@@ -9,9 +9,16 @@
 #define JL_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 \
                         + LLVM_VERSION_PATCH)
 
-#if JL_LLVM_VERSION < 60000
-    #error Only LLVM versions >= 6.0.0 are supported by Julia
+#if JL_LLVM_VERSION < 80000
+    #error Only LLVM versions >= 8.0.0 are supported by Julia
 #endif
 #if JL_LLVM_VERSION < 100000
 #define Align(a) (a)
+#endif
+
+#define LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING 0
+
+#if defined(__GNUC__) && (__GNUC__ >= 9)
+// Added in GCC 9, this warning is annoying
+#pragma GCC diagnostic ignored "-Winit-list-lifetime"
 #endif

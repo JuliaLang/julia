@@ -77,6 +77,7 @@ end
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
+==(stmt1::Core.PhiNode, stmt2::Core.PhiNode) = stmt1.edges == stmt2.edges && stmt1.values == stmt2.values
 
 """
     macroexpand(m::Module, x; recursive=true)
@@ -119,10 +120,11 @@ Return equivalent expression with all macros removed (expanded).
 There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
 * While [`macroexpand`](@ref) takes a keyword argument `recursive`, `@macroexpand`
-is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
+  is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
 
 * While [`macroexpand`](@ref) has an explicit `module` argument, `@macroexpand` always
-expands with respect to the module in which it is called.
+  expands with respect to the module in which it is called.
+
 This is best seen in the following example:
 ```julia-repl
 julia> module M
@@ -264,7 +266,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     if isempty(args)
         tag = sym
     else
-        tag = Expr(sym, args...)
+        tag = Expr(sym, args...)::Expr
     end
 
     inner = ex
@@ -276,7 +278,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     if idx != 0
         push!(exargs[idx].args, tag)
     else
-        body::Expr = inner.args[2]
+        body = inner.args[2]::Expr
         pushfirst!(body.args, Expr(:meta, tag))
     end
     ex
@@ -331,8 +333,8 @@ function is_short_function_def(ex)
 end
 
 function findmeta(ex::Expr)
-    if ex.head === :function || is_short_function_def(ex)
-        body::Expr = ex.args[2]
+    if ex.head === :function || is_short_function_def(ex) || ex.head === :->
+        body = ex.args[2]::Expr
         body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)
     end
@@ -345,9 +347,9 @@ function findmeta_block(exargs, argsmatch=args->true)
     for i = 1:length(exargs)
         a = exargs[i]
         if isa(a, Expr)
-            if (a::Expr).head === :meta && argsmatch((a::Expr).args)
+            if a.head === :meta && argsmatch(a.args)
                 return i, exargs
-            elseif (a::Expr).head === :block
+            elseif a.head === :block
                 idx, exa = findmeta_block(a.args, argsmatch)
                 if idx != 0
                     return idx, exa

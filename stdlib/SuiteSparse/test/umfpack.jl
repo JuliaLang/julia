@@ -162,7 +162,7 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         N = 10
         p = 0.5
         A = N*I + sprand(N, N, p)
-        X = zeros(Complex{Float64}, N, N)
+        X = zeros(ComplexF64, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lu(A), lu(Array(A))
         @test LinearAlgebra.ldiv!(copy(X), luA, B) ≈ LinearAlgebra.ldiv!(copy(X), lufA, B)
@@ -186,6 +186,34 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         F2 = deserialize(b)
         for nm in (:colptr, :m, :n, :nzval, :rowval, :status)
             @test getfield(F1, nm) == getfield(F2, nm)
+        end
+    end
+
+    @testset "Reuse symbolic LU factorization" begin
+        A1 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
+                    increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
+                    [2.,1.,3.,4.,-1.,-3.,3.,9.,2.,1.,4.,2.], 5, 5)
+        for Tv in (Float64, ComplexF64, Float16, Float32, ComplexF16, ComplexF32)
+            for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
+                A = convert(SparseMatrixCSC{Tv,Ti}, A0)
+                B = convert(SparseMatrixCSC{Tv,Ti}, A1)
+                b = Tv[8., 45., -3., 3., 19.]
+                F = lu(A)
+                lu!(F, B)
+                @test F\b ≈ B\b ≈ Matrix(B)\b
+
+                # singular matrix
+                C = copy(B)
+                C[4, 3] = Tv(0)
+                F = lu(A)
+                @test_throws SingularException lu!(F, C)
+
+                # change of nonzero pattern
+                D = copy(B)
+                D[5, 1] = Tv(1.0)
+                F = lu(A)
+                @test_throws ArgumentError lu!(F, D)
+            end
         end
     end
 

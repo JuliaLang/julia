@@ -13,20 +13,45 @@ using Base: with_output_color
 
 using InteractiveUtils: subtypes
 
+using Unicode: normalize
+
 ## Help mode ##
 
 # This is split into helpmode and _helpmode to easier unittest _helpmode
 helpmode(io::IO, line::AbstractString) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line))))
 helpmode(line::AbstractString) = helpmode(stdout, line)
 
+const extended_help_on = Ref{Any}(nothing)
+
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
+    ternary_operator_help = (line == "?" || line == "?:")
+    if startswith(line, '?') && !ternary_operator_help
+        line = line[2:end]
+        extended_help_on[] = line
+        brief = false
+    else
+        extended_help_on[] = nothing
+        brief = true
+    end
+    # interpret anything starting with # or #= as asking for help on comments
+    if startswith(line, "#")
+        if startswith(line, "#=")
+            line = "#="
+        else
+            line = "#"
+        end
+    end
     x = Meta.parse(line, raise = false, depwarn = false)
+    assym = Symbol(line)
     expr =
-        if haskey(keywords, Symbol(line)) || isexpr(x, :error) || isexpr(x, :invalid)
+        if haskey(keywords, Symbol(line)) || Base.isoperator(assym) || isexpr(x, :error) ||
+            isexpr(x, :invalid) || isexpr(x, :incomplete)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
-            Symbol(line)
+            assym
+        elseif isexpr(x, (:using, :import))
+            x.head
         else
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
@@ -37,7 +62,7 @@ function _helpmode(io::IO, line::AbstractString)
         end
     # the following must call repl(io, expr) via the @repl macro
     # so that the resulting expressions are evaluated in the Base.Docs namespace
-    :($REPL.@repl $io $expr)
+    :($REPL.@repl $io $expr $brief)
 end
 _helpmode(line::AbstractString) = _helpmode(stdout, line)
 
@@ -72,6 +97,51 @@ function parsedoc(d::DocStr)
     end
     d.object
 end
+
+## Trimming long help ("# Extended help")
+
+struct Message  # For direct messages to the terminal
+    msg    # AbstractString
+    fmt    # keywords to `printstyled`
+end
+Message(msg) = Message(msg, ())
+
+function Markdown.term(io::IO, msg::Message, columns)
+    printstyled(io, msg.msg; msg.fmt...)
+end
+
+trimdocs(doc, brief::Bool) = doc
+
+function trimdocs(md::Markdown.MD, brief::Bool)
+    brief || return md
+    md, trimmed = _trimdocs(md, brief)
+    if trimmed
+        line = extended_help_on[]
+        line = isa(line, AbstractString) ? line : ""
+        push!(md.content, Message("Extended help is available with `??$line`", (color=Base.info_color(), bold=true)))
+    end
+    return md
+end
+
+function _trimdocs(md::Markdown.MD, brief::Bool)
+    content, trimmed = [], false
+    for c in md.content
+        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
+            !isempty(c.text) && isa(c.text[1], AbstractString) &&
+            lowercase(c.text[1]) ∈ ("extended help",
+                                    "extended documentation",
+                                    "extended docs")
+            trimmed = true
+            break
+        end
+        c, trm = _trimdocs(c, brief)
+        trimmed |= trm
+        push!(content, c)
+    end
+    return Markdown.MD(content, md.meta), trimmed
+end
+
+_trimdocs(md, brief::Bool) = md, false
 
 """
     Docs.doc(binding, sig)
@@ -131,20 +201,33 @@ doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 
 function lookup_doc(ex)
+    if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
+        # handle syntactic operators, e.g. +=, ::, .=
+        ex = ex.head
+    end
     if haskey(keywords, ex)
-        parsedoc(keywords[ex])
+        return parsedoc(keywords[ex])
     elseif Meta.isexpr(ex, :incomplete)
         return :($(Markdown.md"No documentation found."))
-    elseif isa(ex, Union{Expr, Symbol})
-        binding = esc(bindingexpr(namify(ex)))
-        if isexpr(ex, :call) || isexpr(ex, :macrocall)
-            sig = esc(signature(ex))
-            :($(doc)($binding, $sig))
-        else
-            :($(doc)($binding))
+    elseif !isa(ex, Expr) && !isa(ex, Symbol)
+        return :($(doc)($(typeof)($(esc(ex)))))
+    end
+    if isa(ex, Symbol) && Base.isoperator(ex)
+        str = string(ex)
+        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment
+            op = str[1:end-1]
+            return Markdown.parse("`x $op= y` is a synonym for `x = x $op y`")
+        elseif startswith(str, ".")
+            op = str[2:end]
+            return Markdown.parse("`x $ex y` is equivalent to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
         end
+    end
+    binding = esc(bindingexpr(namify(ex)))
+    if isexpr(ex, :call) || isexpr(ex, :macrocall)
+        sig = esc(signature(ex))
+        :($(doc)($binding, $sig))
     else
-        :($(doc)($(typeof)($(esc(ex)))))
+        :($(doc)($binding))
     end
 end
 
@@ -247,6 +330,8 @@ function symbol_latex(s::String)
     return get(symbols_latex, s, "")
 end
 function repl_latex(io::IO, s::String)
+    # decompose NFC-normalized identifier to match tab-completion input
+    s = normalize(s, :NFD)
     latex = symbol_latex(s)
     if !isempty(latex)
         print(io, "\"")
@@ -273,29 +358,29 @@ function repl_latex(io::IO, s::String)
 end
 repl_latex(s::String) = repl_latex(stdout, s)
 
-macro repl(ex) repl(ex) end
-macro repl(io, ex) repl(io, ex) end
+macro repl(ex, brief=false) repl(ex; brief=brief) end
+macro repl(io, ex, brief) repl(io, ex; brief=brief) end
 
-function repl(io::IO, s::Symbol)
+function repl(io::IO, s::Symbol; brief::Bool=true)
     str = string(s)
     quote
         repl_latex($io, $str)
         repl_search($io, $str)
-        $(if !isdefined(Main, s) && !haskey(keywords, s)
+        $(if !isdefined(Main, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str))
           end)
-        $(_repl(s))
+        $(_repl(s, brief))
     end
 end
 isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
-repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
-repl(io::IO, str::AbstractString) = :(apropos($io, $str))
-repl(io::IO, other) = esc(:(@doc $other))
+repl(io::IO, ex::Expr; brief::Bool=true) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief)
+repl(io::IO, str::AbstractString; brief::Bool=true) = :(apropos($io, $str))
+repl(io::IO, other; brief::Bool=true) = esc(:(@doc $other))
 #repl(io::IO, other) = lookup_doc(other) # TODO
 
-repl(x) = repl(stdout, x)
+repl(x; brief=true) = repl(stdout, x; brief=brief)
 
-function _repl(x)
+function _repl(x, brief=true)
     if isexpr(x, :call)
         # determine the types of the values
         kwargs = nothing
@@ -349,7 +434,7 @@ function _repl(x)
     end
     #docs = lookup_doc(x) # TODO
     docs = esc(:(@doc $x))
-    if isfield(x)
+    docs = if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)
                 fielddoc($(esc(x.args[1])), $(esc(x.args[2])))
@@ -360,6 +445,7 @@ function _repl(x)
     else
         docs
     end
+    :(REPL.trimdocs($docs, $brief))
 end
 
 """
@@ -521,21 +607,15 @@ print_correction(word) = print_correction(stdout, word)
 
 # Completion data
 
-const builtins = ["abstract type", "baremodule", "begin", "break",
-                  "catch", "ccall", "const", "continue", "do", "else",
-                  "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "import", "let",
-                  "local", "macro", "module", "mutable struct", "primitive type",
-                  "quote", "return", "struct", "try", "using", "while"]
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
 filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-    [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
-     map(names, moduleusings(mod))...;
-     builtins] |> unique |> filtervalid
+    Symbol[filter!(s -> !Base.isdeprecated(mod, s), names(mod, all=true, imported=true));
+           map(names, moduleusings(mod))...;
+           collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
 doc_completions(name) = fuzzysort(name, accessible(Main))
 doc_completions(name::Symbol) = doc_completions(string(name))
@@ -611,14 +691,16 @@ stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
-# Apropos searches through all available documentation for some string or regex
 """
-    apropos(string)
+    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
 
-Search through all documentation for a string, ignoring case.
+Search available docstrings for entries containing `pattern`.
+
+When `pattern` is a string, case is ignored. Results are printed to `io`.
 """
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
+
 function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict

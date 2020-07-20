@@ -592,17 +592,28 @@ Returns `A` and `tau` modified in-place.
 geqlf!(A::AbstractMatrix, tau::AbstractVector)
 
 """
-    geqp3!(A, jpvt, tau)
+    geqp3!(A, [jpvt, tau]) -> (A, tau, jpvt)
 
 Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
 `P` is a pivoting matrix, represented by `jpvt`. `tau` stores the elementary
-reflectors. `jpvt` must have length length greater than or equal to `n` if `A`
-is an `(m x n)` matrix. `tau` must have length greater than or equal to the
-smallest dimension of `A`.
+reflectors. The arguments `jpvt` and `tau` are optional and allow
+for passing preallocated arrays. When passed, `jpvt` must have length greater
+than or equal to `n` if `A` is an `(m x n)` matrix and `tau` must have length
+greater than or equal to the smallest dimension of `A`.
 
 `A`, `jpvt`, and `tau` are modified in-place.
 """
 geqp3!(A::AbstractMatrix, jpvt::AbstractVector{BlasInt}, tau::AbstractVector)
+
+function geqp3!(A::AbstractMatrix{<:BlasFloat}, jpvt::AbstractVector{BlasInt})
+    m, n = size(A)
+    geqp3!(A, jpvt, similar(A, min(m, n)))
+end
+
+function geqp3!(A::AbstractMatrix{<:BlasFloat})
+    m, n = size(A)
+    geqp3!(A, zeros(BlasInt, n), similar(A, min(m, n)))
+end
 
 """
     geqrt!(A, T)
@@ -724,34 +735,6 @@ Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
 gerqf!(A::AbstractMatrix{<:BlasFloat}) = ((m,n) = size(A); gerqf!(A, similar(A, min(m, n))))
-
-"""
-    geqp3!(A, jpvt) -> (A, jpvt, tau)
-
-Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
-`P` is a pivoting matrix, represented by `jpvt`. `jpvt` must have length
-greater than or equal to `n` if `A` is an `(m x n)` matrix.
-
-Returns `A` and `jpvt`, modified in-place, and `tau`, which stores the elementary
-reflectors.
-"""
-function geqp3!(A::AbstractMatrix{<:BlasFloat}, jpvt::AbstractVector{BlasInt})
-    m, n = size(A)
-    geqp3!(A, jpvt, similar(A, min(m, n)))
-end
-
-"""
-    geqp3!(A) -> (A, jpvt, tau)
-
-Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
-
-Returns `A`, modified in-place, `jpvt`, which represents the pivoting matrix `P`,
-and `tau`, which stores the elementary reflectors.
-"""
-function geqp3!(A::AbstractMatrix{<:BlasFloat})
-    m, n = size(A)
-    geqp3!(A, zeros(BlasInt, n), similar(A, min(m, n)))
-end
 
 ## Tools to compute and apply elementary reflectors
 for (larfg, elty) in

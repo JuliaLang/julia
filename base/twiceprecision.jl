@@ -257,7 +257,10 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
-zero(::Type{TwicePrecision{T}}) where {T} = TwicePrecision{T}(0, 0)
+function zero(::Type{TwicePrecision{T}}) where {T}
+    z = zero(T)
+    TwicePrecision{T}(z, z)
+end
 
 # Arithmetic
 
@@ -332,14 +335,11 @@ const F_or_FF = Union{AbstractFloat, Tuple{AbstractFloat,AbstractFloat}}
 asF64(x::AbstractFloat) = Float64(x)
 asF64(x::Tuple{AbstractFloat,AbstractFloat}) = Float64(x[1]) + Float64(x[2])
 
-# Defined to prevent splatting in the function below which here has a performance impact
-_TP(x) = TwicePrecision{Float64}(x)
-_TP(x::Tuple{Any, Any}) = TwicePrecision{Float64}(x[1], x[2])
 function steprangelen_hp(::Type{Float64}, ref::F_or_FF,
                          step::F_or_FF, nb::Integer,
                          len::Integer, offset::Integer)
-    StepRangeLen(_TP(ref),
-                 twiceprecision(_TP(step), nb), Int(len), offset)
+    StepRangeLen(TwicePrecision{Float64}(ref...),
+                 twiceprecision(TwicePrecision{Float64}(step...), nb), Int(len), offset)
 end
 
 function steprangelen_hp(::Type{T}, ref::F_or_FF,
@@ -424,6 +424,9 @@ function (:)(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
     steprangelen_hp(T, start, step, 0, len, 1)
 end
 
+step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractFloat} = T(r.step)
+step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T} = T(r.step)
+
 function _range(a::T, st::T, ::Nothing, len::Integer) where T<:Union{Float16,Float32,Float64}
     start_n, start_d = rat(a)
     step_n, step_d = rat(st)
@@ -487,12 +490,12 @@ StepRangeLen{T,R,S}(r::StepRangeLen{T,R,S}) where {T<:AbstractFloat,R<:TwicePrec
 StepRangeLen{T,R,S}(r::StepRangeLen) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} =
     _convertSRL(StepRangeLen{T,R,S}, r)
 
-(::Type{StepRangeLen{Float64}})(r::StepRangeLen) =
+StepRangeLen{Float64}(r::StepRangeLen) =
     _convertSRL(StepRangeLen{Float64,TwicePrecision{Float64},TwicePrecision{Float64}}, r)
 StepRangeLen{T}(r::StepRangeLen) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
 
-(::Type{StepRangeLen{Float64}})(r::AbstractRange) =
+StepRangeLen{Float64}(r::AbstractRange) =
     _convertSRL(StepRangeLen{Float64,TwicePrecision{Float64},TwicePrecision{Float64}}, r)
 StepRangeLen{T}(r::AbstractRange) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
@@ -533,6 +536,21 @@ function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T
 end
 
 function sum(r::StepRangeLen)
+    l = length(r)
+    # Compute the contribution of step over all indices.
+    # Indexes on opposite side of r.offset contribute with opposite sign,
+    #    r.step * (sum(1:np) - sum(1:nn))
+    np, nn = l - r.offset, r.offset - 1  # positive, negative
+    # To prevent overflow in sum(1:n), multiply its factors by the step
+    sp, sn = sumpair(np), sumpair(nn)
+    W = widen(Int)
+    Δn = W(sp[1]) * W(sp[2]) - W(sn[1]) * W(sn[2])
+    s = r.step * Δn
+    # Add in contributions of ref
+    ref = r.ref * l
+    convert(eltype(r), s + ref)
+end
+function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision})
     l = length(r)
     # Compute the contribution of step over all indices.
     # Indexes on opposite side of r.offset contribute with opposite sign,

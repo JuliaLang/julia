@@ -5,15 +5,12 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :call => 1:typemax(Int),
     :invoke => 2:typemax(Int),
     :static_parameter => 1:1,
-    :gotoifnot => 2:2,
     :(&) => 1:1,
     :(=) => 2:2,
     :method => 1:4,
     :const => 1:1,
     :new => 1:typemax(Int),
     :splatnew => 2:2,
-    :return => 1:1,
-    :unreachable => 0:0,
     :the_exception => 0:0,
     :enter => 1:1,
     :leave => 1:1,
@@ -26,6 +23,7 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, cconv, args..., roots...
     :cfunction => 5:5,
     :isdefined => 1:1,
+    :code_coverage_effect => 0:0,
     :loopinfo => 0:typemax(Int),
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
@@ -38,7 +36,7 @@ const INVALID_EXPR_HEAD = "invalid expression head"
 const INVALID_EXPR_NARGS = "invalid number of expression args"
 const INVALID_LVALUE = "invalid LHS value"
 const INVALID_RVALUE = "invalid RHS value"
-const INVALID_RETURN = "invalid argument to :return"
+const INVALID_RETURN = "invalid argument to return"
 const INVALID_CALL_ARG = "invalid :call argument"
 const EMPTY_SLOTNAMES = "slotnames field is empty"
 const SLOTFLAGS_MISMATCH = "length(slotnames) < length(slotflags)"
@@ -129,22 +127,12 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 end
                 validate_val!(lhs)
                 validate_val!(rhs)
-            elseif head === :gotoifnot
-                if !is_valid_argument(x.args[1])
-                    push!(errors, InvalidCodeError(INVALID_CALL_ARG, x.args[1]))
-                end
-                validate_val!(x.args[1])
-            elseif head === :return
-                if !is_valid_return(x.args[1])
-                    push!(errors, InvalidCodeError(INVALID_RETURN, x.args[1]))
-                end
-                validate_val!(x.args[1])
             elseif head === :call || head === :invoke || head === :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
                 head === :const || head === :enter || head === :leave || head === :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
-                head === :throw_undef_if_not || head === :unreachable
+                head === :throw_undef_if_not || head === :code_coverage_effect
                 validate_val!(x)
             else
                 # TODO: nothing is actually in statement position anymore
@@ -152,8 +140,21 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
             end
         elseif isa(x, NewvarNode)
         elseif isa(x, GotoNode)
+        elseif isa(x, GotoIfNot)
+            if !is_valid_argument(x.cond)
+                push!(errors, InvalidCodeError(INVALID_CALL_ARG, x.cond))
+            end
+            validate_val!(x.cond)
+        elseif isa(x, ReturnNode)
+            if isdefined(x, :val)
+                if !is_valid_return(x.val)
+                    push!(errors, InvalidCodeError(INVALID_RETURN, x.val))
+                end
+                validate_val!(x.val)
+            end
         elseif x === nothing
         elseif isa(x, SlotNumber)
+        elseif isa(x, Argument)
         elseif isa(x, GlobalRef)
         elseif isa(x, LineNumberNode)
         elseif isa(x, PiNode)
@@ -212,7 +213,7 @@ validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 is_valid_lvalue(@nospecialize(x)) = isa(x, Slot) || isa(x, GlobalRef)
 
 function is_valid_argument(@nospecialize(x))
-    if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
+    if isa(x, Slot) || isa(x, Argument) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
         (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck))) ||
         isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
         isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing

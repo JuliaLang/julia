@@ -32,6 +32,7 @@ Base.denominator
 Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
+Base.bitrotate
 Base.:(:)
 Base.range
 Base.OneTo
@@ -66,6 +67,7 @@ Base.Math.cosd
 Base.Math.tand
 Base.Math.sinpi
 Base.Math.cospi
+Base.Math.sincospi
 Base.sinh(::Number)
 Base.cosh(::Number)
 Base.tanh(::Number)

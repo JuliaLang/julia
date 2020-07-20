@@ -52,6 +52,8 @@ false
 """
 issparse(A::AbstractArray) = false
 issparse(S::AbstractSparseArray) = true
+issparse(S::LinearAlgebra.Adjoint{<:Any,<:AbstractSparseArray}) = true
+issparse(S::LinearAlgebra.Transpose{<:Any,<:AbstractSparseArray}) = true
 
 issparse(S::LinearAlgebra.Symmetric{<:Any,<:AbstractSparseMatrix}) = true
 issparse(S::LinearAlgebra.Hermitian{<:Any,<:AbstractSparseMatrix}) = true
@@ -101,7 +103,7 @@ function findprev(f::Function, v::AbstractSparseArray, i)
 end
 
 """
-    findnz(A)
+    findnz(A::SparseMatrixCSC)
 
 Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of the stored
 ("structurally non-zero") values in sparse matrix `A`, and `V` is a vector of the values.
@@ -110,10 +112,9 @@ Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of t
 ```jldoctest
 julia> A = sparse([1 2 0; 0 0 3; 0 4 0])
 3×3 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1, 1]  =  1
-  [1, 2]  =  2
-  [3, 2]  =  4
-  [2, 3]  =  3
+ 1  2  ⋅
+ ⋅  ⋅  3
+ ⋅  4  ⋅
 
 julia> findnz(A)
 ([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])

@@ -2,18 +2,6 @@
 
 const EMPTY_VECTOR = Vector{Any}()
 
-mutable struct InferenceResult
-    linfo::MethodInstance
-    argtypes::Vector{Any}
-    overridden_by_const::BitVector
-    result # ::Type, or InferenceState if WIP
-    src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
-    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing)
-    end
-end
-
 function is_argtype_match(@nospecialize(given_argtype),
                           @nospecialize(cache_argtype),
                           overridden_by_const::Bool)
@@ -35,9 +23,13 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
     if linfo.def.isva
         isva_given_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs - 1)
-            isva_given_argtypes[i] = given_argtypes[i]
+            isva_given_argtypes[i] = argtype_by_index(given_argtypes, i)
         end
-        isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[nargs:end])
+        if length(given_argtypes) >= nargs || !isvarargtype(given_argtypes[end])
+            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[nargs:end])
+        else
+            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[end:end])
+        end
         given_argtypes = isva_given_argtypes
     end
     cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing)

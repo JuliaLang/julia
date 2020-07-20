@@ -3,7 +3,13 @@
 using REPL.REPLCompletions
 using Test
 using Random
-
+using REPL
+    @testset "Check symbols previously not shown by REPL.doc_completions()" begin
+    symbols = ["?","=","[]","[","]","{}","{","}",";","","'","&&","||","julia","Julia","new","@var_str"]
+        for i in symbols
+            @test REPL.doc_completions(i)[1]==i
+        end
+    end
 let ex = quote
     module CompletionFoo
         using Random
@@ -95,6 +101,9 @@ test_scomplete(s) =  map_completion_text(shell_completions(s,lastindex(s)))
 test_bslashcomplete(s) =  map_completion_text(bslash_completions(s,lastindex(s))[2])
 test_complete_context(s) =  map_completion_text(completions(s,lastindex(s),Main.CompletionFoo))
 
+module M32377 end
+test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
+
 let s = ""
     c, r = test_complete(s)
     @test "CompletionFoo" in c
@@ -103,10 +112,10 @@ let s = ""
 end
 
 let s = "using REP"
-    c, r = test_complete(s)
+    c, r = test_complete_32377(s)
     @test count(isequal("REPL"), c) == 1
     # issue #30234
-    @test !Base.isbindingresolved(Main, :tanh)
+    @test !Base.isbindingresolved(M32377, :tanh)
 end
 
 let s = "Comp"
@@ -126,7 +135,7 @@ end
 let s = "Main.CompletionFoo."
     c, r = test_complete(s)
     @test "bar" in c
-    @test r == 20:19
+    @test r === UnitRange{Int64}(20:19)
     @test s[r] == ""
 end
 
@@ -136,6 +145,21 @@ let s = "Main.CompletionFoo.f"
     @test r == 20:20
     @test s[r] == "f"
     @test !("foobar" in c)
+end
+
+# test method completions when `!` operator precedes
+let
+    s = "!is"
+    c, r = test_complete(s)
+    @test "isa" in c
+    @test s[r] == "is"
+    @test !("!" in c)
+
+    s = "!!is"
+    c, r = test_complete(s)
+    @test "isa" in c
+    @test s[r] == "is"
+    @test !("!" in c)
 end
 
 # issue #6424
@@ -302,6 +326,27 @@ let s = "max("
     @test s[r] == "max"
 end
 
+# test method completions when `!` operator precedes
+let
+    s = "!("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(!))
+    @test s[r] == s[1:end-1]
+
+    s = "!isnothing("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(isnothing))
+    @test s[r] == s[1:end-1]
+
+    s = "!!isnothing("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(isnothing))
+    @test s[r] == s[1:end-1]
+end
+
 # Test completion of methods with input concrete args and args where typeinference determine their type
 let s = "CompletionFoo.test(1,1, "
     c, r, res = test_complete(s)
@@ -363,15 +408,14 @@ end
 
 let s = "(1, CompletionFoo.test2(`')'`,"
     c, r, res = test_complete(s)
-    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
     @test length(c) == 1
+    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
 end
 
 let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
-    @test_broken length(c) == 1
+    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
 end
 
 let s = "CompletionFoo.test3([1.,2.], 1.,"
@@ -397,8 +441,7 @@ end
 let s = "CompletionFoo.test5(broadcast((x,y)->x==y, push!(Base.split(\"\",' '),\"\",\"\"), \"\"),"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken length(c) == 1
-    @test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
 end
 
 # test partial expression expansion
@@ -550,7 +593,12 @@ end
 
 # The return type is of importance, before #8995 it would return nothing
 # which would raise an error in the repl code.
-@test (String[], 0:-1, false) == test_scomplete("\$a")
+let c, r, res
+    c, r, res = test_scomplete("\$a")
+    @test c == String[]
+    @test r === UnitRange{Int64}(0:-1)
+    @test res === false
+end
 
 if Sys.isunix()
 let s, c, r
@@ -598,7 +646,7 @@ let s, c, r
         s = "/tmp/"
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r == 6:5
+        @test r === UnitRange{Int64}(6:5)
         @test s[r] == ""
     end
 
@@ -615,7 +663,7 @@ let s, c, r
         file = joinpath(path, "repl completions")
         s = "/tmp "
         c,r = test_scomplete(s)
-        @test r == 6:5
+        @test r === UnitRange{Int64}(6:5)
     end
 
     # Test completing paths with an escaped trailing space
@@ -768,7 +816,7 @@ end
 if Sys.iswindows()
     tmp = tempname()
     touch(tmp)
-    path = dirname(tmp)
+    path = realpath(dirname(tmp))
     file = basename(tmp)
     temp_name = basename(path)
     cd(path) do
@@ -929,7 +977,7 @@ end
 let s = ""
     c, r = test_complete_context(s)
     @test "bar" in c
-    @test r == 1:0
+    @test r === UnitRange{Int64}(1:0)
     @test s[r] == ""
 end
 
@@ -1012,4 +1060,15 @@ let s = "prevind(\"θ\",1,"
     @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
     @test r == 1:7
     @test s[r] == "prevind"
+end
+
+# Issue #32840
+let s = "typeof(+)."
+    c, r = test_complete_context(s)
+    @test length(c) == length(fieldnames(DataType))
+end
+
+let s = "test_dict[\"ab"
+    c, r = test_complete_context(s)
+    @test c == Any["\"abc\"", "\"abcd\""]
 end

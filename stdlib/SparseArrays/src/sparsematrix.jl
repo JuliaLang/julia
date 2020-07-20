@@ -100,17 +100,24 @@ Returns the number of stored (filled) elements in a sparse array.
 ```jldoctest
 julia> A = sparse(2I, 3, 3)
 3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
-  [1, 1]  =  2
-  [2, 2]  =  2
-  [3, 3]  =  2
+ 2  ⋅  ⋅
+ ⋅  2  ⋅
+ ⋅  ⋅  2
 
 julia> nnz(A)
 3
 ```
 """
 nnz(S::AbstractSparseMatrixCSC) = Int(getcolptr(S)[size(S, 2) + 1] - 1)
-nnz(S::ReshapedArray{T,1,<:AbstractSparseMatrixCSC}) where T = nnz(parent(S))
-count(pred, S::AbstractSparseMatrixCSC) = count(pred, nzvalview(S)) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
+nnz(S::ReshapedArray{<:Any,1,<:AbstractSparseMatrixCSC}) = nnz(parent(S))
+nnz(S::UpperTriangular{<:Any,<:AbstractSparseMatrixCSC}) = nnz1(S)
+nnz(S::LowerTriangular{<:Any,<:AbstractSparseMatrixCSC}) = nnz1(S)
+nnz(S::SparseMatrixCSCView) = nnz1(S)
+nnz1(S) = sum(length.(nzrange.(Ref(S), axes(S, 2))))
+
+function count(pred, S::AbstractSparseMatrixCSC)
+    count(pred, nzvalview(S)) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
+end
 
 """
     nonzeros(A)
@@ -125,12 +132,12 @@ modifications to the returned vector will mutate `A` as well. See
 ```jldoctest
 julia> A = sparse(2I, 3, 3)
 3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
-  [1, 1]  =  2
-  [2, 2]  =  2
-  [3, 3]  =  2
+ 2  ⋅  ⋅
+ ⋅  2  ⋅
+ ⋅  ⋅  2
 
 julia> nonzeros(A)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  2
  2
@@ -138,6 +145,8 @@ julia> nonzeros(A)
 """
 nonzeros(S::SparseMatrixCSC) = getfield(S, :nzval)
 nonzeros(S::SparseMatrixCSCView)  = nonzeros(S.parent)
+nonzeros(S::UpperTriangular{<:Any,<:SparseMatrixCSCUnion}) = nonzeros(S.data)
+nonzeros(S::LowerTriangular{<:Any,<:SparseMatrixCSCUnion}) = nonzeros(S.data)
 
 """
     rowvals(A::AbstractSparseMatrixCSC)
@@ -151,12 +160,12 @@ nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 ```jldoctest
 julia> A = sparse(2I, 3, 3)
 3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
-  [1, 1]  =  2
-  [2, 2]  =  2
-  [3, 3]  =  2
+ 2  ⋅  ⋅
+ ⋅  2  ⋅
+ ⋅  ⋅  2
 
 julia> rowvals(A)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -164,6 +173,8 @@ julia> rowvals(A)
 """
 rowvals(S::SparseMatrixCSC) = getfield(S, :rowval)
 rowvals(S::SparseMatrixCSCView) = rowvals(S.parent)
+rowvals(S::UpperTriangular{<:Any,<:SparseMatrixCSCUnion}) = rowvals(S.data)
+rowvals(S::LowerTriangular{<:Any,<:SparseMatrixCSCUnion}) = rowvals(S.data)
 
 """
     nzrange(A::AbstractSparseMatrixCSC, col::Integer)
@@ -186,64 +197,105 @@ column. In conjunction with [`nonzeros`](@ref) and
 """
 nzrange(S::AbstractSparseMatrixCSC, col::Integer) = getcolptr(S)[col]:(getcolptr(S)[col+1]-1)
 nzrange(S::SparseMatrixCSCView, col::Integer) = nzrange(S.parent, S.indices[2][col])
+nzrange(S::UpperTriangular{<:Any,<:SparseMatrixCSCUnion}, i::Integer) = nzrangeup(S.data, i)
+nzrange(S::LowerTriangular{<:Any,<:SparseMatrixCSCUnion}, i::Integer) = nzrangelo(S.data, i)
+
+function Base.isstored(A::AbstractSparseMatrixCSC, i::Integer, j::Integer)
+    @boundscheck checkbounds(A, i, j)
+    rows = rowvals(A)
+    for istored in nzrange(A, j) # could do binary search if the row indices are sorted?
+        i == rows[istored] && return true
+    end
+    return false
+end
+
+Base.replace_in_print_matrix(A::AbstractSparseMatrix, i::Integer, j::Integer, s::AbstractString) =
+    Base.isstored(A, i, j) ? s : Base.replace_with_centered_mark(s)
 
 function Base.show(io::IO, ::MIME"text/plain", S::AbstractSparseMatrixCSC)
     xnnz = nnz(S)
     m, n = size(S)
     print(io, m, "×", n, " ", typeof(S), " with ", xnnz, " stored ",
               xnnz == 1 ? "entry" : "entries")
-    if xnnz != 0
+    if !(m == 0 || n == 0)
         print(io, ":")
         show(IOContext(io, :typeinfo => eltype(S)), S)
     end
 end
 
 Base.show(io::IO, S::AbstractSparseMatrixCSC) = Base.show(convert(IOContext, io), S::AbstractSparseMatrixCSC)
-function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
-    nnz(S) == 0 && return show(io, MIME("text/plain"), S)
 
-    ioc = IOContext(io, :compact => true)
-    function _format_line(r, col, padr, padc)
-        print(ioc, "\n  [", rpad(rowvals(S)[r], padr), ", ", lpad(col, padc), "]  =  ")
-        if isassigned(nonzeros(S), Int(r))
-            show(ioc, nonzeros(S)[r])
-        else
-            print(ioc, Base.undef_ref_str)
-        end
-    end
+const brailleBlocks = UInt16['⠁', '⠂', '⠄', '⡀', '⠈', '⠐', '⠠', '⢀']
+function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
+    m, n = size(S)
+    (m == 0 || n == 0) && return show(io, MIME("text/plain"), S)
 
-    function _get_cols(from, to)
-        idx = eltype(getcolptr(S))[]
-        c = searchsortedlast(getcolptr(S), from)
-        for i = from:to
-            while i == getcolptr(S)[c+1]
-                c +=1
-            end
-            push!(idx, c)
-        end
-        idx
-    end
+    # The maximal number of characters we allow to display the matrix
+    local maxHeight::Int, maxWidth::Int
+    maxHeight = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
+    maxWidth = displaysize(io)[2] ÷ 2
 
-    rows = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
-    if !get(io, :limit, false) || rows >= nnz(S) # Will the whole matrix fit when printed?
-        cols = _get_cols(1, nnz(S))
-        padr, padc = ndigits.((maximum(rowvals(S)[1:nnz(S)]), cols[end]))
-        _format_line.(1:nnz(S), cols, padr, padc)
+    # In the process of generating the braille pattern to display the nonzero
+    # structure of `S`, we need to be able to scale the matrix `S` to a
+    # smaller matrix with the same aspect ratio as `S`, but fits on the
+    # available screen space. The size of that smaller matrix is stored
+    # in the variables `scaleHeight` and `scaleWidth`. If no scaling is needed,
+    # we can use the size `m × n` of `S` directly.
+    # We determine if scaling is needed and set the scaling factors
+    # `scaleHeight` and `scaleWidth` accordingly. Note that each available
+    # character can contain up to 4 braille dots in its height (⡇) and up to
+    # 2 braille dots in its width (⠉).
+    if get(io, :limit, true) && (m > 4maxHeight || n > 2maxWidth)
+        s = min(2maxWidth / n, 4maxHeight / m)
+        scaleHeight = floor(Int, s * m)
+        scaleWidth = floor(Int, s * n)
     else
-        if rows <= 2
-            print(io, "\n  \u22ee")
-            return
-        end
-        s1, e1 = 1, div(rows - 1, 2) # -1 accounts for \vdots
-        s2, e2 = nnz(S) - (rows - 1 - e1) + 1, nnz(S)
-        cols1, cols2 = _get_cols(s1, e1), _get_cols(s2, e2)
-        padr = ndigits(max(maximum(rowvals(S)[s1:e1]), maximum(rowvals(S)[s2:e2])))
-        padc = ndigits(cols2[end])
-        _format_line.(s1:e1, cols1, padr, padc)
-        print(io, "\n  \u22ee")
-        _format_line.(s2:e2, cols2, padr, padc)
+        scaleHeight = m
+        scaleWidth = n
     end
-    return
+
+    # `brailleGrid` is used to store the needed braille characters for
+    # the matrix `S`. Each row of the braille pattern to print is stored
+    # in a column of `brailleGrid`.
+    brailleGrid = fill(UInt16(10240), (scaleWidth - 1) ÷ 2 + 2, (scaleHeight - 1) ÷ 4 + 1)
+    brailleGrid[end, :] .= '\n'
+
+    rvals = rowvals(S)
+    rowscale = max(1, scaleHeight - 1) / max(1, m - 1)
+    colscale = max(1, scaleWidth - 1) / max(1, n - 1)
+    @inbounds for j = 1:n
+        # Scale the column index `j` to the best matching column index
+        # of a matrix of size `scaleHeight × scaleWidth`
+        sj = round(Int, (j - 1) * colscale + 1)
+        for x in nzrange(S, j)
+            # Scale the row index `i` to the best matching row index
+            # of a matrix of size `scaleHeight × scaleWidth`
+            si = round(Int, (rvals[x] - 1) * rowscale + 1)
+
+            # Given the index pair `(si, sj)` of the scaled matrix,
+            # calculate the corresponding triple `(k, l, p)` such that the
+            # element at `(si, sj)` can be found at position `(k, l)` in the
+            # braille grid `brailleGrid` and corresponds to the 1-dot braille
+            # character `brailleBlocks[p]`
+            k = (sj - 1) ÷ 2 + 1
+            l = (si - 1) ÷ 4 + 1
+            p = ((sj - 1) % 2) * 4 + ((si - 1) % 4 + 1)
+
+            brailleGrid[k, l] |= brailleBlocks[p]
+        end
+    end
+    foreach(c -> print(io, Char(c)), @view brailleGrid[1:end-1])
+end
+
+function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
+    if max(size(S)...) < 16 && !(get(io, :compact, false)::Bool)
+        ioc = IOContext(io, :compact => true)
+        println(ioc)
+        Base.print_matrix(ioc, S)
+        return
+    end
+    println(io)
+    _show_with_braille_patterns(io, S)
 end
 
 ## Reshape
@@ -354,6 +406,54 @@ function copyto!(A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
     return A
 end
 
+copyto!(A::AbstractMatrix, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
+# Ambiguity resolution
+copyto!(A::PermutedDimsArray, B::AbstractSparseMatrixCSC) = _sparse_copyto!(A, B)
+
+function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC)
+    (dest === src || isempty(src)) && return dest
+    z = convert(eltype(dest), zero(eltype(src))) # should throw if not possible
+    isrc = LinearIndices(src)
+    checkbounds(dest, isrc)
+    # If src is not dense, zero out the portion of dest spanned by isrc
+    if length(src) > nnz(src)
+        for i in isrc
+            @inbounds dest[i] = z
+        end
+    end
+    @inbounds for col in axes(src, 2), ptr in nzrange(src, col)
+        row = rowvals(src)[ptr]
+        val = nonzeros(src)[ptr]
+        dest[isrc[row, col]] = val
+    end
+    return dest
+end
+
+function copyto!(dest::AbstractMatrix, Rdest::CartesianIndices{2},
+                 src::AbstractSparseMatrixCSC{T}, Rsrc::CartesianIndices{2}) where {T}
+    isempty(Rdest) && return dest
+    if size(Rdest) != size(Rsrc)
+        throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+    end
+    checkbounds(dest, Rdest)
+    checkbounds(src, Rsrc)
+    src′ = Base.unalias(dest, src)
+    for I in Rdest
+        @inbounds dest[I] = zero(T) # implicitly convert to eltype(dest), throw if not possible
+    end
+    rows, cols = Rsrc.indices
+    lin = LinearIndices(Base.IdentityUnitRange.(Rsrc.indices))
+    @inbounds for col in cols, ptr in nzrange(src′, col)
+        row = rowvals(src′)[ptr]
+        if row in rows
+            val = nonzeros(src′)[ptr]
+            I = Rdest[lin[row, col]]
+            dest[I] = val
+        end
+    end
+    return dest
+end
+
 ## similar
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
@@ -397,11 +497,12 @@ SparseMatrixCSC{Tv}(S::AbstractSparseMatrixCSC{Tv}) where {Tv} = copy(S)
 SparseMatrixCSC{Tv}(S::AbstractSparseMatrixCSC) where {Tv} = SparseMatrixCSC{Tv,eltype(getcolptr(S))}(S)
 SparseMatrixCSC{Tv,Ti}(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = copy(S)
 function SparseMatrixCSC{Tv,Ti}(S::AbstractSparseMatrixCSC) where {Tv,Ti}
-    eltypeTicolptr = convert(Vector{Ti}, getcolptr(S))
-    eltypeTirowval = convert(Vector{Ti}, rowvals(S))
-    eltypeTvnzval = convert(Vector{Tv}, nonzeros(S))
+    eltypeTicolptr = Vector{Ti}(getcolptr(S))
+    eltypeTirowval = Vector{Ti}(rowvals(S))
+    eltypeTvnzval = Vector{Tv}(nonzeros(S))
     return SparseMatrixCSC(size(S, 1), size(S, 2), eltypeTicolptr, eltypeTirowval, eltypeTvnzval)
 end
+
 # converting from other matrix types to SparseMatrixCSC (also see sparse())
 SparseMatrixCSC(M::Matrix) = sparse(M)
 function SparseMatrixCSC(T::Tridiagonal{Tv}) where Tv
@@ -545,15 +646,8 @@ SparseMatrixCSC{Tv,Ti}(M::Transpose{<:Any,<:AbstractSparseMatrixCSC}) where {Tv,
 
 # converting from SparseMatrixCSC to other matrix types
 function Matrix(S::AbstractSparseMatrixCSC{Tv}) where Tv
-    # Handle cases where zero(Tv) is not defined but the array is dense.
-    A = length(S) == nnz(S) ? Matrix{Tv}(undef, size(S, 1), size(S, 2)) : zeros(Tv, size(S, 1), size(S, 2))
-    for Sj in 1:size(S, 2)
-        for Sk in nzrange(S, Sj)
-            Si = rowvals(S)[Sk]
-            Sv = nonzeros(S)[Sk]
-            A[Si, Sj] = Sv
-        end
-    end
+    A = Matrix{Tv}(undef, size(S, 1), size(S, 2))
+    copyto!(A, S)
     return A
 end
 Array(S::AbstractSparseMatrixCSC) = Matrix(S)
@@ -571,16 +665,16 @@ Convert an AbstractMatrix `A` into a sparse matrix.
 # Examples
 ```jldoctest
 julia> A = Matrix(1.0I, 3, 3)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  0.0  0.0
  0.0  1.0  0.0
  0.0  0.0  1.0
 
 julia> sparse(A)
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
+ 1.0   ⋅    ⋅
+  ⋅   1.0   ⋅
+  ⋅    ⋅   1.0
 ```
 """
 sparse(A::AbstractMatrix{Tv}) where {Tv} = convert(SparseMatrixCSC{Tv,Int}, A)
@@ -618,9 +712,9 @@ julia> Vs = [1; 2; 3];
 
 julia> sparse(Is, Js, Vs)
 3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
-  [1, 1]  =  1
-  [2, 2]  =  2
-  [3, 3]  =  3
+ 1  ⋅  ⋅
+ ⋅  2  ⋅
+ ⋅  ⋅  3
 ```
 """
 function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv}, m::Integer, n::Integer, combine) where {Tv,Ti<:Integer}
@@ -1226,33 +1320,24 @@ For expert drivers and additional information, see [`permute!`](@ref).
 ```jldoctest
 julia> A = spdiagm(0 => [1, 2, 3, 4], 1 => [5, 6, 7])
 4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
-  [1, 1]  =  1
-  [1, 2]  =  5
-  [2, 2]  =  2
-  [2, 3]  =  6
-  [3, 3]  =  3
-  [3, 4]  =  7
-  [4, 4]  =  4
+ 1  5  ⋅  ⋅
+ ⋅  2  6  ⋅
+ ⋅  ⋅  3  7
+ ⋅  ⋅  ⋅  4
 
 julia> permute(A, [4, 3, 2, 1], [1, 2, 3, 4])
 4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
-  [4, 1]  =  1
-  [3, 2]  =  2
-  [4, 2]  =  5
-  [2, 3]  =  3
-  [3, 3]  =  6
-  [1, 4]  =  4
-  [2, 4]  =  7
+ ⋅  ⋅  ⋅  4
+ ⋅  ⋅  3  7
+ ⋅  2  6  ⋅
+ 1  5  ⋅  ⋅
 
 julia> permute(A, [1, 2, 3, 4], [4, 3, 2, 1])
 4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
-  [3, 1]  =  7
-  [4, 1]  =  4
-  [2, 2]  =  6
-  [3, 2]  =  3
-  [1, 3]  =  5
-  [2, 3]  =  2
-  [1, 4]  =  1
+ ⋅  ⋅  5  1
+ ⋅  6  2  ⋅
+ 7  3  ⋅  ⋅
+ 4  ⋅  ⋅  ⋅
 ```
 """
 function permute(A::AbstractSparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
@@ -1273,7 +1358,7 @@ end
 ## fkeep! and children tril!, triu!, droptol!, dropzeros[!]
 
 """
-    fkeep!(A::AbstractSparseArray, f, trim::Bool = true)
+    fkeep!(A::AbstractSparseArray, f)
 
 Keep elements of `A` for which test `f` returns `true`. `f`'s signature should be
 
@@ -1282,22 +1367,23 @@ Keep elements of `A` for which test `f` returns `true`. `f`'s signature should b
 where `i` and `j` are an element's row and column indices and `x` is the element's
 value. This method makes a single sweep
 through `A`, requiring `O(size(A, 2), nnz(A))`-time for matrices and `O(nnz(A))`-time for vectors
-and no space beyond that passed in. If `trim` is `true`, this method trims `rowvals(A)` or `nonzeroinds(A)` and
-`nonzeros(A)` to length `nnz(A)` after dropping elements.
+and no space beyond that passed in.
 
 # Examples
 ```jldoctest
 julia> A = sparse(Diagonal([1, 2, 3, 4]))
 4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1, 1]  =  1
-  [2, 2]  =  2
-  [3, 3]  =  3
-  [4, 4]  =  4
+ 1  ⋅  ⋅  ⋅
+ ⋅  2  ⋅  ⋅
+ ⋅  ⋅  3  ⋅
+ ⋅  ⋅  ⋅  4
 
 julia> SparseArrays.fkeep!(A, (i, j, v) -> isodd(v))
 4×4 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
-  [1, 1]  =  1
-  [3, 3]  =  3
+ 1  ⋅  ⋅  ⋅
+ ⋅  ⋅  ⋅  ⋅
+ ⋅  ⋅  3  ⋅
+ ⋅  ⋅  ⋅  ⋅
 ```
 """
 function fkeep!(A::AbstractSparseMatrixCSC, f, trim::Bool = true)
@@ -1327,50 +1413,40 @@ function fkeep!(A::AbstractSparseMatrixCSC, f, trim::Bool = true)
         Acolptr[Aj+1] = Awritepos
     end
 
-    # Trim A's storage if necessary and desired
-    if trim
-        Annz = Acolptr[end] - 1
-        if length(Arowval) != Annz
-            resize!(Arowval, Annz)
-        end
-        if length(Anzval) != Annz
-            resize!(Anzval, Annz)
-        end
-    end
+    # Trim A's storage if necessary
+    Annz = Acolptr[end] - 1
+    resize!(Arowval, Annz)
+    resize!(Anzval, Annz)
 
-    A
+    return A
 end
 
-tril!(A::AbstractSparseMatrixCSC, k::Integer = 0, trim::Bool = true) =
-    fkeep!(A, (i, j, x) -> i + k >= j, trim)
-triu!(A::AbstractSparseMatrixCSC, k::Integer = 0, trim::Bool = true) =
-    fkeep!(A, (i, j, x) -> j >= i + k, trim)
+tril!(A::AbstractSparseMatrixCSC, k::Integer = 0) =
+    fkeep!(A, (i, j, x) -> i + k >= j)
+triu!(A::AbstractSparseMatrixCSC, k::Integer = 0) =
+    fkeep!(A, (i, j, x) -> j >= i + k)
 
 """
-    droptol!(A::AbstractSparseMatrixCSC, tol; trim::Bool = true)
+    droptol!(A::AbstractSparseMatrixCSC, tol)
 
-Removes stored values from `A` whose absolute value is less than or equal to `tol`,
-optionally trimming resulting excess space from `rowvals(A)` and `nonzeros(A)` when `trim`
-is `true`.
+Removes stored values from `A` whose absolute value is less than or equal to `tol`.
 """
-droptol!(A::AbstractSparseMatrixCSC, tol; trim::Bool = true) =
-    fkeep!(A, (i, j, x) -> abs(x) > tol, trim)
+droptol!(A::AbstractSparseMatrixCSC, tol) =
+    fkeep!(A, (i, j, x) -> abs(x) > tol)
 
 """
-    dropzeros!(A::AbstractSparseMatrixCSC; trim::Bool = true)
+    dropzeros!(A::AbstractSparseMatrixCSC;)
 
-Removes stored numerical zeros from `A`, optionally trimming resulting excess space from
-`rowvals(A)` and `nonzeros(A)` when `trim` is `true`.
+Removes stored numerical zeros from `A`.
 
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(A::AbstractSparseMatrixCSC; trim::Bool = true) = fkeep!(A, (i, j, x) -> !iszero(x), trim)
+dropzeros!(A::AbstractSparseMatrixCSC) = fkeep!(A, (i, j, x) -> !iszero(x))
 """
-    dropzeros(A::AbstractSparseMatrixCSC; trim::Bool = true)
+    dropzeros(A::AbstractSparseMatrixCSC;)
 
-Generates a copy of `A` and removes stored numerical zeros from that copy, optionally
-trimming excess space from the result's `rowval` and `nzval` arrays when `trim` is `true`.
+Generates a copy of `A` and removes stored numerical zeros from that copy.
 
 For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 
@@ -1378,17 +1454,18 @@ For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 ```jldoctest
 julia> A = sparse([1, 2, 3], [1, 2, 3], [1.0, 0.0, 1.0])
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  0.0
-  [3, 3]  =  1.0
+ 1.0   ⋅    ⋅
+  ⋅   0.0   ⋅
+  ⋅    ⋅   1.0
 
 julia> dropzeros(A)
 3×3 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
-  [1, 1]  =  1.0
-  [3, 3]  =  1.0
+ 1.0   ⋅    ⋅
+  ⋅    ⋅    ⋅
+  ⋅    ⋅   1.0
 ```
 """
-dropzeros(A::AbstractSparseMatrixCSC; trim::Bool = true) = dropzeros!(copy(A), trim = trim)
+dropzeros(A::AbstractSparseMatrixCSC) = dropzeros!(copy(A))
 
 ## Find methods
 
@@ -1497,7 +1574,8 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 ```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> sprand(Bool, 2, 2, 0.5)
 2×2 SparseMatrixCSC{Bool,Int64} with 1 stored entry:
-  [2, 2]  =  1
+ ⋅  ⋅
+ ⋅  1
 
 julia> sprand(Float64, 3, 0.75)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
@@ -1543,8 +1621,8 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 ```jldoctest; setup = :(using Random; Random.seed!(0))
 julia> sprandn(2, 2, 0.75)
 2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
-  [1, 2]  =  0.586617
-  [2, 2]  =  0.297336
+  ⋅   0.586617
+  ⋅   0.297336
 ```
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) =
@@ -1569,7 +1647,10 @@ specified.
 # Examples
 ```jldoctest
 julia> spzeros(3, 3)
-3×3 SparseMatrixCSC{Float64,Int64} with 0 stored entries
+3×3 SparseMatrixCSC{Float64,Int64} with 0 stored entries:
+  ⋅    ⋅    ⋅
+  ⋅    ⋅    ⋅
+  ⋅    ⋅    ⋅
 
 julia> spzeros(Float32, 4)
 4-element SparseVector{Float32,Int64} with 0 stored entries
@@ -3016,12 +3097,13 @@ Drop entry `A[i,j]` from `A` if `A[i,j]` is stored, and otherwise do nothing.
 ```jldoctest
 julia> A = sparse([1 2; 0 0])
 2×2 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
-  [1, 1]  =  1
-  [1, 2]  =  2
+ 1  2
+ ⋅  ⋅
 
 julia> SparseArrays.dropstored!(A, 1, 2); A
 2×2 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
-  [1, 1]  =  1
+ 1  ⋅
+ ⋅  ⋅
 ```
 """
 function dropstored!(A::AbstractSparseMatrixCSC, i::Integer, j::Integer)
@@ -3054,16 +3136,17 @@ stored and otherwise do nothing. Derivative forms:
 ```jldoctest
 julia> A = sparse(Diagonal([1, 2, 3, 4]))
 4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1, 1]  =  1
-  [2, 2]  =  2
-  [3, 3]  =  3
-  [4, 4]  =  4
+ 1  ⋅  ⋅  ⋅
+ ⋅  2  ⋅  ⋅
+ ⋅  ⋅  3  ⋅
+ ⋅  ⋅  ⋅  4
 
 julia> SparseArrays.dropstored!(A, [1, 2], [1, 1])
 4×4 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
-  [2, 2]  =  2
-  [3, 3]  =  3
-  [4, 4]  =  4
+ ⋅  ⋅  ⋅  ⋅
+ ⋅  2  ⋅  ⋅
+ ⋅  ⋅  3  ⋅
+ ⋅  ⋅  ⋅  4
 ```
 """
 function dropstored!(A::AbstractSparseMatrixCSC,
@@ -3241,22 +3324,31 @@ Concatenate matrices block-diagonally. Currently only implemented for sparse mat
 ```jldoctest
 julia> blockdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
 5×5 SparseMatrixCSC{Int64,Int64} with 5 stored entries:
-  [1, 1]  =  2
-  [2, 2]  =  2
-  [3, 3]  =  2
-  [4, 4]  =  4
-  [5, 5]  =  4
+ 2  ⋅  ⋅  ⋅  ⋅
+ ⋅  2  ⋅  ⋅  ⋅
+ ⋅  ⋅  2  ⋅  ⋅
+ ⋅  ⋅  ⋅  4  ⋅
+ ⋅  ⋅  ⋅  ⋅  4
 ```
 """
+blockdiag() = spzeros(promote_type(), Int, 0, 0)
+
+function blockdiag(X::AbstractSparseMatrixCSC{Tv, Ti}...) where {Tv, Ti <: Integer}
+    _blockdiag(Tv, Ti, X...)
+end
+
 function blockdiag(X::AbstractSparseMatrixCSC...)
+    Tv = promote_type(map(x->eltype(nonzeros(x)), X)...)
+    Ti = promote_type(map(x->eltype(rowvals(x)), X)...)
+    _blockdiag(Tv, Ti, X...)
+end
+
+function _blockdiag(::Type{Tv}, ::Type{Ti}, X::AbstractSparseMatrixCSC...) where {Tv, Ti <: Integer}
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
     nX = Int[ size(x, 2) for x in X ]
     m = sum(mX)
     n = sum(nX)
-
-    Tv = promote_type(map(x->eltype(nonzeros(x)), X)...)
-    Ti = isempty(X) ? Int : promote_type(map(x->eltype(rowvals(x)), X)...)
 
     colptr = Vector{Ti}(undef, n+1)
     nnzX = Int[ nnz(x) for x in X ]
@@ -3434,11 +3526,11 @@ end
 
 """
     spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
-    spdiagm(m::Integer, n::Ingeger, kv::Pair{<:Integer,<:AbstractVector}...)
+    spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...)
 
 Construct a sparse diagonal matrix from `Pair`s of vectors and diagonals.
 Each vector `kv.second` will be placed on the `kv.first` diagonal.  By
-default (if `size=nothing`), the matrix is square and its size is inferred
+default, the matrix is square and its size is inferred
 from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
 can be specified by passing `m,n` as the first arguments.
 
@@ -3446,14 +3538,11 @@ can be specified by passing `m,n` as the first arguments.
 ```jldoctest
 julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
 5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:
-  [2, 1]  =  1
-  [1, 2]  =  4
-  [3, 2]  =  2
-  [2, 3]  =  3
-  [4, 3]  =  3
-  [3, 4]  =  2
-  [5, 4]  =  4
-  [4, 5]  =  1
+ ⋅  4  ⋅  ⋅  ⋅
+ 1  ⋅  3  ⋅  ⋅
+ ⋅  2  ⋅  2  ⋅
+ ⋅  ⋅  3  ⋅  1
+ ⋅  ⋅  ⋅  4  ⋅
 ```
 """
 spdiagm(kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm(nothing, kv...)

@@ -32,15 +32,34 @@ SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
 
 # Define an alias for a view of a whole column of a SparseMatrixCSC. Many methods can be written for the
 # union of such a view and a SparseVector so we define an alias for such a union as well
-const SparseColumnView{T}  = SubArray{T,1,<:AbstractSparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
-const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
-const AdjOrTransSparseVectorUnion{T} = LinearAlgebra.AdjOrTrans{T, <:SparseVectorUnion{T}}
+const SparseColumnView{Tv,Ti}  = SubArray{Tv,1,<:AbstractSparseMatrixCSC{Tv,Ti},Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
+const SparseVectorView{Tv,Ti}  = SubArray{Tv,1,<:AbstractSparseVector{Tv,Ti},Tuple{Base.Slice{Base.OneTo{Int}}},false}
+const SparseVectorUnion{Tv,Ti} = Union{SparseVector{Tv,Ti}, SparseColumnView{Tv,Ti}, SparseVectorView{Tv,Ti}}
+const AdjOrTransSparseVectorUnion{Tv,Ti} = LinearAlgebra.AdjOrTrans{Tv, <:SparseVectorUnion{Tv,Ti}}
 
 ### Basic properties
 
 size(x::SparseVector)     = (getfield(x, :n),)
-nnz(x::SparseVector)      = length(nonzeros(x))
 count(f, x::SparseVector) = count(f, nonzeros(x)) + f(zero(eltype(x)))*(length(x) - nnz(x))
+
+# implement the nnz - nzrange - nonzeros - rowvals interface for sparse vectors
+
+nnz(x::SparseVector)      = length(nonzeros(x))
+function nnz(x::SparseColumnView)
+    rowidx, colidx = parentindices(x)
+    return length(nzrange(parent(x), colidx))
+end
+nnz(x::SparseVectorView) = nnz(x.parent)
+
+"""
+    nzrange(x::SparseVectorUnion, col)
+
+Give the range of indices to the structural nonzero values of a sparse vector.
+The column index `col` is ignored (assumed to be `1`).
+"""
+function nzrange(x::SparseVectorUnion, j::Integer)
+    j == 1 ? (1:nnz(x)) : throw(BoundsError(x, (":", j)))
+end
 
 nonzeros(x::SparseVector) = getfield(x, :nzval)
 function nonzeros(x::SparseColumnView)
@@ -49,6 +68,7 @@ function nonzeros(x::SparseColumnView)
     @inbounds y = view(nonzeros(A), nzrange(A, colidx))
     return y
 end
+nonzeros(x::SparseVectorView) = nonzeros(parent(x))
 
 nonzeroinds(x::SparseVector) = getfield(x, :nzind)
 function nonzeroinds(x::SparseColumnView)
@@ -57,12 +77,12 @@ function nonzeroinds(x::SparseColumnView)
     @inbounds y = view(rowvals(A), nzrange(A, colidx))
     return y
 end
+nonzeroinds(x::SparseVectorView) = nonzeroinds(parent(x))
+
+rowvals(x::SparseVectorUnion) = nonzeroinds(x)
 
 indtype(x::SparseColumnView) = indtype(parent(x))
-function nnz(x::SparseColumnView)
-    rowidx, colidx = parentindices(x)
-    return length(nzrange(parent(x), colidx))
-end
+indtype(x::SparseVectorView) = indtype(parent(x))
 
 ## similar
 #
@@ -421,18 +441,17 @@ SparseVector{Tv}(s::AbstractVector{Tv}) where {Tv} = SparseVector{Tv,Int}(s)
 
 SparseVector(s::AbstractVector{Tv}) where {Tv} = SparseVector{Tv,Int}(s)
 
+# copy-constructors
+SparseVector(s::SparseVector{Tv,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
+SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
+function SparseVector{Tv,Ti}(s::SparseVector) where {Tv,Ti}
+    copyind = Vector{Ti}(nonzeroinds(s))
+    copynz = Vector{Tv}(nonzeros(s))
+    SparseVector{Tv,Ti}(length(s), copyind, copynz)
+end
 
 # convert between different types of SparseVector
-SparseVector{Tv}(s::SparseVector{Tv}) where {Tv} = s
-SparseVector{Tv,Ti}(s::SparseVector{Tv,Ti}) where {Tv,Ti} = s
-SparseVector{Tv,Ti}(s::SparseVector) where {Tv,Ti} =
-    SparseVector{Tv,Ti}(length(s::SparseVector), convert(Vector{Ti}, nonzeroinds(s)), convert(Vector{Tv}, nonzeros(s)))
-
-SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} =
-    SparseVector{Tv,Ti}(length(s::SparseVector), nonzeroinds(s), convert(Vector{Tv}, nonzeros(s)))
-
 convert(T::Type{<:SparseVector}, m::AbstractVector) = m isa T ? m : T(m)
-
 convert(T::Type{<:SparseVector}, m::AbstractSparseMatrixCSC) = T(m)
 convert(T::Type{<:AbstractSparseMatrixCSC}, v::SparseVector) = T(v)
 
@@ -733,6 +752,25 @@ end
 findall(p::Base.Fix2{typeof(in)}, x::SparseVector{<:Any,Ti}) where {Ti} =
     invoke(findall, Tuple{Base.Fix2{typeof(in)}, AbstractArray}, p, x)
 
+"""
+    findnz(x::SparseVector)
+
+Return a tuple `(I, V)`  where `I` is the indices of the stored ("structurally non-zero")
+values in sparse vector `x` and `V` is a vector of the values.
+
+# Examples
+```jldoctest
+julia> x = sparsevec([1 2 0; 0 0 3; 0 4 0])
+9-element SparseVector{Int64,Int64} with 4 stored entries:
+  [1]  =  1
+  [4]  =  2
+  [6]  =  4
+  [8]  =  3
+
+julia> findnz(x)
+([1, 4, 6, 8], [1, 2, 4, 3])
+```
+"""
 function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)
 
@@ -814,7 +852,7 @@ function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractUnitRange) where {T
 end
 
 getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[findall(I)]
-getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[findall(I)]
+getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[LinearIndices(I)[findall(I)]]
 @inline function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector) where {Tv,Ti}
     # SparseMatrixCSC has a nicely optimized routine for this; punt
     S = SparseMatrixCSC(length(x::SparseVector), 1, Ti[1,length(nonzeroinds(x))+1], nonzeroinds(x), nonzeros(x))
@@ -828,6 +866,11 @@ function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractArray) where {Tv,Ti
 end
 
 getindex(x::AbstractSparseVector, ::Colon) = copy(x)
+
+function Base.isstored(x::AbstractSparseVector, i::Integer)
+    @boundscheck checkbounds(x, i)
+    return i in nonzeroinds(x)
+end
 
 ### show and friends
 
@@ -850,7 +893,7 @@ function show(io::IOContext, x::AbstractSparseVector)
     if isempty(nzind)
         return show(io, MIME("text/plain"), x)
     end
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
     if !haskey(io, :compact)
@@ -1921,7 +1964,7 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     SparseVector(n,newnzind,newnzvals)
 end
 
-function fkeep!(x::SparseVector, f, trim::Bool = true)
+function fkeep!(x::SparseVector, f)
     n = length(x::SparseVector)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
@@ -1940,43 +1983,35 @@ function fkeep!(x::SparseVector, f, trim::Bool = true)
         end
     end
 
-    # Trim x's storage if necessary and desired
-    if trim
-        x_nnz = x_writepos - 1
-        if length(nzind) != x_nnz
-            resize!(nzval, x_nnz)
-            resize!(nzind, x_nnz)
-        end
-    end
+    # Trim x's storage if necessary
+    x_nnz = x_writepos - 1
+    resize!(nzval, x_nnz)
+    resize!(nzind, x_nnz)
 
-    x
+    return x
 end
 
 """
-    droptol!(x::SparseVector, tol; trim::Bool = true)
+    droptol!(x::SparseVector, tol)
 
-Removes stored values from `x` whose absolute value is less than or equal to `tol`,
-optionally trimming resulting excess space from `nonzeroinds(x)` and `nonzeros(x)` when `trim`
-is `true`.
+Removes stored values from `x` whose absolute value is less than or equal to `tol`.
 """
-droptol!(x::SparseVector, tol; trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
+droptol!(x::SparseVector, tol) = fkeep!(x, (i, x) -> abs(x) > tol)
 
 """
-    dropzeros!(x::SparseVector; trim::Bool = true)
+    dropzeros!(x::SparseVector)
 
-Removes stored numerical zeros from `x`, optionally trimming resulting excess space from
-`nonzeroinds(x)` and `nonzeros(x)` when `trim` is `true`.
+Removes stored numerical zeros from `x`.
 
 For an out-of-place version, see [`dropzeros`](@ref). For
 algorithmic information, see `fkeep!`.
 """
-dropzeros!(x::SparseVector; trim::Bool = true) = fkeep!(x, (i, x) -> !iszero(x), trim)
+dropzeros!(x::SparseVector) = fkeep!(x, (i, x) -> !iszero(x))
 
 """
-    dropzeros(x::SparseVector; trim::Bool = true)
+    dropzeros(x::SparseVector)
 
-Generates a copy of `x` and removes numerical zeros from that copy, optionally trimming
-excess space from the result's `nzind` and `nzval` arrays when `trim` is `true`.
+Generates a copy of `x` and removes numerical zeros from that copy.
 
 For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 
@@ -1994,7 +2029,7 @@ julia> dropzeros(A)
   [3]  =  1.0
 ```
 """
-dropzeros(x::SparseVector; trim::Bool = true) = dropzeros!(copy(x), trim = trim)
+dropzeros(x::SparseVector) = dropzeros!(copy(x))
 
 function copy!(dst::SparseVector, src::SparseVector)
     length(dst::SparseVector) == length(src::SparseVector) || throw(ArgumentError("Sparse vectors should have the same length for copy!"))

@@ -117,6 +117,8 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid2 = UUID(uuidstr2)
     uuids = [uuid, uuid2]
     @test (uuids .== uuid) == [true, false]
+
+    @test parse(UUID, uuidstr2) == uuid2
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
@@ -181,12 +183,10 @@ end
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
-saved_home_project = Base.HOME_PROJECT[]
 saved_active_project = Base.ACTIVE_PROJECT[]
 
 push!(empty!(LOAD_PATH), "project")
 push!(empty!(DEPOT_PATH), "depot")
-Base.HOME_PROJECT[] = nothing
 Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]
@@ -284,7 +284,8 @@ module NotPkgModule; end
 
     @testset "pkgdir" begin
         @test pkgdir(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
-        @test pkgdir(Foo.SubFoo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
         @test pkgdir(NotPkgModule) === nothing
     end
 
@@ -381,6 +382,14 @@ const depots = [mktempdir() for _ = 1:3]
 const envs = Dict{String,Any}()
 
 append!(empty!(DEPOT_PATH), depots)
+
+@testset "load code uniqueness" begin
+    @show UUIDS
+    @show depots
+    @test allunique(UUIDS)
+    @test allunique(depots)
+    @test allunique(DEPOT_PATH)
+end
 
 for (flat, root, roots, graph) in graphs
     if flat
@@ -561,7 +570,11 @@ end
 end
 
 # normalization of paths by include (#26424)
-@test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
+@test begin
+    exc = try; include("./notarealfile.jl"); "unexpectedly reached!"; catch exc; exc; end
+    @test exc isa SystemError
+    exc.prefix
+end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
 
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
@@ -652,10 +665,31 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-Base.HOME_PROJECT[] = saved_home_project
 Base.ACTIVE_PROJECT[] = saved_active_project
 
 # issue #28190
 module Foo; import Libdl; end
 import .Foo.Libdl; import Libdl
 @test Foo.Libdl === Libdl
+
+@testset "include with mapexpr" begin
+    let exprs = Any[]
+        @test 13 === include_string(@__MODULE__, "1+1\n3*4") do ex
+            ex isa LineNumberNode || push!(exprs, ex)
+            Meta.isexpr(ex, :call) ? :(1 + $ex) : ex
+        end
+        @test exprs == [:(1 + 1), :(3 * 4)]
+    end
+    # test using test_exec.jl, just because that is the shortest handy file
+    for incl in (include, (mapexpr,path) -> Base.include(mapexpr, @__MODULE__, path))
+        let exprs = Any[]
+            incl("test_exec.jl") do ex
+                ex isa LineNumberNode || push!(exprs, ex)
+                Meta.isexpr(ex, :macrocall) ? :nothing : ex
+            end
+            @test length(exprs) == 2 && exprs[1] == :(using Test)
+            @test Meta.isexpr(exprs[2], :macrocall) &&
+                  exprs[2].args[[1,3]] == [Symbol("@test"), :(1 == 2)]
+        end
+    end
+end

@@ -84,6 +84,7 @@ include("range.jl")
 include("error.jl")
 
 # core numeric operations & types
+==(x, y) = x === y
 include("bool.jl")
 include("number.jl")
 include("int.jl")
@@ -105,6 +106,8 @@ include("baseext.jl")
 include("ntuple.jl")
 
 include("abstractdict.jl")
+include("iddict.jl")
+include("idset.jl")
 
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
@@ -127,6 +130,7 @@ include("abstractarraymath.jl")
 include("arraymath.jl")
 
 # SIMD loops
+@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
 include("simdloop.jl")
 using .SimdLoop
 
@@ -162,6 +166,20 @@ include("strings/substring.jl")
 # For OS specific stuff
 include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
+# Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
+# a slightly more verbose fashion than usual, because we're running so early.
+const DL_LOAD_PATH = String[]
+let os = ccall(:jl_get_UNAME, Any, ())
+    if os === :Darwin || os === :Apple
+        if Base.DARWIN_FRAMEWORK
+            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+        else
+            push!(DL_LOAD_PATH, "@loader_path/julia")
+        end
+        push!(DL_LOAD_PATH, "@loader_path")
+    end
+end
 
 include("osutils.jl")
 include("c.jl")
@@ -202,24 +220,16 @@ include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 
-const DL_LOAD_PATH = String[]
-if Sys.isapple()
-    if Base.DARWIN_FRAMEWORK
-        push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-    else
-        push!(DL_LOAD_PATH, "@loader_path/julia")
-    end
-    push!(DL_LOAD_PATH, "@loader_path")
-end
-
 include("env.jl")
 
-# Scheduling
+# Concurrency
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+include("channels.jl")
 include("task.jl")
+include("threads_overloads.jl")
 include("weakkeydict.jl")
 
 # Logging
@@ -239,6 +249,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
+include("ttyhascolor.jl")
 include("grisu/grisu.jl")
 include("secretbuffer.jl")
 
@@ -312,9 +323,6 @@ using .MathConstants: ℯ, π, pi
 # metaprogramming
 include("meta.jl")
 
-# concurrency and parallelism
-include("channels.jl")
-
 # utilities
 include("deepcopy.jl")
 include("download.jl")
@@ -335,6 +343,7 @@ include("uuid.jl")
 include("loading.jl")
 
 # misc useful functions & macros
+include("timing.jl")
 include("util.jl")
 
 include("asyncmap.jl")
@@ -363,27 +372,8 @@ for m in methods(include)
 end
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, path::AbstractString) = include(mod, convert(String, path))
-function include(mod::Module, _path::String)
-    path, prev = _include_dependency(mod, _path)
-    for callback in include_callbacks # to preserve order, must come before Core.include
-        invokelatest(callback, mod, path)
-    end
-    tls = task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        # result = Core.include(mod, path)
-        result = ccall(:jl_load_, Any, (Any, Any), mod, path)
-    finally
-        if prev === nothing
-            delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
-end
+include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
+include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 
 end_base_include = time_ns()
 
@@ -410,12 +400,10 @@ function __init__()
     # initialize loading
     init_depot_path()
     init_load_path()
+    init_active_project()
     nothing
 end
 
-
 end
-
-const tot_time_stdlib = RefValue(0.0)
 
 end # baremodule Base

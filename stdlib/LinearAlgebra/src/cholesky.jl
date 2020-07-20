@@ -8,7 +8,7 @@
 # complicated and some explanation is therefore provided in the following
 #
 # In the methods below, LAPACK is called when possible, i.e. StridedMatrices with Float32,
-# Float64, Complex{Float32}, and Complex{Float64} element types. For other element or
+# Float64, ComplexF32, and ComplexF64 element types. For other element or
 # matrix types, the unblocked Julia implementation in _chol! is used. For cholesky
 # and cholesky! pivoting is supported through a Val(Bool) argument. A type argument is
 # necessary for type stability since the output of cholesky and cholesky! is either
@@ -40,27 +40,27 @@ via `F.L` and `F.U`.
 # Examples
 ```jldoctest
 julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
    4.0   12.0  -16.0
   12.0   37.0  -43.0
  -16.0  -43.0   98.0
 
 julia> C = cholesky(A)
-Cholesky{Float64,Array{Float64,2}}
+Cholesky{Float64,Matrix{Float64}}
 U factor:
-3×3 UpperTriangular{Float64,Array{Float64,2}}:
+3×3 UpperTriangular{Float64,Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.U
-3×3 UpperTriangular{Float64,Array{Float64,2}}:
+3×3 UpperTriangular{Float64,Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.L
-3×3 LowerTriangular{Float64,Array{Float64,2}}:
+3×3 LowerTriangular{Float64,Matrix{Float64}}:
   2.0   ⋅    ⋅
   6.0  1.0   ⋅
  -8.0  5.0  3.0
@@ -97,20 +97,20 @@ via `F.L` and `F.U`.
 # Examples
 ```jldoctest
 julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
    4.0   12.0  -16.0
   12.0   37.0  -43.0
  -16.0  -43.0   98.0
 
 julia> C = cholesky(A, Val(true))
-CholeskyPivoted{Float64,Array{Float64,2}}
+CholeskyPivoted{Float64,Matrix{Float64}}
 U factor with rank 3:
-3×3 UpperTriangular{Float64,Array{Float64,2}}:
+3×3 UpperTriangular{Float64,Matrix{Float64}}:
  9.89949  -4.34366  -1.61624
   ⋅        4.25825   1.1694
   ⋅         ⋅        0.142334
 permutation:
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  2
  1
@@ -147,13 +147,6 @@ end
 function _chol!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular})
     C, info = LAPACK.potrf!('L', A)
     return LowerTriangular(C), info
-end
-function _chol!(A::StridedMatrix)
-    if !ishermitian(A) # return with info = -1 if not Hermitian
-        return UpperTriangular(A), convert(BlasInt, -1)
-    else
-        return _chol!(A, UpperTriangular)
-    end
 end
 
 ## Non BLAS/LAPACK element types (generic)
@@ -229,7 +222,7 @@ end
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A, Val(false); check = true) -> Cholesky
+    cholesky!(A::StridedMatrix, Val(false); check = true) -> Cholesky
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if
@@ -239,7 +232,7 @@ the factorization produces a number not representable by the element type of
 # Examples
 ```jldoctest
 julia> A = [1 2; 2 50]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   2
  2  50
 
@@ -276,7 +269,7 @@ cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0, check::Bool
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
+    cholesky!(A::StridedMatrix, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if the
@@ -302,11 +295,14 @@ end
     cholesky(A, Val(false); check = true) -> Cholesky
 
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
-and return a `Cholesky` factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
-`StridedMatrix` or a *perfectly* symmetric or Hermitian `StridedMatrix`.
+and return a [`Cholesky`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
+[`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
 The following functions are available for `Cholesky` objects: [`size`](@ref), [`\\`](@ref),
 [`inv`](@ref), [`det`](@ref), [`logdet`](@ref) and [`isposdef`](@ref).
+
+If you have a matrix `A` that is slightly non-Hermitian due to roundoff errors in its construction,
+wrap it in `Hermitian(A)` before passing it to `cholesky` in order to treat it as perfectly Hermitian.
 
 When `check = true`, an error is thrown if the decomposition fails.
 When `check = false`, responsibility for checking the decomposition's
@@ -315,27 +311,27 @@ validity (via [`issuccess`](@ref)) lies with the user.
 # Examples
 ```jldoctest
 julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
    4.0   12.0  -16.0
   12.0   37.0  -43.0
  -16.0  -43.0   98.0
 
 julia> C = cholesky(A)
-Cholesky{Float64,Array{Float64,2}}
+Cholesky{Float64,Matrix{Float64}}
 U factor:
-3×3 UpperTriangular{Float64,Array{Float64,2}}:
+3×3 UpperTriangular{Float64,Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.U
-3×3 UpperTriangular{Float64,Array{Float64,2}}:
+3×3 UpperTriangular{Float64,Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.L
-3×3 LowerTriangular{Float64,Array{Float64,2}}:
+3×3 LowerTriangular{Float64,Matrix{Float64}}:
   2.0   ⋅    ⋅
   6.0  1.0   ⋅
  -8.0  5.0  3.0
@@ -353,13 +349,16 @@ cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
     cholesky(A, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
 
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
-and return a `CholeskyPivoted` factorization. The matrix `A` can either be a [`Symmetric`](@ref)
-or [`Hermitian`](@ref) `StridedMatrix` or a *perfectly* symmetric or Hermitian `StridedMatrix`.
+and return a [`CholeskyPivoted`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref)
+or [`Hermitian`](@ref) [`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
 The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
+
+If you have a matrix `A` that is slightly non-Hermitian due to roundoff errors in its construction,
+wrap it in `Hermitian(A)` before passing it to `cholesky` in order to treat it as perfectly Hermitian.
 
 When `check = true`, an error is thrown if the decomposition fails.
 When `check = false`, responsibility for checking the decomposition's
@@ -448,7 +447,7 @@ end
 Base.propertynames(F::CholeskyPivoted, private::Bool=false) =
     (:U, :L, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
-issuccess(C::Cholesky) = C.info == 0
+issuccess(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)

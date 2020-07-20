@@ -47,7 +47,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
     Base.link_pipe!(output, reader_supports_async=true, writer_supports_async=true)
     Base.link_pipe!(err, reader_supports_async=true, writer_supports_async=true)
 
-    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in), true)
+    repl = REPL.LineEditREPL(FakeTerminal(input.out, output.in, err.in, options.hascolor), options.hascolor)
     repl.options = options
 
     hard_kill = kill_timer(900) # Your debugging session starts now. You have 15 minutes. Go.
@@ -65,7 +65,7 @@ function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
-ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
+Base.exit_on_sigint(false)
 
 # make sure `run_interface` can normally handle `eof`
 # without any special handling by the user
@@ -90,7 +90,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl() do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -194,8 +194,8 @@ fake_repl() do stdin_write, stdout_read, repl
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
-              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
+        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
+              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] ")
     end
 
     # issue #27293
@@ -331,6 +331,13 @@ fake_repl() do stdin_write, stdout_read, repl
     s2 = readuntil(stdout_read, "|||", keep=true)
     @test endswith(s2, " 0x321\r\e[13C|||") # should have a space (from Meta-rightarrow) and not
                                             # have a spurious C before ||| (the one here is not spurious!)
+
+    # "pass through" for ^x^x
+    write(stdin_write, "\x030x4321\n") # \x03 == ^c
+    readuntil(stdout_read, "0x4321")
+    write(stdin_write, "\e[A\x18\x18||\x18\x18||||") # uparrow, ^x^x||^x^x||||
+    s3 = readuntil(stdout_read, "||||", keep=true)
+    @test endswith(s3, "||0x4321\r\e[15C||||")
 
     # Delete line (^U) and close REPL (^D)
     write(stdin_write, "\x15\x04")
@@ -764,47 +771,47 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
+Base.exit_on_sigint(true)
 
 let exename = Base.julia_cmd()
     # Test REPL in dumb mode
-    with_fake_pty() do pty_slave, pty_master
+    with_fake_pty() do pts, ptm
         nENV = copy(ENV)
         nENV["TERM"] = "dumb"
-        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pty_slave, pty_slave, pty_slave, wait=false)
-        Base.close_stdio(pty_slave)
-        output = readuntil(pty_master, "julia> ", keep=true)
+        p = run(detach(setenv(`$exename --startup-file=no -q`, nENV)), pts, pts, pts, wait=false)
+        Base.close_stdio(pts)
+        output = readuntil(ptm, "julia> ", keep=true)
         if ccall(:jl_running_on_valgrind, Cint,()) == 0
             # If --trace-children=yes is passed to valgrind, we will get a
             # valgrind banner here, not just the prompt.
             @test output == "julia> "
         end
-        write(pty_master, "1\nexit()\n")
+        write(ptm, "1\nexit()\n")
 
-        output = readuntil(pty_master, ' ', keep=true)
+        output = readuntil(ptm, ' ', keep=true)
         if Sys.iswindows()
 	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
             @test output == "1\n\njulia> "
         else
             @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
         end
-        @test bytesavailable(pty_master) == 0
+        @test bytesavailable(ptm) == 0
         @test if Sys.iswindows() || Sys.isbsd()
-                eof(pty_master)
+                eof(ptm)
             else
                 # Some platforms (such as linux) report EIO instead of EOF
                 # possibly consume child-exited notification
                 # for example, see discussion in https://bugs.python.org/issue5380
                 try
-                    eof(pty_master) && !Sys.islinux()
+                    eof(ptm) && !Sys.islinux()
                 catch ex
                     (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow()
-                    @test_throws ex eof(pty_master) # make sure the error is sticky
-                    pty_master.readerror = nothing
-                    eof(pty_master)
+                    @test_throws ex eof(ptm) # make sure the error is sticky
+                    ptm.readerror = nothing
+                    eof(ptm)
                 end
             end
-        @test read(pty_master, String) == ""
+        @test read(ptm, String) == ""
         wait(p)
     end
 
@@ -879,6 +886,13 @@ let term = REPL.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOContext(IOBuffe
     @test term[:foo] == get(term, :foo, nothing) == true
     @test get(term, :bar, nothing) === nothing
     @test_throws KeyError term[:bar]
+end
+
+# Ensure even the dumb REPL elides content
+let term = REPL.Terminals.TTYTerminal("dumb",IOBuffer("zeros(1000)\n"),IOBuffer(),IOBuffer())
+    r = REPL.BasicREPL(term)
+    REPL.run_repl(r)
+    @test contains(String(take!(term.out_stream)), "⋮")
 end
 
 
@@ -1013,6 +1027,8 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
+help_result(line) = Base.eval(REPL._helpmode(IOBuffer(), line))
+
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
 for (line, expr) in Pair[
@@ -1027,18 +1043,95 @@ for (line, expr) in Pair[
     "while       " => :while, # keyword, trailing spaces should be stripped.
     "0"            => 0,
     "\"...\""      => "...",
-    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
+    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "..."),
+    "using Foo"    => :using,
+    "import Foo"   => :import,
     ]
-    #@test REPL._helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(119, doc_util_path), stdout, expr)
-    buf = IOBuffer()
-    @test Base.eval(REPL._helpmode(buf, line)) isa Union{Markdown.MD,Nothing}
+    @test REPL._helpmode(line).args[4] == expr
+    @test help_result(line) isa Union{Markdown.MD,Nothing}
 end
 
 # PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
-for line in ["′", "abstract", "type", "|=", ".="]
+for line in ["′", "abstract", "type"]
     @test occursin("No documentation found.",
-        sprint(show, Base.eval(REPL._helpmode(IOBuffer(), line))::Union{Markdown.MD,Nothing}))
+        sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
+
+# PR 35154
+@test occursin("|=", sprint(show, help_result("|=")))
+@test occursin("broadcast", sprint(show, help_result(".=")))
+
+# PR 35277
+@test occursin("identical", sprint(show, help_result("===")))
+@test occursin("broadcast", sprint(show, help_result(".<=")))
+
+# Issue #25930
+
+# Brief and extended docs (issue #25930)
+let text =
+        """
+            brief_extended()
+
+        Short docs
+
+        # Extended help
+
+        Long docs
+        """,
+    md = Markdown.parse(text)
+    @test md == REPL.trimdocs(md, false)
+    @test !isa(md.content[end], REPL.Message)
+    mdbrief = REPL.trimdocs(md, true)
+    @test length(mdbrief.content) == 3
+    @test isa(mdbrief.content[1], Markdown.Code)
+    @test isa(mdbrief.content[2], Markdown.Paragraph)
+    @test isa(mdbrief.content[3], REPL.Message)
+    @test occursin("??", mdbrief.content[3].msg)
+end
+
+# issue #35216: empty and non-strings in H1 headers
+let emptyH1 = Markdown.parse("# "),
+    codeH1 = Markdown.parse("# `hello`")
+    @test emptyH1 == REPL.trimdocs(emptyH1, false) == REPL.trimdocs(emptyH1, true)
+    @test codeH1 == REPL.trimdocs(codeH1, false) == REPL.trimdocs(codeH1, true)
+end
+
+module BriefExtended
+"""
+    f()
+
+Short docs
+
+# Extended help
+
+Long docs
+"""
+f() = nothing
+@doc text"""
+    f_plain()
+
+Plain text docs
+"""
+f_plain() = nothing
+@doc html"""
+<h1><code>f_html()</code></h1>
+<p>HTML docs.</p>
+"""
+f_html() = nothing
+end # module BriefExtended
+
+buf = IOBuffer()
+md = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f"))
+@test length(md.content) == 2 && isa(md.content[2], REPL.Message)
+buf = IOBuffer()
+md = Base.eval(REPL._helpmode(buf, "?$(@__MODULE__).BriefExtended.f"))
+@test length(md.content) == 1 && length(md.content[1].content[1].content) == 4
+buf = IOBuffer()
+txt = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f_plain"))
+@test !isempty(sprint(show, txt))
+buf = IOBuffer()
+html = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f_html"))
+@test !isempty(sprint(show, html))
 
 # PR #27562
 fake_repl() do stdin_write, stdout_read, repl
@@ -1073,6 +1166,31 @@ fake_repl() do stdin_write, stdout_read, repl
     @test istaskdone(repltask)
 end
 
+# issue #34842
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "?;\n")
+    readline(stdout_read)
+    @test endswith(readline(stdout_read),";")
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+# issue #35771
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "global x\n")
+    readline(stdout_read)
+    @test !occursin("ERROR", readline(stdout_read))
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin
         REPL.run_repl(repl)
@@ -1089,4 +1207,85 @@ fake_repl() do stdin_write, stdout_read, repl
     @test s4 == "anything" # no control characters between the last two occurrences of "anything"
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
+end
+
+# AST transformations (softscope, Revise, OhMyREPL, etc.)
+@testset "AST Transformation" begin
+    backend = REPL.REPLBackend()
+    @async REPL.start_repl_backend(backend)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == (2, false)
+    twice(ex) = Expr(:tuple, ex, ex)
+    push!(backend.ast_transforms, twice)
+    put!(backend.repl_channel, (:(1+1), false))
+    reply = take!(backend.response_channel)
+    @test reply == ((2, 2), false)
+    put!(backend.repl_channel, (nothing, -1))
+    Base.wait(backend.backend_task)
+end
+
+
+backend = REPL.REPLBackend()
+frontend_task = @async begin
+    try
+        @testset "AST Transformations Async" begin
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == (2, false)
+            twice(ex) = Expr(:tuple, ex, ex)
+            push!(backend.ast_transforms, twice)
+            put!(backend.repl_channel, (:(1+1), false))
+            reply = take!(backend.response_channel)
+            @test reply == ((2, 2), false)
+        end
+    catch e
+        Base.rethrow(e)
+    finally
+        put!(backend.repl_channel, (nothing, -1))
+    end
+end
+REPL.start_repl_backend(backend)
+Base.wait(frontend_task)
+
+macro throw_with_linenumbernode(err)
+    Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
+end
+
+@testset "last shown line infos" begin
+    out_stream = IOBuffer()
+    term = REPL.TTYTerminal("dumb", IOBuffer(), out_stream, IOBuffer())
+    repl = REPL.LineEditREPL(term, false)
+    repl.specialdisplay = REPL.REPLDisplay(repl)
+
+    REPL.print_response(repl, (methods(+), false), true, false)
+    seekstart(out_stream)
+    @test count(
+        contains(
+            "To edit a specific method, type the corresponding number into the REPL and " *
+            "press Ctrl+Q"
+        ),
+        eachline(out_stream),
+    ) == 1
+    take!(out_stream)
+
+    err = ErrorException("Foo")
+    bt = try
+        @throw_with_linenumbernode(err)()
+    catch
+        Base.catch_stack()
+    end
+
+    repl.backendref = REPL.REPLBackendRef(Channel(1), Channel(1))
+    put!(repl.backendref.response_channel, (bt, true))
+
+    REPL.print_response(repl, (err, true), true, false)
+    seekstart(out_stream)
+    @test count(
+        contains(
+            "To edit a specific method, type the corresponding number into the REPL and " *
+            "press Ctrl+Q"
+        ),
+        eachline(out_stream),
+    ) == 1
 end

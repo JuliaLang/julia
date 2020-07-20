@@ -37,14 +37,22 @@ aimg  = randn(n,n)/2
 
         sch, vecs, vals = schur(UpperTriangular(triu(a)))
         @test vecs*sch*vecs' ≈ triu(a)
+        sch, vecs, vals = schur(UnitUpperTriangular(triu(a)))
+        @test vecs*sch*vecs' ≈ UnitUpperTriangular(triu(a))
         sch, vecs, vals = schur(LowerTriangular(tril(a)))
         @test vecs*sch*vecs' ≈ tril(a)
+        sch, vecs, vals = schur(UnitLowerTriangular(tril(a)))
+        @test vecs*sch*vecs' ≈ UnitLowerTriangular(tril(a))
         sch, vecs, vals = schur(Hermitian(asym))
         @test vecs*sch*vecs' ≈ asym
         sch, vecs, vals = schur(Symmetric(a + transpose(a)))
         @test vecs*sch*vecs' ≈ a + transpose(a)
         sch, vecs, vals = schur(Tridiagonal(a + transpose(a)))
         @test vecs*sch*vecs' ≈ Tridiagonal(a + transpose(a))
+        sch, vecs, vals = schur(Bidiagonal(a, :U))
+        @test vecs*sch*vecs' ≈ Bidiagonal(a, :U)
+        sch, vecs, vals = schur(Bidiagonal(a, :L))
+        @test vecs*sch*vecs' ≈ Bidiagonal(a, :L)
 
         tstring = sprint((t, s) -> show(t, "text/plain", s), f.T)
         zstring = sprint((t, s) -> show(t, "text/plain", s), f.Z)

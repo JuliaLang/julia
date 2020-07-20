@@ -1,11 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import LinearAlgebra: checksquare
+import LinearAlgebra: checksquare, sym_uplo
 using Random: rand!
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 const StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
 const AdjOrTransStridedOrTriangularMatrix{T} = Union{StridedOrTriangularMatrix{T},Adjoint{<:Any,<:StridedOrTriangularMatrix{T}},Transpose{<:Any,<:StridedOrTriangularMatrix{T}}}
+
+for op ∈ (:+, :-), Wrapper ∈ (:Hermitian, :Symmetric)
+    @eval begin
+        $op(A::AbstractSparseMatrix, B::$Wrapper{<:Any,<:AbstractSparseMatrix}) = $op(A, sparse(B))
+        $op(A::$Wrapper{<:Any,<:AbstractSparseMatrix}, B::AbstractSparseMatrix) = $op(sparse(A), B)
+
+        $op(A::AbstractSparseMatrix, B::$Wrapper) = $op(A, collect(B))
+        $op(A::$Wrapper, B::AbstractSparseMatrix) = $op(collect(A), B)
+    end
+end
+for op ∈ (:+, :-)
+    @eval begin
+        $op(A::Symmetric{<:Any,  <:AbstractSparseMatrix}, B::Hermitian{<:Any,  <:AbstractSparseMatrix}) = $op(sparse(A), sparse(B))
+        $op(A::Hermitian{<:Any,  <:AbstractSparseMatrix}, B::Symmetric{<:Any,  <:AbstractSparseMatrix}) = $op(sparse(A), sparse(B))
+        $op(A::Symmetric{<:Real, <:AbstractSparseMatrix}, B::Hermitian{<:Any,  <:AbstractSparseMatrix}) = $op(Hermitian(parent(A), sym_uplo(A.uplo)), B)
+        $op(A::Hermitian{<:Any,  <:AbstractSparseMatrix}, B::Symmetric{<:Real, <:AbstractSparseMatrix}) = $op(A, Hermitian(parent(B), sym_uplo(B.uplo)))
+    end
+end
 
 function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)
     size(A, 2) == size(B, 1) || throw(DimensionMismatch())
@@ -26,9 +44,9 @@ function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVe
     end
     C
 end
-*(A::AbstractSparseMatrixCSC{TA}, x::StridedVector{Tx}) where {TA,Tx} =
+*(A::SparseMatrixCSCUnion{TA}, x::StridedVector{Tx}) where {TA,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(x, T, size(A, 1)), A, x, true, false))
-*(A::AbstractSparseMatrixCSC{TA}, B::AdjOrTransStridedOrTriangularMatrix{Tx}) where {TA,Tx} =
+*(A::SparseMatrixCSCUnion{TA}, B::AdjOrTransStridedOrTriangularMatrix{Tx}) where {TA,Tx} =
     (T = promote_op(matprod, TA, Tx); mul!(similar(B, T, (size(A, 1), size(B, 2))), A, B, true, false))
 
 function mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}, α::Number, β::Number)
@@ -107,7 +125,7 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedOrTriangularMatrix, A::Abs
     end
     C
 end
-*(X::AdjOrTransStridedOrTriangularMatrix, A::AbstractSparseMatrixCSC{TvA}) where {TvA} =
+*(X::AdjOrTransStridedOrTriangularMatrix, A::SparseMatrixCSCUnion{TvA}) where {TvA} =
     (T = promote_op(matprod, eltype(X), TvA); mul!(similar(X, T, (size(X, 1), size(A, 2))), X, A, true, false))
 
 function mul!(C::StridedVecOrMat, X::AdjOrTransStridedOrTriangularMatrix, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, α::Number, β::Number)
@@ -156,19 +174,32 @@ function (*)(A::AbstractSparseMatrixCSC, D::Diagonal)
     T = Base.promote_op(*, eltype(D), eltype(A))
     mul!(LinearAlgebra.copy_oftype(A, T), A, D)
 end
+function (/)(A::AbstractSparseMatrixCSC, D::Diagonal)
+    T = typeof(oneunit(eltype(A))/oneunit(eltype(D)))
+    rdiv!(LinearAlgebra.copy_oftype(A, T), D)
+end
 
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
 
-*(A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC) = spmatmul(A,B)
-*(A::AbstractSparseMatrixCSC, B::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = spmatmul(A, copy(B))
-*(A::AbstractSparseMatrixCSC, B::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = spmatmul(A, copy(B))
-*(A::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::AbstractSparseMatrixCSC) = spmatmul(copy(A), B)
-*(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::AbstractSparseMatrixCSC) = spmatmul(copy(A), B)
+const SparseTriangular{Tv,Ti} = Union{UpperTriangular{Tv,<:SparseMatrixCSCUnion{Tv,Ti}},LowerTriangular{Tv,<:SparseMatrixCSCUnion{Tv,Ti}}}
+const SparseOrTri{Tv,Ti} = Union{SparseMatrixCSCUnion{Tv,Ti},SparseTriangular{Tv,Ti}}
+
+*(A::SparseOrTri, B::AbstractSparseVector) = spmatmulv(A, B)
+*(A::SparseOrTri, B::SparseColumnView) = spmatmulv(A, B)
+*(A::SparseOrTri, B::SparseVectorView) = spmatmulv(A, B)
+*(A::SparseMatrixCSCUnion, B::SparseMatrixCSCUnion) = spmatmul(A,B)
+*(A::SparseTriangular, B::SparseMatrixCSCUnion) = spmatmul(A,B)
+*(A::SparseMatrixCSCUnion, B::SparseTriangular) = spmatmul(A,B)
+*(A::SparseTriangular, B::SparseTriangular) = spmatmul1(A,B)
+*(A::SparseOrTri, B::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = spmatmul(A, copy(B))
+*(A::SparseOrTri, B::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = spmatmul(A, copy(B))
+*(A::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::SparseOrTri) = spmatmul(copy(A), B)
+*(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::SparseOrTri) = spmatmul(copy(A), B)
 *(A::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = spmatmul(copy(A), copy(B))
 *(A::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = spmatmul(copy(A), copy(B))
 
-# Gustavsen's matrix multiplication algorithm revisited.
+# Gustavson's matrix multiplication algorithm revisited.
 # The result rowval vector is already sorted by construction.
 # The auxiliary Vector{Ti} xb is replaced by a Vector{Bool} of same length.
 # The optional argument controlling a sorting algorithm is obsolete.
@@ -176,20 +207,18 @@ end
 # done by a quicksort of the row indices or by a full scan of the dense result vector.
 # The last is faster, if more than ≈ 1/32 of the result column is nonzero.
 # TODO: extend to SparseMatrixCSCUnion to allow for SubArrays (view(X, :, r)).
-function spmatmul(A::AbstractSparseMatrixCSC{TvA,TiA}, B::AbstractSparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
+function spmatmul(A::SparseOrTri{TvA,TiA}, B::Union{SparseOrTri{TvB,TiB},SparseVectorUnion{TvB,TiB},SubArray{TvB,<:Any,<:AbstractSparseArray{TvB,TiB}}}) where {TvA,TiA,TvB,TiB}
+
     Tv = promote_op(matprod, TvA, TvB)
     Ti = promote_type(TiA, TiB)
     mA, nA = size(A)
     nB = size(B, 2)
     nA == size(B, 1) || throw(DimensionMismatch())
 
-    rowvalA = rowvals(A); nzvalA = nonzeros(A)
-    rowvalB = rowvals(B); nzvalB = nonzeros(B)
-    nnzC = max(estimate_mulsize(mA, nnz(A), nA, nnz(B), nB) * 11 ÷ 10, mA)
+    nnzC = min(estimate_mulsize(mA, nnz(A), nA, nnz(B), nB) * 11 ÷ 10 + mA, mA*nB)
     colptrC = Vector{Ti}(undef, nB+1)
     rowvalC = Vector{Ti}(undef, nnzC)
     nzvalC = Vector{Tv}(undef, nnzC)
-    nzpercol = nnzC ÷ max(nB, 1)
 
     @inbounds begin
         ip = 1
@@ -200,45 +229,8 @@ function spmatmul(A::AbstractSparseMatrixCSC{TvA,TiA}, B::AbstractSparseMatrixCS
                 resize!(rowvalC, nnzC)
                 resize!(nzvalC, nnzC)
             end
-            colptrC[i] = ip0 = ip
-            k0 = ip - 1
-            for jp in nzrange(B, i)
-                nzB = nzvalB[jp]
-                j = rowvalB[jp]
-                for kp in nzrange(A, j)
-                    nzC = nzvalA[kp] * nzB
-                    k = rowvalA[kp]
-                    if xb[k]
-                        nzvalC[k+k0] += nzC
-                    else
-                        nzvalC[k+k0] = nzC
-                        xb[k] = true
-                        rowvalC[ip] = k
-                        ip += 1
-                    end
-                end
-            end
-            if ip > ip0
-                if prefer_sort(ip-k0, mA)
-                    # in-place sort of indices. Effort: O(nnz*ln(nnz)).
-                    sort!(rowvalC, ip0, ip-1, QuickSort, Base.Order.Forward)
-                    for vp = ip0:ip-1
-                        k = rowvalC[vp]
-                        xb[k] = false
-                        nzvalC[vp] = nzvalC[k+k0]
-                    end
-                else
-                    # scan result vector (effort O(mA))
-                    for k = 1:mA
-                        if xb[k]
-                            xb[k] = false
-                            rowvalC[ip0] = k
-                            nzvalC[ip0] = nzvalC[k+k0]
-                            ip0 += 1
-                        end
-                    end
-                end
-            end
+            colptrC[i] = ip
+            ip = spcolmul!(rowvalC, nzvalC, xb, i, ip, A, B)
         end
         colptrC[nB+1] = ip
     end
@@ -249,6 +241,68 @@ function spmatmul(A::AbstractSparseMatrixCSC{TvA,TiA}, B::AbstractSparseMatrixCS
     # This modification of Gustavson algorithm has sorted row indices
     C = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
     return C
+end
+
+# process single rhs column
+function spcolmul!(rowvalC, nzvalC, xb, i, ip, A, B)
+    rowvalA = rowvals(A); nzvalA = nonzeros(A)
+    rowvalB = rowvals(B); nzvalB = nonzeros(B)
+    mA = size(A, 1)
+    ip0 = ip
+    k0 = ip - 1
+    @inbounds begin
+        for jp in nzrange(B, i)
+            nzB = nzvalB[jp]
+            j = rowvalB[jp]
+            for kp in nzrange(A, j)
+                nzC = nzvalA[kp] * nzB
+                k = rowvalA[kp]
+                if xb[k]
+                    nzvalC[k+k0] += nzC
+                else
+                    nzvalC[k+k0] = nzC
+                    xb[k] = true
+                    rowvalC[ip] = k
+                    ip += 1
+                end
+            end
+        end
+        if ip > ip0
+            if prefer_sort(ip-k0, mA)
+                # in-place sort of indices. Effort: O(nnz*ln(nnz)).
+                sort!(rowvalC, ip0, ip-1, QuickSort, Base.Order.Forward)
+                for vp = ip0:ip-1
+                    k = rowvalC[vp]
+                    xb[k] = false
+                    nzvalC[vp] = nzvalC[k+k0]
+                end
+            else
+                # scan result vector (effort O(mA))
+                for k = 1:mA
+                    if xb[k]
+                        xb[k] = false
+                        rowvalC[ip0] = k
+                        nzvalC[ip0] = nzvalC[k+k0]
+                        ip0 += 1
+                    end
+                end
+            end
+        end
+    end
+    return ip
+end
+
+# special cases of same twin Upper/LowerTriangular
+spmatmul1(A, B) = spmatmul(A, B)
+function spmatmul1(A::UpperTriangular, B::UpperTriangular)
+    UpperTriangular(spmatmul(A, B))
+end
+function spmatmul1(A::LowerTriangular, B::LowerTriangular)
+    LowerTriangular(spmatmul(A, B))
+end
+# exploit spmatmul for sparse vectors and column views
+function spmatmulv(A, B)
+    spmatmul(A, B)[:,1]
 end
 
 # estimated number of non-zeros in matrix product
@@ -744,7 +798,7 @@ function _ldiv!(U::UpperTriangularWrapped, B::StridedVecOrMat)
 end
 
 (\)(L::TriangularSparse, B::AbstractSparseMatrixCSC) = ldiv!(L, Array(B))
-(*)(L::TriangularSparse, B::AbstractSparseMatrixCSC) = lmul!(L, Array(B))
+#(*)(L::TriangularSparse, B::AbstractSparseMatrixCSC) = lmul!(L, Array(B))
 
 ## end of triangular
 
@@ -1274,16 +1328,21 @@ function opnormestinv(A::AbstractSparseMatrixCSC{T}, t::Integer = min(2,maximum(
 end
 
 ## kron
-
-# sparse matrix ⊗ sparse matrix
-function kron(A::AbstractSparseMatrixCSC{T1,S1}, B::AbstractSparseMatrixCSC{T2,S2}) where {T1,S1,T2,S2}
+@inline function kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
     nnzC = nnz(A)*nnz(B)
     mA, nA = size(A); mB, nB = size(B)
     mC, nC = mA*mB, nA*nB
-    colptrC = Vector{promote_type(S1,S2)}(undef, nC+1)
-    rowvalC = Vector{promote_type(S1,S2)}(undef, nnzC)
-    nzvalC  = Vector{typeof(one(T1)*one(T2))}(undef, nnzC)
-    colptrC[1] = 1
+
+    rowvalC = rowvals(C)
+    nzvalC = nonzeros(C)
+    colptrC = getcolptr(C)
+
+    @boundscheck begin
+        length(colptrC) == nC+1 || throw(DimensionMismatch("expect C to be preallocated with $(nC+1) colptrs "))
+        length(rowvalC) == nnzC || throw(DimensionMismatch("expect C to be preallocated with $(nnzC) rowvals"))
+        length(nzvalC) == nnzC || throw(DimensionMismatch("expect C to be preallocated with $(nnzC) nzvals"))
+    end
+
     col = 1
     @inbounds for j = 1:nA
         startA = getcolptr(A)[j]
@@ -1307,7 +1366,43 @@ function kron(A::AbstractSparseMatrixCSC{T1,S1}, B::AbstractSparseMatrixCSC{T2,S
             end
         end
     end
-    return SparseMatrixCSC(mC, nC, colptrC, rowvalC, nzvalC)
+    return C
+end
+
+@inline function kron!(z::SparseVector, x::SparseVector, y::SparseVector)
+    nnzx = nnz(x); nnzy = nnz(y); nnzz = nnz(z);
+    nzind = nonzeroinds(z)
+    nzval = nonzeros(z)
+
+    @boundscheck begin
+        nnzval = length(nzval); nnzind = length(nzind)
+        nnzz = nnzx*nnzy
+        nnzval == nnzz || throw(DimensionMismatch("expect z to be preallocated with $nnzz nonzeros"))
+        nnzind == nnzz || throw(DimensionMismatch("expect z to be preallocated with $nnzz nonzeros"))
+    end
+
+    @inbounds for i = 1:nnzx, j = 1:nnzy
+        this_ind = (i-1)*nnzy+j
+        nzind[this_ind] = (nonzeroinds(x)[i]-1)*length(y) + nonzeroinds(y)[j]
+        nzval[this_ind] = nonzeros(x)[i] * nonzeros(y)[j]
+    end
+    return z
+end
+
+# sparse matrix ⊗ sparse matrix
+function kron(A::AbstractSparseMatrixCSC{T1,S1}, B::AbstractSparseMatrixCSC{T2,S2}) where {T1,S1,T2,S2}
+    nnzC = nnz(A)*nnz(B)
+    mA, nA = size(A); mB, nB = size(B)
+    mC, nC = mA*mB, nA*nB
+    Tv = typeof(one(T1)*one(T2))
+    Ti = promote_type(S1,S2)
+    colptrC = Vector{Ti}(undef, nC+1)
+    rowvalC = Vector{Ti}(undef, nnzC)
+    nzvalC  = Vector{Tv}(undef, nnzC)
+    colptrC[1] = 1
+    # skip sparse_check
+    C = SparseMatrixCSC{Tv, Ti}(mC, nC, colptrC, rowvalC, nzvalC)
+    return @inbounds kron!(C, A, B)
 end
 
 # sparse vector ⊗ sparse vector
@@ -1316,27 +1411,33 @@ function kron(x::SparseVector{T1,S1}, y::SparseVector{T2,S2}) where {T1,S1,T2,S2
     nnzz = nnzx*nnzy # number of nonzeros in new vector
     nzind = Vector{promote_type(S1,S2)}(undef, nnzz) # the indices of nonzeros
     nzval = Vector{typeof(one(T1)*one(T2))}(undef, nnzz) # the values of nonzeros
-    @inbounds for i = 1:nnzx, j = 1:nnzy
-        this_ind = (i-1)*nnzy+j
-        nzind[this_ind] = (nonzeroinds(x)[i]-1)*length(y::SparseVector) + nonzeroinds(y)[j]
-        nzval[this_ind] = nonzeros(x)[i] * nonzeros(y)[j]
-    end
-    return SparseVector(length(x::SparseVector)*length(y::SparseVector), nzind, nzval)
+    z = SparseVector(length(x)*length(y), nzind, nzval)
+    return @inbounds kron!(z, x, y)
 end
 
 # sparse matrix ⊗ sparse vector & vice versa
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, x::SparseVector) = kron!(C, A, SparseMatrixCSC(x))
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, x::SparseVector, A::AbstractSparseMatrixCSC) = kron!(C, SparseMatrixCSC(x), A)
+
 kron(A::AbstractSparseMatrixCSC, x::SparseVector) = kron(A, SparseMatrixCSC(x))
 kron(x::SparseVector, A::AbstractSparseMatrixCSC) = kron(SparseMatrixCSC(x), A)
 
 # sparse vec/mat ⊗ vec/mat and vice versa
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Union{SparseVector,AbstractSparseMatrixCSC}, B::VecOrMat) = kron!(C, A, sparse(B))
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC}) = kron!(C, sparse(A), B)
+
 kron(A::Union{SparseVector,AbstractSparseMatrixCSC}, B::VecOrMat) = kron(A, sparse(B))
 kron(A::VecOrMat, B::Union{SparseVector,AbstractSparseMatrixCSC}) = kron(sparse(A), B)
 
 # sparse vec/mat ⊗ Diagonal and vice versa
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron!(C, sparse(A), B)
+Base.@propagate_inbounds kron!(C::SparseMatrixCSC, A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron!(C, A, sparse(B))
+
 kron(A::Diagonal{T}, B::Union{SparseVector{S}, AbstractSparseMatrixCSC{S}}) where {T<:Number, S<:Number} = kron(sparse(A), B)
 kron(A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) where {T<:Number, S<:Number} = kron(A, sparse(B))
 
 # sparse outer product
+kron!(C::SparseMatrixCSC, A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = broadcast!(*, C, A, B)
 kron(A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = A .* B
 
 ## det, inv, cond

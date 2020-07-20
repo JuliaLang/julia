@@ -12,11 +12,37 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 this function is unpredictable.
 
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
-`@schedule println("message")` or `ccall(:jl_, Cvoid, (Any,), "message")` may be helpful for
-debugging purposes.
+Using the `@async` macro (to defer context switching to outside of the finalizer) or
+`ccall` to directly invoke IO functions in C may be helpful for debugging purposes.
+
+# Examples
+```julia
+finalizer(my_mutable_struct) do x
+    @async println("Finalizing \$x.")
+end
+
+finalizer(my_mutable_struct) do x
+    ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Finalizing %s.", repr(x))
+end
+```
+
+A finalizer may be registered at object construction. In the following example note that
+we implicitly rely on the finalizer returning the newly created mutable struct `x`.
+
+# Example
+```julia
+mutable struct MyMutableStruct
+    bar
+    function MyMutableStruct(bar)
+        x = new(bar)
+        f(t) = @async println("Finalizing \$t.")
+        finalizer(f, x)
+    end
+end
+```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
-    if isimmutable(o)
+    if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
     ccall(:jl_gc_add_finalizer_th, Cvoid, (Ptr{Cvoid}, Any, Any),
@@ -26,7 +52,7 @@ end
 
 function finalizer(f::Ptr{Cvoid}, o::T) where T
     @_inline_meta
-    if isimmutable(o)
+    if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
     ccall(:jl_gc_add_ptr_finalizer, Cvoid, (Ptr{Cvoid}, Any, Ptr{Cvoid}),
@@ -49,29 +75,24 @@ Module with garbage collection utilities.
 """
 module GC
 
-# @enum-like structure
-struct CollectionType
-    x::Int
-end
-Base.cconvert(::Type{Cint}, collection::CollectionType) = Cint(collection.x)
-
-const Auto          = CollectionType(0)
-const Full          = CollectionType(1)
-const Incremental   = CollectionType(2)
+# mirrored from julia.h
+const GC_AUTO = 0
+const GC_FULL = 1
+const GC_INCREMENTAL = 2
 
 """
-    GC.gc(full::Bool=true)
-    GC.gc(collection::CollectionType)
+    GC.gc([full=true])
 
-Perform garbage collection. The argument `full` determines whether a full, but more costly
-collection is performed. Otherwise, heuristics are used to determine which type of
-collection is needed. For exact control, pass an argument of type `CollectionType`.
+Perform garbage collection. The argument `full` determines the kind of
+collection: A full collection (default) sweeps all objects, which makes the
+next GC scan much slower, while an incremental collection may only sweep
+so-called young objects.
 
 !!! warning
     Excessive use will likely lead to poor performance.
 """
-gc(full::Bool=true) = ccall(:jl_gc_collect, Cvoid, (Cint,), full)
-gc(collection::CollectionType) = ccall(:jl_gc_collect, Cvoid, (Cint,), collection)
+gc(full::Bool=true) =
+    ccall(:jl_gc_collect, Cvoid, (Cint,), full ? GC_FULL : GC_INCREMENTAL)
 
 """
     GC.enable(on::Bool)
@@ -88,24 +109,57 @@ enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 """
     GC.@preserve x1 x2 ... xn expr
 
-Temporarily protect the given objects from being garbage collected, even if they would
-otherwise be unreferenced.
+Mark the objects `x1, x2, ...` as being *in use* during the evaluation of the
+expression `expr`. This is only required in unsafe code where `expr`
+*implicitly uses* memory or other resources owned by one of the `x`s.
 
-The last argument is the expression during which the object(s) will be preserved.
-The previous arguments are the objects to preserve.
+*Implicit use* of `x` covers any indirect use of resources logically owned by
+`x` which the compiler cannot see. Some examples:
+* Accessing memory of an object directly via a `Ptr`
+* Passing a pointer to `x` to `ccall`
+* Using resources of `x` which would be cleaned up in the finalizer.
+
+`@preserve` should generally not have any performance impact in typical use
+cases where it briefly extends object lifetime. In implementation, `@preserve`
+has effects such as protecting dynamically allocated objects from garbage
+collection.
+
+# Examples
+
+When loading from a pointer with `unsafe_load`, the underlying object is
+implicitly used, for example `x` is implicitly used by `unsafe_load(p)` in the
+following:
+
+```jldoctest
+julia> let
+           x = Ref{Int}(101)
+           p = Base.unsafe_convert(Ptr{Int}, x)
+           GC.@preserve x unsafe_load(p)
+       end
+101
+```
+
+When passing pointers to `ccall`, the pointed-to object is implicitly used and
+should be preserved. (Note however that you should normally just pass `x`
+directly to `ccall` which counts as an explicit use.)
+
+```jldoctest
+julia> let
+           x = "Hello"
+           p = pointer(x)
+           GC.@preserve x @ccall strlen(p::Cstring)::Cint
+           # Preferred alternative
+           @ccall strlen(x::Cstring)::Cint
+       end
+5
+```
 """
 macro preserve(args...)
     syms = args[1:end-1]
     for x in syms
         isa(x, Symbol) || error("Preserved variable must be a symbol")
     end
-    s, r = gensym(), gensym()
-    esc(quote
-        $s = $(Expr(:gc_preserve_begin, syms...))
-        $r = $(args[end])
-        $(Expr(:gc_preserve_end, s))
-        $r
-    end)
+    esc(Expr(:gc_preserve, args[end], syms...))
 end
 
 """

@@ -6,6 +6,9 @@ using Base.Order
 using Random
 using Test
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "Order" begin
     @test Forward == ForwardOrdering()
     @test ReverseOrdering(Forward) == ReverseOrdering() == Reverse
@@ -85,16 +88,16 @@ end
     @test searchsorted(fill(1, 15), 1, 6, 10, Forward) == 6:10
 
     for R in numTypes, T in numTypes
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
+        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) === 1:0
         @test searchsorted(R[1, 1, 2, 2, 3, 3], T(1)) == 1:2
         @test searchsorted(R[1, 1, 2, 2, 3, 3], T(2)) == 3:4
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(4)) == 7:6
-        @test searchsorted(R[1, 1, 2, 2, 3, 3], 2.5) == 5:4
+        @test searchsorted(R[1, 1, 2, 2, 3, 3], T(4)) === 7:6
+        @test searchsorted(R[1, 1, 2, 2, 3, 3], 2.5) === 5:4
 
-        @test searchsorted(1:3, T(0)) == 1:0
+        @test searchsorted(1:3, T(0)) === 1:0
         @test searchsorted(1:3, T(1)) == 1:1
         @test searchsorted(1:3, T(2)) == 2:2
-        @test searchsorted(1:3, T(4)) == 4:3
+        @test searchsorted(1:3, T(4)) === 4:3
 
         @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
         @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
@@ -106,37 +109,97 @@ end
         rg_r = reverse(rg)
         rgv, rgv_r = [rg;], [rg_r;]
         for i = I
-            @test searchsorted(rg,i) == searchsorted(rgv,i)
-            @test searchsorted(rg_r,i,rev=true) == searchsorted(rgv_r,i,rev=true)
+            @test searchsorted(rg,i) === searchsorted(rgv,i)
+            @test searchsorted(rg_r,i,rev=true) === searchsorted(rgv_r,i,rev=true)
         end
     end
 
     rg = 0.0:0.01:1.0
     for i = 2:101
         @test searchsorted(rg, rg[i]) == i:i
-        @test searchsorted(rg, prevfloat(rg[i])) == i:i-1
-        @test searchsorted(rg, nextfloat(rg[i])) == i+1:i
+        @test searchsorted(rg, prevfloat(rg[i])) === i:i-1
+        @test searchsorted(rg, nextfloat(rg[i])) === i+1:i
     end
 
     rg_r = reverse(rg)
     for i = 1:100
         @test searchsorted(rg_r, rg_r[i], rev=true) == i:i
-        @test searchsorted(rg_r, prevfloat(rg_r[i]), rev=true) == i+1:i
-        @test searchsorted(rg_r, nextfloat(rg_r[i]), rev=true) == i:i-1
+        @test searchsorted(rg_r, prevfloat(rg_r[i]), rev=true) === i+1:i
+        @test searchsorted(rg_r, nextfloat(rg_r[i]), rev=true) === i:i-1
     end
 
     @test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10;], 1, by=(x -> x >= 5))
     @test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10;], 10, by=(x -> x >= 5))
 
-    @test searchsorted([], 0) == 1:0
-    @test searchsorted([1,2,3], 0) == 1:0
-    @test searchsorted([1,2,3], 4) == 4:3
+    @test searchsorted([], 0) === 1:0
+    @test searchsorted([1,2,3], 0) === 1:0
+    @test searchsorted([1,2,3], 4) === 4:3
 
     @testset "issue 8866" begin
         @test searchsortedfirst(500:1.0:600, -1.0e20) == 1
         @test searchsortedfirst(500:1.0:600, 1.0e20) == 102
         @test searchsortedlast(500:1.0:600, -1.0e20) == 0
         @test searchsortedlast(500:1.0:600, 1.0e20) == 101
+    end
+
+    @testset "issue 32568" begin
+        for R in numTypes, T in numTypes
+            for arr in [R[1:5;], R(1):R(5), R(1):2:R(5)]
+                @test eltype(searchsorted(arr, T(2))) == keytype(arr)
+                @test eltype(searchsorted(arr, T(2), big(1), big(4), Forward)) == keytype(arr)
+                @test searchsortedfirst(arr, T(2)) isa keytype(arr)
+                @test searchsortedfirst(arr, T(2), big(1), big(4), Forward) isa keytype(arr)
+                @test searchsortedlast(arr, T(2)) isa keytype(arr)
+                @test searchsortedlast(arr, T(2), big(1), big(4), Forward) isa keytype(arr)
+            end
+        end
+    end
+
+    @testset "issue #34157" begin
+        @test searchsorted(1:2.0, -Inf) === 1:0
+        @test searchsorted([1,2], -Inf) === 1:0
+        @test searchsorted(1:2,   -Inf) === 1:0
+
+        @test searchsorted(1:2.0, Inf) === 3:2
+        @test searchsorted([1,2], Inf) === 3:2
+        @test searchsorted(1:2,   Inf) === 3:2
+
+        for coll in [
+                Base.OneTo(10),
+                1:2,
+                -4:6,
+                5:2:10,
+                [1,2],
+                1.0:4,
+                [10.0,20.0],
+            ]
+            for huge in [Inf, 1e300]
+                @test searchsortedfirst(coll, huge) === lastindex(coll) + 1
+                @test searchsortedfirst(coll, -huge)=== firstindex(coll)
+                @test searchsortedlast(coll, huge)  === lastindex(coll)
+                @test searchsortedlast(coll, -huge) === firstindex(coll) - 1
+                @test searchsorted(coll, huge)      === lastindex(coll)+1 : lastindex(coll)
+                @test searchsorted(coll, -huge)     === firstindex(coll) : firstindex(coll) - 1
+
+                @test searchsortedfirst(reverse(coll), huge, rev=true) === firstindex(coll)
+                @test searchsortedfirst(reverse(coll), -huge, rev=true) === lastindex(coll) + 1
+                @test searchsortedlast(reverse(coll), huge, rev=true) === firstindex(coll) - 1
+                @test searchsortedlast(reverse(coll), -huge, rev=true) === lastindex(coll)
+                @test searchsorted(reverse(coll), huge, rev=true) === firstindex(coll):firstindex(coll) - 1
+                @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
+            end
+        end
+    end
+    @testset "issue #35272" begin
+        for v0 = (3:-1:1, 3.0:-1.0:1.0), v = (v0, collect(v0))
+            @test searchsorted(v, 3, rev=true) == 1:1
+            @test searchsorted(v, 3.0, rev=true) == 1:1
+            @test searchsorted(v, 2.5, rev=true) === 2:1
+            @test searchsorted(v, 2, rev=true) == 2:2
+            @test searchsorted(v, 1.2, rev=true) === 3:2
+            @test searchsorted(v, 1, rev=true) == 3:3
+            @test searchsorted(v, 0.1, rev=true) === 4:3
+        end
     end
 end
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
@@ -463,6 +526,20 @@ end
     @test issorted(c)
     @test isequal(c, [5,6,7,NaN])
     @test isequal(a, [8,6,7,NaN,5,3,0,9])
+end
+
+@testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
+    a = view([9:-1:0;], :)::SubArray
+    sort!(a)
+    @test issorted(a)
+
+    a = view([9:-1:0;], :)::SubArray
+    Base.Sort.sort_int_range!(a, 10, 0, identity)  # test it supports non-Vector
+    @test issorted(a)
+
+    a = OffsetArray([9:-1:0;], -5)
+    Base.Sort.sort_int_range!(a, 10, 0, identity)
+    @test issorted(a)
 end
 
 end

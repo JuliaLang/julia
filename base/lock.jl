@@ -40,13 +40,14 @@ Each successful `trylock` must be matched by an [`unlock`](@ref).
 """
 function trylock(rl::ReentrantLock)
     t = current_task()
+    if t === rl.locked_by
+        rl.reentrancy_cnt += 1
+        return true
+    end
     lock(rl.cond_wait)
     if rl.reentrancy_cnt == 0
         rl.locked_by = t
         rl.reentrancy_cnt = 1
-        got = true
-    elseif t === notnothing(rl.locked_by)
-        rl.reentrancy_cnt += 1
         got = true
     else
         got = false
@@ -66,24 +67,25 @@ Each `lock` must be matched by an [`unlock`](@ref).
 """
 function lock(rl::ReentrantLock)
     t = current_task()
-    lock(rl.cond_wait)
-    while true
-        if rl.reentrancy_cnt == 0
-            rl.locked_by = t
-            rl.reentrancy_cnt = 1
-            break
-        elseif t === notnothing(rl.locked_by)
-            rl.reentrancy_cnt += 1
-            break
+    if t === rl.locked_by
+        rl.reentrancy_cnt += 1
+    else
+        lock(rl.cond_wait)
+        while true
+            if rl.reentrancy_cnt == 0
+                rl.locked_by = t
+                rl.reentrancy_cnt = 1
+                break
+            end
+            try
+                wait(rl.cond_wait)
+            catch
+                unlock(rl.cond_wait)
+                rethrow()
+            end
         end
-        try
-            wait(rl.cond_wait)
-        catch
-            unlock(rl.cond_wait)
-            rethrow()
-        end
+        unlock(rl.cond_wait)
     end
-    unlock(rl.cond_wait)
     return
 end
 
@@ -97,11 +99,14 @@ internal counter and return immediately.
 """
 function unlock(rl::ReentrantLock)
     t = current_task()
-    rl.reentrancy_cnt == 0 && error("unlock count must match lock count")
+    n = rl.reentrancy_cnt
+    n == 0 && error("unlock count must match lock count")
     rl.locked_by === t || error("unlock from wrong thread")
-    lock(rl.cond_wait)
-    rl.reentrancy_cnt -= 1
-    if rl.reentrancy_cnt == 0
+    if n > 1
+        rl.reentrancy_cnt = n - 1
+    else
+        lock(rl.cond_wait)
+        rl.reentrancy_cnt = 0
         rl.locked_by = nothing
         if !isempty(rl.cond_wait.waitq)
             try
@@ -111,8 +116,8 @@ function unlock(rl::ReentrantLock)
                 rethrow()
             end
         end
+        unlock(rl.cond_wait)
     end
-    unlock(rl.cond_wait)
     return
 end
 
@@ -203,6 +208,22 @@ end
 
     A thread-safe version of [`Base.Condition`](@ref).
 
+    To call [`wait`](@ref) or [`notify`](@ref) on a `Threads.Condition`, you must first call
+    [`lock`](@ref) on it. When `wait` is called, the lock is atomically released during
+    blocking, and will be reacquired before `wait` returns. Therefore idiomatic use
+    of a `Threads.Condition` `c` looks like the following:
+
+    ```
+    lock(c)
+    try
+        while !thing_we_are_waiting_for
+            wait(c)
+        end
+    finally
+        unlock(c)
+    end
+    ```
+
     !!! compat "Julia 1.2"
         This functionality requires at least Julia 1.2.
     """
@@ -213,7 +234,7 @@ end
 
     The caller must be holding the [`lock`](@ref) that owns `c` before calling this method.
     The calling task will be blocked until some other task wakes it,
-    usually by calling [`notify`](@ref)` on the same Condition object.
+    usually by calling [`notify`](@ref) on the same Condition object.
     The lock will be atomically released when blocking (even if it was locked recursively),
     and will be reacquired before returning.
     """

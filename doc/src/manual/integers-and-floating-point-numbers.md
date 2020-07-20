@@ -113,34 +113,34 @@ Unsigned integers are input and output using the `0x` prefix and hexadecimal (ba
 determined by the number of hex digits used:
 
 ```jldoctest
-julia> 0x1
+julia> x = 0x1
 0x01
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt8
 
-julia> 0x123
+julia> x = 0x123
 0x0123
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt16
 
-julia> 0x1234567
+julia> x = 0x1234567
 0x01234567
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt32
 
-julia> 0x123456789abcdef
+julia> x = 0x123456789abcdef
 0x0123456789abcdef
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt64
 
-julia> 0x11112222333344445555666677778888
+julia> x = 0x11112222333344445555666677778888
 0x11112222333344445555666677778888
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt128
 ```
 
@@ -148,28 +148,25 @@ This behavior is based on the observation that when one uses unsigned hex litera
 values, one typically is using them to represent a fixed numeric byte sequence, rather than just
 an integer value.
 
-Recall that the variable [`ans`](@ref) is set to the value of the last expression evaluated in
-an interactive session. This does not occur when Julia code is run in other ways.
-
 Binary and octal literals are also supported:
 
 ```jldoctest
-julia> 0b10
+julia> x = 0b10
 0x02
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt8
 
-julia> 0o010
+julia> x = 0o010
 0x08
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt8
 
-julia> 0x00000000000000001111222233334444
+julia> x = 0x00000000000000001111222233334444
 0x00000000000000001111222233334444
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt128
 ```
 
@@ -240,6 +237,16 @@ computers. In applications where overflow is possible, explicit checking for wra
 by overflow is essential; otherwise, the [`BigInt`](@ref) type in [Arbitrary Precision Arithmetic](@ref)
 is recommended instead.
 
+An example of overflow behavior and how to potentially resolve it is as follows:
+
+```jldoctest
+julia> 10^19
+-8446744073709551616
+
+julia> big(10)^19
+10000000000000000000
+```
+
 ### Division errors
 
 Integer division (the `div` function) has two exceptional cases: dividing by zero, and dividing
@@ -279,10 +286,10 @@ The above results are all [`Float64`](@ref) values. Literal [`Float32`](@ref) va
 entered by writing an `f` in place of `e`:
 
 ```jldoctest
-julia> 0.5f0
+julia> x = 0.5f0
 0.5f0
 
-julia> typeof(ans)
+julia> typeof(x)
 Float32
 
 julia> 2.5f-4
@@ -292,10 +299,10 @@ julia> 2.5f-4
 Values can be converted to [`Float32`](@ref) easily:
 
 ```jldoctest
-julia> Float32(-1.5)
+julia> x = Float32(-1.5)
 -1.5f0
 
-julia> typeof(ans)
+julia> typeof(x)
 Float32
 ```
 
@@ -309,10 +316,10 @@ julia> 0x1p0
 julia> 0x1.8p3
 12.0
 
-julia> 0x.4p-1
+julia> x = 0x.4p-1
 0.125
 
-julia> typeof(ans)
+julia> typeof(x)
 Float64
 ```
 

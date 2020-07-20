@@ -68,7 +68,9 @@ ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 firstindex(x::Number) = 1
+firstindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
 lastindex(x::Number) = 1
+lastindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
 IteratorSize(::Type{<:Number}) = HasShape{0}()
 keys(::Number) = OneTo(1)
 
@@ -114,9 +116,9 @@ signbit(x::Real) = x < 0
 
 Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).
 """
-sign(x::Number) = x == 0 ? x/abs(oneunit(x)) : x/abs(x)
-sign(x::Real) = ifelse(x < 0, oftype(one(x),-1), ifelse(x > 0, one(x), typeof(one(x))(x)))
-sign(x::Unsigned) = ifelse(x > 0, one(x), oftype(one(x),0))
+sign(x::Number) = iszero(x) ? x/abs(oneunit(x)) : x/abs(x)
+sign(x::Real) = ifelse(x < zero(x), oftype(one(x),-1), ifelse(x > zero(x), one(x), typeof(one(x))(x)))
+sign(x::Unsigned) = ifelse(x > zero(x), one(x), oftype(one(x),0))
 abs(x::Real) = ifelse(signbit(x), -x, x)
 
 """
@@ -233,7 +235,7 @@ julia> zero(big"2.0")
 0.0
 
 julia> zero(rand(2,2))
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0  0.0
  0.0  0.0
 ```

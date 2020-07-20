@@ -524,6 +524,7 @@ const latex_symbols = Dict(
     "\\setminus" => "∖",
     "\\ast" => "∗",
     "\\circ" => "∘",
+    blackboard*"semi" => "⨟",
     "\\surd" => "√",
     "\\propto" => "∝",
     "\\infty" => "∞",

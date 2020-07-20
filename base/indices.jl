@@ -320,6 +320,10 @@ not all index types are guaranteed to propagate to `Base.to_index`.
 """
 to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, axes(A), I))
 to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (eachindex(IndexLinear(), A),), I))
+# In simple cases, we know that we don't need to use axes(A), optimize those.
+# Having this here avoids invalidations from multidimensional.jl: to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}})
+to_indices(A, I::Tuple{}) = ()
+to_indices(A, I::Tuple{Vararg{Integer}}) = (@_inline_meta; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
 to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
     (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
@@ -328,7 +332,7 @@ _maybetail(::Tuple{}) = ()
 _maybetail(t::Tuple) = tail(t)
 
 """
-   Slice(indices)
+    Slice(indices)
 
 Represent an AbstractUnitRange of indices as a vector of the indices themselves,
 with special handling to signal they represent a complete slice of a dimension (:).
@@ -363,7 +367,7 @@ iterate(S::Slice, s...) = iterate(S.indices, s...)
 
 
 """
-   IdentityUnitRange(range::AbstractUnitRange)
+    IdentityUnitRange(range::AbstractUnitRange)
 
 Represent an AbstractUnitRange `range` as an offset vector such that `range[i] == i`.
 
@@ -373,8 +377,7 @@ struct IdentityUnitRange{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 IdentityUnitRange(S::IdentityUnitRange) = S
-# IdentityUnitRanges are offset and thus have offset axes, so they are their own axes... but
-# we need to strip the wholedim marker because we don't know how they'll be used
+# IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
 unsafe_indices(S::IdentityUnitRange) = (S,)
 axes1(S::IdentityUnitRange) = S

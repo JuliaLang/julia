@@ -30,24 +30,47 @@ end
 
 UInt128(u::UUID) = u.value
 
-let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
-    global UUID
-    function UUID(s::AbstractString)
-        s = lowercase(s)
-
-        if !occursin(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
-            throw(ArgumentError("Malformed UUID string: $(repr(s))"))
-        end
-
-        u = UInt128(0)
-        for i in groupings
-            u <<= 4
-            d = s[i] - '0'
-            u |= 0xf & (d - 39*(d > 9))
-        end
-        return UUID(u)
-    end
+let
+@noinline throw_malformed_uuid(s) = throw(ArgumentError("Malformed UUID string: $(repr(s))"))
+@inline function uuid_kernel(s, i, u)
+    _c = UInt32(@inbounds codeunit(s, i))
+    d = __convert_digit(_c, UInt32(16))
+    d >= 16 && throw_malformed_uuid(s)
+    u <<= 4
+    u | d
 end
+
+global UUID
+function UUID(s::AbstractString)
+    u = UInt128(0)
+    ncodeunits(s) != 36 && throw_malformed_uuid(s)
+    for i in 1:8
+        u = uuid_kernel(s, i, u)
+    end
+    @inbounds codeunit(s, 9) == UInt8('-') || @goto error
+    for i in 10:13
+        u = uuid_kernel(s, i, u)
+    end
+    @inbounds codeunit(s, 14) == UInt8('-') || @goto error
+    for i in 15:18
+        u = uuid_kernel(s, i, u)
+    end
+    @inbounds codeunit(s, 19) == UInt8('-') || @goto error
+    for i in 20:23
+        u = uuid_kernel(s, i, u)
+    end
+    @inbounds codeunit(s, 24) == UInt8('-') || @goto error
+    for i in 25:36
+        u = uuid_kernel(s, i, u)
+    end
+    return Base.UUID(u)
+    @label error
+    throw_malformed_uuid(s)
+end
+end
+
+parse(::Type{UUID}, s::AbstractString) = UUID(s)
+
 
 let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
     global string
@@ -55,10 +78,10 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         u = u.value
         a = Base.StringVector(36)
         for i in groupings
-            a[i] = hex_chars[1 + u & 0xf]
+            @inbounds a[i] = hex_chars[1 + u & 0xf]
             u >>= 4
         end
-        a[24] = a[19] = a[14] = a[9] = '-'
+        @inbounds a[24] = a[19] = a[14] = a[9] = '-'
         return String(a)
     end
 end

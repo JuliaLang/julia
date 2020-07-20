@@ -11,8 +11,6 @@ using .Main.Quaternions
 Random.seed!(123)
 
 @testset "basic functions" begin
-    @test I[1,1] == 1 # getindex
-    @test I[1,2] == 0 # getindex
     @test I === I' # transpose
     @test ndims(I) == 2
     @test one(UniformScaling{Float32}) == UniformScaling(one(Float32))
@@ -25,13 +23,85 @@ Random.seed!(123)
     @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
     @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
     @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
+    @test convert(UniformScaling{Float64}, 2I) === 2.0I
+end
+
+@testset "getindex" begin
+    @test I[1,1] == 1
+    @test I[1,2] == 0
+
+    J = I(15)
+    for (a, b) in [
+        # indexing that returns a Vector
+        (1:10, 1),
+        (4, 1:10),
+        (11, 1:10),
+        # indexing that returns a Matrix
+        (1:2, 1:2),
+        (1:2:3, 1:2:3),
+        (1:2:8, 2:2:9),
+        (1:2:8, 9:-4:1),
+        (9:-4:1, 1:2:8),
+        (2:3, 1:2),
+        (2:-1:1, 1:2),
+        (1:2:9, 5:2:13),
+    ]
+        @test I[a,b] == J[a,b]
+    end
+end
+
+@testset "sqrt, exp, log, and trigonometric functions" begin
+    # convert to a dense matrix with random size
+    M(J) = (N = rand(1:10); Matrix(J, N, N))
+
+    # on complex plane
+    J = UniformScaling(randn(ComplexF64))
+    for f in ( exp,   log,
+               sqrt,
+               sin,   cos,   tan,
+               asin,  acos,  atan,
+               csc,   sec,   cot,
+               acsc,  asec,  acot,
+               sinh,  cosh,  tanh,
+               asinh, acosh, atanh,
+               csch,  sech,  coth,
+               acsch, asech, acoth )
+        @test f(J) ≈ f(M(J))
+    end
+
+    # on real axis
+    for (λ, fs) in (
+        # functions defined for x ∈ ℝ
+        (()->randn(),           (exp,
+                                 sin,   cos,   tan,
+                                 csc,   sec,   cot,
+                                 atan,  acot,
+                                 sinh,  cosh,  tanh,
+                                 csch,  sech,  coth,
+                                 asinh, acsch)),
+        # functions defined for x ≥ 0
+        (()->abs(randn()),      (log,   sqrt)),
+        # functions defined for -1 ≤ x ≤ 1
+        (()->2rand()-1,         (asin,  acos,  atanh)),
+        # functions defined for x ≤ -1 or x ≥ 1
+        (()->1/(2rand()-1),     (acsc,  asec,  acoth)),
+        # functions defined for 0 ≤ x ≤ 1
+        (()->rand(),            (asech,)),
+        # functions defined for x ≥ 1
+        (()->1/rand(),          (acosh,))
+    )
+        for f in fs
+            J = UniformScaling(λ())
+            @test f(J) ≈ f(M(J))
+        end
+    end
 end
 
 @testset "conjugation of UniformScaling" begin
     @test conj(UniformScaling(1))::UniformScaling{Int} == UniformScaling(1)
     @test conj(UniformScaling(1.0))::UniformScaling{Float64} == UniformScaling(1.0)
     @test conj(UniformScaling(1+1im))::UniformScaling{Complex{Int}} == UniformScaling(1-1im)
-    @test conj(UniformScaling(1.0+1.0im))::UniformScaling{Complex{Float64}} == UniformScaling(1.0-1.0im)
+    @test conj(UniformScaling(1.0+1.0im))::UniformScaling{ComplexF64} == UniformScaling(1.0-1.0im)
 end
 
 @testset "isdiag, istriu, istril, issymmetric, ishermitian, isposdef, isapprox" begin
@@ -42,6 +112,10 @@ end
     @test issymmetric(UniformScaling(complex(1.0,1.0)))
     @test ishermitian(I)
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
+    @test isposdef(UniformScaling(rand()))
+    @test !isposdef(UniformScaling(-rand()))
+    @test !isposdef(UniformScaling(randn(ComplexF64)))
+    @test !isposdef(UniformScaling(NaN))
     @test isposdef(I)
     @test !isposdef(-I)
     @test isposdef(UniformScaling(complex(1.0, 0.0)))
@@ -64,8 +138,10 @@ end
     @test I - α == 1 - α
     @test α .* UniformScaling(1.0) == UniformScaling(1.0) .* α
     @test UniformScaling(α)./α == UniformScaling(1.0)
+    @test α.\UniformScaling(α) == UniformScaling(1.0)
     @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
     @test UniformScaling(α)/α == UniformScaling(1.0)
+    @test (2I)^α == (2I).^α == (2^α)I
 
     β = rand()
     @test (α*I)^2    == UniformScaling(α^2)
@@ -77,7 +153,11 @@ end
     @test (α * I) .^ β == UniformScaling(α^β)
 end
 
-@testset "det and logdet" begin
+@testset "tr, det and logdet" begin
+    for T in (Int, Float64, ComplexF64, Bool)
+        @test tr(UniformScaling(zero(T))) === zero(T)
+    end
+    @test_throws ArgumentError tr(UniformScaling(1))
     @test det(I) === true
     @test det(1.0I) === 1.0
     @test det(0I) === 0
@@ -87,23 +167,34 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
-@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{ComplexF64}\n(1.0 + 0.0im)*I"
 @test sprint(show,MIME"text/plain"(),UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
-@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}(1.0 + 0.0im)"
+@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{ComplexF64}(1.0 + 0.0im)"
 @test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}(1.0f0)"
 
 let
     λ = complex(randn(),randn())
     J = UniformScaling(λ)
-    @testset "transpose, conj, inv" begin
+    @testset "transpose, conj, inv, pinv, cond" begin
         @test ndims(J) == 2
         @test transpose(J) == J
         @test J * [1 0; 0 1] == conj(*(adjoint(J), [1 0; 0 1])) # ctranpose (and A(c)_mul_B)
         @test I + I === UniformScaling(2) # +
         @test inv(I) == I
         @test inv(J) == UniformScaling(inv(λ))
+        @test pinv(J) == UniformScaling(inv(λ))
+        @test @inferred(pinv(0.0I)) == 0.0I
+        @test @inferred(pinv(0I)) == 0.0I
+        @test @inferred(pinv(false*I)) == 0.0I
+        @test @inferred(pinv(0im*I)) == 0im*I
         @test cond(I) == 1
         @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
+    end
+
+    @testset "real, imag, reim" begin
+        @test real(J) == UniformScaling(real(λ))
+        @test imag(J) == UniformScaling(imag(λ))
+        @test reim(J) == (UniformScaling(real(λ)), UniformScaling(imag(λ)))
     end
 
     @testset "copyto!" begin
@@ -111,6 +202,19 @@ let
         @test copyto!(A, I) == one(A)
         B = Matrix{ComplexF64}(undef, (1,2))
         @test copyto!(B, J) == [λ zero(λ)]
+    end
+
+    @testset "binary ops with vectors" begin
+        v = complex.(randn(3), randn(3))
+        # As shown in #20423@GitHub, vector acts like x1 matrix when participating in linear algebra
+        @test v  * J ≈ v  * λ
+        @test v' * J ≈ v' * λ
+        @test J * v  ≈ λ * v
+        @test J * v' ≈ λ * v'
+        @test v  / J ≈ v  / λ
+        @test v' / J ≈ v' / λ
+        @test J \ v  ≈ λ \ v
+        @test J \ v' ≈ λ \ v'
     end
 
     @testset "binary ops with matrices" begin

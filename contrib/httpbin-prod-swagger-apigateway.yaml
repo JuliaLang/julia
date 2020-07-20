@@ -1,0 +1,101 @@
+---
+swagger: "2.0"
+info:
+  description: "Looks like an httpbin"
+  version: "2020-06-18T07:18:54Z"
+  title: "httpbin"
+host: "httpbin.julialang.org"
+schemes:
+- "https"
+paths:
+  /get:
+    get:
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          schema:
+            $ref: "#/definitions/Empty"
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "200"
+            responseTemplates:
+              application/json: "#set($allParams = $input.params())\n{\n\"args\":\
+                \ {\n#set($params = $allParams.get(\"querystring\"))\n#foreach($paramName\
+                \ in $params.keySet())\n\"$paramName\" : \"$util.escapeJavaScript($params.get($paramName)).replaceAll(\"\
+                \\\\'\",\"'\")\"\n#if($foreach.hasNext),#end\n\n#end\n},\n\"headers\"\
+                : {\n#set($params = $allParams.get(\"header\"))\n#foreach($paramName\
+                \ in $params.keySet())\n\"$paramName\" : \"$util.escapeJavaScript($params.get($paramName)).replaceAll(\"\
+                \\\\'\",\"'\")\"#if($foreach.hasNext),#end\n\n#end\n},\n\"origin\"\
+                : \"$context.identity.sourceIp\",\n\"url\": \"$context.path\"\n}\n"
+        requestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        passthroughBehavior: "when_no_match"
+        type: "mock"
+  /ip:
+    get:
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "200 response"
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "200"
+            responseTemplates:
+              application/json: "{\n  \"origin\" : \"$context.identity.sourceIp\"\n\
+                }"
+        requestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        passthroughBehavior: "when_no_match"
+        type: "mock"
+  /status/200:
+    get:
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          schema:
+            $ref: "#/definitions/Empty"
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "200"
+        requestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        passthroughBehavior: "when_no_match"
+        type: "mock"
+  /status/404:
+    get:
+      consumes:
+      - "application/json"
+      responses:
+        404:
+          description: "404 response"
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "404"
+        requestTemplates:
+          application/json: "{\"statusCode\": 404}"
+        passthroughBehavior: "when_no_match"
+        type: "mock"
+definitions:
+  Empty:
+    type: "object"
+    title: "Empty Schema"
+x-amazon-apigateway-gateway-responses:
+  DEFAULT_4XX:
+    statusCode: 401
+    responseTemplates:
+      application/json: "{\"message\":$context.error.messageString}"

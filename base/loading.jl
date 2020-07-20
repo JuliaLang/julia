@@ -648,7 +648,7 @@ end
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
     base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
-    return isfile(base_path) ? base_path : nothing
+    return isfile(base_path) ? normpath(base_path) : nothing
 end
 
 cache_file_entry(pkg::PkgId) = joinpath(
@@ -715,6 +715,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
                 invokelatest(callback, modkey)
             end
             for M in mod::Vector{Any}
+                M = M::Module
                 if PkgId(M) == modkey && module_build_id(M) === build_id
                     return M
                 end
@@ -1073,21 +1074,49 @@ end
 # relative-path load
 
 """
-    include_string(m::Module, code::AbstractString, filename::AbstractString="string")
+    include_string([mapexpr::Function,] m::Module, code::AbstractString, filename::AbstractString="string")
 
 Like [`include`](@ref), except reads code from the given string rather than from a file.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `code`, the `include_string` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
-include_string(m::Module, txt::String, fname::String) =
-    ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
-          txt, sizeof(txt), fname, m)
+function include_string(mapexpr::Function, mod::Module, code::AbstractString,
+                        filename::AbstractString="string")
+    loc = LineNumberNode(1, Symbol(filename))
+    try
+        ast = Meta.parseall(code, filename=filename)
+        @assert Meta.isexpr(ast, :toplevel)
+        result = nothing
+        line_and_ex = Expr(:toplevel, loc, nothing)
+        for ex in ast.args
+            if ex isa LineNumberNode
+                loc = ex
+                line_and_ex.args[1] = ex
+                continue
+            end
+            ex = mapexpr(ex)
+            # Wrap things to be eval'd in a :toplevel expr to carry line
+            # information as part of the expr.
+            line_and_ex.args[2] = ex
+            result = Core.eval(mod, line_and_ex)
+        end
+        return result
+    catch exc
+        # TODO: Now that stacktraces are more reliable we should remove
+        # LoadError and expose the real error type directly.
+        rethrow(LoadError(filename, loc.line, exc))
+    end
+end
 
 include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
-    include_string(m, String(txt), String(fname))
+    include_string(identity, m, txt, fname)
 
 function source_path(default::Union{AbstractString,Nothing}="")
     s = current_task().storage
-    if s !== nothing && haskey(s, :SOURCE_PATH)
-        return s[:SOURCE_PATH]
+    if s !== nothing && haskey(s::IdDict{Any,Any}, :SOURCE_PATH)
+        return s[:SOURCE_PATH]::Union{Nothing,String}
     end
     return default
 end
@@ -1098,17 +1127,42 @@ function source_dir()
 end
 
 """
-    Base.include([m::Module,] path::AbstractString)
+    Base.include([mapexpr::Function,] [m::Module,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of module `m`.
-Every module (except those defined with [`baremodule`](@ref)) has its own 1-argument
-definition of `include`, which evaluates the file in that module.
+Every module (except those defined with [`baremodule`](@ref)) has its own
+definition of `include` omitting the `m` argument, which evaluates the file in that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `path`, the `include` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 """
-Base.include # defined in sysimg.jl
+Base.include # defined in Base.jl
+
+# Full include() implementation which is used after bootstrap
+function _include(mapexpr::Function, mod::Module, _path::AbstractString)
+    @_noinline_meta # Workaround for module availability in _simplify_include_frames
+    path, prev = _include_dependency(mod, _path)
+    for callback in include_callbacks # to preserve order, must come before eval in include_string
+        invokelatest(callback, mod, path)
+    end
+    code = read(path, String)
+    tls = task_local_storage()
+    tls[:SOURCE_PATH] = path
+    try
+        return include_string(mapexpr, mod, code, path)
+    finally
+        if prev === nothing
+            delete!(tls, :SOURCE_PATH)
+        else
+            tls[:SOURCE_PATH] = prev
+        end
+    end
+end
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
@@ -1122,6 +1176,7 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
              :(const ARGS = $args),
              :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
              :(include(x) = $(Expr(:top, :include))(__anon__, x)),
+             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, __anon__, x)),
              :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
@@ -1139,70 +1194,78 @@ function load_path_setup_code(load_path::Bool=true)
         code *= """
         append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
         ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
-        Base.HOME_PROJECT[] = Base.ACTIVE_PROJECT[] = nothing
+        Base.ACTIVE_PROJECT[] = nothing
         """
     end
     return code
 end
 
+# this is called in the external process that generates precompiled package files
+function include_package_for_output(input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String}, concrete_deps::typeof(_concrete_dependencies), uuid_tuple::NTuple{2,UInt64}, source::Union{Nothing,String})
+    append!(empty!(Base.DEPOT_PATH), depot_path)
+    append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
+    append!(empty!(Base.LOAD_PATH), load_path)
+    ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
+    Base.ACTIVE_PROJECT[] = nothing
+    Base._track_dependencies[] = true
+    append!(empty!(Base._concrete_dependencies), concrete_deps)
+
+    ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
+    if source !== nothing
+        task_local_storage()[:SOURCE_PATH] = source
+    end
+
+    try
+        Base.include(Base.__toplevel__, input)
+    catch ex
+        precompilableerror(ex) || rethrow()
+        @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
+        exit(125) # we define status = 125 means PrecompileableError
+    end
+end
+
+@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},Nothing))
+@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},String))
+
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
-    code_object = """
-        while !eof(stdin)
-            code = readuntil(stdin, '\\0')
-            eval(Meta.parse(code))
+    depot_path = map(abspath, DEPOT_PATH)
+    dl_load_path = map(abspath, DL_LOAD_PATH)
+    load_path = map(abspath, Base.load_path())
+    path_sep = Sys.iswindows() ? ';' : ':'
+    any(path -> path_sep in path, load_path) &&
+        error("LOAD_PATH entries cannot contain $(repr(path_sep))")
+
+    deps_strs = String[]
+    for (pkg, build_id) in concrete_deps
+        pkg_str = if pkg.uuid === nothing
+            "Base.PkgId($(repr(pkg.name)))"
+        else
+            "Base.PkgId(Base.UUID(\"$(pkg.uuid)\"), $(repr(pkg.name)))"
         end
-        """
+        push!(deps_strs, "$pkg_str => $(repr(build_id))")
+    end
+    deps = repr(eltype(concrete_deps)) * "[" * join(deps_strs, ",") * "]"
+
+    uuid_tuple = uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, uuid)
+
     io = open(pipeline(`$(julia_cmd()) -O0
                        --output-ji $output --output-incremental=yes
                        --startup-file=no --history-file=no --warn-overwrite=yes
-                       --color=$(have_color ? "yes" : "no")
-                       --eval $code_object`, stderr=stderr),
+                       --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
+                       --eval 'eval(Meta.parse(read(stdin,String)))'`, stderr=stderr),
               "w", stdout)
-    in = io.in
-    try
-        write(in, """
-            begin
-                $(Base.load_path_setup_code())
-                Base._track_dependencies[] = true
-                Base.empty!(Base._concrete_dependencies)
-            """)
-        for (pkg, build_id) in concrete_deps
-            pkg_str = if pkg.uuid === nothing
-                "Base.PkgId($(repr(pkg.name)))"
-            else
-                "Base.PkgId(Base.UUID(\"$(pkg.uuid)\"), $(repr(pkg.name)))"
-            end
-            write(in, "Base.push!(Base._concrete_dependencies, $pkg_str => $(repr(build_id)))\n")
-        end
-        write(io, "end\0")
-        uuid_tuple = uuid === nothing ? (0, 0) : convert(NTuple{2, UInt64}, uuid)
-        write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, $uuid_tuple)\0")
-        source = source_path(nothing)
-        if source !== nothing
-            write(in, "task_local_storage()[:SOURCE_PATH] = $(repr(source))\0")
-        end
-        write(in, """
-            try
-                Base.include(Base.__toplevel__, $(repr(abspath(input))))
-            catch ex
-                Base.precompilableerror(ex) || Base.rethrow()
-                Base.@debug "Aborting `createexprcache'" exception=(Base.ErrorException("Declaration of __precompile__(false) not allowed"), Base.catch_backtrace())
-                Base.exit(125) # we define status = 125 means PrecompileableError
-            end\0""")
-        # TODO: cleanup is probably unnecessary here
-        if source !== nothing
-            write(in, "delete!(task_local_storage(), :SOURCE_PATH)\0")
-        end
-        write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
-        close(in)
-    catch
-        close(in)
-        process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
-        rethrow()
-    end
+    # write data over stdin to avoid the (unlikely) case of exceeding max command line size
+    write(io.in, """
+        Base.include_package_for_output($(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
+            $(repr(load_path)), $deps, $(repr(uuid_tuple)), $(repr(source_path(nothing))))
+        """)
+    close(io.in)
     return io
 end
+
+@assert precompile(create_expr_cache, (String, String, typeof(_concrete_dependencies), Nothing))
+@assert precompile(create_expr_cache, (String, String, typeof(_concrete_dependencies), UUID))
 
 function compilecache_path(pkg::PkgId)::String
     entrypath, entryfile = cache_file_entry(pkg)
@@ -1238,9 +1301,9 @@ const MAX_NUM_PRECOMPILE_FILES = 10
 function compilecache(pkg::PkgId, path::String)
     # decide where to put the resulting cache file
     cachefile = compilecache_path(pkg)
+    cachepath = dirname(cachefile)
     # prune the directory with cache files
     if pkg.uuid !== nothing
-        cachepath = dirname(cachefile)
         entrypath, entryfile = cache_file_entry(pkg)
         cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
         if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES
@@ -1258,18 +1321,34 @@ function compilecache(pkg::PkgId, path::String)
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
     @logmsg verbosity "Precompiling $pkg"
-    p = create_expr_cache(path, cachefile, concrete_deps, pkg.uuid)
-    if success(p)
-        # append checksum to the end of the .ji file:
-        open(cachefile, "a+") do f
-            write(f, _crc32c(seekstart(f)))
+
+    # create a temporary file in `cachepath` directory, write the cache in it,
+    # write the checksum, _and then_ atomically move the file to `cachefile`.
+    tmppath, tmpio = mktemp(cachepath)
+    local p
+    try
+        close(tmpio)
+        p = create_expr_cache(path, tmppath, concrete_deps, pkg.uuid)
+        if success(p)
+            # append checksum to the end of the .ji file:
+            open(tmppath, "a+") do f
+                write(f, _crc32c(seekstart(f)))
+            end
+            # inherit permission from the source file
+            chmod(tmppath, filemode(path) & 0o777)
+
+            # this is atomic according to POSIX:
+            rename(tmppath, cachefile; force=true)
+            return cachefile
         end
-    elseif p.exitcode == 125
+    finally
+        rm(tmppath, force=true)
+    end
+    if p.exitcode == 125
         return PrecompilableError()
     else
         error("Failed to precompile $pkg to $cachefile.")
     end
-    return cachefile
 end
 
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
@@ -1485,7 +1564,7 @@ Alternatively see [`PROGRAM_FILE`](@ref).
 """
 macro __FILE__()
     __source__.file === nothing && return nothing
-    return String(__source__.file)
+    return String(__source__.file::Symbol)
 end
 
 """
@@ -1497,6 +1576,6 @@ Return the current working directory if run from a REPL or if evaluated by `juli
 """
 macro __DIR__()
     __source__.file === nothing && return nothing
-    _dirname = dirname(String(__source__.file))
+    _dirname = dirname(String(__source__.file::Symbol))
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end

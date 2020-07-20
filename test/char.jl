@@ -185,6 +185,7 @@ end
 
 @testset "sprint, repr" begin
     @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
+    @test sprint(show, "text/plain", '$', context=:compact => true) == "'\$'"
     @test repr('$') == "'\$'"
 end
 

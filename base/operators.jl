@@ -27,7 +27,7 @@ false
 
 Supertype operator, equivalent to `T2 <: T1`.
 """
-const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
     supertype(T::DataType)
@@ -80,7 +80,7 @@ handle comparison to other types via promotion rules where possible.
 [`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
 should therefore also implement [`hash`](@ref).
 """
-==(x, y) = x === y
+==
 
 """
     isequal(x, y)
@@ -150,6 +150,15 @@ This is the default comparison used by [`sort`](@ref).
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
+
+# Examples
+ ```jldoctest
+ julia> isless(1, 3)
+ true
+
+ julia> isless("Red", "Blue")
+ false
+ ```
 """
 function isless end
 
@@ -533,6 +542,10 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     end
 end
 
+function kron! end
+
+const var"'" = adjoint
+
 """
     \\(x, y)
 
@@ -550,12 +563,12 @@ julia> inv(3) * 6
 julia> A = [4 3; 2 1]; x = [5, 6];
 
 julia> A \\ x
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   6.5
  -7.0
 
 julia> inv(A) * x
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   6.5
  -7.0
 ```
@@ -837,13 +850,16 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
 
+!!! compat "Julia 1.5"
+    Composition of one function ∘(f)  requires at least Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])
-3-element Array{Char,1}:
- 'A'
- 'B'
- 'C'
+3-element Vector{Char}:
+ 'A': ASCII/Unicode U+0041 (category Lu: Letter, uppercase)
+ 'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
+ 'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
 
 julia> fs = [
            x -> 2x
@@ -856,8 +872,26 @@ julia> ∘(fs...)(3)
 3.0
 ```
 """
-∘(f, g) = (x...)->f(g(x...))
+function ∘ end
+
+struct ComposedFunction{F,G} <: Function
+    f::F
+    g::G
+    ComposedFunction{F, G}(f, g) where {F, G} = new{F, G}(f, g)
+    ComposedFunction(f, g) = new{Core.Typeof(f),Core.Typeof(g)}(f, g)
+end
+
+(c::ComposedFunction)(x...) = c.f(c.g(x...))
+
+∘(f) = f
+∘(f, g) = ComposedFunction(f, g)
 ∘(f, g, h...) = ∘(f ∘ g, h...)
+
+function show(io::IO, c::ComposedFunction)
+    show(io, c.f)
+    print(io, " ∘ ")
+    show(io, c.g)
+end
 
 """
     !f::Function
@@ -1015,7 +1049,7 @@ passes a tuple as that single argument.
 # Example usage:
 ```jldoctest
 julia> map(Base.splat(+), zip(1:3,4:6))
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  5
  7
  9
@@ -1073,6 +1107,17 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
+To determine whether an item is not in a given collection, see [`:∉`](@ref).
+You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
+
+When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
+`item` and `collection` are broadcasted over, which is often not what is intended.
+For example, if both arguments are vectors (and the dimensions match), the result is
+a vector indicating whether each value in collection `items` is `in` the value at the
+corresponding position in `collection`. To get a vector indicating whether each value
+in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
+`in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
+
 # Examples
 ```jldoctest
 julia> a = 1:3:20
@@ -1095,6 +1140,22 @@ true
 
 julia> missing in Set([1, 2])
 false
+
+julia> !(21 in a)
+true
+
+julia> !(19 in a)
+false
+
+julia> [1, 2] .∈ [2, 3]
+2-element BitVector:
+ 0
+ 0
+
+julia> [1, 2] .∈ ([2, 3],)
+2-element BitVector:
+ 0
+ 1
 ```
 """
 in, ∋
@@ -1105,6 +1166,14 @@ in, ∋
 
 Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
 
+When broadcasting with `items .∉ collection`, both `item` and `collection` are
+broadcasted over, which is often not what is intended. For example, if both arguments
+are vectors (and the dimensions match), the result is a vector indicating whether
+each value in collection `items` is not in the value at the corresponding position
+in `collection`. To get a vector indicating whether each value in `items` is not in
+`collection`, wrap `collection` in a tuple or a `Ref` like this:
+`items .∉ Ref(collection)`.
+
 # Examples
 ```jldoctest
 julia> 1 ∉ 2:4
@@ -1112,6 +1181,16 @@ true
 
 julia> 1 ∉ 1:3
 false
+
+julia> [1, 2] .∉ [2, 3]
+2-element BitVector:
+ 1
+ 1
+
+julia> [1, 2] .∉ ([2, 3],)
+2-element BitVector:
+ 1
+ 0
 ```
 """
 ∉, ∌

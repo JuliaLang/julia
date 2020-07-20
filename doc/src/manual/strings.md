@@ -51,24 +51,24 @@ other subtypes of `AbstractChar`, e.g. to optimize operations for other
 input and shown:
 
 ```jldoctest
-julia> 'x'
+julia> c = 'x'
 'x': ASCII/Unicode U+0078 (category Ll: Letter, lowercase)
 
-julia> typeof(ans)
+julia> typeof(c)
 Char
 ```
 
 You can easily convert a `Char` to its integer value, i.e. code point:
 
 ```jldoctest
-julia> Int('x')
+julia> c = Int('x')
 120
 
-julia> typeof(ans)
+julia> typeof(c)
 Int64
 ```
 
-On 32-bit architectures, [`typeof(ans)`](@ref) will be [`Int32`](@ref). You can convert an
+On 32-bit architectures, [`typeof(c)`](@ref) will be [`Int32`](@ref). You can convert an
 integer value back to a `Char` just as easily:
 
 ```jldoctest
@@ -205,13 +205,11 @@ Using an index less than `begin` (`1`) or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
 julia> str[begin-1]
-ERROR: BoundsError: attempt to access String
-  at index [0]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [0]
 [...]
 
 julia> str[end+1]
-ERROR: BoundsError: attempt to access String
-  at index [15]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [15]
 [...]
 ```
 
@@ -281,11 +279,12 @@ julia> s[1]
 '∀': Unicode U+2200 (category Sm: Symbol, math)
 
 julia> s[2]
-ERROR: StringIndexError("∀ x ∃ y", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'∀', [4]=>' '
+Stacktrace:
 [...]
 
 julia> s[3]
-ERROR: StringIndexError("∀ x ∃ y", 3)
+ERROR: StringIndexError: invalid index [3], valid nearby indices [1]=>'∀', [4]=>' '
 Stacktrace:
 [...]
 
@@ -305,7 +304,7 @@ julia> s[end-1]
 ' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
 
 julia> s[end-2]
-ERROR: StringIndexError("∀ x ∃ y", 9)
+ERROR: StringIndexError: invalid index [9], valid nearby indices [7]=>'∃', [10]=>' '
 Stacktrace:
 [...]
 
@@ -325,7 +324,7 @@ julia> s[1:1]
 "∀"
 
 julia> s[1:2]
-ERROR: StringIndexError("∀ x ∃ y", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'∀', [4]=>' '
 Stacktrace:
 [...]
 
@@ -380,7 +379,7 @@ You can also use the [`eachindex`](@ref) function to iterate over the valid char
 
 ```jldoctest unicodestring
 julia> collect(eachindex(s))
-7-element Array{Int64,1}:
+7-element Vector{Int64}:
   1
   4
   5
@@ -549,7 +548,7 @@ they are entered as literal expressions:
 
 ```jldoctest
 julia> v = [1,2,3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -642,7 +641,7 @@ julia> """
 
 Trailing whitespace is left unaltered.
 
-Triple-quoted string literals can contain `"` symbols without escaping.
+Triple-quoted string literals can contain `"` characters without escaping.
 
 Note that line breaks in literal strings, whether single- or triple-quoted, result in a newline
 (LF) character `\n` in the string, even if your editor uses a carriage return `\r` (CR) or CRLF
@@ -757,10 +756,10 @@ using non-standard string literals prefixed with various identifiers beginning w
 basic regular expression literal without any options turned on just uses `r"..."`:
 
 ```jldoctest
-julia> r"^\s*(?:#|$)"
+julia> re = r"^\s*(?:#|$)"
 r"^\s*(?:#|$)"
 
-julia> typeof(ans)
+julia> typeof(re)
 Regex
 ```
 
@@ -843,7 +842,7 @@ julia> m.match
 "acd"
 
 julia> m.captures
-3-element Array{Union{Nothing, SubString{String}},1}:
+3-element Vector{Union{Nothing, SubString{String}}}:
  "a"
  "c"
  "d"
@@ -852,7 +851,7 @@ julia> m.offset
 1
 
 julia> m.offsets
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -864,7 +863,7 @@ julia> m.match
 "ad"
 
 julia> m.captures
-3-element Array{Union{Nothing, SubString{String}},1}:
+3-element Vector{Union{Nothing, SubString{String}}}:
  "a"
  nothing
  "d"
@@ -873,7 +872,7 @@ julia> m.offset
 1
 
 julia> m.offsets
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  0
  2
@@ -1069,7 +1068,7 @@ ERROR: setindex! not defined for Base.CodeUnits{UInt8,String}
 [...]
 
 julia> Vector{UInt8}(x)
-3-element Array{UInt8,1}:
+3-element Vector{UInt8}:
  0x31
  0x32
  0x33

@@ -3,15 +3,15 @@
 #### Specialized matrix types ####
 
 ## (complex) symmetric tridiagonal matrices
-struct SymTridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V                        # diagonal
-    ev::V                        # subdiagonal
-    function SymTridiagonal{T,V}(dv, ev) where {T,V<:AbstractVector{T}}
+    ev::V                        # superdiagonal
+    function SymTridiagonal{T, V}(dv, ev) where {T, V<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
-        new{T,V}(dv,ev)
+        new{T, V}(dv, ev)
     end
 end
 
@@ -23,27 +23,48 @@ sub/super-diagonal (`ev`), respectively. The result is of type `SymTridiagonal`
 and provides efficient specialized eigensolvers, but may be converted into a
 regular matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 
+For `SymTridiagonal` block matrices, the elements of `dv` are symmetrized.
+The argument `ev` is interpreted as the superdiagonal. Blocks from the
+subdiagonal are (materialized) transpose of the corresponding superdiagonal blocks.
+
 # Examples
 ```jldoctest
 julia> dv = [1, 2, 3, 4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
  4
 
 julia> ev = [7, 8, 9]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  7
  8
  9
 
 julia> SymTridiagonal(dv, ev)
-4×4 SymTridiagonal{Int64,Array{Int64,1}}:
+4×4 SymTridiagonal{Int64,Vector{Int64}}:
  1  7  ⋅  ⋅
  7  2  8  ⋅
  ⋅  8  3  9
  ⋅  ⋅  9  4
+
+julia> A = SymTridiagonal(fill([1 2; 3 4], 3), fill([1 2; 3 4], 2));
+
+julia> A[1,1]
+2×2 Symmetric{Int64,Matrix{Int64}}:
+ 1  2
+ 2  4
+
+julia> A[1,2]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> A[2,1]
+2×2 Matrix{Int64}:
+ 1  3
+ 2  4
 ```
 """
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
@@ -56,27 +77,34 @@ end
 """
     SymTridiagonal(A::AbstractMatrix)
 
-Construct a symmetric tridiagonal matrix from the diagonal and
-first sub/super-diagonal, of the symmetric matrix `A`.
+Construct a symmetric tridiagonal matrix from the diagonal and first superdiagonal
+of the symmetric matrix `A`.
 
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 2 4 5; 3 5 6]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  2  4  5
  3  5  6
 
 julia> SymTridiagonal(A)
-3×3 SymTridiagonal{Int64,Array{Int64,1}}:
+3×3 SymTridiagonal{Int64,Vector{Int64}}:
  1  2  ⋅
  2  4  5
  ⋅  5  6
+
+julia> B = reshape([[1 2; 2 3], [1 2; 3 4], [1 3; 2 4], [1 2; 2 3]], 2, 2);
+
+julia> SymTridiagonal(B)
+2×2 SymTridiagonal{Matrix{Int64},Vector{Matrix{Int64}}}:
+ [1 2; 2 3]  [1 3; 2 4]
+ [1 2; 3 4]  [1 2; 2 3]
 ```
 """
 function SymTridiagonal(A::AbstractMatrix)
-    if diag(A,1) == diag(A,-1)
-        SymTridiagonal(diag(A,0), diag(A,1))
+    if (diag(A, 1) == transpose.(diag(A, -1))) && all(issymmetric.(diag(A, 0)))
+        SymTridiagonal(diag(A, 0), diag(A, 1))
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
     end
@@ -97,6 +125,9 @@ AbstractMatrix{T}(S::SymTridiagonal) where {T} =
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
+    if n == 0
+        return Mf
+    end
     @inbounds begin
         @simd for i = 1:n-1
             Mf[i,i] = M.dv[i]
@@ -139,13 +170,13 @@ adjoint(S::SymTridiagonal) = Adjoint(S)
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
 Base.copy(S::Transpose{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(transpose.(x)), (S.parent.dv, S.parent.ev))...)
 
-function diag(M::SymTridiagonal, n::Integer=0)
+function diag(M::SymTridiagonal{<:Number}, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     absn = abs(n)
     if absn == 0
         return copyto!(similar(M.dv, length(M.dv)), M.dv)
-    elseif absn==1
+    elseif absn == 1
         return copyto!(similar(M.ev, length(M.ev)), M.ev)
     elseif absn <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-absn), 0)
@@ -154,9 +185,26 @@ function diag(M::SymTridiagonal, n::Integer=0)
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
+function diag(M::SymTridiagonal, n::Integer=0)
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of n
+    if n == 0
+        return copyto!(similar(M.dv, length(M.dv)), symmetric.(M.dv, :U))
+    elseif n == 1
+        return copyto!(similar(M.ev, length(M.ev)), M.ev)
+    elseif n == -1
+        return copyto!(similar(M.ev, length(M.ev)), transpose.(M.ev))
+    elseif n <= size(M,1)
+        throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
+    else
+        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+    end
+end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, A.ev+B.ev)
 -(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv-B.dv, A.ev-B.ev)
+-(A::SymTridiagonal) = SymTridiagonal(-A.dv, -A.ev)
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
 *(B::Number, A::SymTridiagonal) = A*B
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
@@ -274,25 +322,25 @@ returns the specific corresponding eigenvectors.
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+3×3 SymTridiagonal{Float64,Vector{Float64}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
 
 julia> eigvals(A)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  -2.1400549446402604
   1.0000000000000002
   5.140054944640259
 
 julia> eigvecs(A)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   0.418304  -0.83205      0.364299
  -0.656749  -7.39009e-16  0.754109
   0.627457   0.5547       0.546448
 
 julia> eigvecs(A, [1.])
-3×1 Array{Float64,2}:
+3×1 Matrix{Float64}:
   0.8320502943378438
   4.263514128092366e-17
  -0.5547001962252291
@@ -307,8 +355,16 @@ end
 
 #tril and triu
 
-istriu(M::SymTridiagonal) = iszero(M.ev)
-istril(M::SymTridiagonal) = iszero(M.ev)
+function istriu(M::SymTridiagonal, k::Integer=0)
+    if k <= -1
+        return true
+    elseif k == 0
+        return iszero(M.ev)
+    else # k >= 1
+        return iszero(M.ev) && iszero(M.dv)
+    end
+end
+istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
 iszero(M::SymTridiagonal) = iszero(M.ev) && iszero(M.dv)
 isone(M::SymTridiagonal) = iszero(M.ev) && all(isone, M.dv)
 isdiag(M::SymTridiagonal) = iszero(M.ev)
@@ -390,9 +446,9 @@ function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
         throw(BoundsError(A, (i,j)))
     end
     if i == j
-        return A.dv[i]
+        return symmetric(A.dv[i], :U)::symmetric_type(eltype(A.dv))
     elseif i == j + 1
-        return A.ev[j]
+        return copy(transpose(A.ev[j])) # materialized for type stability
     elseif i + 1 == j
         return A.ev[i]
     else
@@ -452,7 +508,7 @@ julia> du = [4, 5, 6];
 julia> d = [7, 8, 9, 0];
 
 julia> Tridiagonal(dl, d, du)
-4×4 Tridiagonal{Int64,Array{Int64,1}}:
+4×4 Tridiagonal{Int64,Vector{Int64}}:
  7  4  ⋅  ⋅
  1  8  5  ⋅
  ⋅  2  9  6
@@ -474,14 +530,14 @@ diagonal and first super-diagonal of the matrix `A`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  2  3  4
  1  2  3  4
  1  2  3  4
  1  2  3  4
 
 julia> Tridiagonal(A)
-4×4 Tridiagonal{Int64,Array{Int64,1}}:
+4×4 Tridiagonal{Int64,Vector{Int64}}:
  1  2  ⋅  ⋅
  1  2  3  ⋅
  ⋅  2  3  4
@@ -610,8 +666,28 @@ end
 
 iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
-istriu(M::Tridiagonal) = iszero(M.dl)
-istril(M::Tridiagonal) = iszero(M.du)
+function istriu(M::Tridiagonal, k::Integer=0)
+    if k <= -1
+        return true
+    elseif k == 0
+        return iszero(M.dl)
+    elseif k == 1
+        return iszero(M.dl) && iszero(M.d)
+    else # k >= 2
+        return iszero(M.dl) && iszero(M.d) && iszero(M.du)
+    end
+end
+function istril(M::Tridiagonal, k::Integer=0)
+    if k >= 1
+        return true
+    elseif k == 0
+        return iszero(M.du)
+    elseif k == -1
+        return iszero(M.du) && iszero(M.d)
+    else # k <= -2
+        return iszero(M.du) && iszero(M.d) && iszero(M.dl)
+    end
+end
 isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)
@@ -678,6 +754,74 @@ end
 
 Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
 Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
+
+function Base._sum(A::Tridiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.d)
+    if n == 0
+        return res
+    elseif n == 1
+        res[1] = A.d[1]
+        return res
+    end
+    @inbounds begin
+        if dims == 1
+            res[1] = A.dl[1] + A.d[1]
+            for i = 2:n-1
+                res[i] = A.dl[i] + A.d[i] + A.du[i-1]
+            end
+            res[n] = A.d[n] + A.du[n-1]
+        elseif dims == 2
+            res[1] = A.d[1] + A.du[1]
+            for i = 2:n-1
+                res[i] = A.dl[i-1] + A.d[i] + A.du[i]
+            end
+            res[n] = A.dl[n-1] + A.d[n]
+        elseif dims >= 3
+            for i = 1:n-1
+                res[i,i+1] = A.du[i]
+                res[i,i]   = A.d[i]
+                res[i+1,i] = A.dl[i]
+            end
+            res[n,n] = A.d[n]
+        end
+    end
+    res
+end
+
+function Base._sum(A::SymTridiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.dv)
+    if n == 0
+        return res
+    elseif n == 1
+        res[1] = A.dv[1]
+        return res
+    end
+    @inbounds begin
+        if dims == 1
+            res[1] = A.ev[1] + A.dv[1]
+            for i = 2:n-1
+                res[i] = A.ev[i] + A.dv[i] + A.ev[i-1]
+            end
+            res[n] = A.dv[n] + A.ev[n-1]
+        elseif dims == 2
+            res[1] = A.dv[1] + A.ev[1]
+            for i = 2:n-1
+                res[i] = A.ev[i-1] + A.dv[i] + A.ev[i]
+            end
+            res[n] = A.ev[n-1] + A.dv[n]
+        elseif dims >= 3
+            for i = 1:n-1
+                res[i,i+1] = A.ev[i]
+                res[i,i]   = A.dv[i]
+                res[i+1,i] = A.ev[i]
+            end
+            res[n,n] = A.dv[n]
+        end
+    end
+    res
+end
 
 function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)

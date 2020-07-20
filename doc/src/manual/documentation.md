@@ -3,10 +3,10 @@
 Julia enables package developers and users to document functions, types and other objects easily
 via a built-in documentation system since Julia 0.4.
 
-The basic syntax is simple: any string appearing at the top-level right before an object
-(function, macro, type or instance) will be interpreted as documenting it (these are called *docstrings*).
-Note that no blank lines or comments may intervene between a docstring and the documented object.
-Here is a basic example:
+The basic syntax is simple: any string appearing at the toplevel right before an object
+(function, macro, type or instance) will be interpreted as documenting it (these are called
+*docstrings*). Note that no blank lines or comments may intervene between a docstring and
+the documented object. Here is a basic example:
 
 ```julia
 "Tell whether there are too foo items in the array."
@@ -29,8 +29,9 @@ Here is a more complex example, still using Markdown:
 """
     bar(x[, y])
 
-Compute the Bar index between `x` and `y`. If `y` is missing, compute
-the Bar index between all pairs of columns of `x`.
+Compute the Bar index between `x` and `y`.
+
+If `y` is unspecified, compute the Bar index between all pairs of columns of `x`.
 
 # Examples
 ```julia-repl
@@ -187,16 +188,20 @@ As in the example above, we recommend following some simple conventions when wri
    f(x, y) = ...
    ```
 
-   This makes it more clear where docstrings start and end.
+   This makes it clearer where docstrings start and end.
 9. Respect the line length limit used in the surrounding code.
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
-   It is advised to add line breaks after 92 characters.
+   It is recommended that lines are at most 92 characters wide.
 6. Provide information allowing custom types to implement the function in an
-   `# Implementation` section. These implementation details intended for developers
-   rather than users, explaining e.g. which functions should be overridden and which functions
-   automatically use appropriate fallbacks, are better kept separate from the main description of
-   the function's behavior.
+   `# Implementation` section. These implementation details are intended for developers
+   rather than users, explaining e.g. which functions should be overridden and which
+   functions automatically use appropriate fallbacks. Such details are best kept separate
+   from the main description of the function's behavior.
+5. For long docstrings, consider splitting the documentation with an
+   `# Extended help` header. The typical help-mode will show only the
+   material above the header; you can access the full help by adding a '?'
+   at the beginning of the expression (i.e., "??foo" rather than "?foo").
 
 ## Accessing Documentation
 
@@ -209,8 +214,9 @@ by typing `?` followed by the name of a function or macro, and pressing `Enter`.
 ?r""
 ```
 
-will bring up docs for the relevant function, macro or string macro respectively. In [Juno](http://junolab.org)
-using `Ctrl-J, Ctrl-D` will bring up documentation for the object under the cursor.
+will show documentation for the relevant function, macro or string macro respectively. In
+[Juno](http://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
+under the cursor.
 
 ## Functions & Methods
 
@@ -312,6 +318,23 @@ end
 will add documentation to `f(x)` when `condition()` is `true`. Note that even if `f(x)` goes
 out of scope at the end of the block, its documentation will remain.
 
+It is possible to make use of metaprogramming to assist in the creation of documentation.
+When using string-interpolation within the docstring you will need to use an extra `$` as
+shown with `$($name)`:
+
+```julia
+for func in (:day, :dayofmonth)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(dt::TimeType) -> Int64
+
+        The day of month of a `Date` or `DateTime` as an `Int64`.
+        """ $func(dt::Dates.TimeType)
+    end
+end
+```
+
 ### Dynamic documentation
 
 Sometimes the appropriate documentation for an instance of a type depends on the field values of that
@@ -334,7 +357,9 @@ y = MyType("y")
 
 ## Syntax Guide
 
-A comprehensive overview of all documentable Julia syntax.
+This guide provides a comprehensive overview of how to attach documentation to all Julia syntax
+constructs for which providing documentation is possible.
+
 In the following examples `"..."` is used to illustrate an arbitrary docstring.
 
 ### `$` and `\` characters
@@ -450,7 +475,7 @@ M
 end
 ```
 
-Adds docstring `"..."` to the `Module``M`. Adding the docstring above the `Module` is the preferred
+Adds docstring `"..."` to the `Module` `M`. Adding the docstring above the `Module` is the preferred
 syntax, however both are equivalent.
 
 ```julia
@@ -520,8 +545,8 @@ the referenced value itself.
 sym
 ```
 
-Adds docstring `"..."` to the value associated with `sym`. Users should prefer documenting `sym`
-at its definition.
+Adds docstring `"..."` to the value associated with `sym`. However, it is preferred that
+`sym` is documented where it is defined.
 
 ### Multiple Objects
 
@@ -551,9 +576,9 @@ two functions are related, such as non-mutating and mutating versions `f` and `f
 @m expression
 ```
 
-Adds docstring `"..."` to expression generated by expanding `@m expression`. This allows for expressions
-decorated with `@inline`, `@noinline`, `@generated`, or any other macro to be documented in the
-same way as undecorated expressions.
+Adds docstring `"..."` to the expression generated by expanding `@m expression`. This allows
+for expressions decorated with `@inline`, `@noinline`, `@generated`, or any other macro to
+be documented in the same way as undecorated expressions.
 
 Macro authors should take note that only macros that generate a single expression will automatically
 support docstrings. If a macro returns a block containing multiple subexpressions then the subexpression

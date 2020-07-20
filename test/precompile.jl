@@ -87,9 +87,9 @@ try
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
 
               # issue 16471 (capturing references to a kwfunc)
-              Test.@test !isdefined(Base.Nothing.name.mt, :kwsorter)
-              Base.nothing(::UInt8, ::UInt16, ::UInt32; x = 52) = x
-              const nothingkw = Core.kwfunc(Base.nothing)
+              Test.@test !isdefined(typeof(sin).name.mt, :kwsorter)
+              Base.sin(::UInt8, ::UInt16, ::UInt32; x = 52) = x
+              const sinkw = Core.kwfunc(Base.sin)
 
               # issue 16908 (some complicated types and external method definitions)
               abstract type CategoricalPool{T, R <: Integer, V} end
@@ -170,10 +170,17 @@ try
               const layout1 = Ptr{Int8}[Ptr{Int8}(0), Ptr{Int8}(1), Ptr{Int8}(-1)]
               const layout2 = Any[Ptr{Int8}(0), Ptr{Int16}(1), Ptr{Int32}(-1)]
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
+
+              # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
+              call_bottom() = show(stdout::IO, Union{})
+              Core.Compiler.return_type(call_bottom, ())
+
+              # check that @ccallable works from precompiled modules
+              Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
           end
           """)
-    # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
-    @test !isdefined(Base.Nothing.name.mt, :kwsorter)
+    # make sure `sin` didn't have a kwfunc (which would invalidate the attempted test)
+    @test !isdefined(typeof(sin).name.mt, :kwsorter)
 
     # Issue #12623
     @test __precompile__(false) === nothing
@@ -216,6 +223,17 @@ try
         @test Foo.layout2 == Any[Ptr{Int8}(0), Ptr{Int16}(0), Ptr{Int32}(-1)]
         @test typeof.(Foo.layout2) == [Ptr{Int8}, Ptr{Int16}, Ptr{Int32}]
         @test Foo.layout3 == ["ab", "cd", "ef", "gh", "ij"]
+    end
+
+    @eval begin function ccallable_test()
+        Base.llvmcall(
+        (""" declare i32 @f35014(i32)""",
+         """
+         %1 = call i32 @f35014(i32 3)
+         ret i32 %1
+         """), Cint, Tuple{})
+    end
+    @test ccallable_test() == 4
     end
 
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
@@ -281,9 +299,9 @@ try
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
-        @test nothing(0x01, 0x4000, 0x30031234) == 52
-        @test nothing(0x01, 0x4000, 0x30031234; x = 9142) == 9142
-        @test Foo.nothingkw === Core.kwfunc(Base.nothing)
+        @test sin(0x01, 0x4000, 0x30031234) == 52
+        @test sin(0x01, 0x4000, 0x30031234; x = 9142) == 9142
+        @test Foo.sinkw === Core.kwfunc(Base.sin)
 
         @test Foo.NominalValue() == 1
         @test Foo.OrdinalValue() == 1
@@ -396,6 +414,19 @@ try
             isa(exc, ErrorException) || rethrow()
             occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
         end
+
+    # Test that trying to eval into closed modules during precompilation is an error
+    FooBar3_file = joinpath(dir, "FooBar3.jl")
+    FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
+    write(FooBar3_inc, "x=1\n")
+    for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
+        write(FooBar3_file, code)
+        @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
+                Base.require(Main, :FooBar3)
+            catch exc
+                isa(exc, ErrorException) || rethrow()
+            end
+    end
 
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")
@@ -794,6 +825,29 @@ let
     finally
         rm(load_path, recursive=true)
         rm(load_cache_path, recursive=true)
+    end
+end
+
+# Issue #25971
+let
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
+        sourcefile = joinpath(load_path, "Foo25971.jl")
+        write(sourcefile, "module Foo25971 end")
+        chmod(sourcefile, 0o666)
+        cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+        @test filemode(sourcefile) == filemode(cachefile)
+        chmod(sourcefile, 0o600)
+        cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+        @test filemode(sourcefile) == filemode(cachefile)
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+        filter!((≠)(load_path), LOAD_PATH)
+        filter!((≠)(load_cache_path), DEPOT_PATH)
     end
 end
 

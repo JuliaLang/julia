@@ -214,7 +214,7 @@ module LLVMCallFunctionTest
 
     function julia_to_llvm(@nospecialize x)
         isboxed = Ref{UInt8}()
-        ccall(:julia_type_to_llvm,Ptr{Cvoid},(Any,Ref{UInt8}),x,isboxed)
+        ccall(:jl_type_to_llvm, Ptr{Cvoid}, (Any, Ref{UInt8}), x, isboxed)
     end
     const AnyTy = julia_to_llvm(Any)
 
@@ -240,12 +240,4 @@ module LLVMCallFunctionTest
     @eval global_value_address2() = llvmcall($(the_other_f2), Int64, Tuple{})
 
     @test global_value_address1() != global_value_address2()
-end
-
-# support for calling external functions
-let
-    f() = ccall("time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
-    @test_throws ErrorException f()
-    f() = ccall("extern time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
-    f()
 end

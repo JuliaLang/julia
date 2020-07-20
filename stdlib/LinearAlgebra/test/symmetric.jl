@@ -4,7 +4,7 @@ module TestSymmetric
 
 using Test, LinearAlgebra, SparseArrays, Random
 
-Random.seed!(101)
+Random.seed!(1010)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
         Any[ [1 0; 0 1], [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
@@ -481,6 +481,9 @@ end
         W[1,1] = 4
         @test W == T([4 -1; -1 1])
         @test_throws ArgumentError (W[1,2] = 2)
+        if T == Hermitian
+            @test_throws ArgumentError (W[2,2] = 3+4im)
+        end
 
         @test Y + I == T([2 -1; -1 2])
         @test Y - I == T([0 -1; -1 0])
@@ -658,6 +661,21 @@ end
     @test LinearAlgebra.symmetric_type(Int) == Int
     @test LinearAlgebra.hermitian(1, :U) == 1
     @test LinearAlgebra.hermitian_type(Int) == Int
+end
+
+@testset "sqrt(nearly semidefinite)" begin
+    let A = [0.9999999999999998 4.649058915617843e-16 -1.3149405273715513e-16 9.9959579317056e-17; -8.326672684688674e-16 1.0000000000000004 2.9280733590254494e-16 -2.9993900031619594e-16; 9.43689570931383e-16 -1.339206523454095e-15 1.0000000000000007 -8.550505126287743e-16; -6.245004513516506e-16 -2.0122792321330962e-16 1.183061278035052e-16 1.0000000000000002],
+        B = [0.09648289218436859 0.023497875751503007 0.0 0.0; 0.023497875751503007 0.045787575150300804 0.0 0.0; 0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0],
+        C = Symmetric(A*B*A'), # semidefinite up to roundoff
+        Csqrt = sqrt(C)
+        @test Csqrt isa Symmetric{Float64}
+        @test Csqrt*Csqrt ≈ C rtol=1e-14
+    end
+    let D = Symmetric(Matrix(Diagonal([1 0; 0 -1e-14])))
+        @test sqrt(D) ≈ [1 0; 0 1e-7im] rtol=1e-14
+        @test sqrt(D, rtol=1e-13) ≈ [1 0; 0 0] rtol=1e-14
+        @test sqrt(D, rtol=1e-13)^2 ≈ D rtol=1e-13
+    end
 end
 
 end # module TestSymmetric

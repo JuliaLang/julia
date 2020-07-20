@@ -10,7 +10,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, require_one_based_indexing
+    length, resize!, fill, Missing, require_one_based_indexing, keytype
 
 using .Base: >>>, !==
 
@@ -113,7 +113,7 @@ array.
 # Examples
 ```jldoctest
 julia> a = [1, 2, 4, 3, 4]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  4
@@ -124,7 +124,7 @@ julia> partialsort!(a, 4)
 4
 
 julia> a
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -132,7 +132,7 @@ julia> a
  4
 
 julia> a = [1, 2, 4, 3, 4]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  4
@@ -143,7 +143,7 @@ julia> partialsort!(a, 4, rev=true)
 2
 
 julia> a
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  4
  4
  3
@@ -174,7 +174,7 @@ midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns length(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
@@ -191,7 +191,7 @@ end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer
+function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
@@ -209,7 +209,7 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T<:Integer
+function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRange{keytype(v)} where T<:Integer
     u = T(1)
     lo = ilo - u
     hi = ihi + u
@@ -228,7 +228,7 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
@@ -238,35 +238,61 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
         n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
-        lt(o, a[n] ,x) ? n + 1 : n
+        lt(o, a[n], x) ? n + 1 : n
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    if step(a) == 0
+    h = step(a)
+    if h == 0
         lt(o, x, first(a)) ? 0 : length(a)
+    elseif h > 0 && x < first(a)
+        firstindex(a) - 1
+    elseif h > 0 && x >= last(a)
+        lastindex(a)
+    elseif h < 0 && x > first(a)
+        firstindex(a) - 1
+    elseif h < 0 && x <= last(a)
+        lastindex(a)
     else
-        clamp( fld(floor(Integer, x) - first(a), step(a)) + 1, 0, length(a))
+        if o isa ForwardOrdering
+            fld(floor(Integer, x) - first(a), h) + 1
+        else
+            fld(ceil(Integer, x) - first(a), h) + 1
+        end
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    if step(a) == 0
+    h = step(a)
+    if h == 0
         lt(o, first(a), x) ? length(a)+1 : 1
+    elseif h > 0 && x <= first(a)
+        firstindex(a)
+    elseif h > 0 && x > last(a)
+        lastindex(a) + 1
+    elseif h < 0 && x >= first(a)
+        firstindex(a)
+    elseif h < 0 && x < last(a)
+        lastindex(a) + 1
     else
-        clamp(-fld(floor(Integer, -x) + first(a), step(a)) + 1, 1, length(a) + 1)
+        if o isa ForwardOrdering
+            -fld(floor(Integer, -x) + Signed(first(a)), h) + 1
+        else
+            -fld(ceil(Integer, -x) + Signed(first(a)), h) + 1
+        end
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     if lt(o, first(a), x)
         if step(a) == 0
@@ -279,7 +305,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOr
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
     if lt(o, x, first(a))
         0
@@ -662,25 +688,25 @@ and `lt` are specified, the `lt` function is applied to the result of the `by` f
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2]; sort!(v); v
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> v = [3, 1, 2]; sort!(v, rev = true); v
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  2
  1
 
 julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[1]); v
-3-element Array{Tuple{Int64,String},1}:
+3-element Vector{Tuple{Int64,String}}:
  (1, "c")
  (2, "b")
  (3, "a")
 
 julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
-3-element Array{Tuple{Int64,String},1}:
+3-element Vector{Tuple{Int64,String}}:
  (3, "a")
  (2, "b")
  (1, "c")
@@ -693,14 +719,14 @@ function sort!(v::AbstractVector;
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
-    if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
+    if (ordr === Forward || ordr === Reverse) && eltype(v)<:Integer
         n = length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
             (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
             if !o1 && !o2 && rangelen < div(n,2)
-                return sort_int_range!(v, rangelen, min)
+                return sort_int_range!(v, rangelen, min, ordr === Reverse ? reverse : identity)
             end
         end
     end
@@ -708,17 +734,16 @@ function sort!(v::AbstractVector;
 end
 
 # sort! for vectors of few unique integers
-function sort_int_range!(x::Vector{<:Integer}, rangelen, minval)
+function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse)
     offs = 1 - minval
-    n = length(x)
 
     where = fill(0, rangelen)
-    @inbounds for i = 1:n
+    @inbounds for i = eachindex(x)
         where[x[i] + offs] += 1
     end
 
-    idx = 1
-    @inbounds for i = 1:rangelen
+    idx = firstindex(x)
+    @inbounds for i = maybereverse(1:rangelen)
         lastidx = idx + where[i] - 1
         val = i-offs
         for j = idx:lastidx
@@ -740,13 +765,13 @@ Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself 
 julia> v = [3, 1, 2];
 
 julia> sort(v)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> v
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  1
  2
@@ -775,13 +800,13 @@ julia> v[partialsortperm(v, 1)]
 1
 
 julia> p = partialsortperm(v, 1:3)
-3-element view(::Array{Int64,1}, 1:3) with eltype Int64:
+3-element view(::Vector{Int64}, 1:3) with eltype Int64:
  2
  4
  3
 
 julia> v[p]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  1
  2
@@ -830,7 +855,7 @@ julia> partialsortperm!(ix, v, 1)
 julia> ix = [1:4;];
 
 julia> partialsortperm!(ix, v, 2:3, initialized=true)
-2-element view(::Array{Int64,1}, 2:3) with eltype Int64:
+2-element view(::Vector{Int64}, 2:3) with eltype Int64:
  4
  3
 ```
@@ -875,13 +900,13 @@ See also [`sortperm!`](@ref).
 julia> v = [3, 1, 2];
 
 julia> p = sortperm(v)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  1
 
 julia> v[p]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -925,13 +950,13 @@ Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `init
 julia> v = [3, 1, 2]; p = zeros(Int, 3);
 
 julia> sortperm!(p, v); p
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  1
 
 julia> v[p]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -995,17 +1020,17 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  1  2
 
 julia> sort(A, dims = 1)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  4  3
 
 julia> sort(A, dims = 2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  4
  1  2
 ```
@@ -1055,17 +1080,17 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  1  2
 
 julia> sort!(A, dims = 1); A
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  4  3
 
 julia> sort!(A, dims = 2); A
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```

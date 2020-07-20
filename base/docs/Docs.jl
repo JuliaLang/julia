@@ -18,22 +18,20 @@ module Docs
 
 Functions, methods and types can be documented by placing a string before the definition:
 
-    \"""
+    \"\"\"
     # The Foo Function
     `foo(x)`: Foo the living hell out of `x`.
-    \"""
+    \"\"\"
     foo(x) = ...
 
-The `@doc` macro can be used directly to both set and retrieve documentation / metadata. By
-default, documentation is written as Markdown, but any object can be placed before the
-arrow. For example:
+The `@doc` macro can be used directly to both set and retrieve documentation / metadata.
+The macro has special parsing so that the documented object may occur on the next line:
 
-    @doc "blah" ->
+    @doc "blah"
     function foo() ...
 
-The `->` is not required if the object is on the same line, e.g.
-
-    @doc "foo" foo
+By default, documentation is written as Markdown, but any object can be used as
+the first argument.
 
 ## Documenting objects after they are defined
 You can document an object after its definition by
@@ -64,7 +62,7 @@ include("bindings.jl")
 
 import .Base.Meta: quot, isexpr
 import .Base: Callable, with_output_color
-using .Base: RefValue
+using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
 export doc
@@ -73,12 +71,13 @@ export doc
 
 const modules = Module[]
 const META    = gensym(:meta)
+const METAType = IdDict{Any,Any}
 
-meta(m::Module) = isdefined(m, META) ? getfield(m, META) : IdDict()
+meta(m::Module) = isdefined(m, META) ? getfield(m, META)::METAType : METAType()
 
 function initmeta(m::Module)
     if !isdefined(m, META)
-        Core.eval(m, :(const $META = $(IdDict())))
+        Core.eval(m, :(const $META = $(METAType())))
         push!(modules, m)
     end
     nothing
@@ -97,7 +96,7 @@ function signature!(tv, expr::Expr)
             push!(sig.args[end].args, argtype(arg))
         end
         if isexpr(expr.args[1], :curly) && isempty(tv)
-            append!(tv, tvar.(expr.args[1].args[2:end]))
+            append!(tv, mapany(tvar, (expr.args[1]::Expr).args[2:end]))
         end
         for i = length(tv):-1:1
             push!(sig.args, :(Tuple{$(tv[i].args[1])}))
@@ -107,7 +106,7 @@ function signature!(tv, expr::Expr)
         end
         return sig
     elseif isexpr(expr, :where)
-        append!(tv, tvar.(expr.args[2:end]))
+        append!(tv, mapany(tvar, expr.args[2:end]))
         return signature!(tv, expr.args[1])
     else
         return signature!(tv, expr.args[1])
@@ -206,9 +205,9 @@ mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
     order::Vector{Type}
     "Documentation for each object. Keys are signatures."
-    docs::IdDict{Any,Any}
+    docs::METAType
 
-    MultiDoc() = new(Type[], IdDict())
+    MultiDoc() = new(Type[], METAType())
 end
 
 # Docstring registration.
@@ -226,7 +225,7 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.  The warning
         # is suppressed for symbols in Main, for interactive use (#23011).
-        __module__ == Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
+        __module__ === Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
@@ -333,13 +332,14 @@ function metadata(__source__, __module__, expr, ismodule)
     end
     if isexpr(expr, :struct)
         # Field docs for concrete types.
-        fields = []
+        P = Pair{Any,Any}
+        fields = P[]
         last_docstr = nothing
         for each in expr.args[3].args
             if isa(each, Symbol) || isexpr(each, :(::))
                 # a field declaration
                 if last_docstr !== nothing
-                    push!(fields, (namify(each), last_docstr))
+                    push!(fields, P(namify(each), last_docstr))
                     last_docstr = nothing
                 end
             elseif isexpr(each, :function) || isexpr(each, :(=))
@@ -350,7 +350,7 @@ function metadata(__source__, __module__, expr, ismodule)
                 last_docstr = each
             end
         end
-        dict = :($(Dict)($([:($(Pair)($(quot(f)), $d)) for (f, d) in fields]...)))
+        dict = :($(Dict)($([(:($(P)($(quot(f)), $d)))::Expr for (f, d) in fields]...)))
         push!(args, :($(Pair)(:fields, $dict)))
     end
     return :($(Dict)($(args...)))

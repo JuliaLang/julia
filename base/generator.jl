@@ -5,8 +5,8 @@
 
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
-The syntax `f(x) for x in iter [if cond(x)::Bool]` is syntax for constructing an instance of this
-type. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
+The syntax for constructing an instance of this type is `f(x) for x in iter [if cond(x)::Bool] `.
+The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
 filtering out values where the condition is false.
 
 ```jldoctest
@@ -21,7 +21,7 @@ julia> for x in g
 25
 
 julia> collect(g)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   4
  16

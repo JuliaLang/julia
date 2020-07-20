@@ -17,9 +17,14 @@
 """
     @deprecate old new [ex=true]
 
-The first argument `old` is the signature of the deprecated method, the second one
-`new` is the call which replaces it. `@deprecate` exports `old` unless the optional
-third argument is `false`.
+Deprecate method `old` and specify the replacement call `new`. Prevent `@deprecate` from
+exporting `old` by setting `ex` to `false`. `@deprecate` defines a new method with the same
+signature as `old`.
+
+!!! compat "Julia 1.5"
+    As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
+    is run without the `--depwarn=yes` flag set, as the default value of `--depwarn` option
+    is `no`.  The warnings are printed from tests run by `Pkg.test()`.
 
 # Examples
 ```jldoctest
@@ -159,36 +164,47 @@ macro deprecate_moved(old, new, export_old=true)
         Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
 end
 
-# BEGIN 0.7 deprecations
-
-function promote_eltype_op end
-
-# END 0.7 deprecations
-
 # BEGIN 1.0 deprecations
 
-# @deprecate one(i::CartesianIndex) oneunit(i)
-# @deprecate one(::Type{I}) where I<:CartesianIndex oneunit(I)
+@deprecate one(i::CartesianIndex)                    oneunit(i)
+@deprecate one(I::Type{CartesianIndex{N}}) where {N} oneunit(I)
 
-@deprecate reindex(V, idxs, subidxs) reindex(idxs, subidxs) false
-@deprecate substrides(parent::AbstractArray, strds::Tuple, I::Tuple) substrides(strds, I) false
-
-# TODO: deprecate these
-one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
-one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
-
-MPFR.BigFloat(x, prec::Int) = BigFloat(x; precision=prec)
-MPFR.BigFloat(x, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
-MPFR.BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
-MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
+@deprecate BigFloat(x, prec::Int)                               BigFloat(x; precision=prec)
+@deprecate BigFloat(x, prec::Int, rounding::RoundingMode)       BigFloat(x, rounding; precision=prec)
+@deprecate BigFloat(x::Real, prec::Int)                         BigFloat(x; precision=prec)
+@deprecate BigFloat(x::Real, prec::Int, rounding::RoundingMode) BigFloat(x, rounding; precision=prec)
 
 # END 1.0 deprecations
 
-# BEGIN 1.3 deprecations
+# BEGIN 1.5 deprecations
 
-@eval Threads begin
-    Base.@deprecate_binding RecursiveSpinLock ReentrantLock
-    Base.@deprecate_binding Mutex ReentrantLock
+"""
+    isimmutable(v) -> Bool
+!!! warning
+    Consider using `!ismutable(v)` instead, as `isimmutable(v)` will be replaced by `!ismutable(v)` in a future release. (Since Julia 1.5)
+Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
+for a discussion of immutability. Note that this function works on values, so if you give it
+a type, it will tell you that a value of `DataType` is mutable.
+
+# Examples
+```jldoctest
+julia> isimmutable(1)
+true
+
+julia> isimmutable([1,2])
+false
+```
+"""
+isimmutable(@nospecialize(x)) = !ismutable(x)
+export isimmutable
+# Note isimmutable is not @deprecated out of performance concerns
+
+macro get!(h, key0, default)
+    f, l = __source__.file, __source__.line
+    @warn "`@get!(dict, key, default)` at $f:$l is deprecated, use `get!(()->default, dict, key)` instead."
+    return quote
+        get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
+    end
 end
 
-# END 1.3 deprecations
+# END 1.5 deprecations
