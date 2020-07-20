@@ -34,12 +34,9 @@ using llvm_file_magic = file_magic;
 #include "processor.h"
 
 #include <string>
-#include <sstream>
-#include <fstream>
 #include <map>
 #include <vector>
 #include <set>
-#include <cstdio>
 #include "julia_assert.h"
 
 #ifdef _OS_DARWIN_
@@ -246,14 +243,17 @@ public:
                 auto sName = section.getName();
                 if (!sName)
                     continue;
+                if (sName.get() != ".ARM.exidx") {
+                    continue;
+                }
 #else
                 StringRef sName;
                 if (section.getName(sName))
                     continue;
-#endif
                 if (sName != ".ARM.exidx") {
                     continue;
                 }
+#endif
             }
             uint64_t loadaddr = L.getSectionLoadAddress(section);
             size_t seclen = section.getSize();

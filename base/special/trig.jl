@@ -777,8 +777,8 @@ function sinpi(x::T) where T<:AbstractFloat
     end
 end
 
-# Integers and Rationals
-function sinpi(x::T) where T<:Union{Integer,Rational}
+# Rationals
+function sinpi(x::T) where T<:Rational
     Tf = float(T)
     if !isfinite(x)
         throw(DomainError(x, "`x` must be finite."))
@@ -836,8 +836,8 @@ function cospi(x::T) where T<:AbstractFloat
     end
 end
 
-# Integers and Rationals
-function cospi(x::T) where T<:Union{Integer,Rational}
+# Rationals
+function cospi(x::T) where T<:Rational
     if !isfinite(x)
         throw(DomainError(x, "`x` must be finite."))
     end
@@ -860,10 +860,79 @@ function cospi(x::T) where T<:Union{Integer,Rational}
     end
 end
 
+"""
+    sincospi(x)
+
+Simultaneously compute `sinpi(x)` and `cospi(x)`, where the `x` is in radians.
+"""
+function sincospi(x::T) where T<:AbstractFloat
+    if !isfinite(x)
+        isnan(x) && return x, x
+        throw(DomainError(x, "`x` cannot be infinite."))
+    end
+
+    ax = abs(x)
+    s = maxintfloat(T)
+    ax >= s && return (copysign(zero(T), x), one(T)) # even integer-valued
+
+    # reduce to interval [-1,1]
+    # assumes RoundNearest rounding mode
+    t = 3*(s/2)
+    rx = x-((x+t)-t) # zeros may be incorrectly signed
+    arx = abs(rx)
+
+    # same selection scheme as sinpi and cospi
+    if (arx == 0) | (arx == 1)
+        return copysign(zero(T), x), ifelse(ax % 2 == 0, one(T), -one(T))
+    elseif arx < 0.25
+        return sincos_kernel(mulpi_ext(rx))
+    elseif arx < 0.75
+        y = mulpi_ext(T(0.5) - arx)
+        return copysign(cos_kernel(y), rx), sin_kernel(y)
+    else
+        y_si = mulpi_ext(copysign(one(T), rx) - rx)
+        y_co = mulpi_ext(one(T) - arx)
+        return sin_kernel(y_si), -cos_kernel(y_co)
+    end
+end
+
+# Rationals
+function sincospi(x::T) where T<:Rational
+    Tf = float(T)
+    if !isfinite(x)
+        throw(DomainError(x, "`x` must be finite."))
+    end
+
+    # until we get an IEEE remainder function (#9283)
+    rx = rem(x,2)
+    if rx > 1
+        rx -= 2
+    elseif rx < -1
+        rx += 2
+    end
+    arx = abs(rx)
+
+    # same selection scheme as sinpi and cospi
+    if (arx == 0) | (arx == 1)
+        return copysign(zero(Tf),x), ifelse(iseven(numerator(x)), one(Tf), -one(Tf))
+    elseif arx < 0.25
+        return sincos_kernel(mulpi_ext(rx))
+    elseif arx < 0.75
+        y = mulpi_ext(T(0.5) - arx)
+        return copysign(cos_kernel(y), rx), sin_kernel(y)
+    else
+        y_si = mulpi_ext(copysign(one(T), rx) - rx)
+        y_co = mulpi_ext(one(T) - arx)
+        return sin_kernel(y_si), -cos_kernel(y_co)
+    end
+end
+
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
+sincospi(x::Integer) = (sinpi(x), cospi(x))
 sinpi(x::Real) = sinpi(float(x))
 cospi(x::Real) = cospi(float(x))
+sincospi(x::Real) = sincospi(float(x))
 
 function sinpi(z::Complex{T}) where T
     F = float(T)
@@ -893,7 +962,8 @@ function sinpi(z::Complex{T}) where T
         end
     else
         pizi = pi*zi
-        Complex(sinpi(zr)*cosh(pizi), cospi(zr)*sinh(pizi))
+        sipi, copi = sincospi(zr)
+        Complex(sipi*cosh(pizi), copi*sinh(pizi))
     end
 end
 
@@ -928,7 +998,55 @@ function cospi(z::Complex{T}) where T
         end
     else
         pizi = pi*zi
-        Complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
+        sipi, copi = sincospi(zr)
+        Complex(copi*cosh(pizi), -sipi*sinh(pizi))
+    end
+end
+
+function sincospi(z::Complex{T}) where T
+    F = float(T)
+    zr, zi = reim(z)
+    if isinteger(zr)
+        # zr = ...,-2,-1,0,1,2,...
+        # sin(pi*zr) == ±0
+        # cos(pi*zr) == ±1
+        # cosh(pi*zi) > 0
+        s = copysign(zero(F),zr)
+        c_pos = isa(zr,Integer) ? iseven(zr) : isinteger(zr/2)
+        pizi = pi*zi
+        sh, ch = sinh(pizi), cosh(pizi)
+        (
+            Complex(s, c_pos ? sh : -sh),
+            Complex(c_pos ? ch : -ch, isnan(zi) ? s : -flipsign(s,zi)),
+        )
+    elseif isinteger(2*zr)
+        # zr = ...,-1.5,-0.5,0.5,1.5,2.5,...
+        # sin(pi*zr) == ±1
+        # cos(pi*zr) == +0
+        # sign(sinh(pi*zi)) == sign(zi)
+        s_pos = isinteger((2*zr-1)/4)
+        pizi = pi*zi
+        sh, ch = sinh(pizi), cosh(pizi)
+        (
+            Complex(s_pos ? ch : -ch, isnan(zi) ? zero(F) : copysign(zero(F),zi)),
+            Complex(zero(F), s_pos ? -sh : sh),
+        )
+    elseif !isfinite(zr)
+        if zi == 0
+            Complex(F(NaN), F(zi)), Complex(F(NaN), isnan(zr) ? zero(F) : -flipsign(F(zi),zr))
+        elseif isinf(zi)
+            Complex(F(NaN), F(zi)), Complex(F(Inf), F(NaN))
+        else
+            Complex(F(NaN), F(NaN)), Complex(F(NaN), F(NaN))
+        end
+    else
+        pizi = pi*zi
+        sipi, copi = sincospi(zr)
+        sihpi, cohpi = sinh(pizi), cosh(pizi)
+        (
+            Complex(sipi*cohpi, copi*sihpi),
+            Complex(copi*cohpi, -sipi*sihpi),
+        )
     end
 end
 

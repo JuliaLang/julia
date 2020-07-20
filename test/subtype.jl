@@ -1108,7 +1108,7 @@ f18348(::Type{T}, x::T) where {T<:Any} = 2
 # Issue #13165
 @test Symmetric{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
 @test Hermitian{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
-@test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinearAlgebra.RealHermSymComplexHerm
+@test Hermitian{ComplexF64,Matrix{ComplexF64}} <: LinearAlgebra.RealHermSymComplexHerm
 
 # Issue #12721
 f12721(::T) where {T<:Type{Int}} = true
@@ -1357,6 +1357,18 @@ end
 let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
     @test e[1] isa TypeVar
 end
+
+# issue #25430
+@test Vector{Tuple{Any}}() isa Vector{Tuple{>:Int}}
+@test Vector{Tuple{>:Int}}() isa Vector{Tuple{Any}}
+@test Vector{Tuple{Any}} == Vector{Tuple{>:Int}}
+@test Vector{Vector{Tuple{Any}}} == Vector{Vector{Tuple{>:Int}}}
+f25430(t::Vector{Tuple{Any}}) = true
+g25430(t::Vector{Tuple{>:Int}}) = true
+@test f25430(Vector{Tuple{>:Int}}())
+@test g25430(Vector{Tuple{Any}}())
+@testintersect(Vector{Tuple{>:Int}}, Vector{Tuple{Any}}, Vector{Tuple{Any}})
+@testintersect(Vector{Vector{Tuple{>:Int}}}, Vector{Vector{Tuple{Any}}}, Vector{Vector{Tuple{Any}}})
 
 # issue #24521
 g24521(::T, ::T) where {T} = T
@@ -1627,18 +1639,9 @@ end
 @testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
                Tuple{Type{Vector}, Any},
                Union{})
-#@testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
-#               Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
-#               Tuple{Type{Vector{Int}}, Int})
-@test_broken isequal(_type_intersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
-                                     Tuple{Type{Vector{T} where Int<:T<:Int}, Any}),
-                     Tuple{Type{Vector{Int}}, Int})
-@test isequal_type(_type_intersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
-                                   Tuple{Type{Vector{T} where Int<:T<:Int}, Any}),
-                   Tuple{Type{Vector{Int}}, Int})
-@test isequal_type(_type_intersect(Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
-                                   Tuple{Type{<:AbstractVector{T}}, Int} where T),
-                   Tuple{Type{Vector{Int}}, Int})
+@testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
+               Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
+               Tuple{Type{Vector{Int}}, Int})
 let X = LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T,
     Y = Union{LinearAlgebra.Hermitian{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T,
               LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T}
@@ -1753,3 +1756,7 @@ s26065 = Ref{Tuple{T,Ref{Union{Ref{Tuple{Ref{Union{Ref{Ref{Tuple{Ref{Tuple{Union
 
 @test !issub(Tuple{Type{T}, T} where T<:Tuple{String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}, String, Union{Base.Regex, AbstractChar, AbstractString}},
              Tuple{Type{Tuple{Vararg{V, N} where N}}, Tuple{Vararg{V, N} where N}} where V)
+
+# issue 36100
+@test NamedTuple{(:a, :b), Tuple{Missing, Union{}}} == NamedTuple{(:a, :b), Tuple{Missing, Union{}}}
+@test Val{Tuple{Missing, Union{}}} === Val{Tuple{Missing, Union{}}}

@@ -190,7 +190,8 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                     snprintf(relocated, PATHBUF, "%s%s", jl_options.julia_bindir, dl_path + 16);
                     len = len - 16 + strlen(jl_options.julia_bindir);
                 } else {
-                    strncpy(relocated, dl_path, len);
+                    strncpy(relocated, dl_path, PATHBUF);
+                    relocated[PATHBUF-1] = '\0';
                 }
                 for (i = 0; i < n_extensions; i++) {
                     const char *ext = extensions[i];

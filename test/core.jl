@@ -234,12 +234,12 @@ end
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
 end
-@test A3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test A3890{Float64}.types[1] === Array{ComplexF64,2}
 # make sure the field type Matrix{Complex{T1}} isn't cached
 mutable struct B3890{T2}
     x::Matrix{Complex{T2}}
 end
-@test B3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test B3890{Float64}.types[1] === Array{ComplexF64,2}
 
 # issue #786
 mutable struct Node{T}
@@ -301,7 +301,7 @@ function bar(x::T) where T
 end
 @test bar(3.0) == Complex(3.0,0.0)
 
-z = convert(Complex{Float64},2)
+z = convert(ComplexF64,2)
 @test z == Complex(2.0,0.0)
 
 function typeassert_instead_of_decl()
@@ -2263,7 +2263,7 @@ end
 @test ttt7049(init="a") == "init=a"
 
 # issue #7074
-let z(A::StridedMatrix{T}) where {T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}} = T,
+let z(A::StridedMatrix{T}) where {T<:Union{Float64,ComplexF64,Float32,ComplexF32}} = T,
     S = zeros(Complex,2,2)
     @test_throws MethodError z(S)
 end
@@ -5178,6 +5178,12 @@ end
 @test let_Box5()() == 46
 @test let_noBox()() == 21
 
+function _assigns_and_captures_arg(a)
+    a = a
+    return ()->a
+end
+@test !any(contains_Box, code_lowered(_assigns_and_captures_arg,(Any,))[1].code)
+
 module TestModuleAssignment
 using Test
 @eval $(GlobalRef(TestModuleAssignment, :x)) = 1
@@ -6602,6 +6608,17 @@ end
 # issue #26518
 function f26518((a,b)) end
 @test f26518((1,2)) === nothing
+# issue #36572 - destructuring called object
+struct Foo36572
+    a
+    b
+end
+function Base.iterate(f::Foo36572, i=1)
+    i == 1 ? (f.a, 2) :
+    i == 2 ? (f.b, 3) : nothing
+end
+((a,b)::Foo36572)(x) = a*x + b
+@test Foo36572(10,2)(3) == 32
 
 # issue 22098
 macro m22098 end
@@ -7132,7 +7149,7 @@ let code = code_lowered(FieldConvert)[1].code
     @test code[8] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
     @test code[9] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(8), Core.SlotNumber(6))
     @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
-    @test code[11] == Expr(:return, Core.SSAValue(10))
+    @test code[11] == Core.ReturnNode(Core.SSAValue(10))
  end
 
 # Issue #32820
@@ -7221,3 +7238,31 @@ struct AVL35416{K,V}
     avl:: Union{Nothing,Node35416{AVL35416{K,V},<:K,<:V}}
 end
 @test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}
+
+# issue #31696
+foo31696(x::Int8, y::Int8) = 1
+foo31696(x::T, y::T) where {T <: Int8} = 2
+@test length(methods(foo31696)) == 1
+let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
+    b .= a
+    @test b[1] == (1,)
+    a .= b
+    @test a[1] == (1,)
+end
+
+# issue #36104
+module M36104
+struct T36104
+    v::Vector{M36104.T36104}
+end
+struct T36104   # check that redefining it works, issue #21816
+    v::Vector{T36104}
+end
+end
+@test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
+@test_throws ErrorException("expected") @eval(struct X36104; x::error("expected"); end)
+@test @isdefined(X36104)
+struct X36104; x::Int; end
+@test fieldtypes(X36104) == (Int,)
+primitive type P36104 8 end
+@test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)

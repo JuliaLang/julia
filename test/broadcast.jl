@@ -310,9 +310,13 @@ let x = [1:4;], y = x
     @. x[2:end] = 1:3    # @. should convert to .=
     @test y === x == [0,1,2,3]
 end
-let a = [[4, 5], [6, 7]]
+let a = [[4, 5], [6, 7]], b = reshape(a, 1, 2)
     a[1] .= 3
     @test a == [[3, 3], [6, 7]]
+    a[CartesianIndex(1)] .= 4
+    @test a == [[4, 4], [6, 7]]
+    b[1, CartesianIndex(1)] .= 5
+    @test a == [[5, 5], [6, 7]]
 end
 let d = Dict(:foo => [1,3,7], (3,4) => [5,9])
     d[:foo] .+= 2

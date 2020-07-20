@@ -575,7 +575,9 @@ end
     for (rng, flg) in ((0x00:0x9f, false), (0xa0:0xbf, true), (0xc0:0xff, false))
         for cont in rng
             @test isvalid(String, UInt8[0xe0, cont]) == false
-            @test isvalid(String, UInt8[0xe0, cont, 0x80]) == flg
+            bytes = UInt8[0xe0, cont, 0x80]
+            @test isvalid(String, bytes) == flg
+            @test isvalid(String, @view(bytes[1:end])) == flg # contiguous subarray support
         end
     end
     # Check three-byte sequences
@@ -1073,4 +1075,19 @@ let x = SubString("ab", 1, 1)
     y = convert(SubString{String}, x)
     @test y === x
     chop("ab") === chop.(["ab"])[1]
+end
+
+@testset "show StringIndexError" begin
+    str = "abcdefghκijklmno"
+    e = StringIndexError(str, 10)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [10], valid nearby indices [9]=>'κ', [11]=>'i'"
+    str = "κ"
+    e = StringIndexError(str, 2)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [2], valid nearby index [1]=>'κ'"
+end
+
+@testset "summary" begin
+    @test sprint(summary, "foα") == "4-codeunit String"
+    @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
+    @test sprint(summary, "") == "empty String"
 end

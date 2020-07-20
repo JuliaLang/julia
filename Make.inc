@@ -339,6 +339,9 @@ USE_POLLY := 0
 USE_POLLY_OPENMP := 0  # Enable OpenMP code-generation
 USE_POLLY_ACC := 0     # Enable GPU code-generation
 
+# Options to use MLIR
+USE_MLIR := 0
+
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
 #XC_HOST := x86_64-w64-mingw32
@@ -774,6 +777,11 @@ ifeq ($(ARCH),amd64)
 override ARCH := x86_64
 endif
 
+# We map arm64 (Apple spelling) to aarch64 to avoid having to deal with both spellings everywhere
+ifeq ($(ARCH),arm64)
+override ARCH := aarch64
+endif
+
 ifeq ($(ARCH),i386)
 BINARY:=32
 ISX86:=1
@@ -850,6 +858,10 @@ endif
 ifneq (,$(findstring aarch64,$(ARCH)))
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
+ifeq ($(OS),Darwin)
+# Apple Chips are all at least A12Z
+MCPU:=apple-a12
+endif
 endif
 
 # Set MARCH-specific flags

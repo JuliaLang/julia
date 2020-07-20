@@ -215,7 +215,7 @@ end
     nnorm = 10
     mmat = 10
     nmat = 8
-    @testset "For $elty" for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
+    @testset "For $elty" for elty in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int32, Int64, BigInt)
         x = fill(elty(1),10)
         @testset "Vector" begin
             xs = view(x,1:2:10)
@@ -395,6 +395,19 @@ end
     @test kron(b',2) == [8 10 12]
 end
 
+@testset "kron!" begin
+    a = [1.0, 0.0]
+    b = [0.0, 1.0]
+    @test kron!([1.0, 0.0], b, 0.5) == [0.0; 0.5]
+    @test kron!([1.0, 0.0], 0.5, b) == [0.0; 0.5]
+    c = Vector{Float64}(undef, 4)
+    kron!(c, a, b)
+    @test c == [0.0; 1.0; 0.0; 0.0]
+    c = Matrix{Float64}(undef, 2, 2)
+    kron!(c, a, b')
+    @test c == [0.0 1.0; 0.0 0.0]
+end
+
 @testset "kron adjoint" begin
     a = [1+im, 2, 3]
     b = [4, 5, 6+7im]
@@ -458,7 +471,7 @@ end
                                                   0  -0.000000000000002   3.000000000000000])
     end
 
-    @testset "Additional tests for $elty" for elty in (Float64, Complex{Float64})
+    @testset "Additional tests for $elty" for elty in (Float64, ComplexF64)
         A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
                                      1/3 1/4 1/5 1/6;
                                      1/4 1/5 1/6 1/7;
@@ -476,7 +489,7 @@ end
     end
 
     @testset "Integer promotion tests" begin
-        for (elty1, elty2) in ((Int64, Float64), (Complex{Int64}, Complex{Float64}))
+        for (elty1, elty2) in ((Int64, Float64), (Complex{Int64}, ComplexF64))
             A4int  = convert(Matrix{elty1}, [1 2; 3 4])
             A4float  = convert(Matrix{elty2}, A4int)
             @test exp(A4int) == exp(A4float)
@@ -632,7 +645,7 @@ end
         end
     end
 
-    @testset "Inverse functions for $elty" for elty in (Complex{Float32}, Complex{Float64})
+    @testset "Inverse functions for $elty" for elty in (ComplexF32, ComplexF64)
         A1 = convert(Matrix{elty}, [ 0.143721-0.0im       -0.138386-0.106905im;
                                      -0.138386+0.106905im   0.306224-0.0im])
         A2 = convert(Matrix{elty}, [1im 2; 0.02+0.5im 3])
@@ -691,12 +704,12 @@ end
     @test exp(A10) ≈ eA10
 end
 
-@testset "Additional matrix logarithm tests" for elty in (Float64, Complex{Float64})
+@testset "Additional matrix logarithm tests" for elty in (Float64, ComplexF64)
     A11 = convert(Matrix{elty}, [3 2; -5 -3])
     @test exp(log(A11)) ≈ A11
 
     A12 = convert(Matrix{elty}, [1 -1; 1 -1])
-    @test typeof(log(A12)) == Array{Complex{Float64}, 2}
+    @test typeof(log(A12)) == Array{ComplexF64, 2}
 
     A13 = convert(Matrix{elty}, [2 0; 0 2])
     @test typeof(log(A13)) == Array{elty, 2}
@@ -754,7 +767,7 @@ end
     @test diag(zeros(0,1),2) == []
 end
 
-@testset "Matrix to real power" for elty in (Float64, Complex{Float64})
+@testset "Matrix to real power" for elty in (Float64, ComplexF64)
 # Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
     #Aa : only positive real eigenvalues
     Aa = convert(Matrix{elty}, [5 4 2 1; 0 1 -1 -1; -1 -1 3 0; 1 1 -1 2])
@@ -937,6 +950,17 @@ end
     # case where no sqrt is needed (s=0)
     A2 = [1.01 0.01 0.01; 0 1.01 0.01; 0 0 1.01]
     @test exp(log(A2)) ≈ A2
+end
+
+struct TypeWithoutZero end
+Base.zero(::Type{TypeWithoutZero}) = TypeWithZero()
+struct TypeWithZero end
+Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
+Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
+Base.:+(x::TypeWithZero, ::TypeWithoutZero) = x
+
+@testset "diagm for type with no zero" begin
+    @test diagm(0 => [TypeWithoutZero()]) isa Matrix{TypeWithZero}
 end
 
 end # module TestDense

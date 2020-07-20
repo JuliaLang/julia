@@ -678,8 +678,8 @@ function count_meta_loc(exprs)
     return push_count
 end
 
-function is_return_ssavalue(ex::Expr)
-    ex.head === :return && isa(ex.args[1], Core.SSAValue)
+function is_return_ssavalue(ex)
+    ex isa Core.ReturnNode && ex.val isa Core.SSAValue
 end
 
 function is_pop_loc(ex::Expr)
@@ -2264,3 +2264,31 @@ x = let var"'"(x) = 2x
     3'
 end
 @test x == 6
+
+# issue #36196
+@test_throws ParseError("\"for\" at none:1 expected \"end\", got \")\"") Meta.parse("(for i=1; println())")
+@test_throws ParseError("\"try\" at none:1 expected \"end\", got \")\"") Meta.parse("(try i=1; println())")
+
+# issue #36272
+macro m36272()
+    :((a, b=1) -> a*b)
+end
+@test @m36272()(1) == 1
+
+@testset "unary ± and ∓" begin
+    @test Meta.parse("±x") == Expr(:call, :±, :x)
+    @test Meta.parse("∓x") == Expr(:call, :∓, :x)
+end
+
+@testset "test .<: and .>:" begin
+    tmp = [Int, Float64, String, Bool] .<: Union{Int, String}
+    @test tmp == Bool[1, 0, 1, 0]
+
+    tmp = [Int, Float64, String, Bool] .>: [Int, Float64, String, Bool]
+    @test tmp == Bool[1, 1, 1, 1]
+
+    tmp = @. [Int, Float64, String, Bool] <: Union{Int, String}
+    @test tmp == Bool[1, 0,1, 0]
+
+    @test (Int .<: [Integer] .<: [Real]) == [true]
+end

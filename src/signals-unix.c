@@ -72,9 +72,12 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.arm_sp;
-#elif defined(_OS_DARWIN_)
+#elif defined(_OS_DARWIN_) && defined(_CPU_X86_64_)
     const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
     return ctx->uc_mcontext64->__ss.__rsp;
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
+    return ctx->uc_mcontext64->__ss.__sp;
 #else
     // TODO Add support for FreeBSD and PowerPC(64)?
     return 0;
@@ -150,7 +153,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ctx->uc_mcontext.arm_sp = rsp;
     ctx->uc_mcontext.arm_lr = 0; // Clear link register
     ctx->uc_mcontext.arm_pc = target;
-#elif defined(_OS_DARWIN_)
+#elif defined(_OS_DARWIN_) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
     // Only used for SIGFPE.
     // This doesn't seems to be reliable when the SIGFPE is generated
     // from a divide-by-zero exception, which is now handled by
@@ -159,8 +162,13 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ucontext64_t *ctx = (ucontext64_t*)_ctx;
     rsp -= sizeof(void*);
     *(void**)rsp = NULL;
+#if defined(_CPU_X86_64_)
     ctx->uc_mcontext64->__ss.__rsp = rsp;
     ctx->uc_mcontext64->__ss.__rip = (uintptr_t)fptr;
+#else
+    ctx->uc_mcontext64->__ss.__sp = rsp;
+    ctx->uc_mcontext64->__ss.__pc = (uintptr_t)fptr;
+#endif
 #else
 #warning "julia: throw-in-context not supported on this platform"
     // TODO Add support for PowerPC(64)?

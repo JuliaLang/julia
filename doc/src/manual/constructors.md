@@ -360,10 +360,10 @@ and then delegates construction to the general constructor for the case where bo
 successfully creates a point of type `Point{Float64}`:
 
 ```jldoctest parametric2
-julia> Point(1,2.5)
+julia> p = Point(1,2.5)
 Point{Float64}(1.0, 2.5)
 
-julia> typeof(ans)
+julia> typeof(p)
 Point{Float64}
 ```
 
@@ -548,9 +548,11 @@ julia> struct SummedArray{T<:Number,S<:Number}
        end
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
-ERROR: MethodError: no method matching SummedArray(::Array{Int32,1}, ::Int32)
+ERROR: MethodError: no method matching SummedArray(::Vector{Int32}, ::Int32)
 Closest candidates are:
-  SummedArray(::Array{T,1}) where T at none:4
+  SummedArray(::Vector{T}) where T at none:4
+Stacktrace:
+[...]
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows

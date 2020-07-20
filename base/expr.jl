@@ -347,9 +347,9 @@ function findmeta_block(exargs, argsmatch=args->true)
     for i = 1:length(exargs)
         a = exargs[i]
         if isa(a, Expr)
-            if (a::Expr).head === :meta && argsmatch((a::Expr).args)
+            if a.head === :meta && argsmatch(a.args)
                 return i, exargs
-            elseif (a::Expr).head === :block
+            elseif a.head === :block
                 idx, exa = findmeta_block(a.args, argsmatch)
                 if idx != 0
                     return idx, exa

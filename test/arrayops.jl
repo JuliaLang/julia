@@ -974,6 +974,8 @@ end
                                         3 4], inner=(2, 2), outer=(2,))
     @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
 
+    @test_throws ArgumentError repeat(OffsetArray(rand(2), 1), inner=(2,))
+
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
     T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
@@ -1446,11 +1448,15 @@ end
     @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
     @test_throws BoundsError deleteat!(a, 13)
     @test_throws BoundsError deleteat!(a, [1,13])
-    @test_throws ArgumentError deleteat!(a, [5,3])
+    @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
+    @test_throws BoundsError deleteat!(a, [0])
+    @test_throws BoundsError deleteat!(a, [4])
+    @test_throws BoundsError deleteat!(a, [5])
+    @test_throws BoundsError deleteat!(a, [5, 3])
 
     @test_throws BoundsError deleteat!([], 1)
     @test_throws BoundsError deleteat!([], [1])
@@ -2791,27 +2797,27 @@ end
     b = IOBuffer()
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, 1:2]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 1:2]"
 
     err = try x[10, trues(2)]; catch err; err; end
     b = IOBuffer()
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, Bool[1, 1]]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, Bool[1, 1]]"
 
     # Also test : directly for custom types for which it may appear as-is
     err = BoundsError(x, (10, :))
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, :]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, :]"
 
     err = BoundsError(x, "bad index")
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [\"bad index\"]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [\"bad index\"]"
 
     err = BoundsError(x, (10, "bad index"))
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Array{Float64,2} at index [10, \"bad index\"]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
 end

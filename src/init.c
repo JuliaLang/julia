@@ -640,6 +640,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_page_size = jl_getpagesize();
     uint64_t total_mem = uv_get_total_memory();
+    uint64_t constrained_mem = uv_get_constrained_memory();
+    if (constrained_mem > 0 && constrained_mem < total_mem)
+        total_mem = constrained_mem;
     if (total_mem >= (size_t)-1) {
         total_mem = (size_t)-1;
     }
@@ -721,7 +724,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     else {
         jl_init_types();
         jl_init_codegen();
-        jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     }
 
     jl_init_tasks();

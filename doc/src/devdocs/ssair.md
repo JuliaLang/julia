@@ -143,7 +143,7 @@ The corresponding IR (with irrelevant types stripped) is:
 └──       $(Expr(:unreachable))::Union{}
 4 ┄ %13 = φᶜ (%3, %6, %9)::Bool
 │   %14 = φᶜ (%4, %7, %10)::Core.Compiler.MaybeUndef(Int64)
-│   %15 = φᶜ (%5)::Core.Compiler.Const(1, false)
+│   %15 = φᶜ (%5)::Core.Const(1, false)
 └──       $(Expr(:leave, 1))
 5 ─       $(Expr(:pop_exception, :(%2)))::Any
 │         $(Expr(:throw_undef_if_not, :y, :(%13)))::Any

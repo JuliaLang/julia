@@ -329,6 +329,7 @@ export
     sinc,
     sincos,
     sincosd,
+    sincospi,
     sind,
     sinh,
     sinpi,

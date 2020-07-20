@@ -90,10 +90,10 @@ julia> function foo()
        end
 foo (generic function with 1 method)
 
-julia> foo()
+julia> x = foo()
 100
 
-julia> typeof(ans)
+julia> typeof(x)
 Int8
 ```
 
@@ -237,12 +237,12 @@ of function arguments that are containers of abstract types; see [Performance Ti
 ## Primitive Types
 
 !!! warning
-  It is almost always preferable to wrap an existing primitive type in a new
-  composite type than to define your own primitive type.
+    It is almost always preferable to wrap an existing primitive type in a new
+    composite type than to define your own primitive type.
 
-  This functionality exists to allow Julia to bootstrap the standard primitive
-  types that LLVM supports. Once they are defined, there is very little reason
-  to define more.
+    This functionality exists to allow Julia to bootstrap the standard primitive
+    types that LLVM supports. Once they are defined, there is very little reason
+    to define more.
 
 A primitive type is a concrete type whose data consists of plain old bits. Classic examples of primitive
 types are integers and floating-point values. Unlike most languages, Julia lets you declare your
@@ -667,10 +667,10 @@ Since the type `Point{Float64}` is a concrete type equivalent to `Point` declare
 in place of `T`, it can be applied as a constructor accordingly:
 
 ```jldoctest pointtype
-julia> Point{Float64}(1.0, 2.0)
+julia> p = Point{Float64}(1.0, 2.0)
 Point{Float64}(1.0, 2.0)
 
-julia> typeof(ans)
+julia> typeof(p)
 Point{Float64}
 ```
 
@@ -695,16 +695,16 @@ that reason, you can also apply `Point` itself as a constructor, provided that t
 of the parameter type `T` is unambiguous:
 
 ```jldoctest pointtype
-julia> Point(1.0,2.0)
+julia> p1 = Point(1.0,2.0)
 Point{Float64}(1.0, 2.0)
 
-julia> typeof(ans)
+julia> typeof(p1)
 Point{Float64}
 
-julia> Point(1,2)
+julia> p2 = Point(1,2)
 Point{Int64}(1, 2)
 
-julia> typeof(ans)
+julia> typeof(p2)
 Point{Int64}
 ```
 
@@ -1101,10 +1101,10 @@ consider the two types created by the following declarations:
 
 ```jldoctest
 julia> const T1 = Array{Array{T,1} where T, 1}
-Array{Array{T,1} where T,1}
+Vector{Vector{T} where T} = Array{Array{T,1} where T,1}
 
 julia> const T2 = Array{Array{T,1}, 1} where T
-Array{Array{T,1},1} where T
+Array{Vector{T},1} where T
 ```
 
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each
@@ -1284,7 +1284,7 @@ Polar{Float64} complex number:
    3.0 * exp(4.0im)
 
 julia> [Polar(3, 4.0), Polar(4.0,5.3)]
-2-element Array{Polar{Float64},1}:
+2-element Vector{Polar{Float64}}:
  3.0 * exp(4.0im)
  4.0 * exp(5.3im)
 ```
@@ -1389,7 +1389,7 @@ julia> show(IOContext(stdout, :compact=>true), Polar(3, 4.0))
 3.0ℯ4.0im
 
 julia> [Polar(3, 4.0) Polar(4.0,5.3)]
-1×2 Array{Polar{Float64},2}:
+1×2 Matrix{Polar{Float64}}:
  3.0ℯ4.0im  4.0ℯ5.3im
 ```
 

@@ -14,7 +14,8 @@ julia> ntuple(i -> 2*i, 4)
 (2, 4, 6, 8)
 ```
 """
-function ntuple(f::F, n::Integer) where F
+@inline function ntuple(f::F, n::Integer) where F
+    # marked inline since this benefits from constant propagation of `n`
     t = n == 0  ? () :
         n == 1  ? (f(1),) :
         n == 2  ? (f(1), f(2)) :

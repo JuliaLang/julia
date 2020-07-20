@@ -127,7 +127,7 @@ julia> findnz(S)
 ([1, 4, 5, 3], [4, 7, 9, 18], [1, 2, 3, -5])
 
 julia> findall(!iszero, S)
-4-element Array{CartesianIndex{2},1}:
+4-element Vector{CartesianIndex{2}}:
  CartesianIndex(1, 4)
  CartesianIndex(4, 7)
  CartesianIndex(5, 9)
@@ -137,7 +137,7 @@ julia> findnz(R)
 ([1, 3, 4, 5], [1, -5, 2, 3])
 
 julia> findall(!iszero, R)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  3
  4
@@ -194,7 +194,7 @@ section of the standard library reference.
 |:-------------------------- |:---------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`spzeros(m,n)`](@ref)     | [`zeros(m,n)`](@ref)   | Creates a *m*-by-*n* matrix of zeros. ([`spzeros(m,n)`](@ref) is empty.)                                                                                              |
 | [`sparse(I, n, n)`](@ref)  | [`Matrix(I,n,n)`](@ref)| Creates a *n*-by-*n* identity matrix.                                                                                                                                 |
-| [`Array(S)`](@ref)         | [`sparse(A)`](@ref)    | Interconverts between dense and sparse formats.                                                                                                                       |
+| [`sparse(A)`](@ref)        | [`Array(S)`](@ref)   | Interconverts between dense and sparse formats.                                                                                                                       |
 | [`sprand(m,n,d)`](@ref)    | [`rand(m,n)`](@ref)    | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed uniformly on the half-open interval ``[0, 1)``.                            |
 | [`sprandn(m,n,d)`](@ref)   | [`randn(m,n)`](@ref)   | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the standard normal (Gaussian) distribution.                  |
 | [`sprandn(rng,m,n,d)`](@ref) | [`randn(rng,m,n)`](@ref) | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements generated with the `rng` random number generator                                   |

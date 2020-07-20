@@ -26,8 +26,6 @@
 #include <llvm/IR/Metadata.h>
 #include <llvm/Support/Debug.h>
 
-#include <cstdio>
-
 #include "julia_assert.h"
 
 namespace llvm {

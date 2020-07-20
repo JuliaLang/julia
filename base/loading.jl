@@ -648,7 +648,7 @@ end
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
     base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
-    return isfile(base_path) ? base_path : nothing
+    return isfile(base_path) ? normpath(base_path) : nothing
 end
 
 cache_file_entry(pkg::PkgId) = joinpath(
@@ -1194,71 +1194,78 @@ function load_path_setup_code(load_path::Bool=true)
         code *= """
         append!(empty!(Base.LOAD_PATH), $(repr(load_path)))
         ENV["JULIA_LOAD_PATH"] = $(repr(join(load_path, Sys.iswindows() ? ';' : ':')))
-        Base.HOME_PROJECT[] = Base.ACTIVE_PROJECT[] = nothing
+        Base.ACTIVE_PROJECT[] = nothing
         """
     end
     return code
 end
 
+# this is called in the external process that generates precompiled package files
+function include_package_for_output(input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String}, concrete_deps::typeof(_concrete_dependencies), uuid_tuple::NTuple{2,UInt64}, source::Union{Nothing,String})
+    append!(empty!(Base.DEPOT_PATH), depot_path)
+    append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
+    append!(empty!(Base.LOAD_PATH), load_path)
+    ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
+    Base.ACTIVE_PROJECT[] = nothing
+    Base._track_dependencies[] = true
+    append!(empty!(Base._concrete_dependencies), concrete_deps)
+
+    ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
+    if source !== nothing
+        task_local_storage()[:SOURCE_PATH] = source
+    end
+
+    try
+        Base.include(Base.__toplevel__, input)
+    catch ex
+        precompilableerror(ex) || rethrow()
+        @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
+        exit(125) # we define status = 125 means PrecompileableError
+    end
+end
+
+@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},Nothing))
+@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},String))
+
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
-    code_object = """
-        while !eof(stdin)
-            code = readuntil(stdin, '\\0')
-            eval(Meta.parse(code))
+    depot_path = map(abspath, DEPOT_PATH)
+    dl_load_path = map(abspath, DL_LOAD_PATH)
+    load_path = map(abspath, Base.load_path())
+    path_sep = Sys.iswindows() ? ';' : ':'
+    any(path -> path_sep in path, load_path) &&
+        error("LOAD_PATH entries cannot contain $(repr(path_sep))")
+
+    deps_strs = String[]
+    for (pkg, build_id) in concrete_deps
+        pkg_str = if pkg.uuid === nothing
+            "Base.PkgId($(repr(pkg.name)))"
+        else
+            "Base.PkgId(Base.UUID(\"$(pkg.uuid)\"), $(repr(pkg.name)))"
         end
-        """
+        push!(deps_strs, "$pkg_str => $(repr(build_id))")
+    end
+    deps = repr(eltype(concrete_deps)) * "[" * join(deps_strs, ",") * "]"
+
+    uuid_tuple = uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, uuid)
 
     io = open(pipeline(`$(julia_cmd()) -O0
                        --output-ji $output --output-incremental=yes
                        --startup-file=no --history-file=no --warn-overwrite=yes
                        --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
-                       --eval $code_object`, stderr=stderr),
+                       --eval 'eval(Meta.parse(read(stdin,String)))'`, stderr=stderr),
               "w", stdout)
-    in = io.in
-    try
-        write(in, """
-            begin
-                $(Base.load_path_setup_code())
-                Base._track_dependencies[] = true
-                Base.empty!(Base._concrete_dependencies)
-            """)
-        for (pkg, build_id) in concrete_deps
-            pkg_str = if pkg.uuid === nothing
-                "Base.PkgId($(repr(pkg.name)))"
-            else
-                "Base.PkgId(Base.UUID(\"$(pkg.uuid)\"), $(repr(pkg.name)))"
-            end
-            write(in, "Base.push!(Base._concrete_dependencies, $pkg_str => $(repr(build_id)))\n")
-        end
-        write(io, "end\0")
-        uuid_tuple = uuid === nothing ? (0, 0) : convert(NTuple{2, UInt64}, uuid)
-        write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, $uuid_tuple)\0")
-        source = source_path(nothing)
-        if source !== nothing
-            write(in, "task_local_storage()[:SOURCE_PATH] = $(repr(source))\0")
-        end
-        write(in, """
-            try
-                Base.include(Base.__toplevel__, $(repr(abspath(input))))
-            catch ex
-                Base.precompilableerror(ex) || Base.rethrow()
-                Base.@debug "Aborting `createexprcache'" exception=(Base.ErrorException("Declaration of __precompile__(false) not allowed"), Base.catch_backtrace())
-                Base.exit(125) # we define status = 125 means PrecompileableError
-            end\0""")
-        # TODO: cleanup is probably unnecessary here
-        if source !== nothing
-            write(in, "delete!(task_local_storage(), :SOURCE_PATH)\0")
-        end
-        write(in, "ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))\0")
-        close(in)
-    catch
-        close(in)
-        process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
-        rethrow()
-    end
+    # write data over stdin to avoid the (unlikely) case of exceeding max command line size
+    write(io.in, """
+        Base.include_package_for_output($(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
+            $(repr(load_path)), $deps, $(repr(uuid_tuple)), $(repr(source_path(nothing))))
+        """)
+    close(io.in)
     return io
 end
+
+@assert precompile(create_expr_cache, (String, String, typeof(_concrete_dependencies), Nothing))
+@assert precompile(create_expr_cache, (String, String, typeof(_concrete_dependencies), UUID))
 
 function compilecache_path(pkg::PkgId)::String
     entrypath, entryfile = cache_file_entry(pkg)
@@ -1294,9 +1301,9 @@ const MAX_NUM_PRECOMPILE_FILES = 10
 function compilecache(pkg::PkgId, path::String)
     # decide where to put the resulting cache file
     cachefile = compilecache_path(pkg)
+    cachepath = dirname(cachefile)
     # prune the directory with cache files
     if pkg.uuid !== nothing
-        cachepath = dirname(cachefile)
         entrypath, entryfile = cache_file_entry(pkg)
         cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
         if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES
@@ -1314,20 +1321,34 @@ function compilecache(pkg::PkgId, path::String)
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
     @logmsg verbosity "Precompiling $pkg"
-    p = create_expr_cache(path, cachefile, concrete_deps, pkg.uuid)
-    if success(p)
-        # append checksum to the end of the .ji file:
-        open(cachefile, "a+") do f
-            write(f, _crc32c(seekstart(f)))
+
+    # create a temporary file in `cachepath` directory, write the cache in it,
+    # write the checksum, _and then_ atomically move the file to `cachefile`.
+    tmppath, tmpio = mktemp(cachepath)
+    local p
+    try
+        close(tmpio)
+        p = create_expr_cache(path, tmppath, concrete_deps, pkg.uuid)
+        if success(p)
+            # append checksum to the end of the .ji file:
+            open(tmppath, "a+") do f
+                write(f, _crc32c(seekstart(f)))
+            end
+            # inherit permission from the source file
+            chmod(tmppath, filemode(path) & 0o777)
+
+            # this is atomic according to POSIX:
+            rename(tmppath, cachefile; force=true)
+            return cachefile
         end
-        # inherit permission from the source file
-        chmod(cachefile, filemode(path) & 0o777)
-    elseif p.exitcode == 125
+    finally
+        rm(tmppath, force=true)
+    end
+    if p.exitcode == 125
         return PrecompilableError()
     else
         error("Failed to precompile $pkg to $cachefile.")
     end
-    return cachefile
 end
 
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)

@@ -193,6 +193,7 @@ end
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
     @test x.hi/2 === PhysQuantity{1}(2.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
+    @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -819,7 +820,9 @@ end
                        0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),map(Float32,LinRange(0.0, 1.0, 11)),
                        1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
                        range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20)),
-                       3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0)]
+                       3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0),
+                       Base.OneTo(1), 1:1, 1:-3:1, 1//1:1//3:1//1, range(1.0, step=2.5, length=1),
+                       LinRange(1,1,1), LinRange(1,1,2)]
     for r in Rs
         local r
         ar = Vector(r)

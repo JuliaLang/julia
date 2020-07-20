@@ -49,12 +49,13 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     mt->name = jl_demangle_typename(name);
     mt->module = module;
     mt->defs = jl_nothing;
+    mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
     mt->cache = jl_nothing;
     mt->max_args = 0;
     mt->kwsorter = NULL;
     mt->backedges = NULL;
     JL_MUTEX_INIT(&mt->writelock);
-    mt->offs = 1;
+    mt->offs = 0;
     mt->frozen = 0;
     return mt;
 }
@@ -95,8 +96,11 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->zeroinit = 0;
     t->isinlinealloc = 0;
     t->has_concrete_subtype = 1;
+    t->cached_by_hash = 0;
     t->layout = NULL;
     t->names = NULL;
+    t->types = NULL;
+    t->instance = NULL;
     return t;
 }
 
@@ -520,10 +524,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
 static int is_anonfn_typename(char *name)
 {
-    if (name[0] != '#')
+    if (name[0] != '#' || name[1] == '#')
         return 0;
     char *other = strrchr(name, '#');
-    return (name[1] != '#' && other > &name[1] && is10digit(other[1]));
+    return other > &name[1] && is10digit(other[1]);
 }
 
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
@@ -553,7 +557,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     t->abstract = abstract;
     t->mutabl = mutabl;
     t->ninitialized = ninitialized;
-    t->instance = NULL;
     t->size = 0;
 
     t->name = NULL;
@@ -568,8 +571,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
             // as an optimization
             tn->mt = jl_new_method_table(name, module);
             jl_gc_wb(tn, tn->mt);
-            if (jl_svec_len(parameters) > 0)
-                tn->mt->offs = 0;
+            if (jl_svec_len(parameters) == 0 && !abstract)
+                tn->mt->offs = 1;
         }
         else {
             // Everything else, gets to use the unified table
@@ -1010,7 +1013,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     assert(i < jl_datatype_nfields(st));
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
-        return *(jl_value_t**)((char*)v + offs);
+        return jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
     }
     jl_value_t *ty = jl_field_type(st, i);
     if (jl_is_uniontype(ty)) {
@@ -1028,7 +1031,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_RO
     assert(i < jl_datatype_nfields(st));
     size_t offs = jl_field_offset(st,i);
     assert(jl_field_isptr(st,i));
-    return *(jl_value_t**)((char*)v + offs);
+    return jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
@@ -1038,7 +1041,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
         jl_bounds_error_int(v, i + 1);
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
-        jl_value_t *fval = *(jl_value_t**)((char*)v + offs);
+        jl_value_t *fval = jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
         if (__unlikely(fval == NULL))
             jl_throw(jl_undefref_exception);
         return fval;
@@ -1057,10 +1060,13 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 void set_nth_field(jl_datatype_t *st, void *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
     size_t offs = jl_field_offset(st, i);
+    if (rhs == NULL) { // TODO: this should be invalid, but it happens frequently in ircode.c
+        assert(jl_field_isptr(st, i) && *(jl_value_t**)((char*)v + offs) == NULL);
+        return;
+    }
     if (jl_field_isptr(st, i)) {
-        *(jl_value_t**)((char*)v + offs) = rhs;
-        if (rhs != NULL)
-            jl_gc_wb(v, rhs);
+        jl_atomic_store_relaxed((jl_value_t**)((char*)v + offs), rhs);
+        jl_gc_wb(v, rhs);
     }
     else {
         jl_value_t *ty = jl_field_type_concrete(st, i);
@@ -1084,7 +1090,8 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
     size_t offs = jl_field_offset(st, i);
     char *fld = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
-        return *(jl_value_t**)fld != NULL;
+        jl_value_t *fval = jl_atomic_load_relaxed((jl_value_t**)fld);
+        return fval != NULL;
     }
     jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(st, i);
     if (jl_is_datatype(ft) && ft->layout->first_ptr >= 0) {

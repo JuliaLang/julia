@@ -460,7 +460,8 @@ promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
     big(x)
 
 Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
-`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+`BigFloat`). See [`BigFloat`](@ref BigFloat(::Any, rounding::RoundingMode)) for
+information about some pitfalls with floating-point numbers.
 """
 function big end
 

@@ -242,7 +242,7 @@ julia> b, c = Distributed.head_and_tail(1:10, 3)
 ([1, 2, 3], Base.Iterators.Rest{UnitRange{Int64},Int64}(1:10, 3))
 
 julia> collect(c)
-7-element Array{Int64,1}:
+7-element Vector{Int64}:
   4
   5
   6

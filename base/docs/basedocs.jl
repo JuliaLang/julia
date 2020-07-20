@@ -126,8 +126,30 @@ kw"__init__"
 """
     baremodule
 
-`baremodule` declares a module that does not contain `using Base`
-or a definition of [`eval`](@ref Base.eval). It does still import `Core`.
+`baremodule` declares a module that does not contain `using Base` or local definitions of
+[`eval`](@ref Base.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+
+```julia
+module Mod
+
+...
+
+end
+```
+
+is equivalent to
+
+```julia
+baremodule Mod
+
+using Base
+
+eval(x) = Core.eval(Mod, x)
+include(p) = Base.include(Mod, p)
+
+...
+
+end
 """
 kw"baremodule"
 
@@ -1309,24 +1331,18 @@ An indexing operation into an array, `a`, tried to access an out-of-bounds eleme
 julia> A = fill(1.0, 7);
 
 julia> A[8]
-ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
-Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:660
- [2] top-level scope
+ERROR: BoundsError: attempt to access 7-element Vector{Float64} at index [8]
+
 
 julia> B = fill(1.0, (2,3));
 
 julia> B[2, 4]
-ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
-Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:661
- [2] top-level scope
+ERROR: BoundsError: attempt to access 2×3 Matrix{Float64} at index [2, 4]
+
 
 julia> B[9]
-ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
-Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:660
- [2] top-level scope
+ERROR: BoundsError: attempt to access 2×3 Matrix{Float64} at index [9]
+
 ```
 """
 BoundsError
@@ -1830,7 +1846,7 @@ Rational{Int64}
 julia> M = [1 2; 3.5 4];
 
 julia> typeof(M)
-Array{Float64,2}
+Matrix{Float64} = Array{Float64,2}
 ```
 """
 typeof
@@ -1899,7 +1915,7 @@ these values, i.e. `Nothing <: T`.
 # Examples
 ```jldoctest
 julia> Vector{Union{Nothing, String}}(nothing, 2)
-2-element Array{Union{Nothing, String},1}:
+2-element Vector{Union{Nothing, String}}:
  nothing
  nothing
 ```
@@ -1916,7 +1932,7 @@ these values, i.e. `Missing <: T`.
 # Examples
 ```jldoctest
 julia> Vector{Union{Missing, String}}(missing, 2)
-2-element Array{Union{Missing, String},1}:
+2-element Vector{Union{Missing, String}}:
  missing
  missing
 ```
@@ -1948,7 +1964,7 @@ these values, i.e. `Nothing <: T`.
 # Examples
 ```jldoctest
 julia> Matrix{Union{Nothing, String}}(nothing, 2, 3)
-2×3 Array{Union{Nothing, String},2}:
+2×3 Matrix{Union{Nothing, String}}:
  nothing  nothing  nothing
  nothing  nothing  nothing
 ```
@@ -1965,7 +1981,7 @@ these values, i.e. `Missing <: T`.
 # Examples
 ```jldoctest
 julia> Matrix{Union{Missing, String}}(missing, 2, 3)
-2×3 Array{Union{Missing, String},2}:
+2×3 Matrix{Union{Missing, String}}:
  missing  missing  missing
  missing  missing  missing
 ```
@@ -2009,12 +2025,12 @@ to hold these values, i.e. `Nothing <: T`.
 # Examples
 ```jldoctest
 julia> Array{Union{Nothing, String}}(nothing, 2)
-2-element Array{Union{Nothing, String},1}:
+2-element Vector{Union{Nothing, String}}:
  nothing
  nothing
 
 julia> Array{Union{Nothing, Int}}(nothing, 2, 3)
-2×3 Array{Union{Nothing, Int64},2}:
+2×3 Matrix{Union{Nothing, Int64}}:
  nothing  nothing  nothing
  nothing  nothing  nothing
 ```
@@ -2033,12 +2049,12 @@ to hold these values, i.e. `Missing <: T`.
 # Examples
 ```jldoctest
 julia> Array{Union{Missing, String}}(missing, 2)
-2-element Array{Union{Missing, String},1}:
+2-element Vector{Union{Missing, String}}:
  missing
  missing
 
 julia> Array{Union{Missing, Int}}(missing, 2, 3)
-2×3 Array{Union{Missing, Int64},2}:
+2×3 Matrix{Union{Missing, Int64}}:
  missing  missing  missing
  missing  missing  missing
 ```
@@ -2118,7 +2134,7 @@ julia> -(2)
 -2
 
 julia> -[1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  -1  -2
  -3  -4
 ```

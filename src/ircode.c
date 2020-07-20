@@ -207,8 +207,17 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         write_uint8(s->s, TAG_GOTONODE);
         jl_encode_value(s, jl_get_nth_field(v, 0));
     }
-    else if (jl_is_quotenode(v)) {
-        write_uint8(s->s, TAG_QUOTENODE);
+    else if (jl_is_gotoifnot(v)) {
+        write_uint8(s->s, TAG_GOTOIFNOT);
+        jl_encode_value(s, jl_get_nth_field(v, 0));
+        jl_encode_value(s, jl_get_nth_field(v, 1));
+    }
+    else if (jl_is_argument(v)) {
+        write_uint8(s->s, TAG_ARGUMENT);
+        jl_encode_value(s, jl_get_nth_field(v, 0));
+    }
+    else if (jl_is_returnnode(v)) {
+        write_uint8(s->s, TAG_RETURNNODE);
         jl_encode_value(s, jl_get_nth_field(v, 0));
     }
     else if (jl_typeis(v, jl_int64_type)) {
@@ -591,6 +600,19 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
     case TAG_GOTONODE: JL_FALLTHROUGH; case TAG_QUOTENODE:
         v = jl_new_struct_uninit(tag == TAG_GOTONODE ? jl_gotonode_type : jl_quotenode_type);
         set_nth_field(tag == TAG_GOTONODE ? jl_gotonode_type : jl_quotenode_type, (void*)v, 0, jl_decode_value(s));
+        return v;
+    case TAG_GOTOIFNOT:
+        v = jl_new_struct_uninit(jl_gotoifnot_type);
+        set_nth_field(jl_gotoifnot_type, (void*)v, 0, jl_decode_value(s));
+        set_nth_field(jl_gotoifnot_type, (void*)v, 1, jl_decode_value(s));
+        return v;
+    case TAG_ARGUMENT:
+        v = jl_new_struct_uninit(jl_argument_type);
+        set_nth_field(jl_argument_type, (void*)v, 0, jl_decode_value(s));
+        return v;
+    case TAG_RETURNNODE:
+        v = jl_new_struct_uninit(jl_returnnode_type);
+        set_nth_field(jl_returnnode_type, (void*)v, 0, jl_decode_value(s));
         return v;
     case TAG_SHORTER_INT64:
         v = jl_box_int64((int16_t)read_uint16(s->s));

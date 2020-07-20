@@ -37,7 +37,11 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
     jl_array_t *a = *pa;
     size_t orig, index, iter, empty_slot;
     size_t newsz, sz = hash_size(a);
-    assert(sz >= 1);
+    if (sz == 0) {
+        a = jl_alloc_vec_any(HT_N_INLINE);
+        sz = hash_size(a);
+        *pa = a;
+    }
     size_t maxprobe = max_probe(sz);
     void **tab = (void **)a->data;
 
@@ -108,7 +112,8 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
 jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
 {
     size_t sz = hash_size(a);
-    assert(sz >= 1);
+    if (sz == 0)
+        return NULL;
     size_t maxprobe = max_probe(sz);
     void **tab = (void **)a->data;
     uint_t hv = keyhash(key);

@@ -1276,16 +1276,26 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
             IRBuilder<> builder(load);
             Value *val;
-            auto load_ty = load->getType();
+            Type *load_ty = load->getType();
+            LoadInst *newload;
             if (slot.isref) {
                 assert(slot.offset == offset);
-                val = builder.CreateLoad(pass.T_prjlvalue, slot.slot);
+                newload = builder.CreateLoad(pass.T_prjlvalue, slot.slot);
                 // Assume the addrspace is correct.
-                val = builder.CreateBitCast(val, load_ty);
+                val = builder.CreateBitCast(newload, load_ty);
             }
             else {
-                val = builder.CreateLoad(load_ty, slot_gep(slot, offset, load_ty, builder));
+                newload = builder.CreateLoad(load_ty, slot_gep(slot, offset, load_ty, builder));
+                val = newload;
             }
+            // TODO: should we use `load->clone()`, or manually copy any other metadata?
+#if JL_LLVM_VERSION >= 100000
+            newload->setAlignment(MaybeAlign(load->getAlignment()));
+#else
+            newload->setAlignment(load->getAlignment());
+#endif
+            // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
+            newload->setOrdering(AtomicOrdering::NotAtomic);
             load->replaceAllUsesWith(val);
             load->eraseFromParent();
             return;
@@ -1302,6 +1312,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             IRBuilder<> builder(store);
             auto store_val = store->getValueOperand();
             auto store_ty = store_val->getType();
+            StoreInst *newstore;
             if (slot.isref) {
                 assert(slot.offset == offset);
                 if (!isa<PointerType>(store_ty)) {
@@ -1316,11 +1327,19 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 }
                 if (cast<PointerType>(store_ty)->getAddressSpace() != AddressSpace::Tracked)
                     store_val = builder.CreateAddrSpaceCast(store_val, pass.T_prjlvalue);
-                builder.CreateStore(store_val, slot.slot);
+                newstore = builder.CreateStore(store_val, slot.slot);
             }
             else {
-                builder.CreateStore(store_val, slot_gep(slot, offset, store_ty, builder));
+                newstore = builder.CreateStore(store_val, slot_gep(slot, offset, store_ty, builder));
             }
+            // TODO: should we use `store->clone()`, or manually copy any other metadata?
+#if JL_LLVM_VERSION >= 100000
+            newstore->setAlignment(MaybeAlign(store->getAlignment()));
+#else
+            newstore->setAlignment(store->getAlignment());
+#endif
+            // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
+            newstore->setOrdering(AtomicOrdering::NotAtomic);
             store->eraseFromParent();
             return;
         }
@@ -1352,7 +1371,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                     val = ConstantExpr::getIntToPtr(val, pass.T_pjlvalue);
                                     ptr = ConstantExpr::getAddrSpaceCast(val, pass.T_prjlvalue);
                                 }
-                                builder.CreateStore(ptr, slot.slot);
+                                StoreInst *store = builder.CreateAlignedStore(ptr, slot.slot, sizeof(void*));
+                                store->setOrdering(AtomicOrdering::NotAtomic);
                                 continue;
                             }
                             auto ptr8 = builder.CreateBitCast(slot.slot, pass.T_pint8);
@@ -1361,6 +1381,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                                                           offset - slot.offset);
                             auto sub_size = std::min(slot.offset + slot.size, offset + size) -
                                 std::max(offset, slot.offset);
+                            // TODO: alignment computation
 #if JL_LLVM_VERSION >= 100000
                             builder.CreateMemSet(ptr8, val_arg, sub_size, MaybeAlign(0));
 #else
@@ -1394,7 +1415,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 for (auto &slot: slots) {
                     if (!slot.isref)
                         continue;
-                    operands.push_back(builder.CreateLoad(pass.T_prjlvalue, slot.slot));
+                    LoadInst *ref = builder.CreateAlignedLoad(pass.T_prjlvalue, slot.slot, sizeof(void*));
+                    // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
+                    ref->setOrdering(AtomicOrdering::NotAtomic);
+                    operands.push_back(ref);
                 }
                 auto new_call = builder.CreateCall(pass.gc_preserve_begin, operands);
                 new_call->takeName(call);
@@ -1422,7 +1446,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 for (auto &slot: slots) {
                     if (!slot.isref)
                         continue;
-                    operands.push_back(builder.CreateLoad(pass.T_prjlvalue, slot.slot));
+                    LoadInst *ref = builder.CreateAlignedLoad(pass.T_prjlvalue, slot.slot, sizeof(void*));
+                    // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
+                    ref->setOrdering(AtomicOrdering::NotAtomic);
+                    operands.push_back(ref);
                 }
                 bundle = OperandBundleDef("jl_roots", std::move(operands));
                 break;

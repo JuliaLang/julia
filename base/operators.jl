@@ -80,7 +80,7 @@ handle comparison to other types via promotion rules where possible.
 [`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
 should therefore also implement [`hash`](@ref).
 """
-==(x, y) = x === y
+==
 
 """
     isequal(x, y)
@@ -563,12 +563,12 @@ julia> inv(3) * 6
 julia> A = [4 3; 2 1]; x = [5, 6];
 
 julia> A \\ x
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   6.5
  -7.0
 
 julia> inv(A) * x
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   6.5
  -7.0
 ```
@@ -856,7 +856,7 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
 # Examples
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])
-3-element Array{Char,1}:
+3-element Vector{Char}:
  'A': ASCII/Unicode U+0041 (category Lu: Letter, uppercase)
  'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
  'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
@@ -1049,7 +1049,7 @@ passes a tuple as that single argument.
 # Example usage:
 ```jldoctest
 julia> map(Base.splat(+), zip(1:3,4:6))
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  5
  7
  9
@@ -1148,12 +1148,12 @@ julia> !(19 in a)
 false
 
 julia> [1, 2] .∈ [2, 3]
-2-element BitArray{1}:
+2-element BitVector:
  0
  0
 
 julia> [1, 2] .∈ ([2, 3],)
-2-element BitArray{1}:
+2-element BitVector:
  0
  1
 ```
@@ -1183,12 +1183,12 @@ julia> 1 ∉ 1:3
 false
 
 julia> [1, 2] .∉ [2, 3]
-2-element BitArray{1}:
+2-element BitVector:
  1
  1
 
 julia> [1, 2] .∉ ([2, 3],)
-2-element BitArray{1}:
+2-element BitVector:
  1
  0
 ```

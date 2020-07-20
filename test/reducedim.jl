@@ -75,6 +75,11 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     @test @inferred(count(!, Breduc, dims=region)) ≈ safe_count(.!Breduc, region)
 end
 
+# Combining dims and init
+A = Array{Int}(undef, 0, 3)
+@test_throws ArgumentError maximum(A; dims=1)
+@test maximum(A; dims=1, init=-1) == reshape([-1,-1,-1], 1, 3)
+
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16
 Breduc = rand(64, 3)

@@ -62,7 +62,7 @@ julia> isposdef!(A)
 true
 
 julia> A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  2.0  6.78233
 ```
@@ -80,7 +80,7 @@ See also [`isposdef!`](@ref)
 # Examples
 ```jldoctest
 julia> A = [1 2; 2 50]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   2
  2  50
 
@@ -114,7 +114,7 @@ overwriting `M` in the process.
 # Examples
 ```jldoctest
 julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
-5×5 Array{Int64,2}:
+5×5 Matrix{Int64}:
  1  2  3  4  5
  1  2  3  4  5
  1  2  3  4  5
@@ -122,7 +122,7 @@ julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
  1  2  3  4  5
 
 julia> triu!(M, 1)
-5×5 Array{Int64,2}:
+5×5 Matrix{Int64}:
  0  2  3  4  5
  0  0  3  4  5
  0  0  0  4  5
@@ -152,7 +152,7 @@ the process.
 # Examples
 ```jldoctest
 julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
-5×5 Array{Int64,2}:
+5×5 Matrix{Int64}:
  1  2  3  4  5
  1  2  3  4  5
  1  2  3  4  5
@@ -160,7 +160,7 @@ julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
  1  2  3  4  5
 
 julia> tril!(M, 2)
-5×5 Array{Int64,2}:
+5×5 Matrix{Int64}:
  1  2  3  0  0
  1  2  3  4  0
  1  2  3  4  5
@@ -208,7 +208,7 @@ An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  4  5  6
  7  8  9
@@ -232,13 +232,13 @@ See also: [`diagm`](@ref)
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  4  5  6
  7  8  9
 
 julia> diag(A,1)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  6
 ```
@@ -262,14 +262,14 @@ versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
 # Examples
 ```jldoctest
 julia> diagm(1 => [1,2,3])
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  0  1  0  0
  0  0  2  0
  0  0  0  3
  0  0  0  0
 
 julia> diagm(1 => [1,2,3], -1 => [4,5])
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  0  1  0  0
  4  0  2  0
  0  5  0  3
@@ -301,7 +301,9 @@ function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}..
 end
 function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
     T = promote_type(map(x -> eltype(x.second), kv)...)
-    return zeros(T, diagm_size(size, kv...)...)
+    # For some type `T`, `zero(T)` is not a `T` and `zeros(T, ...)` fails.
+    U = promote_type(T, typeof(zero(T)))
+    return zeros(U, diagm_size(size, kv...)...)
 end
 diagm_container(size, kv::Pair{<:Integer,<:BitVector}...) =
     falses(diagm_size(size, kv...)...)
@@ -318,7 +320,7 @@ by passing `m,n` as the first arguments.
 # Examples
 ```jldoctest
 julia> diagm([1,2,3])
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  0  0
  0  2  0
  0  0  3
@@ -374,17 +376,17 @@ For complex vectors, the outer product `w * v'` also differs by conjugation of `
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> B = [im 1; 1 -im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+1im  1+0im
  1+0im  0-1im
 
 julia> kron(A, B)
-4×4 Array{Complex{Int64},2}:
+4×4 Matrix{Complex{Int64}}:
  0+1im  1+0im  0+2im  2+0im
  1+0im  0-1im  2+0im  0-2im
  0+3im  3+0im  0+4im  4+0im
@@ -393,13 +395,13 @@ julia> kron(A, B)
 julia> v = [1, 2]; w = [3, 4, 5];
 
 julia> w*transpose(v)
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  3   6
  4   8
  5  10
 
 julia> reshape(kron(v,w), (length(w), length(v)))
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  3   6
  4   8
  5  10
@@ -411,6 +413,7 @@ function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
 end
 
 kron!(c::AbstractVecOrMat, a::AbstractVecOrMat, b::Number) = mul!(c, a, b)
+kron!(c::AbstractVecOrMat, a::Number, b::AbstractVecOrMat) = mul!(c, a, b)
 
 Base.@propagate_inbounds function kron!(c::AbstractVector, a::AbstractVector, b::AbstractVector)
     C = reshape(c, length(a)*length(b), 1)
@@ -512,7 +515,7 @@ Matrix power, equivalent to ``\\exp(p\\log(A))``
 # Examples
 ```jldoctest
 julia> [1 2; 0 3]^3
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  26
  0  27
 ```
@@ -538,12 +541,12 @@ used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 # Examples
 ```jldoctest
 julia> A = Matrix(1.0I, 2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  0.0
  0.0  1.0
 
 julia> exp(A)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.71828  0.0
  0.0      2.71828
 ```
@@ -563,12 +566,12 @@ Matrix exponential, equivalent to ``\\exp(\\log(b)A)``.
 # Examples
 ```jldoctest
 julia> 2^[1 2; 0 3]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  6.0
  0.0  8.0
 
 julia> ℯ^[1 2; 0 3]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.71828  17.3673
  0.0      20.0855
 ```
@@ -693,12 +696,12 @@ triangular factor.
 # Examples
 ```jldoctest
 julia> A = Matrix(2.7182818*I, 2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.71828  0.0
  0.0      2.71828
 
 julia> log(A)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  0.0
  0.0  1.0
 ```
@@ -759,12 +762,12 @@ and then the complex square root of the triangular factor.
 # Examples
 ```jldoctest
 julia> A = [4 0; 0 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  0
  0  4
 
 julia> sqrt(A)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  0.0
  0.0  2.0
 ```
@@ -823,7 +826,7 @@ compute the cosine. Otherwise, the cosine is determined by calling [`exp`](@ref)
 # Examples
 ```jldoctest
 julia> cos(fill(1.0, (2,2)))
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   0.291927  -0.708073
  -0.708073   0.291927
 ```
@@ -856,7 +859,7 @@ compute the sine. Otherwise, the sine is determined by calling [`exp`](@ref).
 # Examples
 ```jldoctest
 julia> sin(fill(1.0, (2,2)))
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.454649  0.454649
  0.454649  0.454649
 ```
@@ -892,12 +895,12 @@ Compute the matrix sine and cosine of a square matrix `A`.
 julia> S, C = sincos(fill(1.0, (2,2)));
 
 julia> S
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.454649  0.454649
  0.454649  0.454649
 
 julia> C
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   0.291927  -0.708073
  -0.708073   0.291927
 ```
@@ -942,7 +945,7 @@ compute the tangent. Otherwise, the tangent is determined by calling [`exp`](@re
 # Examples
 ```jldoctest
 julia> tan(fill(1.0, (2,2)))
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -1.09252  -1.09252
  -1.09252  -1.09252
 ```
@@ -1019,7 +1022,7 @@ this function, see [^AH16_1].
 # Examples
 ```jldoctest
 julia> acos(cos([0.5 0.1; -0.2 0.3]))
-2×2 Array{Complex{Float64},2}:
+2×2 Matrix{ComplexF64}:
   0.5-8.32667e-17im  0.1+0.0im
  -0.2+2.63678e-16im  0.3-3.46945e-16im
 ```
@@ -1050,7 +1053,7 @@ see [^AH16_2].
 # Examples
 ```jldoctest
 julia> asin(sin([0.5 0.1; -0.2 0.3]))
-2×2 Array{Complex{Float64},2}:
+2×2 Matrix{ComplexF64}:
   0.5-4.16334e-17im  0.1-5.55112e-17im
  -0.2+9.71445e-17im  0.3-1.249e-16im
 ```
@@ -1081,7 +1084,7 @@ compute the inverse tangent. Otherwise, the inverse tangent is determined by usi
 # Examples
 ```jldoctest
 julia> atan(tan([0.5 0.1; -0.2 0.3]))
-2×2 Array{Complex{Float64},2}:
+2×2 Matrix{ComplexF64}:
   0.5+1.38778e-17im  0.1-2.77556e-17im
  -0.2+6.93889e-17im  0.3-4.16334e-17im
 ```
@@ -1214,7 +1217,7 @@ will return a Cholesky factorization.
 # Examples
 ```jldoctest
 julia> A = Array(Bidiagonal(fill(1.0, (5, 5)), :U))
-5×5 Array{Float64,2}:
+5×5 Matrix{Float64}:
  1.0  1.0  0.0  0.0  0.0
  0.0  1.0  1.0  0.0  0.0
  0.0  0.0  1.0  1.0  0.0
@@ -1222,7 +1225,7 @@ julia> A = Array(Bidiagonal(fill(1.0, (5, 5)), :U))
  0.0  0.0  0.0  0.0  1.0
 
 julia> factorize(A) # factorize will check to see that A is already factorized
-5×5 Bidiagonal{Float64,Array{Float64,1}}:
+5×5 Bidiagonal{Float64,Vector{Float64}}:
  1.0  1.0   ⋅    ⋅    ⋅
   ⋅   1.0  1.0   ⋅    ⋅
   ⋅    ⋅   1.0  1.0   ⋅
@@ -1336,17 +1339,17 @@ For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 # Examples
 ```jldoctest
 julia> M = [1.5 1.3; 1.2 1.9]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.5  1.3
  1.2  1.9
 
 julia> N = pinv(M)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   1.47287   -1.00775
  -0.930233   1.16279
 
 julia> M * N
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0          -2.22045e-16
  4.44089e-16   1.0
 ```
@@ -1412,25 +1415,25 @@ the element type of `M`.
 # Examples
 ```jldoctest
 julia> M = [1 0 0; 0 1 0; 0 0 0]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  0  0
  0  1  0
  0  0  0
 
 julia> nullspace(M)
-3×1 Array{Float64,2}:
+3×1 Matrix{Float64}:
  0.0
  0.0
  1.0
 
 julia> nullspace(M, rtol=3)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  0.0  1.0  0.0
  1.0  0.0  0.0
  0.0  0.0  1.0
 
 julia> nullspace(M, atol=0.95)
-3×1 Array{Float64,2}:
+3×1 Matrix{Float64}:
  0.0
  0.0
  1.0
@@ -1487,27 +1490,27 @@ Computes the solution `X` to the Sylvester equation `AX + XB + C = 0`, where `A`
 # Examples
 ```jldoctest
 julia> A = [3. 4.; 5. 6]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0  4.0
  5.0  6.0
 
 julia> B = [1. 1.; 1. 2.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  1.0
  1.0  2.0
 
 julia> C = [1. 2.; -2. 1]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   1.0  2.0
  -2.0  1.0
 
 julia> X = sylvester(A, B, C)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -4.46667   1.93333
   3.73333  -1.8
 
 julia> A*X + X*B + C
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   2.66454e-15  1.77636e-15
  -3.77476e-15  4.44089e-16
 ```
@@ -1536,22 +1539,22 @@ conjugates of each other.
 # Examples
 ```jldoctest
 julia> A = [3. 4.; 5. 6]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0  4.0
  5.0  6.0
 
 julia> B = [1. 1.; 1. 2.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  1.0
  1.0  2.0
 
 julia> X = lyap(A, B)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   0.5  -0.5
  -0.5   0.25
 
 julia> A*X + X*A' + B
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0          6.66134e-16
  6.66134e-16  8.88178e-16
 ```

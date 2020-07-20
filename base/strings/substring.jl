@@ -122,6 +122,11 @@ end
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
 
+function hash(s::SubString{String}, h::UInt)
+    h += memhash_seed
+    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
+end
+
 """
     reverse(s::AbstractString) -> AbstractString
 
@@ -140,13 +145,21 @@ and encoding. If they return a string with a different encoding, they must also 
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
+```
 
-julia> reverse("ax̂e") # combining characters can lead to surprising results
+!!! note
+    The examples below may be rendered differently on different systems.
+    The comments indicate how they're supposed to be rendered
+
+Combining characters can lead to surprising results:
+
+```jldoctest
+julia> reverse("ax̂e") # hat is above x in the input, above e in the output
 "êxa"
 
 julia> using Unicode
 
-julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
+julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes; hat is above x in both in- and output
 "ex̂a"
 ```
 """

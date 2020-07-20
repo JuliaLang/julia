@@ -737,24 +737,24 @@ bitstring(x::Union{Int128,UInt128})            = string(reinterpret(UInt128,x), 
 
 Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indices, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+higher indices, such that `n == sum(digits[k]*base^(k-1) for k=1:length(digits))`.
 
 # Examples
 ```jldoctest
 julia> digits(10, base = 10)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  0
  1
 
 julia> digits(10, base = 2)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  0
  1
  0
  1
 
 julia> digits(10, base = 2, pad = 6)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  0
  1
  0
@@ -788,14 +788,14 @@ the array length. If the array length is excessive, the excess portion is filled
 # Examples
 ```jldoctest
 julia> digits!([2,2,2,2], 10, base = 2)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  0
  1
  0
  1
 
 julia> digits!([2,2,2,2,2,2], 10, base = 2)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  0
  1
  0

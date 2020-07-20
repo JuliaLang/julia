@@ -39,7 +39,8 @@ static void *const _tags[] = {
          &jl_expr_type, &jl_globalref_type, &jl_string_type,
          &jl_module_type, &jl_tvar_type, &jl_method_instance_type, &jl_method_type, &jl_code_instance_type,
          &jl_linenumbernode_type, &jl_lineinfonode_type,
-         &jl_gotonode_type, &jl_quotenode_type,
+         &jl_gotonode_type, &jl_quotenode_type, &jl_gotoifnot_type, &jl_argument_type, &jl_returnnode_type,
+         &jl_const_type, &jl_partial_struct_type,
          &jl_pinode_type, &jl_phinode_type, &jl_phicnode_type, &jl_upsilonnode_type,
          &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type, &jl_llvmpointer_type,
          &jl_vararg_type, &jl_abstractarray_type,
@@ -117,7 +118,8 @@ void *native_functions;
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
 static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_throw, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
-    &jl_f_typeassert, &jl_f__apply, &jl_f__apply_iterate, &jl_f__apply_pure, &jl_f__apply_latest, &jl_f_isdefined,
+    &jl_f_typeassert, &jl_f__apply, &jl_f__apply_iterate, &jl_f__apply_pure,
+    &jl_f__apply_latest, &jl_f__apply_in_world, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call, &jl_f_invoke_kwsorter,
     &jl_f_getfield, &jl_f_setfield, &jl_f_fieldtype, &jl_f_nfields,
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
@@ -1189,7 +1191,6 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             else {
                 codeinst->invoke = (jl_callptr_t)fptr;
             }
-            jl_fptr_to_llvm(fptr, codeinst, specfunc);
         }
     }
     jl_register_fptrs(sysimage_base, &fvars, linfos, sysimg_fvars_max);

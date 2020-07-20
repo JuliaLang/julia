@@ -50,12 +50,12 @@ end
     c.code[1] = Expr(:(=), SlotNumber(2), GotoNode(1))
     c.code[2] = Expr(:(=), SlotNumber(2), LineNumberNode(2))
     i = 2
-    for h in (:gotoifnot, :line, :const, :meta)
+    for h in (:line, :const, :meta)
         c.code[i+=1] = Expr(:(=), SlotNumber(2), Expr(h))
     end
     errors = Core.Compiler.validate_code(c)
-    @test length(errors) == 6
-    @test count(e.kind === Core.Compiler.INVALID_RVALUE for e in errors) == 6
+    @test length(errors) == 5
+    @test count(e.kind === Core.Compiler.INVALID_RVALUE for e in errors) == 5
 end
 
 @testset "INVALID_CALL_ARG" begin
@@ -64,12 +64,12 @@ end
     c.code[2] = Expr(:call, GlobalRef(Base,:-), Expr(:call, GlobalRef(Base,:sin), GotoNode(2)), 3)
     c.code[3] = Expr(:call, LineNumberNode(2))
     i = 3
-    for h in (:gotoifnot, :line, :const, :meta)
+    for h in (:line, :const, :meta)
         c.code[i+=1] = Expr(:call, GlobalRef(@__MODULE__,:f), Expr(h))
     end
     errors = Core.Compiler.validate_code(c)
-    @test length(errors) == 7
-    @test count(e.kind === Core.Compiler.INVALID_CALL_ARG for e in errors) == 7
+    @test length(errors) == 6
+    @test count(e.kind === Core.Compiler.INVALID_CALL_ARG for e in errors) == 6
 end
 
 @testset "EMPTY_SLOTNAMES" begin

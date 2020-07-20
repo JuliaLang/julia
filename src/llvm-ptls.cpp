@@ -7,7 +7,6 @@
 
 #include "llvm-version.h"
 #include "support/dtypes.h"
-#include <sstream>
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
@@ -81,13 +80,13 @@ Instruction *LowerPTLS::emit_ptls_tp(Value *offset, Instruction *insertBefore) c
         // (and therefore the optimization opportunity) from LLVM.
         // Ref https://github.com/JuliaLang/julia/issues/17288
         static const std::string const_asm_str = [&] () {
-            std::stringstream stm;
+            std::string stm;
 #  if defined(_CPU_X86_64_)
-            stm << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
+            raw_string_ostream(stm) << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
 #  else
-            stm << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
+            raw_string_ostream(stm) << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
 #  endif
-            return stm.str();
+            return stm;
         }();
 #  if defined(_CPU_X86_64_)
         const char *dyn_asm_str = "movq %fs:0, $0;\naddq $1, $0";

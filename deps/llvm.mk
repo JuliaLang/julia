@@ -17,6 +17,15 @@ endif
 endif
 endif
 
+ifeq ($(USE_MLIR),1)
+ifeq ($(USE_SYSTEM_LLVM),0)
+ifneq ($(LLVM_VER),svn)
+$(error USE_MLIR=1 requires LLVM_VER=svn)
+endif
+endif
+endif
+
+
 # for Monorepo
 LLVM_ENABLE_PROJECTS :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
@@ -27,6 +36,9 @@ LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);polly
 endif
 ifeq ($(BUILD_LLDB), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lldb
+endif
+ifeq ($(USE_MLIR), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);mlir
 endif
 
 include $(SRCDIR)/llvm-options.mk

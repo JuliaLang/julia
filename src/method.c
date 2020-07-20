@@ -28,6 +28,23 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             return expr;
         return jl_module_globalref(module, (jl_sym_t*)expr);
     }
+    else if (jl_is_returnnode(expr)) {
+        jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
+        JL_GC_PUSH1(&val);
+        expr = jl_new_struct(jl_returnnode_type, val);
+        JL_GC_POP();
+        return expr;
+    }
+    else if (jl_is_gotoifnot(expr)) {
+        jl_value_t *cond = resolve_globals(jl_gotoifnot_cond(expr), module, sparam_vals, binding_effects, eager_resolve);
+        intptr_t label = jl_gotoifnot_label(expr);
+        JL_GC_PUSH1(&cond);
+        expr = jl_new_struct_uninit(jl_gotoifnot_type);
+        set_nth_field(jl_gotoifnot_type, expr, 0, cond);
+        jl_gotoifnot_label(expr) = label;
+        JL_GC_POP();
+        return expr;
+    }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         if (e->head == global_sym && binding_effects) {
@@ -244,6 +261,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 bd[j] = jl_nothing;
             else
                 jl_array_del_end(meta, na - ins);
+        }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == return_sym) {
+            jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
         }
     }
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ir, 1);
@@ -513,7 +533,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 size_t j;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj))
+                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @nospecialize on self is valid but currently ignored
@@ -589,8 +609,6 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->speckeyset = (jl_array_t*)jl_an_empty_vec_any;
     m->sig = NULL;
     m->slot_syms = NULL;
-    m->ambig = jl_nothing;
-    m->resorted = jl_nothing;
     m->roots = NULL;
     m->ccallable = NULL;
     m->module = module;

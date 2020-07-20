@@ -101,6 +101,13 @@ end
 @test length(zip(1:3,product(1:7,cycle(1:3)))) == 3
 @test length(zip(1:3,product(1:7,cycle(1:3)),8)) == 1
 
+# map
+# ----
+@testset "Iterators.map" begin
+    @test collect(Iterators.map(string, 1:3)::Base.Generator) == map(string, 1:3)
+    @test collect(Iterators.map(tuple, 1:3, 4:6)::Base.Generator) == map(tuple, 1:3, 4:6)
+end
+
 # rest
 # ----
 let s = "hello"
@@ -638,13 +645,13 @@ end
 
     let io = IOBuffer()
         Base.showarg(io, pairs([1,2,3]), true)
-        @test String(take!(io)) == "pairs(::Array{$Int,1})"
+        @test String(take!(io)) == "pairs(::Vector{$Int})"
         Base.showarg(io, pairs((a=1, b=2)), true)
         @test String(take!(io)) == "pairs(::NamedTuple)"
         Base.showarg(io, pairs(IndexLinear(), zeros(3,3)), true)
-        @test String(take!(io)) == "pairs(IndexLinear(), ::Array{Float64,2})"
+        @test String(take!(io)) == "pairs(IndexLinear(), ::Matrix{Float64})"
         Base.showarg(io, pairs(IndexCartesian(), zeros(3)), true)
-        @test String(take!(io)) == "pairs(IndexCartesian(), ::Array{Float64,1})"
+        @test String(take!(io)) == "pairs(IndexCartesian(), ::Vector{Float64})"
     end
 end
 

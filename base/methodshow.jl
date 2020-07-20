@@ -13,7 +13,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     s = string(n)
     i = findfirst(isequal('#'), s)
     if i !== nothing
-        s = s[1:i-1]
+        s = s[1:prevind(s, i)]
     end
     if t === Any && !isempty(s)
         return s, ""
@@ -241,7 +241,9 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     n = rest = 0
     local last
 
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
+
     for meth in ms
         if max==-1 || n<max
             n += 1
@@ -249,7 +251,9 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             print(io, "[$n] ")
             show(io, meth)
             file, line = updated_methodloc(meth)
-            push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
+            if last_shown_line_infos !== nothing
+                push!(last_shown_line_infos, (string(file), line))
+            end
         else
             rest += 1
             last = meth
@@ -373,7 +377,8 @@ show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, Metho
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
     first = true
     for (i, m) in enumerate(mt)
         first || println(io)
@@ -381,7 +386,9 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         print(io, "[$(i)] ")
         show(io, m)
         file, line = updated_methodloc(m)
-        push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
+        if last_shown_line_infos !== nothing
+            push!(last_shown_line_infos, (string(file), line))
+        end
     end
 end
 

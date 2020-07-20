@@ -21,7 +21,7 @@ julia> for x in g
 25
 
 julia> collect(g)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   4
  16

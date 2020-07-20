@@ -84,6 +84,7 @@ include("range.jl")
 include("error.jl")
 
 # core numeric operations & types
+==(x, y) = x === y
 include("bool.jl")
 include("number.jl")
 include("int.jl")
@@ -129,6 +130,7 @@ include("abstractarraymath.jl")
 include("arraymath.jl")
 
 # SIMD loops
+@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
 include("simdloop.jl")
 using .SimdLoop
 
@@ -164,6 +166,20 @@ include("strings/substring.jl")
 # For OS specific stuff
 include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
+# Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
+# a slightly more verbose fashion than usual, because we're running so early.
+const DL_LOAD_PATH = String[]
+let os = ccall(:jl_get_UNAME, Any, ())
+    if os === :Darwin || os === :Apple
+        if Base.DARWIN_FRAMEWORK
+            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+        else
+            push!(DL_LOAD_PATH, "@loader_path/julia")
+        end
+        push!(DL_LOAD_PATH, "@loader_path")
+    end
+end
 
 include("osutils.jl")
 include("c.jl")
@@ -203,16 +219,6 @@ include("version.jl")
 include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
-
-const DL_LOAD_PATH = String[]
-if Sys.isapple()
-    if Base.DARWIN_FRAMEWORK
-        push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-    else
-        push!(DL_LOAD_PATH, "@loader_path/julia")
-    end
-    push!(DL_LOAD_PATH, "@loader_path")
-end
 
 include("env.jl")
 
@@ -394,12 +400,10 @@ function __init__()
     # initialize loading
     init_depot_path()
     init_load_path()
+    init_active_project()
     nothing
 end
 
-
 end
-
-const tot_time_stdlib = RefValue(0.0)
 
 end # baremodule Base

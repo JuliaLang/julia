@@ -19,6 +19,7 @@ mutable struct InferenceState
     nargs::Int
     stmt_types::Vector{Any}
     stmt_edges::Vector{Any}
+    stmt_info::Vector{Any}
     # return type
     bestguess #::Type
     # current active instruction pointers
@@ -31,6 +32,7 @@ mutable struct InferenceState
     n_handlers::Int
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
+    throw_blocks::BitSet
 
     cycle_backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
@@ -44,7 +46,11 @@ mutable struct InferenceState
 
     # cached results of calling `_methods_by_ftype`, including `min_valid` and
     # `max_valid`, to be used in inlining
-    matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt}}
+    matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt, Bool}}
+
+    # The interpreter that created this inference state. Not looked at by
+    # NativeInterpreter. But other interpreters may use this to detect cycles
+    interp::AbstractInterpreter
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
@@ -57,6 +63,7 @@ mutable struct InferenceState
 
         nssavalues = src.ssavaluetypes::Int
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+        stmt_info = Any[ nothing for i = 1:length(code) ]
 
         n = length(code)
         s_edges = Any[ nothing for i = 1:n ]
@@ -76,6 +83,7 @@ mutable struct InferenceState
         s_types[1] = s_argtypes
 
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
+        throw_blocks = find_throw_blocks(code)
 
         # exception handlers
         cur_hand = nothing
@@ -99,15 +107,16 @@ mutable struct InferenceState
             InferenceParams(interp), result, linfo,
             sp, slottypes, inmodule, 0,
             src, get_world_counter(interp), min_valid, max_valid,
-            nargs, s_types, s_edges,
+            nargs, s_types, s_edges, stmt_info,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
-            ssavalue_uses,
+            ssavalue_uses, throw_blocks,
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
             cached, false, false, false,
-            IdDict{Any, Tuple{Any, UInt, UInt}}())
+            IdDict{Any, Tuple{Any, UInt, UInt, Bool}}(),
+            interp)
         result.result = frame
         cached && push!(get_inference_cache(interp), result)
         return frame
@@ -205,7 +214,10 @@ update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
     old = frame.src.ssavaluetypes[ssa_id]
     if old === NOT_FOUND || !(new ⊑ old)
-        frame.src.ssavaluetypes[ssa_id] = tmerge(old, new)
+        # typically, we expect that old ⊑ new (that output information only
+        # gets less precise with worse input information), but to actually
+        # guarantee convergence we need to use tmerge here to ensure that is true
+        frame.src.ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
         W = frame.ip
         s = frame.stmt_types
         for r in frame.ssavalue_uses[ssa_id]

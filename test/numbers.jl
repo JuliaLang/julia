@@ -460,7 +460,7 @@ end
     @test sign(-1//0) == -1
     @test isa(sign(2//3), Rational{Int})
     @test isa(2//3 + 2//3im, Complex{Rational{Int}})
-    @test isa(sign(2//3 + 2//3im), Complex{Float64})
+    @test isa(sign(2//3 + 2//3im), ComplexF64)
     @test sign(one(UInt)) == 1
     @test sign(zero(UInt)) == 0
 
@@ -2401,7 +2401,12 @@ end
     @test size(1) == ()
     @test length(1) == 1
     @test firstindex(1) == 1
+    @test firstindex(1, 1) == 1
+    @test_throws BoundsError firstindex(1,0)
     @test lastindex(1) == 1
+    @test lastindex(1, 1) == 1
+    @test 1[end,end] == 1
+    @test_throws BoundsError lastindex(1,0)
     @test eltype(Integer) == Integer
 end
 
@@ -2507,6 +2512,14 @@ end
     @test rem2pi(T(-4), RoundNearest) ≈ 2pi-4
     @test rem2pi(T(-4), RoundDown)    ≈ 2pi-4
     @test rem2pi(T(-4), RoundUp)      == -4
+    @test rem2pi(T(8), RoundToZero)  ≈ 8-2pi
+    @test rem2pi(T(8), RoundNearest) ≈ 8-2pi
+    @test rem2pi(T(8), RoundDown)    ≈ 8-2pi
+    @test rem2pi(T(8), RoundUp)      ≈ 8-4pi
+    @test rem2pi(T(-8), RoundToZero)  ≈ -8+2pi
+    @test rem2pi(T(-8), RoundNearest) ≈ -8+2pi
+    @test rem2pi(T(-8), RoundDown)    ≈ -8+4pi
+    @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
 end
 
 import Base.^
@@ -2522,7 +2535,7 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     @test x^p == 1
     @test x^2 == 2
     @test [x, x, x].^2 == [2, 2, 2]
-    for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
+    for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, ComplexF64)
         for p in -4:4
             v = eval(:($T(2)^$p))
             @test 2.0^p == v

@@ -81,7 +81,7 @@ Return the indices in the [`parent`](@ref) which correspond to the array view `A
 julia> A = [1 2; 3 4];
 
 julia> V = view(A, 1, :)
-2-element view(::Array{Int64,2}, 1, :) with eltype Int64:
+2-element view(::Matrix{Int64}, 1, :) with eltype Int64:
  1
  2
 
@@ -129,22 +129,22 @@ indices to the parent array on the fly without checking bounds.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> b = view(A, :, 1)
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  1
  3
 
 julia> fill!(b, 0)
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  0
  0
 
 julia> A # Note A has changed even though we modified b
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  0  2
  0  4
 ```
@@ -398,23 +398,12 @@ find_extended_inds(::ScalarIndex, I...) = (@_inline_meta; find_extended_inds(I..
 find_extended_inds(i1, I...) = (@_inline_meta; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
 
-unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
-    unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
+function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
+    return unsafe_convert(Ptr{T}, V.parent) + _memory_offset(V.parent, map(first, V.indices)...)
+end
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
-pointer(V::SubArray, i::Int) = _pointer(V, i)
-_pointer(V::SubArray{<:Any,1}, i::Int) = pointer(V, (i,))
-_pointer(V::SubArray, i::Int) = pointer(V, Base._ind2sub(axes(V), i))
-
-function pointer(V::SubArray{T,N,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple{Vararg{Int}}) where {T,N}
-    index = first_index(V)
-    strds = strides(V)
-    for d = 1:length(is)
-        index += (is[d]-1)*strds[d]
-    end
-    return pointer(V.parent, index)
-end
 
 # indices are taken from the range/vector
 # Since bounds-checking is performance-critical and uses

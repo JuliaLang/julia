@@ -1039,11 +1039,11 @@ end
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)
-        densecomplexmat = I + randn(Complex{Float64}, m, m)/(4m)
+        densecomplexmat = I + randn(ComplexF64, m, m)/(4m)
 
         inttypes = (Int32, Int64, BigInt)
         floattypes = (Float32, Float64, BigFloat)
-        complextypes = (Complex{Float32}, Complex{Float64})
+        complextypes = (ComplexF32, ComplexF64)
         eltypes = (inttypes..., floattypes..., complextypes...)
 
         for eltypemat in eltypes

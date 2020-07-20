@@ -182,7 +182,7 @@ and `a`, `b`, and `c` all integers creates a `StepRange`.
 # Examples
 ```jldoctest
 julia> collect(StepRange(1, Int8(2), 10))
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  3
  5
@@ -265,7 +265,7 @@ The syntax `a:b` with `a` and `b` both `Integer`s creates a `UnitRange`.
 # Examples
 ```jldoctest
 julia> collect(UnitRange(2.3, 5.2))
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.3
  3.3
  4.3
@@ -741,14 +741,29 @@ show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), '
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 
-==(r::T, s::T) where {T<:AbstractRange} =
-    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s)))
-==(r::OrdinalRange, s::OrdinalRange) =
-    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s)))
+function ==(r::T, s::T) where {T<:AbstractRange}
+    isempty(r) && return isempty(s)
+    _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
+    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+end
+
+function ==(r::OrdinalRange, s::OrdinalRange)
+    isempty(r) && return isempty(s)
+    _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
+    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+end
+
 ==(r::T, s::T) where {T<:Union{StepRangeLen,LinRange}} =
     (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s)))
-==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T} =
-    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s)))
+
+function ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T}
+    isempty(r) && return isempty(s)
+    _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
+    (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+end
+
+_has_length_one(r::OrdinalRange) = first(r) == last(r)
+_has_length_one(r::AbstractRange) = isone(length(r))
 
 function ==(r::AbstractRange, s::AbstractRange)
     lr = length(r)

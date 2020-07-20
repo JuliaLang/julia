@@ -138,7 +138,7 @@ containing the argument list.
 # Examples
 ```jldoctest
 julia> a = Base.vect(UInt8(1), 2.5, 1//2)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.0
  2.5
  0.5
@@ -154,11 +154,11 @@ end
 size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N)))
+size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N))::Dims)
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
-allocatedinline(::Type{T}) where {T} = (@_pure_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
+allocatedinline(T::Type) = (@_pure_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
     Base.isbitsunion(::Type{T})
@@ -392,13 +392,13 @@ Construct a 1-d array of the specified type. This is usually called with the syn
 # Examples
 ```jldoctest
 julia> Int8[1, 2, 3]
-3-element Array{Int8,1}:
+3-element Vector{Int8}:
  1
  2
  3
 
 julia> getindex(Int8, 1, 2, 3)
-3-element Array{Int8,1}:
+3-element Vector{Int8}:
  1
  2
  3
@@ -447,7 +447,7 @@ the common idiom `fill(x)` creates a zero-dimensional array containing the singl
 # Examples
 ```jldoctest
 julia> fill(1.0, (2,3))
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  1.0  1.0  1.0
  1.0  1.0  1.0
 
@@ -463,7 +463,7 @@ julia> A = fill(zeros(2), 2);
 julia> A[1][1] = 42; # modifies both A[1][1] and A[2][1]
 
 julia> A
-2-element Array{Array{Float64,1},1}:
+2-element Vector{Vector{Float64}}:
  [42.0, 0.0]
  [42.0, 0.0]
 ```
@@ -485,11 +485,11 @@ See also [`fill`](@ref), [`ones`](@ref).
 # Examples
 ```jldoctest
 julia> zeros(1)
-1-element Array{Float64,1}:
+1-element Vector{Float64}:
  0.0
 
 julia> zeros(Int8, 2, 3)
-2×3 Array{Int8,2}:
+2×3 Matrix{Int8}:
  0  0  0
  0  0  0
 ```
@@ -506,11 +506,11 @@ See also: [`fill`](@ref), [`zeros`](@ref).
 # Examples
 ```jldoctest
 julia> ones(1,2)
-1×2 Array{Float64,2}:
+1×2 Matrix{Float64}:
  1.0  1.0
 
 julia> ones(ComplexF64, 2, 3)
-2×3 Array{Complex{Float64},2}:
+2×3 Matrix{ComplexF64}:
  1.0+0.0im  1.0+0.0im  1.0+0.0im
  1.0+0.0im  1.0+0.0im  1.0+0.0im
 ```
@@ -561,8 +561,8 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
-Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto!(Array{T,N}(undef, size(x)), x)
-AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto!(similar(A,T), A)
+Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto_axcheck!(Array{T,N}(undef, size(x)), x)
+AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto_axcheck!(similar(A,T), A)
 end
 
 ## copying iterators to containers
@@ -576,7 +576,7 @@ The result has the same shape and number of dimensions as `collection`.
 # Examples
 ```jldoctest
 julia> collect(Float64, 1:2:5)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.0
  3.0
  5.0
@@ -613,7 +613,7 @@ and number of dimensions as the argument.
 # Examples
 ```jldoctest
 julia> collect(1:2:13)
-7-element Array{Int64,1}:
+7-element Vector{Int64}:
   1
   3
   5
@@ -916,7 +916,7 @@ the items are inserted at the end (in the given order).
 # Examples
 ```jldoctest
 julia> push!([1, 2, 3], 4, 5, 6)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  1
  2
  3
@@ -953,13 +953,13 @@ For an ordered container `collection`, add the elements of `collection2` to the 
 # Examples
 ```jldoctest
 julia> append!([1],[2,3])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> append!([1, 2, 3], [4, 5, 6])
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  1
  2
  3
@@ -1008,7 +1008,7 @@ Insert the elements of `items` to the beginning of `a`.
 # Examples
 ```jldoctest
 julia> prepend!([3],[1,2])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -1061,7 +1061,7 @@ guaranteed to be initialized.
 # Examples
 ```jldoctest
 julia> resize!([6, 5, 4, 3, 2, 1], 3)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  6
  5
  4
@@ -1072,7 +1072,7 @@ julia> length(a)
 8
 
 julia> a[1:6]
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  6
  5
  4
@@ -1115,7 +1115,7 @@ ordered container, the last item is returned.
 # Examples
 ```jldoctest
 julia> A=[1, 2, 3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -1124,7 +1124,7 @@ julia> pop!(A)
 3
 
 julia> A
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -1171,7 +1171,7 @@ julia> a = [4, 3, 2, 1]; popat!(a, 2)
 3
 
 julia> a
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  4
  2
  1
@@ -1180,7 +1180,7 @@ julia> popat!(a, 4, missing)
 missing
 
 julia> popat!(a, 4)
-ERROR: BoundsError: attempt to access 3-element Array{Int64,1} at index [4]
+ERROR: BoundsError: attempt to access 3-element Vector{Int64} at index [4]
 [...]
 ```
 """
@@ -1208,7 +1208,7 @@ Insert one or more `items` at the beginning of `collection`.
 # Examples
 ```jldoctest
 julia> pushfirst!([1, 2, 3, 4], 5, 6)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  5
  6
  1
@@ -1232,7 +1232,7 @@ Remove the first `item` from `collection`.
 # Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5, 6]
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  1
  2
  3
@@ -1244,7 +1244,7 @@ julia> popfirst!(A)
 1
 
 julia> A
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  2
  3
  4
@@ -1270,7 +1270,7 @@ the resulting `a`.
 # Examples
 ```jldoctest
 julia> insert!([6, 5, 4, 2, 1], 4, 3)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  6
  5
  4
@@ -1297,7 +1297,7 @@ are shifted to fill the resulting gap.
 # Examples
 ```jldoctest
 julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  6
  4
  3
@@ -1325,13 +1325,13 @@ or a boolean vector of the same length as `a` with `true` indicating entries to 
 # Examples
 ```jldoctest
 julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  5
  3
  1
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  5
  3
  1
@@ -1352,9 +1352,9 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
     y = iterate(inds)
     y === nothing && return a
-    n == 0 && throw(BoundsError(a, inds))
     (p, s) = y
-    p <= n && push!(dltd, @inbounds a[p])
+    checkbounds(a, p)
+    push!(dltd, @inbounds a[p])
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1411,7 +1411,7 @@ julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
 2
 
 julia> A
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  6
  5
  4
@@ -1422,7 +1422,7 @@ julia> splice!(A, 5, -1)
 1
 
 julia> A
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
   6
   5
   4
@@ -1433,7 +1433,7 @@ julia> splice!(A, 1, [-1, -2, -3])
 6
 
 julia> A
-7-element Array{Int64,1}:
+7-element Vector{Int64}:
  -1
  -2
  -3
@@ -1485,7 +1485,7 @@ julia> A = [-1, -2, -3, 5, 4, 3, -1]; splice!(A, 4:3, 2)
 Int64[]
 
 julia> A
-8-element Array{Int64,1}:
+8-element Vector{Int64}:
  -1
  -2
  -3
@@ -1559,7 +1559,7 @@ for reverse-order iteration without making a copy.
 # Examples
 ```jldoctest
 julia> A = Vector(1:5)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -1567,7 +1567,7 @@ julia> A = Vector(1:5)
  5
 
 julia> reverse(A)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  5
  4
  3
@@ -1575,7 +1575,7 @@ julia> reverse(A)
  1
 
 julia> reverse(A, 1, 4)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  4
  3
  2
@@ -1583,7 +1583,7 @@ julia> reverse(A, 1, 4)
  5
 
 julia> reverse(A, 3, 5)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  5
@@ -1621,7 +1621,7 @@ In-place version of [`reverse`](@ref).
 # Examples
 ```jldoctest
 julia> A = Vector(1:5)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -1631,7 +1631,7 @@ julia> A = Vector(1:5)
 julia> reverse!(A);
 
 julia> A
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  5
  4
  3
@@ -1702,7 +1702,7 @@ and [`pairs(A)`](@ref).
 # Examples
 ```jldoctest
 julia> A = [false, false, true, false]
-4-element Array{Bool,1}:
+4-element Vector{Bool}:
  0
  0
  1
@@ -1714,7 +1714,7 @@ julia> findnext(A, 1)
 julia> findnext(A, 4) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true false]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  0  0
  1  0
 
@@ -1748,7 +1748,7 @@ and [`pairs(A)`](@ref).
 # Examples
 ```jldoctest
 julia> A = [false, false, true, false]
-4-element Array{Bool,1}:
+4-element Vector{Bool}:
  0
  0
  1
@@ -1760,7 +1760,7 @@ julia> findfirst(A)
 julia> findfirst(falses(3)) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true false]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  0  0
  1  0
 
@@ -1829,7 +1829,7 @@ and [`pairs(A)`](@ref).
 # Examples
 ```jldoctest
 julia> A = [1, 4, 2, 2]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  4
  2
@@ -1844,7 +1844,7 @@ julia> findfirst(isequal(4), A)
 2
 
 julia> A = [1 4; 2 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  4
  2  2
 
@@ -1889,7 +1889,7 @@ and [`pairs(A)`](@ref).
 # Examples
 ```jldoctest
 julia> A = [false, false, true, true]
-4-element Array{Bool,1}:
+4-element Vector{Bool}:
  0
  0
  1
@@ -1901,7 +1901,7 @@ julia> findprev(A, 3)
 julia> findprev(A, 1) # returns nothing, but not printed in the REPL
 
 julia> A = [false false; true true]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  0  0
  1  1
 
@@ -1934,7 +1934,7 @@ and [`pairs(A)`](@ref).
 # Examples
 ```jldoctest
 julia> A = [true, false, true, false]
-4-element Array{Bool,1}:
+4-element Vector{Bool}:
  1
  0
  1
@@ -1948,7 +1948,7 @@ julia> A = falses(2,2);
 julia> findlast(A) # returns nothing, but not printed in the REPL
 
 julia> A = [true false; true false]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  1  0
 
@@ -1980,7 +1980,7 @@ and [`pairs(A)`](@ref).
 # Examples
 ```jldoctest
 julia> A = [4, 6, 1, 2]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  6
  1
@@ -1992,7 +1992,7 @@ julia> findprev(isodd, A, 3)
 3
 
 julia> A = [4 6; 1 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  6
  1  2
 
@@ -2025,7 +2025,7 @@ and [`pairs(A)`](@ref).
 # Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
@@ -2037,7 +2037,7 @@ julia> findlast(isodd, A)
 julia> findlast(x -> x > 5, A) # returns nothing, but not printed in the REPL
 
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
@@ -2068,27 +2068,27 @@ and [`pairs(A)`](@ref).
 # Examples
 ```jldoctest
 julia> x = [1, 3, 4]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  4
 
 julia> findall(isodd, x)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
 julia> A = [1 2 0; 3 4 0]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  0
  3  4  0
 julia> findall(isodd, A)
-2-element Array{CartesianIndex{2},1}:
+2-element Vector{CartesianIndex{2}}:
  CartesianIndex(1, 1)
  CartesianIndex(2, 1)
 
 julia> findall(!iszero, A)
-4-element Array{CartesianIndex{2},1}:
+4-element Vector{CartesianIndex{2}}:
  CartesianIndex(1, 1)
  CartesianIndex(2, 1)
  CartesianIndex(1, 2)
@@ -2101,7 +2101,7 @@ Dict{Symbol,Int64} with 3 entries:
   :C => 0
 
 julia> findall(x -> x >= 0, d)
-2-element Array{Symbol,1}:
+2-element Vector{Symbol}:
  :A
  :C
 
@@ -2122,24 +2122,24 @@ and [`pairs(A)`](@ref).
 # Examples
 ```jldoctest
 julia> A = [true, false, false, true]
-4-element Array{Bool,1}:
+4-element Vector{Bool}:
  1
  0
  0
  1
 
 julia> findall(A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  4
 
 julia> A = [true false; false true]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  0  1
 
 julia> findall(A)
-2-element Array{CartesianIndex{2},1}:
+2-element Vector{CartesianIndex{2}}:
  CartesianIndex(1, 1)
  CartesianIndex(2, 2)
 
@@ -2317,7 +2317,7 @@ julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
 julia> b = ['a', 'b', 'c'];
 
 julia> indexin(a, b)
-6-element Array{Union{Nothing, Int64},1}:
+6-element Vector{Union{Nothing, Int64}}:
  1
  2
  3
@@ -2326,7 +2326,7 @@ julia> indexin(a, b)
  1
 
 julia> indexin(b, a)
-3-element Array{Union{Nothing, Int64},1}:
+3-element Vector{Union{Nothing, Int64}}:
  1
  2
  3
@@ -2448,7 +2448,7 @@ julia> a = 1:10
 1:10
 
 julia> filter(isodd, a)
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  3
  5
@@ -2494,7 +2494,7 @@ The function `f` is passed one argument.
 # Examples
 ```jldoctest
 julia> filter!(isodd, Vector(1:10))
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  3
  5

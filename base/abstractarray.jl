@@ -344,6 +344,33 @@ function first(itr)
 end
 
 """
+    first(itr, n::Integer)
+
+Get the first `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
+long enough.
+
+# Examples
+```jldoctest
+julia> first(["foo", "bar", "qux"], 2)
+2-element Vector{String}:
+ "foo"
+ "bar"
+
+julia> first(1:6, 10)
+1:6
+
+julia> first(Bool[], 1)
+Bool[]
+```
+"""
+first(itr, n::Integer) = collect(Iterators.take(itr, n))
+# Faster method for vectors
+function first(v::AbstractVector, n::Integer)
+    n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
+    @inbounds v[begin:min(begin + n - 1, end)]
+end
+
+"""
     last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
@@ -360,6 +387,33 @@ julia> last([1; 2; 3; 4])
 ```
 """
 last(a) = a[end]
+
+"""
+    last(itr, n::Integer)
+
+Get the last `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
+long enough.
+
+# Examples
+```jldoctest
+julia> last(["foo", "bar", "qux"], 2)
+2-element Vector{String}:
+ "bar"
+ "qux"
+
+julia> last(1:6, 10)
+1:6
+
+julia> last(Float64[], 1)
+Float64[]
+```
+"""
+last(itr, n::Integer) = reverse!(collect(Iterators.take(Iterators.reverse(itr), n)))
+# Faster method for arrays
+function last(v::AbstractVector, n::Integer)
+    n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
+    @inbounds v[max(begin, end - n + 1):end]
+end
 
 """
     strides(A)
@@ -392,7 +446,11 @@ julia> stride(A,3)
 12
 ```
 """
-stride(A::AbstractArray, k::Integer) = strides(A)[k]
+function stride(A::AbstractArray, k::Integer)
+    st = strides(A)
+    k ≤ ndims(A) && return st[k]
+    return sum(st .* size(A))
+end
 
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
 size_to_strides(s, d) = (s,)
@@ -610,7 +668,7 @@ elements since `BitArray`s are both mutable and can support 1-dimensional arrays
 
 ```julia-repl
 julia> similar(trues(10,10), 2)
-2-element BitArray{1}:
+2-element BitVector:
  0
  0
 ```
@@ -825,7 +883,7 @@ julia> y = zeros(7);
 julia> copyto!(y, x);
 
 julia> y
-7-element Array{Float64,1}:
+7-element Vector{Float64}:
  1.0
  0.0
  3.0
@@ -940,6 +998,12 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     return B
 end
 
+function copyto_axcheck!(dest, src)
+    @noinline checkaxs(axd, axs) = axd == axs || throw(DimensionMismatch("axes must agree, got $axd and $axs"))
+
+    checkaxs(axes(dest), axes(src))
+    copyto!(dest, src)
+end
 
 """
     copymutable(a)
@@ -955,7 +1019,7 @@ julia> tup = (1, 2, 3)
 (1, 2, 3)
 
 julia> Base.copymutable(tup)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -1001,7 +1065,14 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
-    unsafe_convert(Ptr{T}, x) + (i - first(LinearIndices(x)))*elsize(x)
+    unsafe_convert(Ptr{T}, x) + _memory_offset(x, i)
+end
+
+# The distance from pointer(x) to the element at x[I...] in bytes
+_memory_offset(x::DenseArray, I...) = (_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
+function _memory_offset(x::AbstractArray, I...)
+    J = _to_subscript_indices(x, I...)
+    return sum(map((i, s, o)->s*(i-o), J, strides(x), Tuple(first(CartesianIndices(x)))))*elsize(x)
 end
 
 ## Approach:
@@ -1023,7 +1094,7 @@ Return a subset of array `A` as specified by `inds`, where each `ind` may be an
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
@@ -1031,12 +1102,12 @@ julia> getindex(A, 1)
 1
 
 julia> getindex(A, [2, 1])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  3
  1
 
 julia> getindex(A, 2:4)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  2
  4
@@ -1047,6 +1118,9 @@ function getindex(A::AbstractArray, I...)
     error_if_canonical_getindex(IndexStyle(A), A, I...)
     _getindex(IndexStyle(A), A, to_indices(A, I)...)
 end
+# To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
+getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
+
 function unsafe_getindex(A::AbstractArray, I...)
     @_inline_meta
     @inbounds r = getindex(A, I...)
@@ -1072,10 +1146,10 @@ function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @inbounds r = getindex(A, _to_linear_index(A, I...))
     r
 end
-_to_linear_index(A::AbstractArray, i::Int) = i
-_to_linear_index(A::AbstractVector, i::Int, I::Int...) = i
+_to_linear_index(A::AbstractArray, i::Integer) = i
+_to_linear_index(A::AbstractVector, i::Integer, I::Integer...) = i
 _to_linear_index(A::AbstractArray) = 1
-_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; _sub2ind(A, I...))
+_to_linear_index(A::AbstractArray, I::Integer...) = (@_inline_meta; _sub2ind(A, I...))
 
 ## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
 function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Int,M}) where M
@@ -1088,12 +1162,12 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     @_propagate_inbounds_meta
     getindex(A, I...)
 end
-_to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
+_to_subscript_indices(A::AbstractArray, i::Integer) = (@_inline_meta; _unsafe_ind2sub(A, i))
 _to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val(N)))
 _to_subscript_indices(A::AbstractArray{T,0}) where {T} = ()
-_to_subscript_indices(A::AbstractArray{T,0}, i::Int) where {T} = ()
-_to_subscript_indices(A::AbstractArray{T,0}, I::Int...) where {T} = ()
-function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N}
+_to_subscript_indices(A::AbstractArray{T,0}, i::Integer) where {T} = ()
+_to_subscript_indices(A::AbstractArray{T,0}, I::Integer...) where {T} = ()
+function _to_subscript_indices(A::AbstractArray{T,N}, I::Integer...) where {T,N}
     @_inline_meta
     J, Jrem = IteratorsMD.split(I, Val(N))
     _to_subscript_indices(A, J, Jrem)
@@ -1131,7 +1205,7 @@ julia> setindex!(A, [10, 20], [1, 2]);
 julia> A[[3, 4]] = [30, 40];
 
 julia> A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  10.0  30.0
  20.0  40.0
 ```
@@ -1188,17 +1262,17 @@ during object creation. If the input is not a wrapped object, return the input i
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> V = view(A, 1:2, :)
-2×2 view(::Array{Int64,2}, 1:2, :) with eltype Int64:
+2×2 view(::Matrix{Int64}, 1:2, :) with eltype Int64:
  1  2
  3  4
 
 julia> parent(V)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```
@@ -1509,7 +1583,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
     catdims = dims2cat(dims)
     shape = cat_shape(catdims, (), map(cat_size, X)...)
     A = cat_similar(X[1], T, shape)
-    if T <: Number && count(!iszero, catdims) > 1
+    if count(!iszero, catdims) > 1
         fill!(A, zero(T))
     end
     return __cat(A, shape, catdims, X...)
@@ -1546,16 +1620,16 @@ Concatenate along dimension 1.
 # Examples
 ```jldoctest
 julia> a = [1 2 3 4 5]
-1×5 Array{Int64,2}:
+1×5 Matrix{Int64}:
  1  2  3  4  5
 
 julia> b = [6 7 8 9 10; 11 12 13 14 15]
-2×5 Array{Int64,2}:
+2×5 Matrix{Int64}:
   6   7   8   9  10
  11  12  13  14  15
 
 julia> vcat(a,b)
-3×5 Array{Int64,2}:
+3×5 Matrix{Int64}:
   1   2   3   4   5
   6   7   8   9  10
  11  12  13  14  15
@@ -1564,7 +1638,7 @@ julia> c = ([1 2 3], [4 5 6])
 ([1 2 3], [4 5 6])
 
 julia> vcat(c...)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 ```
@@ -1578,7 +1652,7 @@ Concatenate along dimension 2.
 # Examples
 ```jldoctest
 julia> a = [1; 2; 3; 4; 5]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -1586,7 +1660,7 @@ julia> a = [1; 2; 3; 4; 5]
  5
 
 julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
   6   7
   8   9
  10  11
@@ -1594,7 +1668,7 @@ julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
  14  15
 
 julia> hcat(a,b)
-5×3 Array{Int64,2}:
+5×3 Matrix{Int64}:
  1   6   7
  2   8   9
  3  10  11
@@ -1605,16 +1679,16 @@ julia> c = ([1; 2; 3], [4; 5; 6])
 ([1, 2, 3], [4, 5, 6])
 
 julia> hcat(c...)
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  1  4
  2  5
  3  6
 
 julia> x = Matrix(undef, 3, 0)  # x = [] would have created an Array{Any, 1}, but need an Array{Any, 2}
-3×0 Array{Any,2}
+3×0 Matrix{Any}
 
 julia> hcat(x, [1; 2; 3])
-3×1 Array{Any,2}:
+3×1 Matrix{Any}:
  1
  2
  3
@@ -1683,23 +1757,23 @@ julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
 (1, 2, 3, 4, 5, 6)
 
 julia> [a b c; d e f]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 
 julia> hvcat((3,3), a,b,c,d,e,f)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 
 julia> [a b;c d; e f]
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  1  2
  3  4
  5  6
 
 julia> hvcat((2,2,2), a,b,c,d,e,f)
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  1  2
  3  4
  5  6
@@ -2150,7 +2224,7 @@ end
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
-mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)), itr)  # convenient for Expr.args
+mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)::Int), itr)  # convenient for Expr.args
 
 # default to returning an Array for `map` on general iterators
 """
@@ -2164,13 +2238,13 @@ See also: [`mapslices`](@ref)
 # Examples
 ```jldoctest
 julia> map(x -> x * 2, [1, 2, 3])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  4
  6
 
 julia> map(+, [1, 2, 3], [10, 20, 30])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  11
  22
  33
@@ -2223,7 +2297,7 @@ julia> a = zeros(3);
 julia> map!(x -> x * 2, a, [1, 2, 3]);
 
 julia> a
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.0
  4.0
  6.0
@@ -2260,7 +2334,7 @@ function hash(A::AbstractArray, h::UInt)
     # hashes will often subsequently be compared by equality -- and equality between arrays
     # works elementwise forwards and is short-circuiting. This means that a collision
     # between arrays that differ by elements at the beginning is cheaper than one where the
-    # difference is towards the end. Furthermore, blindly choosing log(N) entries from a
+    # difference is towards the end. Furthermore, choosing `log(N)` arbitrary entries from a
     # sparse array will likely only choose the same element repeatedly (zero in this case).
 
     # To achieve this, we work backwards, starting by hashing the last element of the

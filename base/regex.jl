@@ -259,7 +259,7 @@ julia> m = match(rx, "cabac")
 RegexMatch("aba", 1="b")
 
 julia> m.captures
-1-element Array{Union{Nothing, SubString{String}},1}:
+1-element Vector{Union{Nothing, SubString{String}}}:
  "b"
 
 julia> m.match
@@ -344,15 +344,15 @@ original string, otherwise they must be from disjoint character ranges.
 # Examples
 ```jldoctest
 julia> findall("a", "apple")
-1-element Array{UnitRange{Int64},1}:
+1-element Vector{UnitRange{Int64}}:
  1:1
 
 julia> findall("nana", "banana")
-1-element Array{UnitRange{Int64},1}:
+1-element Vector{UnitRange{Int64}}:
  3:6
 
 julia> findall("a", "banana")
-3-element Array{UnitRange{Int64},1}:
+3-element Vector{UnitRange{Int64}}:
  2:2
  4:4
  6:6
@@ -582,8 +582,8 @@ end
 """
     eachmatch(r::Regex, s::AbstractString; overlap::Bool=false)
 
-Search for all matches of a the regular expression `r` in `s` and return a iterator over the
-matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
+Search for all matches of the regular expression `r` in `s` and return an iterator over the
+matches. If `overlap` is `true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from distinct character ranges.
 
 # Examples
@@ -595,12 +595,12 @@ julia> m = eachmatch(rx, "a1a2a3a")
 Base.RegexMatchIterator(r"a.a", "a1a2a3a", false)
 
 julia> collect(m)
-2-element Array{RegexMatch,1}:
+2-element Vector{RegexMatch}:
  RegexMatch("a1a")
  RegexMatch("a3a")
 
 julia> collect(eachmatch(rx, "a1a2a3a", overlap = true))
-3-element Array{RegexMatch,1}:
+3-element Vector{RegexMatch}:
  RegexMatch("a1a")
  RegexMatch("a2a")
  RegexMatch("a3a")

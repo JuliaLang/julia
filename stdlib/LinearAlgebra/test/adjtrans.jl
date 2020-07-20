@@ -380,8 +380,8 @@ end
     # TODO tighten type asserts once pinv yields Transpose/Adjoint
     @test pinv(Adjoint(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
     @test pinv(Transpose(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
-    @test pinv(Adjoint(complexvec))::Vector{Complex{Float64}} ≈ pinv(conj(rowcomplexvec))
-    @test pinv(Transpose(complexvec))::Vector{Complex{Float64}} ≈ pinv(rowcomplexvec)
+    @test pinv(Adjoint(complexvec))::Vector{ComplexF64} ≈ pinv(conj(rowcomplexvec))
+    @test pinv(Transpose(complexvec))::Vector{ComplexF64} ≈ pinv(rowcomplexvec)
 end
 
 @testset "Adjoint/Transpose-wrapped vector left-division" begin

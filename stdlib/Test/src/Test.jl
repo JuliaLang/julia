@@ -155,7 +155,7 @@ mutable struct Error <: Result
             bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(Base.show_exception_stack, bt)
+            bt_str = sprint(Base.show_exception_stack, bt; context=stdout)
         else
             bt_str = ""
         end
@@ -769,16 +769,15 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
-            # don't print the backtrace for Errors because it gets printed in the show
-            # method
-            if !isa(t, Error)
+            if !isa(t, Error) # if not gets printed in the show method
                 Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
             end
             println()
         end
     end
     push!(ts.results, t)
-    t, isa(t, Error) || backtrace()
+    isa(t, Error) || backtrace()
+    return t
 end
 
 # When a DefaultTestSet finishes, it records itself to its parent
@@ -1322,7 +1321,7 @@ Int64
 
 julia> @code_warntype f(2)
 Variables
-  #self#::Core.Compiler.Const(f, false)
+  #self#::Core.Const(f, false)
   a::Int64
 
 Body::UNION{FLOAT64, INT64}
@@ -1441,11 +1440,12 @@ function detect_ambiguities(mods...;
             elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.mt !== Symbol.name.mt
                 mt = Base.MethodList(f.name.mt)
                 for m in mt
-                    if m.ambig !== nothing
-                        for m2 in m.ambig
-                            if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
-                                push!(ambs, sortdefs(m, m2.func))
-                            end
+                    ambig = Int32[0]
+                    for m2 in Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+                        ambig[1] == 0 && break
+                        m2 = m2[3]
+                        if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
+                            push!(ambs, sortdefs(m, m2))
                         end
                     end
                 end
@@ -1458,14 +1458,19 @@ function detect_ambiguities(mods...;
             recursive || return false
             p = parentmodule(m)
             p === m && return false
-            m = parent
+            m = p
         end
     end
-    for m in Base.MethodList(Symbol.name.mt)
-        if m.ambig !== nothing && is_in_mods(m.module)
-            for m2 in m.ambig
-                if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
-                    push!(ambs, sortdefs(m, m2.func))
+    let mt = Base.MethodList(Symbol.name.mt)
+        for m in mt
+            if is_in_mods(m.module)
+                ambig = Int32[0]
+                for m2 in Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+                    ambig[1] == 0 && break
+                    m2 = m2[3]
+                    if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
+                        push!(ambs, sortdefs(m, m2))
+                    end
                 end
             end
         end
@@ -1505,7 +1510,7 @@ function detect_unbound_args(mods...;
                             params = tuple_sig.parameters[1:(end - 1)]
                             tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
                             mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
-                            if mf !== nothing && mf.func !== m && mf.func.sig <: tuple_sig
+                            if mf !== nothing && mf !== m && mf.sig <: tuple_sig
                                 continue
                             end
                         end

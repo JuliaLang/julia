@@ -395,11 +395,9 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
                 if (jl_gotonode_label(stmt) <= i)
                     *has_loops = 1;
             }
-            else if (jl_is_expr(stmt)) {
-                if (((jl_expr_t*)stmt)->head == goto_ifnot_sym) {
-                    if (jl_unbox_long(jl_exprarg(stmt,1)) <= i)
-                        *has_loops = 1;
-                }
+            else if (jl_is_gotoifnot(stmt)) {
+                if (jl_gotoifnot_label(stmt) <= i)
+                    *has_loops = 1;
             }
         }
         expr_attributes(stmt, has_intrinsics, has_defs);

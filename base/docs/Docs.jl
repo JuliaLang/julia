@@ -96,7 +96,7 @@ function signature!(tv, expr::Expr)
             push!(sig.args[end].args, argtype(arg))
         end
         if isexpr(expr.args[1], :curly) && isempty(tv)
-            append!(tv, mapany(tvar, expr.args[1].args[2:end]))
+            append!(tv, mapany(tvar, (expr.args[1]::Expr).args[2:end]))
         end
         for i = length(tv):-1:1
             push!(sig.args, :(Tuple{$(tv[i].args[1])}))
@@ -225,7 +225,7 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.  The warning
         # is suppressed for symbols in Main, for interactive use (#23011).
-        __module__ == Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
+        __module__ === Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.

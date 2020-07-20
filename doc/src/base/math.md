@@ -67,6 +67,7 @@ Base.Math.cosd
 Base.Math.tand
 Base.Math.sinpi
 Base.Math.cospi
+Base.Math.sincospi
 Base.sinh(::Number)
 Base.cosh(::Number)
 Base.tanh(::Number)

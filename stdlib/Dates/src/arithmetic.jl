@@ -69,6 +69,11 @@ function (-)(dt::Date, z::Month)
     mm = monthwrap(m, -value(z)); ld = daysinmonth(ny, mm)
     return Date(ny, mm, d <= ld ? d : ld)
 end
+
+(+)(x::Date, y::Quarter) = x + Month(y)
+(-)(x::Date, y::Quarter) = x - Month(y)
+(+)(x::DateTime, y::Quarter) = x + Month(y)
+(-)(x::DateTime, y::Quarter) = x - Month(y)
 (+)(x::Date, y::Week) = return Date(UTD(value(x) + 7 * value(y)))
 (-)(x::Date, y::Week) = return Date(UTD(value(x) - 7 * value(y)))
 (+)(x::Date, y::Day)  = return Date(UTD(value(x) + value(y)))

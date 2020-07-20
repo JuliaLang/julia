@@ -274,12 +274,12 @@ applyf35855(Any[1])
 @test worlds(instance(applyf35855, (Vector{Float64},))) == wfloat
 wany3 = worlds(instance(applyf35855, (Vector{Any},)))
 src3 = code_typed(applyf35855, (Vector{Any},))[1]
-@test (wany3 == wany2) == equal(src3, src2)   # don't invalidate unless you also change the code
-f35855(::AbstractVector) = 4         # next test would pass if this were ::Vector{Int}
+@test !(wany3 == wany2) || equal(src3, src2) # code doesn't change unless you invalidate
+f35855(::AbstractVector) = 4
 applyf35855(Any[1])
 wany4 = worlds(instance(applyf35855, (Vector{Any},)))
 src4 = code_typed(applyf35855, (Vector{Any},))[1]
-@test_broken (wany4 == wany3) == equal(src4, src3)
+@test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
 f35855(::Dict) = 5
 applyf35855(Any[1])
 wany5 = worlds(instance(applyf35855, (Vector{Any},)))
@@ -289,7 +289,20 @@ f35855(::Set) = 6    # with current settings, this shouldn't invalidate
 applyf35855(Any[1])
 wany6 = worlds(instance(applyf35855, (Vector{Any},)))
 src6 = code_typed(applyf35855, (Vector{Any},))[1]
-@test (wany6 == wany5) == equal(src6, src5)
+@test wany6 == wany5
+@test equal(src6, src5)
+
+applyf35855_2(c) = f35855_2(c[1])
+f35855_2(::Int) = 1
+f35855_2(::Float64) = 2
+applyf35855_2(Any[1])
+wany3 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src3 = code_typed(applyf35855_2, (Vector{Any},))[1]
+f35855_2(::AbstractVector) = 4
+applyf35855_2(Any[1])
+wany4 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src4 = code_typed(applyf35855_2, (Vector{Any},))[1]
+@test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
 
 ## ambiguities do not trigger invalidation
 using Printf
@@ -311,3 +324,17 @@ w = worlds(mi)
 abstract type Colorant35855 end
 Base.convert(::Type{C}, c) where C<:Colorant35855 = false
 @test_broken worlds(mi) == w
+
+# invoke_in_world
+f_inworld(x) = "world one; x=$x"
+g_inworld(x; y) = "world one; x=$x, y=$y"
+wc_aiw1 = get_world_counter()
+# redefine f_inworld, g_inworld, and check that we can invoke both versions
+f_inworld(x) = "world two; x=$x"
+g_inworld(x; y) = "world two; x=$x, y=$y"
+wc_aiw2 = get_world_counter()
+@test Base.invoke_in_world(wc_aiw1, f_inworld, 2) == "world one; x=2"
+@test Base.invoke_in_world(wc_aiw2, f_inworld, 2) == "world two; x=2"
+@test Base.invoke_in_world(wc_aiw1, g_inworld, 2, y=3) == "world one; x=2, y=3"
+@test Base.invoke_in_world(wc_aiw2, g_inworld, 2, y=3) == "world two; x=2, y=3"
+

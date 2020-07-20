@@ -78,13 +78,25 @@ end
 @test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting stderr.
 let
     redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
-    script = "$redir_err; module A; f() = 1; end; A.f() = 1"
+    script = """
+        $redir_err
+        module A; f() = 1; end; A.f() = 1
+        A.f() = 1
+        outer() = (g() = 1; g() = 2; g)
+        """
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
-    @test occursin("f()", warning_str)
+    @test warning_str == """
+        WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
+        WARNING: Method definition f() in module Main at none:2 overwritten at none:3.
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
+    warning_str = read(`$exename --startup-file=no -e $script`, String)
+    @test warning_str == """
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
 end
 
 # lock / unlock

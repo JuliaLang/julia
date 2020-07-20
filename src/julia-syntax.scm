@@ -884,7 +884,8 @@
           (defs2 (if (null? defs)
                      (default-inner-ctors name field-names field-types params bounds locs)
                      defs))
-          (min-initialized (min (ctors-min-initialized defs) (length fields))))
+          (min-initialized (min (ctors-min-initialized defs) (length fields)))
+          (prev (make-ssavalue)))
      (let ((dups (has-dups field-names)))
        (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
      (for-each (lambda (v)
@@ -898,16 +899,29 @@
          (local-def ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
-         (toplevel-only struct)
+         (toplevel-only struct (outerref ,name))
          (= ,name (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@params)
                         (call (core svec) ,@(map quotify field-names))
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
-         (call (core _typebody!) ,name (call (core svec) ,@field-types))
-         (if (&& (isdefined (outerref ,name))
-                 (call (core _equiv_typedef) (outerref ,name) ,name))
-             (null)
+         (if (isdefined (outerref ,name))
+             (block
+              (= ,prev (outerref ,name))
+              (if (call (core _equiv_typedef) ,prev ,name)
+                  ;; if this is compatible with an old definition, use the existing type object
+                  ;; and its parameters
+                  (block (= ,name ,prev)
+                         ,@(if (pair? params)
+                               `((= (tuple ,@params) (|.|
+                                                      ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
+                                                              prev
+                                                              params)
+                                                      (quote parameters))))
+                               '()))
+                  ;; otherwise do an assignment to trigger an error
+                  (= (outerref ,name) ,name)))
              (= (outerref ,name) ,name))
+         (call (core _typebody!) ,name (call (core svec) ,@field-types))
          (null)))
        ;; "inner" constructors
        (scope-block
@@ -1091,27 +1105,29 @@
            `(method ,name))
           ((not (pair? name))  e)
           ((eq? (car name) 'call)
-           (let* ((head    (cadr name))
-                  (argl    (cddr name))
-                  (name    (check-dotop head))
+           (let* ((raw-typevars (or where '()))
+                  (sparams (map analyze-typevar raw-typevars))
+                  (argl    (cdr name))
+                  ;; strip @nospecialize
                   (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (caddr a))))
                                     (filter nospecialize-meta? argl)))
                   (body (insert-after-meta (caddr e) annotations))
                   (argl (map (lambda (a)
                                (if (nospecialize-meta? a) (caddr a) a))
                              argl))
-                  (raw-typevars (or where '()))
-                  (sparams (map analyze-typevar raw-typevars))
+                  ;; handle destructuring
+                  (argl-stmts (lower-destructuring-args argl))
+                  (argl       (car argl-stmts))
+                  (name       (check-dotop (car argl)))
+                  ;; fill in first (closure) argument
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| |#self#| ,(cadr n))
                                             n)))
-                  ;; fill in first (closure) argument
                   (farg    (if (decl? name)
                                (adj-decl name)
                                `(|::| |#self#| (call (core Typeof) ,name))))
-                  (argl-stmts (lower-destructuring-args argl))
-                  (argl       (car argl-stmts))
                   (body       (insert-after-meta body (cdr argl-stmts)))
+                  (argl    (cdr argl))
                   (argl    (fix-arglist
                             (arglist-unshift argl farg)
                             (and (not (any kwarg? argl)) (not (and (pair? argl)
@@ -1881,6 +1897,13 @@
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
+(define (expand-if e)
+  (if (and (pair? (cadr e)) (eq? (car (cadr e)) '&&))
+      (let ((clauses (cdr (flatten-ex '&& (cadr e)))))
+        `(if (&& ,@(map expand-forms clauses))
+             ,@(map expand-forms (cddr e))))
+      (cons (car e) (map expand-forms (cdr e)))))
+
 ;; move an assignment into the last statement of a block to keep more statements at top level
 (define (sink-assignment lhs rhs)
   (if (and (pair? rhs) (eq? (car rhs) 'block))
@@ -2216,6 +2239,9 @@
                 ,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
          (map expand-forms e)))
 
+   'if expand-if
+   'elseif expand-if
+
    'while
    (lambda (e)
      `(break-block loop-exit
@@ -2473,38 +2499,44 @@
 ;; pass 2: identify and rename local vars
 
 (define (find-assigned-vars e)
-  (if (or (not (pair? e)) (quoted? e))
-      '()
-      (case (car e)
-        ((lambda scope-block module toplevel)  '())
-        ((method)
-         (let ((v (decl-var (method-expr-name e))))
-           (append!
-            (if (length= e 2) '() (find-assigned-vars (caddr e)))
-            (if (not (symbol? v))
-                '()
-                (list v)))))
-        ((=)
-         (let ((v (decl-var (cadr e)))
-               (rest (find-assigned-vars (caddr e))))
-           (if (or (ssavalue? v) (globalref? v) (outerref? v) (underscore-symbol? v))
-               rest
-               (cons v rest))))
-        (else
-         (apply append! (map find-assigned-vars e))))))
+  (define vars '())
+  (define (find-assigned-vars- e)
+    (if (or (not (pair? e)) (quoted? e))
+        '()
+        (case (car e)
+          ((lambda scope-block module toplevel)  '())
+          ((method)
+           (let ((v (decl-var (method-expr-name e))))
+             (if (symbol? v)
+                 (set! vars (cons v vars)))
+             (if (not (length= e 2))
+                 (find-assigned-vars- (caddr e)))))
+          ((=)
+           (let ((v (decl-var (cadr e))))
+             (find-assigned-vars- (caddr e))
+             (if (or (ssavalue? v) (globalref? v) (outerref? v) (underscore-symbol? v))
+                 '()
+                 (set! vars (cons v vars)))))
+          (else
+           (for-each find-assigned-vars- (cdr e))))))
+  (find-assigned-vars- e)
+  (delete-duplicates vars))
 
 (define (find-decls kind e)
-  (if (or (not (pair? e)) (quoted? e))
-      '()
-      (cond ((memq (car e) '(lambda scope-block module toplevel))
-             '())
-            ((eq? (car e) kind)
-             (if (underscore-symbol? (cadr e))
-                 '()
-                 (list (decl-var (cadr e)))))
-            (else
-             (apply append! (map (lambda (x) (find-decls kind x))
-                                 e))))))
+  (define vars '())
+  (define (find-decls- e)
+    (cond ((or (not (pair? e)) (quoted? e))
+           '())
+          ((memq (car e) '(lambda scope-block module toplevel))
+           '())
+          ((eq? (car e) kind)
+           (if (underscore-symbol? (cadr e))
+               '()
+               (set! vars (cons (decl-var (cadr e)) vars))))
+          (else
+           (for-each find-decls- (cdr e)))))
+  (find-decls- e)
+  vars)
 
 (define (find-local-decls e) (find-decls 'local e))
 (define (find-local-def-decls e) (find-decls 'local-def e))
@@ -2542,7 +2574,7 @@
           (and (memq var (scope:locals scope))  'local)
           (and (memq var (scope:globals scope))
                (if (and exclude-top-level-globals
-                        (null? (lam:vars (scope:lam scope)))
+                        (null? (lam:args (scope:lam scope)))
                         ;; don't inherit global decls from the outermost scope block
                         ;; in a top-level expression.
                         (or (not (scope:prev scope))
@@ -2622,13 +2654,13 @@
              '(false)
              '(true)))
         ((eq? (car e) 'lambda)
-         (let* ((args (lam:vars e))
+         (let* ((args (lam:argnames e))
                 (body (resolve-scopes- (lam:body e) (make-scope e args '() '() sp '() scope))))
            `(lambda ,(cadr e) ,(caddr e) ,body)))
         ((eq? (car e) 'scope-block)
          (let* ((blok            (cadr e)) ;; body of scope-block expression
                 (lam             (scope:lam scope))
-                (argnames        (lam:vars lam))
+                (argnames        (lam:argnames lam))
                 (toplevel?       (and (null? argnames) (eq? e (lam:body lam))))
                 (current-locals  (caddr lam)) ;; locals created so far in our lambda
                 (globals         (find-global-decls blok))
@@ -2741,7 +2773,7 @@
            ,(resolve-scopes- (cadddr e) scope (method-expr-static-parameters e))))
         (else
          (if (and (eq? (car e) '=) (symbol? (cadr e))
-                  scope (null? (lam:vars (scope:lam scope)))
+                  scope (null? (lam:args (scope:lam scope)))
                   (warn-var?! (cadr e) scope)
                   (= *scopewarn-opt* 1))
              (let* ((v    (cadr e))
@@ -2768,7 +2800,7 @@
 
 ;; names of arguments and local vars
 (define (lambda-all-vars e)
-  (append (lam:vars e) (caddr e)))
+  (append (lam:argnames e) (caddr e)))
 
 ;; compute set of variables referenced in a lambda but not bound by it
 (define (free-vars- e tab)
@@ -3187,6 +3219,7 @@ f(x) = yt(x)
   ;; This does a basic-block-local dominance analysis to find variables that
   ;; are never used undef.
   (let ((vi     (car (lam:vinfo lam)))
+        (args   (lam:argnames lam))
         (unused (table))  ;; variables not (yet) used (read from) in the current block
         (live   (table))  ;; variables that have been set in the current block
         (seen   (table))) ;; all variables we've seen assignments to
@@ -3207,6 +3240,11 @@ f(x) = yt(x)
       (restore (table)))
     (define (mark-used var)
       ;; remove variable from the unused table
+      ;; Note arguments are only "used" for purposes of this analysis when
+      ;; they are captured, since they are never undefined.
+      (if (and (has? unused var) (not (memq var args)))
+          (del! unused var)))
+    (define (mark-captured var)
       (if (has? unused var)
           (del! unused var)))
     (define (assign! var)
@@ -3258,7 +3296,7 @@ f(x) = yt(x)
                                          (get-methods e (lam:body lam))
                                          (list e))))
                    (for-each (lambda (ex)
-                               (for-each mark-used
+                               (for-each mark-captured
                                          (map car (cadr (lam:vinfo (cadddr ex))))))
                              all-methods)
                    (assign! (cadr e))))
@@ -3351,7 +3389,12 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref outerref thismodule toplevel-only line break inert module toplevel null true false meta) e)
+          ((quote top core globalref outerref thismodule line break inert module toplevel null true false meta) e)
+          ((toplevel-only)
+           ;; hack to avoid generating a (method x) expr for struct types
+           (if (eq? (cadr e) 'struct)
+               (put! defined (caddr e) #t))
+           e)
           ((=)
            (let ((var (cadr e))
                  (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp)))
@@ -3676,15 +3719,16 @@ f(x) = yt(x)
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
         (label-nesting (table)) ;; exception handler and catch block nesting of each label
-        (finally-handler #f)  ;; `(var label map level)` where `map` is a list of `(tag . action)`.
-                              ;; To exit the current finally block, set `var` to integer `tag`,
-                              ;; jump to `label`, and put `(tag . action)` in the map, where `action`
-                              ;; is `(return x)`, `(break x)`, or a call to rethrow.
+        (finally-handler #f)  ;; Current finally block info: `(var label map level tokens)`
+                              ;; `map` is a list of `(tag . action)` which will
+                              ;; be emitted at the exit of the block. Code
+                              ;; should enter the finally block via `enter-finally-block`.
         (handler-goto-fixups '())  ;; `goto`s that might need `leave` exprs added
         (handler-level 0)     ;; exception handler nesting depth
         (catch-token-stack '())) ;; tokens identifying handler enter for current catch blocks
     (define (emit c)
-      (set! code (cons c code)))
+      (set! code (cons c code))
+      c)
     (define (make-label)
       (begin0 label-counter
               (set! label-counter (+ 1 label-counter))))
@@ -3696,14 +3740,27 @@ f(x) = yt(x)
           (let ((l (make-label)))
             (mark-label l)
             l)))
-    (define (leave-finally-block action (need-goto #t))
+    ;; Enter a finally block, either through the landing pad or via a jump if
+    ;; `need-goto` is true. Before entering, the current code path is identified
+    ;; with a tag which labels the action to be taken at finally handler exit.
+    ;; `action` may be `(return x)`, `(break x)`, or a call to rethrow.
+    (define (enter-finally-block action (need-goto #t))
       (let* ((tags (caddr finally-handler))
              (tag  (if (null? tags) 1 (+ 1 (caar tags)))))
+        ;; To enter the current active finally block, set the tag variable
+        ;; to identify the current code path with the action for this code path
+        ;; which will run at finally block exit.
         (set-car! (cddr finally-handler) (cons (cons tag action) tags))
         (emit `(= ,(car finally-handler) ,tag))
         (if need-goto
-            (begin (emit `(leave ,(+ 1 (- handler-level (cadddr finally-handler)))))
-                   (emit `(goto ,(cadr finally-handler)))))
+            (let ((label (cadr finally-handler))
+                  (dest-handler-level (cadddr finally-handler))
+                  (dest-tokens        (caddddr finally-handler)))
+              ;; Leave current exception handling scope and jump to finally block
+              (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
+                (if pexc (emit pexc)))
+              (emit `(leave ,(+ 1 (- handler-level dest-handler-level))))
+              (emit `(goto ,label))))
         tag))
     (define (pop-exc-expr src-tokens dest-tokens)
       (if (eq? src-tokens dest-tokens)
@@ -3732,7 +3789,7 @@ f(x) = yt(x)
                                (else             (make-ssavalue)))))
                 (if tmp (emit `(= ,tmp ,x)))
                 (if finally-handler
-                    (leave-finally-block `(return ,(or tmp x)))
+                    (enter-finally-block `(return ,(or tmp x)))
                     (begin (emit `(leave ,handler-level))
                            (actually-return (or tmp x))))
                 (or tmp x))
@@ -3740,11 +3797,11 @@ f(x) = yt(x)
     (define (emit-break labl)
       (let ((lvl (caddr labl))
             (dest-tokens (cadddr labl)))
-        (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
-          (if pexc (emit pexc)))
         (if (and finally-handler (> (cadddr finally-handler) lvl))
-            (leave-finally-block `(break ,labl))
+            (enter-finally-block `(break ,labl))
             (begin
+              (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
+                (if pexc (emit pexc)))
               (if (> handler-level lvl)
                   (emit `(leave ,(- handler-level lvl))))
               (emit `(goto ,(cadr labl)))))))
@@ -3932,15 +3989,21 @@ f(x) = yt(x)
                  (compile (cadr e) break-labels value tail)
                  #f))
             ((if elseif)
-             (let ((test `(gotoifnot ,(compile-cond (cadr e) break-labels) _))
+             (let ((tests (map (lambda (clause)
+                                 (emit `(gotoifnot ,(compile-cond clause break-labels) _)))
+                               (if (and (pair? (cadr e)) (eq? (car (cadr e)) '&&))
+                                   (cdadr e)
+                                   (list (cadr e)))))
                    (end-jump `(goto _))
                    (val (if (and value (not tail)) (new-mutable-var) #f)))
-               (emit test)
                (let ((v1 (compile (caddr e) break-labels value tail)))
                  (if val (emit-assignment val v1))
                  (if (and (not tail) (or (length> e 3) val))
                      (emit end-jump))
-                 (set-car! (cddr test) (make&mark-label))
+                 (let ((elselabel (make&mark-label)))
+                   (for-each (lambda (test)
+                               (set-car! (cddr test) elselabel))
+                             tests))
                  (let ((v2 (if (length> e 3)
                                (compile (cadddr e) break-labels value tail)
                                '(null))))
@@ -4018,7 +4081,7 @@ f(x) = yt(x)
                ;; handler block entry
                (emit `(= ,handler-token (enter ,catch)))
                (set! handler-level (+ handler-level 1))
-               (if finally (begin (set! my-finally-handler (list finally endl '() handler-level))
+               (if finally (begin (set! my-finally-handler (list finally endl '() handler-level catch-token-stack))
                                   (set! finally-handler my-finally-handler)
                                   (emit `(= ,finally -1))))
                (let* ((v1  (compile (cadr e) break-labels value #f)) ;; emit try block code
@@ -4036,11 +4099,12 @@ f(x) = yt(x)
                  (mark-label catch)
                  (emit `(leave 1))
                  (if finally
-                     (begin (leave-finally-block '(call (top rethrow)) #f)
-                            (if endl (mark-label endl))
+                     (begin (enter-finally-block '(call (top rethrow)) #f) ;; enter block via exception
+                            (mark-label endl) ;; non-exceptional control flow enters here
                             (set! finally-handler last-finally-handler)
                             (compile (caddr e) break-labels #f #f)
-                            ;; emit actions to be taken at exit of finally block
+                            ;; emit actions to be taken at exit of finally
+                            ;; block, depending on the tag variable `finally`
                             (let loop ((actions (caddr my-finally-handler)))
                               (if (pair? actions)
                                   (let ((skip (if (and tail (null? (cdr actions))
