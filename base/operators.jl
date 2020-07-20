@@ -925,7 +925,9 @@ struct Fix1{F,T} <: Function
     x::T
 
     Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix1(f::F, x::Type{T}) where {F,T} = new{F,Type{T}}(f, x)
     Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix1(f::Type{F}, x::Type{T}) where {F,T} = new{Type{F},Type{T}}(f, x)
 end
 
 (f::Fix1)(y) = f.f(f.x, y)
@@ -942,7 +944,9 @@ struct Fix2{F,T} <: Function
     x::T
 
     Fix2(f::F, x::T) where {F,T} = new{F,T}(f, x)
+    Fix2(f::F, x::Type{T}) where {F,T} = new{F,Type{T}}(f, x)
     Fix2(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix2(f::Type{F}, x::Type{T}) where {F,T} = new{Type{F},Type{T}}(f, x)
 end
 
 (f::Fix2)(y) = f.f(y, f.x)

@@ -256,3 +256,12 @@ end
     @test isaSymbol isa Fix2{typeof(isa),Type{Symbol}}
     @test is5 isa Fix2{typeof(===),Int}
 end
+
+@testset "Fix1 and Fix2 on types" begin
+    @test Fix1(tuple, Fix1) isa Fix1{typeof(tuple),Type{Fix1}}
+    @test Fix1(Fix1, tuple) isa Fix1{Type{Fix1},typeof(tuple)}
+    @test Fix1(Fix1, Fix1) isa Fix1{Type{Fix1},Type{Fix1}}
+    @test Fix2(tuple, Fix2) isa Fix2{typeof(tuple),Type{Fix2}}
+    @test Fix2(Fix2, tuple) isa Fix2{Type{Fix2},typeof(tuple)}
+    @test Fix2(Fix2, Fix2) isa Fix2{Type{Fix2},Type{Fix2}}
+end
