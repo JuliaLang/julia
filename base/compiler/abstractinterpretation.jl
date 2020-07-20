@@ -64,7 +64,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
             push!(infos, MethodMatchInfo(xapplicable, ambig))
             append!(applicable, xapplicable)
-            thisfullmatch = _any(match->match[4], xapplicable)
+            thisfullmatch = _any(match->(match::MethodMatch).fully_covers, xapplicable)
             found = false
             for (i, mt′) in enumerate(mts)
                 if mt′ === mt
@@ -95,7 +95,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             return CallMeta(Any, false)
         end
         push!(mts, mt)
-        push!(fullmatch, _any(match->match[4], applicable))
+        push!(fullmatch, _any(match->(match::MethodMatch).fully_covers, applicable))
         info = MethodMatchInfo(applicable, ambig)
     end
     update_valid_age!(min_valid[1], max_valid[1], sv)
@@ -109,7 +109,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     istoplevel = sv.linfo.def isa Module
     multiple_matches = napplicable > 1
 
-    if f !== nothing && napplicable == 1 && is_method_pure(applicable[1][3], applicable[1][1], applicable[1][2])
+    if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
         val = pure_eval_call(f, argtypes)
         if val !== false
             return CallMeta(val, info)
@@ -117,9 +117,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     for i in 1:napplicable
-        match = applicable[i]::SimpleVector
-        method = match[3]::Method
-        sig = match[1]
+        match = applicable[i]::MethodMatch
+        method = match.method
+        sig = match.spec_types
         if istoplevel && !isdispatchtuple(sig)
             # only infer concrete call sites in top-level expressions
             add_remark!(interp, sv, "Refusing to infer non-concrete call site in top-level expression")
@@ -143,7 +143,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 this_rt === Any && break
             end
         else
-            this_rt, edgecycle1, edge = abstract_call_method(interp, method, sig, match[2]::SimpleVector, multiple_matches, sv)
+            this_rt, edgecycle1, edge = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
             edgecycle |= edgecycle1::Bool
             if edge !== nothing
                 push!(edges, edge)
@@ -167,7 +167,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
-        const_rettype = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::SimpleVector, sv, edgecycle)
+        const_rettype = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::MethodMatch, sv, edgecycle)
         if const_rettype ⊑ rettype
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
@@ -214,8 +214,8 @@ function const_prop_profitable(@nospecialize(arg))
     return false
 end
 
-function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::SimpleVector, sv::InferenceState, edgecycle::Bool)
-    method = match[3]::Method
+function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch, sv::InferenceState, edgecycle::Bool)
+    method = match.method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
     length(argtypes) >= nargs || return Any
@@ -261,9 +261,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     if istopfunction(f, :getproperty) || istopfunction(f, :setproperty!)
         force_inference = true
     end
-    sig = match[1]
-    sparams = match[2]::SimpleVector
-    mi = specialize_method(method, sig, sparams, !force_inference)
+    mi = specialize_method(match, !force_inference)
     mi === nothing && return Any
     mi = mi::MethodInstance
     # decide if it's likely to be worthwhile
@@ -743,6 +741,7 @@ function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVecto
     end
     return method.pure
 end
+is_method_pure(match::MethodMatch) = is_method_pure(match.method, match.spec_types, match.sparams)
 
 function pure_eval_call(@nospecialize(f), argtypes::Vector{Any})
     for i = 2:length(argtypes)

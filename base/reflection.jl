@@ -893,7 +893,7 @@ function methods(@nospecialize(f), @nospecialize(t),
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
-    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if mod === nothing || m[3].module in mod],
+    MethodList(Method[m.method for m in _methods(f, t, -1, world) if mod === nothing || m.method.module in mod],
                typeof(f).name.mt)
 end
 
@@ -907,7 +907,7 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     has_ambig = Int32[0]
     ms = _methods_by_ftype(tt, -1, world, true, min, max, has_ambig)
     ms === false && return false
-    return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
+    return MethodList(Method[m.method for m in ms], typeof(f).name.mt)
 end
 
 function methods(@nospecialize(f),
@@ -979,9 +979,9 @@ const _uncompressed_ast = _uncompressed_ir
 function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
-    for method_data in _methods_by_ftype(tt, -1, world)
-        mtypes, msp, m = method_data
-        instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), m, mtypes, msp)
+    for match in _methods_by_ftype(tt, -1, world)
+        instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
+            (Any, Any, Any), match.method, match.spec_types, match.sparams)
         push!(results, instance)
     end
     return results
@@ -1142,14 +1142,14 @@ function code_typed_by_type(@nospecialize(tt::Type);
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     tt = to_tuple_type(tt)
-    meths = _methods_by_ftype(tt, -1, world)
-    if meths === false
+    matches = _methods_by_ftype(tt, -1, world)
+    if matches === false
         error("signature does not correspond to a generic function")
     end
     asts = []
-    for x in meths
-        meth = func_for_method_checked(x[3], tt, x[2])
-        (code, ty) = Core.Compiler.typeinf_code(interp, meth, x[1], x[2], optimize)
+    for match in matches
+        meth = func_for_method_checked(match.method, tt, match.sparams)
+        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, optimize)
         code === nothing && error("inference not successful") # inference disabled?
         debuginfo === :none && remove_linenums!(code)
         push!(asts, code => ty)
@@ -1165,9 +1165,9 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.
     types = to_tuple_type(types)
     rt = []
     world = get_world_counter()
-    for x in _methods(f, types, -1, world)
-        meth = func_for_method_checked(x[3], types, x[2])
-        ty = Core.Compiler.typeinf_type(interp, meth, x[1], x[2])
+    for match in _methods(f, types, -1, world)
+        meth = func_for_method_checked(match.method, types, match.sparams)
+        ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
         ty === nothing && error("inference not successful") # inference disabled?
         push!(rt, ty)
     end
@@ -1359,11 +1359,12 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
     if !ambiguous_bottom
         has_bottom_parameter(ti) && return false
     end
-    ml = _methods_by_ftype(ti, -1, typemax(UInt))
-    for m in ml
+    matches = _methods_by_ftype(ti, -1, typemax(UInt))
+    for match in matches
+        m = match.method
         m === m1 && continue
         m === m2 && continue
-        if ti <: m[3].sig && morespecific(m[3].sig, m1.sig) && morespecific(m[3].sig, m2.sig)
+        if ti <: m.sig && morespecific(m.sig, m1.sig) && morespecific(m.sig, m2.sig)
             return false
         end
     end

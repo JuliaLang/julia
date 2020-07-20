@@ -208,3 +208,15 @@ macro get!(h, key0, default)
 end
 
 # END 1.5 deprecations
+
+# BEGIN 1.6 deprecations
+
+# These changed from SimpleVector to `MethodMatch`. These definitions emulate
+# being a SimpleVector to ease transition for packages that make explicit
+# use of (internal) APIs that return raw method matches.
+iterate(match::Core.MethodMatch, field::Int=1) =
+    field > nfields(match) ? nothing : (getfield(match, field), field+1)
+getindex(match::Core.MethodMatch, field::Int) =
+    getfield(match, field)
+
+# END 1.6 deprecations

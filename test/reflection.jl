@@ -629,10 +629,10 @@ let
     x22979 = (1, 2.0, 3.0 + im)
     T22979 = Tuple{typeof(f22979), typeof.(x22979)...}
     world = Core.Compiler.get_world_counter()
-    mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[1]
-    instance = Core.Compiler.specialize_method(m, mtypes, msp)
+    match = Base._methods_by_ftype(T22979, -1, world)[1]
+    instance = Core.Compiler.specialize_method(match)
     cinfo_generated = Core.Compiler.get_staged(instance)
-    @test_throws ErrorException Base.uncompressed_ir(m)
+    @test_throws ErrorException Base.uncompressed_ir(match.method)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
 

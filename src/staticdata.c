@@ -40,7 +40,7 @@ static void *const _tags[] = {
          &jl_module_type, &jl_tvar_type, &jl_method_instance_type, &jl_method_type, &jl_code_instance_type,
          &jl_linenumbernode_type, &jl_lineinfonode_type,
          &jl_gotonode_type, &jl_quotenode_type, &jl_gotoifnot_type, &jl_argument_type, &jl_returnnode_type,
-         &jl_const_type, &jl_partial_struct_type,
+         &jl_const_type, &jl_partial_struct_type, &jl_method_match_type,
          &jl_pinode_type, &jl_phinode_type, &jl_phicnode_type, &jl_upsilonnode_type,
          &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type, &jl_llvmpointer_type,
          &jl_vararg_type, &jl_abstractarray_type,

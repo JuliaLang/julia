@@ -1080,15 +1080,15 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Any}, idx::Int, @nospecia
             continue
         elseif length(meth) == 1 && only_method !== false
             if only_method === nothing
-                only_method = meth[1][3]
-            elseif only_method !== meth[1][3]
+                only_method = meth[1].method
+            elseif only_method !== meth[1].method
                 only_method = false
             end
         else
             only_method = false
         end
         for match in meth::Vector{Any}
-            (metharg, methsp, method) = (match[1]::Type, match[2]::SimpleVector, match[3]::Method)
+            (metharg, methsp, method) = (match.spec_types, match.sparams, match.method)
             signature_union = Union{signature_union, metharg}
             if !isdispatchtuple(metharg)
                 fully_covered = false
@@ -1119,7 +1119,7 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Any}, idx::Int, @nospecia
                 sig.atype, method.sig)::SimpleVector
         else
             @assert length(meth) == 1
-            (metharg, methsp, method) = (meth[1][1]::Type, meth[1][2]::SimpleVector, meth[1][3]::Method)
+            (metharg, methsp, method) = (meth[1].spec_types, meth[1].sparams, meth[1].method)
         end
         fully_covered = true
         case = analyze_method!(idx, sig, metharg, methsp, method,
