@@ -2693,13 +2693,13 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
     // done with many of these values now
     env.match.ti = NULL; env.matc = NULL; env.match.env = NULL; search.env = NULL;
     size_t i, j, len = jl_array_len(env.t);
+    jl_method_match_t *minmax = NULL;
+    int minmax_ambig = 0;
+    int all_subtypes = 1;
     if (len > 1) {
         // first try to pre-process the results to find the most specific result that fully covers the input
         // (since we can do this in linear time, and the rest is O(n^2)
         //   - first see if this might even be profitable, given the requested output we need to compute
-        jl_method_match_t *minmax = NULL;
-        int minmax_ambig = 0;
-        int all_subtypes = 1;
         for (i = 0; i < len; i++) {
             jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
             if (matc->fully_covers != FULLY_COVERS) {
@@ -2764,21 +2764,20 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
             if (all_subtypes) {
                 if (minmax_ambig) {
                     if (!include_ambiguous) {
-                        JL_GC_POP();
-                        return jl_an_empty_vec_any;
+                        len = 0;
+                        env.t = jl_an_empty_vec_any;
                     }
                 }
                 else {
                     assert(minmax != NULL);
                     jl_array_ptr_set(env.t, 0, minmax);
                     jl_array_del_end((jl_array_t*)env.t, len - 1);
-                    JL_GC_POP();
-                    if (lim == 0)
-                        return jl_false;
-                    return env.t;
+                    len = 1;
                 }
             }
         }
+    }
+    if (len > 1) {
         // need to partially domsort the graph now into a list
         // (this is an insertion sort attempt)
         // if we have a minmax method, we ignore anything less specific
