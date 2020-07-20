@@ -338,15 +338,19 @@ function datatype_alignment(dt::DataType)
     return Int(alignment)
 end
 
+function uniontype_layout(T::Type)
+    sz = RefValue{Csize_t}(0)
+    algn = RefValue{Csize_t}(0)
+    isinline = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn) != 0
+    (isinline, sz[], algn[])
+end
+
 # amount of total space taken by T when stored in a container
 function aligned_sizeof(T)
     @_pure_meta
     if isbitsunion(T)
-        sz = Ref{Csize_t}(0)
-        algn = Ref{Csize_t}(0)
-        ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn)
-        al = algn[]
-        return (sz[] + al - 1) & -al
+        _, sz, al = uniontype_layout(T)
+        return (sz + al - 1) & -al
     elseif allocatedinline(T)
         al = datatype_alignment(T)
         return (Core.sizeof(T) + al - 1) & -al
@@ -371,6 +375,19 @@ function datatype_haspadding(dt::DataType)
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return flags & 1 == 1
 end
+
+"""
+    Base.datatype_nfields(dt::DataType) -> Bool
+
+Return the number of fields known to this datatype's layout.
+Can be called on any `isconcretetype`.
+"""
+function datatype_nfields(dt::DataType)
+    @_pure_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
+end
+
 
 """
     Base.datatype_pointerfree(dt::DataType) -> Bool
