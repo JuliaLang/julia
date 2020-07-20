@@ -967,19 +967,32 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
             jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, arg1, args, n, offs+1, world);
             if (ml) return ml;
         }
-        if (jl_is_kind(ty) && cache->tname != (jl_array_t*)jl_an_empty_vec_any) {
+        jl_array_t *tname = cache->tname;
+        if (jl_is_kind(ty) && tname != (jl_array_t*)jl_an_empty_vec_any) {
             jl_value_t *name = jl_type_extract_name(a1);
             if (name) {
                 if (ty != (jl_value_t*)jl_datatype_type)
                     a1 = jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
                 while (1) {
                     jl_typemap_t *ml_or_cache = mtcache_hash_lookup(
-                            cache->tname, (jl_value_t*)((jl_datatype_t*)a1)->name);
+                            tname, (jl_value_t*)((jl_datatype_t*)a1)->name);
                     jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, arg1, args, n, offs+1, world);
                     if (ml) return ml;
                     if (a1 == (jl_value_t*)jl_any_type)
                         break;
                     a1 = (jl_value_t*)((jl_datatype_t*)a1)->super;
+                }
+            }
+            else {
+                // couldn't figure out unique `name` initial point, so must scan all for matches
+                size_t i, l = jl_array_len(tname);
+                jl_typemap_t **data = (jl_typemap_t **)jl_array_ptr_data(tname);
+                for (i = 1; i < l; i += 2) {
+                    jl_typemap_t *ml_or_cache = data[i];
+                    if (ml_or_cache == NULL || ml_or_cache == jl_nothing)
+                        continue;
+                    jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, arg1, args, n, offs + 1, world);
+                    if (ml) return ml;
                 }
             }
         }
