@@ -364,7 +364,11 @@ JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 
 JL_CALLABLE(jl_f_is)
 {
-    JL_NARGS(===, 2, 2);
+    JL_NARGS(===, 1, 2);
+    if (nargs == 1) {
+        jl_function_t *fix2 = jl_get_function(jl_base_module, "Fix2");
+        return jl_call2(fix2, jl_builtin_is, args[0]);
+    }
     if (args[0] == args[1])
         return jl_true;
     return jl_egal(args[0], args[1]) ? jl_true : jl_false;
@@ -429,7 +433,11 @@ JL_CALLABLE(jl_f_issubtype)
 
 JL_CALLABLE(jl_f_isa)
 {
-    JL_NARGS(isa, 2, 2);
+    JL_NARGS(isa, 1, 2);
+    if (nargs == 1) {
+        jl_function_t *fix2 = jl_get_function(jl_base_module, "Fix2");
+        return jl_call2(fix2, jl_builtin_isa, args[0]);
+    }
     JL_TYPECHK(isa, type, args[1]);
     return (jl_isa(args[0],args[1]) ? jl_true : jl_false);
 }

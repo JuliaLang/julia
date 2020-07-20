@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base: Fix1, Fix2
 using Random: randstring
 
 @testset "ifelse" begin
@@ -242,4 +243,16 @@ end
     @test lte5(5) && lte5(4)
     @test gt5(6) && !gt5(5)
     @test lt5(4) && !lt5(5)
+end
+
+@testset "curried comparisons (builtins)" begin
+    isaSymbol = isa(Symbol)
+    is5 = (===)(5)
+
+    @test isaSymbol(:yes) && !isaSymbol("no")
+    @test is5(5) && !is5(5.0)
+
+    # Make sure they are dispatchable:
+    @test isaSymbol isa Fix2{typeof(isa),Type{Symbol}}
+    @test is5 isa Fix2{typeof(===),Int}
 end
