@@ -1662,7 +1662,7 @@ function conj!(A::AbstractSparseMatrixCSC)
     return A
 end
 function (-)(A::AbstractSparseMatrixCSC)
-    nzval = similar(nonzeros(A))
+    nzval = similar(nonzeros(A), typeof(-zero(eltype(A))))
     map!(-, view(nzval, 1:nnz(A)), nzvalview(A))
     return SparseMatrixCSC(size(A, 1), size(A, 2), copy(getcolptr(A)), copy(rowvals(A)), nzval)
 end
