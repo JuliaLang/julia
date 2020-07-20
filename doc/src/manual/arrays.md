@@ -226,7 +226,7 @@ Comprehensions provide a general and powerful way to construct arrays. Comprehen
 similar to set construction notation in mathematics:
 
 ```
-A = [ F(x,y,...) for x=rx, y=ry, ... ]
+A = [ F(x,y,...) for x=rx y=ry ... ]
 ```
 
 The meaning of this form is that `F(x,y,...)` is evaluated with the variables `x`, `y`, etc. taking
