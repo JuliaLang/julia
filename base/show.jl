@@ -211,6 +211,35 @@ end
 # The default representation in latex code is just the same as plain
 show(io::IO, ::MIME"text/latex", x::Any) = show(io, MIME"text/plain"(), x)
 
+function show(io::IO,mime::MIME"text/latex",x::Rational)
+    print(io,"\\frac{")
+    show(io,mime,x.num)
+    print(io,"}{")
+    show(io,mime,x.den)
+    print(io,"}")
+end
+
+function show(io::IO, mime::MIME"text/latex", z::Complex)
+    # complex numbers are displayed with "i" instead of "im" in latex, and with "\cdot" instead of "*"
+    r,i = reim(z)
+    show(io, mime, r)
+    if signbit(i) && !isnan(i)
+        print(io, " - ")
+        if isa(i,Signed) && !isa(i,BigInt) && i == typemin(typeof(i))
+            show(io, mime, -widen(i))
+        else
+            show(io, mime, -i)
+        end
+    else
+        print(io, " + ")
+        show(io, mime, i)
+    end
+    if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
+        print(io, " \\cdot ")
+    end
+    print(io, "i")
+end
+
 print(io::IO, s::Symbol) = (write(io,s); nothing)
 
 """
