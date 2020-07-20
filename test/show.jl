@@ -1994,3 +1994,17 @@ end
     @test contains(string(methods(foo)), "foo(α)")
     @test contains(string(methods(bar)), "bar(ℓ)")
 end
+
+struct OffsetMatrix{T} <: AbstractMatrix{T}
+    val::T
+    axes
+end
+Base.size(::OffsetMatrix) = (1, 1)
+Base.axes(m::OffsetMatrix) = m.axes
+Base.getindex(m::OffsetMatrix, i::Int, j::Int) = m.val
+
+@testset "show single-entry matrix (#36732)" begin
+    @test sprint(show, fill(42, 1, 1), context=:compact=>true) == "fill(42, 1, 1)"
+    m = OffsetMatrix(9.8, (3:3, 7:7))
+    @test sprint(show, m, context=:compact=>true) == "fill(9.8, 3:3, 7:7)"
+end

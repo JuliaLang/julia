@@ -433,6 +433,23 @@ _show_empty(io, X::AbstractArray) = summary(io, X)
 function show(io::IO, X::AbstractArray)
     ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
+    # [x] parses as a vector, so we need to special-case 1x1 matrices
+    if ndims(X) == 2 && length(X) == 1
+        print(io, "fill(")
+        show(io, only(X))
+        ax = axes(X)
+        if all(a -> a isa OneTo, ax)
+            print(io, ", 1, 1)")
+        else
+            print(io, ", ")
+            show(io, ax[1])
+            print(io, ", ")
+            show(io, ax[2])
+            print(io, ")")
+        end
+        return
+    end
+
     prefix, implicit = typeinfo_prefix(io, X)
     if !implicit
         io = IOContext(io, :typeinfo => eltype(X))
