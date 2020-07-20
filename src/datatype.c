@@ -49,12 +49,13 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     mt->name = jl_demangle_typename(name);
     mt->module = module;
     mt->defs = jl_nothing;
+    mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
     mt->cache = jl_nothing;
     mt->max_args = 0;
     mt->kwsorter = NULL;
     mt->backedges = NULL;
     JL_MUTEX_INIT(&mt->writelock);
-    mt->offs = 1;
+    mt->offs = 0;
     mt->frozen = 0;
     return mt;
 }
@@ -73,6 +74,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->mt = NULL;
+    tn->partial = NULL;
     return tn;
 }
 
@@ -87,14 +89,18 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ptls, sizeof(jl_datatype_t), jl_datatype_type);
+    t->hash = 0;
     t->hasfreetypevars = 0;
     t->isdispatchtuple = 0;
     t->isbitstype = 0;
     t->zeroinit = 0;
     t->isinlinealloc = 0;
     t->has_concrete_subtype = 1;
+    t->cached_by_hash = 0;
     t->layout = NULL;
     t->names = NULL;
+    t->types = NULL;
+    t->instance = NULL;
     return t;
 }
 
@@ -212,7 +218,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 {
     return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_symbol_type && d->name != jl_array_typename &&
-            d->uid != 0 && !d->mutabl);
+            d->isconcretetype && !d->mutabl);
 }
 
 STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
@@ -278,25 +284,25 @@ int jl_pointer_egal(jl_value_t *t)
     return 0;
 }
 
-static int references_name(jl_value_t *p, jl_typename_t *name) JL_NOTSAFEPOINT
+static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(p))
-        return references_name(((jl_uniontype_t*)p)->a, name) ||
-               references_name(((jl_uniontype_t*)p)->b, name);
+        return references_name(((jl_uniontype_t*)p)->a, name, affects_layout) ||
+               references_name(((jl_uniontype_t*)p)->b, name, affects_layout);
     if (jl_is_unionall(p))
-        return references_name((jl_value_t*)((jl_unionall_t*)p)->var, name) ||
-               references_name(((jl_unionall_t*)p)->body, name);
+        return references_name((jl_value_t*)((jl_unionall_t*)p)->var, name, 0) ||
+               references_name(((jl_unionall_t*)p)->body, name, affects_layout);
     if (jl_is_typevar(p))
-        return references_name(((jl_tvar_t*)p)->ub, name) ||
-               references_name(((jl_tvar_t*)p)->lb, name);
+        return references_name(((jl_tvar_t*)p)->ub, name, 0) ||
+               references_name(((jl_tvar_t*)p)->lb, name, 0);
     if (jl_is_datatype(p)) {
-        if (((jl_datatype_t*)p)->name == name)
+        jl_datatype_t *dp = (jl_datatype_t*)p;
+        if (affects_layout && dp->name == name)
             return 1;
-        if (((jl_datatype_t*)p)->layout && jl_datatype_nfields(p) == 0)
-            return 0;
+        affects_layout = dp->types == NULL || jl_svec_len(dp->types) != 0;
         size_t i, l = jl_nparams(p);
         for (i = 0; i < l; i++) {
-            if (references_name(jl_tparam(p, i), name))
+            if (references_name(jl_tparam(p, i), name, affects_layout))
                 return 1;
         }
     }
@@ -315,7 +321,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     const uint64_t max_offset = (((uint64_t)1) << 32) - 1;
     const uint64_t max_size = max_offset >> 1;
 
-    if (st->types == NULL || st->name->wrapper == NULL || (jl_is_namedtuple_type(st) && !jl_is_concrete_type((jl_value_t*)st)))
+    if (st->types == NULL || st->name->wrapper == NULL)
+        return;
+    if ((jl_is_tuple_type(st) || jl_is_namedtuple_type(st)) && !jl_is_concrete_type((jl_value_t*)st))
         return;
     jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
     if (w->types == NULL) // we got called too early--we'll be back
@@ -387,7 +395,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         size_t i, nf = jl_svec_len(w->types);
         for (i = 0; i < nf; i++) {
             jl_value_t *fld = jl_svecref(w->types, i);
-            if (references_name(fld, w->name)) {
+            if (references_name(fld, w->name, 1)) {
                 isinlinealloc = 0;
                 isbitstype = 0;
                 break;
@@ -503,11 +511,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     // now finish deciding if this instantiation qualifies for special properties
     assert(!isbitstype || st->layout->npointers == 0); // the definition of isbits
     if (isinlinealloc && st->layout->npointers > 0) {
-        //if (st->ninitialized != nfields)
-        //    isinlinealloc = 0;
-        //else if (st->layout->fielddesc_type != 0) // GC only implements support for this
-        //    isinlinealloc = 0;
-        isinlinealloc = 0;
+        if (st->ninitialized != nfields)
+            isinlinealloc = 0;
+        else if (st->layout->fielddesc_type != 0) // GC only implements support for this
+            isinlinealloc = 0;
     }
     st->isbitstype = isbitstype;
     st->isinlinealloc = isinlinealloc;
@@ -517,10 +524,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
 static int is_anonfn_typename(char *name)
 {
-    if (name[0] != '#')
+    if (name[0] != '#' || name[1] == '#')
         return 0;
     char *other = strrchr(name, '#');
-    return (name[1] != '#' && other > &name[1] && is10digit(other[1]));
+    return other > &name[1] && is10digit(other[1]);
 }
 
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
@@ -550,9 +557,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     t->abstract = abstract;
     t->mutabl = mutabl;
     t->ninitialized = ninitialized;
-    t->instance = NULL;
-    t->struct_decl = NULL;
-    t->ditype = NULL;
     t->size = 0;
 
     t->name = NULL;
@@ -567,8 +571,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
             // as an optimization
             tn->mt = jl_new_method_table(name, module);
             jl_gc_wb(tn, tn->mt);
-            if (jl_svec_len(parameters) > 0)
-                tn->mt->offs = 0;
+            if (jl_svec_len(parameters) == 0 && !abstract)
+                tn->mt->offs = 1;
         }
         else {
             // Everything else, gets to use the unified table
@@ -583,21 +587,17 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     if (t->name->wrapper == NULL) {
         t->name->wrapper = (jl_value_t*)t;
         jl_gc_wb(t->name, t);
-        int i;
-        int np = jl_svec_len(parameters);
-        for (i=np-1; i >= 0; i--) {
-            t->name->wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters,i), t->name->wrapper);
+        int i, np = jl_svec_len(parameters);
+        for (i = np - 1; i >= 0; i--) {
+            t->name->wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), t->name->wrapper);
             jl_gc_wb(t->name, t->name->wrapper);
         }
     }
-    jl_precompute_memoized_dt(t);
+    jl_precompute_memoized_dt(t, 0);
 
-    t->uid = 0;
-    if (!abstract) {
-        if (jl_svec_len(parameters) == 0)
-            t->uid = jl_assign_type_uid();
+    if (!abstract)
         jl_compute_field_offsets(t);
-    }
+
     JL_GC_POP();
     return t;
 }
@@ -746,6 +746,7 @@ UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 UNBOX_FUNC(voidpointer, void*)
+UNBOX_FUNC(uint8pointer, uint8_t*)
 
 #define BOX_FUNC(typ,c_type,pfx,nw)                             \
     JL_DLLEXPORT jl_value_t *pfx##_##typ(c_type x)              \
@@ -758,6 +759,7 @@ UNBOX_FUNC(voidpointer, void*)
     }
 BOX_FUNC(float32, float,  jl_box, 1)
 BOX_FUNC(voidpointer, void*,  jl_box, 1)
+BOX_FUNC(uint8pointer, uint8_t*,  jl_box, 1)
 #ifdef _P64
 BOX_FUNC(float64, double, jl_box, 1)
 #else
@@ -890,19 +892,10 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 
 static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na)
 {
-    size_t nf = jl_datatype_nfields(type);
-    char *data = (char*)jl_data_ptr(jv);
-    for (size_t i = na; i < nf; i++) {
-        if (jl_field_isptr(type, i)) {
-            *(jl_value_t**)(data + jl_field_offset(type, i)) = NULL;
-        }
-        else {
-            jl_value_t *ft = jl_field_type(type, i);
-            if (jl_is_uniontype(ft)) {
-                uint8_t *psel = &((uint8_t *)data)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
-                *psel = 0;
-            }
-        }
+    if (na < jl_datatype_nfields(type)) {
+        char *data = (char*)jl_data_ptr(jv);
+        size_t offs = jl_field_offset(type, na);
+        memset(data + offs, 0, jl_datatype_size(type) - offs);
     }
 }
 
@@ -913,20 +906,16 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     if (type->ninitialized > na || na > jl_datatype_nfields(type))
         jl_error("invalid struct allocation");
-    if (type->instance != NULL) {
-        for (size_t i = 0; i < na; i++) {
-            jl_value_t *ft = jl_field_type(type, i);
-            if (!jl_isa(args[i], ft))
-                jl_type_error("new", ft, args[i]);
-        }
-        return type->instance;
-    }
-    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
-    JL_GC_PUSH1(&jv);
     for (size_t i = 0; i < na; i++) {
         jl_value_t *ft = jl_field_type(type, i);
         if (!jl_isa(args[i], ft))
             jl_type_error("new", ft, args[i]);
+    }
+    if (type->instance != NULL)
+        return type->instance;
+    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
+    JL_GC_PUSH1(&jv);
+    for (size_t i = 0; i < na; i++) {
         set_nth_field(type, (void*)jv, i, args[i]);
     }
     init_struct_tail(type, jv, na);
@@ -958,6 +947,12 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
     jl_value_t *fi = NULL;
     JL_GC_PUSH2(&jv, &fi);
+    if (type->layout->npointers > 0) {
+        // if there are references, zero the space first to prevent the GC
+        // from seeing uninitialized references during jl_get_nth_field and jl_isa,
+        // which can allocate.
+        memset(jl_data_ptr(jv), 0, jl_datatype_size(type));
+    }
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *ft = jl_field_type(type, i);
         fi = jl_get_nth_field(tup, i);
@@ -1018,7 +1013,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     assert(i < jl_datatype_nfields(st));
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
-        return *(jl_value_t**)((char*)v + offs);
+        return jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
     }
     jl_value_t *ty = jl_field_type(st, i);
     if (jl_is_uniontype(ty)) {
@@ -1036,7 +1031,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_RO
     assert(i < jl_datatype_nfields(st));
     size_t offs = jl_field_offset(st,i);
     assert(jl_field_isptr(st,i));
-    return *(jl_value_t**)((char*)v + offs);
+    return jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
@@ -1046,7 +1041,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
         jl_bounds_error_int(v, i + 1);
     size_t offs = jl_field_offset(st, i);
     if (jl_field_isptr(st, i)) {
-        jl_value_t *fval = *(jl_value_t**)((char*)v + offs);
+        jl_value_t *fval = jl_atomic_load_relaxed((jl_value_t**)((char*)v + offs));
         if (__unlikely(fval == NULL))
             jl_throw(jl_undefref_exception);
         return fval;
@@ -1065,10 +1060,13 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 void set_nth_field(jl_datatype_t *st, void *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
     size_t offs = jl_field_offset(st, i);
+    if (rhs == NULL) { // TODO: this should be invalid, but it happens frequently in ircode.c
+        assert(jl_field_isptr(st, i) && *(jl_value_t**)((char*)v + offs) == NULL);
+        return;
+    }
     if (jl_field_isptr(st, i)) {
-        *(jl_value_t**)((char*)v + offs) = rhs;
-        if (rhs != NULL)
-            jl_gc_wb(v, rhs);
+        jl_atomic_store_relaxed((jl_value_t**)((char*)v + offs), rhs);
+        jl_gc_wb(v, rhs);
     }
     else {
         jl_value_t *ty = jl_field_type_concrete(st, i);
@@ -1092,7 +1090,8 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
     size_t offs = jl_field_offset(st, i);
     char *fld = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
-        return *(jl_value_t**)fld != NULL;
+        jl_value_t *fval = jl_atomic_load_relaxed((jl_value_t**)fld);
+        return fval != NULL;
     }
     jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(st, i);
     if (jl_is_datatype(ft) && ft->layout->first_ptr >= 0) {

@@ -52,15 +52,15 @@ remove stored zeros from the sparse matrix.
 ```jldoctest
 julia> A = sparse([1, 1, 2, 3], [1, 3, 2, 3], [0, 1, 2, 0])
 3×3 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1, 1]  =  0
-  [2, 2]  =  2
-  [1, 3]  =  1
-  [3, 3]  =  0
+ 0  ⋅  1
+ ⋅  2  ⋅
+ ⋅  ⋅  0
 
 julia> dropzeros(A)
 3×3 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
-  [2, 2]  =  2
-  [1, 3]  =  1
+ ⋅  ⋅  1
+ ⋅  2  ⋅
+ ⋅  ⋅  ⋅
 ```
 
 ## Sparse Vector Storage
@@ -106,10 +106,8 @@ julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
 5×18 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
-  [1,  4]  =  1
-  [4,  7]  =  2
-  [5,  9]  =  3
-  [3, 18]  =  -5
+⠀⠈⠀⡀⠀⠀⠀⠀⠠
+⠀⠀⠀⠀⠁⠀⠀⠀⠀
 
 julia> R = sparsevec(I,V)
 5-element SparseVector{Int64,Int64} with 4 stored entries:
@@ -129,7 +127,7 @@ julia> findnz(S)
 ([1, 4, 5, 3], [4, 7, 9, 18], [1, 2, 3, -5])
 
 julia> findall(!iszero, S)
-4-element Array{CartesianIndex{2},1}:
+4-element Vector{CartesianIndex{2}}:
  CartesianIndex(1, 4)
  CartesianIndex(4, 7)
  CartesianIndex(5, 9)
@@ -139,7 +137,7 @@ julia> findnz(R)
 ([1, 3, 4, 5], [1, -5, 2, 3])
 
 julia> findall(!iszero, R)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  3
  4
@@ -152,11 +150,11 @@ the [`sparse`](@ref) function:
 ```jldoctest
 julia> sparse(Matrix(1.0I, 5, 5))
 5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
-  [4, 4]  =  1.0
-  [5, 5]  =  1.0
+ 1.0   ⋅    ⋅    ⋅    ⋅
+  ⋅   1.0   ⋅    ⋅    ⋅
+  ⋅    ⋅   1.0   ⋅    ⋅
+  ⋅    ⋅    ⋅   1.0   ⋅
+  ⋅    ⋅    ⋅    ⋅   1.0
 
 julia> sparse([1.0, 0.0, 1.0])
 3-element SparseVector{Float64,Int64} with 2 stored entries:
@@ -196,7 +194,7 @@ section of the standard library reference.
 |:-------------------------- |:---------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`spzeros(m,n)`](@ref)     | [`zeros(m,n)`](@ref)   | Creates a *m*-by-*n* matrix of zeros. ([`spzeros(m,n)`](@ref) is empty.)                                                                                              |
 | [`sparse(I, n, n)`](@ref)  | [`Matrix(I,n,n)`](@ref)| Creates a *n*-by-*n* identity matrix.                                                                                                                                 |
-| [`Array(S)`](@ref)         | [`sparse(A)`](@ref)    | Interconverts between dense and sparse formats.                                                                                                                       |
+| [`sparse(A)`](@ref)        | [`Array(S)`](@ref)   | Interconverts between dense and sparse formats.                                                                                                                       |
 | [`sprand(m,n,d)`](@ref)    | [`rand(m,n)`](@ref)    | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed uniformly on the half-open interval ``[0, 1)``.                            |
 | [`sprandn(m,n,d)`](@ref)   | [`randn(m,n)`](@ref)   | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the standard normal (Gaussian) distribution.                  |
 | [`sprandn(rng,m,n,d)`](@ref) | [`randn(rng,m,n)`](@ref) | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements generated with the `rng` random number generator                                   |

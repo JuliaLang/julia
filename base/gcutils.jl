@@ -25,6 +25,21 @@ finalizer(my_mutable_struct) do x
     ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Finalizing %s.", repr(x))
 end
 ```
+
+A finalizer may be registered at object construction. In the following example note that
+we implicitly rely on the finalizer returning the newly created mutable struct `x`.
+
+# Example
+```julia
+mutable struct MyMutableStruct
+    bar
+    function MyMutableStruct(bar)
+        x = new(bar)
+        f(t) = @async println("Finalizing \$t.")
+        finalizer(f, x)
+    end
+end
+```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     if !ismutable(o)
@@ -94,11 +109,50 @@ enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 """
     GC.@preserve x1 x2 ... xn expr
 
-Temporarily protect the given objects from being garbage collected, even if they would
-otherwise be unreferenced.
+Mark the objects `x1, x2, ...` as being *in use* during the evaluation of the
+expression `expr`. This is only required in unsafe code where `expr`
+*implicitly uses* memory or other resources owned by one of the `x`s.
 
-The last argument is the expression during which the object(s) will be preserved.
-The previous arguments are the objects to preserve.
+*Implicit use* of `x` covers any indirect use of resources logically owned by
+`x` which the compiler cannot see. Some examples:
+* Accessing memory of an object directly via a `Ptr`
+* Passing a pointer to `x` to `ccall`
+* Using resources of `x` which would be cleaned up in the finalizer.
+
+`@preserve` should generally not have any performance impact in typical use
+cases where it briefly extends object lifetime. In implementation, `@preserve`
+has effects such as protecting dynamically allocated objects from garbage
+collection.
+
+# Examples
+
+When loading from a pointer with `unsafe_load`, the underlying object is
+implicitly used, for example `x` is implicitly used by `unsafe_load(p)` in the
+following:
+
+```jldoctest
+julia> let
+           x = Ref{Int}(101)
+           p = Base.unsafe_convert(Ptr{Int}, x)
+           GC.@preserve x unsafe_load(p)
+       end
+101
+```
+
+When passing pointers to `ccall`, the pointed-to object is implicitly used and
+should be preserved. (Note however that you should normally just pass `x`
+directly to `ccall` which counts as an explicit use.)
+
+```jldoctest
+julia> let
+           x = "Hello"
+           p = pointer(x)
+           GC.@preserve x @ccall strlen(p::Cstring)::Cint
+           # Preferred alternative
+           @ccall strlen(x::Cstring)::Cint
+       end
+5
+```
 """
 macro preserve(args...)
     syms = args[1:end-1]

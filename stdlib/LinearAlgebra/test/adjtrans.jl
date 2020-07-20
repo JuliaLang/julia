@@ -271,7 +271,7 @@ end
 
 @testset "Adjoint and Transpose vector vec methods" begin
     intvec = [1, 2]
-    @test vec(Adjoint(intvec)) == intvec
+    @test vec(Adjoint(intvec)) === intvec
     @test vec(Transpose(intvec)) === intvec
     cvec = [1 + 1im]
     @test vec(cvec')[1] == cvec[1]'
@@ -380,8 +380,8 @@ end
     # TODO tighten type asserts once pinv yields Transpose/Adjoint
     @test pinv(Adjoint(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
     @test pinv(Transpose(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
-    @test pinv(Adjoint(complexvec))::Vector{Complex{Float64}} ≈ pinv(conj(rowcomplexvec))
-    @test pinv(Transpose(complexvec))::Vector{Complex{Float64}} ≈ pinv(rowcomplexvec)
+    @test pinv(Adjoint(complexvec))::Vector{ComplexF64} ≈ pinv(conj(rowcomplexvec))
+    @test pinv(Transpose(complexvec))::Vector{ComplexF64} ≈ pinv(rowcomplexvec)
 end
 
 @testset "Adjoint/Transpose-wrapped vector left-division" begin
@@ -481,6 +481,31 @@ end
                   "$t of "*sprint(show, parent(Fop))
     @test "LinearAlgebra."*sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
                   "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
+end
+
+@testset "strided transposes" begin
+    for t in (Adjoint, Transpose)
+        @test strides(t(rand(3))) == (3, 1)
+        @test strides(t(rand(3,2))) == (3, 1)
+        @test strides(t(view(rand(3, 2), :))) == (6, 1)
+        @test strides(t(view(rand(3, 2), :, 1:2))) == (3, 1)
+
+        A = rand(3)
+        @test pointer(t(A)) === pointer(A)
+        B = rand(3,1)
+        @test pointer(t(B)) === pointer(B)
+    end
+    @test_throws MethodError strides(Adjoint(rand(3) .+ rand(3).*im))
+    @test_throws MethodError strides(Adjoint(rand(3, 2) .+ rand(3, 2).*im))
+    @test strides(Transpose(rand(3) .+ rand(3).*im)) == (3, 1)
+    @test strides(Transpose(rand(3, 2) .+ rand(3, 2).*im)) == (3, 1)
+
+    C = rand(3) .+ rand(3).*im
+    @test_throws ErrorException pointer(Adjoint(C))
+    @test pointer(Transpose(C)) === pointer(C)
+    D = rand(3,2) .+ rand(3,2).*im
+    @test_throws ErrorException pointer(Adjoint(D))
+    @test pointer(Transpose(D)) === pointer(D)
 end
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")

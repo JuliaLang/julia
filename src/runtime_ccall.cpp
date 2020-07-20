@@ -3,7 +3,7 @@
 #include "llvm-version.h"
 #include <map>
 #include <string>
-#include <cstdio>
+#include <llvm/ADT/StringMap.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -128,7 +128,7 @@ extern "C" int jl_getpid();
 std::string jl_format_filename(StringRef output_pattern)
 {
     std::string buf;
-    llvm::raw_string_ostream outfile(buf);
+    raw_string_ostream outfile(buf);
     bool special = false;
     char hostname[MAXHOSTNAMELEN + 1];
     uv_passwd_t pwd;

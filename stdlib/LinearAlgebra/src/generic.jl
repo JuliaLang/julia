@@ -68,7 +68,7 @@ julia> _add = MulAddMul(1, 0);
 julia> _modify!(_add, 123, C, 1)
 
 julia> C
-1-element Array{BigFloat,1}:
+1-element Vector{BigFloat}:
  123.0
 ```
 """
@@ -144,17 +144,17 @@ multiplication involving non-finite numbers such as `NaN` and `±Inf`.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rmul!(A, 2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  6  8
 
 julia> rmul!([NaN], 0.0)
-1-element Array{Float64,1}:
+1-element Vector{Float64}:
  NaN
 ```
 """
@@ -182,17 +182,17 @@ multiplication involving non-finite numbers such as `NaN` and `±Inf`.
 # Examples
 ```jldoctest
 julia> B = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> lmul!(2, B)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  6  8
 
 julia> lmul!(0.0, [Inf])
-1-element Array{Float64,1}:
+1-element Vector{Float64}:
  NaN
 ```
 """
@@ -212,12 +212,12 @@ in-place.  Use [`ldiv!`](@ref) to divide scalar from left.
 # Examples
 ```jldoctest
 julia> A = [1.0 2.0; 3.0 4.0]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> rdiv!(A, 2.0)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.5  1.0
  1.5  2.0
 ```
@@ -238,12 +238,12 @@ in-place.  Use [`rdiv!`](@ref) to divide scalar from right.
 # Examples
 ```jldoctest
 julia> B = [1.0 2.0; 3.0 4.0]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> ldiv!(2.0, B)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.5  1.0
  1.5  2.0
 ```
@@ -269,19 +269,19 @@ Compute the cross product of two 3-vectors.
 # Examples
 ```jldoctest
 julia> a = [0;1;0]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  0
  1
  0
 
 julia> b = [0;0;1]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  0
  0
  1
 
 julia> cross(a,b)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  0
  0
@@ -304,14 +304,14 @@ Upper triangle of a matrix.
 # Examples
 ```jldoctest
 julia> a = fill(1.0, (4,4))
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
 
 julia> triu(a)
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  0.0  1.0  1.0  1.0
  0.0  0.0  1.0  1.0
@@ -328,14 +328,14 @@ Lower triangle of a matrix.
 # Examples
 ```jldoctest
 julia> a = fill(1.0, (4,4))
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
 
 julia> tril(a)
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
  1.0  1.0  0.0  0.0
  1.0  1.0  1.0  0.0
@@ -352,21 +352,21 @@ Returns the upper triangle of `M` starting from the `k`th superdiagonal.
 # Examples
 ```jldoctest
 julia> a = fill(1.0, (4,4))
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
 
 julia> triu(a,3)
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  0.0  0.0  0.0  1.0
  0.0  0.0  0.0  0.0
  0.0  0.0  0.0  0.0
  0.0  0.0  0.0  0.0
 
 julia> triu(a,-3)
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
@@ -383,21 +383,21 @@ Returns the lower triangle of `M` starting from the `k`th superdiagonal.
 # Examples
 ```jldoctest
 julia> a = fill(1.0, (4,4))
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
 
 julia> tril(a,3)
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
  1.0  1.0  1.0  1.0
 
 julia> tril(a,-3)
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  0.0  0.0  0.0  0.0
  0.0  0.0  0.0  0.0
  0.0  0.0  0.0  0.0
@@ -568,7 +568,7 @@ Use [`opnorm`](@ref) to compute the operator norm of a matrix.
 # Examples
 ```jldoctest
 julia> v = [3, -2, 6]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   3
  -2
   6
@@ -731,7 +731,7 @@ When `p=Inf`, the operator norm is the maximum absolute row sum of `A`:
 # Examples
 ```jldoctest
 julia> A = [1 -2 -3; 2 3 -1]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  -2  -3
  2   3  -1
 
@@ -996,7 +996,7 @@ Matrix trace. Sums the diagonal elements of `M`.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
@@ -1026,12 +1026,12 @@ Computed by solving the left-division
 # Examples
 ```jldoctest
 julia> M = [2 5; 1 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  5
  1  3
 
 julia> N = inv(M)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   3.0  -5.0
  -1.0   2.0
 
@@ -1091,7 +1091,7 @@ procedure can fail even for invertible matrices.
 julia> A = [1 0; 1 -2]; B = [32; -4];
 
 julia> X = A \\ B
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  32.0
  18.0
 
@@ -1164,7 +1164,7 @@ Test whether a matrix is symmetric.
 # Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   2
  2  -1
 
@@ -1172,7 +1172,7 @@ julia> issymmetric(a)
 true
 
 julia> b = [1 im; -im 1]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+0im  0+1im
  0-1im  1+0im
 
@@ -1203,7 +1203,7 @@ Test whether a matrix is Hermitian.
 # Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   2
  2  -1
 
@@ -1211,7 +1211,7 @@ julia> ishermitian(a)
 true
 
 julia> b = [1 im; -im 1]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+0im  0+1im
  0-1im  1+0im
 
@@ -1242,7 +1242,7 @@ Test whether `A` is upper triangular starting from the `k`th superdiagonal.
 # Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   2
  2  -1
 
@@ -1253,7 +1253,7 @@ julia> istriu(a, -1)
 true
 
 julia> b = [1 im; 0 -1]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+0im   0+1im
  0+0im  -1+0im
 
@@ -1284,7 +1284,7 @@ Test whether `A` is lower triangular starting from the `k`th superdiagonal.
 # Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   2
  2  -1
 
@@ -1295,7 +1295,7 @@ julia> istril(a, 1)
 true
 
 julia> b = [1 0; -im -1]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+0im   0+0im
  0-1im  -1+0im
 
@@ -1327,7 +1327,7 @@ and upper bandwidth extending through the `ku`th superdiagonal.
 # Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   2
  2  -1
 
@@ -1338,7 +1338,7 @@ julia> LinearAlgebra.isbanded(a, -1, 1)
 true
 
 julia> b = [1 0; -im -1] # lower bidiagonal
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+0im   0+0im
  0-1im  -1+0im
 
@@ -1359,7 +1359,7 @@ Test whether a matrix is diagonal.
 # Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   2
  2  -1
 
@@ -1367,7 +1367,7 @@ julia> isdiag(a)
 false
 
 julia> b = [im 0; 0 -im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+1im  0+0im
  0+0im  0-1im
 
@@ -1416,6 +1416,51 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     y
 end
 
+"""
+    rotate!(x, y, c, s)
+
+Overwrite `x` with `c*x + s*y` and `y` with `-conj(s)*x + c*y`.
+Returns `x` and `y`.
+
+!!! compat "Julia 1.5"
+    `rotate!` requires at least Julia 1.5.
+"""
+function rotate!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    @inbounds for i = 1:n
+        xi, yi = x[i], y[i]
+        x[i] =       c *xi + s*yi
+        y[i] = -conj(s)*xi + c*yi
+    end
+    return x, y
+end
+
+"""
+    reflect!(x, y, c, s)
+
+Overwrite `x` with `c*x + s*y` and `y` with `conj(s)*x - c*y`.
+Returns `x` and `y`.
+
+!!! compat "Julia 1.5"
+    `reflect!` requires at least Julia 1.5.
+"""
+function reflect!(x::AbstractVector, y::AbstractVector, c, s)
+    require_one_based_indexing(x, y)
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    @inbounds for i = 1:n
+        xi, yi = x[i], y[i]
+        x[i] =      c *xi + s*yi
+        y[i] = conj(s)*xi - c*yi
+    end
+    return x, y
+end
 
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but
 # ensures that tridiagonalization of Hermitian matrices become real. See lawn72
@@ -1477,7 +1522,7 @@ Matrix determinant.
 # Examples
 ```jldoctest
 julia> M = [1 0; 2 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  0
  2  2
 
@@ -1503,7 +1548,7 @@ Log of absolute value of matrix determinant. Equivalent to
 # Examples
 ```jldoctest
 julia> A = [-1. 0.; 0. 1.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -1.0  0.0
   0.0  1.0
 
@@ -1514,7 +1559,7 @@ julia> logabsdet(A)
 (0.0, -1.0)
 
 julia> B = [2. 0.; 0. 1.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  0.0
  0.0  1.0
 
@@ -1536,7 +1581,7 @@ increased accuracy and/or speed.
 # Examples
 ```jldoctest
 julia> M = [1 0; 2 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  0
  2  2
 
@@ -1566,13 +1611,13 @@ Currently supports only numeric leaf elements.
 # Examples
 ```jldoctest
 julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
-3-element Array{Any,1}:
+3-element Vector{Any}:
   Any[1, 2, [3, 4]]
  5.0
   Any[0 + 6im, [7.0, 8.0]]
 
 julia> LinearAlgebra.promote_leaf_eltypes(a)
-Complex{Float64}
+ComplexF64 = Complex{Float64}
 ```
 """
 promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:Number} = T
@@ -1637,7 +1682,7 @@ See also [`normalize!`](@ref) and [`norm`](@ref).
 julia> a = [1,2,4];
 
 julia> b = normalize(a)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  0.2182178902359924
  0.4364357804719848
  0.8728715609439696
@@ -1646,7 +1691,7 @@ julia> norm(b)
 1.0
 
 julia> c = normalize(a, 1)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  0.14285714285714285
  0.2857142857142857
  0.5714285714285714
@@ -1655,7 +1700,7 @@ julia> norm(c, 1)
 1.0
 
 julia> a = [1 2 4 ; 1 2 4]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  4
  1  2  4
 
@@ -1663,7 +1708,7 @@ julia> norm(a)
 6.48074069840786
 
 julia> normalize(a)
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  0.154303  0.308607  0.617213
  0.154303  0.308607  0.617213
 

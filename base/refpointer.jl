@@ -20,11 +20,11 @@ There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can 
 a `ccall` Ref argument.
 
 # Use in broadcasting
+`Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar:
 
-Broadcasting with `Ref(x)` treats `x` as a scalar:
 ```jldoctest
 julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
-3-element BitArray{1}:
+3-element BitVector:
  1
  0
  0
@@ -142,3 +142,15 @@ getindex(b::RefArray) = b.x[b.i]
 setindex!(b::RefArray, x) = (b.x[b.i] = x; b)
 
 ###
+
+"""
+    LLVMPtr{T, AS}
+
+A pointer type that more closely resembles LLVM semantics: It includes the pointer address
+space, and will be passed as an actual pointer instead of an integer.
+
+This type is mainly used to interface with code that has strict requirements about pointers,
+e.g., intrinsics that are selected based on the address space, or back-ends that require
+pointers to be identifiable by their types.
+"""
+Core.LLVMPtr

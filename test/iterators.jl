@@ -16,10 +16,44 @@ let z = zip(1:2)
     @test eltype(z) == Tuple{Int}
 end
 
-let z = zip(1:2, 3:4)
-    @test size(z) == (2,)
+for z in (zip(1:2, 3:4), zip(1:2, 3:5))
     @test collect(z) == [(1,3), (2,4)]
     @test eltype(z) == Tuple{Int,Int}
+    @test size(z) == (2,)
+    @test axes(z) == (Base.OneTo(2),)
+    @test length(z) == 2
+end
+
+let z = zip(1:2, Iterators.countfrom(3))
+    @test collect(z) == [(1,3), (2,4)]
+    @test eltype(z) == Tuple{Int,Int}
+    @test_throws MethodError size(z) # by convention, the zip of a finite and
+                         # an infinite iterator has only `length`
+    @test_throws MethodError axes(z)
+    @test length(z) == 2
+end
+
+let z = zip([i*j for i in 1:3, j in -1:2:1], 1:6)
+    @test collect(z) == [(-1, 1)
+                         (-2, 2)
+                         (-3, 3)
+                         (1, 4)
+                         (2, 5)
+                         (3, 6) ]
+    @test eltype(z) == Tuple{Int,Int}
+    @test_throws DimensionMismatch size(z)
+    @test_throws DimensionMismatch axes(z)
+    @test length(z) == 6
+end
+
+let z = zip([i*j for i in 1:3, j in -1:2:1], [i*j for i in 1:3, j in -1:2:1])
+    @test collect(z) == [(-1, -1) (1, 1)
+                        (-2, -2) (2, 2)
+                        (-3, -3) (3, 3)]
+    @test eltype(z) == Tuple{Int,Int}
+    @test size(z) == (3, 2)
+    @test axes(z) == (Base.OneTo(3), Base.OneTo(2))
+    @test length(z) == 6
 end
 
 let z = zip(1:2, 3:4, 5:6)
@@ -66,6 +100,13 @@ end
 @test length(zip(cycle(1:3), 1:7, cycle(1:3))) == 7
 @test length(zip(1:3,product(1:7,cycle(1:3)))) == 3
 @test length(zip(1:3,product(1:7,cycle(1:3)),8)) == 1
+
+# map
+# ----
+@testset "Iterators.map" begin
+    @test collect(Iterators.map(string, 1:3)::Base.Generator) == map(string, 1:3)
+    @test collect(Iterators.map(tuple, 1:3, 4:6)::Base.Generator) == map(tuple, 1:3, 4:6)
+end
 
 # rest
 # ----
@@ -604,13 +645,13 @@ end
 
     let io = IOBuffer()
         Base.showarg(io, pairs([1,2,3]), true)
-        @test String(take!(io)) == "pairs(::Array{$Int,1})"
+        @test String(take!(io)) == "pairs(::Vector{$Int})"
         Base.showarg(io, pairs((a=1, b=2)), true)
         @test String(take!(io)) == "pairs(::NamedTuple)"
         Base.showarg(io, pairs(IndexLinear(), zeros(3,3)), true)
-        @test String(take!(io)) == "pairs(IndexLinear(), ::Array{Float64,2})"
+        @test String(take!(io)) == "pairs(IndexLinear(), ::Matrix{Float64})"
         Base.showarg(io, pairs(IndexCartesian(), zeros(3)), true)
-        @test String(take!(io)) == "pairs(IndexCartesian(), ::Array{Float64,1})"
+        @test String(take!(io)) == "pairs(IndexCartesian(), ::Vector{Float64})"
     end
 end
 
@@ -644,7 +685,7 @@ end
     end
     let a = @inferred(Iterators.Stateful([1, 1, 1, 2, 3, 4]))
         for x in a; x == 1 || break; end
-        @test Base.peek(a) == 3
+        @test peek(a) == 3
         @test sum(a) == 7
     end
     @test eltype(Iterators.Stateful("a")) == Char
@@ -793,8 +834,17 @@ end
     @test collect(Iterators.accumulate(+, [1,2])) == [1,3]
     @test collect(Iterators.accumulate(+, [1,2,3])) == [1,3,6]
     @test collect(Iterators.accumulate(=>, [:a,:b,:c])) == [:a, :a => :b, (:a => :b) => :c]
+    @test collect(Iterators.accumulate(+, (x for x in [true])))::Vector{Int} == [1]
+    @test collect(Iterators.accumulate(+, (x for x in [true, true, false])))::Vector{Int} == [1, 2, 2]
+    @test collect(Iterators.accumulate(+, (x for x in [true]), init=10.0))::Vector{Float64} == [11.0]
     @test length(Iterators.accumulate(+, [10,20,30])) == 3
     @test size(Iterators.accumulate(max, rand(2,3))) == (2,3)
     @test Base.IteratorSize(Iterators.accumulate(max, rand(2,3))) === Base.IteratorSize(rand(2,3))
     @test Base.IteratorEltype(Iterators.accumulate(*, ())) isa Base.EltypeUnknown
+end
+
+@testset "Base.accumulate" begin
+    @test cumsum(x^2 for x in 1:3) == [1, 5, 14]
+    @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
+    @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end

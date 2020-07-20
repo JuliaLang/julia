@@ -6,7 +6,8 @@ module PCRE
 
 import ..RefValue
 
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))  # include($BUILDROOT/base/pcre_h.jl)
+# include($BUILDROOT/base/pcre_h.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))
 
 const PCRE_LIB = "libpcre2-8"
 
@@ -14,7 +15,7 @@ function create_match_context()
     JIT_STACK_START_SIZE = 32768
     JIT_STACK_MAX_SIZE = 1048576
     jit_stack = ccall((:pcre2_jit_stack_create_8, PCRE_LIB), Ptr{Cvoid},
-                      (Cint, Cint, Ptr{Cvoid}),
+                      (Csize_t, Csize_t, Ptr{Cvoid}),
                       JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE, C_NULL)
     ctx = ccall((:pcre2_match_context_create_8, PCRE_LIB),
                 Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
@@ -90,22 +91,22 @@ const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
 function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
     buf = RefValue{T}()
-    ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Int32,
-                (Ptr{Cvoid}, Int32, Ptr{Cvoid}),
-                regex, what, buf) % UInt32
+    ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Cint,
+                (Ptr{Cvoid}, UInt32, Ptr{Cvoid}),
+                regex, what, buf)
     if ret != 0
-        error(ret == ERROR_NULL      ? "NULL regex object" :
-              ret == ERROR_BADMAGIC  ? "invalid regex object" :
-              ret == ERROR_BADOPTION ? "invalid option flags" :
-                                       "unknown error $ret")
+        error(ret == ERROR_NULL      ? "PCRE error: NULL regex object" :
+              ret == ERROR_BADMAGIC  ? "PCRE error: invalid regex object" :
+              ret == ERROR_BADOPTION ? "PCRE error: invalid option flags" :
+                                       "PCRE error: unknown error ($ret)")
     end
-    buf[]
+    return buf[]
 end
 
 function ovec_length(match_data)
     n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
               (Ptr{Cvoid},), match_data)
-    return 2n
+    return 2Int(n)
 end
 
 function ovec_ptr(match_data)
@@ -115,18 +116,23 @@ function ovec_ptr(match_data)
 end
 
 function compile(pattern::AbstractString, options::Integer)
+    if !(pattern isa Union{String,SubString{String}})
+        pattern = String(pattern)
+    end
     errno = RefValue{Cint}(0)
     erroff = RefValue{Csize_t}(0)
     re_ptr = ccall((:pcre2_compile_8, PCRE_LIB), Ptr{Cvoid},
                    (Ptr{UInt8}, Csize_t, UInt32, Ref{Cint}, Ref{Csize_t}, Ptr{Cvoid}),
-                   pattern, sizeof(pattern), options, errno, erroff, C_NULL)
-    re_ptr == C_NULL && error("PCRE compilation error: $(err_message(errno[])) at offset $(erroff[])")
-    re_ptr
+                   pattern, ncodeunits(pattern), options, errno, erroff, C_NULL)
+    if re_ptr == C_NULL
+        error("PCRE compilation error: $(err_message(errno[])) at offset $(erroff[])")
+    end
+    return re_ptr
 end
 
 function jit_compile(regex::Ptr{Cvoid})
     errno = ccall((:pcre2_jit_compile_8, PCRE_LIB), Cint,
-                  (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE) % UInt32
+                  (Ptr{Cvoid}, UInt32), regex, JIT_COMPLETE)
     errno == 0 && return true
     errno == ERROR_JIT_BADOPTION && return false
     error("PCRE JIT error: $(err_message(errno))")
@@ -144,20 +150,25 @@ free_jit_stack(stack) =
 free_match_context(context) =
     ccall((:pcre2_match_context_free_8, PCRE_LIB), Cvoid, (Ptr{Cvoid},), context)
 
-function err_message(errno)
-    buffer = Vector{UInt8}(undef, 256)
-    ccall((:pcre2_get_error_message_8, PCRE_LIB), Cvoid,
-          (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
-    GC.@preserve buffer unsafe_string(pointer(buffer))
+function err_message(errno::Integer)
+    buffer = Vector{UInt8}(undef, 1024)
+    ret = ccall((:pcre2_get_error_message_8, PCRE_LIB), Cint,
+                (Cint, Ptr{UInt8}, Csize_t), errno, buffer, length(buffer))
+    ret == ERROR_BADDATA && error("PCRE error: invalid errno ($errno)")
+    # TODO: seems like there should be a better way to get this string
+    return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
 function exec(re, subject, offset, options, match_data)
+    if !(subject isa Union{String,SubString{String}})
+        subject = String(subject)
+    end
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
-               (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, Cuint, Ptr{Cvoid}, Ptr{Cvoid}),
-               re, subject, sizeof(subject), offset, options, match_data, get_local_match_context())
+               (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, UInt32, Ptr{Cvoid}, Ptr{Cvoid}),
+               re, subject, ncodeunits(subject), offset, options, match_data, get_local_match_context())
     # rc == -1 means no match, -2 means partial match.
     rc < -2 && error("PCRE.exec error: $(err_message(rc))")
-    rc >= 0
+    return rc >= 0
 end
 
 function exec_r(re, subject, offset, options)
@@ -174,21 +185,25 @@ function exec_r_data(re, subject, offset, options)
 end
 
 function create_match_data(re)
-    ccall((:pcre2_match_data_create_from_pattern_8, PCRE_LIB),
-          Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), re, C_NULL)
+    p = ccall((:pcre2_match_data_create_from_pattern_8, PCRE_LIB),
+              Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), re, C_NULL)
+    p == C_NULL && error("PCRE error: could not allocate memory")
+    return p
 end
 
 function substring_number_from_name(re, name)
-  ccall((:pcre2_substring_number_from_name_8, PCRE_LIB), Cint,
-        (Ptr{Cvoid}, Cstring), re, name)
+    n = ccall((:pcre2_substring_number_from_name_8, PCRE_LIB), Cint,
+               (Ptr{Cvoid}, Cstring), re, name)
+    n < 0 && error("PCRE error: $(err_message(n))")
+    return Int(n)
 end
 
 function substring_length_bynumber(match_data, number)
     s = RefValue{Csize_t}()
     rc = ccall((:pcre2_substring_length_bynumber_8, PCRE_LIB), Cint,
-          (Ptr{Cvoid}, UInt32, Ref{Csize_t}), match_data, number, s)
+               (Ptr{Cvoid}, Cint, Ref{Csize_t}), match_data, number, s)
     rc < 0 && error("PCRE error: $(err_message(rc))")
-    convert(Int, s[])
+    return Int(s[])
 end
 
 function substring_copy_bynumber(match_data, number, buf, buf_size)
@@ -197,15 +212,15 @@ function substring_copy_bynumber(match_data, number, buf, buf_size)
                (Ptr{Cvoid}, UInt32, Ptr{UInt8}, Ref{Csize_t}),
                match_data, number, buf, s)
     rc < 0 && error("PCRE error: $(err_message(rc))")
-    convert(Int, s[])
+    return Int(s[])
 end
 
 function capture_names(re)
     name_count = info(re, INFO_NAMECOUNT, UInt32)
     name_entry_size = info(re, INFO_NAMEENTRYSIZE, UInt32)
     nametable_ptr = info(re, INFO_NAMETABLE, Ptr{UInt8})
-    names = Dict{Int, String}()
-    for i=1:name_count
+    names = Dict{Int,String}()
+    for i = 1:name_count
         offset = (i-1)*name_entry_size + 1
         # The capture group index corresponding to name 'i' is stored as a
         # big-endian 16-bit value.
@@ -216,7 +231,7 @@ function capture_names(re)
         # after the index.
         names[idx] = unsafe_string(nametable_ptr+offset+1)
     end
-    names
+    return names
 end
 
 end # module

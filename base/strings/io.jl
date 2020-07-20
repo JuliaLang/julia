@@ -94,7 +94,7 @@ julia> sprint(show, 66.66666; context=:compact => true)
 "66.6667"
 
 julia> sprint(showerror, BoundsError([1], 100))
-"BoundsError: attempt to access 1-element Array{Int64,1} at index [100]"
+"BoundsError: attempt to access 1-element Vector{Int64} at index [100]"
 ```
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
@@ -172,6 +172,8 @@ julia> string("a", 1, true)
 ```
 """
 string(xs...) = print_to_string(xs...)
+
+string(a::Symbol) = String(a)
 
 # note: print uses an encoding determined by `io` (defaults to UTF-8), whereas
 #       write uses an encoding determined by `s` (UTF-8 for `String`)
@@ -256,7 +258,7 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 
 Join an array of `strings` into a single string, inserting the given delimiter (if any) between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
-two strings. If `io` is given, the result is written to `io` rather than returned as
+two strings. If `io` is given, the result is written to `io` rather than returned
 as a `String`.
 
 `strings` can be any iterable over elements `x` which are convertible to strings
@@ -522,6 +524,55 @@ julia> println(raw"\\\\x \\\\\\"")
 ```
 """
 macro raw_str(s); s; end
+
+"""
+    escape_raw_string(s::AbstractString)
+    escape_raw_string(io, s::AbstractString)
+
+Escape a string in the manner used for parsing raw string literals.
+For each double-quote (`"`) character in input string `s`, this
+function counts the number _n_ of preceeding backslash (`\\`) characters,
+and then increases there the number of backslashes from _n_ to 2_n_+1
+(even for _n_ = 0). It also doubles a sequence of backslashes at the end
+of the string.
+
+This escaping convention is used in raw strings and other non-standard
+string literals. (It also happens to be the escaping convention
+expected by the Microsoft C/C++ compiler runtime when it parses a
+command-line string into the argv[] array.)
+
+See also: [`escape_string`](@ref)
+"""
+function escape_raw_string(io, str::AbstractString)
+    escapes = 0
+    for c in str
+        if c == '\\'
+            escapes += 1
+        else
+            if c == '"'
+                # if one or more backslashes are followed by
+                # a double quote then escape all backslashes
+                # and the double quote
+                escapes = escapes * 2 + 1
+            end
+            while escapes > 0
+                write(io, '\\')
+                escapes -= 1
+            end
+            escapes = 0
+            write(io, c)
+        end
+    end
+    # also escape any trailing backslashes,
+    # so they do not affect the closing quote
+    while escapes > 0
+        write(io, '\\')
+        write(io, '\\')
+        escapes -= 1
+    end
+end
+escape_raw_string(str::AbstractString) = sprint(escape_raw_string, str;
+                                                sizehint = lastindex(str) + 2)
 
 ## multiline strings ##
 

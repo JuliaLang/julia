@@ -31,7 +31,7 @@ and installing Julia, below.
 - **Homepage:** <https://julialang.org>
 - **Binaries:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
-- **Documentation:** <https://docs.julialang.org/>
+- **Documentation:** <https://docs.julialang.org>
 - **Packages:** <https://pkg.julialang.org/>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
@@ -47,6 +47,7 @@ helpful to start contributing to the Julia codebase.
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](https://julia.meetup.com/)
+- [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
 
@@ -60,7 +61,7 @@ for OS and platform combinations.
 If everything works correctly, you will see a Julia banner and an
 interactive prompt into which you can enter expressions for
 evaluation.  You can read about [getting
-started](https://julialang.org/manual/getting-started) in the manual.
+started](https://docs.julialang.org/en/v1/manual/getting-started/) in the manual.
 
 **Note**: Although some system package managers provide Julia, such
 installations are neither maintained nor endorsed by the Julia
@@ -80,7 +81,7 @@ Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.3.0
+    git checkout v1.4.2
 
 Now run `make` to build the `julia` executable.
 
@@ -132,6 +133,9 @@ The Julia source code is organized as follows:
 The Julia REPL is quite powerful.  See the section in the manual on
 [the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
+
+On Windows we highly recommend running Julia using a modern terminal,
+such as installing the [Windows Terminal from the Microsoft Store](https://aka.ms/terminal).
 
 Support for editing Julia is available for many
 [widely used editors](https://github.com/JuliaEditorSupport):

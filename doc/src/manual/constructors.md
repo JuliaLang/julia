@@ -360,10 +360,10 @@ and then delegates construction to the general constructor for the case where bo
 successfully creates a point of type `Point{Float64}`:
 
 ```jldoctest parametric2
-julia> Point(1,2.5)
+julia> p = Point(1,2.5)
 Point{Float64}(1.0, 2.5)
 
-julia> typeof(ans)
+julia> typeof(p)
 Point{Float64}
 ```
 
@@ -465,7 +465,7 @@ and `den::T` indicate that the data held in a `OurRational{T}` object are a pair
 `T`, one representing the rational value's numerator and the other representing its denominator.
 
 Now things get interesting. `OurRational` has a single inner constructor method which checks that
-both of `num` and `den` aren't zero and ensures that every rational is constructed in "lowest
+`num` and `den` aren't both zero and ensures that every rational is constructed in "lowest
 terms" with a non-negative denominator. This is accomplished by dividing the given numerator and
 denominator values by their greatest common divisor, computed using the `gcd` function. Since
 `gcd` returns the greatest common divisor of its arguments with sign matching the first argument
@@ -548,9 +548,11 @@ julia> struct SummedArray{T<:Number,S<:Number}
        end
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
-ERROR: MethodError: no method matching SummedArray(::Array{Int32,1}, ::Int32)
+ERROR: MethodError: no method matching SummedArray(::Vector{Int32}, ::Int32)
 Closest candidates are:
-  SummedArray(::Array{T,1}) where T at none:5
+  SummedArray(::Vector{T}) where T at none:4
+Stacktrace:
+[...]
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows

@@ -4,7 +4,7 @@ This file describes how to install, or build, and use Julia on Windows.
 
 For more general information about Julia, please see the
 [main README](https://github.com/JuliaLang/julia/blob/master/README.md)
-or the [documentation](https://docs.julialang.org/).
+or the [documentation](https://docs.julialang.org).
 
 
 ## General Information for Windows
@@ -58,6 +58,9 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 
  1. [Download](https://julialang.org/downloads) the latest version of Julia.
     Extract the binary to a reasonable destination folder, e.g. `C:\julia`.
+    By default, Julia will be installed into
+    `C:\Users\YOURNAME\AppData\Local\Julia-1.0.0\bin`,
+    where `YOURNAME` is your Windows user name.
 
  2. Double-click the `julia` shortcut to launch Julia.
 
@@ -196,6 +199,7 @@ make -j4 win-extras julia-ui-release
 export WINEDEBUG=-all # suppress wine fixme's
 # this last step may need to be run interactively
 make -j4 binary-dist
+make -j4 exe
 SCRIPT
 
 Vagrant.configure("2") do |config|
@@ -235,7 +239,7 @@ Then run the build:
  2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
  3. `make`
  4. `make win-extras` (Necessary before running `make binary-dist`)
- 5. `make binary-dist`
+ 5. `make binary-dist` then `make exe` to create the Windows installer.
  6. move the `julia-*.exe` installer to the target machine
 
 If you are building for 64-bit windows, the steps are essentially the same.
@@ -267,8 +271,7 @@ just run `vagrant up` from that folder.
 Compiling using one of the options above creates a basic Julia build, but not some
 extra components that are included if you run the full Julia binary installer.
 If you need these components, the easiest way to get them is to build the installer
-yourself using ```make win-extras``` followed by ```make binary-dist```, and then
-running the resulting installer.
+yourself using ```make win-extras``` followed by ```make binary-dist``` and ```make exe```. Then running the resulting installer.
 
 
 ## Windows Build Debugging

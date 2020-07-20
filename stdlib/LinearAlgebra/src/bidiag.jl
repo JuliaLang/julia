@@ -34,27 +34,27 @@ must be one less than the length of `dv`.
 # Examples
 ```jldoctest
 julia> dv = [1, 2, 3, 4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
  4
 
 julia> ev = [7, 8, 9]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  7
  8
  9
 
 julia> Bu = Bidiagonal(dv, ev, :U) # ev is on the first superdiagonal
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64,Vector{Int64}}:
  1  7  ⋅  ⋅
  ⋅  2  8  ⋅
  ⋅  ⋅  3  9
  ⋅  ⋅  ⋅  4
 
 julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64,Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  7  2  ⋅  ⋅
  ⋅  8  3  ⋅
@@ -77,21 +77,21 @@ its first super- (if `uplo=:U`) or sub-diagonal (if `uplo=:L`).
 # Examples
 ```jldoctest
 julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  1  1  1
  2  2  2  2
  3  3  3  3
  4  4  4  4
 
 julia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64,Vector{Int64}}:
  1  1  ⋅  ⋅
  ⋅  2  2  ⋅
  ⋅  ⋅  3  3
  ⋅  ⋅  ⋅  4
 
 julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64,Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  2  2  ⋅  ⋅
  ⋅  3  3  ⋅
@@ -149,6 +149,9 @@ end
 function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
     B = zeros(T, n, n)
+    if n == 0
+        return B
+    end
     for i = 1:n - 1
         B[i,i] = A.dv[i]
         if A.uplo == 'U'
@@ -248,8 +251,44 @@ end
 
 iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
 isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
-istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
-istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
+function istriu(M::Bidiagonal, k::Integer=0)
+    if M.uplo == 'U'
+        if k <= 0
+            return true
+        elseif k == 1
+            return iszero(M.dv)
+        else # k >= 2
+            return iszero(M.dv) && iszero(M.ev)
+        end
+    else # M.uplo == 'L'
+        if k <= -1
+            return true
+        elseif k == 0
+            return iszero(M.ev)
+        else # k >= 1
+            return iszero(M.ev) && iszero(M.dv)
+        end
+    end
+end
+function istril(M::Bidiagonal, k::Integer=0)
+    if M.uplo == 'U'
+        if k >= 1
+            return true
+        elseif k == 0
+            return iszero(M.ev)
+        else # k <= -1
+            return iszero(M.ev) && iszero(M.dv)
+        end
+    else # M.uplo == 'L'
+        if k >= 0
+            return true
+        elseif k == -1
+            return iszero(M.dv)
+        else # k <= -2
+            return iszero(M.dv) && iszero(M.ev)
+        end
+    end
+end
 isdiag(M::Bidiagonal) = iszero(M.ev)
 
 function tril!(M::Bidiagonal, k::Integer=0)
@@ -872,3 +911,42 @@ end
 eigen(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
 
 Base._sum(A::Bidiagonal, ::Colon) = sum(A.dv) + sum(A.ev)
+function Base._sum(A::Bidiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.dv)
+    if n == 0
+        # Just to be sure. This shouldn't happen since there is a check whether
+        # length(A.dv) == length(A.ev) + 1 in the constructor.
+        return res
+    elseif n == 1
+        res[1] = A.dv[1]
+        return res
+    end
+    @inbounds begin
+        if (dims == 1 && A.uplo == 'U') || (dims == 2 && A.uplo == 'L')
+            res[1] = A.dv[1]
+            for i = 2:length(A.dv)
+                res[i] = A.ev[i-1] + A.dv[i]
+            end
+        elseif (dims == 1 && A.uplo == 'L') || (dims == 2 && A.uplo == 'U')
+            for i = 1:length(A.dv)-1
+                res[i] = A.ev[i] + A.dv[i]
+            end
+            res[end] = A.dv[end]
+        elseif dims >= 3
+            if A.uplo == 'U'
+                for i = 1:length(A.dv)-1
+                    res[i,i]   = A.dv[i]
+                    res[i,i+1] = A.ev[i]
+                end
+            else
+                for i = 1:length(A.dv)-1
+                    res[i,i]   = A.dv[i]
+                    res[i+1,i] = A.ev[i]
+                end
+            end
+            res[end,end] = A.dv[end]
+        end
+    end
+    res
+end

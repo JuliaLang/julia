@@ -22,7 +22,7 @@ let Ac = copy(A), Bc = copy(B)
     @test Bc == Complex{Int64}[1+2im, 3+4im, 5+6im]
 
     A1 = reinterpret(Float64, A)
-    A2 = reinterpret(Complex{Float64}, A)
+    A2 = reinterpret(ComplexF64, A)
     A1[1] = 1.0
     @test real(A2[1]) == 1.0
 end

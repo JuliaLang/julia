@@ -4,15 +4,15 @@
 
 # for reductions that expand 0 dims to 1
 reduced_index(i::OneTo) = OneTo(1)
-reduced_index(i::Union{Slice, IdentityUnitRange}) = first(i):first(i)
+reduced_index(i::Union{Slice, IdentityUnitRange}) = oftype(i, first(i):first(i))
 reduced_index(i::AbstractUnitRange) =
     throw(ArgumentError(
 """
-No method is implemented for reducing index range of type $typeof(i). Please implement
+No method is implemented for reducing index range of type $(typeof(i)). Please implement
 reduced_index for this index type or report this as an issue.
 """
     ))
-reduced_indices(a::AbstractArray, region) = reduced_indices(axes(a), region)
+reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a), region)
 
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
@@ -20,7 +20,7 @@ reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 function reduced_indices(inds::Indices{N}, d::Int) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d == 1
-        return (reduced_index(inds[1]), tail(inds)...)
+        return (reduced_index(inds[1]), tail(inds)...)::typeof(inds)
     elseif 1 < d <= N
         return tuple(inds[1:d-1]..., oftype(inds[d], reduced_index(inds[d])), inds[d+1:N]...)::typeof(inds)
     else
@@ -34,7 +34,7 @@ function reduced_indices0(inds::Indices{N}, d::Int) where N
         ind = inds[d]
         rd = isempty(ind) ? ind : reduced_index(inds[d])
         if d == 1
-            return (rd, tail(inds)...)
+            return (rd, tail(inds)...)::typeof(inds)
         else
             return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
         end
@@ -89,8 +89,8 @@ for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
 end
 
 # reducedim_initarray is called by
-reducedim_initarray(A::AbstractArray, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
-reducedim_initarray(A::AbstractArray, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
+reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
+reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
 
 # TODO: better way to handle reducedim initialization
 #
@@ -156,8 +156,8 @@ end
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))), _realtype(f, T))
 
-reducedim_init(f, op::typeof(&), A::AbstractArray, region) = reducedim_initarray(A, region, true)
-reducedim_init(f, op::typeof(|), A::AbstractArray, region) = reducedim_initarray(A, region, false)
+reducedim_init(f, op::typeof(&), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, true)
+reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, false)
 
 # specialize to make initialization more efficient for common cases
 
@@ -179,8 +179,11 @@ end
 
 ## generic (map)reduction
 
-has_fast_linear_indexing(a::AbstractArray) = false
+has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = false
 has_fast_linear_indexing(a::Array) = true
+has_fast_linear_indexing(::Number) = true  # for Broadcasted
+has_fast_linear_indexing(bc::Broadcast.Broadcasted) =
+    all(has_fast_linear_indexing, bc.args)
 
 function check_reducedims(R, A)
     # Check whether R has compatible dimensions w.r.t. A for reduction
@@ -218,7 +221,7 @@ Extract first entry of slices of array A into existing array R.
 """
 copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 
-function mapfirst!(f, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N}
+function mapfirst!(f::F, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N, F}
     lsiz = check_reducedims(R, A)
     t = _firstreducedslice(axes(R), axes(A))
     map!(f, R, view(A, t...))
@@ -233,7 +236,7 @@ _firstslice(i::OneTo) = OneTo(1)
 _firstslice(i::Slice) = Slice(_firstslice(i.indices))
 _firstslice(i) = i[firstindex(i):firstindex(i)]
 
-function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
+function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     lsiz = check_reducedims(R,A)
     isempty(A) && return R
 
@@ -271,10 +274,10 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     return R
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
+mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
     (_mapreducedim!(f, op, R, A); R)
 
-reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
+reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
     mapreducedim!(identity, op, R, A)
 
 """
@@ -289,32 +292,36 @@ faster because the intermediate array is avoided.
 # Examples
 ```jldoctest
 julia> a = reshape(Vector(1:16), (4,4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
 julia> mapreduce(isodd, *, a, dims=1)
-1×4 Array{Bool,2}:
+1×4 Matrix{Bool}:
  0  0  0  0
 
 julia> mapreduce(isodd, |, a, dims=1)
-1×4 Array{Bool,2}:
+1×4 Matrix{Bool}:
  1  1  1  1
 ```
 """
-mapreduce(f, op, A::AbstractArray; dims=:, kw...) = _mapreduce_dim(f, op, kw.data, A, dims)
-mapreduce(f, op, A::AbstractArray...; kw...) = reduce(op, map(f, A...); kw...)
+mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
+    _mapreduce_dim(f, op, init, A, dims)
+mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
+    reduce(op, map(f, A...); kw...)
 
-_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArray, ::Colon) = mapfoldl(f, op, A; nt...)
+_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
+    mapfoldl_impl(f, op, nt, A)
 
-_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArray, ::Colon) = _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
+    _mapreduce(f, op, IndexStyle(A), A)
 
-_mapreduce_dim(f, op, nt::NamedTuple{(:init,)}, A::AbstractArray, dims) =
-    mapreducedim!(f, op, reducedim_initarray(A, dims, nt.init), A)
+_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
+    mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
 
-_mapreduce_dim(f, op, ::NamedTuple{()}, A::AbstractArray, dims) =
+_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """
@@ -331,27 +338,87 @@ associativity, e.g. left-to-right, you should write your own loop or consider us
 # Examples
 ```jldoctest
 julia> a = reshape(Vector(1:16), (4,4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
 julia> reduce(max, a, dims=2)
-4×1 Array{Int64,2}:
+4×1 Matrix{Int64}:
  13
  14
  15
  16
 
 julia> reduce(max, a, dims=1)
-1×4 Array{Int64,2}:
+1×4 Matrix{Int64}:
  4  8  12  16
 ```
 """
 reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
 
 ##### Specific reduction functions #####
+
+"""
+    count([f=identity,] A::AbstractArray; dims=:)
+
+Count the number of elements in `A` for which `f` returns `true` over the given
+dimensions.
+
+!!! compat "Julia 1.5"
+    `dims` keyword was added in Julia 1.5.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> count(<=(2), A, dims=1)
+1×2 Matrix{Int64}:
+ 1  1
+
+julia> count(<=(2), A, dims=2)
+2×1 Matrix{Int64}:
+ 2
+ 0
+```
+"""
+count(A::AbstractArrayOrBroadcasted; dims=:) = count(identity, A, dims=dims)
+count(f, A::AbstractArrayOrBroadcasted; dims=:) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
+
+"""
+    count!([f=identity,] r, A)
+
+Count the number of elements in `A` for which `f` returns `true` over the
+singleton dimensions of `r`, writing the result into `r` in-place.
+
+!!! compat "Julia 1.5"
+    inplace `count!` was added in Julia 1.5.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> count!(<=(2), [1 1], A)
+1×2 Matrix{Int64}:
+ 1  1
+
+julia> count!(<=(2), [1; 1], A)
+2-element Vector{Int64}:
+ 2
+ 0
+```
+"""
+count!(r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) = count!(identity, r, A; init=init)
+count!(f, r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) =
+    mapreducedim!(_bool(f), add_sum, initarray!(r, add_sum, init, A), A)
+
 """
     sum(A::AbstractArray; dims)
 
@@ -360,21 +427,46 @@ Sum elements of an array over the given dimensions.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> sum(A, dims=1)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  4  6
 
 julia> sum(A, dims=2)
-2×1 Array{Int64,2}:
+2×1 Matrix{Int64}:
  3
  7
 ```
 """
 sum(A::AbstractArray; dims)
+
+"""
+    sum(f, A::AbstractArray; dims)
+
+Sum the results of calling function `f` on each element of an array over the given
+dimensions.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> sum(abs2, A, dims=1)
+1×2 Matrix{Int64}:
+ 10  20
+
+julia> sum(abs2, A, dims=2)
+2×1 Matrix{Int64}:
+  5
+ 25
+```
+"""
+sum(f, A::AbstractArray; dims)
 
 """
     sum!(r, A)
@@ -384,17 +476,17 @@ Sum elements of `A` over the singleton dimensions of `r`, and write results to `
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> sum!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  3
  7
 
 julia> sum!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  4  6
 ```
 """
@@ -408,21 +500,46 @@ Multiply elements of an array over the given dimensions.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> prod(A, dims=1)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  3  8
 
 julia> prod(A, dims=2)
-2×1 Array{Int64,2}:
+2×1 Matrix{Int64}:
   2
  12
 ```
 """
 prod(A::AbstractArray; dims)
+
+"""
+    prod(f, A::AbstractArray; dims)
+
+Multiply the results of calling the function `f` on each element of an array over the given
+dimensions.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> prod(abs2, A, dims=1)
+1×2 Matrix{Int64}:
+ 9  64
+
+julia> prod(abs2, A, dims=2)
+2×1 Matrix{Int64}:
+   4
+ 144
+```
+"""
+prod(f, A::AbstractArray; dims)
 
 """
     prod!(r, A)
@@ -432,17 +549,17 @@ Multiply elements of `A` over the singleton dimensions of `r`, and write results
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> prod!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
   2
  12
 
 julia> prod!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  3  8
 ```
 """
@@ -458,21 +575,46 @@ which can be applied elementwise to arrays via `max.(a,b)`.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> maximum(A, dims=1)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  3  4
 
 julia> maximum(A, dims=2)
-2×1 Array{Int64,2}:
+2×1 Matrix{Int64}:
  2
  4
 ```
 """
 maximum(A::AbstractArray; dims)
+
+"""
+    maximum(f, A::AbstractArray; dims)
+
+Compute the maximum value from of calling the function `f` on each element of an array over the given
+dimensions.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> maximum(abs2, A, dims=1)
+1×2 Matrix{Int64}:
+ 9  16
+
+julia> maximum(abs2, A, dims=2)
+2×1 Matrix{Int64}:
+  4
+ 16
+```
+"""
+maximum(f, A::AbstractArray; dims)
 
 """
     maximum!(r, A)
@@ -482,17 +624,17 @@ Compute the maximum value of `A` over the singleton dimensions of `r`, and write
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> maximum!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  4
 
 julia> maximum!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  3  4
 ```
 """
@@ -508,21 +650,46 @@ which can be applied elementwise to arrays via `min.(a,b)`.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> minimum(A, dims=1)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  2
 
 julia> minimum(A, dims=2)
-2×1 Array{Int64,2}:
+2×1 Matrix{Int64}:
  1
  3
 ```
 """
 minimum(A::AbstractArray; dims)
+
+"""
+    minimum(f, A::AbstractArray; dims)
+
+Compute the minimum value from of calling the function `f` on each element of an array over the given
+dimensions.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> minimum(abs2, A, dims=1)
+1×2 Matrix{Int64}:
+ 1  4
+
+julia> minimum(abs2, A, dims=2)
+2×1 Matrix{Int64}:
+ 1
+ 9
+```
+"""
+minimum(f, A::AbstractArray; dims)
 
 """
     minimum!(r, A)
@@ -532,17 +699,17 @@ Compute the minimum value of `A` over the singleton dimensions of `r`, and write
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> minimum!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  3
 
 julia> minimum!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  2
 ```
 """
@@ -556,21 +723,45 @@ Test whether all values along the given dimensions of an array are `true`.
 # Examples
 ```jldoctest
 julia> A = [true false; true true]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  1  1
 
 julia> all(A, dims=1)
-1×2 Array{Bool,2}:
+1×2 Matrix{Bool}:
  1  0
 
 julia> all(A, dims=2)
-2×1 Array{Bool,2}:
+2×1 Matrix{Bool}:
  0
  1
 ```
 """
 all(A::AbstractArray; dims)
+
+"""
+    all(p, A; dims)
+
+Determine whether predicate p returns true for all elements along the given dimensions of an array.
+
+# Examples
+```jldoctest
+julia> A = [1 -1; 2 2]
+2×2 Matrix{Int64}:
+ 1  -1
+ 2   2
+
+julia> all(i -> i > 0, A, dims=1)
+1×2 Matrix{Bool}:
+ 1  0
+
+julia> all(i -> i > 0, A, dims=2)
+2×1 Matrix{Bool}:
+ 0
+ 1
+```
+"""
+all(::Function, ::AbstractArray; dims)
 
 """
     all!(r, A)
@@ -580,17 +771,17 @@ Test whether all values in `A` along the singleton dimensions of `r` are `true`,
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  1  0
 
 julia> all!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  0
  0
 
 julia> all!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  0
 ```
 """
@@ -604,21 +795,45 @@ Test whether any values along the given dimensions of an array are `true`.
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  1  0
 
 julia> any(A, dims=1)
-1×2 Array{Bool,2}:
+1×2 Matrix{Bool}:
  1  0
 
 julia> any(A, dims=2)
-2×1 Array{Bool,2}:
+2×1 Matrix{Bool}:
  1
  1
 ```
 """
 any(::AbstractArray; dims)
+
+"""
+    any(p, A; dims)
+
+Determine whether predicate p returns true for any elements along the given dimensions of an array.
+
+# Examples
+```jldoctest
+julia> A = [1 -1; 2 -2]
+2×2 Matrix{Int64}:
+ 1  -1
+ 2  -2
+
+julia> any(i -> i > 0, A, dims=1)
+1×2 Matrix{Bool}:
+ 1  0
+
+julia> any(i -> i > 0, A, dims=2)
+2×1 Matrix{Bool}:
+ 1
+ 1
+```
+"""
+any(::Function, ::AbstractArray; dims)
 
 """
     any!(r, A)
@@ -629,17 +844,17 @@ results to `r`.
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
-2×2 Array{Bool,2}:
+2×2 Matrix{Bool}:
  1  0
  1  0
 
 julia> any!([1; 1], A)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  1
 
 julia> any!([1 1], A)
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  0
 ```
 """
@@ -649,12 +864,12 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
                             (:maximum, :_maximum, :max),     (:minimum, :_minimum, :min)]
     @eval begin
         # User-facing methods with keyword arguments
-        @inline ($fname)(a::AbstractArray; dims=:) = ($_fname)(a, dims)
-        @inline ($fname)(f, a::AbstractArray; dims=:) = ($_fname)(f, a, dims)
+        @inline ($fname)(a::AbstractArray; dims=:, kw...) = ($_fname)(a, dims; kw...)
+        @inline ($fname)(f, a::AbstractArray; dims=:, kw...) = ($_fname)(f, a, dims; kw...)
 
         # Underlying implementations using dispatch
-        ($_fname)(a, ::Colon) = ($_fname)(identity, a, :)
-        ($_fname)(f, a, ::Colon) = mapreduce(f, $op, a)
+        ($_fname)(a, ::Colon; kw...) = ($_fname)(identity, a, :; kw...)
+        ($_fname)(f, a, ::Colon; kw...) = mapreduce(f, $op, a; kw...)
     end
 end
 
@@ -675,8 +890,8 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
             mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
-        $(_fname)(A, dims)    = $(_fname)(identity, A, dims)
-        $(_fname)(f, A, dims) = mapreduce(f, $(op), A, dims=dims)
+        $(_fname)(A, dims; kw...)    = $(_fname)(identity, A, dims; kw...)
+        $(_fname)(f, A, dims; kw...) = mapreduce(f, $(op), A; dims=dims, kw...)
     end
 end
 
@@ -754,7 +969,7 @@ For an array input, returns the value and index of the minimum over the given di
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
@@ -803,7 +1018,7 @@ For an array input, returns the value and index of the maximum over the given di
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
@@ -840,16 +1055,16 @@ For an array input, return the indices of the minimum elements over the given di
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> argmin(A, dims=1)
-1×2 Array{CartesianIndex{2},2}:
+1×2 Matrix{CartesianIndex{2}}:
  CartesianIndex(1, 1)  CartesianIndex(1, 2)
 
 julia> argmin(A, dims=2)
-2×1 Array{CartesianIndex{2},2}:
+2×1 Matrix{CartesianIndex{2}}:
  CartesianIndex(1, 1)
  CartesianIndex(2, 1)
 ```
@@ -865,16 +1080,16 @@ For an array input, return the indices of the maximum elements over the given di
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> argmax(A, dims=1)
-1×2 Array{CartesianIndex{2},2}:
+1×2 Matrix{CartesianIndex{2}}:
  CartesianIndex(2, 1)  CartesianIndex(2, 2)
 
 julia> argmax(A, dims=2)
-2×1 Array{CartesianIndex{2},2}:
+2×1 Matrix{CartesianIndex{2}}:
  CartesianIndex(1, 2)
  CartesianIndex(2, 2)
 ```

@@ -400,7 +400,7 @@ g33829() # warm up
 @test called33829 # make sure there was a global side effect so it's hard for this call to simply be removed
 let src = get_llvm(f33829, Tuple{Float64}, true, true)
     @test occursin(r"call [^(]*double @", src)
-    @test !occursin(r"call [^(]*\%jl_value_t", src)
+    @test !occursin(r"call [^(]*\{}", src)
 end
 
 let io = IOBuffer()
@@ -426,3 +426,33 @@ function f33590(b, x)
 end
 @test f33590(true, (3,)) == (3,)
 @test f33590(false, (3,)) == (4,)
+
+# issue 29864
+const c29864 = VecElement{Union{Int,Nothing}}(2)
+@noinline f29864() = c29864
+@noinline g29864() = VecElement{Union{Int,Nothing}}(3)
+@test f29864().value === 2
+@test g29864().value === 3
+
+# test sret pointing into a struct containing a tracked pointer
+# reduced from TerminalLoggers/ProgressLogging
+const _PROGRESS_LOGGING_UUID_NS_test = Base.UUID("1e962757-ea70-431a-b9f6-aadf988dcb7f")
+_asuuid_test(id) = Base.uuid5(_PROGRESS_LOGGING_UUID_NS_test, repr(id))
+@noinline _handle_progress_test(progress) = progress
+function _handle_message_test()
+    progress = (_asuuid_test(:id), "name")
+    return _handle_progress_test(progress)
+end
+@test _handle_message_test() isa Tuple{Base.UUID, String}
+
+@testset "#30739" begin
+    ifelsetuple(n::Integer, k::Integer, f, g) = ntuple(i -> (i <= k ? f : g), n)
+    f(x) = x^2; g(x) = x^3;
+    a = [1]; b = [2]
+    @test ifelsetuple(5, 3, a, b) == ([1], [1], [1], [2], [2])
+end
+
+@testset "#36422" begin
+    str_36422 = "using InteractiveUtils; code_llvm(Base.ht_keyindex, (Dict{NTuple{65,Int64},Nothing}, NTuple{65,Int64}))"
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e $str_36422`)
+end

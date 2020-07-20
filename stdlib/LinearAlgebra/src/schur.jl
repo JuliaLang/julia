@@ -17,27 +17,27 @@ Iterating the decomposition produces the components `F.T`, `F.Z`, and `F.values`
 # Examples
 ```jldoctest
 julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64,Array{Float64,2}}
+Schur{Float64,Matrix{Float64}}
 T factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0   9.0
  0.0  -2.0
 Z factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   0.961524  0.274721
  -0.274721  0.961524
 eigenvalues:
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   3.0
  -2.0
 
 julia> F.vectors * F.Schur * F.vectors'
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
@@ -69,27 +69,27 @@ Same as [`schur`](@ref) but uses the input argument `A` as workspace.
 # Examples
 ```jldoctest
 julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
 julia> F = schur!(A)
-Schur{Float64,Array{Float64,2}}
+Schur{Float64,Matrix{Float64}}
 T factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0   9.0
  0.0  -2.0
 Z factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   0.961524  0.274721
  -0.274721  0.961524
 eigenvalues:
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   3.0
  -2.0
 
 julia> A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0   9.0
  0.0  -2.0
 ```
@@ -109,27 +109,27 @@ Iterating the decomposition produces the components `F.T`, `F.Z`, and `F.values`
 # Examples
 ```jldoctest
 julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64,Array{Float64,2}}
+Schur{Float64,Matrix{Float64}}
 T factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0   9.0
  0.0  -2.0
 Z factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   0.961524  0.274721
  -0.274721  0.961524
 eigenvalues:
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   3.0
  -2.0
 
 julia> F.vectors * F.Schur * F.vectors'
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
@@ -142,11 +142,47 @@ true
 schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
 schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
 
-schur(A::Symmetric) = schur(copyto!(similar(parent(A)), A))
-schur(A::Hermitian) = schur(copyto!(similar(parent(A)), A))
-schur(A::UpperTriangular) = schur(copyto!(similar(parent(A)), A))
-schur(A::LowerTriangular) = schur(copyto!(similar(parent(A)), A))
-schur(A::Tridiagonal) = schur(Matrix(A))
+schur(A::AbstractMatrix{T}) where {T} = schur!(copyto!(Matrix{eigtype(T)}(undef, size(A)...), A))
+function schur(A::RealHermSymComplexHerm)
+    F = eigen(A; sortby=nothing)
+    return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
+end
+function schur(A::Union{UnitUpperTriangular{T},UpperTriangular{T}}) where {T}
+    t = eigtype(T)
+    Z = Matrix{t}(undef, size(A)...)
+    copyto!(Z, A)
+    return Schur(Z, Matrix{t}(I, size(A)), convert(Vector{t}, diag(A)))
+end
+function schur(A::Union{UnitLowerTriangular{T},LowerTriangular{T}}) where {T}
+    t = eigtype(T)
+    # double flip the matrix A
+    Z = Matrix{t}(undef, size(A)...)
+    copyto!(Z, A)
+    reverse!(reshape(Z, :))
+    # construct "reverse" identity
+    n = size(A, 1)
+    J = zeros(t, n, n)
+    for i in axes(J, 2)
+       J[n+1-i, i] = oneunit(t)
+    end
+    return Schur(Z, J, convert(Vector{t}, diag(A)))
+end
+function schur(A::Bidiagonal{T}) where {T}
+    t = eigtype(T)
+    if A.uplo == 'U'
+        return Schur(Matrix{t}(A), Matrix{t}(I, size(A)), Vector{t}(A.dv))
+    else # A.uplo == 'L'
+        # construct "reverse" identity
+        n = size(A, 1)
+        J = zeros(t, n, n)
+        for i in axes(J, 2)
+            J[n+1-i, i] = oneunit(t)
+        end
+        dv = reverse!(Vector{t}(A.dv))
+        ev = reverse!(Vector{t}(A.ev))
+        return Schur(Matrix{t}(Bidiagonal(dv, ev, 'U')), J, dv)
+    end
+end
 
 function getproperty(F::Schur, d::Symbol)
     if d === :Schur

@@ -19,7 +19,7 @@ triangle of the matrix `A`.
 # Examples
 ```jldoctest
 julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
-5×5 Array{Int64,2}:
+5×5 Matrix{Int64}:
  1  0  2  0  3
  0  4  0  5  0
  6  0  7  0  8
@@ -27,7 +27,7 @@ julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
  2  0  3  0  4
 
 julia> Supper = Symmetric(A)
-5×5 Symmetric{Int64,Array{Int64,2}}:
+5×5 Symmetric{Int64,Matrix{Int64}}:
  1  0  2  0  3
  0  4  0  5  0
  2  0  7  0  8
@@ -35,7 +35,7 @@ julia> Supper = Symmetric(A)
  3  0  8  0  4
 
 julia> Slower = Symmetric(A, :L)
-5×5 Symmetric{Int64,Array{Int64,2}}:
+5×5 Symmetric{Int64,Matrix{Int64}}:
  1  0  6  0  2
  0  4  0  9  0
  6  0  7  0  3
@@ -102,7 +102,7 @@ triangle of the matrix `A`.
 julia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];
 
 julia> Hupper = Hermitian(A)
-5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:
+5×5 Hermitian{Complex{Int64},Matrix{Complex{Int64}}}:
  1+0im  0+0im  2+2im  0+0im  3-3im
  0+0im  4+0im  0+0im  5+0im  0+0im
  2-2im  0+0im  7+0im  0+0im  8+8im
@@ -110,7 +110,7 @@ julia> Hupper = Hermitian(A)
  3+3im  0+0im  8-8im  0+0im  4+0im
 
 julia> Hlower = Hermitian(A, :L)
-5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:
+5×5 Hermitian{Complex{Int64},Matrix{Complex{Int64}}}:
  1+0im  0+0im  6+6im  0+0im  2-2im
  0+0im  4+0im  0+0im  9+0im  0+0im
  6-6im  0+0im  7+0im  0+0im  3+3im
@@ -239,7 +239,7 @@ end
 # For A<:Union{Symmetric,Hermitian}, similar(A[, neweltype]) should yield a matrix with the same
 # symmetry type, uplo flag, and underlying storage type as A. The following methods cover these cases.
 similar(A::Symmetric, ::Type{T}) where {T} = Symmetric(similar(parent(A), T), ifelse(A.uplo == 'U', :U, :L))
-# If the the Hermitian constructor's check ascertaining that the wrapped matrix's
+# If the Hermitian constructor's check ascertaining that the wrapped matrix's
 # diagonal is strictly real is removed, the following method can be simplified.
 function similar(A::Hermitian, ::Type{T}) where T
     B = similar(parent(A), T)
@@ -268,11 +268,11 @@ end
 Array(A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
 
 parent(A::HermOrSym) = A.data
-Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:AbstractMatrix} = A
-Symmetric{T,S}(A::Symmetric) where {T,S<:AbstractMatrix} = Symmetric{T,S}(convert(S,A.data),A.uplo)
+Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:AbstractMatrix{T}} = A
+Symmetric{T,S}(A::Symmetric) where {T,S<:AbstractMatrix{T}} = Symmetric{T,S}(convert(S,A.data),A.uplo)
 AbstractMatrix{T}(A::Symmetric) where {T} = Symmetric(convert(AbstractMatrix{T}, A.data), sym_uplo(A.uplo))
-Hermitian{T,S}(A::Hermitian{T,S}) where {T,S<:AbstractMatrix} = A
-Hermitian{T,S}(A::Hermitian) where {T,S<:AbstractMatrix} = Hermitian{T,S}(convert(S,A.data),A.uplo)
+Hermitian{T,S}(A::Hermitian{T,S}) where {T,S<:AbstractMatrix{T}} = A
+Hermitian{T,S}(A::Hermitian) where {T,S<:AbstractMatrix{T}} = Hermitian{T,S}(convert(S,A.data),A.uplo)
 AbstractMatrix{T}(A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), sym_uplo(A.uplo))
 
 copy(A::Symmetric{T,S}) where {T,S} = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
@@ -461,11 +461,25 @@ end
 (-)(A::Hermitian) = Hermitian(-A.data, sym_uplo(A.uplo))
 
 ## Addition/subtraction
+for f ∈ (:+, :-), (Wrapper, conjugation) ∈ ((:Hermitian, :adjoint), (:Symmetric, :transpose))
+    @eval begin
+        function $f(A::$Wrapper, B::$Wrapper)
+            if A.uplo == B.uplo
+                return $Wrapper($f(parent(A), parent(B)), sym_uplo(A.uplo))
+            elseif A.uplo == 'U'
+                return $Wrapper($f(parent(A), $conjugation(parent(B))), :U)
+            else
+                return $Wrapper($f($conjugation(parent(A)), parent(B)), :U)
+            end
+        end
+    end
+end
+
 for f in (:+, :-)
-    @eval $f(A::Symmetric, B::Symmetric) = Symmetric($f(A.data, B), sym_uplo(A.uplo))
-    @eval $f(A::Hermitian, B::Hermitian) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
-    @eval $f(A::Hermitian, B::Symmetric{<:Real}) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
-    @eval $f(A::Symmetric{<:Real}, B::Hermitian) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
+    @eval begin
+        $f(A::Hermitian, B::Symmetric{<:Real}) = $f(A, Hermitian(parent(B), sym_uplo(B.uplo)))
+        $f(A::Symmetric{<:Real}, B::Hermitian) = $f(Hermitian(parent(A), sym_uplo(A.uplo)), B)
+    end
 end
 
 ## Matvec
@@ -742,17 +756,17 @@ e.g. the 2nd to 8th eigenvalues.
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+3×3 SymTridiagonal{Float64,Vector{Float64}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
 
 julia> eigvals(A, 2:2)
-1-element Array{Float64,1}:
+1-element Vector{Float64}:
  0.9999999999999996
 
 julia> eigvals(A)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  -2.1400549446402604
   1.0000000000000002
   5.140054944640259
@@ -782,17 +796,17 @@ by specifying a pair `vl` and `vu` for the lower and upper boundaries of the eig
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+3×3 SymTridiagonal{Float64,Vector{Float64}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
 
 julia> eigvals(A, -1, 2)
-1-element Array{Float64,1}:
+1-element Vector{Float64}:
  1.0000000000000009
 
 julia> eigvals(A)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  -2.1400549446402604
   1.0000000000000002
   5.140054944640259
@@ -993,22 +1007,27 @@ end
 
 
 for func in (:log, :sqrt)
+    # sqrt has rtol arg to handle matrices that are semidefinite up to roundoff errors
+    rtolarg = func === :sqrt ? Any[Expr(:kw, :(rtol::Real), :(eps(real(float(one(T))))*size(A,1)))] : Any[]
+    rtolval = func === :sqrt ? :(-maximum(abs, F.values) * rtol) : 0
     @eval begin
-        function ($func)(A::HermOrSym{<:Real})
+        function ($func)(A::HermOrSym{T}; $(rtolarg...)) where {T<:Real}
             F = eigen(A)
-            if all(λ -> λ ≥ 0, F.values)
-                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+            λ₀ = $rtolval # treat λ ≥ λ₀ as "zero" eigenvalues up to roundoff
+            if all(λ -> λ ≥ λ₀, F.values)
+                retmat = (F.vectors * Diagonal(($func).(max.(0, F.values)))) * F.vectors'
             else
                 retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
             end
             return Symmetric(retmat)
         end
 
-        function ($func)(A::Hermitian{<:Complex})
+        function ($func)(A::Hermitian{T}; $(rtolarg...)) where {T<:Complex}
             n = checksquare(A)
             F = eigen(A)
-            if all(λ -> λ ≥ 0, F.values)
-                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+            λ₀ = $rtolval # treat λ ≥ λ₀ as "zero" eigenvalues up to roundoff
+            if all(λ -> λ ≥ λ₀, F.values)
+                retmat = (F.vectors * Diagonal(($func).(max.(0, F.values)))) * F.vectors'
                 for i = 1:n
                     retmat[i,i] = real(retmat[i,i])
                 end

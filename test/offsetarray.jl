@@ -9,6 +9,10 @@ using Statistics
 
 const OAs_name = join(fullname(OffsetArrays), ".")
 
+if !isdefined(@__MODULE__, :T24Linear)
+    include("testhelpers/arrayindexingtypes.jl")
+end
+
 let
 # Basics
 v0 = rand(4)
@@ -17,6 +21,7 @@ h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test axes(v) == (-2:1,)
 @test size(v) == (4,)
 @test size(v, 1) == 4
+@test_throws DimensionMismatch Array(v)
 
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # IndexLinear
@@ -212,8 +217,8 @@ cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop
 cmp_showf(show, io, OffsetArray(collect(1:100), (100,)))   # issue #31641
 
 targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
-            "1-element $OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
-            "1×1 $OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
+            "1-element $OAs_name.OffsetArray{Float64,1,Vector{Float64}} with indices 2:2:\n 1.0",
+            "1×1 $OAs_name.OffsetArray{Float64,2,Matrix{Float64}} with indices 2:2×3:3:\n 1.0",
             "1×1×1 $OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
             "1×1×1×1 $OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(fill(1.0), fill(1.0))",
@@ -290,12 +295,15 @@ copyto!(a, -2, (1,2,3), 1, 2)
 
 b = 1:2    # copy between AbstractArrays
 bo = OffsetArray(1:2, (-3,))
-@test_throws BoundsError copyto!(a, b)
+copyto!(a, b)    # no BoundsError, see #34049
+@test a[-3] == 1
+@test a[-2] == 2
+@test a[-1] == 2
 fill!(a, -1)
 copyto!(a, bo)
-@test a[-3] == -1
-@test a[-2] == 1
-@test a[-1] == 2
+@test a[-3] == 1
+@test a[-2] == 2
+@test a[-1] == -1
 fill!(a, -1)
 copyto!(a, -2, bo)
 @test a[-3] == -1
@@ -328,6 +336,16 @@ map!(+, dest, am, am)
 am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
+
+# https://github.com/JuliaArrays/OffsetArrays.jl/issues/106
+@test isequal(map(!, OffsetArray([true,missing],2)), OffsetArray([false, missing], 2))
+@test isequal(map(!, OffsetArray([true missing; false true], 2, -1)), OffsetArray([false missing; true false], 2, -1))
+P = view([true missing; false true; true false], 1:2:3, :)
+@test IndexStyle(P) === IndexCartesian()
+@test isequal(map(!, OffsetArray(P, 2, -1)), OffsetArray(map(!, P), 2, -1))
+P = TSlow([true missing; false true])
+@test IndexStyle(P) === IndexCartesian()
+@test isequal(map(!, OffsetArray(P, 2, -1)), OffsetArray(map(!, P), 2, -1))
 
 # dropdims
 a0 = rand(1,1,8,8,1)
@@ -440,6 +458,14 @@ I = findall(!iszero, z)
 @test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), A_3_3.offsets)
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
+# https://github.com/JuliaArrays/OffsetArrays.jl/issues/92
+A92 = OffsetArray(reshape(1:27, 3, 3, 3), -2, -2, -2)
+B92 = view(A92, :, :, -1:0)
+@test axes(B92) == (-1:1, -1:1, 1:2)
+@test sum(B92, dims=(2,3)) == OffsetArray(reshape([51,57,63], Val(3)), -2, -2, 0)
+B92 = view(A92, :, :, Base.IdentityUnitRange(-1:0))
+@test sum(B92, dims=(2,3)) == OffsetArray(reshape([51,57,63], Val(3)), -2, -2, -2)
+
 @test norm(v) ≈ norm(parent(v))
 @test norm(A) ≈ norm(parent(A))
 @test dot(v, v) ≈ dot(v0, v0)
@@ -477,7 +503,7 @@ v = OffsetArray(rand(8), (-2,))
 @test sort(A, dims=2) == OffsetArray(sort(parent(A), dims=2), A.offsets)
 # Issue #33977
 soa = OffsetArray([2,2,3], -2)
-@test searchsorted(soa, 1) == -1:-2
+@test searchsorted(soa, 1) === -1:-2
 @test searchsortedfirst(soa, 1) == -1
 @test searchsortedlast(soa, 1) == -2
 @test first(sort!(soa; alg=QuickSort)) == 2
@@ -582,4 +608,19 @@ end
     @test_throws DimensionMismatch minimum!(fill(0, -4:-4, 7:9, -6:-6, 1:1), B)
     @test_throws DimensionMismatch maximum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
     @test_throws DimensionMismatch minimum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
+end
+
+@testset "first/last n elements of vector" begin
+    v0 = rand(6)
+    v = OffsetArray(v0, (-3,))
+    @test_throws ArgumentError first(v, -2)
+    @test first(v, 2) == v[begin:begin+1]
+    @test first(v, 100) == v0
+    @test first(v, 100) !== v
+    @test first(v, 1) == [v[begin]]
+    @test_throws ArgumentError last(v, -2)
+    @test last(v, 2) == v[end-1:end]
+    @test last(v, 100) == v0
+    @test last(v, 100) !== v
+    @test last(v, 1) == [v[end]]
 end

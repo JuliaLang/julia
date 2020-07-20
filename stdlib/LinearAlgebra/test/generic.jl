@@ -17,7 +17,7 @@ Random.seed!(123)
 
 n = 5 # should be odd
 
-@testset for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat})
+@testset for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
     # In the long run, these tests should step through Strang's
     #  axiomatic definition of determinants.
     # If all axioms are satisfied and all the composition rules work,
@@ -152,11 +152,11 @@ end
 
 @testset "scale real matrix by complex type" begin
     @test_throws InexactError rmul!([1.0], 2.0im)
-    @test isequal([1.0] * 2.0im,             Complex{Float64}[2.0im])
-    @test isequal(2.0im * [1.0],             Complex{Float64}[2.0im])
-    @test isequal(Float32[1.0] * 2.0f0im,    Complex{Float32}[2.0im])
-    @test isequal(Float32[1.0] * 2.0im,      Complex{Float64}[2.0im])
-    @test isequal(Float64[1.0] * 2.0f0im,    Complex{Float64}[2.0im])
+    @test isequal([1.0] * 2.0im,             ComplexF64[2.0im])
+    @test isequal(2.0im * [1.0],             ComplexF64[2.0im])
+    @test isequal(Float32[1.0] * 2.0f0im,    ComplexF32[2.0im])
+    @test isequal(Float32[1.0] * 2.0im,      ComplexF64[2.0im])
+    @test isequal(Float64[1.0] * 2.0f0im,    ComplexF64[2.0im])
     @test isequal(Float32[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
     @test isequal(Float64[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
     @test isequal(BigFloat[1.0] * 2.0im,     Complex{BigFloat}[2.0im])
@@ -215,6 +215,25 @@ end
     @test norm(x, 0) == length(x)
     @test norm(x, 1) ≈ 5+sqrt(5)
     @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
+end
+
+@testset "rotate! and reflect!" begin
+    x = rand(ComplexF64, 10)
+    y = rand(ComplexF64, 10)
+    c = rand(Float64)
+    s = rand(ComplexF64)
+
+    x2 = copy(x)
+    y2 = copy(y)
+    rotate!(x, y, c, s)
+    @test x ≈ c*x2 + s*y2
+    @test y ≈ -conj(s)*x2 + c*y2
+
+    x3 = copy(x)
+    y3 = copy(y)
+    reflect!(x, y, c, s)
+    @test x ≈ c*x3 + s*y3
+    @test y ≈ conj(s)*x3 - c*y3
 end
 
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
@@ -435,7 +454,7 @@ end
 end
 
 @testset "generalized dot #32739" begin
-    for elty in (Int, Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat})
+    for elty in (Int, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
         n = 10
         if elty <: Int
             A = rand(-n:n, n, n)

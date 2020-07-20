@@ -13,14 +13,14 @@
 (define (error-wrap thk)
   (with-exception-catcher
    (lambda (e)
-     (if (and (pair? e) (eq? (car e) 'error))
+     (if (and (pair? e) (memq (car e) '(error io-error)))
          (let ((msg (cadr e))
                (pfx "incomplete:"))
            (if (and (string? msg) (>= (string-length msg) (string-length pfx))
                     (equal? pfx
                             (substring msg 0 (string-length pfx))))
                `(incomplete ,msg)
-               e))
+               (cons 'error (cdr e))))
          (begin
            ;;(newline)
            ;;(display "unexpected error: ")
@@ -37,14 +37,15 @@
 ;; parser entry points
 
 ;; parse one expression (if greedy) or atom, returning end position
-(define (jl-parse-one s pos0 greedy)
-  (let ((inp (open-input-string s)))
+(define (jl-parse-one str filename pos0 greedy)
+  (let ((inp (open-input-string str)))
     (io.seek inp pos0)
-    (let ((expr (error-wrap (lambda ()
-                              (if greedy
-                                  (julia-parse inp)
-                                  (julia-parse inp parse-atom))))))
-      (cons expr (io.pos inp)))))
+    (with-bindings ((current-filename (symbol filename)))
+     (let ((expr (error-wrap (lambda ()
+                               (if greedy
+                                   (julia-parse inp parse-stmts)
+                                   (julia-parse inp parse-atom))))))
+       (cons expr (io.pos inp))))))
 
 (define (parse-all- io filename)
   (unwind-protect
@@ -53,10 +54,13 @@
       (let loop ((exprs '()))
         (let ((lineno (error-wrap
                        (lambda ()
-                         (skip-ws-and-comments (ts:port stream))
-                         (input-port-line (ts:port stream))))))
+                         (skip-ws-and-comments io)
+                         (input-port-line io)))))
           (if (pair? lineno)
-              (cons 'toplevel (reverse! (cons lineno exprs)))
+              (cons 'toplevel
+                    (reverse! (list* lineno
+                                     `(line ,(input-port-line io) ,current-filename)
+                                     exprs)))
               (let ((expr (error-wrap
                            (lambda ()
                              (julia-parse stream)))))
@@ -66,10 +70,7 @@
                            ;; for error, get most recent line number (#16720)
                            (lineno (if iserr (input-port-line io) lineno))
                            (next   (list* expr
-                                          ;; include filename in first line node
-                                          (if (null? exprs)
-                                              `(line ,lineno ,(symbol filename))
-                                              `(line ,lineno))
+                                          `(line ,lineno ,current-filename)
                                           exprs)))
                       (if iserr
                           (cons 'toplevel (reverse! next))
@@ -94,7 +95,7 @@
   (let ((ex0 (julia-expand-macroscope e)))
     (if (toplevel-only-expr? ex0)
         ex0
-        (let* ((ex (julia-expand0 ex0))
+        (let* ((ex (julia-expand0 ex0 file line))
                (th (julia-expand1
                     `(lambda () ()
                              (scope-block
@@ -176,11 +177,12 @@
   (jl-expand-to-thunk
    (let* ((name (caddr e))
           (body (cadddr e))
-          (loc  (cadr body))
+          (loc  (if (null? (cdr body)) () (cadr body)))
           (loc  (if (and (pair? loc) (eq? (car loc) 'line))
                     (list loc)
                     '()))
-          (x    (if (eq? name 'x) 'y 'x)))
+          (x    (if (eq? name 'x) 'y 'x))
+          (mex  (if (eq? name 'mapexpr) 'map_expr 'mapexpr)))
      `(block
        (= (call eval ,x)
           (block
@@ -189,7 +191,11 @@
        (= (call include ,x)
           (block
            ,@loc
-           (call (top include) ,name ,x)))))
+           (call (top include) ,name ,x)))
+       (= (call include (:: ,mex (top Function)) ,x)
+          (block
+           ,@loc
+           (call (top include) ,mex ,name ,x)))))
    'none 0))
 
 ; run whole frontend on a string. useful for testing.

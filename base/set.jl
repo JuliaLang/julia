@@ -37,9 +37,18 @@ emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 _similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
-    print(io, "Set(")
-    show_vector(io, s)
-    print(io, ')')
+    if isempty(s)
+        if get(io, :typeinfo, Any) == typeof(s)
+            print(io, "Set()")
+        else
+            show(io, typeof(s))
+            print(io, "()")
+        end
+    else
+        print(io, "Set(")
+        show_vector(io, s)
+        print(io, ')')
+    end
 end
 
 isempty(s::Set) = isempty(s.dict)
@@ -58,6 +67,7 @@ delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = copymutable(s)
 
+copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
@@ -98,31 +108,37 @@ input is preserved.
 # Examples
 ```jldoctest
 julia> unique([1, 2, 6, 2])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  6
 
 julia> unique(Real[1, 1.0, 2])
-2-element Array{Real,1}:
+2-element Vector{Real}:
  1
  2
 ```
 """
 function unique(itr)
-    T = @default_eltype(itr)
-    out = Vector{T}()
-    seen = Set{T}()
-    y = iterate(itr)
-    y === nothing && return out
-    x, i = y
-    if !isconcretetype(T) && IteratorEltype(itr) == EltypeUnknown()
-        S = typeof(x)
-        return _unique_from(itr, S[x], Set{S}((x,)), i)
+    if isa(IteratorEltype(itr), HasEltype)
+        T = eltype(itr)
+        out = Vector{T}()
+        seen = Set{T}()
+        for x in itr
+            if !in(x, seen)
+                push!(seen, x)
+                push!(out, x)
+            end
+        end
+        return out
     end
-    push!(seen, x)
-    push!(out, x)
-    return unique_from(itr, out, seen, i)
+    T = @default_eltype(itr)
+    y = iterate(itr)
+    y === nothing && return T[]
+    x, i = y
+    S = typeof(x)
+    R = isconcretetype(T) ? T : S
+    return _unique_from(itr, R[x], Set{R}((x,)), i)
 end
 
 _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
@@ -159,14 +175,24 @@ applied to elements of `itr`.
 # Examples
 ```jldoctest
 julia> unique(x -> x^2, [1, -1, 3, -3, 4])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  4
 ```
 """
-function unique(f, C)
+function unique(f, C; seen::Union{Nothing,Set}=nothing)
     out = Vector{eltype(C)}()
+    if seen !== nothing
+        for x in C
+            y = f(x)
+            if y ∉ seen
+                push!(out, x)
+                push!(seen, y)
+            end
+        end
+        return out
+    end
 
     s = iterate(C)
     if s === nothing
@@ -206,7 +232,7 @@ end
     unique!(f, A::AbstractVector)
 
 Selects one value from `A` for each unique value produced by `f` applied to
-elements of `A` , then return the modified A.
+elements of `A`, then return the modified A.
 
 !!! compat "Julia 1.1"
     This method is available as of Julia 1.1.
@@ -214,24 +240,24 @@ elements of `A` , then return the modified A.
 # Examples
 ```jldoctest
 julia> unique!(x -> x^2, [1, -1, 3, -3, 4])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  4
 
 julia> unique!(n -> n%3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  5
  1
  9
 
 julia> unique!(iseven, [2, 3, 5, 7, 9])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  3
 ```
 """
-function unique!(f, A::AbstractVector)
+function unique!(f, A::AbstractVector; seen::Union{Nothing,Set}=nothing)
     if length(A) <= 1
         return A
     end
@@ -239,7 +265,9 @@ function unique!(f, A::AbstractVector)
     i = firstindex(A)
     x = @inbounds A[i]
     y = f(x)
-    seen = Set{typeof(y)}()
+    if seen === nothing
+        seen = Set{typeof(y)}()
+    end
     push!(seen, y)
     return _unique!(f, A, seen, i, i+1)
 end
@@ -261,7 +289,7 @@ function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
         end
         i += 1
     end
-    return resize!(A, current - firstindex(A) + 1)
+    return resize!(A, current - firstindex(A) + 1)::typeof(A)
 end
 
 
@@ -287,7 +315,7 @@ function _groupedunique!(A::AbstractVector)
             it = iterate(idxs, it[2])
         end
     end
-    resize!(A, count)
+    resize!(A, count)::typeof(A)
 end
 
 """
@@ -301,13 +329,13 @@ more efficient as long as the elements of `A` can be sorted.
 # Examples
 ```jldoctest
 julia> unique!([1, 1, 1])
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 
 julia> A = [7, 3, 2, 3, 7, 5];
 
 julia> unique!(A)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  7
  3
  2
@@ -318,30 +346,20 @@ julia> B = [7, 6, 42, 6, 7, 42];
 julia> sort!(B);  # unique! is able to process sorted data much more efficiently.
 
 julia> unique!(B)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   6
   7
  42
 ```
 """
-function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
-                          AbstractVector{<:Symbol}})
-    if isempty(A)
-        return A
-    elseif issorted(A) || issorted(A, rev=true)
-        return _groupedunique!(A)
-    else
-        return _unique!(A)
+function unique!(itr)
+    if isa(itr, AbstractVector)
+        if OrderStyle(eltype(itr)) === Ordered()
+            (issorted(itr) || issorted(itr, rev=true)) && return _groupedunique!(itr)
+        end
     end
-end
-# issorted fails for some element types, so the method above has to be restricted to
-# elements with isless/< defined.
-function unique!(A)
-    if isempty(A)
-        return A
-    else
-        return _unique!(A)
-    end
+    isempty(itr) && return itr
+    return _unique!(itr)
 end
 
 """
@@ -352,7 +370,7 @@ Return `true` if all values from `itr` are distinct when compared with [`isequal
 # Examples
 ```jldoctest
 julia> a = [1; 2; 3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -377,6 +395,7 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)
+allunique(r::StepRangeLen{T,R,S}) where {T,R,S} = (step(r) != zero(S)) || (length(r) <= 1)
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
@@ -432,7 +451,7 @@ See also [`replace`](@ref replace(A, old_new::Pair...)).
 # Examples
 ```jldoctest
 julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  0
  4
  1
@@ -468,7 +487,7 @@ If `count` is specified, then replace at most `count` values in total
 # Examples
 ```jldoctest
 julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  2
  6
@@ -510,14 +529,14 @@ See also [`replace!`](@ref).
 # Examples
 ```jldoctest
 julia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  0
  4
  1
  3
 
 julia> replace([1, missing], missing=>0)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  0
 ```
@@ -551,14 +570,14 @@ subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
 """
     replace(new::Function, A; [count::Integer])
 
-Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`
+Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 
 # Examples
 ```jldoctest
 julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  2
  6
@@ -589,6 +608,7 @@ askey(k, ::AbstractSet) = k
 
 function _replace!(new::Callable, res::T, A::T,
                    count::Int) where T<:Union{AbstractDict,AbstractSet}
+    count == 0 && return res
     c = 0
     if res === A # cannot replace elements while iterating over A
         repl = Pair{eltype(A),eltype(A)}[]
@@ -597,8 +617,8 @@ function _replace!(new::Callable, res::T, A::T,
             if x !== y
                 push!(repl, x => y)
                 c += 1
+                c == count && break
             end
-            c == count && break
         end
         for oldnew in repl
             pop!(res, askey(first(oldnew), res))
@@ -613,8 +633,8 @@ function _replace!(new::Callable, res::T, A::T,
                 pop!(res, askey(x, res))
                 push!(res, y)
                 c += 1
+                c == count && break
             end
-            c == count && break
         end
     end
     res
@@ -625,10 +645,18 @@ end
 function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::Int)
     c = 0
     if count >= length(A) # simpler loop allows for SIMD
-        for i in eachindex(A)
-            @inbounds Ai = A[i]
-            y = new(Ai)
-            @inbounds res[i] = y
+        if res === A # for optimization only
+            for i in eachindex(A)
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds A[i] = y
+            end
+        else
+            for i in eachindex(A)
+                @inbounds Ai = A[i]
+                y = new(Ai)
+                @inbounds res[i] = y
+            end
         end
     else
         for i in eachindex(A)

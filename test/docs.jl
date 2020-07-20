@@ -982,10 +982,11 @@ let x = Binding(Main, :⊕)
     @test Meta.parse(string(x)) == :(⊕)
 end
 
-doc_util_path = Symbol(joinpath("docs", "utils.jl"))
-
 @test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
 @test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
+
+# issue #36378 (\u1e8b and x\u307 are the fully composed and decomposed forms of ẋ, respectively)
+@test sprint(repl_latex, "\u1e8b") == "\"x\u307\" can be typed by x\\dot<tab>\n\n"
 
 # issue #15684
 begin

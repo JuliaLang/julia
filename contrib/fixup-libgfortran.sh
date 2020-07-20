@@ -63,6 +63,7 @@ for lib in lapack blas openblas; do
         # Find the paths to the libraries we're interested in.  These are almost
         # always within the same directory, but we like to be general.
         LIBGFORTRAN_PATH="$(find_shlib "$private_libname" libgfortran)"
+        if [ -z "$LIBGFORTRAN_PATH" ]; then continue; fi
 
         # Take the directories, add them onto LIBGFORTRAN_DIRS, which we use to
         # search for these libraries in the future.  If there is no directory, try
@@ -79,10 +80,14 @@ for lib in lapack blas openblas; do
         LIBGCC_PATH="$(find_shlib "${LIBGFORTRAN_DIR}/${LIBGFORTRAN_SONAME}" libgcc_s)"
         LIBQUADMATH_PATH="$(find_shlib "${LIBGFORTRAN_DIR}/${LIBGFORTRAN_SONAME}" libquadmath)"
 
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(find_shlib_dir $LIBGCC_PATH)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(find_shlib_dir $LIBQUADMATH_PATH)"
-        LIBGCC_SONAMES="$LIBGCC_SONAMES $(basename "$LIBGCC_PATH")"
-        LIBQUADMATH_SONAMES="$LIBQUADMATH_SONAMES $(basename "$LIBQUADMATH_PATH")"
+        if [ ! -z "$LIBGCC_PATH" ]; then
+            LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(find_shlib_dir $LIBGCC_PATH)"
+            LIBGCC_SONAMES="$LIBGCC_SONAMES $(basename "$LIBGCC_PATH")"
+        fi
+        if [ ! -z "$LIBQUADMATH_PATH" ]; then
+            LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(find_shlib_dir $LIBQUADMATH_PATH)"
+            LIBQUADMATH_SONAMES="$LIBQUADMATH_SONAMES $(basename "$LIBQUADMATH_PATH")"
+        fi
     done
 done
 

@@ -7,6 +7,26 @@ using Base.Threads: SpinLock
 # for cfunction_closure
 include("testenv.jl")
 
+function killjob(d)
+    Core.print(Core.stderr, d)
+    if Sys.islinux()
+        SIGINFO = 10
+    elseif Sys.isbsd()
+        SIGINFO = 29
+    end
+    if @isdefined(SIGINFO)
+        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
+        sleep(1)
+    end
+    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    nothing
+end
+
+# set up a watchdog alarm for 20 minutes
+# so that we can attempt to get a "friendly" backtrace if something gets stuck
+# (expected test duration is about 18-180 seconds)
+Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
+
 # threading constructs
 
 let a = zeros(Int, 2 * nthreads())
@@ -213,6 +233,19 @@ end
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{ComplexF64}
 
+if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+   Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
+
+    @test_throws TypeError Atomic{Int128}()
+    @test_throws TypeError Atomic{UInt128}()
+end
+
+if Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
+    @test_throws TypeError Atomic{Float16}()
+    @test_throws TypeError Atomic{Float32}()
+    @test_throws TypeError Atomic{Float64}()
+end
+
 function test_atomic_bools()
     x = Atomic{Bool}(false)
     # Arithmetic functions are not defined.
@@ -324,18 +357,11 @@ end
 test_fence()
 
 # Test load / store with various types
-let atomic_types = [Int8, Int16, Int32, Int64, Int128,
-                    UInt8, UInt16, UInt32, UInt64, UInt128,
-                    Float16, Float32, Float64]
-    # Temporarily omit 128-bit types on 32bit x86
-    # 128-bit atomics do not exist on AArch32.
-    # And we don't support them yet on power, because they are lowered
-    # to `__sync_lock_test_and_set_16`.
-    if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
-       Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-        filter!(T -> sizeof(T)<=8, atomic_types)
-    end
-    for T in atomic_types
+let atomictypes = intersect((Int8, Int16, Int32, Int64, Int128,
+                             UInt8, UInt16, UInt32, UInt64, UInt128,
+                             Float16, Float32, Float64),
+                            Base.Threads.atomictypes)
+    for T in atomictypes
         var = Atomic{T}()
         var[] = 42
         @test var[] === T(42)
@@ -362,7 +388,7 @@ function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
         end
     end
 end
-for T in (Int32, Int64, Float32, Float64)
+for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
     var = Atomic{T}()
     nloops = 1000
     di = nthreads()
@@ -376,7 +402,7 @@ function test_atomic_xchg!(var::Atomic{T}, i::Int, accum::Atomic{Int}) where T
     old = atomic_xchg!(var, T(i))
     atomic_add!(accum, Int(old))
 end
-for T in (Int32, Int64, Float32, Float64)
+for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
     accum = Atomic{Int}()
     var = Atomic{T}()
     nloops = 1000
@@ -391,7 +417,7 @@ function test_atomic_float(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{
     atomic_max!(varmax, T(i))
     atomic_min!(varmin, T(i))
 end
-for T in (Int32, Int64, Float32, Float64)
+for T in intersect((Int32, Int64, Float16, Float32, Float64), Base.Threads.atomictypes)
     varadd = Atomic{T}()
     varmax = Atomic{T}()
     varmin = Atomic{T}()
@@ -402,6 +428,10 @@ for T in (Int32, Int64, Float32, Float64)
     @test varadd[] === T(sum(1:nloops))
     @test varmax[] === T(maximum(1:nloops))
     @test varmin[] === T(0)
+    @test atomic_add!(Atomic{T}(1), T(2)) == 1
+    @test atomic_sub!(Atomic{T}(2), T(3)) == 2
+    @test atomic_min!(Atomic{T}(4), T(3)) == 4
+    @test atomic_max!(Atomic{T}(5), T(6)) == 5
 end
 
 using Dates
@@ -667,14 +697,11 @@ end
 
 
 # scheduling wake/sleep test (#32511)
-let timeout = 300 # this test should take about 1-10 seconds
-    t = Timer(timeout) do t
-        ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
-    end # set up a watchdog alarm
+let t = Timer(t -> killjob("KILLING BY QUICK KILL WATCHDOG\n"), 600) # this test should take about 1-10 seconds
     for _ = 1:10^5
         @threads for idx in 1:1024; #=nothing=# end
     end
-    close(t) # stop the watchdog
+    close(t) # stop the fast watchdog
 end
 
 # issue #32575
@@ -701,6 +728,17 @@ let a = zeros(nthreads())
     _atthreads_with_error(a, false)
     @test a == [1:nthreads();]
 end
+
+# static schedule
+function _atthreads_static_schedule()
+    ids = zeros(Int, nthreads())
+    Threads.@threads :static for i = 1:nthreads()
+        ids[i] = Threads.threadid()
+    end
+    return ids
+end
+@test _atthreads_static_schedule() == [1:nthreads();]
+@test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(); end
 
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
@@ -793,4 +831,52 @@ end
     @test fetch(Threads.@spawn @. $exp(x)) == @. $exp(x)
     x = 2
     @test @eval(fetch(@async 2+$x)) == 4
+end
+
+# issue #34666
+fib34666(x) =
+    @sync begin
+        function f(x)
+            x in (0, 1) && return x
+            a = Threads.@spawn f(x - 2)
+            b = Threads.@spawn f(x - 1)
+            return fetch(a) + fetch(b)
+        end
+        f(x)
+    end
+@test fib34666(25) == 75025
+
+function jitter_channel(f, k, delay, ntasks, schedule)
+    x = Channel(ch -> foreach(i -> put!(ch, i), 1:k), 1)
+    y = Channel(k) do ch
+        g = i -> begin
+            iseven(i) && sleep(delay)
+            put!(ch, f(i))
+        end
+        Threads.foreach(g, x; schedule=schedule, ntasks=ntasks)
+    end
+    return y
+end
+
+@testset "Threads.foreach(f, ::Channel)" begin
+    k = 50
+    delay = 0.01
+    expected = sin.(1:k)
+    ordered_fair = collect(jitter_channel(sin, k, delay, 1, Threads.FairSchedule()))
+    ordered_static = collect(jitter_channel(sin, k, delay, 1, Threads.StaticSchedule()))
+    @test expected == ordered_fair
+    @test expected == ordered_static
+
+    unordered_fair = collect(jitter_channel(sin, k, delay, 10, Threads.FairSchedule()))
+    unordered_static = collect(jitter_channel(sin, k, delay, 10, Threads.StaticSchedule()))
+    @test expected != unordered_fair
+    @test expected != unordered_static
+    @test Set(expected) == Set(unordered_fair)
+    @test Set(expected) == Set(unordered_static)
+
+    ys = Channel() do ys
+        inner = Channel(xs -> foreach(i -> put!(xs, i), 1:3))
+        Threads.foreach(x -> put!(ys, x), inner)
+    end
+    @test sort!(collect(ys)) == 1:3
 end

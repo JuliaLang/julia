@@ -596,3 +596,18 @@ end
     seekstart(io)
     @test_throws ErrorException read!(io, @view z[4:6])
 end
+
+# Bulk read from pipe
+let p = Pipe()
+    data = rand(UInt8, Base.SZ_UNBUFFERED_IO + 100)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    t = @async write(p.in, data)
+    @test read(p.out, UInt8) == data[1]
+    data_read = Vector{UInt8}(undef, 10*Base.SZ_UNBUFFERED_IO)
+    nread = readbytes!(p.out, data_read, Base.SZ_UNBUFFERED_IO + 50)
+    @test nread == Base.SZ_UNBUFFERED_IO + 50
+    @test data_read[1:nread] == data[2:nread+1]
+    @test read(p.out, 49) == data[end-48:end]
+    wait(t)
+    close(p)
+end

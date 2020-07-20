@@ -3,6 +3,9 @@
 # Array test
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
+
+isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
+
 using SparseArrays
 
 using Random, LinearAlgebra
@@ -463,6 +466,21 @@ end
     end
     @test_throws BoundsError insert!(v, 5, 5)
 end
+
+@testset "popat!(::Vector, i, [default])" begin
+    a = [1, 2, 3, 4]
+    @test_throws BoundsError popat!(a, 0)
+    @test popat!(a, 0, "default") == "default"
+    @test a == 1:4
+    @test_throws BoundsError popat!(a, 5)
+    @test popat!(a, 1) == 1
+    @test a == [2, 3, 4]
+    @test popat!(a, 2) == 3
+    @test a == [2, 4]
+    badpop() = @inbounds popat!([1], 2)
+    @test_throws BoundsError badpop()
+end
+
 @testset "concatenation" begin
     @test isequal([fill(1.,2,2)  fill(2.,2,1)], [1. 1 2; 1 1 2])
     @test isequal([fill(1.,2,2); fill(2.,1,2)], [1. 1; 1 1; 2 2])
@@ -561,6 +579,18 @@ end
     @test findlast(isequal(0x00), [0x01, 0x00]) == 2
     @test findnext(isequal(0x00), [0x00, 0x01, 0x00], 2) == 3
     @test findprev(isequal(0x00), [0x00, 0x01, 0x00], 2) == 1
+
+    @testset "issue 32568" for T = (UInt, BigInt)
+        @test findnext(!iszero, a, T(1)) isa keytype(a)
+        @test findnext(!iszero, a, T(2)) isa keytype(a)
+        @test findprev(!iszero, a, T(4)) isa keytype(a)
+        @test findprev(!iszero, a, T(5)) isa keytype(a)
+        b = [true, false, true]
+        @test findnext(b, T(2)) isa keytype(b)
+        @test findnext(b, T(3)) isa keytype(b)
+        @test findprev(b, T(1)) isa keytype(b)
+        @test findprev(b, T(2)) isa keytype(b)
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
@@ -683,6 +713,13 @@ end
     y = [0, 0, 0, 0]
     copyto!(y, x)
     @test y == [1, 2, 3, 4]
+
+    # similar, https://github.com/JuliaLang/julia/pull/35304
+    x = PermutedDimsArray([1 2; 3 4], (2, 1))
+    @test similar(x, 3,3) isa Array
+    z = TSlow([1 2; 3 4])
+    x_slow = PermutedDimsArray(z, (2, 1))
+    @test similar(x_slow, 3,3) isa TSlow
 end
 
 @testset "circshift" begin
@@ -691,9 +728,18 @@ end
     a = [1:5;]
     @test_throws ArgumentError Base.circshift!(a, a, 1)
     b = copy(a)
-    @test Base.circshift!(b, a, 1) == [5,1,2,3,4]
+    @test @inferred(Base.circshift!(b, a, 1) == [5,1,2,3,4])
+    src=rand(3,4,5)
+    dst=similar(src)
+    s=(1,2,3)
+    @inferred Base.circshift!(dst,src,s)
 end
 
+@testset "circcopy" begin
+    src=rand(3,4,5)
+    dst=similar(src)
+    @inferred Base.circcopy!(dst,src)
+end
 # unique across dim
 
 # With hash collisions
@@ -926,6 +972,9 @@ end
                                         3 4], inner=(2,), outer=(2, 2))
     @test_throws ArgumentError repeat([1 2;
                                         3 4], inner=(2, 2), outer=(2,))
+    @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
+
+    @test_throws ArgumentError repeat(OffsetArray(rand(2), 1), inner=(2,))
 
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
@@ -1191,6 +1240,12 @@ end
     R = reshape(A, 2, 2)
     A[R] .= reshape((1:4) .+ 2^30, 2, 2)
     @test A == [2,1,4,3] .+ 2^30
+
+    # unequal dimensionality (see comment in #35714)
+    a = [1 3; 2 4]
+    b = [3, 1, 4, 2]
+    copyto!(view(a, b), a)
+    @test a == [2 1; 4 3]
 end
 
 @testset "Base.mightalias unit tests" begin
@@ -1342,6 +1397,7 @@ end
             @test a == [acopy[1:(first(idx)-1)]; repl; acopy[(last(idx)+1):end]]
         end
     end
+    @test splice!([4,3,2,1], [2, 4]) == [3, 1]
 end
 
 @testset "filter!" begin
@@ -1392,11 +1448,15 @@ end
     @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
     @test_throws BoundsError deleteat!(a, 13)
     @test_throws BoundsError deleteat!(a, [1,13])
-    @test_throws ArgumentError deleteat!(a, [5,3])
+    @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
+    @test_throws BoundsError deleteat!(a, [0])
+    @test_throws BoundsError deleteat!(a, [4])
+    @test_throws BoundsError deleteat!(a, [5])
+    @test_throws BoundsError deleteat!(a, [5, 3])
 
     @test_throws BoundsError deleteat!([], 1)
     @test_throws BoundsError deleteat!([], [1])
@@ -2683,6 +2743,30 @@ end
     end
     @test !checkbounds(Bool, rand(3,3,3), :, CartesianIndex(0,0):CartesianIndex(1,1))
     @test !checkbounds(Bool, rand(3,3,3), CartesianIndex(0,0):CartesianIndex(1,1), :)
+
+    CI0 = CartesianIndices(())
+    # 0-dimensional
+    @test setindex!(fill(0.0), fill(1.0), CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), :, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, :) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), :, CI0, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, :, CI0) == fill(1.0)
+    @test setindex!(fill(0.0), fill(1.0), CI0, CI0, :) == fill(1.0)
+    @test setindex!(fill(fill(0.0)), fill(fill(1.0)), CI0) == fill(fill(1.0))
+    # 1-dimensional
+    @test setindex!(zeros(2), ones(2), :, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, :) == ones(2)
+    @test setindex!(zeros(2), ones(2), :, CI0, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, :, CI0) == ones(2)
+    @test setindex!(zeros(2), ones(2), CI0, CI0, :) == ones(2)
+    @test setindex!([fill(0.0)], fill(1.0), 1) == [fill(1.0)]
+    # 0-dimensional assigment into ≥1-dimensional arrays
+    @test setindex!(zeros(2), fill(1.0), 1, CI0) == [1.0, 0.0]
+    @test setindex!(zeros(2), fill(1.0), CI0, 1) == [1.0, 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), 1, 1, CI0) == [1.0 0.0; 0.0 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), 1, CI0, 1) == [1.0 0.0; 0.0 0.0]
+    @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
 end
 
 # Throws ArgumentError for negative dimensions in Array
@@ -2704,4 +2788,36 @@ let n = 12000000, k = 257000000
         sizehint!(v, n)
         v[end] == (n, 0.5)
     end
+end
+
+@testset "BoundsError printing" begin
+    x = rand(2, 2)
+
+    err = try x[10, :]; catch err; err; end
+    b = IOBuffer()
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 1:2]"
+
+    err = try x[10, trues(2)]; catch err; err; end
+    b = IOBuffer()
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, Bool[1, 1]]"
+
+    # Also test : directly for custom types for which it may appear as-is
+    err = BoundsError(x, (10, :))
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, :]"
+
+    err = BoundsError(x, "bad index")
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [\"bad index\"]"
+
+    err = BoundsError(x, (10, "bad index"))
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
 end

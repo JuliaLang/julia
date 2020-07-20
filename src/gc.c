@@ -725,6 +725,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
 #ifdef MEMDEBUG
     gc_setmark_big(ptls, o, mark_mode);
 #else
+    jl_assume(page);
     if (mark_mode == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += page->osize;
         jl_atomic_fetch_add_relaxed(&page->nold, 1);
@@ -748,7 +749,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
 STATIC_INLINE void gc_setmark_pool(jl_ptls_t ptls, jl_taggedvalue_t *o,
                                    uint8_t mark_mode) JL_NOTSAFEPOINT
 {
-    gc_setmark_pool_(ptls, o, mark_mode, jl_assume(page_metadata(o)));
+    gc_setmark_pool_(ptls, o, mark_mode, page_metadata(o));
 }
 
 STATIC_INLINE void gc_setmark(jl_ptls_t ptls, jl_taggedvalue_t *o,
@@ -2229,6 +2230,7 @@ excstack: {
                         goto mark;
                     }
                 }
+                jlval_index = 0;
             }
             // The exception comes last - mark it
             new_obj = jl_excstack_exception(excstack, itr);
@@ -2645,6 +2647,8 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
 {
     gc_mark_queue_obj(gc_cache, sp, ptls2->current_task);
     gc_mark_queue_obj(gc_cache, sp, ptls2->root_task);
+    if (ptls2->next_task)
+        gc_mark_queue_obj(gc_cache, sp, ptls2->next_task);
     if (ptls2->previous_exception)
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_exception);
 }
@@ -2670,8 +2674,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
             gc_mark_queue_obj(gc_cache, sp, jl_current_modules.table[i]);
         }
     }
-    if (jl_cfunction_list != NULL)
-        gc_mark_queue_obj(gc_cache, sp, jl_cfunction_list);
     gc_mark_queue_obj(gc_cache, sp, jl_anytuple_type_type);
     for (size_t i = 0; i < N_CALL_CACHE; i++)
         if (call_cache[i])
@@ -2682,8 +2684,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_typetype_type);
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
-
-    gc_mark_queue_finlist(gc_cache, sp, &partial_inst, 0);
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
@@ -3207,7 +3207,11 @@ void jl_gc_init(void)
 
 #ifdef _P64
     // on a big memory machine, set max_collect_interval to totalmem / ncores / 2
-    size_t maxmem = uv_get_total_memory() / jl_cpu_threads() / 2;
+    uint64_t total_mem = uv_get_total_memory();
+    uint64_t constrained_mem = uv_get_constrained_memory();
+    if (constrained_mem > 0 && constrained_mem < total_mem)
+        total_mem = constrained_mem;
+    size_t maxmem = total_mem / jl_cpu_threads() / 2;
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif

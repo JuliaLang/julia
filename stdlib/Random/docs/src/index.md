@@ -145,22 +145,22 @@ Scalar and array methods for `Die` now work as expected:
 
 ```jldoctest Die; setup = :(Random.seed!(1))
 julia> rand(Die)
-Die(18)
+Die(10)
 
 julia> rand(MersenneTwister(0), Die)
-Die(4)
+Die(16)
 
 julia> rand(Die, 3)
-3-element Array{Die,1}:
- Die(6)
- Die(11)
+3-element Vector{Die}:
  Die(5)
+ Die(20)
+ Die(9)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
-3-element Array{Die,1}:
- Die(18)
- Die(6)
- Die(8)
+3-element Vector{Die}:
+ Die(11)
+ Die(20)
+ Die(10)
 ```
 
 #### A simple sampler without pre-computed data
@@ -173,11 +173,11 @@ In order to define random generation out of objects of type `S`, the following m
 julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
 
 julia> rand(Die(4))
-3
+2
 
 julia> rand(Die(4), 3)
-3-element Array{Any,1}:
- 3
+3-element Vector{Any}:
+ 1
  4
  2
 ```
@@ -198,11 +198,11 @@ struct DiscreteDistribution{V <: AbstractVector}
     probabilities::V
 end
 ```
-and that we *always* want to build an a alias table, regardless of the number of values needed (we learn how to customize this below). The methods
+and that we *always* want to build an alias table, regardless of the number of values needed (we learn how to customize this below). The methods
 ```julia
 Random.eltype(::Type{<:DiscreteDistribution}) = Int
 
-function Random.Sampler(::AbstractRng, distribution::DiscreteDistribution, ::Repetition)
+function Random.Sampler(::Type{<:AbstractRNG}, distribution::DiscreteDistribution, ::Repetition)
     SamplerSimple(disribution, make_alias_table(distribution.probabilities))
 end
 ```

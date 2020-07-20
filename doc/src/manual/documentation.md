@@ -29,8 +29,9 @@ Here is a more complex example, still using Markdown:
 """
     bar(x[, y])
 
-Compute the Bar index between `x` and `y`. If `y` is missing, compute
-the Bar index between all pairs of columns of `x`.
+Compute the Bar index between `x` and `y`.
+
+If `y` is unspecified, compute the Bar index between all pairs of columns of `x`.
 
 # Examples
 ```julia-repl
@@ -317,6 +318,23 @@ end
 will add documentation to `f(x)` when `condition()` is `true`. Note that even if `f(x)` goes
 out of scope at the end of the block, its documentation will remain.
 
+It is possible to make use of metaprogramming to assist in the creation of documentation.
+When using string-interpolation within the docstring you will need to use an extra `$` as
+shown with `$($name)`:
+
+```julia
+for func in (:day, :dayofmonth)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(dt::TimeType) -> Int64
+
+        The day of month of a `Date` or `DateTime` as an `Int64`.
+        """ $func(dt::Dates.TimeType)
+    end
+end
+```
+
 ### Dynamic documentation
 
 Sometimes the appropriate documentation for an instance of a type depends on the field values of that
@@ -457,7 +475,7 @@ M
 end
 ```
 
-Adds docstring `"..."` to the `Module``M`. Adding the docstring above the `Module` is the preferred
+Adds docstring `"..."` to the `Module` `M`. Adding the docstring above the `Module` is the preferred
 syntax, however both are equivalent.
 
 ```julia

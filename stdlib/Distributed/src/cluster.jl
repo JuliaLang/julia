@@ -148,7 +148,7 @@ function set_worker_state(w, state)
 end
 
 function check_worker_state(w::Worker)
-    if w.state == W_CREATED
+    if w.state === W_CREATED
         if !isclusterlazy()
             if PGRP.topology === :all_to_all
                 # Since higher pids connect with lower pids, the remote worker
@@ -185,13 +185,13 @@ function exec_conn_func(w::Worker)
 end
 
 function wait_for_conn(w)
-    if w.state == W_CREATED
+    if w.state === W_CREATED
         timeout =  worker_timeout() - (time() - w.ct_time)
         timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
 
         @async (sleep(timeout); notify(w.c_state; all=true))
         wait(w.c_state)
-        w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+        w.state === W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
     end
     nothing
 end
@@ -411,19 +411,19 @@ if launching workers programmatically, execute `addprocs` in its own task.
 
 # Examples
 
-```
+```julia
 # On busy clusters, call `addprocs` asynchronously
 t = @async addprocs(...)
 ```
 
-```
+```julia
 # Utilize workers as and when they come online
 if nprocs() > 1   # Ensure at least one new worker is available
    ....   # perform distributed execution
 end
 ```
 
-```
+```julia
 # Retrieve newly launched worker IDs, or any error messages
 if istaskdone(t)   # Check if `addprocs` has completed to ensure `fetch` doesn't block
     if nworkers() == N
@@ -626,7 +626,7 @@ function create_worker(manager, wconfig)
         # require the value of config.connect_at which is set only upon connection completion
         for jw in PGRP.workers
             if (jw.id != 1) && (jw.id < w.id)
-                (jw.state == W_CREATED) && wait(jw.c_state)
+                (jw.state === W_CREATED) && wait(jw.c_state)
                 push!(join_list, jw)
             end
         end
@@ -649,7 +649,7 @@ function create_worker(manager, wconfig)
         end
 
         for wl in wlist
-            (wl.state == W_CREATED) && wait(wl.c_state)
+            (wl.state === W_CREATED) && wait(wl.c_state)
             push!(join_list, wl)
         end
     end
@@ -767,7 +767,7 @@ end
 mutable struct ProcessGroup
     name::AbstractString
     workers::Array{Any,1}
-    refs::Dict                  # global references
+    refs::Dict{RRID,Any}                  # global references
     topology::Symbol
     lazy::Union{Bool, Nothing}
 
@@ -851,7 +851,7 @@ function nprocs()
         n = length(PGRP.workers)
         # filter out workers in the process of being setup/shutdown.
         for jw in PGRP.workers
-            if !isa(jw, LocalProcess) && (jw.state != W_CONNECTED)
+            if !isa(jw, LocalProcess) && (jw.state !== W_CONNECTED)
                 n = n - 1
             end
         end
@@ -902,7 +902,7 @@ julia> procs()
 function procs()
     if myid() == 1 || (PGRP.topology === :all_to_all  && !isclusterlazy())
         # filter out workers in the process of being setup/shutdown.
-        return Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
+        return Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state === W_CONNECTED)]
     else
         return Int[x.id for x in PGRP.workers]
     end
@@ -911,7 +911,7 @@ end
 function id_in_procs(id)  # faster version of `id in procs()`
     if myid() == 1 || (PGRP.topology === :all_to_all  && !isclusterlazy())
         for x in PGRP.workers
-            if (x.id::Int) == id && (isa(x, LocalProcess) || (x::Worker).state == W_CONNECTED)
+            if (x.id::Int) == id && (isa(x, LocalProcess) || (x::Worker).state === W_CONNECTED)
                 return true
             end
         end
@@ -933,7 +933,7 @@ Specifically all workers bound to the same ip-address as `pid` are returned.
 """
 function procs(pid::Integer)
     if myid() == 1
-        all_workers = [x for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
+        all_workers = [x for x in PGRP.workers if isa(x, LocalProcess) || (x.state === W_CONNECTED)]
         if (pid == 1) || (isa(map_pid_wrkr[pid].manager, LocalManager))
             Int[x.id for x in filter(w -> (w.id==1) || (isa(w.manager, LocalManager)), all_workers)]
         else
@@ -1040,11 +1040,11 @@ function _rmprocs(pids, waitfor)
 
         start = time_ns()
         while (time_ns() - start) < waitfor*1e9
-            all(w -> w.state == W_TERMINATED, rmprocset) && break
+            all(w -> w.state === W_TERMINATED, rmprocset) && break
             sleep(min(0.1, waitfor - (time_ns() - start)/1e9))
         end
 
-        unremoved = [wrkr.id for wrkr in filter(w -> w.state != W_TERMINATED, rmprocset)]
+        unremoved = [wrkr.id for wrkr in filter(w -> w.state !== W_TERMINATED, rmprocset)]
         if length(unremoved) > 0
             estr = string("rmprocs: pids ", unremoved, " not terminated after ", waitfor, " seconds.")
             throw(ErrorException(estr))
@@ -1298,6 +1298,7 @@ end
 
 write_cookie(io::IO) = print(io.in, string(cluster_cookie(), "\n"))
 
+# Starts workers specified by (-n|--procs) and --machine-file command line options
 function process_opts(opts)
     # startup worker.
     # opts.startupfile, opts.load, etc should should not be processed for workers.
@@ -1310,14 +1311,17 @@ function process_opts(opts)
         end
     end
 
+    # Propagate --threads to workers
+    exeflags = opts.nthreads > 0 ? `--threads=$(opts.nthreads)` : ``
+
     # add processors
     if opts.nprocs > 0
-        addprocs(opts.nprocs)
+        addprocs(opts.nprocs; exeflags=exeflags)
     end
 
     # load processes from machine file
     if opts.machine_file != C_NULL
-        addprocs(load_machine_file(unsafe_string(opts.machine_file)))
+        addprocs(load_machine_file(unsafe_string(opts.machine_file)); exeflags=exeflags)
     end
     return nothing
 end

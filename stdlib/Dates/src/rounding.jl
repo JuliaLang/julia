@@ -58,6 +58,11 @@ function Base.floor(dt::Date, p::Month)
     return Date(target_year, target_month)
 end
 
+function Base.floor(dt::Date, p::Quarter)
+    return floor(dt, Month(p))
+end
+
+
 function Base.floor(dt::Date, p::Week)
     value(p) < 1 && throw(DomainError(p))
     days = value(dt) - WEEKEPOCH

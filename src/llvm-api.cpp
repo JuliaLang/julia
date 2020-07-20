@@ -8,11 +8,13 @@
 // They are not to be considered a stable API, and will be removed
 // when better package build systems are available
 
+#include "llvm-version.h"
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
 #include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/CallSite.h>
 #include <llvm/IR/DebugInfo.h>
@@ -23,9 +25,9 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 
 #include "julia.h"
-#include "llvm-version.h"
 
 using namespace llvm::legacy;
 
@@ -206,6 +208,28 @@ extern "C" JL_DLLEXPORT void LLVMExtraAddInternalizePassWithExportList(
         return false;
     };
     unwrap(PM)->add(createInternalizePass(PreserveFobj));
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAppendToUsed(LLVMModuleRef Mod,
+                                                   LLVMValueRef* Values,
+                                                   size_t Count) {
+    SmallVector<GlobalValue *, 1> GlobalValues;
+    for (auto *Value : makeArrayRef(Values, Count))
+        GlobalValues.push_back(cast<GlobalValue>(unwrap(Value)));
+    appendToUsed(*unwrap(Mod), GlobalValues);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAppendToCompilerUsed(LLVMModuleRef Mod,
+                                                           LLVMValueRef* Values,
+                                                           size_t Count) {
+    SmallVector<GlobalValue *, 1> GlobalValues;
+    for (auto *Value : makeArrayRef(Values, Count))
+        GlobalValues.push_back(cast<GlobalValue>(unwrap(Value)));
+    appendToCompilerUsed(*unwrap(Mod), GlobalValues);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddGenericAnalysisPasses(LLVMPassManagerRef PM) {
+    unwrap(PM)->add(createTargetTransformInfoWrapperPass(TargetIRAnalysis()));
 }
 
 

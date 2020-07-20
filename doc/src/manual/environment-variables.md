@@ -182,18 +182,22 @@ A [`Float64`](@ref) that sets the value of `Distributed.worker_timeout()` (defau
 This function gives the number of seconds a worker process will wait for
 a master process to establish a connection before dying.
 
-### `JULIA_NUM_THREADS`
+### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
 An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
 available to Julia. If `$JULIA_NUM_THREADS` exceeds the number of available
-physical CPU cores, then the number of threads is set to the number of cores. If
+CPU threads (logical cores), then the number of threads is set to the number of CPU threads. If
 `$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
-cores cannot be determined through system calls, then the number of threads is
+threads cannot be determined through system calls, then the number of threads is
 set to `1`.
 
 !!! note
 
     `JULIA_NUM_THREADS` must be defined before starting julia; defining it in `startup.jl` is too late in the startup process.
+
+!!! compat "Julia 1.5"
+    In Julia 1.5 and above the number of threads can also be specified on startup
+    using the `-t`/`--threads` command line argument.
 
 ### `JULIA_THREAD_SLEEP_THRESHOLD`
 
@@ -241,17 +245,11 @@ should have at the terminal.
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
-### `JULIA_STACKFRAME_LINEINFO_COLOR`
-
-The formatting `Base.stackframe_lineinfo_color()` (default: bold, `"\033[1m"`)
-that line info should have during a stack trace at the terminal.
-
-### `JULIA_STACKFRAME_FUNCTION_COLOR`
-
-The formatting `Base.stackframe_function_color()` (default: bold, `"\033[1m"`)
-that function calls should have during a stack trace at the terminal.
-
 ## Debugging and profiling
+
+### `JULIA_DEBUG`
+
+Enable debug logging for a file or module, see [`Logging`](@ref Logging) for more information.
 
 ### `JULIA_GC_ALLOC_POOL`, `JULIA_GC_ALLOC_OTHER`, `JULIA_GC_ALLOC_PRINT`
 

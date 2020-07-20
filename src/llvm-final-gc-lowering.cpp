@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -9,7 +11,6 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
@@ -103,22 +104,25 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(&*(++BasicBlock::iterator(target)));
-    Instruction *inst =
-        builder.CreateStore(
-            ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
-            builder.CreateBitCast(
-                builder.CreateConstGEP1_32(gcframe, 0),
-                T_size->getPointerTo()));
+    StoreInst *inst = builder.CreateAlignedStore(
+                ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
+                builder.CreateBitCast(
+                        builder.CreateConstGEP1_32(gcframe, 0),
+                        T_size->getPointerTo()),
+                sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     Value *pgcstack = builder.Insert(getPgcstack(ptlsStates));
-    inst = builder.CreateStore(
-        builder.CreateLoad(pgcstack),
-        builder.CreatePointerCast(
-            builder.CreateConstGEP1_32(gcframe, 1),
-            PointerType::get(T_ppjlvalue, 0)));
+    inst = builder.CreateAlignedStore(
+            builder.CreateAlignedLoad(pgcstack, sizeof(void*)),
+            builder.CreatePointerCast(
+                    builder.CreateConstGEP1_32(gcframe, 1),
+                    PointerType::get(T_ppjlvalue, 0)),
+            sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    builder.CreateStore(gcframe, builder.CreateBitCast(pgcstack,
-        PointerType::get(PointerType::get(T_prjlvalue, 0), 0)));
+    inst = builder.CreateAlignedStore(
+            gcframe,
+            builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
+            sizeof(void*));
 }
 
 void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
@@ -130,13 +134,14 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     builder.SetInsertPoint(target);
     Instruction *gcpop =
         cast<Instruction>(builder.CreateConstGEP1_32(gcframe, 1));
-    Instruction *inst = builder.CreateLoad(gcpop);
+    Instruction *inst = builder.CreateAlignedLoad(gcpop, sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    inst = builder.CreateStore(
+    inst = builder.CreateAlignedStore(
         inst,
         builder.CreateBitCast(
             builder.Insert(getPgcstack(ptlsStates)),
-            PointerType::get(T_prjlvalue, 0)));
+            PointerType::get(T_prjlvalue, 0)),
+        sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
 }
 

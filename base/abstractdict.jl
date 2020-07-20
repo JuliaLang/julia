@@ -17,9 +17,9 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 haskey(d::AbstractDict, k) = in(k, keys(d))
 
 function in(p::Pair, a::AbstractDict, valcmp=(==))
-    v = get(a,p[1],secret_table_token)
+    v = get(a, p.first, secret_table_token)
     if v !== secret_table_token
-        return valcmp(v, p[2])
+        return valcmp(v, p.second)
     end
     return false
 end
@@ -45,7 +45,7 @@ struct ValueIterator{T<:AbstractDict}
 end
 
 function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
-    print(io, T.name, " for a ")
+    print(io, T.name.name, " for a ")
     summary(io, iter.dict)
 end
 
@@ -91,7 +91,7 @@ Dict{Char,Int64} with 2 entries:
   'b' => 3
 
 julia> collect(keys(D))
-2-element Array{Char,1}:
+2-element Vector{Char}:
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
 ```
@@ -117,7 +117,7 @@ Dict{Char,Int64} with 2 entries:
   'b' => 3
 
 julia> collect(values(D))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  3
 ```
@@ -424,22 +424,9 @@ Dict{Int64,String} with 1 entry:
 function filter(f, d::AbstractDict)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = empty(d)
-    try
-        for pair in d
-            if f(pair)
-                df[pair.first] = pair.second
-            end
-        end
-    catch e
-        if isa(e, MethodError) && e.f === f
-            depwarn("In `filter(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter)
-            for (k, v) in d
-                if f(k, v)
-                    df[k] = v
-                end
-            end
-        else
-            rethrow()
+    for pair in d
+        if f(pair)
+            df[pair.first] = pair.second
         end
     end
     return df
@@ -474,14 +461,13 @@ function isequal(l::AbstractDict, r::AbstractDict)
 end
 
 function ==(l::AbstractDict, r::AbstractDict)
-    l === r && return true
     if isa(l,IdDict) != isa(r,IdDict)
         return false
     end
     length(l) != length(r) && return false
     anymissing = false
     for pair in l
-        isin = in(pair, r, ==)
+        isin = in(pair, r)
         if ismissing(isin)
             anymissing = true
         elseif !isin
@@ -512,6 +498,14 @@ end
 # that we need to avoid dispatch loops if setindex!(t,v,k) is not defined.)
 getindex(t::AbstractDict, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
 setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
+
+get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
+function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
+    haskey(t, key) && return t[key]
+    val = default()
+    t[key] = val
+    return val
+end
 
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
 push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
@@ -553,6 +547,9 @@ Modifies `dict` by transforming each value from `val` to `f(val)`.
 Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the value type
 of `dict` then it will be converted to the value type if possible and otherwise raise an error.
 
+!!! compat "Julia 1.2"
+    `map!(f, values(dict::AbstractDict))` requires Julia 1.2 or later.
+
 # Examples
 ```jldoctest
 julia> d = Dict(:a => 1, :b => 2)
@@ -561,7 +558,7 @@ Dict{Symbol,Int64} with 2 entries:
   :b => 2
 
 julia> map!(v -> v-1, values(d))
-Base.ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
+ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
   0
   1
 ```

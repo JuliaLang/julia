@@ -143,7 +143,7 @@ Matrix multiplication.
 # Examples
 ```jldoctest
 julia> [1 1; 0 1] * [1 0; 1 1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  1
  1  1
 ```
@@ -194,7 +194,7 @@ overwriting the existing value of `Y`. Note that `Y` must not be aliased with ei
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);
 
 julia> Y
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0  3.0
  7.0  7.0
 ```
@@ -226,7 +226,7 @@ julia> mul!(C, A, B, 100.0, 10.0) === C
 true
 
 julia> C
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  310.0  320.0
  730.0  740.0
 ```
@@ -252,7 +252,7 @@ julia> B = LinearAlgebra.UpperTriangular([1 2; 0 3]);
 julia> LinearAlgebra.rmul!(A, B);
 
 julia> A
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  0  3
  1  2
 
@@ -261,7 +261,7 @@ julia> A = [1.0 2.0; 3.0 4.0];
 julia> F = qr([0 1; -1 0]);
 
 julia> rmul!(A, F.Q)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  1.0
  4.0  3.0
 ```
@@ -285,7 +285,7 @@ julia> A = LinearAlgebra.UpperTriangular([1 2; 0 3]);
 julia> LinearAlgebra.lmul!(A, B);
 
 julia> B
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  1
  3  0
 
@@ -294,7 +294,7 @@ julia> B = [1.0 2.0; 3.0 4.0];
 julia> F = qr([0 1; -1 0]);
 
 julia> lmul!(F.Q, B)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  3.0  4.0
  1.0  2.0
 ```
@@ -649,7 +649,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
         for k = 1:mA
             aoffs = (k-1)*Astride
             if mB == 0
-                s = zero(R)
+                s = false
             else
                 s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
             end
@@ -662,7 +662,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
         for k = 1:mA
             aoffs = (k-1)*Astride
             if mB == 0
-                s = zero(R)
+                s = false
             else
                 s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
             end
@@ -676,14 +676,14 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
             if !iszero(_add.beta)
                 C[i] *= _add.beta
             elseif mB == 0
-                C[i] = zero(R)
+                C[i] = false
             else
                 C[i] = zero(A[i]*B[1] + A[i]*B[1])
             end
         end
         for k = 1:mB
             aoffs = (k-1)*Astride
-            b = _add(B[k], 0)
+            b = _add(B[k], false)
             for i = 1:mA
                 C[i] += A[aoffs + i] * b
             end

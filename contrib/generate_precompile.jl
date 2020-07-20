@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if isempty(ARGS) || ARGS[1] !== "0"
+Sys.__init_build()
 # Prevent this from being put into the Main namespace
 @eval Module() begin
 if !isdefined(Base, :uv_eventloop)
@@ -12,6 +13,14 @@ import .FakePTYs: open_fake_pty
 CTRL_C = '\x03'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
+
+hardcoded_precompile_statements = """
+precompile(Tuple{typeof(Base.stale_cachefile), String, String})
+precompile(Tuple{typeof(push!), Set{Module}, Module})
+precompile(Tuple{typeof(push!), Set{Method}, Method})
+precompile(Tuple{typeof(push!), Set{Base.PkgId}, Base.PkgId})
+precompile(Tuple{typeof(setindex!), Dict{String,Base.PkgId}, Base.PkgId, String})
+"""
 
 precompile_script = """
 2+2
@@ -76,10 +85,9 @@ function generate_precompile_statements()
         empty!(DEPOT_PATH)
     end
 
-    print("Generating precompile statements...")
     mktemp() do precompile_file, precompile_file_h
         # Run a repl process and replay our script
-        pty_slave, pty_master = open_fake_pty()
+        pts, ptm = open_fake_pty()
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
         if have_repl
             cmdargs = ```--color=yes
@@ -97,25 +105,25 @@ function generate_precompile_statements()
                    --cpu-target=native --startup-file=no --color=yes
                    -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
                    -i $cmdargs```,
-                pty_slave, pty_slave, pty_slave; wait=false)
+                   pts, pts, pts; wait=false)
         end
-        Base.close_stdio(pty_slave)
-        # Prepare a background process to copy output from process until `pty_slave` is closed
+        Base.close_stdio(pts)
+        # Prepare a background process to copy output from process until `pts` is closed
         output_copy = Base.BufferStream()
         tee = @async try
-            while !eof(pty_master)
-                l = readavailable(pty_master)
+            while !eof(ptm)
+                l = readavailable(ptm)
                 write(debug_output, l)
                 Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
                 write(output_copy, l)
             end
             close(output_copy)
-            close(pty_master)
+            close(ptm)
         catch ex
             close(output_copy)
-            close(pty_master)
+            close(ptm)
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
-                rethrow() # ignore EIO on pty_master after pty_slave dies
+                rethrow() # ignore EIO on ptm after pts dies
             end
         end
         # wait for the definitive prompt before start writing to the TTY
@@ -124,24 +132,29 @@ function generate_precompile_statements()
         readavailable(output_copy)
         # Input our script
         if have_repl
-            for l in split(precompile_script, '\n'; keepempty=false)
+            precompile_lines = split(precompile_script, '\n'; keepempty=false)
+            curr = 0
+            for l in precompile_lines
                 sleep(0.1)
+                curr += 1
+                print("\rGenerating precompile statements... $curr/$(length(precompile_lines))")
                 # consume any other output
                 bytesavailable(output_copy) > 0 && readavailable(output_copy)
                 # push our input
                 write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
-                write(pty_master, l, "\n")
+                write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
                 # NOTE: this is rather innaccurate because the Pkg REPL mode is a special flower
                 readuntil(output_copy, "\n")
                 readuntil(output_copy, "> ")
             end
+            println()
         end
-        write(pty_master, "exit()\n")
+        write(ptm, "exit()\n")
         wait(tee)
         success(p) || Base.pipeline_error(p)
-        close(pty_master)
+        close(ptm)
         write(debug_output, "\n#### FINISHED ####\n")
 
         # Extract the precompile statements from the precompile file
@@ -149,6 +162,10 @@ function generate_precompile_statements()
         for statement in eachline(precompile_file_h)
             # Main should be completely clean
             occursin("Main.", statement) && continue
+            push!(statements, statement)
+        end
+
+        for statement in split(hardcoded_precompile_statements, '\n')
             push!(statements, statement)
         end
 
@@ -167,27 +184,42 @@ function generate_precompile_statements()
             try
                 Base.include_string(PrecompileStagingArea, statement)
                 n_succeeded += 1
+                print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
             catch
                 # See #28808
                 # @error "Failed to precompile $statement"
             end
         end
+        println()
         if have_repl
             # Seems like a reasonable number right now, adjust as needed
             # comment out if debugging script
-            @assert n_succeeded > 3500
+            @assert n_succeeded > 1500
         end
 
-        print(" $(length(statements)) generated in ")
         tot_time = time_ns() - start_time
-        Base.time_print(tot_time)
-        print(" (overhead "); Base.time_print(tot_time - (include_time * 1e9)); println(")")
+        include_time *= 1e9
+        gen_time = tot_time - include_time
+        println("Precompilation complete. Summary:")
+        print("Total ─────── "); Base.time_print(tot_time); println()
+        print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100); println("%")
+        print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
     end
 
     return
 end
 
 generate_precompile_statements()
+
+# As a last step in system image generation,
+# remove some references to build time environment for a more reproducible build.
+@eval Base PROGRAM_FILE = ""
+@eval Sys begin
+    BINDIR = ""
+    STDLIB = ""
+end
+empty!(Base.ARGS)
+empty!(Core.ARGS)
 
 end # @eval
 end

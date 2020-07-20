@@ -166,7 +166,7 @@ BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
 # methods that instead specialize on `BroadcastStyle`,
 #    copyto!(dest::AbstractArray, bc::Broadcasted{MyStyle})
 
-struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple}
+struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <: Base.AbstractBroadcasted
     f::F
     args::Args
     axes::Axes          # the axes of the resulting object (may be bigger than implied by `args` if this is nested inside a larger `Broadcasted`)
@@ -193,20 +193,24 @@ function Base.show(io::IO, bc::Broadcasted{Style}) where {Style}
 end
 
 ## Allocating the output container
-Base.similar(bc::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}) where {N,ElType} =
-    similar(Array{ElType}, axes(bc))
-Base.similar(bc::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}) where N =
-    similar(BitArray, axes(bc))
+Base.similar(bc::Broadcasted, ::Type{T}) where {T} = similar(bc, T, axes(bc))
+Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}, dims) where {N,ElType} =
+    similar(Array{ElType}, dims)
+Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}, dims) where N =
+    similar(BitArray, dims)
 # In cases of conflict we fall back on Array
-Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{ElType}) where ElType =
-    similar(Array{ElType}, axes(bc))
-Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{Bool}) =
-    similar(BitArray, axes(bc))
+Base.similar(::Broadcasted{ArrayConflict}, ::Type{ElType}, dims) where ElType =
+    similar(Array{ElType}, dims)
+Base.similar(::Broadcasted{ArrayConflict}, ::Type{Bool}, dims) =
+    similar(BitArray, dims)
 
 @inline Base.axes(bc::Broadcasted) = _axes(bc, bc.axes)
 _axes(::Broadcasted, axes::Tuple) = axes
 @inline _axes(bc::Broadcasted, ::Nothing)  = combine_axes(bc.args...)
 _axes(bc::Broadcasted{<:AbstractArrayStyle{0}}, ::Nothing) = ()
+
+@inline Base.axes(bc::Broadcasted{<:Any, <:NTuple{N}}, d::Integer) where N =
+    d <= N ? axes(bc)[d] : OneTo(1)
 
 BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
 BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
@@ -218,6 +222,12 @@ argtype(bc::Broadcasted) = argtype(typeof(bc))
 @inline Base.eachindex(bc::Broadcasted) = _eachindex(axes(bc))
 _eachindex(t::Tuple{Any}) = t[1]
 _eachindex(t::Tuple) = CartesianIndices(t)
+
+Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
+Base.IndexStyle(::Type{<:Broadcasted{<:Any,<:Tuple{Any}}}) = IndexLinear()
+Base.IndexStyle(::Type{<:Broadcasted{<:Any}}) = IndexCartesian()
+
+Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = axes(bc)[1]
 
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
@@ -471,6 +481,7 @@ julia> Broadcast.combine_axes(1, 1, 1)
 ```
 """
 @inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
+@inline combine_axes(A, B) = broadcast_shape(axes(A), axes(B))
 combine_axes(A) = axes(A)
 
 # shape (i.e., tuple-of-indices) inputs
@@ -563,7 +574,13 @@ end
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
 end
-Base.@propagate_inbounds Base.getindex(bc::Broadcasted, i1::Integer, i2::Integer, I::Integer...) = bc[CartesianIndex((i1, i2, I...))]
+Base.@propagate_inbounds Base.getindex(
+    bc::Broadcasted,
+    i1::Union{Integer,CartesianIndex},
+    i2::Union{Integer,CartesianIndex},
+    I::Union{Integer,CartesianIndex}...,
+) =
+    bc[CartesianIndex((i1, i2, I...))]
 Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
 
 @inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
@@ -646,7 +663,7 @@ Further, if `x` defines its own [`BroadcastStyle`](@ref), then it must define it
 # Examples
 ```jldoctest
 julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already support axes and indexing
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -707,7 +724,7 @@ single broadcast loop.
 # Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -715,7 +732,7 @@ julia> A = [1, 2, 3, 4, 5]
  5
 
 julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
  1   2
  3   4
  5   6
@@ -723,7 +740,7 @@ julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
  9  10
 
 julia> broadcast(+, A, B)
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
   2   3
   5   6
   8   9
@@ -731,7 +748,7 @@ julia> broadcast(+, A, B)
  14  15
 
 julia> parse.(Int, ["1", "2"])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -742,12 +759,12 @@ julia> broadcast(+, 1.0, (0, -2.0))
 (1.0, -1.0)
 
 julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
-2-element Array{Array{Int64,1},1}:
+2-element Vector{Vector{Int64}}:
  [1, 1]
  [2, 2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
-4-element Array{String,1}:
+4-element Vector{String}:
  "one: 1"
  "two: 2"
  "three: 3"
@@ -777,19 +794,19 @@ julia> A = [1.0; 0.0]; B = [0.0; 0.0];
 julia> broadcast!(+, B, A, (0, -2.0));
 
 julia> B
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   1.0
  -2.0
 
 julia> A
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  1.0
  0.0
 
 julia> broadcast!(+, A, A, (0, -2.0));
 
 julia> A
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   1.0
  -2.0
 ```
@@ -819,11 +836,16 @@ Take a lazy `Broadcasted` object and compute the result
 """
 @inline materialize(bc::Broadcasted) = copy(instantiate(bc))
 materialize(x) = x
-@inline function materialize!(dest, bc::Broadcasted{Style}) where {Style}
-    return copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
-end
+
 @inline function materialize!(dest, x)
-    return copyto!(dest, instantiate(Broadcasted(identity, (x,), axes(dest))))
+    return materialize!(dest, instantiate(Broadcasted(identity, (x,), axes(dest))))
+end
+
+@inline function materialize!(dest, bc::Broadcasted{Style}) where {Style}
+    return materialize!(combine_styles(dest, bc), dest, bc)
+end
+@inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{Style}) where {Style}
+    return copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
 end
 
 ## general `copy` methods
@@ -1173,6 +1195,9 @@ function __dot__(x::Expr)
     elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])
+    elseif x.head === :(<:) || x.head === :(>:)
+        tmp = x.head === :(<:) ? :(.<:) : :(.>:)
+        Expr(:call, tmp, dotargs...)
     else
         if x.head === :&& || x.head === :||
             error("""
@@ -1207,7 +1232,7 @@ If you want to *avoid* adding dots for selected function calls in
 julia> x = 1.0:3.0; y = similar(x);
 
 julia> @. y = x + 3 * sin(x)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  3.5244129544236893
  4.727892280477045
  3.4233600241796016

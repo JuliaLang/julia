@@ -141,6 +141,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # --eval --interactive (replaced --post-boot)
     @test  success(`$exename -i -e "exit(0)"`)
     @test !success(`$exename -i -e "exit(1)"`)
+    # issue #34924
+    @test  success(`$exename -e 'const LOAD_PATH=1'`)
 
     # --print
     @test read(`$exename -E "1+1"`, String) == "2\n"
@@ -185,6 +187,32 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     # --cpu-target (requires LLVM enabled)
     @test !success(`$exename -C invalidtarget`)
     @test !success(`$exename --cpu-target=invalidtarget`)
+
+    # -t, --threads
+    code = "print(Threads.nthreads())"
+    cpu_threads = ccall(:jl_cpu_threads, Int32, ())
+    @test string(cpu_threads) ==
+          read(`$exename --threads auto -e $code`, String) ==
+          read(`$exename --threads=auto -e $code`, String) ==
+          read(`$exename -tauto -e $code`, String) ==
+          read(`$exename -t auto -e $code`, String) ==
+          read(`$exename -t $(cpu_threads+1) -e $code`, String)
+    if cpu_threads > 1
+        for nt in (nothing, "1"); withenv("JULIA_NUM_THREADS"=>nt) do
+            @test read(`$exename --threads 2 -e $code`, String) ==
+                  read(`$exename --threads=2 -e $code`, String) ==
+                  read(`$exename -t2 -e $code`, String) ==
+                  read(`$exename -t 2 -e $code`, String) == "2"
+        end end
+    end
+    @test !success(`$exename -t 0`)
+    @test !success(`$exename -t -1`)
+
+    # Combining --threads and --procs: --threads does propagate
+    if cpu_threads > 1; withenv("JULIA_NUM_THREADS"=>nothing) do
+        code = "print(sum(remotecall_fetch(Threads.nthreads, x) for x in procs()))"
+        @test read(`$exename -p2 -t2 -e $code`, String) == "6"
+    end end
 
     # --procs
     @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
@@ -657,6 +685,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             rm(infile)
         end
     end
+end
+
+# incomplete inputs to stream REPL
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    in = Pipe(); out = Pipe(); err = Pipe()
+    proc = run(pipeline(exename, stdin = in, stdout = out, stderr = err), wait=false)
+    write(in, "f(\n")
+    close(in)
+    close(err.in)
+    txt = readline(err)
+    @test startswith(txt, "ERROR: syntax: incomplete")
 end
 
 # Issue #29855

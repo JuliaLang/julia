@@ -68,7 +68,8 @@ function getalladdrinfo(host::String)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     iolock_begin()
     status = ccall(:jl_getaddrinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}, Ptr{Cvoid}),
-                   eventloop(), req, host, #=service=#C_NULL, uv_jl_getaddrinfocb::Ptr{Cvoid})
+                   eventloop(), req, host, #=service=#C_NULL,
+                   @cfunction(uv_getaddrinfocb, Cvoid, (Ptr{Cvoid}, Cint, Ptr{Cvoid})))
     if status < 0
         Libc.free(req)
         if status == UV_EINVAL
@@ -136,7 +137,13 @@ function getaddrinfo(host::String, T::Type{<:IPAddr})
     throw(DNSError(host, UV_EAI_NONAME))
 end
 getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
-getaddrinfo(host::AbstractString) = getaddrinfo(String(host), IPv4)
+function getaddrinfo(host::AbstractString)
+    addrs = getalladdrinfo(String(host))
+    if !isempty(addrs)
+        return addrs[begin]
+    end
+    throw(DNSError(host, UV_EAI_NONAME))
+end
 
 function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, service::Cstring)
     data = uv_req_data(req)
@@ -172,7 +179,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     port = hton(UInt16(0))
     flags = 0
-    uvcb = uv_jl_getnameinfocb::Ptr{Cvoid}
+    uvcb = @cfunction(uv_getnameinfocb, Cvoid, (Ptr{Cvoid}, Cint, Cstring, Cstring))
     status = UV_EINVAL
     host_in = Ref(hton(address.host))
     iolock_begin()

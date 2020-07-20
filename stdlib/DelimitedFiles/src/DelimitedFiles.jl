@@ -38,14 +38,14 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", Int64)
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
  1  5
  2  6
  3  7
  4  8
 
 julia> readdlm("delim_file.txt", Float64)
-4×2 Array{Float64,2}:
+4×2 Matrix{Float64}:
  1.0  5.0
  2.0  6.0
  3.0  7.0
@@ -74,7 +74,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", ',', Float64)
-4×2 Array{Float64,2}:
+4×2 Matrix{Float64}:
  1.0  1.1
  2.0  2.2
  3.0  3.3
@@ -106,7 +106,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt")
-4×2 Array{Any,2}:
+4×2 Matrix{Any}:
  1  "a"
  2  "b"
  3  "c"
@@ -137,7 +137,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", ',')
-4×2 Array{Float64,2}:
+4×2 Matrix{Float64}:
  1.0  1.1
  2.0  2.2
  3.0  3.3
@@ -150,7 +150,7 @@ julia> open("delim_file.txt", "w") do io
        end;
 
 julia> readdlm("delim_file.txt", ',')
-4×2 Array{Any,2}:
+4×2 Matrix{Any}:
  1  "a"
  2  "b"
  3  "c"
@@ -213,7 +213,7 @@ julia> open("delim_file.txt", "w") do io
        end
 
 julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
  1  5
  2  6
  3  7
@@ -814,7 +814,7 @@ julia> open("delim_file.txt", "w") do io
        end
 
 julia> readdlm("delim_file.txt", '\\t', Int, '\\n')
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
  1  5
  2  6
  3  7

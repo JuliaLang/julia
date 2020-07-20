@@ -3,7 +3,7 @@
 module TestLU
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: ldiv!, BlasInt, BlasFloat, rdiv!
+using LinearAlgebra: ldiv!, BlasReal, BlasInt, BlasFloat, rdiv!
 
 n = 10
 
@@ -72,6 +72,12 @@ dimg  = randn(n)/2
             bft = eltya <: Real ? LinearAlgebra.LU{BigFloat} : LinearAlgebra.LU{Complex{BigFloat}}
             bflua = convert(bft, lua)
             @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=ε
+            @test Factorization{eltya}(lua) === lua
+            # test Factorization with different eltype
+            if eltya <: BlasReal
+                @test Array(Factorization{Float16}(lua)) ≈ Array(lu(convert(Matrix{Float16}, a)))
+                @test eltype(Factorization{Float16}(lua)) == Float16
+            end
         end
         # compact printing
         lstring = sprint(show,l)
@@ -86,6 +92,13 @@ dimg  = randn(n)/2
         @test lud.L*lud.U ≈ lud.P*Array(d)
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d
+        @test Array(lud) ≈ d
+        if eltya != Int
+            dlu = convert.(eltya, [1, 1])
+            dia = convert.(eltya, [-2, -2, -2])
+            tri = Tridiagonal(dlu, dia, dlu)
+            @test_throws ArgumentError lu!(tri)
+        end
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
@@ -225,6 +238,7 @@ end
     falu = lu(fa)
     alu = lu(a)
     falu = convert(typeof(falu),alu)
+    @test Array(alu) == fa
     @test AbstractArray(alu) == fa
 end
 
@@ -270,15 +284,15 @@ end
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64,Array{Float64,2}}
+LinearAlgebra.LU{Float64,Matrix{Float64}}
 L factor:
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0
 U factor:
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
@@ -337,4 +351,26 @@ end
     @test F.p == []
 end
 
+@testset "more rdiv! methods" begin
+    for elty in (Float16, Float64, ComplexF64), transform in (transpose, adjoint)
+        A = randn(elty, 5, 5)
+        C = copy(A)
+        B = randn(elty, 5, 5)
+        @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
+    end
+end
+
+@testset "transpose(A) / lu(B)' should not overwrite A (#36657)" begin
+    for elty in (Float16, Float64, ComplexF64)
+        A = randn(elty, 5, 5)
+        B = randn(elty, 5, 5)
+        C = copy(A)
+        a = randn(elty, 5)
+        c = copy(a)
+        @test transpose(A) / lu(B)' ≈ transpose(A) / B'
+        @test transpose(a) / lu(B)' ≈ transpose(a) / B'
+        @test A == C
+        @test a == c
+    end
+end
 end # module TestLU

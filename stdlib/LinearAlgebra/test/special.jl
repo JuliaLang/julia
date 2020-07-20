@@ -77,6 +77,33 @@ Random.seed!(1)
     for newtype in [Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal]
         @test_throws ArgumentError convert(newtype,A)
     end
+
+
+    # test operations/constructors (not conversions) permitted in the docs
+    dl = [1., 1.]
+    d = [-2., -2., -2.]
+    T = Tridiagonal(dl, d, -dl)
+    S = SymTridiagonal(d, dl)
+    Bu = Bidiagonal(d, dl, :U)
+    Bl = Bidiagonal(d, dl, :L)
+    D = Diagonal(d)
+    M = [-2. 0. 0.; 1. -2. 0.; -1. 1. -2.]
+    U = UpperTriangular(M)
+    L = LowerTriangular(Matrix(M'))
+
+    for A in (T, S, Bu, Bl, D, U, L, M)
+        Adense = Matrix(A)
+        B = Symmetric(A)
+        Bdense = Matrix(B)
+        for (C,Cdense) in ((A,Adense), (B,Bdense))
+            @test Diagonal(C) == Diagonal(Cdense)
+            @test Bidiagonal(C, :U) == Bidiagonal(Cdense, :U)
+            @test Bidiagonal(C, :L) == Bidiagonal(Cdense, :L)
+            @test Tridiagonal(C) == Tridiagonal(Cdense)
+            @test UpperTriangular(C) == UpperTriangular(Cdense)
+            @test LowerTriangular(C) == LowerTriangular(Cdense)
+        end
+    end
 end
 
 @testset "Binary ops among special types" begin
@@ -132,7 +159,7 @@ end
 @testset "+ and - among structured matrices with different container types" begin
     diag = 1:5
     offdiag = 1:4
-    uniformscalingmats = [UniformScaling(3), UniformScaling(1.0), UniformScaling(3//5), UniformScaling(Complex{Float64}(1.3, 3.5))]
+    uniformscalingmats = [UniformScaling(3), UniformScaling(1.0), UniformScaling(3//5), UniformScaling(ComplexF64(1.3, 3.5))]
     mats = [Diagonal(diag), Bidiagonal(diag, offdiag, 'U'), Bidiagonal(diag, offdiag, 'L'), Tridiagonal(offdiag, diag, offdiag), SymTridiagonal(diag, offdiag)]
     for T in [ComplexF64, Int64, Rational{Int64}, Float64]
         push!(mats, Diagonal(Vector{T}(diag)))
@@ -148,14 +175,17 @@ end
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
             end
         end
-
+    end
+    for op in (+,-)
         for A in mats
             for B in uniformscalingmats
                 @test (op)(A, B) ≈ (op)(Matrix(A), B) ≈ Matrix((op)(A, B))
+                @test (op)(B, A) ≈ (op)(B, Matrix(A)) ≈ Matrix((op)(B, A))
             end
         end
     end
 end
+
 
 @testset "Triangular Types and QR" begin
     for typ in [UpperTriangular,LowerTriangular,LinearAlgebra.UnitUpperTriangular,LinearAlgebra.UnitLowerTriangular]

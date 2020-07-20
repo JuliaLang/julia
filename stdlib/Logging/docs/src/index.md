@@ -38,7 +38,7 @@ v = ones(100)
 # output
 ┌ Info: Some variables
 │   A =
-│    4×4 Array{Int64,2}:
+│    4×4 Matrix{Int64}:
 │     1  1  1  1
 │     1  1  1  1
 │     1  1  1  1

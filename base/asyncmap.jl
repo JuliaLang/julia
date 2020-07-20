@@ -124,8 +124,7 @@ function verify_ntasks(iterable, ntasks)
     end
 
     if ntasks == 0
-        chklen = IteratorSize(iterable)
-        if (chklen isa HasLength) || (chklen isa HasShape)
+        if haslength(iterable)
             ntasks = max(1,min(100, length(iterable)))
         else
             ntasks = 100

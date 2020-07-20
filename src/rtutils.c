@@ -649,26 +649,24 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_method_type) {
         jl_method_t *m = (jl_method_t*)v;
-        n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
-        n += jl_printf(out, ".%s(...)", jl_symbol_name(m->name));
+        n += jl_static_show_func_sig(out, m->sig);
     }
     else if (vt == jl_method_instance_type) {
         jl_method_instance_t *li = (jl_method_instance_t*)v;
         if (jl_is_method(li->def.method)) {
-            if (li->specTypes) {
-                n += jl_static_show_func_sig(out, li->specTypes);
-            }
-            else {
-                jl_method_t *m = li->def.method;
-                n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
-                n += jl_printf(out, ".%s(?)", jl_symbol_name(m->name));
-            }
+            n += jl_static_show_func_sig(out, li->specTypes);
+            n += jl_printf(out, " from ");
+            n += jl_static_show_func_sig(out, li->def.method->sig);
         }
         else {
             n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth);
             n += jl_printf(out, ".<toplevel thunk> -> ");
             n += jl_static_show_x(out, li->uninferred, depth);
         }
+    }
+    else if (vt == jl_typename_type) {
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_printf(out, ".name");
     }
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
@@ -812,6 +810,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, ua->body, depth);
         n += jl_printf(out, " where ");
         n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev);
+    }
+    else if (vt == jl_typename_type) {
+        n += jl_printf(out, "typename(");
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_printf(out, ")");
     }
     else if (vt == jl_tvar_type) {
         // show type-var bounds only if they aren't going to be printed by UnionAll later
