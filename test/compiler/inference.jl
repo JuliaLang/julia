@@ -1400,12 +1400,17 @@ egal_conditional_lattice3(x, y) = x === y + y ? "" : 1
 
 using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
-@test sizeof_tfunc(Type{Ptr}) === Int
+@test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
 @test sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
 @test sizeof_nothrow(Const(Ptr))
-@test !sizeof_nothrow(Type{Ptr})
-@test !sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
+@test sizeof_nothrow(Type{Ptr})
+@test sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
 @test !sizeof_nothrow(Const(Tuple))
+@test !sizeof_nothrow(Type{Vector{Int}})
+@test !sizeof_nothrow(Type{Union{Int, String}})
+@test sizeof_nothrow(String)
+@test !sizeof_nothrow(Type{String})
+@test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
 let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
     @test sizeof_tfunc(PT) === Const(16)
     @test nfields_tfunc(PT) === Const(2)
@@ -2734,3 +2739,8 @@ end
 
 f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test Base.return_types(f_generator_splat, (Tuple{Symbol, Int64, Float64},)) == Any[Tuple{Symbol, Int64, Float64}]
+
+# Issue #36710 - sizeof(::UnionAll) tfunc correctness
+@test (sizeof(Ptr),) == sizeof.((Ptr,)) == sizeof.((Ptr{Cvoid},))
+@test Core.Compiler.sizeof_tfunc(UnionAll) === Int
+@test !Core.Compiler.sizeof_nothrow(UnionAll)
