@@ -262,17 +262,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
     const char **cmds = NULL;
     int codecov = JL_LOG_NONE;
     int malloclog = JL_LOG_NONE;
-    // getopt handles argument parsing up to -- delineator
     int argc = *argcp;
     char **argv = *argvp;
-    if (argc > 0) {
-        for (int i = 0; i < argc; i++) {
-            if (!strcmp(argv[i], "--")) {
-                argc = i;
-                break;
-            }
-        }
-    }
     char *endptr;
     opterr = 0; // suppress getopt warning messages
     while (1) {

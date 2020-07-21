@@ -201,10 +201,6 @@ end
 include_ifexists(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
 
 function exec_options(opts)
-    if !isempty(ARGS)
-        idxs = findall(x -> x == "--", ARGS)
-        length(idxs) > 0 && deleteat!(ARGS, idxs[1])
-    end
     quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
