@@ -223,7 +223,7 @@ targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1
             "1×1×1×1 $OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
-            "([1.0], [1.0])",
+            "(fill(1.0, Base.IdentityUnitRange(2:2), Base.IdentityUnitRange(3:3)), fill(1.0, Base.IdentityUnitRange(2:2), Base.IdentityUnitRange(3:3)))",
             "([1.0], [1.0])",
             "([1.0], [1.0])"]
 @testset "printing of OffsetArray with n=$n" for n = 0:4
