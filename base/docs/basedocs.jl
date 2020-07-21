@@ -1577,6 +1577,17 @@ Integer
 invoke
 
 """
+    ===(x)
+
+Create a function that compares its argument to `x` using [`===`](@ref), i.e.
+a function equivalent to `y -> y == x`.
+
+!!! compat "Julia 1.6"
+    The partially applied form `===(x)` requires Julia 1.6 or later.
+"""
+===(x)
+
+"""
     isa(x, type) -> Bool
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
@@ -1600,7 +1611,24 @@ julia> 1 isa Number
 true
 ```
 """
-isa
+isa(x, T)
+
+"""
+    isa(type)
+
+Create a function that compares its argument to `x` using [`isa`](@ref), i.e.
+a function equivalent to `type -> x isa type`.
+
+!!! compat "Julia 1.6"
+    The partially applied form `isa(type)` requires Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> isa(Int)(1)
+true
+```
+"""
+isa(T)
 
 """
     DivideError()

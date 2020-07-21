@@ -986,6 +986,15 @@ used to implement specialized methods.
 """
 !=(x) = Fix2(!=, x)
 
+"""
+    !==(x)
+
+Create a function that compares its argument to `x` using [`!==`](@ref), i.e.
+a function equivalent to `y -> y !== x`.
+
+!!! compat "Julia 1.6"
+    This functionality requires at least Julia 1.6.
+"""
 !==(x) = Fix2(!==, x)
 
 """
