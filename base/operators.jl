@@ -986,6 +986,8 @@ used to implement specialized methods.
 """
 !=(x) = Fix2(!=, x)
 
+!==(x) = Fix2(!==, x)
+
 """
     >=(x)
 

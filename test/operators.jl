@@ -230,6 +230,7 @@ end
 end
 
 @testset "curried comparisons" begin
+    isnot5 = (!==)(5)
     eql5 = (==)(5)
     neq5 = (!=)(5)
     gte5 = (>=)(5)
@@ -237,6 +238,7 @@ end
     gt5  = (>)(5)
     lt5  = (<)(5)
 
+    @test isnot5(5.0) && !isnot5(5)
     @test eql5(5) && !eql5(0)
     @test neq5(6) && !neq5(5)
     @test gte5(5) && gte5(6)
