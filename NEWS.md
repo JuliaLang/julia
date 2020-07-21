@@ -107,6 +107,9 @@ Standard library changes
   + `numoptions`, returning the number of items in the menu, has been added as an alternative to implementing `options`
   + `suppress_output` (primarily a testing option) has been added as a keyword argument to `request`,
     rather than a configuration option
+    
+* Windows REPL now supports 24-bit colors, by correctly interpreting virtual terminal escapes.
+
 
 #### SparseArrays
 
