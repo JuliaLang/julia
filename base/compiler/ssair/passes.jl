@@ -570,6 +570,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
             compact.ssa_rename[compact.idx-1] = pi
             continue
         elseif is_known_call(stmt, (===), compact)
+            length(stmt.args) == 3 || continue
             c1 = compact_exprtype(compact, stmt.args[2])
             c2 = compact_exprtype(compact, stmt.args[3])
             if !(isa(c1, Const) || isa(c2, Const))

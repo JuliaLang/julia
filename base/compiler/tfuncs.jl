@@ -218,6 +218,23 @@ function ifelse_tfunc(@nospecialize(cnd), @nospecialize(x), @nospecialize(y))
 end
 add_tfunc(ifelse, 3, 3, ifelse_tfunc, 1)
 
+# Note: `x` is manually specified at the moment so that it's always a `DataType`
+function fix2_tfunc(x::DataType, y)
+    if !(isdefined(Main, :Base) && isdefined(Main.Base, :Fix2) && isconst(Main.Base, :Fix2))
+        return Any
+    end
+    y = widenconst(y)
+    Fix2 = Main.Base.Fix2
+    if isconcretetype(y) || isType(y)
+        return Fix2{x,y}
+    elseif y isa UnionAll
+        return rewrap_unionall(Fix2{x,unwrap_unionall(y)}, y)
+    elseif y isa Union
+        return Union{fix2_tfunc(x, y.a),fix2_tfunc(x, y.b)}
+    end
+    return Fix2{x}
+end
+
 function egal_tfunc(@nospecialize(x), @nospecialize(y))
     xx = widenconditional(x)
     yy = widenconditional(y)
@@ -239,7 +256,8 @@ function egal_tfunc(@nospecialize(x), @nospecialize(y))
     end
     return Bool
 end
-add_tfunc(===, 2, 2, egal_tfunc, 1)
+egal_tfunc(y) = fix2_tfunc(typeof(===), y)
+add_tfunc(===, 1, 2, egal_tfunc, 1)
 
 function isdefined_nothrow(argtypes::Array{Any, 1})
     length(argtypes) == 2 || return false
@@ -555,7 +573,8 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
     # TODO: handle non-leaftype(t) by testing against lower and upper bounds
     return Bool
 end
-add_tfunc(isa, 2, 2, isa_tfunc, 0)
+isa_tfunc(y) = fix2_tfunc(typeof(isa), y)
+add_tfunc(isa, 1, 2, isa_tfunc, 0)
 
 function subtype_tfunc(@nospecialize(a), @nospecialize(b))
     a, isexact_a = instanceof_tfunc(a)

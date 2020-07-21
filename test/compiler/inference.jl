@@ -2734,3 +2734,17 @@ end
 
 f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test Base.return_types(f_generator_splat, (Tuple{Symbol, Int64, Float64},)) == Any[Tuple{Symbol, Int64, Float64}]
+
+f_is2(x) = ===(x)
+@test @inferred(f_is2(1)) === Base.Fix2(===, 1)
+
+f_is2_ref(x) = ===(x[])
+@test Base.return_types(f_is2_ref, Tuple{Base.RefValue{Vector}}) ==
+      Any[Base.Fix2{typeof(===),Vector{T}} where {T}]
+
+f_isa2(T) = isa(T)
+@test @inferred(f_isa2(Int)) === Base.Fix2(isa, Int)
+
+f_isa2(b, T, S) = isa(b ? T : S)
+@test Base.return_types(f_isa2, Tuple{Bool,Type{Int64},Type{Float64}}) ==
+      Any[Union{Base.Fix2{typeof(isa),Type{Float64}},Base.Fix2{typeof(isa),Type{Int64}}}]

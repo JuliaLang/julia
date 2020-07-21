@@ -806,7 +806,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         end
     elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
         # perform very limited back-propagation of type information for `is` and `isa`
-        if f === isa
+        if f === isa && la == 3
             a = ssa_def_slot(fargs[2], sv)
             if isa(a, Slot)
                 aty = widenconst(argtypes[2])
@@ -825,7 +825,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                     end
                 end
             end
-        elseif f === (===)
+        elseif f === (===) && la == 3
             a = ssa_def_slot(fargs[2], sv)
             b = ssa_def_slot(fargs[3], sv)
             aty = argtypes[2]
