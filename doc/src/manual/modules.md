@@ -78,13 +78,13 @@ In this module we export the `x` and `y` functions (with the keyword [`export`](
 the non-exported function `p`. There are several different ways to load the Module and its inner
 functions into the current workspace:
 
-| Import Command                  | What is brought into scope                                                      | Available for method extension              |
-|:------------------------------- |:------------------------------------------------------------------------------- |:------------------------------------------- |
-| `using MyModule`                | All `export`ed names (`x` and `y`), `MyModule.x`, `MyModule.y` and `MyModule.p` | `MyModule.x`, `MyModule.y` and `MyModule.p` |
-| `using MyModule: x, p`          | `x` and `p`                                                                     |                                             |
-| `import MyModule`               | `MyModule.x`, `MyModule.y` and `MyModule.p`                                     | `MyModule.x`, `MyModule.y` and `MyModule.p` |
-| `import MyModule.x, MyModule.p` | `x` and `p`                                                                     | `x` and `p`                                 |
-| `import MyModule: x, p`         | `x` and `p`                                                                     | `x` and `p`                                 |
+| Import Command                  | What is brought into scope                                                                  | Available for method extension              |
+|:------------------------------- |:------------------------------------------------------------------------------------------- |:------------------------------------------- |
+| `using MyModule`                | All `export`ed names (`x` and `y`), `MyModule`, `MyModule.x`, `MyModule.y` and `MyModule.p` | `MyModule.x`, `MyModule.y` and `MyModule.p` |
+| `using MyModule: x, p`          | `x` and `p`                                                                                 |                                             |
+| `import MyModule`               | `MyModule`, `MyModule.x`, `MyModule.y` and `MyModule.p`                                     | `MyModule.x`, `MyModule.y` and `MyModule.p` |
+| `import MyModule.x, MyModule.p` | `x` and `p`                                                                                 | `x` and `p`                                 |
+| `import MyModule: x, p`         | `x` and `p`                                                                                 | `x` and `p`                                 |
 
 ### Modules and files
 
