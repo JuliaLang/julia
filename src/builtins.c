@@ -367,6 +367,8 @@ JL_CALLABLE(jl_f_is)
     JL_NARGS(===, 1, 2);
     if (nargs == 1) {
         jl_function_t *fix2 = jl_get_function(jl_base_module, "Fix2");
+        if (fix2 == NULL)
+            jl_undefined_var_error(jl_symbol("Fix2"));
         return jl_call2(fix2, jl_builtin_is, args[0]);
     }
     if (args[0] == args[1])
@@ -436,6 +438,8 @@ JL_CALLABLE(jl_f_isa)
     JL_NARGS(isa, 1, 2);
     if (nargs == 1) {
         jl_function_t *fix2 = jl_get_function(jl_base_module, "Fix2");
+        if (fix2 == NULL)
+            jl_undefined_var_error(jl_symbol("Fix2"));
         return jl_call2(fix2, jl_builtin_isa, args[0]);
     }
     JL_TYPECHK(isa, type, args[1]);
