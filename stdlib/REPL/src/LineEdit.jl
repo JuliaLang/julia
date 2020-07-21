@@ -1272,8 +1272,39 @@ function write_prompt(terminal, p::Prompt)
     return width
 end
 
+# On Windows, when launching external processes, we cannot control what assumption they make on the
+# console mode. We thus forcibly reset the console mode at the start of the prompt to ensure they do
+# not leave the console mode in a corrupt state.
+# FIXME: remove when pseudo-tty are implemented for child processes
+if Sys.iswindows()
+function _console_mode()
+    hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
+    dwMode = Ref{UInt32}()
+    ccall(:GetConsoleMode, stdcall, Int32, (Ref{Cvoid}, Ref{UInt32}), hOutput, dwMode)
+    return dwMode[]
+end
+const default_console_mode_ref = Ref{UInt32}()
+const default_console_mode_assigned = Ref(false)
+function get_default_console_mode()
+    if default_console_mode_assigned[] == false
+        default_console_mode_assigned[] = true
+        default_console_mode_ref[] = _console_mode()
+    end
+    return default_console_mode_ref[]
+end
+function _reset_console_mode()
+    mode = _console_mode()
+    if mode !== get_default_console_mode()
+        hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
+        ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), hOutput, default_console_mode_ref[])
+    end
+    nothing
+end
+end
+
 # returns the width of the written prompt
 function write_prompt(terminal, s::Union{AbstractString,Function})
+    @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)
     write(terminal, promptstr)
     return textwidth(promptstr)
