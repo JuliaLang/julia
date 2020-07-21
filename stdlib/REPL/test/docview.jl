@@ -5,7 +5,7 @@ import REPL
 @test startswith(let buf = IOBuffer()
         Core.eval(Main, REPL.helpmode(buf, "α"))
         String(take!(buf))
-    end, "\"α\" can be typed by \\:alpha:<tab>\n")
+    end, "\"α\" can be typed by \\alpha<tab>\n")
 
 @test startswith(let buf = IOBuffer()
         Core.eval(Main, REPL.helpmode(buf, "🐨"))
