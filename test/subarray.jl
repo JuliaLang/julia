@@ -615,6 +615,27 @@ end
     v = Vector{UInt48}(undef, 5)
     read!(io, v)
     @test v == view(a, :, 2)
+
+    seekstart(io)
+    @test write(io, view(a, 2:5, 1:4)) == 4*4*8
+    seekstart(io)
+    v = Matrix{UInt48}(undef, 4, 4)
+    read!(io, v)
+    @test v == view(a, 2:5, 1:4)
+
+    seekstart(io)
+    @test write(io, view(a, 5:-1:1, 3)) == 5*8
+    seekstart(io)
+    v = Vector{UInt48}(undef, 5)
+    read!(io, v)
+    @test v == view(a, 5:-1:1, 3)
+
+    seekstart(io)
+    @test write(io, view(a, 1:2:5, :)) == 3*5*8
+    seekstart(io)
+    v = Matrix{UInt48}(undef, 3, 5)
+    read!(io, v)
+    @test v == view(a, 1:2:5, :)
 end
 
 @testset "unaliascopy trimming; Issue #26263" begin

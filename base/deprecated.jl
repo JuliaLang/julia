@@ -207,6 +207,8 @@ macro get!(h, key0, default)
     end
 end
 
+pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple) = pointer(V, CartesianIndex(is))
+
 # END 1.5 deprecations
 
 # BEGIN 1.6 deprecations
