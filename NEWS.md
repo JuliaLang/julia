@@ -6,6 +6,8 @@ New language features
 
 * Types written with `where` syntax can now be used to define constructors, e.g.
   `(Foo{T} where T)(x) = ...`.
+* `<--` and `<-->` are now available as infix operators, with the same precedence
+  and associativity as other arrow-like operators ([#36666]).
 
 Language changes
 ----------------
