@@ -12,6 +12,10 @@ New language features
 Language changes
 ----------------
 
+* The `-->` operator now lowers to a `:call` expression, so it can be defined as
+  a function like other operators. The dotted version `.-->` is now parsed as well.
+  For backwards compatibility, `-->` still parses using its own expression head
+  instead of `:call`.
 
 Compiler/Runtime improvements
 -----------------------------

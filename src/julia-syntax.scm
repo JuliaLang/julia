@@ -1960,6 +1960,8 @@
    (lambda (e) (expand-forms `(call |<:| ,@(cdr e))))
    '|>:|
    (lambda (e) (expand-forms `(call |>:| ,@(cdr e))))
+   '-->
+   (lambda (e) (expand-forms `(call --> ,@(cdr e))))
 
    'where
    (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
