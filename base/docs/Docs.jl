@@ -527,6 +527,10 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true
     if isa(x, GlobalRef) && (x::GlobalRef).mod == mod
         x = (x::GlobalRef).name
     end
+    # Unwrap export statements
+    if isexpr(x, :export)
+        x = length(x.args) == 1 ? x.args[1] : docerror(ex)
+    end
 
     # Keywords using the `@kw_str` macro in `base/docs/basedocs.jl`.
     #
@@ -581,7 +585,6 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true
     __doc__!(meta, x, define) ? esc(x) :
     # Any "basic" expression such as a bare function or module name or numeric literal.
     isbasicdoc(x) ? objectdoc(source, mod, meta, nothing, x) :
-
     # All other expressions are undocumentable and should be handled on a case-by-case basis
     # with `@__doc__`. Unbound string literals are also undocumentable since they cannot be
     # retrieved from the module's metadata `IdDict` without a reference to the string.

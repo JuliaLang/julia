@@ -1549,11 +1549,10 @@
           (list 'module (if (eq? word 'module) '(true) '(false)) name
                 `(block ,loc ,@(cdr body)))))
        ((export)
-        (let ((es (map macrocall-to-atsym
-                       (parse-comma-separated s parse-unary-prefix))))
-          (if (not (every symbol-or-interpolate? es))
-              (error "invalid \"export\" statement"))
-          `(export ,@es)))
+        (let* ((e (parse-eq s)))
+          (if (and (pair? e) (eq? (car e) 'tuple))
+              (cons 'export (map macrocall-to-atsym (cdr e)))
+              (list 'export (macrocall-to-atsym e)))))
        ((import using)
         (parse-imports s word))
        ((do)

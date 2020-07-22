@@ -140,6 +140,14 @@ macro test999_str(args...); args; end
                                                      Expr(:., :b),
                                                      Expr(:., :c, :d))))
 
+
+# inline exports (issue #8005)
+@test Meta.parse("export a, b, c") == Expr(:export, :a, :b, :c)
+@test Meta.parse("export function f end") == Expr(:export,
+                                                    Expr(:function, :f))
+@test Meta.parse("export a = 1") == Expr(:export,
+                                           Expr(:(=), :a, 1))
+
 # issue #11332
 @test Meta.parse("export \$(Symbol(\"A\"))") == :(export $(Expr(:$, :(Symbol("A")))))
 @test Meta.parse("export \$A") == :(export $(Expr(:$, :A)))
