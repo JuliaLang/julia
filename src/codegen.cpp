@@ -3039,21 +3039,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = mark_julia_type(ctx, ctx.builder.CreateMul(len, elsize), false, jl_long_type);
             return true;
         }
-        if (jl_is_type_type((jl_value_t*)sty) && !jl_is_typevar(jl_tparam0(sty))) {
-            sty = (jl_datatype_t*)jl_tparam0(sty);
-        }
-        if (jl_is_datatype(sty) && sty != jl_symbol_type &&
-                sty->name != jl_array_typename &&
-                sty != jl_simplevector_type && sty != jl_string_type &&
-                // exclude DataType, since each DataType has its own size, not sizeof(DataType).
-                // this is issue #8798
-                sty != jl_datatype_type) {
-            if (jl_is_concrete_type((jl_value_t*)sty) ||
-                    (jl_field_names(sty) == jl_emptysvec && jl_datatype_size(sty) > 0)) {
-                *ret = mark_julia_type(ctx, ConstantInt::get(T_size, jl_datatype_size(sty)), false, jl_long_type);
-                return true;
-            }
-        }
     }
 
     else if (f == jl_builtin_apply_type && nargs > 0) {

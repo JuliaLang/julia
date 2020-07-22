@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Random
+using Test, Random, LinearAlgebra
 
 ######## Utilities ###########
 
@@ -36,7 +36,7 @@ _Agen(A, i1, i2, i3, i4, i5, i6) = [A[j1,j2,j3,j4,j5,j6] for j1 in i1, j2 in i2,
 
 function replace_colon(A::AbstractArray, I)
     Iout = Vector{Any}(undef, length(I))
-    I == (:,) && return (1:length(A),)
+    I === (:,) && return (1:length(A),)
     for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
     end
@@ -601,6 +601,10 @@ end
     arrayOfUInt48 = [a, b, c];
 
     @test sizeof(view(arrayOfUInt48, 1:2)) == 16
+
+    @test sizeof(view(Diagonal(zeros(UInt8, 10)), 1:4)) == 4
+    @test sizeof(view(Diagonal(zeros(UInt8, 10)), 1:3)) == 3
+    @test sizeof(view(Diagonal(zeros(Float64, 10)), 1:3, 2:6)) == 120
 end
 
 

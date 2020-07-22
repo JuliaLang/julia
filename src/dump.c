@@ -976,7 +976,8 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
                         }
                         size_t k;
                         for (k = 0; k < jl_array_len(matches); k++) {
-                            jl_array_ptr_set(matches, k, jl_svecref(jl_array_ptr_ref(matches, k), 2));
+                            jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
+                            jl_array_ptr_set(matches, k, match->method);
                         }
                         jl_array_ptr_1d_push(t, callee);
                         jl_array_ptr_1d_push(t, matches);
@@ -1837,7 +1838,8 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         else {
             size_t j, k, l = jl_array_len(expected);
             for (k = 0; k < jl_array_len(matches); k++) {
-                jl_method_t *m = (jl_method_t*)jl_svecref(jl_array_ptr_ref(matches, k), 2);
+                jl_method_match_t *match = jl_array_ptr_ref(matches, k);
+                jl_method_t *m = match->method;
                 for (j = 0; j < l; j++) {
                     if (m == (jl_method_t*)jl_array_ptr_ref(expected, j))
                         break;

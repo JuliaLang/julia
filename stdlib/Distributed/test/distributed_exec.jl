@@ -1399,6 +1399,13 @@ let thrown = false
     @test thrown
 end
 
+# issue #34333
+let
+    @test fetch(remotecall(Float64, id_other, 1)) == Float64(1)
+    @test fetch(remotecall_wait(Float64, id_other, 1)) == Float64(1)
+    @test remotecall_fetch(Float64, id_other, 1) == Float64(1)
+end
+
 #19463
 function foo19463()
     w1 = workers()[1]

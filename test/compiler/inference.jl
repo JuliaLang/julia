@@ -1400,12 +1400,17 @@ egal_conditional_lattice3(x, y) = x === y + y ? "" : 1
 
 using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
-@test sizeof_tfunc(Type{Ptr}) === Int
+@test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
 @test sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
 @test sizeof_nothrow(Const(Ptr))
-@test !sizeof_nothrow(Type{Ptr})
-@test !sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
+@test sizeof_nothrow(Type{Ptr})
+@test sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
 @test !sizeof_nothrow(Const(Tuple))
+@test !sizeof_nothrow(Type{Vector{Int}})
+@test !sizeof_nothrow(Type{Union{Int, String}})
+@test sizeof_nothrow(String)
+@test !sizeof_nothrow(Type{String})
+@test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
 let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
     @test sizeof_tfunc(PT) === Const(16)
     @test nfields_tfunc(PT) === Const(2)
@@ -1553,11 +1558,11 @@ f24852_kernel(x, y::Number) = f24852_kernel3(x, (y,))
 
 function f24852_kernel_cinfo(fsig::Type)
     world = typemax(UInt) # FIXME
-    sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
-    isdefined(method, :source) || return (nothing, :(f(x, y)))
-    code_info = Base.uncompressed_ir(method)
-    Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 1, 0, :propagate)
-    if startswith(String(method.name), "f24852")
+    match = Base._methods_by_ftype(fsig, -1, world)[1]
+    isdefined(match.method, :source) || return (nothing, :(f(x, y)))
+    code_info = Base.uncompressed_ir(match.method)
+    Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 1, 0, :propagate)
+    if startswith(String(match.method.name), "f24852")
         for a in code_info.code
             if a isa Expr && a.head == :(=)
                 a = a.args[2]
@@ -1569,7 +1574,7 @@ function f24852_kernel_cinfo(fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
-    return method, code_info
+    return match.method, code_info
 end
 
 function f24852_gen_cinfo_uninflated(X, Y, _, f, x, y)
@@ -2748,3 +2753,8 @@ f_isa2(T) = isa(T)
 f_isa2(b, T, S) = isa(b ? T : S)
 @test Base.return_types(f_isa2, Tuple{Bool,Type{Int64},Type{Float64}}) ==
       Any[Union{Base.Fix2{typeof(isa),Type{Float64}},Base.Fix2{typeof(isa),Type{Int64}}}]
+
+# Issue #36710 - sizeof(::UnionAll) tfunc correctness
+@test (sizeof(Ptr),) == sizeof.((Ptr,)) == sizeof.((Ptr{Cvoid},))
+@test Core.Compiler.sizeof_tfunc(UnionAll) === Int
+@test !Core.Compiler.sizeof_nothrow(UnionAll)

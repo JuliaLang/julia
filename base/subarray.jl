@@ -64,7 +64,8 @@ size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
-sizeof(V::SubArray) = length(V) * elsize(V.parent)
+sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
+sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
 
 copy(V::SubArray) = V.parent[V.indices...]
 

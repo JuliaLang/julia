@@ -128,6 +128,10 @@ function specialize_method(method::Method, @nospecialize(atypes), sparams::Simpl
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end
 
+function specialize_method(match::MethodMatch, preexisting::Bool=false)
+    return specialize_method(match.method, match.spec_types, match.sparams, preexisting)
+end
+
 # This function is used for computing alternate limit heuristics
 function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
     if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)

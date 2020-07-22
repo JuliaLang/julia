@@ -683,8 +683,8 @@ function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospeciali
             rt = widenconst(rt)
         end
     else
-        for m in _methods(f, t, -1, get_world_counter(interp))
-            ty = typeinf_type(interp, m[3], m[1], m[2])
+        for match in _methods(f, t, -1, get_world_counter(interp))
+            ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
             rt = tmerge(rt, ty)
             rt === Any && break
