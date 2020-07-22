@@ -652,7 +652,7 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     if !isbitstype(T) || !isa(a, StridedArray)
         return invoke(write, Tuple{IO, AbstractArray}, s, a)
     end
-    elsz = sizeof(T)
+    elsz = elsize(a)
     colsz = size(a,1) * elsz
     GC.@preserve a if stride(a,1) != 1
         for idxs in CartesianIndices(size(a))
