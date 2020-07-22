@@ -25,7 +25,7 @@ if Sys.isapple()
 
         # See above comment in `clipboard(x)`
         if Sys.which("reattach-to-user-namespace") !== nothing
-            pbcopy_cmd = `reattach-to-user-namespace pbpaste`
+            pbpaste_cmd = `reattach-to-user-namespace pbpaste`
         end
         return read(pbpaste_cmd, String)
     end
