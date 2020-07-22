@@ -12,11 +12,11 @@ extern "C" {
 #ifdef DEFINE_BUILTIN_GLOBALS
 #define DECLARE_BUILTIN(name) \
     JL_CALLABLE(jl_f_##name); \
-    jl_value_t *jl_builtin_##name
+    jl_value_t *jl_builtin_##name JL_GLOBALLY_ROOTED
 #else
 #define DECLARE_BUILTIN(name) \
     JL_CALLABLE(jl_f_##name); \
-    extern jl_value_t *jl_builtin_##name
+    extern jl_value_t *jl_builtin_##name JL_GLOBALLY_ROOTED
 #endif
 
 DECLARE_BUILTIN(throw);      DECLARE_BUILTIN(is);
