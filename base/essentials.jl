@@ -106,6 +106,40 @@ macro specialize(vars...)
     return Expr(:meta, :specialize, vars...)
 end
 
+"""
+    @isdefined s -> Bool
+
+Tests whether variable `s` is defined in the current scope.
+
+See also [`isdefined`](@ref).
+
+# Examples
+```jldoctest
+julia> @isdefined newvar
+false
+
+julia> newvar = 1
+1
+
+julia> @isdefined newvar
+true
+
+julia> function f()
+           println(@isdefined x)
+           x = 3
+           println(@isdefined x)
+       end
+f (generic function with 1 method)
+
+julia> f()
+false
+true
+```
+"""
+macro isdefined(s::Symbol)
+    return Expr(:escape, Expr(:isdefined, s))
+end
+
 macro _pure_meta()
     return Expr(:meta, :pure)
 end
@@ -207,31 +241,6 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
-tuple_type_head(T::Type) = (@_pure_meta; fieldtype(T, 1))
-
-function tuple_type_tail(T::Type)
-    @_pure_meta
-    if isa(T, UnionAll)
-        return UnionAll(T.var, tuple_type_tail(T.body))
-    elseif isa(T, Union)
-        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
-    else
-        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
-        if isvatuple(T) && length(T.parameters) == 1
-            va = T.parameters[1]
-            (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
-            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
-        end
-        return Tuple{argtail(T.parameters...)...}
-    end
-end
-
-tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
-function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
-    @_pure_meta
-    Tuple{S, T.parameters...}
-end
-
 function unwrap_unionall(@nospecialize(a))
     while isa(a,UnionAll)
         a = a.body
@@ -248,7 +257,7 @@ end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
 function rename_unionall(@nospecialize(u))
-    if !isa(u,UnionAll)
+    if !isa(u, UnionAll)
         return u
     end
     body = rename_unionall(u.body)
@@ -301,52 +310,49 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-const AtLeast1 = Tuple{Any, Vararg{Any}}
+_tuple_error(T::Type, x) = (@_noinline_meta; throw(MethodError(convert, (T, x))))
 
-# converting to empty tuple type
-convert(::Type{Tuple{}}, ::Tuple{}) = ()
-convert(::Type{Tuple{}}, x::AtLeast1) = throw(MethodError(convert, (Tuple{}, x)))
+convert(::Type{T}, x::T) where {T<:Tuple} = x
+function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
+    # First see if there could be any conversion of the input type that'd be a subtype of the output.
+    # If not, we'll throw an explicit MethodError (otherwise, it might throw a typeassert).
+    if typeintersect(NTuple{N,Any}, T) === Union{}
+        _tuple_error(T, x)
+    end
+    cvt1(n) = (@_inline_meta; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
+    return ntuple(cvt1, Val(N))::NTuple{N,Any}
+end
 
-# converting to tuple types with at least one element
-convert(::Type{T}, x::T) where {T<:AtLeast1} = x
-convert(::Type{T}, x::AtLeast1) where {T<:AtLeast1} =
-    (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
-
-# converting to Vararg tuple types
-convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
-convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V} =
-    (convert(tuple_type_head(T), x[1]), convert(T, tail(x))...)
-
-# TODO: the following definitions are equivalent (behaviorally) to the above method
-# I think they may be faster / more efficient for inference,
-# if we could enable them, but are they?
-# TODO: These currently can't be used (#21026, #23017) since with
-#     z(::Type{<:Tuple{Vararg{T}}}) where {T} = T
-#   calling
-#     z(Tuple{Val{T}} where T)
-#   fails, even though `Type{Tuple{Val}} == Type{Tuple{Val{S}} where S}`
-#   and so T should be `Val` (aka `Val{S} where S`)
-#convert(_::Type{Tuple{S}}, x::Tuple{S}) where {S} = x
-#convert(_::Type{Tuple{S}}, x::Tuple{Any}) where {S} = (convert(S, x[1]),)
-#convert(_::Type{T}, x::T) where {S, N, T<:Tuple{S, Vararg{S, N}}} = x
-#convert(_::Type{Tuple{S, Vararg{S, N}}},
-#        x::Tuple{Any, Vararg{Any, N}}) where
-#       {S, N} = cnvt_all(S, x...)
-#convert(_::Type{Tuple{Vararg{S, N}}},
-#        x::Tuple{Vararg{Any, N}}) where
-#       {S, N} = cnvt_all(S, x...)
-# TODO: These are similar to the methods we currently use but cnvt_all might work better:
-#convert(_::Type{Tuple{Vararg{S}}},
-#        x::Tuple{Any, Vararg{Any}}) where
-#       {S} = cnvt_all(S, x...)
-#convert(_::Type{Tuple{Vararg{S}}},
-#        x::Tuple{Vararg{Any}}) where
-#       {S} = cnvt_all(S, x...)
-#cnvt_all(T) = ()
-#cnvt_all(T, x, rest...) = (convert(T, x), cnvt_all(T, rest...)...)
-# TODO: These may be necessary if the above are enabled
+# optimizations?
+# converting to tuple types of fixed length
+#convert(::Type{T}, x::T) where {N, T<:NTuple{N,Any}} = x
+#convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:NTuple{N,Any}} =
+#    ntuple(n -> convert(fieldtype(T, n), x[n]), Val(N))
+#convert(::Type{T}, x::Tuple{Vararg{Any}}) where {N, T<:NTuple{N,Any}} =
+#    throw(MethodError(convert, (T, x)))
+# converting to tuple types of indefinite length
+#convert(::Type{Tuple{Vararg{V}}}, x::Tuple{Vararg{V}}) where {V} = x
+#convert(::Type{NTuple{N, V}}, x::NTuple{N, V}) where {N, V} = x
+#function convert(T::Type{Tuple{Vararg{V}}}, x::Tuple) where {V}
+#    @isdefined(V) || (V = fieldtype(T, 1))
+#    return map(t -> convert(V, t), x)
+#end
+#function convert(T::Type{NTuple{N, V}}, x::NTuple{N, Any}) where {N, V}
+#    @isdefined(V) || (V = fieldtype(T, 1))
+#    return map(t -> convert(V, t), x)
+#end
+# short tuples
 #convert(::Type{Tuple{}}, ::Tuple{}) = ()
-#convert(::Type{Tuple{Vararg{S}}} where S, ::Tuple{}) = ()
+#convert(::Type{Tuple{S}}, x::Tuple{S}) where {S} = x
+#convert(::Type{Tuple{S, T}}, x::Tuple{S, T}) where {S, T} = x
+#convert(::Type{Tuple{S, T, U}}, x::Tuple{S, T, U}) where {S, T, U} = x
+#convert(::Type{Tuple{S}}, x::Tuple{Any}) where {S} = (convert(S, x[1]),)
+#convert(::Type{Tuple{S, T}}, x::Tuple{Any, Any}) where {S, T} = (convert(S, x[1]), convert(T, x[2]),)
+#convert(::Type{Tuple{S, T, U}}, x::Tuple{Any, Any, Any}) where {S, T, U} = (convert(S, x[1]), convert(T, x[2]), convert(U, x[3]))
+#convert(::Type{Tuple{}}, x::Tuple) = _tuple_error(Tuple{}, x)
+#convert(::Type{Tuple{S}}, x::Tuple) = _tuple_error(Tuple{S}, x)
+#convert(::Type{Tuple{S, T}}, x::Tuple{Any, Any}) where {S, T} =_tuple_error(Tuple{S, T}, x)
+#convert(::Type{Tuple{S, T, U}}, x::Tuple{Any, Any, Any}) where {S, T, U} = _tuple_error(Tuple{S, T, U}, x)
 
 """
     oftype(x, y)
@@ -695,7 +701,7 @@ julia> f(Val(true))
 struct Val{x}
 end
 
-Val(x) = (@_pure_meta; Val{x}())
+Val(x) = Val{x}()
 
 """
     invokelatest(f, args...; kwargs...)

@@ -1247,7 +1247,6 @@ let ints = (Int, Int32, UInt, UInt32)
     T = Type{Tuple{V, I}} where V <: Vecs where I <: Ints
     @testintersect(T, T, T)
     test(a::Type{Tuple{V, I}}) where {V <: Vecs, I <: Ints} = I
-    test(a::Type{Tuple{V, I}}) where {V <: Vecs, I <: Ints} = I
 end
 
 # issue #21191

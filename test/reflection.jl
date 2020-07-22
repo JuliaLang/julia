@@ -559,10 +559,6 @@ end
 @test !isstructtype(Int)
 @test isstructtype(TLayout)
 
-@test Base.parameter_upper_bound(ReflectionExample, 1) === AbstractFloat
-@test Base.parameter_upper_bound(ReflectionExample, 2) === Any
-@test Base.parameter_upper_bound(ReflectionExample{T, N} where T where N <: Real, 2) === Real
-
 let
     wrapperT(T) = Base.typename(T).wrapper
     @test @inferred wrapperT(ReflectionExample{Float64, Int64}) == ReflectionExample
