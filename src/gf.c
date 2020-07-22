@@ -2335,12 +2335,19 @@ static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT
 
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types, size_t world)
 {
-    // XXX: return min/max world
+    // Deprecated: Use jl_gf_invoke_lookup_worlds for future development
     size_t min_valid = 0;
     size_t max_valid = ~(size_t)0;
     jl_method_match_t *matc = _gf_invoke_lookup(types, world, &min_valid, &max_valid);
     if (matc == NULL)
         return jl_nothing;
+    return (jl_value_t*)matc->method;
+}
+
+
+JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, size_t world, size_t *min_world, size_t *max_world)
+{
+    jl_method_match_t *matc = _gf_invoke_lookup(types, world, min_world, max_world);
     return (jl_value_t*)matc->method;
 }
 

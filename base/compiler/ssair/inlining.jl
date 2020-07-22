@@ -579,19 +579,19 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
 end
 
 function spec_lambda(@nospecialize(atype), sv::OptimizationState, @nospecialize(invoke_data))
-    min_valid = UInt[typemin(UInt)]
-    max_valid = UInt[typemax(UInt)]
+    min_valid = RefValue{UInt}(typemin(UInt))
+    max_valid = RefValue{UInt}(typemax(UInt))
     if invoke_data === nothing
         mi = ccall(:jl_get_spec_lambda, Any, (Any, UInt, Ptr{UInt}, Ptr{UInt}), atype, sv.world, min_valid, max_valid)
     else
         invoke_data = invoke_data::InvokeData
         atype <: invoke_data.types0 || return nothing
         mi = ccall(:jl_get_invoke_lambda, Any, (Any, Any), invoke_data.entry, atype)
-        min_valid[1] = invoke_data.min_valid
-        max_valid[1] = invoke_data.max_valid
+        min_valid[] = invoke_data.min_valid
+        max_valid[] = invoke_data.max_valid
     end
     mi !== nothing && add_backedge!(mi::MethodInstance, sv)
-    update_valid_age!(min_valid[1], max_valid[1], sv)
+    update_valid_age!(sv, WorldRange(min_valid[], max_valid[]))
     return mi
 end
 
@@ -987,7 +987,7 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, invoke_data::Invok
     methsp = methsp::SimpleVector
     result = analyze_method!(idx, sig, metharg, methsp, method, stmt, sv, true, invoke_data, calltype)
     handle_single_case!(ir, stmt, idx, result, true, todo)
-    update_valid_age!(invoke_data.min_valid, invoke_data.max_valid, sv)
+    update_valid_age!(sv, WorldRange(invoke_data.min_valid, invoke_data.max_valid))
     return nothing
 end
 
@@ -1053,10 +1053,9 @@ function recompute_method_matches(@nospecialize(atype), sv::OptimizationState)
     # in the case that the cache is nonempty, so it should be unchanged
     # The max number of methods should be the same as in inference most
     # of the time, and should not affect correctness otherwise.
-    (meth, min_valid, max_valid, ambig) =
-        matching_methods(atype, sv.matching_methods_cache, sv.params.MAX_METHODS, sv.world)
-    update_valid_age!(min_valid, max_valid, sv)
-    MethodMatchInfo(meth, ambig)
+    results = findall(atype, InternalMethodTable(sv.world); limit=sv.params.MAX_METHODS)
+    results !== missing && update_valid_age!(sv, results.valid_worlds)
+    MethodMatchInfo(results)
 end
 
 function analyze_single_call!(ir::IRCode, todo::Vector{Any}, idx::Int, @nospecialize(stmt),
@@ -1069,8 +1068,8 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Any}, idx::Int, @nospecia
     local fully_covered = true
     for i in 1:length(infos)
         info = infos[i]
-        meth = info.applicable
-        if meth === false || info.ambig
+        meth = info.results
+        if meth === missing || meth.ambig
             # Too many applicable methods
             # Or there is a (partial?) ambiguity
             too_many = true
@@ -1087,7 +1086,7 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Any}, idx::Int, @nospecia
         else
             only_method = false
         end
-        for match in meth::Vector{Any}
+        for match in meth
             (metharg, methsp, method) = (match.spec_types, match.sparams, match.method)
             signature_union = Union{signature_union, metharg}
             if !isdispatchtuple(metharg)
@@ -1179,7 +1178,7 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
             if !isa(info, UnionSplitInfo)
                 infos = MethodMatchInfo[]
                 for union_sig in UnionSplitSignature(sig.atypes)
-                    push!(infos, recompute_method_matches(union_sig, sv))
+                    push!(infos, recompute_method_matches(argtypes_to_type(union_sig), sv))
                 end
             else
                 infos = info.matches
@@ -1221,12 +1220,10 @@ function compute_invoke_data(@nospecialize(atypes), world::UInt)
         return nothing
     end
     invoke_types = rewrap_unionall(Tuple{ft, unwrap_unionall(invoke_tt).parameters...}, invoke_tt)
-    min_valid = UInt[typemin(UInt)]
-    max_valid = UInt[typemax(UInt)]
-    invoke_entry = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt),
-                         invoke_types, world) # XXX: min_valid, max_valid
+    invoke_entry = findsup(invoke_types, InternalMethodTable(world))
     invoke_entry === nothing && return nothing
-    invoke_data = InvokeData(invoke_entry::Method, invoke_types, min_valid[1], max_valid[1])
+    method, valid_worlds = invoke_entry
+    invoke_data = InvokeData(method, invoke_types, first(valid_worlds), last(valid_worlds))
     atype0 = atypes[2]
     atypes = atypes[4:end]
     pushfirst!(atypes, atype0)

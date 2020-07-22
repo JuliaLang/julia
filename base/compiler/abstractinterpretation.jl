@@ -16,31 +16,13 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
 
-function matching_methods(@nospecialize(atype), cache::IdDict{Any, Tuple{Any, UInt, UInt, Bool}}, max_methods::Int, world::UInt)
-    box = Core.Box(atype)
-    return get!(cache, atype) do
-        _min_val = UInt[typemin(UInt)]
-        _max_val = UInt[typemax(UInt)]
-        _ambig = Int32[0]
-        ms = _methods_by_ftype(box.contents, max_methods, world, false, _min_val, _max_val, _ambig)
-        return ms, _min_val[1], _max_val[1], _ambig[1] != 0
-    end
-end
-
-function matching_methods(@nospecialize(atype), cache::IdDict{Any, Tuple{Any, UInt, UInt, Bool}}, max_methods::Int, world::UInt, min_valid::Vector{UInt}, max_valid::Vector{UInt})
-    ms, minvalid, maxvalid, ambig = matching_methods(atype, cache, max_methods, world)
-    min_valid[1] = max(min_valid[1], minvalid)
-    max_valid[1] = min(max_valid[1], maxvalid)
-    return ms, ambig
-end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods::Int = InferenceParams(interp).MAX_METHODS)
     if sv.currpc in sv.throw_blocks
         return CallMeta(Any, false)
     end
-    min_valid = UInt[typemin(UInt)]
-    max_valid = UInt[typemax(UInt)]
+    valid_worlds = WorldRange()
     atype_params = unwrap_unionall(atype).parameters
     splitunions = 1 < countunionsplit(atype_params) <= InferenceParams(interp).MAX_UNION_SPLITTING
     mts = Core.MethodTable[]
@@ -56,15 +38,15 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 return CallMeta(Any, false)
             end
             mt = mt::Core.MethodTable
-            xapplicable, ambig = matching_methods(sig_n, sv.matching_methods_cache, max_methods,
-                                                  get_world_counter(interp), min_valid, max_valid)
-            if xapplicable === false
+            matches = findall(sig_n, method_table(interp); limit=max_methods)
+            if matches === missing
                 add_remark!(interp, sv, "For one of the union split cases, too many methods matched")
                 return CallMeta(Any, false)
             end
-            push!(infos, MethodMatchInfo(xapplicable, ambig))
-            append!(applicable, xapplicable)
-            thisfullmatch = _any(match->(match::MethodMatch).fully_covers, xapplicable)
+            push!(infos, MethodMatchInfo(matches))
+            append!(applicable, matches)
+            valid_worlds = intersect(valid_worlds, matches.valid_worlds)
+            thisfullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
             found = false
             for (i, mt′) in enumerate(mts)
                 if mt′ === mt
@@ -86,19 +68,20 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             return CallMeta(Any, false)
         end
         mt = mt::Core.MethodTable
-        applicable, ambig = matching_methods(atype, sv.matching_methods_cache, max_methods,
-                                      get_world_counter(interp), min_valid, max_valid)
-        if applicable === false
+        matches = findall(atype, method_table(interp, sv); limit=max_methods)
+        if matches === missing
             # this means too many methods matched
             # (assume this will always be true, so we don't compute / update valid age in this case)
             add_remark!(interp, sv, "Too many methods matched")
             return CallMeta(Any, false)
         end
         push!(mts, mt)
-        push!(fullmatch, _any(match->(match::MethodMatch).fully_covers, applicable))
-        info = MethodMatchInfo(applicable, ambig)
+        push!(fullmatch, _any(match->(match::MethodMatch).fully_covers, matches))
+        info = MethodMatchInfo(matches)
+        applicable = matches.matches
+        valid_worlds = matches.valid_worlds
     end
-    update_valid_age!(min_valid[1], max_valid[1], sv)
+    update_valid_age!(sv, valid_worlds)
     applicable = applicable::Array{Any,1}
     napplicable = length(applicable)
     rettype = Bottom
@@ -1460,12 +1443,7 @@ function typeinf_nocycle(interp::AbstractInterpreter, frame::InferenceState)
                 typeinf_local(interp, caller)
                 no_active_ips_in_callers = false
             end
-            if caller.min_valid < frame.min_valid
-                caller.min_valid = frame.min_valid
-            end
-            if caller.max_valid > frame.max_valid
-                caller.max_valid = frame.max_valid
-            end
+            caller.valid_worlds = intersect(caller.valid_worlds, frame.valid_worlds)
         end
     end
     return true

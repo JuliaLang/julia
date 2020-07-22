@@ -1483,8 +1483,8 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
-    @test opt.max_valid === Core.Compiler.get_world_counter()
-    @test opt.min_valid === Core.Compiler.min_world(opt.src) === UInt(1)
+    @test opt.valid_worlds.max_world === Core.Compiler.get_world_counter()
+    @test opt.valid_worlds.min_world === Core.Compiler.min_world(opt.src) === UInt(1)
     @test opt.nargs == 3
 end
 
