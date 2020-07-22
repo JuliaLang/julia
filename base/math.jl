@@ -362,13 +362,9 @@ asinh(x::Number)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:exp2, :expm1)
-    @eval begin
-        ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        ($f)(x::Real) = ($f)(float(x))
-    end
-end
+expm1(x::Float64) = ccall((:expm1,libm), Float64, (Float64,), x)
+expm1(x::Float32) = ccall((:expm1f,libm), Float32, (Float32,), x)
+expm1(x::Real) = expm1(float(x))
 
 """
     exp2(x)
@@ -1184,7 +1180,6 @@ Return positive part of the high word of `x` as a `UInt32`.
 # More special functions
 include("special/cbrt.jl")
 include("special/exp.jl")
-include("special/exp10.jl")
 include("special/ldexp_exp.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
