@@ -354,13 +354,15 @@ changes will be visible in the `@async` block.
 # Examples
 ```jldoctest
 julia> x = ["original"]
+       barrier = Threads.Event()
        t = @async begin
-           sleep(0.1) # Wait for change in x
+           wait(barrier) # Wait for change in x
            println(" x = ", x)
            println("\\\$x = ", \$x)
        end
        push!(x, "modified")
        x = ["reassigned"]
+       notify(barrier)
        wait(t)
  x = ["reassigned"]
 \$x = ["original", "modified"]

@@ -160,13 +160,15 @@ instead of reassigned, these changes will be visible in the `Threads.@spawn` blo
 # Examples
 ```jldoctest
 julia> x = ["original"]
+       barrier = Threads.Event()
        t = Threads.@spawn begin
-           sleep(0.1) # Wait for change in x
+           wait(barrier) # Wait for change in x
            println(" x = ", x)
            println("\\\$x = ", \$x)
        end
        push!(x, "modified")
        x = ["reassigned"]
+       notify(barrier)
        wait(t)
  x = ["reassigned"]
 \$x = ["original", "modified"]
