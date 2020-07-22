@@ -74,16 +74,12 @@ The directory in `DEPOT_PATH` contains a set of subdirectories, used for differe
 of whats typically found there:
 
 * `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
-* `compiled`: Contains precompiled `*.ji` files for packages. Maintained by `Pkg.jl`.
+* `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
 * `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
-* `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`
-* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`. CHECK WHO ELSE LOGS HERE?
-* `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`
-* `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`
-
-Certain packages, also create and populate other subdirectories. For instance:
-* `conda`: Maintained by `Conda.jl`
-* `prefs`: Maintained by `IJulia.jl`
+* `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
+* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
+* `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
+* `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
 
 See also:
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
