@@ -1,5 +1,38 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    SHA
+
+The SHA module provides hashing functionality for SHA1, SHA2 and SHA3 algorithms
+
+They are implemented as both pure functions for hasing single pieces of data,
+or a stateful context which can be updated with the `update!` function and 
+finalized with `digest!`
+
+```julia-repl
+julia> sha1(b"some data")
+20-element Vector{UInt8}:
+ 0xba
+ 0xf3
+    ⋮
+ 0xe3
+ 0x56
+
+
+julia> ctx = SHA1_CTX()
+SHA1 hash state
+
+julia> update!(ctx, b"some data")
+0x0000000000000009
+
+julia> digest!(ctx)
+20-element Vector{UInt8}:
+ 0xba
+ 0xf3
+    ⋮
+ 0xe3
+ 0x56
+"""
 module SHA
 
 # Export convenience functions, context types, update!() and digest!() functions
@@ -45,10 +78,23 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
 
     @eval begin
         # Our basic function is to process arrays of bytes
+        """
+            $($f)(data)
+
+        Hash data using the $($f) algorithm and return the resulting digest
+        See also [`$($ctx)`](@ref)
+        """
         function $f(data::AbstractBytes)
             ctx = $ctx()
             update!(ctx, data)
             return digest!(ctx)
+
+        """
+            $($g)(key, data)
+
+        Hash data using the $($f) algorithm using the passed key
+        See also [`HMAC_CTX`](@ref)
+        """
         end
         function $g(key::Vector{UInt8}, data::AbstractBytes)
             ctx = HMAC_CTX($ctx(), key)
@@ -62,10 +108,11 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
         $g(key::Vector{UInt8}, str::AbstractString) = $g(key, String(str))
         $g(key::Vector{UInt8}, str::String) = $g(key, codeunits(str))
 
-        # Convenience function for IO devices, allows for things like:
-        # open("test.txt") do f
-        #     sha256(f)
-        # done
+        """
+            $($f)(io::IO)
+
+        Hash data from io using $($f) algorithm from io
+        """
         function $f(io::IO, chunk_size=4*1024)
             ctx = $ctx()
             buff = Vector{UInt8}(undef, chunk_size)

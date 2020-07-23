@@ -112,14 +112,55 @@ blocklen(::Type{SHA3_512_CTX}) = UInt64(25*8 - 2*digestlen(SHA3_512_CTX))
 short_blocklen(::Type{T}) where {T<:SHA_CTX} = blocklen(T) - 2*sizeof(state_type(T))
 
 # Once the "blocklen" methods are defined, we can define our outer constructors for SHA types:
+
+"""
+    SHA2_224_CTX()
+
+Construct an empty SHA2_224 context
+"""
 SHA2_224_CTX() = SHA2_224_CTX(copy(SHA2_224_initial_hash_value), 0, zeros(UInt8, blocklen(SHA2_224_CTX)))
+"""
+    SHA2_256_CTX()
+
+Construct an empty SHA2_256 context
+"""
 SHA2_256_CTX() = SHA2_256_CTX(copy(SHA2_256_initial_hash_value), 0, zeros(UInt8, blocklen(SHA2_256_CTX)))
+"""
+    SHA2_384()
+
+Construct an empty SHA2_384 context
+"""
 SHA2_384_CTX() = SHA2_384_CTX(copy(SHA2_384_initial_hash_value), 0, zeros(UInt8, blocklen(SHA2_384_CTX)))
+"""
+    SHA2_512_CTX()
+
+Construct an empty SHA2_512 context
+"""
 SHA2_512_CTX() = SHA2_512_CTX(copy(SHA2_512_initial_hash_value), 0, zeros(UInt8, blocklen(SHA2_512_CTX)))
 
+"""
+    SHA3_224_CTX()
+
+Construct an empty SHA3_224 context
+"""
 SHA3_224_CTX() = SHA3_224_CTX(zeros(UInt64, 25), 0, zeros(UInt8, blocklen(SHA3_224_CTX)), Vector{UInt64}(undef, 5))
+"""
+    SHA3_256_CTX()
+
+Construct an empty SHA3_256 context
+"""
 SHA3_256_CTX() = SHA3_256_CTX(zeros(UInt64, 25), 0, zeros(UInt8, blocklen(SHA3_256_CTX)), Vector{UInt64}(undef, 5))
+"""
+    SHA3_384_CTX()
+
+Construct an empty SHA3_384 context
+"""
 SHA3_384_CTX() = SHA3_384_CTX(zeros(UInt64, 25), 0, zeros(UInt8, blocklen(SHA3_384_CTX)), Vector{UInt64}(undef, 5))
+"""
+    SHA3_512_CTX()
+
+Construct an empty SHA3_512 context
+"""
 SHA3_512_CTX() = SHA3_512_CTX(zeros(UInt64, 25), 0, zeros(UInt8, blocklen(SHA3_512_CTX)), Vector{UInt64}(undef, 5))
 
 # Nickname'd outer constructor methods for SHA2
@@ -129,6 +170,11 @@ const SHA384_CTX = SHA2_384_CTX
 const SHA512_CTX = SHA2_512_CTX
 
 # SHA1 is special; he needs extra workspace
+"""
+    SHA1_CTX()
+
+Construct an empty SHA1 context
+"""
 SHA1_CTX() = SHA1_CTX(copy(SHA1_initial_hash_value), 0, zeros(UInt8, blocklen(SHA1_CTX)), Vector{UInt32}(undef, 80))
 
 
