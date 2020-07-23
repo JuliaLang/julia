@@ -153,6 +153,11 @@ end
     @test (α * I) .^ β == UniformScaling(α^β)
 end
 
+@testset "unary" begin
+    @test +I === +1*I
+    @test -I === -1*I
+end
+
 @testset "tr, det and logdet" begin
     for T in (Int, Float64, ComplexF64, Bool)
         @test tr(UniformScaling(zero(T))) === zero(T)
