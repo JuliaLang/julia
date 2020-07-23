@@ -407,16 +407,13 @@ void jl_init_threading(void)
 #endif
 
     // how many threads available, usable
-    int max_threads = jl_cpu_threads();
     jl_n_threads = JULIA_NUM_THREADS;
     if (jl_options.nthreads < 0) // --threads=auto
-        jl_n_threads = max_threads;
+        jl_n_threads = jl_cpu_threads();
     else if (jl_options.nthreads > 0) // --threads=N
         jl_n_threads = jl_options.nthreads;
     else if ((cp = getenv(NUM_THREADS_NAME)))
         jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
-    if (jl_n_threads > max_threads)
-        jl_n_threads = max_threads;
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
 #ifndef __clang_analyzer__
@@ -451,6 +448,10 @@ void jl_start_threads(void)
     // according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive) {
+        if (jl_n_threads > jl_cpu_threads()) {
+            jl_n_threads = 1;
+            jl_error("Too many threads running for " MACHINE_EXCLUSIVE_NAME " option.");
+        }
         memset(mask, 0, cpumasksize);
         mask[0] = 1;
         uvtid = (uv_thread_t)uv_thread_self();
