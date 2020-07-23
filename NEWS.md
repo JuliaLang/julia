@@ -76,12 +76,12 @@ Standard library changes
 * `first` and `last` functions now accept an integer as second argument to get that many
   leading or trailing elements of any iterable ([#34868]).
 * `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
-* `(+)(::UniformScaling)` is now defined, making `+I` a valid unary operation.
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
 * `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
 * New function `LinearAlgebra.BLAS.get_num_threads()` for getting the number of BLAS threads. ([#36360])
+* `(+)(::UniformScaling)` is now defined, making `+I` a valid unary operation. ([#36784])
 
 #### Markdown
 
