@@ -250,10 +250,10 @@
                              (let* ((newop (string str c))
                                     (opsym (string->symbol newop)))
                                (if (or (operator? opsym)
-                                       (and (eq? opsym '<---)
+                                       (and (or (eq? opsym '<---) (eq? opsym '.<---))
                                             (error (string "invalid operator \"" newop "\"")))
                                        ;; <- is not an operator but <-- and <--> are
-                                       (and (eq? opsym '<-)
+                                       (and (or (eq? opsym '<-) (eq? opsym '.<-))
                                             (read-char port)
                                             (begin0 (eqv? (peek-char port) #\-)
                                                     (io.ungetc port #\-))))
