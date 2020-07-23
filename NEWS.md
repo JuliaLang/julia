@@ -110,6 +110,9 @@ Standard library changes
   + `suppress_output` (primarily a testing option) has been added as a keyword argument to `request`,
     rather than a configuration option
 
+* Windows REPL now supports 24-bit colors, by correctly interpreting virtual terminal escapes.
+
+
 #### SparseArrays
 
 * Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns, and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
