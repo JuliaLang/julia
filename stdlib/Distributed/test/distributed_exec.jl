@@ -1702,6 +1702,12 @@ let e
     @test sprint(showerror, e) isa String
 end
 
+# issue #27429, propagate relative `include` path to workers
+@everywhere include("includefile.jl")
+for p in procs()
+    @test @fetchfrom(p, i27429) == 27429
+end
+
 include("splitrange.jl")
 
 # Run topology tests last after removing all workers, since a given
