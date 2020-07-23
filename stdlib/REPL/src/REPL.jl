@@ -436,9 +436,15 @@ mutable struct LineEditREPL <: AbstractREPL
     last_shown_line_infos::Vector{Tuple{String,Int}}
     interface::ModalInterface
     backendref::REPLBackendRef
-    LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
+    function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors)
+        opts = Options()
+        opts.hascolor = hascolor
+        if !hascolor
+            opts.beep_colors = [""]
+        end
         new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, Options(), nothing, Tuple{String,Int}[])
+            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+    end
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
@@ -849,7 +855,8 @@ end
 
 function reset(repl::LineEditREPL)
     raw!(repl.t, false)
-    print(repl.t, Base.text_colors[:normal])
+    hascolor(repl) && print(repl.t, Base.text_colors[:normal])
+    nothing
 end
 
 function prepare_next(repl::LineEditREPL)

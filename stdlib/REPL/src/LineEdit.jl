@@ -395,7 +395,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     regstart, regstop = region(buf)
     written = 0
     # Write out the prompt string
-    lindent = write_prompt(termbuf, prompt)
+    lindent = write_prompt(termbuf, prompt, hascolor(terminal))
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
     miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
 
@@ -1259,15 +1259,15 @@ refresh_line(s, termbuf) = refresh_multi_line(termbuf, s)
 default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
-write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
+write_prompt(terminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
 
-function write_prompt(terminal, p::Prompt)
+function write_prompt(terminal, p::Prompt, color::Bool)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
     write(terminal, prefix)
-    write(terminal, Base.text_colors[:bold])
-    width = write_prompt(terminal, p.prompt)
-    write(terminal, Base.text_colors[:normal])
+    color && write(terminal, Base.text_colors[:bold])
+    width = write_prompt(terminal, p.prompt, color)
+    color && write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
     return width
 end
@@ -1303,7 +1303,7 @@ end
 end
 
 # returns the width of the written prompt
-function write_prompt(terminal, s::Union{AbstractString,Function})
+function write_prompt(terminal, s::Union{AbstractString,Function}, color::Bool)
     @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)
     write(terminal, promptstr)
@@ -1740,7 +1740,7 @@ end
 
 input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
-write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
+write_prompt(terminal, s::PrefixSearchState, color::Bool) = write_prompt(terminal, s.histprompt.parent_prompt, color)
 prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)
 
 terminal(s::PrefixSearchState) = s.terminal

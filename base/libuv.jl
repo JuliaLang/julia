@@ -115,6 +115,16 @@ function reinit_stdio()
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+    opts = JLOptions()
+    if opts.color != 0
+        have_color = (opts.color == 1)
+        if !isa(stdout, TTY)
+            global stdout = IOContext(stdout, :color => have_color)
+        end
+        if !isa(stderr, TTY)
+            global stderr = IOContext(stderr, :color => have_color)
+        end
+    end
     nothing
 end
 
