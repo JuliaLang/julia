@@ -113,11 +113,13 @@ macro view(ex)
     if Meta.isexpr(ex, :ref)
         ex = replace_ref_begin_end!(ex)
         if Meta.isexpr(ex, :ref)
-            ex = Expr(:call, view, ex.args...)
+            ex = Expr(:call, Base.view, ex.args...)
         else # ex replaced by let ...; foo[...]; end
             @assert Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref)
-            ex.args[2] = Expr(:call, view, ex.args[2].args...)
+            ex.args[2] = Expr(:call, Base.view, ex.args[2].args...)
         end
+        # prevent accidentally redefining `view` if used on the LHS, i.e.
+        #   @view(A[x]) = 2
         Expr(:&&, true, esc(ex))
     else
         throw(ArgumentError("Invalid use of @view macro: argument must be a reference expression A[...]."))
