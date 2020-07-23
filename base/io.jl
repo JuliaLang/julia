@@ -656,14 +656,14 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     colsz = size(a,1) * elsz
     GC.@preserve a if stride(a,1) != 1
         for idxs in CartesianIndices(size(a))
-            unsafe_write(s, pointer(a, idxs.I), elsz)
+            unsafe_write(s, pointer(a, idxs), elsz)
         end
         return elsz * length(a)
     elseif N <= 1
         return unsafe_write(s, pointer(a, 1), colsz)
     else
-        for idxs in CartesianIndices((1, size(a)[2:end]...))
-            unsafe_write(s, pointer(a, idxs.I), colsz)
+        for colstart in CartesianIndices((1, size(a)[2:end]...))
+            unsafe_write(s, pointer(a, colstart), colsz)
         end
         return colsz * trailingsize(a,2)
     end

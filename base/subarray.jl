@@ -408,6 +408,15 @@ end
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
 
+function pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::AbstractCartesianIndex{N}) where {N}
+    index = first_index(V)
+    strds = strides(V)
+    for d = 1:N
+        index += (is[d]-1)*strds[d]
+    end
+    return pointer(V.parent, index)
+end
+
 # indices are taken from the range/vector
 # Since bounds-checking is performance-critical and uses
 # indices, it's worth optimizing these implementations thoroughly
