@@ -51,6 +51,7 @@ New library functions
 
 * New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker product in-place. ([#31069]).
 * New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption. ([#34543]).
+* New function `Base.readeach(io, T)` for iteratively performing `read(io, T)`. ([#36150])
 * `Iterators.map` is added. It provides another syntax `Iterators.map(f, iterators...)`
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
 * New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more

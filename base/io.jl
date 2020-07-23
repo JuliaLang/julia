@@ -773,8 +773,7 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
         return readuntil_string(s, delim % UInt8, keep)
     end
     out = IOBuffer()
-    while !eof(s)
-        c = read(s, Char)
+    for c in readeach(s, Char)
         if c == delim
             keep && write(out, c)
             break
@@ -786,8 +785,7 @@ end
 
 function readuntil(s::IO, delim::T; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    while !eof(s)
-        c = read(s, T)
+    for c in readeach(s, T)
         if c == delim
             keep && push!(out, c)
             break
@@ -823,8 +821,7 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
     max_pos = 1 # array-offset in cache
     local cache # will be lazy initialized when needed
     output! = (isa(out, IO) ? write : push!)
-    while !eof(io)
-        c = read(io, T)
+    for c in readeach(io, T)
         # Backtrack until the next target character matches what was found
         while true
             c1 = target[pos + first]
@@ -1022,6 +1019,40 @@ eltype(::Type{<:EachLine}) = String
 
 IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
+struct ReadEachIterator{T, IOT <: IO}
+    stream::IOT
+end
+
+"""
+    readeach(io::IO, T)
+
+Return an iterable object yielding [`read(io, T)`](@ref).
+
+See also: [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref)
+
+!!! compat "Julia 1.6"
+    `readeach` requires Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.\\n It has many members.\\n");
+
+julia> for c in readeach(io, Char)
+           c == '\\n' && break
+           print(c)
+       end
+JuliaLang is a GitHub organization.
+```
+"""
+readeach(stream::IOT, T::Type) where IOT<:IO = ReadEachIterator{T,IOT}(stream)
+
+iterate(itr::ReadEachIterator{T}, state=nothing) where T =
+    eof(itr.stream) ? nothing : (read(itr.stream, T), nothing)
+
+eltype(::Type{ReadEachIterator{T}}) where T = T
+
+IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
+
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
 # the concrete IO type. This may not be true for IO types
@@ -1106,8 +1137,7 @@ julia> String(readavailable(buf))
 ```
 """
 function skipchars(predicate, io::IO; linecomment=nothing)
-    while !eof(io)
-        c = read(io, Char)
+    for c in readeach(io, Char)
         if c === linecomment
             readline(io)
         elseif !predicate(c)
