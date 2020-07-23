@@ -118,7 +118,7 @@ macro view(ex)
             ex = Expr(:let, Expr(:block), ex)
         end
         @assert Meta.isexpr(ex.args[2], :ref)
-        ex.args[2] = Expr(:call, Base.view, ex.args[2].args...)
+        ex.args[2] = :(Base.view($(ex.args[2].args...))
         return esc(ex)
     else
         throw(ArgumentError("Invalid use of @view macro: argument must be a reference expression A[...]."))
