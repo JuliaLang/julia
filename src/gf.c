@@ -2348,6 +2348,8 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types, size_t world)
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, size_t world, size_t *min_world, size_t *max_world)
 {
     jl_method_match_t *matc = _gf_invoke_lookup(types, world, min_world, max_world);
+    if (matc == NULL)
+        return jl_nothing;
     return (jl_value_t*)matc->method;
 }
 

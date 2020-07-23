@@ -7266,3 +7266,7 @@ struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
 @test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+
+# Malformed invoke
+f_bad_invoke(x::Int) = invoke(x, (Any,), x)
+@test_throws TypeError f_bad_invoke(1)
