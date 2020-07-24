@@ -229,5 +229,9 @@ function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
     @_pure_meta
     Tuple{S, T.parameters...}
 end
+function parameter_upper_bound(t::UnionAll, idx)
+    @_pure_meta
+    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
+end
 
 # END 1.6 deprecations
