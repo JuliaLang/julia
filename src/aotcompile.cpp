@@ -631,6 +631,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
         }
+        PM->add(createRemoveNIPass());
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
@@ -753,6 +754,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         // Clean up write barrier and ptls lowering
         PM->add(createCFGSimplificationPass());
     }
+    PM->add(createRemoveNIPass());
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
 #if defined(JL_ASAN_ENABLED)
