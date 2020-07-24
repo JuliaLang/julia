@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## Tests for the abstract array interfaces and operations with arrays
 ## with different indexing rules
 

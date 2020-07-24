@@ -1,4 +1,5 @@
 #!/bin/bash
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # We need a URL
 if [[ -z "$1" ]]; then
