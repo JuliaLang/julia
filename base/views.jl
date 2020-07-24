@@ -120,7 +120,7 @@ macro view(ex)
         @assert Meta.isexpr(ex.args[2], :ref)
         ex.args[1] = esc(ex.args[1])
         ex.args[2] = :(view($(map(esc, ex.args[2].args)...)))
-        return esc
+        return ex
     else
         throw(ArgumentError("Invalid use of @view macro: argument must be a reference expression A[...]."))
     end
