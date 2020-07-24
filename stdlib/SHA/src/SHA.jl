@@ -3,11 +3,11 @@
 """
     SHA
 
-The SHA module provides hashing functionality for SHA1, SHA2 and SHA3 algorithms
+The SHA module provides hashing functionality for SHA1, SHA2 and SHA3 algorithms.
 
-They are implemented as both pure functions for hasing single pieces of data,
+They are implemented as both pure functions for hashing single pieces of data,
 or a stateful context which can be updated with the `update!` function and 
-finalized with `digest!`
+finalized with `digest!`.
 
 ```julia-repl
 julia> sha1(b"some data")
@@ -81,8 +81,8 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
         """
             $($f)(data)
 
-        Hash data using the $($f) algorithm and return the resulting digest
-        See also [`$($ctx)`](@ref)
+        Hash data using the $($f) algorithm and return the resulting digest.
+        See also [`$($ctx)`](@ref).
         """
         function $f(data::AbstractBytes)
             ctx = $ctx()
@@ -93,7 +93,7 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
             $($g)(key, data)
 
         Hash data using the $($f) algorithm using the passed key
-        See also [`HMAC_CTX`](@ref)
+        See also [`HMAC_CTX`](@ref).
         """
         end
         function $g(key::Vector{UInt8}, data::AbstractBytes)
@@ -111,7 +111,7 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
         """
             $($f)(io::IO)
 
-        Hash data from io using $($f) algorithm from io
+        Hash data from io using $($f) algorithm from io.
         """
         function $f(io::IO, chunk_size=4*1024)
             ctx = $ctx()

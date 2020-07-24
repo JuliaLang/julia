@@ -83,7 +83,7 @@ end
 """
     digest!(context)
 
-Finalize the SHA context and return the hash as array of bytes (Array{Uint8, 1})
+Finalize the SHA context and return the hash as array of bytes (Array{Uint8, 1}).
 
 # Examples
 ```julia-repl
