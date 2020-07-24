@@ -681,7 +681,7 @@ with a Julia variable named `s`. See also `ccall`.
 
 Varargs are supported with the following convention:
 
-    @ccall sprintf("%s = %d"::Cstring ; "foo"::Cstring, foo::Cint)::Cint
+    @ccall printf("%s = %d"::Cstring ; "foo"::Cstring, foo::Cint)::Cint
 
 The semicolon is used to separate required arguments (of which there
 must be at least one) from variadic arguments.
