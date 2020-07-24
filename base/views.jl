@@ -117,8 +117,9 @@ macro view(ex)
             #   @view(A[x]) = 2
             ex = Expr(:let, Expr(:block), ex)
         end
+        @assert Meta.isexpr(ex.args[2], :block)
         @assert Meta.isexpr(ex.args[2], :ref)
-        ex.args[1] = esc(ex.args[1])
+        ex.args[1].args = map(esc,ex.args[1].args)
         ex.args[2] = :(view($(map(esc, ex.args[2].args)...)))
         return ex
     else
