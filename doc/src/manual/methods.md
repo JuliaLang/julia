@@ -885,8 +885,7 @@ purpose of documentation or code readability. The syntax for this is an empty `f
 without a tuple of arguments:
 
 ```julia
-function emptyfunc
-end
+function emptyfunc end
 ```
 
 ## [Method design and the avoidance of ambiguities](@id man-method-design-ambiguities)
