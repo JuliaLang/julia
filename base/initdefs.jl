@@ -71,7 +71,7 @@ environment variable if set.
 ## DEPOT_PATH contents
 
 Each entry in `DEPOT_PATH` is a path to a directory which contains subdirectories used by Julia for various purposes.
-of whats typically found there:
+Here is an overview of some of the subdirectories that may exist in a depot:
 
 * `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
 * `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
