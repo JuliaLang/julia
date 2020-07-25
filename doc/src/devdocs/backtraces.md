@@ -11,6 +11,7 @@ and follow the instructions to generate the debugging information requested.  Ta
   * [Segfaults during bootstrap (`sysimg.jl`)](@ref)
   * [Segfaults when running a script](@ref)
   * [Errors during Julia startup](@ref)
+  * [Other generic segfaults or unreachables reached](@ref)
 
 ## [Version/Environment info](@id dev-version-info)
 
@@ -105,6 +106,20 @@ the disk activity of the `julia` process:
 Create a [gist](https://gist.github.com) with the `strace`/ `dtruss` output, the [version info](@ref dev-version-info),
 and any other pertinent information and open a new [issue](https://github.com/JuliaLang/julia/issues?q=is%3Aopen)
 on Github with a link to the gist.
+
+## Other generic segfaults or unreachables reached
+
+As mentioned elsewhere, `julia` has good integration with `rr` for generating traces; this includes, on linux, the ability to automatically run `julia` under `rr` and share the trace after a crash. This can be immensely helpful when debugging such crashes and is strongly encouraged when reporting crash issues to the JuliaLang/julia repo. To run `julia` under `rr` automatically, do:
+
+```julia
+julia --bug-report=rr
+```
+
+To generate the `rr` trace locally, but not share, you can do:
+
+```julia
+julia --bug-report=rr-local
+```
 
 ## Glossary
 
