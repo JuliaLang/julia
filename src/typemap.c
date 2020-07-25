@@ -1155,10 +1155,9 @@ static void jl_typemap_level_insert_(
     // Don't put Varargs in the optimized caches (too hard to handle in lookup and bp)
     if (t1 && !isva) {
         // try to put in leaf type caches
-        if (t1 != (jl_value_t*)jl_typetype_type && jl_is_type_type(t1)) {
-            // if t1 != jl_typetype_type and the argument is Type{...}, this
-            // method has specializations for singleton kinds and we use
-            // the table indexed for that purpose.
+        if (jl_is_type_type(t1)) {
+            // if the argument is Type{...}, this method has specializations for singleton kinds
+            // and we use the table indexed for that purpose.
             jl_value_t *a0 = jl_tparam0(t1);
             if (is_cache_leaf(a0, 1)) {
                 jl_typemap_array_insert_(map, &cache->targ, a0, newrec, (jl_value_t*)cache, offs, tparams);

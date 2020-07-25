@@ -617,7 +617,7 @@ static void jl_compilation_sig(
             // if we get a kind, where we don't expect to accept one, widen it to something more expected (Type{T})
             if (!(jl_subtype(elt, decl_i) && !jl_subtype((jl_value_t*)jl_type_type, decl_i))) {
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-                elt = (jl_value_t*)jl_typetype_type;
+                elt = (jl_value_t*)jl_type_type;
                 jl_svecset(*newparams, i, elt);
             }
         }
@@ -639,7 +639,7 @@ static void jl_compilation_sig(
             }
         }
 
-        if (jl_types_equal(elt, (jl_value_t*)jl_typetype_type)) { // elt == Type{T} where T
+        if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) { // elt == Type{T} where T
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
         }
@@ -647,7 +647,7 @@ static void jl_compilation_sig(
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
             if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-            jl_svecset(*newparams, i, jl_typetype_type);
+            jl_svecset(*newparams, i, jl_type_type);
         }
         else if (jl_is_type_type(elt)) { // elt isa Type{T}
             if (very_general_type(decl_i)) {
@@ -669,7 +669,7 @@ static void jl_compilation_sig(
                   Type{TC} nor TypeConstructor is more specific.
                 */
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-                jl_svecset(*newparams, i, jl_typetype_type);
+                jl_svecset(*newparams, i, jl_type_type);
             }
             else if (jl_is_type_type(jl_tparam0(elt)) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
@@ -684,18 +684,18 @@ static void jl_compilation_sig(
                 */
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 if (i < nargs || !definition->isva) {
-                    jl_value_t *di = jl_type_intersection(decl_i, (jl_value_t*)jl_typetype_type);
+                    jl_value_t *di = jl_type_intersection(decl_i, (jl_value_t*)jl_type_type);
                     assert(di != (jl_value_t*)jl_bottom_type);
                     // issue #11355: DataType has a UID and so would take precedence in the cache
                     if (jl_is_kind(di))
-                        jl_svecset(*newparams, i, (jl_value_t*)jl_typetype_type);
+                        jl_svecset(*newparams, i, (jl_value_t*)jl_type_type);
                     else
                         jl_svecset(*newparams, i, di);
                     // TODO: recompute static parameter values, so in extreme cases we
                     // can give `T=Type` instead of `T=Type{Type{Type{...`.   /* make editors happy:}}} */
                 }
                 else {
-                    jl_svecset(*newparams, i, (jl_value_t*)jl_typetype_type);
+                    jl_svecset(*newparams, i, (jl_value_t*)jl_type_type);
                 }
             }
         }
@@ -907,7 +907,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                   this can be determined using a type intersection.
                 */
                 if (i < nargs || !definition->isva) {
-                    jl_value_t *di = jl_type_intersection(decl_i, (jl_value_t*)jl_typetype_type);
+                    jl_value_t *di = jl_type_intersection(decl_i, (jl_value_t*)jl_type_type);
                     JL_GC_PUSH1(&di);
                     assert(di != (jl_value_t*)jl_bottom_type);
                     if (jl_is_kind(di)) {
