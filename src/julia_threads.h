@@ -226,6 +226,9 @@ struct _jl_tls_states_t {
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
 
+    // currently-held locks, to be released when an exception is thrown
+    small_arraylist_t locks;
+
     JULIA_DEBUG_SLEEPWAKE(
         uint64_t uv_run_enter;
         uint64_t uv_run_leave;
