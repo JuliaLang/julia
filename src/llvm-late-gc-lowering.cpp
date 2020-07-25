@@ -1591,15 +1591,49 @@ static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> 
     return V;
 }
 
+static unsigned getFieldOffset(const DataLayout &DL, Type *STy, ArrayRef<unsigned> Idxs)
+{
+    SmallVector<Value*,4> IdxList{Idxs.size() + 1};
+    Type *T_int32 = Type::getInt32Ty(STy->getContext());
+    IdxList[0] = ConstantInt::get(T_int32, 0);
+    for (unsigned j = 0; j < Idxs.size(); ++j)
+        IdxList[j + 1] = ConstantInt::get(T_int32, Idxs[j]);
+    auto offset = DL.getIndexedOffsetInType(STy, IdxList);
+    assert(offset >= 0);
+    return (unsigned)offset;
+}
+
 #if JL_LLVM_VERSION >= 110000
-std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> &irbuilder) {
+std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> &irbuilder, ArrayRef<unsigned> perm_offsets) {
 #else
-std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> irbuilder) {
+std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> irbuilder, ArrayRef<unsigned> perm_offsets) {
 #endif
     auto Tracked = TrackCompositeType(STy);
     std::vector<Value*> Ptrs;
+    unsigned perm_idx = 0;
+    auto ignore_field = [&] (ArrayRef<unsigned> Idxs) {
+        if (perm_idx >= perm_offsets.size())
+            return false;
+        // Assume the indices returned from `TrackCompositeType` is ordered and do a
+        // single pass over `perm_offsets`.
+        assert(!isptr);
+        auto offset = getFieldOffset(irbuilder.GetInsertBlock()->getModule()->getDataLayout(),
+                                     STy, Idxs);
+        do {
+            auto perm_offset = perm_offsets[perm_idx];
+            if (perm_offset > offset)
+                return false;
+            perm_idx++;
+            if (perm_offset == offset) {
+                return true;
+            }
+        } while (perm_idx < perm_offsets.size());
+        return false;
+    };
     for (unsigned i = 0; i < Tracked.size(); ++i) {
         auto Idxs = makeArrayRef(Tracked[i]);
+        if (ignore_field(Idxs))
+            continue;
         Value *Elem = ExtractScalar(Src, STy, isptr, Idxs, irbuilder);
         Ptrs.push_back(Elem);
     }
