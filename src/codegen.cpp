@@ -404,6 +404,18 @@ static const auto jlgetworld_global = new JuliaVariable{
     [](LLVMContext &C) { return (Type*)T_size; },
 };
 
+static const auto jlboxed_int8_cache = new JuliaVariable{
+    "jl_boxed_int8_cache",
+    true,
+    [](LLVMContext &C) { return (Type*)ArrayType::get(T_pjlvalue, 256); },
+};
+
+static const auto jlboxed_uint8_cache = new JuliaVariable{
+    "jl_boxed_uint8_cache",
+    true,
+    [](LLVMContext &C) { return (Type*)ArrayType::get(T_pjlvalue, 256); },
+};
+
 static const auto jltls_states_func = new JuliaFunction{
     "julia.ptls_states",
     [](LLVMContext &C) { return FunctionType::get(PointerType::get(T_ppjlvalue, 0), false); },
@@ -746,8 +758,6 @@ static const auto box_##ct##_func = new JuliaFunction{                        \
             {at}, false); },                                                  \
     attrs,                                                                    \
 }
-BOX_FUNC(int8, T_pjlvalue, T_int8, get_attrs_sext);
-BOX_FUNC(uint8, T_pjlvalue, T_int8, get_attrs_zext);
 BOX_FUNC(int16, T_prjlvalue, T_int16, get_attrs_sext);
 BOX_FUNC(uint16, T_prjlvalue, T_int16, get_attrs_zext);
 BOX_FUNC(int32, T_prjlvalue, T_int32, get_attrs_sext);
