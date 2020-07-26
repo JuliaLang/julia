@@ -300,10 +300,9 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     size_t compile_for[] = { jl_typeinf_world, jl_world_counter };
     for (int worlds = 0; worlds < 2; worlds++) {
         params.world = compile_for[worlds];
-        if (!params.world)
-            continue;
-        // Don't emit methods for the typeinf_world with extern policy
-        if (policy == CompilationPolicy::Extern && params.world == jl_typeinf_world)
+        if (!params.world ||
+            // Don't emit methods for the typeinf_world with extern policy
+            (policy == CompilationPolicy::Extern && params.world == jl_typeinf_world))
             continue;
         size_t i, l;
         for (i = 0, l = jl_array_len(methods); i < l; i++) {
