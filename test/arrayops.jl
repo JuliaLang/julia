@@ -733,6 +733,15 @@ end
     dst=similar(src)
     s=(1,2,3)
     @inferred Base.circshift!(dst,src,s)
+
+    src = [1 2 3; 4 5 6]
+    dst = similar(src)
+    @test circshift(src, (3, 2)) == [5 6 4; 2 3 1]
+    @test circshift(src, (3.0, 2.0)) == [5 6 4; 2 3 1]
+    res = circshift!(dst, src, (3, 2))
+    @test res === dst == [5 6 4; 2 3 1]
+    res = circshift!(dst, src, (3.0, 2.0))
+    @test res === dst == [5 6 4; 2 3 1]
 end
 
 @testset "circcopy" begin

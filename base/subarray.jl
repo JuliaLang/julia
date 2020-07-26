@@ -64,7 +64,10 @@ size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
-sizeof(V::SubArray) = length(V) * elsize(V.parent)
+sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
+sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
+
+elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P<:Array} = elsize(P)
 
 copy(V::SubArray) = V.parent[V.indices...]
 
@@ -404,6 +407,15 @@ end
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
+
+function pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::AbstractCartesianIndex{N}) where {N}
+    index = first_index(V)
+    strds = strides(V)
+    for d = 1:N
+        index += (is[d]-1)*strds[d]
+    end
+    return pointer(V.parent, index)
+end
 
 # indices are taken from the range/vector
 # Since bounds-checking is performance-critical and uses

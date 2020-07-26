@@ -97,6 +97,8 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->has_concrete_subtype = 1;
     t->layout = NULL;
     t->names = NULL;
+    t->types = NULL;
+    t->instance = NULL;
     return t;
 }
 
@@ -553,7 +555,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     t->abstract = abstract;
     t->mutabl = mutabl;
     t->ninitialized = ninitialized;
-    t->instance = NULL;
     t->size = 0;
 
     t->name = NULL;
