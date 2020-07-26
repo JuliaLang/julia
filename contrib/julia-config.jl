@@ -121,14 +121,11 @@ function main()
     check_args(ARGS)
     doframework = check_framework_flag(ARGS)
     for args in ARGS
-        if args == "--ldflags"
-            println(ldflags(doframework))
-        elseif args == "--cflags"
-            println(cflags(doframework))
-        elseif args == "--ldlibs"
-            println(ldlibs(doframework))
-        elseif args == "--allflags"
-            println(allflags(doframework))
+        for flag in (:ldflags, :cflags, :ldlibs, :allflags)
+            if args == "--$flag"
+                @eval println($flag(doframework))
+                break
+            end
         end
     end
 end
