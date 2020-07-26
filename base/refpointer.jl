@@ -50,6 +50,7 @@ convert(::Type{Ref{T}}, x::Ref{T}) where {T} = x
 size(x::Ref) = ()
 axes(x::Ref) = ()
 length(x::Ref) = 1
+isempty(x::Ref) = false
 ndims(x::Ref) = 0
 ndims(::Type{<:Ref}) = 0
 iterate(r::Ref) = (r[], nothing)

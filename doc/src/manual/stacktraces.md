@@ -88,18 +88,16 @@ Symbol("~/julia/usr/share/julia/stdlib/v0.7/REPL/src/REPL.jl")
 julia> frame.line
 5
 
-julia> top_frame.linfo
+julia> frame.linfo
 MethodInstance for eval(::Module, ::Expr)
 
-julia> top_frame.inlined
+julia> frame.inlined
 false
 
-julia> top_frame.from_c
+julia> frame.from_c
 false
-```
 
-```julia-repl
-julia> top_frame.pointer
+julia> frame.pointer
 0x00007f92d6293171
 ```
 
@@ -130,7 +128,7 @@ julia> example()
 [...]
 ```
 
-You may notice that in the example above the first stack frame points points at line 4, where
+You may notice that in the example above the first stack frame points at line 4, where
 [`stacktrace`](@ref) is called, rather than line 2, where *bad_function* is called, and `bad_function`'s
 frame is missing entirely. This is understandable, given that [`stacktrace`](@ref) is called
 from the context of the *catch*. While in this example it's fairly easy to find the actual source

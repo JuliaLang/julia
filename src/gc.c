@@ -2682,7 +2682,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
         gc_mark_queue_obj(gc_cache, sp, jl_all_methods);
 
     // constants
-    gc_mark_queue_obj(gc_cache, sp, jl_typetype_type);
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
 }
 
