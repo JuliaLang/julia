@@ -694,8 +694,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
     PM->add(createLICMPass());
+    PM->add(createJuliaLICMPass());
     PM->add(createLoopUnswitchPass());
     PM->add(createLICMPass());
+    PM->add(createJuliaLICMPass());
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createIndVarSimplifyPass());
