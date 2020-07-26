@@ -2455,27 +2455,27 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "next",
                                         "queue",
                                         "storage",
-                                        "state",
                                         "donenotify",
                                         "result",
                                         "exception",
                                         "backtrace",
                                         "logstate",
                                         "code",
+                                        "_state",
                                         "sticky"),
                         jl_svec(11,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_symbol_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
+                                jl_uint8_type,
                                 jl_bool_type),
-                        0, 1, 9);
+                        0, 1, 8);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
 

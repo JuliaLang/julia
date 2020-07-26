@@ -329,8 +329,7 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 {
     JL_TYPECHK(catch_stack, task, (jl_value_t*)task);
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (task != ptls->current_task &&
-        task->state != failed_sym && task->state != done_sym) {
+    if (task != ptls->current_task && task->_state == JL_TASK_STATE_RUNNABLE) {
         jl_error("Inspecting the exception stack of a task which might "
                  "be running concurrently isn't allowed.");
     }
