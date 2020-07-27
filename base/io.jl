@@ -357,35 +357,35 @@ end
 function pipe_reader end
 function pipe_writer end
 
-write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io), byte)
-unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io), p, nb)
-buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io), args...)
-flush(io::AbstractPipe) = flush(pipe_writer(io))
+write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
+unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)
+buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
+flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
 
-read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
-unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
-read(io::AbstractPipe) = read(pipe_reader(io))
-readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io), arg; kw...)
-readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io), target, keep, out)
-readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io), target, n)
+read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)
+unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
+read(io::AbstractPipe) = read(pipe_reader(io)::IO)
+readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
+readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
 
 for f in (
         # peek/mark interface
         :mark, :unmark, :reset, :ismarked,
         # Simple reader functions
         :readavailable, :isreadable)
-    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io))
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
 end
-peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io), T)
+peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)
 
-iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
-isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
-close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
-wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io), nb)
-wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
+iswritable(io::AbstractPipe) = iswritable(pipe_writer(io)::IO)
+isopen(io::AbstractPipe) = isopen(pipe_writer(io)::IO) || isopen(pipe_reader(io)::IO)
+close(io::AbstractPipe) = (close(pipe_writer(io)::IO); close(pipe_reader(io)::IO))
+wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
+wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe_reader(io)::IO))
 
 """
     bytesavailable(io)
@@ -400,7 +400,7 @@ julia> bytesavailable(io)
 34
 ```
 """
-bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io))
+bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io)::IO)
 
 """
     eof(stream) -> Bool
@@ -412,7 +412,7 @@ it is always safe to read one byte after seeing `eof` return `false`. `eof` will
 is closed.
 """
 eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
-reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
+reseteof(io::AbstractPipe) = reseteof(pipe_reader(io)::IO)
 
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
@@ -503,8 +503,8 @@ function readline(filename::AbstractString; keep::Bool=false)
     end
 end
 
-function readline(s::IO=stdin; keep::Bool=false)::String
-    line = readuntil(s, 0x0a, keep=true)
+function readline(s::IO=stdin; keep::Bool=false)
+    line = readuntil(s, 0x0a, keep=true)::Vector{UInt8}
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
         return String(line)
@@ -676,18 +676,18 @@ function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
     if !isbitstype(T) || !isa(a, StridedArray)
         return invoke(write, Tuple{IO, AbstractArray}, s, a)
     end
-    elsz = sizeof(T)
+    elsz = elsize(a)
     colsz = size(a,1) * elsz
     GC.@preserve a if stride(a,1) != 1
         for idxs in CartesianIndices(size(a))
-            unsafe_write(s, pointer(a, idxs.I), elsz)
+            unsafe_write(s, pointer(a, idxs), elsz)
         end
         return elsz * length(a)
     elseif N <= 1
         return unsafe_write(s, pointer(a, 1), colsz)
     else
-        for idxs in CartesianIndices((1, size(a)[2:end]...))
-            unsafe_write(s, pointer(a, idxs.I), colsz)
+        for colstart in CartesianIndices((1, size(a)[2:end]...))
+            unsafe_write(s, pointer(a, colstart), colsz)
         end
         return colsz * trailingsize(a,2)
     end
@@ -766,15 +766,14 @@ end
 
 # readuntil_string is useful below since it has
 # an optimized method for s::IOStream
-readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))
+readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))::String
 
 function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
     if delim ≤ '\x7f'
         return readuntil_string(s, delim % UInt8, keep)
     end
     out = IOBuffer()
-    while !eof(s)
-        c = read(s, Char)
+    for c in readeach(s, Char)
         if c == delim
             keep && write(out, c)
             break
@@ -786,8 +785,7 @@ end
 
 function readuntil(s::IO, delim::T; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    while !eof(s)
-        c = read(s, T)
+    for c in readeach(s, T)
         if c == delim
             keep && push!(out, c)
             break
@@ -823,8 +821,7 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
     max_pos = 1 # array-offset in cache
     local cache # will be lazy initialized when needed
     output! = (isa(out, IO) ? write : push!)
-    while !eof(io)
-        c = read(io, T)
+    for c in readeach(io, T)
         # Backtrack until the next target character matches what was found
         while true
             c1 = target[pos + first]
@@ -1022,6 +1019,40 @@ eltype(::Type{<:EachLine}) = String
 
 IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
+struct ReadEachIterator{T, IOT <: IO}
+    stream::IOT
+end
+
+"""
+    readeach(io::IO, T)
+
+Return an iterable object yielding [`read(io, T)`](@ref).
+
+See also: [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref)
+
+!!! compat "Julia 1.6"
+    `readeach` requires Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization.\\n It has many members.\\n");
+
+julia> for c in readeach(io, Char)
+           c == '\\n' && break
+           print(c)
+       end
+JuliaLang is a GitHub organization.
+```
+"""
+readeach(stream::IOT, T::Type) where IOT<:IO = ReadEachIterator{T,IOT}(stream)
+
+iterate(itr::ReadEachIterator{T}, state=nothing) where T =
+    eof(itr.stream) ? nothing : (read(itr.stream, T), nothing)
+
+eltype(::Type{ReadEachIterator{T}}) where T = T
+
+IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
+
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
 # the concrete IO type. This may not be true for IO types
@@ -1106,8 +1137,7 @@ julia> String(readavailable(buf))
 ```
 """
 function skipchars(predicate, io::IO; linecomment=nothing)
-    while !eof(io)
-        c = read(io, Char)
+    for c in readeach(io, Char)
         if c === linecomment
             readline(io)
         elseif !predicate(c)

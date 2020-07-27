@@ -350,12 +350,11 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
-    typea == typeb && return typea
-    if !(isa(typea, Type) || isa(typea, TypeVar)) ||
-       !(isa(typeb, Type) || isa(typeb, TypeVar))
+    if !isa(typea, Type) || !isa(typeb, Type)
         # XXX: this should never happen
         return Any
     end
+    typea == typeb && return typea
     # it's always ok to form a Union of two concrete types
     if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
         return Union{typea, typeb}

@@ -371,13 +371,12 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            color_set || (global have_color = REPL.Terminals.hascolor(term))
             banner && Base.banner(term)
             if term.term_type == "dumb"
                 active_repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
             else
-                active_repl = REPL.LineEditREPL(term, have_color, true)
+                active_repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
                 active_repl.history_file = history_file
             end
             # Make sure any displays pushed in .julia/config/startup.jl ends up above the
@@ -487,7 +486,7 @@ function _start()
         invokelatest(display_error, catch_stack())
         exit(1)
     end
-    if is_interactive && have_color === true
+    if is_interactive && get(stdout, :color, false)
         print(color_normal)
     end
 end

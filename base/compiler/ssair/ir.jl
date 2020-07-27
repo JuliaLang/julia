@@ -159,25 +159,25 @@ end
 struct InstructionStream
     inst::Vector{Any}
     type::Vector{Any}
+    info::Vector{Any}
     line::Vector{Int32}
     flag::Vector{UInt8}
 end
 function InstructionStream(len::Int)
     insts = Array{Any}(undef, len)
     types = Array{Any}(undef, len)
+    info = Array{Any}(undef, len)
+    fill!(info, nothing)
     lines = fill(Int32(0), len)
     flags = fill(0x00, len)
-    return InstructionStream(insts, types, lines, flags)
+    return InstructionStream(insts, types, info, lines, flags)
 end
 InstructionStream() = InstructionStream(0)
 length(is::InstructionStream) = length(is.inst)
 isempty(is::InstructionStream) = isempty(is.inst)
 function add!(is::InstructionStream)
     ninst = length(is) + 1
-    resize!(is.inst, ninst)
-    resize!(is.type, ninst)
-    resize!(is.line, ninst)
-    resize!(is.flag, ninst)
+    resize!(is, ninst)
     return ninst
 end
 #function copy(is::InstructionStream) # unused
@@ -191,15 +191,16 @@ function resize!(stmts::InstructionStream, len)
     old_length = length(stmts)
     resize!(stmts.inst, len)
     resize!(stmts.type, len)
+    resize!(stmts.info, len)
     resize!(stmts.line, len)
     resize!(stmts.flag, len)
     for i in (old_length + 1):len
         stmts.line[i] = 0
         stmts.flag[i] = 0x00
+        stmts.info[i] = nothing
     end
     return stmts
 end
-
 
 struct Instruction
     data::InstructionStream
@@ -220,6 +221,7 @@ end
 function setindex!(is::InstructionStream, newval::Instruction, idx::Int)
     is.inst[idx] = newval[:inst]
     is.type[idx] = newval[:type]
+    is.info[idx] = newval[:info]
     is.line[idx] = newval[:line]
     is.flag[idx] = newval[:flag]
     return is
@@ -273,8 +275,11 @@ function getindex(x::IRCode, s::SSAValue)
 end
 
 function setindex!(x::IRCode, @nospecialize(repl), s::SSAValue)
-    @assert s.id <= length(x.stmts)
-    x.stmts[s.id][:inst] = repl
+    if s.id <= length(x.stmts)
+        x.stmts[s.id][:inst] = repl
+    else
+        x.new_nodes.stmts[s.id - length(x.stmts)][:inst] = repl
+    end
     return x
 end
 
@@ -1072,7 +1077,9 @@ function process_newnode!(compact::IncrementalCompact, new_idx::Int, new_node_en
         finish_current_bb!(compact, active_bb, old_result_idx)
     end
     (old_result_idx == result_idx) && return iterate(compact, (idx, active_bb))
-    return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx][:inst]), (idx, active_bb)
+    return Pair{Pair{Int, Int}, Any}(
+        Pair{Int,Int}(new_idx,old_result_idx),
+        compact.result[old_result_idx][:inst]), (idx, active_bb)
 end
 
 struct CompactPeekIterator
@@ -1139,9 +1146,9 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         # Move to next block
         compact.idx += 1
         if finish_current_bb!(compact, active_bb, old_result_idx, true)
-            return iterate(compact, (compact.idx, active_bb + 1))
+            return iterate(compact, (compact.idx-1, active_bb + 1))
         else
-            return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx][:inst]), (compact.idx, active_bb + 1)
+            return Pair{Pair{Int, Int}, Any}(Pair{Int,Int}(compact.idx-1, old_result_idx), compact.result[old_result_idx][:inst]), (compact.idx, active_bb + 1)
         end
     end
     if compact.new_nodes_idx <= length(compact.perm) &&
@@ -1178,7 +1185,8 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         @goto restart
     end
     @assert isassigned(compact.result.inst, old_result_idx)
-    return Pair{Int, Any}(old_result_idx, compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
+    return Pair{Pair{Int,Int}, Any}(Pair{Int,Int}(compact.idx-1, old_result_idx),
+        compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
 end
 
 function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing)

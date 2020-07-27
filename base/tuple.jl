@@ -14,6 +14,11 @@ true
 """
 NTuple
 
+# convenience function for extracting N from a Tuple (if defined)
+# else return `nothing` for anything else given (such as Vararg or other non-sized Union)
+_counttuple(::Type{<:NTuple{N,Any}}) where {N} = N
+_counttuple(::Type) = nothing
+
 ## indexing ##
 
 length(@nospecialize t::Tuple) = nfields(t)
@@ -110,8 +115,10 @@ end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
 function _compute_eltype(t::Type{<:Tuple})
     @_pure_meta
+    @nospecialize t
     t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
+    # TODO: handle Union/UnionAll correctly here
     r = Union{}
     for ti in t´.parameters
         r = promote_typejoin(r, rewrap_unionall(unwrapva(ti), t))
@@ -222,6 +229,23 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # NOTE: this means this constructor must be avoided in Core.Compiler!
 if nameof(@__MODULE__) === :Base
 
+function tuple_type_tail(T::Type)
+    @_pure_meta # TODO: this method is wrong (and not @pure)
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_tail(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+    else
+        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+        if isvatuple(T) && length(T.parameters) == 1
+            va = T.parameters[1]
+            (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
+            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
+        end
+        return Tuple{argtail(T.parameters...)...}
+    end
+end
+
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 
 Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
@@ -240,7 +264,7 @@ function _totuple(T, itr, s...)
     @_inline_meta
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
+    return (convert(fieldtype(T, 1), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
 end
 
 # use iterative algorithm for long tuples
@@ -419,6 +443,22 @@ function _tuple_any(f::Function, tf::Bool, a, b...)
     _tuple_any(f, tf | f(a), b...)
 end
 _tuple_any(f::Function, tf::Bool) = tf
+
+
+# a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    @_pure_meta
+    for y in itr
+        y === x && return true
+    end
+    return false
+end
+function in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    return sym_in(x, itr)
+end
+
 
 """
     empty(x::Tuple)

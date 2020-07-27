@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if isempty(ARGS) || ARGS[1] !== "0"
+Sys.__init_build()
 # Prevent this from being put into the Main namespace
 @eval Module() begin
 if !isdefined(Base, :uv_eventloop)
@@ -209,6 +210,16 @@ function generate_precompile_statements()
 end
 
 generate_precompile_statements()
+
+# As a last step in system image generation,
+# remove some references to build time environment for a more reproducible build.
+@eval Base PROGRAM_FILE = ""
+@eval Sys begin
+    BINDIR = ""
+    STDLIB = ""
+end
+empty!(Base.ARGS)
+empty!(Core.ARGS)
 
 end # @eval
 end

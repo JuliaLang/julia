@@ -294,3 +294,16 @@ f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
     @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :arrayref)), ci.code)
 end
+
+# Issue #29114 & #36087 - Inlining of non-tuple splats
+f_29115(x) = (x...,)
+@test @allocated(f_29115(1)) == 0
+@test @allocated(f_29115(1=>2)) == 0
+let ci = code_typed(f_29115, Tuple{Int64})[1].first
+    @test length(ci.code) == 2 && isexpr(ci.code[1], :call) &&
+        ci.code[1].args[1] === GlobalRef(Core, :tuple)
+end
+let ci = code_typed(f_29115, Tuple{Pair{Int64, Int64}})[1].first
+    @test length(ci.code) == 4 && isexpr(ci.code[1], :call) &&
+        ci.code[end-1].args[1] === GlobalRef(Core, :tuple)
+end

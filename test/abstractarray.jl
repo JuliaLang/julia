@@ -1126,3 +1126,18 @@ end
         end
     end
 end
+
+@testset "first/last n elements of $(typeof(itr))" for itr in (collect(1:9),
+                                                               [1 4 7; 2 5 8; 3 6 9],
+                                                               ntuple(identity, 9))
+    @test first(itr, 6) == [itr[1:6]...]
+    @test first(itr, 25) == [itr[:]...]
+    @test first(itr, 25) !== itr
+    @test first(itr, 1) == [itr[1]]
+    @test_throws ArgumentError first(itr, -6)
+    @test last(itr, 6) == [itr[end-5:end]...]
+    @test last(itr, 25) == [itr[:]...]
+    @test last(itr, 25) !== itr
+    @test last(itr, 1) == [itr[end]]
+    @test_throws ArgumentError last(itr, -6)
+end

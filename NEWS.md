@@ -6,6 +6,8 @@ New language features
 
 * Types written with `where` syntax can now be used to define constructors, e.g.
   `(Foo{T} where T)(x) = ...`.
+* `<--` and `<-->` are now available as infix operators, with the same precedence
+  and associativity as other arrow-like operators ([#36666]).
 
 Language changes
 ----------------
@@ -39,12 +41,17 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* Windows Installer now has the option to 'Add Julia to Path'. To unselect this option
+  from the commandline simply remove the tasks you do not want to be installed: e.g.
+  `./julia-installer.exe /TASKS="desktopicon,startmenu,addtopath"`, adds a desktop
+  icon, a startmenu group icon, and adds Julia to system PATH.
 
 New library functions
 ---------------------
 
 * New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker product in-place. ([#31069]).
 * New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption. ([#34543]).
+* New function `Base.readeach(io, T)` for iteratively performing `read(io, T)`. ([#36150])
 * `Iterators.map` is added. It provides another syntax `Iterators.map(f, iterators...)`
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
 * New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more
@@ -53,6 +60,7 @@ New library functions
 New library features
 --------------------
 
+* The `redirect_*` functions can now be called on `IOContext` objects.
 
 Standard library changes
 ------------------------
@@ -65,11 +73,15 @@ Standard library changes
 * `unique(f, itr; seen=Set{T}())` now allows you to declare the container type used for
   keeping track of values returned by `f` on elements of `itr` ([#36280]).
 * `Libdl` has been moved to `Base.Libc.Libdl`, however it is still accessible as an stdlib ([#35628]).
+* `first` and `last` functions now accept an integer as second argument to get that many
+  leading or trailing elements of any iterable ([#34868]).
+* `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
 * `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
 * New function `LinearAlgebra.BLAS.get_num_threads()` for getting the number of BLAS threads. ([#36360])
+* `(+)(::UniformScaling)` is now defined, making `+I` a valid unary operation. ([#36784])
 
 #### Markdown
 
@@ -99,6 +111,9 @@ Standard library changes
   + `numoptions`, returning the number of items in the menu, has been added as an alternative to implementing `options`
   + `suppress_output` (primarily a testing option) has been added as a keyword argument to `request`,
     rather than a configuration option
+
+* Windows REPL now supports 24-bit colors, by correctly interpreting virtual terminal escapes.
+
 
 #### SparseArrays
 

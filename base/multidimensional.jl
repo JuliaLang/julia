@@ -479,6 +479,10 @@ module IteratorsMD
 
     Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
 
+    # array operations
+    Base.intersect(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
+        CartesianIndices(intersect.(a.indices, b.indices))
+
     # Views of reshaped CartesianIndices are used for partitions — ensure these are fast
     const CartesianPartition{T<:CartesianIndex, P<:CartesianIndices, R<:ReshapedArray{T,1,P}} = SubArray{T,1,R,Tuple{UnitRange{Int}},false}
     eltype(::Type{PartitionIterator{T}}) where {T<:ReshapedArrayLF} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
@@ -1022,7 +1026,9 @@ See also [`circshift`](@ref).
     axes(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(axes(dest)))"))
     _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val(N)))
 end
-circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt...,))
+
+circshift!(dest::AbstractArray, src, shiftamt) =
+    circshift!(dest, src, map(Integer, (shiftamt...,)))
 
 # For each dimension, we copy the first half of src to the second half
 # of dest, and the second half of src to the first half of dest. This

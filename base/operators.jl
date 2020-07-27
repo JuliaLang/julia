@@ -80,7 +80,7 @@ handle comparison to other types via promotion rules where possible.
 [`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
 should therefore also implement [`hash`](@ref).
 """
-==(x, y) = x === y
+==
 
 """
     isequal(x, y)

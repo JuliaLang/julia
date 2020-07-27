@@ -457,6 +457,7 @@ typedef struct _jl_datatype_t {
     uint8_t zeroinit; // if one or more fields requires zero-initialization
     uint8_t isinlinealloc; // if this is allocated inline
     uint8_t has_concrete_subtype; // If clear, no value will have this datatype
+    uint8_t cached_by_hash; // stored in hash-based set cache (instead of linear cache)
 } jl_datatype_t;
 
 typedef struct {
@@ -518,14 +519,22 @@ typedef struct _jl_typemap_entry_t {
     int8_t va; // isVararg(sig)
 } jl_typemap_entry_t;
 
-// one level in a TypeMap tree
-// indexed by key if it is a sublevel in an array
+// one level in a TypeMap tree (each level splits on a type at a given offset)
 typedef struct _jl_typemap_level_t {
     JL_DATA_TYPE
-    jl_array_t *arg1;
-    jl_array_t *targ;
-    jl_typemap_entry_t *linear; // jl_typemap_t * (but no more levels)
-    jl_typemap_t *any; // type at offs is Any
+    // these vectors contains vectors of more levels in their intended visit order
+    // with an index that gives the functionality of a sorted dict.
+    // next split may be on Type{T} as LeafTypes then TypeName's parents up to Any
+    // next split may be on LeafType
+    // next split may be on TypeName
+    jl_array_t *arg1; // contains LeafType
+    jl_array_t *targ; // contains Type{LeafType}
+    jl_array_t *name1; // contains non-abstract TypeName, for parents up to (excluding) Any
+    jl_array_t *tname; // contains a dict of Type{TypeName}, for parents up to Any
+    // next a linear list of things too complicated at this level for analysis (no more levels)
+    jl_typemap_entry_t *linear;
+    // finally, start a new level if the type at offs is Any
+    jl_typemap_t *any;
 } jl_typemap_level_t;
 
 // contains the TypeMap for one Type
@@ -550,6 +559,16 @@ typedef struct {
     jl_array_t *args;
 } jl_expr_t;
 
+typedef struct {
+    JL_DATA_TYPE
+    jl_tupletype_t *spec_types;
+    jl_svec_t *sparams;
+    jl_method_t *method;
+    // A bool on the julia side, but can be temporarily 0x2 as a sentinel
+    // during construction.
+    uint8_t fully_covers;
+} jl_method_match_t;
+
 // constants and type objects -------------------------------------------------
 
 // kinds
@@ -561,7 +580,6 @@ extern JL_DLLEXPORT jl_datatype_t *jl_tvar_type JL_GLOBALLY_ROOTED;
 
 extern JL_DLLEXPORT jl_datatype_t *jl_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_unionall_t *jl_type_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_unionall_t *jl_typetype_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_typename_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_type_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_symbol_type JL_GLOBALLY_ROOTED;
@@ -572,6 +590,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_typedslot_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_argument_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_const_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_partial_struct_type JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_typename_t *jl_vecelement_typename JL_GLOBALLY_ROOTED;
@@ -1208,6 +1227,7 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
 
 // type predicates and basic operations
+JL_DLLEXPORT int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua);
@@ -2056,6 +2076,11 @@ typedef struct {
 
 #define jl_current_task (jl_get_ptls_states()->current_task)
 #define jl_root_task (jl_get_ptls_states()->root_task)
+
+JL_DLLEXPORT jl_value_t *jl_get_current_task(void);
+
+JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void);
+JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *);
 
 // codegen interface ----------------------------------------------------------
 // The root propagation here doesn't have to be literal, but callers should

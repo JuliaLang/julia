@@ -23,8 +23,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     # collect results for the new expanded frame
     results = InferenceResult[ frames[i].result for i in 1:length(frames) ]
     # empty!(frames)
-    min_valid = frame.min_valid
-    max_valid = frame.max_valid
+    valid_worlds = frame.valid_worlds
     cached = frame.cached
     if cached || frame.parent !== nothing
         for caller in results
@@ -46,27 +45,21 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
                 else
                     caller.src = nothing
                 end
-                if min_valid < opt.min_valid
-                    min_valid = opt.min_valid
-                end
-                if max_valid > opt.max_valid
-                    max_valid = opt.max_valid
-                end
+                valid_worlds = intersect(valid_worlds, opt.valid_worlds)
             end
         end
     end
-    if max_valid == get_world_counter()
-        max_valid = typemax(UInt)
+    if last(valid_worlds) == get_world_counter()
+        valid_worlds = WorldRange(first(valid_worlds), typemax(UInt))
     end
     for caller in frames
-        caller.min_valid = min_valid
-        caller.max_valid = max_valid
-        caller.src.min_world = min_valid
-        caller.src.max_world = max_valid
+        caller.valid_worlds = valid_worlds
+        caller.src.min_world = first(valid_worlds)
+        caller.src.max_world = last(valid_worlds)
         if cached
-            cache_result!(interp, caller.result, min_valid, max_valid)
+            cache_result!(interp, caller.result, valid_worlds)
         end
-        if max_valid == typemax(UInt)
+        if last(valid_worlds) == typemax(UInt)
             # if we aren't cached, we don't need this edge
             # but our caller might, so let's just make it anyways
             for caller in frames
@@ -79,7 +72,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     return true
 end
 
-function CodeInstance(result::InferenceResult, min_valid::UInt, max_valid::UInt,
+function CodeInstance(result::InferenceResult, valid_worlds::WorldRange,
                       may_compress=true, allow_discard_tree=true)
     inferred_result = result.src
     local const_flags::Int32
@@ -126,7 +119,7 @@ function CodeInstance(result::InferenceResult, min_valid::UInt, max_valid::UInt,
     end
     return CodeInstance(result.linfo,
         widenconst(result.result), rettype_const, inferred_result,
-        const_flags, min_valid, max_valid)
+        const_flags, first(valid_worlds), last(valid_worlds))
 end
 
 # For the NativeInterpreter, we don't need to do an actual cache query to know
@@ -140,17 +133,17 @@ already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) =
 
 # inference completed on `me`
 # update the MethodInstance
-function cache_result!(interp::AbstractInterpreter, result::InferenceResult, min_valid::UInt, max_valid::UInt)
+function cache_result!(interp::AbstractInterpreter, result::InferenceResult, valid_worlds::WorldRange)
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
     already_inferred = already_inferred_quick_test(interp, result.linfo)
-    if !already_inferred && haskey(WorldView(code_cache(interp), min_valid, max_valid), result.linfo)
+    if !already_inferred && haskey(WorldView(code_cache(interp), valid_worlds), result.linfo)
         already_inferred = true
     end
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        code_cache(interp)[result.linfo] = CodeInstance(result, min_valid, max_valid,
+        code_cache(interp)[result.linfo] = CodeInstance(result, valid_worlds,
             may_compress(interp), may_discard_trees(interp))
     end
     unlock_mi_inference(interp, result.linfo)
@@ -382,6 +375,7 @@ function type_annotate!(sv::InferenceState)
                 deleteat!(states, i)
                 deleteat!(src.ssavaluetypes, i)
                 deleteat!(src.codelocs, i)
+                deleteat!(sv.stmt_info, i)
                 nexpr -= 1
                 if oldidx < length(changemap)
                     changemap[oldidx + 1] = -1
@@ -494,7 +488,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     mi = specialize_method(method, atypes, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
-        update_valid_age!(min_world(code), max_world(code), caller)
+        update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
         if isdefined(code, :rettype_const)
             if isa(code.rettype_const, Vector{Any}) && !(Vector{Any} <: code.rettype)
                 return PartialStruct(code.rettype, code.rettype_const), mi
@@ -682,8 +676,8 @@ function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospeciali
             rt = widenconst(rt)
         end
     else
-        for m in _methods(f, t, -1, get_world_counter(interp))
-            ty = typeinf_type(interp, m[3], m[1], m[2])
+        for match in _methods(f, t, -1, get_world_counter(interp))
+            ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
             rt = tmerge(rt, ty)
             rt === Any && break

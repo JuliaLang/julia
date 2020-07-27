@@ -158,7 +158,7 @@ size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
-allocatedinline(::Type{T}) where {T} = (@_pure_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
+allocatedinline(T::Type) = (@_pure_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
     Base.isbitsunion(::Type{T})
@@ -211,11 +211,9 @@ julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
 ```
 """
 function bitsunionsize(u::Union)
-    sz = Ref{Csize_t}(0)
-    algn = Ref{Csize_t}(0)
-    isunboxed = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), u, sz, algn)
-    @assert isunboxed != Cint(0)
-    return sz[]
+    isinline, sz, _ = uniontype_layout(u)
+    @assert isinline
+    return sz
 end
 
 length(a::Array) = arraylen(a)

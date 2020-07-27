@@ -225,6 +225,8 @@ tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test hasfield(TLayout, :y)
 @test !hasfield(TLayout, :a)
+@test hasfield(Complex, :re)
+@test !hasfield(Complex, :qxq)
 @test hasproperty(tlayout, :x)
 @test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
@@ -559,10 +561,6 @@ end
 @test !isstructtype(Int)
 @test isstructtype(TLayout)
 
-@test Base.parameter_upper_bound(ReflectionExample, 1) === AbstractFloat
-@test Base.parameter_upper_bound(ReflectionExample, 2) === Any
-@test Base.parameter_upper_bound(ReflectionExample{T, N} where T where N <: Real, 2) === Real
-
 let
     wrapperT(T) = Base.typename(T).wrapper
     @test @inferred wrapperT(ReflectionExample{Float64, Int64}) == ReflectionExample
@@ -629,10 +627,10 @@ let
     x22979 = (1, 2.0, 3.0 + im)
     T22979 = Tuple{typeof(f22979), typeof.(x22979)...}
     world = Core.Compiler.get_world_counter()
-    mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[1]
-    instance = Core.Compiler.specialize_method(m, mtypes, msp)
+    match = Base._methods_by_ftype(T22979, -1, world)[1]
+    instance = Core.Compiler.specialize_method(match)
     cinfo_generated = Core.Compiler.get_staged(instance)
-    @test_throws ErrorException Base.uncompressed_ir(m)
+    @test_throws ErrorException Base.uncompressed_ir(match.method)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
 

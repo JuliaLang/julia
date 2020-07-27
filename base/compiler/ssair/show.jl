@@ -316,6 +316,7 @@ function compute_ir_line_annotations(code::IRCode)
         push!(loc_methods, loc_method)
         last_line = line
         (lineno != 0) && (last_lineno = lineno)
+        nothing
     end
     return (loc_annotations, loc_methods, loc_lineno)
 end
@@ -396,14 +397,14 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     end
                 else
                     npops = length(context) - nctx
-                end
-                # look at the first non-matching element to see if we are only changing the line number
-                if !update_line_only && nctx < nframes
-                    let CtxLine = context[nctx + 1],
-                        FrameLine = DI[nframes - nctx]
-                        if CtxLine.file === FrameLine.file &&
-                                method_name(CtxLine) === method_name(FrameLine)
-                            update_line_only = true
+                    # look at the first non-matching element to see if we are only changing the line number
+                    if !update_line_only && nctx < nframes
+                        let CtxLine = context[nctx + 1],
+                            FrameLine = DI[nframes - nctx]
+                            if CtxLine.file === FrameLine.file &&
+                                    method_name(CtxLine) === method_name(FrameLine)
+                                update_line_only = true
+                            end
                         end
                     end
                 end
@@ -416,35 +417,12 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     println(io)
                 end
             end
-            # see what change we made to the outermost line number
-            if update_line_only
-                frame = DI[nframes - nctx]
-                nctx += 1
-                push!(context, frame)
-                if frame.line != typemax(frame.line) && frame.line != 0
-                    print(io, linestart)
-                    Base.with_output_color(linecolor, io) do io
-                        print(io, indent("│"), " @ ", frame.file, ":", frame.line, " within `", method_name(frame), "'")
-                        if collapse
-                            method = method_name(frame)
-                            while nctx < nframes
-                                frame = DI[nframes - nctx]
-                                method_name(frame) === method || break
-                                nctx += 1
-                                push!(context, frame)
-                                print(io, " @ ", frame.file, ":", frame.line)
-                            end
-                        end
-                    end
-                    println(io)
-                end
-            end
-            # now print the rest of the new frames
+            # now print the new frames
             while nctx < nframes
                 frame = DI[nframes - nctx]
                 nctx += 1
                 started = false
-                if showtypes && !isa(frame.method, Symbol) && nctx != 1
+                if !update_line_only && showtypes && !isa(frame.method, Symbol) && nctx != 1
                     print(io, linestart)
                     Base.with_output_color(linecolor, io) do io
                         print(io, indent("│"))
@@ -457,8 +435,12 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                 Base.with_output_color(linecolor, io) do io
                     print(io, indent("│"))
                     push!(context, frame)
-                    context_depth[] += 1
-                    nctx != 1 && print(io, started ? "│" : "┌")
+                    if update_line_only
+                        update_line_only = false
+                    else
+                        context_depth[] += 1
+                        nctx != 1 && print(io, started ? "│" : "┌")
+                    end
                     print(io, " @ ", frame.file)
                     if frame.line != typemax(frame.line) && frame.line != 0
                         print(io, ":", frame.line)

@@ -9,17 +9,14 @@ mutable struct OptimizationState
     linfo::MethodInstance
     calledges::Vector{Any}
     src::CodeInfo
+    stmt_info::Vector{Any}
     mod::Module
     nargs::Int
     world::UInt
-    min_valid::UInt
-    max_valid::UInt
+    valid_worlds::WorldRange
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
-    # cached results of calling `_methods_by_ftype` from inference, including
-    # `min_valid` and `max_valid`
-    matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt, Bool}}
     # TODO: This will be eliminated once optimization no longer needs to do method lookups
     interp::AbstractInterpreter
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
@@ -31,10 +28,10 @@ mutable struct OptimizationState
         src = frame.src
         return new(params, frame.linfo,
                    s_edges::Vector{Any},
-                   src, frame.mod, frame.nargs,
-                   frame.world, frame.min_valid, frame.max_valid,
+                   src, frame.stmt_info, frame.mod, frame.nargs,
+                   frame.world, frame.valid_worlds,
                    frame.sptypes, frame.slottypes, false,
-                   frame.matching_methods_cache, interp)
+                   interp)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
         # prepare src for running optimization passes
@@ -49,6 +46,7 @@ mutable struct OptimizationState
             slottypes = Any[ Any for i = 1:nslots ]
         end
         s_edges = []
+        stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
         toplevel = !isa(linfo.def, Method)
         if !toplevel
@@ -61,10 +59,10 @@ mutable struct OptimizationState
         end
         return new(params, linfo,
                    s_edges::Vector{Any},
-                   src, inmodule, nargs,
-                   get_world_counter(), UInt(1), get_world_counter(),
+                   src, stmt_info, inmodule, nargs,
+                   get_world_counter(), WorldRange(UInt(1), get_world_counter()),
                    sptypes_from_meth_instance(linfo), slottypes, false,
-                   IdDict{Any, Tuple{Any, UInt, UInt, Bool}}(), interp)
+                   interp)
         end
 end
 
@@ -108,11 +106,9 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
-function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::OptimizationState)
-    sv.min_valid = max(sv.min_valid, min_valid)
-    sv.max_valid = min(sv.max_valid, max_valid)
-    @assert(sv.min_valid <= sv.world <= sv.max_valid,
-            "invalid age range update")
+function update_valid_age!(sv::OptimizationState, valid_worlds::WorldRange)
+    sv.valid_worlds = intersect(sv.valid_worlds, valid_worlds)
+    @assert(sv.world in sv.valid_worlds, "invalid age range update")
     nothing
 end
 
@@ -124,7 +120,7 @@ function add_backedge!(li::MethodInstance, caller::OptimizationState)
 end
 
 function add_backedge!(li::CodeInstance, caller::OptimizationState)
-    update_valid_age!(min_world(li), max_world(li), caller)
+    update_valid_age!(caller, WorldRange(min_world(li), max_world(li)))
     add_backedge!(li.def, caller)
     nothing
 end

@@ -23,13 +23,13 @@ let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, run_passes],
     for f in fs
         for m in _methods_by_ftype(Tuple{typeof(f), Vararg{Any}}, 10, typemax(UInt))
             # remove any TypeVars from the intersection
-            typ = Any[m[1].parameters...]
+            typ = Any[m.spec_types.parameters...]
             for i = 1:length(typ)
                 if isa(typ[i], TypeVar)
                     typ[i] = typ[i].ub
                 end
             end
-            typeinf_type(interp, m[3], Tuple{typ...}, m[2])
+            typeinf_type(interp, m.method, Tuple{typ...}, m.sparams)
         end
     end
 end

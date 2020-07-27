@@ -278,7 +278,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             | (dt->isbitstype << 3)
             | (dt->zeroinit << 4)
             | (dt->isinlinealloc << 5)
-            | (dt->has_concrete_subtype << 6));
+            | (dt->has_concrete_subtype << 6)
+            | (dt->cached_by_hash << 7));
     if (!dt->abstract) {
         write_uint16(s->s, dt->ninitialized);
     }
@@ -771,22 +772,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             }
             return;
         }
-        if (t == jl_typemap_level_type) {
-            // perform some compression on the typemap levels
-            // (which will need to be rehashed during deserialization anyhow)
-            jl_typemap_level_t *node = (jl_typemap_level_t*)v;
-            assert( // make sure this type has the expected ordering and layout
-                offsetof(jl_typemap_level_t, arg1) == 0 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, targ) == 1 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, linear) == 2 * sizeof(jl_value_t*) &&
-                offsetof(jl_typemap_level_t, any) == 3 * sizeof(jl_value_t*) &&
-                sizeof(jl_typemap_level_t) == 4 * sizeof(jl_value_t*));
-            jl_serialize_value(s, node->arg1);
-            jl_serialize_value(s, node->targ);
-            jl_serialize_value(s, node->linear);
-            jl_serialize_value(s, node->any);
-            return;
-        }
 
         char *data = (char*)jl_data_ptr(v);
         size_t i, j, np = t->layout->npointers;
@@ -991,7 +976,8 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
                         }
                         size_t k;
                         for (k = 0; k < jl_array_len(matches); k++) {
-                            jl_array_ptr_set(matches, k, jl_svecref(jl_array_ptr_ref(matches, k), 2));
+                            jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
+                            jl_array_ptr_set(matches, k, match->method);
                         }
                         jl_array_ptr_1d_push(t, callee);
                         jl_array_ptr_1d_push(t, matches);
@@ -1179,7 +1165,6 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     assert(pos == backref_list.len - 1 && "nothing should have been deserialized since assigning pos");
     backref_list.items[pos] = dt;
     dt->size = size;
-    dt->instance = NULL;
     dt->abstract = flags & 1;
     dt->mutabl = (flags >> 1) & 1;
     int has_layout = (flags >> 2) & 1;
@@ -1191,6 +1176,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->zeroinit = (memflags >> 4) & 1;
     dt->isinlinealloc = (memflags >> 5) & 1;
     dt->has_concrete_subtype = (memflags >> 6) & 1;
+    dt->cached_by_hash = (memflags >> 7) & 1;
     dt->types = NULL;
     dt->parameters = NULL;
     dt->name = NULL;
@@ -1852,7 +1838,8 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         else {
             size_t j, k, l = jl_array_len(expected);
             for (k = 0; k < jl_array_len(matches); k++) {
-                jl_method_t *m = (jl_method_t*)jl_svecref(jl_array_ptr_ref(matches, k), 2);
+                jl_method_match_t *match = (jl_method_match_t*)jl_array_ptr_ref(matches, k);
+                jl_method_t *m = match->method;
                 for (j = 0; j < l; j++) {
                     if (m == (jl_method_t*)jl_array_ptr_ref(expected, j))
                         break;
@@ -2580,7 +2567,7 @@ void jl_init_serializer(void)
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
                      jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_nothing_type,
                      jl_densearray_type, jl_function_type, jl_typename_type,
-                     jl_builtin_type, jl_task_type, jl_uniontype_type, jl_typetype_type,
+                     jl_builtin_type, jl_task_type, jl_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,
                      jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,

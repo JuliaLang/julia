@@ -87,7 +87,7 @@ mutable struct REPLBackend
     REPLBackend(repl_channel, response_channel, in_eval, ast_transforms=copy(repl_ast_transforms)) =
         new(repl_channel, response_channel, in_eval, ast_transforms)
 end
-REPLBackend() = REPLBackend(Channel(1),Channel(1),false)
+REPLBackend() = REPLBackend(Channel(1), Channel(1), false)
 
 """
     softscope(ex)
@@ -205,11 +205,11 @@ end
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     with_methodtable_hint(d.repl) do io
+        io = IOContext(io, :limit => true, :module => Main)
         get(io, :color, false) && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
             # this can override the :limit property set initially
-            io = foldl(IOContext, d.repl.options.iocontext,
-                       init=IOContext(io, :limit => true, :module => Main))
+            io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
         show(io, mime, x)
         println(io)
@@ -277,7 +277,15 @@ struct REPLBackendRef
     repl_channel::Channel
     response_channel::Channel
 end
-REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel,backend.response_channel)
+REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
+function destroy(ref::REPLBackendRef, state::Task)
+    if istaskfailed(state) && Base.task_result(state) isa Exception
+        close(ref.repl_channel, TaskFailedException(state))
+        close(ref.response_channel, TaskFailedException(state))
+    end
+    close(ref.repl_channel)
+    close(ref.response_channel)
+end
 
 """
     run_repl(repl::AbstractREPL)
@@ -290,11 +298,20 @@ REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel,backe
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true)
     backend = REPLBackend()
     backend_ref = REPLBackendRef(backend)
+    cleanup = @task try
+            destroy(backend_ref, t)
+        catch e
+            Core.print(Core.stderr, "\nINTERNAL ERROR: ")
+            Core.println(Core.stderr, e)
+            Core.println(Core.stderr, catch_backtrace())
+        end
     if backend_on_current_task
-        @async run_frontend(repl, backend_ref)
-        start_repl_backend(backend,consumer)
+        t = @async run_frontend(repl, backend_ref)
+        Base._wait2(t, cleanup)
+        start_repl_backend(backend, consumer)
     else
-        @async start_repl_backend(backend,consumer)
+        t = @async start_repl_backend(backend, consumer)
+        Base._wait2(t, cleanup)
         run_frontend(repl, backend_ref)
     end
     return backend
@@ -436,9 +453,15 @@ mutable struct LineEditREPL <: AbstractREPL
     last_shown_line_infos::Vector{Tuple{String,Int}}
     interface::ModalInterface
     backendref::REPLBackendRef
-    LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
+    function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors)
+        opts = Options()
+        opts.hascolor = hascolor
+        if !hascolor
+            opts.beep_colors = [""]
+        end
         new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing, Options(), nothing, Tuple{String,Int}[])
+            in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+    end
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
@@ -820,7 +843,7 @@ backend(r::AbstractREPL) = r.backendref
 
 function eval_with_backend(ast, backend::REPLBackendRef)
     put!(backend.repl_channel, (ast, 1))
-    take!(backend.response_channel) # (val, iserr)
+    return take!(backend.response_channel) # (val, iserr)
 end
 
 function respond(f, repl, main; pass_empty = false, suppress_on_semicolon = true)
@@ -849,7 +872,8 @@ end
 
 function reset(repl::LineEditREPL)
     raw!(repl.t, false)
-    print(repl.t, Base.text_colors[:normal])
+    hascolor(repl) && print(repl.t, Base.text_colors[:normal])
+    nothing
 end
 
 function prepare_next(repl::LineEditREPL)

@@ -664,6 +664,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_static_show_x(out, li->uninferred, depth);
         }
     }
+    else if (vt == jl_typename_type) {
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_printf(out, ".name");
+    }
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
     }

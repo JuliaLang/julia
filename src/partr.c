@@ -330,13 +330,10 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 static void wake_thread(int16_t tid)
 {
     jl_ptls_t other = jl_all_tls_states[tid];
-    if (jl_atomic_load(&other->sleep_check_state) != not_sleeping) {
-        int16_t state = jl_atomic_exchange(&other->sleep_check_state, not_sleeping); // prohibit it from sleeping
-        if (state == sleeping) { // see if it was possibly sleeping before now
-            uv_mutex_lock(&other->sleep_lock);
-            uv_cond_signal(&other->wake_signal);
-            uv_mutex_unlock(&other->sleep_lock);
-        }
+    if (jl_atomic_bool_compare_exchange(&other->sleep_check_state, sleeping, not_sleeping)) {
+        uv_mutex_lock(&other->sleep_lock);
+        uv_cond_signal(&other->wake_signal);
+        uv_mutex_unlock(&other->sleep_lock);
     }
 }
 
@@ -358,7 +355,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
     if (tid == self || tid == -1) {
         // we're already awake, but make sure we'll exit uv_run
-        if (ptls->sleep_check_state != not_sleeping)
+        if (jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping)
             jl_atomic_store(&ptls->sleep_check_state, not_sleeping);
         if (uvlock == system_self)
             uv_stop(jl_global_event_loop());
@@ -405,7 +402,10 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 
 static int may_sleep(jl_ptls_t ptls)
 {
-    return ptls->sleep_check_state == sleeping;
+    // sleep_check_state is only transitioned from not_sleeping to sleeping
+    // by the thread itself. As a result, if this returns false, it will
+    // continue returning false. If it returns true, there are no guarantees.
+    return jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping;
 }
 
 extern volatile unsigned _threadedregion;
@@ -476,8 +476,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                     JL_UV_UNLOCK();
                     // optimization: check again first if we may have work to do
                     if (!may_sleep(ptls)) {
-                        if (ptls->sleep_check_state != not_sleeping)
-                            jl_atomic_store(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
+                        assert(ptls->sleep_check_state == not_sleeping);
                         start_cycles = 0;
                         continue;
                     }
@@ -495,7 +494,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                 if (!_threadedregion && active && ptls->tid == 0) {
                     // thread 0 is the only thread permitted to run the event loop
                     // so it needs to stay alive
-                    if (ptls->sleep_check_state != not_sleeping)
+                    if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
                         jl_atomic_store(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
                     start_cycles = 0;
                     continue;
@@ -510,8 +509,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 // TODO: help with gc work here, if applicable
             }
-            if (ptls->sleep_check_state != not_sleeping)
-                jl_atomic_store(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
+            assert(ptls->sleep_check_state == not_sleeping);
             uv_mutex_unlock(&ptls->sleep_lock);
             JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
             jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint

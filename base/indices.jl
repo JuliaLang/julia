@@ -332,7 +332,7 @@ _maybetail(::Tuple{}) = ()
 _maybetail(t::Tuple) = tail(t)
 
 """
-   Slice(indices)
+    Slice(indices)
 
 Represent an AbstractUnitRange of indices as a vector of the indices themselves,
 with special handling to signal they represent a complete slice of a dimension (:).
@@ -367,7 +367,7 @@ iterate(S::Slice, s...) = iterate(S.indices, s...)
 
 
 """
-   IdentityUnitRange(range::AbstractUnitRange)
+    IdentityUnitRange(range::AbstractUnitRange)
 
 Represent an AbstractUnitRange `range` as an offset vector such that `range[i] == i`.
 

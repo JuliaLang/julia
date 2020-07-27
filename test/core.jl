@@ -7239,6 +7239,17 @@ struct AVL35416{K,V}
 end
 @test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}
 
+# issue #31696
+foo31696(x::Int8, y::Int8) = 1
+foo31696(x::T, y::T) where {T <: Int8} = 2
+@test length(methods(foo31696)) == 1
+let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
+    b .= a
+    @test b[1] == (1,)
+    a .= b
+    @test a[1] == (1,)
+end
+
 # issue #36104
 module M36104
 struct T36104
@@ -7255,3 +7266,7 @@ struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
 @test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+
+# Malformed invoke
+f_bad_invoke(x::Int) = invoke(x, (Any,), x)
+@test_throws TypeError f_bad_invoke(1)

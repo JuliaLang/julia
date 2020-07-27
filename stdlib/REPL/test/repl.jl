@@ -90,7 +90,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -888,6 +888,13 @@ let term = REPL.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOContext(IOBuffe
     @test_throws KeyError term[:bar]
 end
 
+# Ensure even the dumb REPL elides content
+let term = REPL.Terminals.TTYTerminal("dumb",IOBuffer("zeros(1000)\n"),IOBuffer(),IOBuffer())
+    r = REPL.BasicREPL(term)
+    REPL.run_repl(r)
+    @test contains(String(take!(term.out_stream)), "⋮")
+end
+
 
 # a small module for alternative keymap tests
 module AltLE
@@ -1272,7 +1279,7 @@ end
     repl.backendref = REPL.REPLBackendRef(Channel(1), Channel(1))
     put!(repl.backendref.response_channel, (bt, true))
 
-    REPL.print_response(repl, (err, true), true, false)
+    REPL.print_response(repl, (bt, true), true, false)
     seekstart(out_stream)
     @test count(
         contains(

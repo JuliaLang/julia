@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Random
+using Test, Random, LinearAlgebra
 
 ######## Utilities ###########
 
@@ -36,7 +36,7 @@ _Agen(A, i1, i2, i3, i4, i5, i6) = [A[j1,j2,j3,j4,j5,j6] for j1 in i1, j2 in i2,
 
 function replace_colon(A::AbstractArray, I)
     Iout = Vector{Any}(undef, length(I))
-    I == (:,) && return (1:length(A),)
+    I === (:,) && return (1:length(A),)
     for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
     end
@@ -585,24 +585,58 @@ end
     @test IndexStyle(B18581) === IndexLinear()
 end
 
+primitive type UInt48 48 end
+UInt48(x::UInt64) = Core.Intrinsics.trunc_int(UInt48, x)
+UInt48(x::UInt32) = Core.Intrinsics.zext_int(UInt48, x)
+
 @testset "sizeof" begin
     @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4
     @test sizeof(view(zeros(UInt8, 10), 1:3)) == 3
     @test sizeof(view(zeros(Float64, 10, 10), 1:3, 2:6)) == 120
 
     # Test non-power of 2 types (Issue #35884)
-    primitive type UInt48 48 end
-    UInt48(x::UInt64) = Core.Intrinsics.trunc_int(UInt48, x)
-    UInt48(x::UInt32) = Core.Intrinsics.zext_int(UInt48, x)
-
     a = UInt48(0x00000001);
     b = UInt48(0x00000002);
     c = UInt48(0x00000003);
     arrayOfUInt48 = [a, b, c];
 
     @test sizeof(view(arrayOfUInt48, 1:2)) == 16
+
+    @test sizeof(view(Diagonal(zeros(UInt8, 10)), 1:4)) == 4
+    @test sizeof(view(Diagonal(zeros(UInt8, 10)), 1:3)) == 3
+    @test sizeof(view(Diagonal(zeros(Float64, 10)), 1:3, 2:6)) == 120
 end
 
+@testset "write" begin
+    io = IOBuffer()
+    a = UInt48[ UInt48(UInt32(i+j)) for i = 1:5, j = 1:5 ]
+    @test write(io, view(a, :, 2)) == 40
+    seekstart(io)
+    v = Vector{UInt48}(undef, 5)
+    read!(io, v)
+    @test v == view(a, :, 2)
+
+    seekstart(io)
+    @test write(io, view(a, 2:5, 1:4)) == 4*4*8
+    seekstart(io)
+    v = Matrix{UInt48}(undef, 4, 4)
+    read!(io, v)
+    @test v == view(a, 2:5, 1:4)
+
+    seekstart(io)
+    @test write(io, view(a, 5:-1:1, 3)) == 5*8
+    seekstart(io)
+    v = Vector{UInt48}(undef, 5)
+    read!(io, v)
+    @test v == view(a, 5:-1:1, 3)
+
+    seekstart(io)
+    @test write(io, view(a, 1:2:5, :)) == 3*5*8
+    seekstart(io)
+    v = Matrix{UInt48}(undef, 3, 5)
+    read!(io, v)
+    @test v == view(a, 1:2:5, :)
+end
 
 @testset "unaliascopy trimming; Issue #26263" begin
     A = rand(5,5,5,5)

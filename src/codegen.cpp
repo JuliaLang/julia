@@ -1153,7 +1153,7 @@ static inline jl_cgval_t ghostValue(jl_value_t *typ)
         return jl_cgval_t(); // Undef{}
     if (typ == (jl_value_t*)jl_typeofbottom_type) {
         // normalize TypeofBottom to Type{Union{}}
-        typ = (jl_value_t*)jl_wrap_Type(jl_bottom_type);
+        typ = (jl_value_t*)jl_typeofbottom_type->super;
     }
     if (jl_is_type_type(typ)) {
         // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
@@ -2956,31 +2956,25 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
             }
         }
-        if (jl_is_type_type(obj.typ)) {
+        ssize_t nf = -1;
+        if (obj.constant) {
+            nf = jl_datatype_nfields(jl_typeof(obj.constant));
+        }
+        else if (jl_is_type_type(obj.typ)) {
             jl_value_t *tp0 = jl_tparam0(obj.typ);
-            if (jl_is_concrete_type(tp0)) {
-                *ret = mark_julia_type(ctx, ConstantInt::get(T_size, jl_datatype_nfields(tp0)), false, jl_long_type);
-                return true;
-            }
+            if (jl_is_datatype(tp0) && jl_is_datatype_singleton((jl_datatype_t*)tp0))
+                nf = jl_datatype_nfields(jl_typeof(tp0));
         }
-        else if (jl_is_concrete_type(obj.typ) || obj.constant) {
-            Value *sz;
-            if (obj.constant) {
-                if (jl_typeof(obj.constant) == (jl_value_t*)jl_datatype_type)
-                    sz = ConstantInt::get(T_size, jl_datatype_nfields(obj.constant));
-                else
-                    sz = ConstantInt::get(T_size, jl_datatype_nfields(obj.typ));
-            }
-            else if (obj.typ == (jl_value_t*)jl_datatype_type) {
-                sz = emit_datatype_nfields(ctx, boxed(ctx, obj));
-            }
-            else {
-                assert(jl_is_datatype(obj.typ));
-                sz = ConstantInt::get(T_size, jl_datatype_nfields(obj.typ));
-            }
-            *ret = mark_julia_type(ctx, sz, false, jl_long_type);
-            return true;
+        else if (jl_is_concrete_type(obj.typ)) {
+            nf = jl_datatype_nfields(obj.typ);
         }
+        Value *sz;
+        if (nf != -1)
+            sz = ConstantInt::get(T_size, nf);
+        else
+            sz = emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj));
+        *ret = mark_julia_type(ctx, sz, false, jl_long_type);
+        return true;
     }
 
     else if (f == jl_builtin_fieldtype && (nargs == 2 || nargs == 3)) {
@@ -3044,21 +3038,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
             *ret = mark_julia_type(ctx, ctx.builder.CreateMul(len, elsize), false, jl_long_type);
             return true;
-        }
-        if (jl_is_type_type((jl_value_t*)sty) && !jl_is_typevar(jl_tparam0(sty))) {
-            sty = (jl_datatype_t*)jl_tparam0(sty);
-        }
-        if (jl_is_datatype(sty) && sty != jl_symbol_type &&
-                sty->name != jl_array_typename &&
-                sty != jl_simplevector_type && sty != jl_string_type &&
-                // exclude DataType, since each DataType has its own size, not sizeof(DataType).
-                // this is issue #8798
-                sty != jl_datatype_type) {
-            if (jl_is_concrete_type((jl_value_t*)sty) ||
-                    (jl_field_names(sty) == jl_emptysvec && jl_datatype_size(sty) > 0)) {
-                *ret = mark_julia_type(ctx, ConstantInt::get(T_size, jl_datatype_size(sty)), false, jl_long_type);
-                return true;
-            }
         }
     }
 
@@ -6226,6 +6205,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     };
     std::vector<DebugLineTable> linetable;
     {
+        assert(jl_is_array(src->linetable));
         size_t nlocs = jl_array_len(src->linetable);
         std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
         linetable.resize(nlocs + 1);

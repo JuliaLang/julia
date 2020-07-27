@@ -335,14 +335,11 @@ const F_or_FF = Union{AbstractFloat, Tuple{AbstractFloat,AbstractFloat}}
 asF64(x::AbstractFloat) = Float64(x)
 asF64(x::Tuple{AbstractFloat,AbstractFloat}) = Float64(x[1]) + Float64(x[2])
 
-# Defined to prevent splatting in the function below which here has a performance impact
-_TP(x) = TwicePrecision{Float64}(x)
-_TP(x::Tuple{Any, Any}) = TwicePrecision{Float64}(x[1], x[2])
 function steprangelen_hp(::Type{Float64}, ref::F_or_FF,
                          step::F_or_FF, nb::Integer,
                          len::Integer, offset::Integer)
-    StepRangeLen(_TP(ref),
-                 twiceprecision(_TP(step), nb), Int(len), offset)
+    StepRangeLen(TwicePrecision{Float64}(ref...),
+                 twiceprecision(TwicePrecision{Float64}(step...), nb), Int(len), offset)
 end
 
 function steprangelen_hp(::Type{T}, ref::F_or_FF,

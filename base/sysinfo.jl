@@ -114,6 +114,12 @@ function __init__()
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    __init_build()
+    nothing
+end
+# Populate the paths needed by sysimg compilation, e.g. `generate_precompile.jl`,
+# without pulling in anything unnecessary like `CPU_NAME`
+function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(VERSION.major).$(VERSION.minor)"
     global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)

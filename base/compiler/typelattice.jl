@@ -84,6 +84,11 @@ struct NotFound end
 
 const NOT_FOUND = NotFound()
 
+const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStruct}
+==(x::CompilerTypes, y::CompilerTypes) = x === y
+==(x::Type, y::CompilerTypes) = false
+==(x::CompilerTypes, y::Type) = false
+
 #################
 # lattice logic #
 #################
@@ -216,7 +221,8 @@ end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
-widenconst(@nospecialize(t)) = t
+widenconst(t::Type) = t
+widenconst(t::TypeVar) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 
@@ -234,9 +240,9 @@ end
 
 widenconditional(@nospecialize typ) = typ
 function widenconditional(typ::Conditional)
-    if typ.vtype == Union{}
+    if typ.vtype === Union{}
         return Const(false)
-    elseif typ.elsetype == Union{}
+    elseif typ.elsetype === Union{}
         return Const(true)
     else
         return Bool

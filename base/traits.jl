@@ -8,6 +8,8 @@ struct Unordered <: OrderStyle end
 
 OrderStyle(instance) = OrderStyle(typeof(instance))
 OrderStyle(::Type{<:Real}) = Ordered()
+OrderStyle(::Type{<:AbstractString}) = Ordered()
+OrderStyle(::Type{Symbol}) = Ordered()
 OrderStyle(::Type{<:Any}) = Unordered()
 
 # trait for objects that support arithmetic

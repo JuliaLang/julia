@@ -224,7 +224,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                     end
                     val = new_def
                 end
-                if def == val
+                if def === val
                     # This shouldn't really ever happen, but
                     # patterns like this can occur in dead code,
                     # so bail out.
@@ -531,7 +531,7 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
     revisit_worklist = Int[]
     #ndone, nmax = 0, 200
-    for (idx, stmt) in compact
+    for ((_, idx), stmt) in compact
         isa(stmt, Expr) || continue
         #ndone >= nmax && continue
         #ndone += 1
@@ -872,7 +872,7 @@ function adce_pass!(ir::IRCode)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
     compact = IncrementalCompact(ir)
-    for (idx, stmt) in compact
+    for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
         end

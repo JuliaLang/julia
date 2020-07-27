@@ -609,3 +609,18 @@ end
     @test_throws DimensionMismatch maximum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
     @test_throws DimensionMismatch minimum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
 end
+
+@testset "first/last n elements of vector" begin
+    v0 = rand(6)
+    v = OffsetArray(v0, (-3,))
+    @test_throws ArgumentError first(v, -2)
+    @test first(v, 2) == v[begin:begin+1]
+    @test first(v, 100) == v0
+    @test first(v, 100) !== v
+    @test first(v, 1) == [v[begin]]
+    @test_throws ArgumentError last(v, -2)
+    @test last(v, 2) == v[end-1:end]
+    @test last(v, 100) == v0
+    @test last(v, 100) !== v
+    @test last(v, 1) == [v[end]]
+end

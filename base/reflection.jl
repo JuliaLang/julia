@@ -184,7 +184,7 @@ Return a boolean indicating whether `T` has `name` as one of its own fields.
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 """
-function hasfield(::Type{T}, name::Symbol) where T
+function hasfield(T::Type, name::Symbol)
     @_pure_meta
     return fieldindex(T, name, false) > 0
 end
@@ -239,31 +239,6 @@ Determine whether a global is declared `const` in a given `Module`.
 """
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
-
-"""
-    @isdefined s -> Bool
-
-Tests whether variable `s` is defined in the current scope.
-
-See also [`isdefined`](@ref).
-
-# Examples
-```jldoctest
-julia> function f()
-           println(@isdefined x)
-           x = 3
-           println(@isdefined x)
-       end
-f (generic function with 1 method)
-
-julia> f()
-false
-true
-```
-"""
-macro isdefined(s::Symbol)
-    return Expr(:isdefined, esc(s))
-end
 
 """
     @locals()
@@ -338,15 +313,19 @@ function datatype_alignment(dt::DataType)
     return Int(alignment)
 end
 
+function uniontype_layout(T::Type)
+    sz = RefValue{Csize_t}(0)
+    algn = RefValue{Csize_t}(0)
+    isinline = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn) != 0
+    (isinline, sz[], algn[])
+end
+
 # amount of total space taken by T when stored in a container
-function aligned_sizeof(T)
+function aligned_sizeof(T::Type)
     @_pure_meta
     if isbitsunion(T)
-        sz = Ref{Csize_t}(0)
-        algn = Ref{Csize_t}(0)
-        ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, algn)
-        al = algn[]
-        return (sz[] + al - 1) & -al
+        _, sz, al = uniontype_layout(T)
+        return (sz + al - 1) & -al
     elseif allocatedinline(T)
         al = datatype_alignment(T)
         return (Core.sizeof(T) + al - 1) & -al
@@ -371,6 +350,19 @@ function datatype_haspadding(dt::DataType)
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return flags & 1 == 1
 end
+
+"""
+    Base.datatype_nfields(dt::DataType) -> Bool
+
+Return the number of fields known to this datatype's layout.
+Can be called on any `isconcretetype`.
+"""
+function datatype_nfields(dt::DataType)
+    @_pure_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
+end
+
 
 """
     Base.datatype_pointerfree(dt::DataType) -> Bool
@@ -560,31 +552,6 @@ struct type with no fields.
 issingletontype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && isdefined(t, :instance))
 
 """
-    Base.parameter_upper_bound(t::UnionAll, idx)
-
-Determine the upper bound of a type parameter in the underlying datatype.
-This method should generally not be relied upon:
-code instead should usually use static parameters in dispatch to extract these values.
-
-# Examples
-```jldoctest
-julia> struct Foo{T<:AbstractFloat, N}
-           x::Tuple{T, N}
-       end
-
-julia> Base.parameter_upper_bound(Foo, 1)
-AbstractFloat
-
-julia> Base.parameter_upper_bound(Foo, 2)
-Any
-```
-"""
-function parameter_upper_bound(t::UnionAll, idx)
-    @_pure_meta
-    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
-end
-
-"""
     typeintersect(T, S)
 
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
@@ -668,6 +635,8 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
+fieldindex(t::UnionAll, name::Symbol, err::Bool=true) = fieldindex(something(argument_datatype(t)), name, err)
+
 argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
 
 """
@@ -750,13 +719,12 @@ julia> instances(Color)
 function instances end
 
 function to_tuple_type(@nospecialize(t))
-    @_pure_meta
-    if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
+    if isa(t, Tuple) || isa(t, AbstractArray) || isa(t, SimpleVector)
         t = Tuple{t...}
     end
-    if isa(t,Type) && t<:Tuple
+    if isa(t, Type) && t <: Tuple
         for p in unwrap_unionall(t).parameters
-            if !(isa(p,Type) || isa(p,TypeVar))
+            if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
         end
@@ -840,6 +808,9 @@ end
 function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool, min::Array{UInt,1}, max::Array{UInt,1}, has_ambig::Array{Int32,1})
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
 end
+function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool, min::Ref{UInt}, max::Ref{UInt}, has_ambig::Ref{Int32})
+    return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
+end
 
 # high-level, more convenient method lookup functions
 
@@ -884,7 +855,7 @@ function methods(@nospecialize(f), @nospecialize(t),
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
-    MethodList(Method[m[3] for m in _methods(f, t, -1, world) if mod === nothing || m[3].module in mod],
+    MethodList(Method[m.method for m in _methods(f, t, -1, world) if mod === nothing || m.method.module in mod],
                typeof(f).name.mt)
 end
 
@@ -898,7 +869,7 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     has_ambig = Int32[0]
     ms = _methods_by_ftype(tt, -1, world, true, min, max, has_ambig)
     ms === false && return false
-    return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
+    return MethodList(Method[m.method for m in ms], typeof(f).name.mt)
 end
 
 function methods(@nospecialize(f),
@@ -920,6 +891,18 @@ function visit(f, mc::Core.TypeMapLevel)
     end
     if mc.arg1 !== nothing
         e = mc.arg1::Vector{Any}
+        for i in 2:2:length(e)
+            isassigned(e, i) && visit(f, e[i])
+        end
+    end
+    if mc.tname !== nothing
+        e = mc.tname::Vector{Any}
+        for i in 2:2:length(e)
+            isassigned(e, i) && visit(f, e[i])
+        end
+    end
+    if mc.name1 !== nothing
+        e = mc.name1::Vector{Any}
         for i in 2:2:length(e)
             isassigned(e, i) && visit(f, e[i])
         end
@@ -958,9 +941,9 @@ const _uncompressed_ast = _uncompressed_ir
 function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
-    for method_data in _methods_by_ftype(tt, -1, world)
-        mtypes, msp, m = method_data
-        instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), m, mtypes, msp)
+    for match in _methods_by_ftype(tt, -1, world)
+        instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
+            (Any, Any, Any), match.method, match.spec_types, match.sparams)
         push!(results, instance)
     end
     return results
@@ -1121,14 +1104,14 @@ function code_typed_by_type(@nospecialize(tt::Type);
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     tt = to_tuple_type(tt)
-    meths = _methods_by_ftype(tt, -1, world)
-    if meths === false
+    matches = _methods_by_ftype(tt, -1, world)
+    if matches === false
         error("signature does not correspond to a generic function")
     end
     asts = []
-    for x in meths
-        meth = func_for_method_checked(x[3], tt, x[2])
-        (code, ty) = Core.Compiler.typeinf_code(interp, meth, x[1], x[2], optimize)
+    for match in matches
+        meth = func_for_method_checked(match.method, tt, match.sparams)
+        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, optimize)
         code === nothing && error("inference not successful") # inference disabled?
         debuginfo === :none && remove_linenums!(code)
         push!(asts, code => ty)
@@ -1144,9 +1127,9 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.
     types = to_tuple_type(types)
     rt = []
     world = get_world_counter()
-    for x in _methods(f, types, -1, world)
-        meth = func_for_method_checked(x[3], types, x[2])
-        ty = Core.Compiler.typeinf_type(interp, meth, x[1], x[2])
+    for match in _methods(f, types, -1, world)
+        meth = func_for_method_checked(match.method, types, match.sparams)
+        ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
         ty === nothing && error("inference not successful") # inference disabled?
         push!(rt, ty)
     end
@@ -1338,11 +1321,12 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
     if !ambiguous_bottom
         has_bottom_parameter(ti) && return false
     end
-    ml = _methods_by_ftype(ti, -1, typemax(UInt))
-    for m in ml
+    matches = _methods_by_ftype(ti, -1, typemax(UInt))
+    for match in matches
+        m = match.method
         m === m1 && continue
         m === m2 && continue
-        if ti <: m[3].sig && morespecific(m[3].sig, m1.sig) && morespecific(m[3].sig, m2.sig)
+        if ti <: m.sig && morespecific(m.sig, m1.sig) && morespecific(m.sig, m2.sig)
             return false
         end
     end

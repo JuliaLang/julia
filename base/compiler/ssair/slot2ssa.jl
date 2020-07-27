@@ -181,7 +181,7 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, flags::Vector{UInt8})
+function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}, flags::Vector{UInt8})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     for i = length(code):-1:1
@@ -189,6 +189,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, flags::Vector{UIn
             resize!(code, i)
             resize!(ci.ssavaluetypes, i)
             resize!(ci.codelocs, i)
+            resize!(info, i)
             resize!(flags, i)
             break
         end
@@ -200,6 +201,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, flags::Vector{UIn
         push!(code, ReturnNode())
         push!(ci.ssavaluetypes, Union{})
         push!(ci.codelocs, 0)
+        push!(info, nothing)
         push!(flags, 0x00)
     end
     nothing
@@ -692,13 +694,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         for (idx, slot) in Iterators.enumerate(phi_slots[item])
             ssaval, node = phi_nodes[item][idx]
             incoming_val = incoming_vals[slot]
-            if incoming_val == SSAValue(-1)
+            if incoming_val === SSAValue(-1)
                 # Optimistically omit this path.
                 # Liveness analysis would probably have prevented us from inserting this phi node
                 continue
             end
             push!(node.edges, pred)
-            if incoming_val == undef_token
+            if incoming_val === undef_token
                 resize!(node.values, length(node.values)+1)
             else
                 push!(node.values, incoming_val)
@@ -708,7 +710,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             if isa(incoming_val, NewSSAValue)
                 push!(type_refine_phi, ssaval.id)
             end
-            typ = incoming_val == undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, sptypes, -1, slottypes)
+            typ = incoming_val === undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, sptypes, -1, slottypes)
             old_entry = new_nodes.stmts[ssaval.id]
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)

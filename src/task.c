@@ -470,6 +470,9 @@ void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
     ptls->io_wait = 0;
     if (ptls->safe_restore)
         jl_longjmp(*ptls->safe_restore, 1);
+    // During startup
+    if (!ptls->current_task)
+        jl_no_exc_handler(exception);
     JL_GC_PUSH1(&exception);
     jl_gc_unsafe_enter(ptls);
     if (exception) {
@@ -607,6 +610,18 @@ JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     return (jl_value_t*)ptls->current_task;
+}
+
+JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return (jl_value_t*)ptls->safe_restore;
+}
+
+JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->safe_restore = sr;
 }
 
 #ifdef JL_HAVE_ASYNCIFY

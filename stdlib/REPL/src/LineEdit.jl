@@ -395,7 +395,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     regstart, regstop = region(buf)
     written = 0
     # Write out the prompt string
-    lindent = write_prompt(termbuf, prompt)
+    lindent = write_prompt(termbuf, prompt, hascolor(terminal))
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
     miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
 
@@ -1259,21 +1259,52 @@ refresh_line(s, termbuf) = refresh_multi_line(termbuf, s)
 default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
-write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
+write_prompt(terminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
 
-function write_prompt(terminal, p::Prompt)
+function write_prompt(terminal, p::Prompt, color::Bool)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
     write(terminal, prefix)
-    write(terminal, Base.text_colors[:bold])
-    width = write_prompt(terminal, p.prompt)
-    write(terminal, Base.text_colors[:normal])
+    color && write(terminal, Base.text_colors[:bold])
+    width = write_prompt(terminal, p.prompt, color)
+    color && write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
     return width
 end
 
+# On Windows, when launching external processes, we cannot control what assumption they make on the
+# console mode. We thus forcibly reset the console mode at the start of the prompt to ensure they do
+# not leave the console mode in a corrupt state.
+# FIXME: remove when pseudo-tty are implemented for child processes
+if Sys.iswindows()
+function _console_mode()
+    hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
+    dwMode = Ref{UInt32}()
+    ccall(:GetConsoleMode, stdcall, Int32, (Ref{Cvoid}, Ref{UInt32}), hOutput, dwMode)
+    return dwMode[]
+end
+const default_console_mode_ref = Ref{UInt32}()
+const default_console_mode_assigned = Ref(false)
+function get_default_console_mode()
+    if default_console_mode_assigned[] == false
+        default_console_mode_assigned[] = true
+        default_console_mode_ref[] = _console_mode()
+    end
+    return default_console_mode_ref[]
+end
+function _reset_console_mode()
+    mode = _console_mode()
+    if mode !== get_default_console_mode()
+        hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
+        ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), hOutput, default_console_mode_ref[])
+    end
+    nothing
+end
+end
+
 # returns the width of the written prompt
-function write_prompt(terminal, s::Union{AbstractString,Function})
+function write_prompt(terminal, s::Union{AbstractString,Function}, color::Bool)
+    @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)
     write(terminal, promptstr)
     return textwidth(promptstr)
@@ -1709,7 +1740,7 @@ end
 
 input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
-write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
+write_prompt(terminal, s::PrefixSearchState, color::Bool) = write_prompt(terminal, s.histprompt.parent_prompt, color)
 prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)
 
 terminal(s::PrefixSearchState) = s.terminal
