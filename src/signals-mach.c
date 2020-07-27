@@ -501,7 +501,7 @@ void *mach_profile_listener(void *arg)
 
                 forceDwarf = -2;
 #else
-                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
+                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL, 1);
 #endif
 
                 // Mark the end of this block with 0
