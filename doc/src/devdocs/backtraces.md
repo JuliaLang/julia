@@ -109,7 +109,7 @@ on Github with a link to the gist.
 
 ## Other generic segfaults or unreachables reached
 
-As mentioned elsewhere, `julia` has good integration with `rr` for generating traces; this includes, on linux, the ability to automatically run `julia` under `rr` and share the trace after a crash. This can be immensely helpful when debugging such crashes and is strongly encouraged when reporting crash issues to the JuliaLang/julia repo. To run `julia` under `rr` automatically, do:
+As mentioned elsewhere, `julia` has good integration with `rr` for generating traces; this includes, on Linux, the ability to automatically run `julia` under `rr` and share the trace after a crash. This can be immensely helpful when debugging such crashes and is strongly encouraged when reporting crash issues to the JuliaLang/julia repo. To run `julia` under `rr` automatically, do:
 
 ```julia
 julia --bug-report=rr
