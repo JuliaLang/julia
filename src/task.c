@@ -615,7 +615,7 @@ JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    return (jl_value_t*)ptls->safe_restore;
+    return ptls->safe_restore;
 }
 
 JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
