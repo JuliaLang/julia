@@ -389,18 +389,16 @@ reverse(t::Tuple) = revargs(t...)
 
 ## specialized reduction ##
 
+# TODO: this is inconsistent with sum(f, itr; [init]) in that it does not
+# promote (un)signed integer types of less than system word size to (U)Int
 sum(x::Tuple{Any, Vararg{Any}}) = +(x...)
 # avoid stack overflow with large tuples
-function sum(x::Any16)
-    s = x[1]
-    for i in 2:length(x)
-        s += x[i]
-    end
-    return s
-end
+sum(x::Any16) = foldl(+, x)
 
 # NOTE: should remove, but often used on array sizes
 prod(x::Tuple{}) = 1
+# TODO: this is inconsistent with prod(f, itr) in that it does not promote
+# (un)signed integer types of less than system word size to (U)Int
 prod(x::Tuple{Any, Vararg{Any}}) = *(x...)
 
 all(x::Tuple{}) = true
