@@ -761,6 +761,11 @@ end # exp
     @test stringcompact(1.046875) == "1.04688"
     @test stringcompact(0.025621074) == "0.0256211"
 
+    # issue #36234
+    @test stringcompact(12345.678) == "12345.7"
+    @test stringcompact(123456.78) == "1.23457e5"
+    @test stringcompact(1234567.8) == "1.23457e6"
+
     # subnormals
     @test stringcompact(eps(0.0)) == "5.0e-324"
     @test stringcompact(eps(0f0)) == "1.0f-45"
