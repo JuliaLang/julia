@@ -125,7 +125,14 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p);
 // the size of that stack buffer upon return. Also, if task is a thread's
 // current task, that thread's id will be stored in *tid; otherwise,
 // *tid will be set to -1.
+//
+// DEPRECATED: use jl_active_task_stack() instead.
 JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid);
+
+// Query the active stack range for the given task, and set *start and *end
+// accordingly. That is, the active part of the stack is between *start and *end.
+// However, these bounds may not be tight.
+JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task, char **start, char **end);
 
 #ifdef __cplusplus
 }
