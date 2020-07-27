@@ -440,7 +440,7 @@ end
     @test @inferred(unique!(iseven, [2, 3, 5, 7, 9])) == [2, 3]
     @test @inferred(unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1])) == [1, 2]
     @test @inferred(unique!(x -> x % 2 == 0 ? :even : "odd", [1, 2, 3, 4, 2, 2, 1]; seen=Set{Union{Symbol,String}}())) == [1, 2]
-                    
+
     @test isempty(unique!(Union{}[]))
     @test eltype(unique!([i for i in ["1"] if i isa Int])) <: Union{}
 end
