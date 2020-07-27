@@ -6,7 +6,7 @@
 The SHA module provides hashing functionality for SHA1, SHA2 and SHA3 algorithms.
 
 They are implemented as both pure functions for hashing single pieces of data,
-or a stateful context which can be updated with the `update!` function and 
+or a stateful context which can be updated with the `update!` function and
 finalized with `digest!`.
 
 ```julia-repl
