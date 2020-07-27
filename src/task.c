@@ -612,6 +612,18 @@ JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
     return (jl_value_t*)ptls->current_task;
 }
 
+JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return (jl_value_t*)ptls->safe_restore;
+}
+
+JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->safe_restore = sr;
+}
+
 #ifdef JL_HAVE_ASYNCIFY
 JL_DLLEXPORT jl_ucontext_t *task_ctx_ptr(jl_task_t *t)
 {
