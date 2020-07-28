@@ -539,11 +539,13 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
     case 22:
         return CPU::amd_btver2;
     case 23:
-        if ((model >= 0x30 && model <= 0x3f) || model == 0x71)
+        // Known models:
+        // Zen: 1, 17
+        // Zen+: 8, 24
+        // Zen2: 96, 113
+        if (model >= 0x30)
             return CPU::amd_znver2;
-        if (model <= 0x0f)
-            return CPU::amd_znver1;
-        return CPU::amd_btver1;
+        return CPU::amd_znver1;
     }
 }
 
