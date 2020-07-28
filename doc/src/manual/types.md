@@ -40,7 +40,7 @@ up front are:
   * There is no meaningful concept of a "compile-time type": the only type a value has is its actual
     type when the program is running. This is called a "run-time type" in object-oriented languages
     where the combination of static compilation with polymorphism makes this distinction significant.
-  * Only values, not variables, have types -- variables are simply names bound to values, although for 
+  * Only values, not variables, have types -- variables are simply names bound to values, although for
     simplicity we may say "type of a variable" as shorthand for "type of the value to which a variable refers."
   * Both abstract and concrete types can be parameterized by other types. They can also be parameterized
     by symbols, by values of any type for which [`isbits`](@ref) returns true (essentially, things
