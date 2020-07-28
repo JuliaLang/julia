@@ -189,6 +189,10 @@ julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 Assigning numbers into `a` will now convert them to `Float64` and `a` will be stored as
 a contiguous block of 64-bit floating-point values that can be manipulated efficiently.
 
+If you cannot avoid containers with abstract value types, it is sometimes better to
+parametrize with `Any` to avoid runtime type checking. E.g. `IdDict{Any, Any}` performs
+better than `IdDict{Type, Vector}`
+
 See also the discussion under [Parametric Types](@ref).
 
 ## Type declarations
@@ -453,9 +457,9 @@ annotation in this context in order to achieve type stability. This is because t
 cannot deduce the type of the return value of a function, even `convert`, unless the types of
 all the function's arguments are known.
 
-Type annotation will not enhance (and can actually hinder) performance if the type is constructed
-at run-time. This is because the compiler cannot use the annotation to specialize the subsequent
-code, and the type-check itself takes time. For example, in the code:
+Type annotation will not enhance (and can actually hinder) performance if the type is abstract,
+or constructed at run-time. This is because the compiler cannot use the annotation to specialize
+the subsequent code, and the type-check itself takes time. For example, in the code:
 
 ```julia
 function nr(a, prec)
