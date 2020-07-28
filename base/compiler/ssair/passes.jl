@@ -2292,3 +2292,166 @@ function cfg_simplify!(ir::IRCode)
     compact.active_result_bb = length(bb_starts)
     return finish(compact)
 end
+
+struct LoopInfo
+    header::Int
+    latches::Vector{Int}
+    # exiting::Vector{Int}
+    # exits::Vector{Int}
+    blocks::Vector{Int}
+end
+# LoopInfo(header, latches, blocks) = LoopInfo(header, latches, Int[], Int[], blocks)
+
+function construct_loopinfo(ir, domtree)
+    cfg = ir.cfg
+
+    # 1. find backedges
+    # Edge n -> h, where h dominates n
+    backedges = Pair{Int, Int}[]
+    for (n, bb) in enumerate(cfg.blocks)
+        for succ in bb.succs
+            if dominates(domtree, succ, n)
+                push!(backedges, n => succ)
+            end
+        end
+    end
+    isempty(backedges) && return nothing
+
+    loops = IdDict{Int, LoopInfo}()
+    for (n, h) in backedges
+        # merge loops that have the same header
+        if haskey(loops, h)
+            visited = BitSet(loops[h].blocks)
+            latches = loops[h].latches
+        else
+            visited = BitSet((h,))
+            latches = Int[]
+        end
+        push!(visited, n)
+        push!(latches, n)
+
+        # Create {n′ | n is reachable from n′ in CFG \ {h}} ∪ {h}
+        worklist = copy(cfg.blocks[n].preds)
+        while !isempty(worklist)
+            idx = pop!(worklist)
+            idx ∈ visited && continue
+
+            push!(visited, idx)
+            append!(worklist, cfg.blocks[idx].preds)
+        end
+
+        blocks = collect(visited)
+        # Assume sorted in CFG order
+        loops[h] = LoopInfo(h, latches, blocks)
+    end
+
+    # Find exiting and exit blocks 
+    # LLVM calculates this on the fly
+    # for loop in values(loops)
+    #     for bb in loop.blocks
+    #         for succ in cfg.blocks[bb].succs
+    #             succ ∈ loop.blocks && continue
+    #             push!(loop.exiting, bb)
+    #             push!(loop.exits, succ)
+    #         end
+    #     end
+    # end
+    
+    # TODO: Loop nesting/Control tree
+    return loops 
+end
+
+
+function licm_pass!(ir, loops)
+    cfg = ir.cfg
+    ir = IncrementalCompact(ir)
+    # TODO: Processing order, we should proceess innermost to outermost loops,
+    #       but we need to maintain LoopInfo under CFG changes.
+    for (h, loop) in loops
+        # Find stmts that are invariant w.r.t this loop
+        invariant_stmts = Int[]
+        
+        # TODO: Order to visit loops in: Innermost to outermost
+        for idx in loop.blocks
+            bb = cfg.blocks[idx]
+            for i in bb.stmts
+                stmt = ir[i]
+                if invariant_stmt(ir, loop, invariant_stmts, stmt)
+                    # XXX: Need to account for, we either need
+                    #      to move the entire block or check ?reverse-dominance?
+                    # if (x > 0)
+                    #   sqrt(x)
+                    push!(invariant_stmts, i)
+                end
+            end
+        end
+
+        # XXX: Need to insert pre-header instead of dumping into predecessor
+        header = cfg.blocks[loop.header]
+        predecessors = filter(bb->bb ∉ loop.latches, header.preds)
+        @assert length(predecessors) == 1
+        # FIXME: Need to insert pre-header instead
+        pre_header = predecessors[1]
+
+
+        insertion_point = SSAValue(last(cfg.blocks[pre_header].stmts))
+        valmap   = IdDict{SSAValue, Core.Compiler.AnySSAValue}()
+        typesmap = types(ir)
+        for idx in invariant_stmts
+            stmt = ir[idx]
+            new_stmt = Core.Compiler.ssamap(stmt) do val
+                if haskey(valmap, val)
+                    return valmap[val]
+                else
+                    return val
+                end
+            end
+            typ = typesmap[idx]
+            new_ssaval = insert_node!(ir, insertion_point, typ, stmt) # XXX: lineinfo
+            ir[idx] = new_ssaval
+            valmap[SSAValue(idx)] = new_ssaval 
+        end
+    end
+
+    # Just run through the iterator without any processing
+    Core.Compiler.foreach(x -> nothing, ir) # x isa Pair{Int, Any}
+    return Core.Compiler.finish(ir)
+end
+
+cfg(ir::IRCode) = ir.cfg
+cfg(compact::IncrementalCompact) = cfg(compact.ir)
+
+function invariant_stmt(ir, loop, invariant_stmts, stmt)
+    if stmt isa Expr
+        return invariant_expr(ir, loop, invariant_stmts, stmt)
+    end
+    return invariant(ir, loop, invariant_stmts, stmt)
+end
+
+function invariant(ir, loop, invariant_stmts, stmt)
+    if stmt isa Argument || stmt isa GlobalRef || stmt isa QuoteNode || stmt isa Bool
+        return true
+    elseif stmt isa SSAValue
+        id = stmt.id
+        bb = block_for_inst(cfg(ir), id)
+        if bb ∉ loop.blocks
+            return true
+        end
+        return id ∈ invariant_stmts 
+    end
+
+    # Check for pure / not side-effecting, 
+    # since we hoist into pre-header throwing is okay. 
+    if stmt isa Core.MethodInstance
+        return stmt.def.pure
+    end
+    return false
+end
+
+function invariant_expr(ir, loop, invariant_stmts, stmt)
+    invar = true
+    for useref in userefs(stmt)
+        invar &= invariant(ir, loop, invariant_stmts, useref[])
+    end
+    return invar
+end
