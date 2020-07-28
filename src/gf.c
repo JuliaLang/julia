@@ -668,8 +668,12 @@ static void jl_compilation_sig(
                   also matching all other TypeConstructors. This means neither
                   Type{TC} nor TypeConstructor is more specific.
                 */
-                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-                jl_svecset(*newparams, i, jl_type_type);
+                // don't apply this heuristic if the argument is called (issue #36783)
+                int iscalled = i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)));
+                if (!iscalled) {
+                    if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                    jl_svecset(*newparams, i, jl_type_type);
+                }
             }
             else if (jl_is_type_type(jl_tparam0(elt)) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
@@ -874,14 +878,15 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         }
 
         if (jl_is_type_type(jl_unwrap_unionall(elt))) {
+            int iscalled = i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)));
             if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) {
-                if (very_general_type(decl_i))
+                if (!iscalled && very_general_type(decl_i))
                     continue;
                 if (i >= nargs && definition->isva)
                     continue;
                 return 0;
             }
-            if (very_general_type(decl_i))
+            if (!iscalled && very_general_type(decl_i))
                 return 0;
             if (!jl_is_datatype(elt))
                 return 0;
