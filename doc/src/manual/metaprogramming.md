@@ -1077,6 +1077,18 @@ but they are just functions, written entirely in Julia. You can read their sourc
 what they do -- and all they do is construct expression objects to be inserted into your program's
 syntax tree.
 
+In additional, you can define marco like this:
+```julia
+macro foo_str(str, flag)
+    # do stuff
+end
+```
+You can then call the above macro with the following syntax:
+```julia
+foo"str"flag
+```
+In this example the flag type is String and with the contents of whatever trails after the string literal.
+
 ## Generated functions
 
 A very special macro is [`@generated`](@ref), which allows you to define so-called *generated functions*.
