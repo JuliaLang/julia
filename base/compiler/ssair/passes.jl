@@ -2296,11 +2296,8 @@ end
 struct LoopInfo
     header::Int
     latches::Vector{Int}
-    # exiting::Vector{Int}
-    # exits::Vector{Int}
     blocks::Vector{Int}
 end
-# LoopInfo(header, latches, blocks) = LoopInfo(header, latches, Int[], Int[], blocks)
 
 function construct_loopinfo(ir, domtree)
     cfg = ir.cfg
@@ -2362,64 +2359,119 @@ function construct_loopinfo(ir, domtree)
 end
 
 
-function licm_pass!(ir, loops)
+function licm_pass!(ir::IRCode, loops)
     cfg = ir.cfg
-    ir = IncrementalCompact(ir)
+
     # TODO: Processing order, we should proceess innermost to outermost loops,
-    #       but we need to maintain LoopInfo under CFG changes.
+    staged_blocks = IdDict{Int, Vector{Int}}()
     for (h, loop) in loops
         # Find stmts that are invariant w.r.t this loop
         invariant_stmts = Int[]
-        
+
         # TODO: Order to visit loops in: Innermost to outermost
         for idx in loop.blocks
             bb = cfg.blocks[idx]
-            for i in bb.stmts
-                stmt = ir[i]
+            for id in bb.stmts
+                stmt = ir.stmts[id][:inst]
                 if invariant_stmt(ir, loop, invariant_stmts, stmt)
                     # XXX: Need to account for, we either need
                     #      to move the entire block or check ?reverse-dominance?
                     # if (x > 0)
                     #   sqrt(x)
-                    push!(invariant_stmts, i)
+                    push!(invariant_stmts, id)
                 end
+            end
+
+            # Move stmts as far as possible
+            if haskey(staged_blocks, idx)
+                staged_stmts = staged_blocks[idx]
+                new_staged_stmts = Int[]
+                for (i, id) in enumerate(staged_stmts)
+                    stmt = ir.stmts[id]
+                    if invariant_stmt(ir, loop, invariant_stmts, stmt)
+                        # XXX: Need to account for, we either need
+                        #      to move the entire block or check ?reverse-dominance?
+                        # if (x > 0)
+                        #   sqrt(x)
+                        push!(invariant_stmts, id)
+                    else
+                        push!(new_staged_stmts, id)
+                    end
+                end
+                staged_blocks[idx] = new_staged_stmts
             end
         end
 
-        # XXX: Need to insert pre-header instead of dumping into predecessor
+        # isempty(invariant_stmts) && continue
+        staged_blocks[h] = invariant_stmts
+    end
+
+    # Now we no longer need a correct loop info / domtree and we can take the sledgehammer to the CFG/IR
+    irstream = ir.stmts
+    valmap   = IdDict{Int, Int}()
+    for (h, loop) in loops
+        # Non-loop predecessors
         header = cfg.blocks[loop.header]
-        predecessors = filter(bb->bb ∉ loop.latches, header.preds)
+        predecessors = filter(bb -> bb ∉ loop.latches, header.preds)
+
         @assert length(predecessors) == 1
-        # FIXME: Need to insert pre-header instead
-        pre_header = predecessors[1]
+        # XXX: If predecessors are more than one we might need to move PhiNodes
+        entry_bb = first(predecessors)
 
+        insertion_point = last(cfg.blocks[entry_bb].stmts)
+        # Copy invariant stmts to new BB 
+        # start = length(irstream) + 1
+        for id in staged_blocks[h]
+            inst = irstream[id]
+            ssaval = copy_inst!(ir, insertion_point, inst, true)
+            inst[:inst] = ssaval
 
-        insertion_point = SSAValue(last(cfg.blocks[pre_header].stmts))
-        valmap   = IdDict{SSAValue, Core.Compiler.AnySSAValue}()
-        typesmap = types(ir)
-        for idx in invariant_stmts
-            stmt = ir[idx]
-            new_stmt = Core.Compiler.ssamap(stmt) do val
-                if haskey(valmap, val)
-                    return valmap[val]
+            # Fixup SSAValue's
+            ir[ssaval] = Core.Compiler.ssamap(ir[ssaval]) do val
+                if haskey(valmap, val.id)
+                    return valmap[val.id]
                 else
                     return val
                 end
             end
-            typ = typesmap[idx]
-            new_ssaval = insert_node!(ir, insertion_point, typ, stmt) # XXX: lineinfo
-            ir[idx] = new_ssaval
-            valmap[SSAValue(idx)] = new_ssaval 
+
+            valmap[id] = ssaval.id # record new SSAValue id
         end
+        insert_node!(ir, insertion_point, Nothing, GotoNode(h), true)
+
+        # Insert pre-header into CFG
+        # push!(cfg.blocks, BasicBlock(StmtRange(start, length(irstream)), predecessors, Int[loop.header]))
+        push!(cfg.blocks, BasicBlock(StmtRange(-1, 0), predecessors, Int[loop.header]))
+        pre_header = length(cfg.blocks)
+        cfg.blocks[loop.header] = BasicBlock(header.stmts, [pre_header, loop.latches...], header.succs)
+
+        for pred in predecessors
+            bb = cfg.blocks[loop.header]
+            succs = map(bb->bb == loop.header ? pre_header : bb, bb.succs)
+            cfg.blocks[loop.header] = BasicBlock(bb.stmts, bb.preds, succs)
+        end
+
+        # CFG now looks right, time to fixup the terminators and phi nodes
+        for id in header.stmts
+            node = irstream[id]
+            stmt = node[:inst]
+            if stmt isa PhiNode 
+                edges = Any[bb == entry_bb ? pre_header : bb for bb in stmt.edges]
+                node[:inst] = PhiNode(edges, stmt.values)
+            else
+                break
+            end
+        end
+        
+        # XXX: How do we deal with implicit fallthrough?
+        #      Need to fixup the terminators. Maybe domsort will cure all things
     end
 
-    # Just run through the iterator without any processing
-    Core.Compiler.foreach(x -> nothing, ir) # x isa Pair{Int, Any}
-    return Core.Compiler.finish(ir)
+    # XXX: The cfg stmt ranges are all wrong
+    # Now domsort the IR so that everything is neat and tidy.
+    domtree = construct_domtree(cfg)
+    return domsort_ssa!(ir, domtree)
 end
-
-cfg(ir::IRCode) = ir.cfg
-cfg(compact::IncrementalCompact) = cfg(compact.ir)
 
 function invariant_stmt(ir, loop, invariant_stmts, stmt)
     if stmt isa Expr
@@ -2433,7 +2485,7 @@ function invariant(ir, loop, invariant_stmts, stmt)
         return true
     elseif stmt isa SSAValue
         id = stmt.id
-        bb = block_for_inst(cfg(ir), id)
+        bb = block_for_inst(ir.cfg, id)
         if bb ∉ loop.blocks
             return true
         end
