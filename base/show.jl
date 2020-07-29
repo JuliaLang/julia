@@ -2087,20 +2087,9 @@ function ismodulecall(ex::Expr)
            isa(resolvebinding(ex.args[2]), Module)
 end
 
-function show(io::IO, tv::TypeVar)
-    # If we are in the `unionall_env`, the type-variable is bound
-    # and the type constraints are already printed.
-    # We don't need to print it again.
-    # Otherwise, the lower bound should be printed if it is not `Bottom`
-    # and the upper bound should be printed if it is not `Any`.
-    in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, @nospecialize(b))
-        parens = isa(b,UnionAll) && !print_without_params(b)
-        parens && print(io, "(")
-        show(io, b)
-        parens && print(io, ")")
-    end
+function show_typevar(io::IO, tv::TypeVar, show_bound)
     lb, ub = tv.lb, tv.ub
+    in_env = (:unionall_env => tv) in io
     if !in_env && lb !== Bottom
         if ub === Any
             show_unquoted(io, tv.name)
@@ -2118,6 +2107,22 @@ function show(io::IO, tv::TypeVar)
         print(io, "<:")
         show_bound(io, ub)
     end
+    nothing
+end
+
+function show(io::IO, tv::TypeVar)
+    # If we are in the `unionall_env`, the type-variable is bound
+    # and the type constraints are already printed.
+    # We don't need to print it again.
+    # Otherwise, the lower bound should be printed if it is not `Bottom`
+    # and the upper bound should be printed if it is not `Any`.
+    function show_bound(io::IO, @nospecialize(b))
+        parens = isa(b,UnionAll) && !print_without_params(b)
+        parens && print(io, "(")
+        show(io, b)
+        parens && print(io, ")")
+    end
+    show_typevar(io, tv, show_bound)
     nothing
 end
 

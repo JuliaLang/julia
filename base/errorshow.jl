@@ -178,30 +178,43 @@ end
 
 typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
 
-function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
+struct ComparisonOptions
+    color::Symbol
+    constraining_typevars::Union{Nothing, Vector{TypeVar}}
+    ComparisonOptions(;color=:normal, constraining_typevars=nothing) =
+        new(color, constraining_typevars)
+end
+
+function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), options::ComparisonOptions)
     if a.name === b.name
         Base.show_type_name(io, a.name)
         n = length(a.parameters)
         print(io, '{')
         for i = 1:n
             if i > length(b.parameters)
-                printstyled(io, a.parameters[i], color=color)
+                printstyled(io, a.parameters[i], color=options.color)
             else
-                print_with_compare(io::IO, a.parameters[i], b.parameters[i], color)
+                print_with_compare(io::IO, a.parameters[i], b.parameters[i], options)
             end
             i < n && print(io, ',')
         end
         print(io, '}')
     else
-        printstyled(io, a; color=color)
+        printstyled(io, a; color=options.color)
     end
 end
 
-function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), color::Symbol)
+function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), options::ComparisonOptions)
     if a === b
         print(io, a)
+    elseif isa(a, TypeVar) && options.constraining_typevars !== nothing
+        if a in options.constraining_typevars
+            printstyled(io, a; color=options.color)
+        else
+            print(io, a.name)
+        end
     else
-        printstyled(io, a; color=color)
+        printstyled(io, a; color=options.color)
     end
 end
 
@@ -214,10 +227,10 @@ function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_par
         print_one_line = isa(T, DataType) && isa(arg_types_param[2], DataType) && T.name != arg_types_param[2].name
         printstyled(io, "Cannot `convert` an object of type ")
         print_one_line || printstyled(io, "\n  ")
-        print_with_compare(io, arg_types_param[2], T, :light_green)
+        print_with_compare(io, arg_types_param[2], T, ComparisonOptions(color = :light_green))
         printstyled(io, " to an object of type ")
         print_one_line || printstyled(io, "\n  ")
-        print_with_compare(io, T, arg_types_param[2], :light_red)
+        print_with_compare(io, T, arg_types_param[2], ComparisonOptions(color = :light_red))
     end
 end
 
@@ -370,6 +383,52 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
 end
 
+function diagnose_arg_mismatch(io::IO, iob::IO, sigstr, constraining_typevars, @nospecialize(sigT), @nospecialize(gotT))
+    if get(io, :color, false) && isa(gotT, DataType) && isa(sigT, DataType) && gotT.name === sigT.name
+        if constraining_typevars !== nothing && isempty(constraining_typevars)
+            constraining_typevars = nothing
+        end
+        print_with_compare(iob, sigT, gotT, ComparisonOptions(color = :light_red,
+            constraining_typevars = constraining_typevars))
+    elseif get(io, :color, false)
+        Base.with_output_color(Base.error_color(), iob) do iob
+            print(iob, "::", sigstr...)
+        end
+    else
+        print(iob, "!Matched::", sigstr...)
+    end
+end
+
+function rename_typevars(@nospecialize(u), d::Dict{TypeVar, TypeVar})
+    if !isa(u,UnionAll)
+        return u
+    end
+    body = rename_typevars(u.body, d)
+    if body === u.body
+        body = u
+    else
+        body = UnionAll(u.var, body)
+    end
+    var = u.var::TypeVar
+    nv = d[var]
+    return UnionAll(nv, body{nv})
+end
+
+function typevars(u::UnionAll)
+    result = isa(u.body, UnionAll) ? typevars(u.body) : TypeVar[]
+    push!(result, u.var)
+    result
+end
+
+struct MismatchedTypeVar
+    tv::TypeVar
+end
+
+function Base.show(io::IO, mtv::MismatchedTypeVar)
+    show_bound(io::IO, @nospecialize(bound)) = printstyled(io, bound; color=Base.error_color())
+    show_typevar(io, mtv.tv, show_bound)
+end
+
 function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
@@ -397,10 +456,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
         for method in methods(func)
             buf = IOBuffer()
             iob0 = iob = IOContext(buf, io)
-            tv = Any[]
+            tvs = Any[]
             sig0 = method.sig
             while isa(sig0, UnionAll)
-                push!(tv, sig0.var)
+                push!(tvs, sig0.var)
                 iob = IOContext(iob, :unionall_env => sig0.var)
                 sig0 = sig0.body
             end
@@ -428,19 +487,36 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     j = i
                 end
                 # Checks if the type of arg 1:i of the input intersects with the current method
-                t_in = typeintersect(rewrap_unionall(Tuple{sig[1:i]...}, method.sig),
-                                     rewrap_unionall(Tuple{t_i[1:j]...}, method.sig))
+                sigwrap = rewrap_unionall(Tuple{sig[1:i]...}, method.sig)
+                twrap = rewrap_unionall(Tuple{t_i[1:j]...}, method.sig)
+                t_in = typeintersect(sigwrap, twrap)
                 # If the function is one of the special cased then it should break the loop if
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
-                    if get(io, :color, false)
-                        Base.with_output_color(Base.error_color(), iob) do iob
-                            print(iob, "::", sigstr...)
+                    constraining_typevars = nothing
+                    if isa(method.sig, UnionAll)
+                        constraining_typevars = TypeVar[]
+                        tv_rename = Dict(tv=>TypeVar(tv.name, tv.lb, tv.ub) for tv in typevars(method.sig))
+                        #@assert sigwrap.body.var in values(tv_rename)
+                        for (old_tv, tv) in tv_rename
+                            tv.lb = Union{}; tv.ub = Any
+                            sigwrap′ = rename_typevars(sigwrap, tv_rename)
+                            twrap′ = rename_typevars(twrap, tv_rename)
+                            if typeintersect(sigwrap′, twrap′) !== Union{}
+                                push!(constraining_typevars, old_tv)
+                            end
+                            tv.lb = old_tv.lb; tv.ub = old_tv.ub
                         end
-                    else
-                        print(iob, "!Matched::", sigstr...)
+                        for tv in constraining_typevars
+                            for i in eachindex(tvs)
+                                if tv === tvs[i]
+                                    tvs[i] = MismatchedTypeVar(tv)
+                                end
+                            end
+                        end
                     end
+                    diagnose_arg_mismatch(io, iob, sigstr, constraining_typevars, sig[i], t_i[j])
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
                     # signature then there will be a type intersect
@@ -491,7 +567,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     join(iob, kwords, ", ")
                 end
                 print(iob, ")")
-                show_method_params(iob0, tv)
+                show_method_params(iob0, tvs)
                 print(iob, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
