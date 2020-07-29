@@ -45,6 +45,9 @@ if isdefined(Core, :Compiler)
     Core.atdoc!(CoreDocs.docm)
 end
 
+# TODO better place for this?
+@doc Core.Compiler.docstring_return_type -> Core.Compiler.return_type
+
 include("exports.jl")
 
 if false
