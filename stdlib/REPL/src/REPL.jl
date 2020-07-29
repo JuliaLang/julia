@@ -54,7 +54,8 @@ import ..LineEdit:
     history_search,
     accept_result,
     terminal,
-    MIState
+    MIState,
+    mode_idx
 
 include("REPLCompletions.jl")
 using .REPLCompletions
@@ -599,14 +600,6 @@ function hist_from_file(hp, file, path)
     seekend(file)
     hp.start_idx = length(hp.history)
     return hp
-end
-
-function mode_idx(hist::REPLHistoryProvider, mode)
-    c = :julia
-    for (k,v) in hist.mode_mapping
-        isequal(v, mode) && (c = k)
-    end
-    return c
 end
 
 function add_history(hist::REPLHistoryProvider, s)
