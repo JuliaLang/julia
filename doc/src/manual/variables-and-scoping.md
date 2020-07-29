@@ -19,13 +19,13 @@ allowed or not.
 
 The constructs introducing scope blocks are:
 
-Construct | Scope type | Allowed within
-----------|------------|---------------
-[`module`](@ref), [`baremodule`](@ref) | global | global
-[`struct`](@ref) | local (soft) | global
-[`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global or local
-[`macro`](@ref) | local (hard) | global
-[`let`](@ref), functions, comprehensions, generators | local (hard) | global or local
+| Construct | Scope type | Allowed within |
+|:----------|:-----------|:---------------|
+| [`module`](@ref), [`baremodule`](@ref) | global | global |
+| [`struct`](@ref) | local (soft) | global |
+| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
+| [`macro`](@ref) | local (hard) | global |
+| functions, [`do`](@ref) blocks, [`let`](@ref) blocks, comprehensions, generators | local (hard) | global, local |
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
