@@ -166,6 +166,8 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
     return out
 end
 
+unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
+
 """
     unique(f, itr)
 
