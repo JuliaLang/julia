@@ -1535,9 +1535,8 @@ cat_indices(A::AbstractArray, d) = axes(A, d)
 cat_similar(A, T, shape) = Array{T}(undef, shape)
 cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
 
-cat_shape(dims, shape::Tuple) = shape
-@inline cat_shape(dims, shape::Tuple, nshape::Tuple, shapes::Tuple...) =
-    cat_shape(dims, _cshp(1, dims, shape, nshape), shapes...)
+cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
+cat_shape(dims, shapes::Tuple) = reduce((x,y)->_cshp(1, dims, x, y), shapes; init=())
 
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
@@ -1581,7 +1580,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 @inline function _cat_t(dims, T::Type, X...)
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, (), map(cat_size, X)...)
+    shape = cat_shape(catdims, map(cat_size, X))
     A = cat_similar(X[1], T, shape)
     if count(!iszero, catdims) > 1
         fill!(A, zero(T))

@@ -1810,7 +1810,7 @@ end
 # general case, specialized for BitArrays and Integers
 function _cat(dims::Integer, X::Union{BitArray, Bool}...)
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, (), map(cat_size, X)...)
+    shape = cat_shape(catdims, map(cat_size, X))
     A = falses(shape)
     return __cat(A, shape, catdims, X...)
 end
