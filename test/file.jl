@@ -15,7 +15,7 @@ subdir = joinpath(dir, "adir")
 mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
-@test_throws Base.IOError mkdir(file)
+@test_throws Base._UVError("mkdir", Base.UV_EEXIST) mkdir(file)
 let err = nothing
     try
         mkdir(file)
@@ -445,9 +445,9 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
-@test_throws Base.IOError rm(c_tmpdir)
+@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
-@test_throws Base.IOError rm(c_tmpdir, recursive=true)
+@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 if !Sys.iswindows()
@@ -462,8 +462,8 @@ if !Sys.iswindows()
         @test stat(file).gid == 0
         @test stat(file).uid == 0
     else
-        @test_throws Base.IOError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base.IOError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test_throws Base._UVError("chown", Base.UV_EPERM) chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        @test_throws Base._UVError("chown", Base.UV_EPERM) chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
     end
 else
     # test that chown doesn't cause any errors for Windows
@@ -904,29 +904,31 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         for src in dirs
             for dst in dirs
                 # cptree
-                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=false)
-                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=true)
+                @test_throws ArgumentError Base.cptree(src, dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError Base.cptree(src, dst; force=true, follow_symlinks=true)
                 # cp
-                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=false)
-                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=true)
+                @test_throws ArgumentError cp(src, dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError cp(src, dst; force=true, follow_symlinks=true)
                 # mv
-                @test_throws ArgumentError mv(src,dst; force=true)
+                @test_throws ArgumentError mv(src, dst; force=true)
             end
         end
     end
     # None existing src
     mktempdir() do tmpdir
-        none_existing_src = joinpath(tmpdir, "none_existing_src")
+        nonexisting_src = joinpath(tmpdir, "nonexisting_src")
         dst = joinpath(tmpdir, "dst")
-        @test !ispath(none_existing_src)
+        @test !ispath(nonexisting_src)
         # cptree
-        @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=false)
-        @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=true)
+        @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
+                     Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=false))
+        @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
+                     Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=true))
         # cp
-        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=false)
-        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=true)
+        @test_throws Base._UVError("open", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
+        @test_throws Base._UVError("open", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base.IOError mv(none_existing_src,dst; force=true)
+        @test_throws Base._UVError("open", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
 end
 
@@ -1130,13 +1132,13 @@ if !Sys.iswindows()
         for src in files
             for dst in files
                 # cptree
-                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=false)
-                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=true)
+                @test_throws ArgumentError Base.cptree(src, dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError Base.cptree(src, dst; force=true, follow_symlinks=true)
                 # cp
-                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=false)
-                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=true)
+                @test_throws ArgumentError cp(src, dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError cp(src, dst; force=true, follow_symlinks=true)
                 # mv
-                @test_throws ArgumentError mv(src,dst; force=true)
+                @test_throws ArgumentError mv(src, dst; force=true)
             end
         end
     end
@@ -1298,7 +1300,8 @@ cd(dirwalk) do
     @test files == ["file1", "file2"]
 
     rm(joinpath("sub_dir1"), recursive=true)
-    @test_throws TaskFailedException take!(chnl_error) # throws an error because sub_dir1 do not exist
+    @test_throws(Base._UVError("readdir", Base.UV_ENOENT, "with ", repr(joinpath(".", "sub_dir1"))),
+                 take!(chnl_error)) # throws an error because sub_dir1 do not exist
 
     root, dirs, files = take!(chnl_noerror)
     @test root == "."
@@ -1313,9 +1316,12 @@ cd(dirwalk) do
     # Test that symlink loops don't cause errors
     if has_symlinks
         mkdir(joinpath(".", "sub_dir3"))
-        symlink("foo", joinpath(".", "sub_dir3", "foo"))
+        foo = joinpath(".", "sub_dir3", "foo")
+        symlink("foo", foo)
 
-        @test_throws Base.IOError walkdir(joinpath(".", "sub_dir3"); follow_symlinks=true)
+        let files = walkdir(joinpath(".", "sub_dir3"); follow_symlinks=true)
+            @test_throws Base._UVError("stat", Base.UV_ELOOP, "for file ", repr(foo)) take!(files)
+        end
         root, dirs, files = take!(walkdir(joinpath(".", "sub_dir3"); follow_symlinks=false))
         @test root == joinpath(".", "sub_dir3")
         @test dirs == []
@@ -1504,8 +1510,8 @@ end
                 rm(d, recursive=true)
                 @test !ispath(d)
                 @test isempty(readdir())
-                @test_throws SystemError readdir(d)
-                @test_throws Base.IOError readdir(join=true)
+                @test_throws Base._UVError("readdir", Base.UV_ENOENT, "with ", repr(d)) readdir(d)
+                @test_throws Base._UVError("cwd", Base.UV_ENOENT) readdir(join=true)
             end
         end
     end
