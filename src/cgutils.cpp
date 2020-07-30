@@ -2386,8 +2386,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     ctx.builder.SetInsertPoint(defaultBB);
     if (skip.size() > 0) {
         assert(skip[0]);
-        Value *box = maybe_decay_untracked(V_null);
-        box_merge->addIncoming(box, defaultBB);
+        box_merge->addIncoming(V_rnull, defaultBB);
         ctx.builder.CreateBr(postBB);
     }
     else if (!vinfo.Vboxed) {

@@ -235,6 +235,7 @@ static DISubroutineType *jl_di_func_null_sig;
 
 // constants
 static Constant *V_null;
+static Constant *V_rnull;
 static bool type_is_ghost(Type *ty)
 {
     return (ty == T_void || ty->isEmptyTy());
@@ -1162,10 +1163,9 @@ static void undef_derived_strct(IRBuilder<> &irbuilder, Value *ptr, jl_datatype_
     if (np == 0)
         return;
     ptr = irbuilder.CreateBitCast(ptr, T_prjlvalue->getPointerTo(ptr->getType()->getPointerAddressSpace()));
-    Value *V_null = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
     for (i = 0; i < np; i++) {
         Value *fld = irbuilder.CreateConstInBoundsGEP1_32(T_prjlvalue, ptr, jl_ptr_offset(sty, i));
-        tbaa_decorate(tbaa, irbuilder.CreateStore(V_null, fld));
+        tbaa_decorate(tbaa, irbuilder.CreateStore(V_rnull, fld));
     }
 }
 
@@ -2278,7 +2278,7 @@ static jl_cgval_t emit_getfield(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_s
         strct,
         mark_julia_const((jl_value_t*)name)
     };
-    Value *result = emit_jlcall(ctx, jlgetfield_func, maybe_decay_untracked(V_null), myargs_array, 2, JLCALL_F_CC);
+    Value *result = emit_jlcall(ctx, jlgetfield_func, V_rnull, myargs_array, 2, JLCALL_F_CC);
     return mark_julia_type(ctx, result, true, jl_any_type);
 }
 
@@ -3430,7 +3430,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
         // special case for known builtin not handled by emit_builtin_call
         auto it = builtin_func_map.find(jl_get_builtin_fptr(f.constant));
         if (it != builtin_func_map.end()) {
-            Value *ret = emit_jlcall(ctx, it->second, maybe_decay_untracked(V_null), &argv[1], nargs - 1, JLCALL_F_CC);
+            Value *ret = emit_jlcall(ctx, it->second, V_rnull, &argv[1], nargs - 1, JLCALL_F_CC);
             return mark_julia_type(ctx, ret, true, rt);
         }
     }
@@ -3578,7 +3578,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
         }
         if (vi.boxroot != NULL) {
             Value *boxed = ctx.builder.CreateAlignedLoad(T_prjlvalue, vi.boxroot, sizeof(void*), vi.isVolatile);
-            Value *box_isnull = ctx.builder.CreateICmpNE(boxed, maybe_decay_untracked(V_null));
+            Value *box_isnull = ctx.builder.CreateICmpNE(boxed, V_rnull);
             if (vi.pTIndex) {
                 // value is either boxed in the stack slot, or unboxed in value
                 // as indicated by testing (pTIndex & 0x80)
@@ -3631,7 +3631,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
             LoadInst *v = ctx.builder.CreateAlignedLoad(T_prjlvalue, bp, sizeof(void*));
             tbaa_decorate(tbaa_binding, v);
             v->setOrdering(AtomicOrdering::Unordered);
-            isnull = ctx.builder.CreateICmpNE(v, maybe_decay_untracked(V_null));
+            isnull = ctx.builder.CreateICmpNE(v, V_rnull);
         }
         else {
             Value *v = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
@@ -3686,7 +3686,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
         Instruction *boxed = ctx.builder.CreateAlignedLoad(T_prjlvalue, vi.boxroot, sizeof(void*), vi.isVolatile);
         Value *box_isnull = NULL;
         if (vi.usedUndef)
-            box_isnull = ctx.builder.CreateICmpNE(boxed, maybe_decay_untracked(V_null));
+            box_isnull = ctx.builder.CreateICmpNE(boxed, V_rnull);
         maybe_mark_load_dereferenceable(boxed, vi.usedUndef || vi.pTIndex, typ);
         if (vi.pTIndex) {
             // value is either boxed in the stack slot, or unboxed in value
@@ -4057,7 +4057,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             // create a new uninitialized variable
             Value *lv = vi.boxroot;
             if (lv != NULL)
-                ctx.builder.CreateStore(maybe_decay_untracked(V_null), lv);
+                ctx.builder.CreateStore(V_rnull, lv);
             if (lv == NULL || vi.pTIndex != NULL)
                 store_def_flag(ctx, vi, false);
         }
@@ -6190,7 +6190,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 emit_varinfo_assign(ctx, vi, tuple);
             }
             else {
-                restTuple = emit_jlcall(ctx, jltuple_func, maybe_decay_untracked(V_null),
+                restTuple = emit_jlcall(ctx, jltuple_func, V_rnull,
                     vargs, ctx.nvargs, JLCALL_F_CC);
                 jl_cgval_t tuple = mark_julia_type(ctx, restTuple, true, vi.value.typ);
                 emit_varinfo_assign(ctx, vi, tuple);
@@ -6201,7 +6201,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             Function *F = prepare_call(jltuple_func);
             restTuple =
                 ctx.builder.CreateCall(F,
-                        { maybe_decay_untracked(V_null),
+                        { V_rnull,
                           ctx.builder.CreateInBoundsGEP(T_prjlvalue, argArray,
                                   ConstantInt::get(T_size, nreq - 1)),
                           ctx.builder.CreateSub(argCount,
@@ -6519,21 +6519,18 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 Value *data, *tindex;
                 if (retvalinfo.TIndex) {
                     tindex = retvalinfo.TIndex;
+                    data = V_rnull;
                     if (retvalinfo.V == NULL) {
                         // treat this as a simple Ghosts
-                        data = maybe_decay_untracked(V_null);
                         sret = NULL;
                     }
-                    else {
-                        data = maybe_decay_untracked(V_null);
-                        if (retvalinfo.Vboxed) {
-                            // also need to account for the possibility the return object is boxed
-                            // and avoid / skip copying it to the stack
-                            isboxed_union = ctx.builder.CreateICmpNE(
-                                    ctx.builder.CreateAnd(tindex, ConstantInt::get(T_int8, 0x80)),
-                                    ConstantInt::get(T_int8, 0));
-                            data = ctx.builder.CreateSelect(isboxed_union, retvalinfo.Vboxed, data);
-                        }
+                    else if (retvalinfo.Vboxed) {
+                        // also need to account for the possibility the return object is boxed
+                        // and avoid / skip copying it to the stack
+                        isboxed_union = ctx.builder.CreateICmpNE(
+                            ctx.builder.CreateAnd(tindex, ConstantInt::get(T_int8, 0x80)),
+                            ConstantInt::get(T_int8, 0));
+                        data = ctx.builder.CreateSelect(isboxed_union, retvalinfo.Vboxed, data);
                     }
                 }
                 else {
@@ -7335,6 +7332,7 @@ static void init_julia_llvm_env(Module *m)
     T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
     T_pprjlvalue = PointerType::get(T_prjlvalue, 0);
     V_null = Constant::getNullValue(T_pjlvalue);
+    V_rnull = Constant::getNullValue(T_prjlvalue);
 
     std::vector<Type*> ftargs(0);
     ftargs.push_back(T_prjlvalue);  // function
