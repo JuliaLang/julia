@@ -24,7 +24,7 @@ static uintptr_t hash_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 
 static size_t symbol_nbytes(size_t len) JL_NOTSAFEPOINT
 {
-    return (sizeof(jl_taggedvalue_t) + sizeof(jl_sym_t) + len + 1 + 7) & -8;
+    return (sizeof(jl_taggedvalue_t) + sizeof(jl_sym_t) + len + 8) & -8;
 }
 
 static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
@@ -140,7 +140,7 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
     uint32_t ctr = jl_atomic_fetch_add(&gs_ctr, 1);
     n = uint2str(gs_name, sizeof(gs_name), ctr, 10);
     memcpy(name + 3 + len, n, sizeof(gs_name) - (n - gs_name));
-    jl_sym_t *sym = _jl_symbol(name, len + 3 + sizeof(gs_name) - (n - gs_name)- 1);
+    jl_sym_t *sym = _jl_symbol(name, len + 2 + sizeof(gs_name) - (n - gs_name));
     if (len >= 256)
         free(name);
     return sym;
