@@ -226,6 +226,10 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
+# let the compiler assume that calling Union{} as a constructor does not need
+# to be considered ever (which comes up often as Type{<:T})
+Union{}(a...) = throw(MethodError(Union{}, a))
+
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
