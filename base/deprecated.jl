@@ -232,5 +232,6 @@ end
 
 # these were internal functions, but some packages seem to be relying on them
 @deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes)
+cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not recursively calls itself
 
 # END 1.6 deprecations
