@@ -2641,6 +2641,7 @@ mark: {
 
 extern jl_typemap_entry_t *call_cache[N_CALL_CACHE];
 extern jl_array_t *jl_all_methods;
+extern jl_array_t *_jl_debug_method_invalidation;
 
 static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                                      jl_ptls_t ptls2)
@@ -2680,6 +2681,8 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
             gc_mark_queue_obj(gc_cache, sp, call_cache[i]);
     if (jl_all_methods != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_all_methods);
+    if (_jl_debug_method_invalidation != NULL)
+        gc_mark_queue_obj(gc_cache, sp, _jl_debug_method_invalidation);
 
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
