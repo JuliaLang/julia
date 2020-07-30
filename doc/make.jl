@@ -221,7 +221,10 @@ struct BuildBotConfig <: Documenter.DeployConfig end
 function Documenter.deploy_folder(::BuildBotConfig; devurl, kwargs...)
     haskey(ENV, "DOCUMENTER_KEY") || return nothing
     if Base.GIT_VERSION_INFO.tagged_commit
-        return "v$(Base.VERSION)"
+        # Strip extra pre-release info (1.5.0-rc2.0 -> 1.5.0-rc2)
+        ver = VersionNumber(VERSION.major, VERSION.minor, VERSION.patch,
+            isempty(VERSION.prerelease) ? () : (VERSION.prerelease[1],))
+        return "v$(ver)"
     elseif Base.GIT_VERSION_INFO.branch == "master"
         return devurl
     end
