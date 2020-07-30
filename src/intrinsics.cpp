@@ -14,7 +14,7 @@ FunctionType *get_intr_args3(LLVMContext &C) { return FunctionType::get(T_prjlva
 FunctionType *get_intr_args4(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
 
 static JuliaFunction *runtime_func[num_intrinsics] = {
-#define ADD_I(name, nargs) new JuliaFunction{"jl_"#name, get_intr_args##nargs},
+#define ADD_I(name, nargs) new JuliaFunction{"jl_"#name, get_intr_args##nargs, nullptr},
 #define ADD_HIDDEN ADD_I
 #define ALIAS(alias, base) nullptr,
     INTRINSICS

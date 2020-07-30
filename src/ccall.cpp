@@ -1697,7 +1697,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
         ctx.builder.CreateMemCpy(
                 ctx.builder.CreateIntToPtr(destp, T_pint8),
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
                 MaybeAlign(1),
 #else
                 1,
@@ -1705,7 +1705,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 ctx.builder.CreateIntToPtr(
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
                     T_pint8),
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
                 MaybeAlign(0),
 #else
                 0,
