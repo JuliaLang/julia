@@ -532,12 +532,59 @@ function generic_normp(x, p)
     end
 end
 
+
 normMinusInf(x) = generic_normMinusInf(x)
 normInf(x) = generic_normInf(x)
 norm1(x) = generic_norm1(x)
 norm2(x) = generic_norm2(x)
 normp(x, p) = generic_normp(x, p)
+function norm0(itr)
+    T = typeof(float(norm(first(itr))))
+    return T(count(!iszero, itr))
+end
 
+@inline strip_val(p) = p
+@inline strip_val(::Val{p}) where {p} = p
+@inline abspow(x, p) = norm(x)^p
+@inline abspow(x, ::Val) = abspow(x, strip_val(p))
+@inline abspow(x, ::Val{2}) = abs2(x)
+invpow(x, p) = x^(1/strip_val(p))
+
+_issubnormal(x) = false
+_issubnormal(x::Union{Float16, Float32, Float64}) = issubnormal(x)
+
+function abstract_array_normp(arr::AbstractArray, p)
+    T = typeof(norm(oneunit(eltype(arr))))
+    psum = zero(T)/oneunit(T) # accumulates Σ(x/normcrude)^p
+    normcrude = if strip_val(p) < 0
+        normMinusInf(arr)
+    else
+        normInf(arr)
+    end
+    if isinf(normcrude) || iszero(normcrude)
+        return T(normcrude)
+    end
+    if _issubnormal(normcrude)
+        for x in arr
+            # oneunit(T)/normcrude will overflow
+            # for subnormal normcrude
+            xp = abspow(x/normcrude, p)
+            psum += xp
+        end
+    else
+        invnormcrude = one(T)/normcrude
+        @simd for x in arr
+            xp = abspow(x*invnormcrude, p)
+            psum += xp
+        end
+    end
+    return T(invpow(psum, p) * normcrude)
+end
+
+norm1(  arr::AbstractArray{<:Number}) = sum(norm, arr)
+norm2(  arr::AbstractArray{<:Number}) = abstract_array_normp(arr, Val(2))
+normp(  arr::AbstractArray{<:Number}) = abstract_array_normp(arr, p)
+normInf(arr::AbstractArray{<:Number}) = maximum(norm, arr)
 
 """
     norm(A, p::Real=2)
@@ -610,13 +657,14 @@ function norm(itr, p::Real=2)
     elseif p == Inf
         return normInf(itr)
     elseif p == 0
-        return typeof(float(norm(first(itr))))(count(!iszero, itr))
+        return norm0(itr)
     elseif p == -Inf
         return normMinusInf(itr)
     else
         normp(itr, p)
     end
 end
+
 
 """
     norm(x::Number, p::Real=2)
