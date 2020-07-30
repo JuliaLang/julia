@@ -861,6 +861,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 if (!y_vboxed)
                     y_vboxed = ConstantPointerNull::get(cast<PointerType>(x_vboxed->getType()));
                 ret.Vboxed = ctx.builder.CreateSelect(isfalse, y_vboxed, x_vboxed);
+                assert(ret.Vboxed->getType() == T_prjlvalue);
             }
             return ret;
         }

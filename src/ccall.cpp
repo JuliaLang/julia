@@ -366,6 +366,7 @@ static Value *llvm_type_rewrite(
 
 // --- argument passing and scratch space utilities ---
 
+// Returns T_prjlvalue
 static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
 {
     // box if concrete type was not statically known
@@ -441,7 +442,7 @@ static Value *julia_to_native(
     // We're passing Any
     if (toboxed) {
         assert(!byRef); // don't expect any ABI to pass pointers by pointer
-        return maybe_decay_untracked(ctx, boxed(ctx, jvinfo));
+        return boxed(ctx, jvinfo);
     }
     assert(jl_is_datatype(jlto) && julia_struct_has_layout((jl_datatype_t*)jlto, jlto_env));
 
@@ -1028,6 +1029,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
 // --- code generator for ccall itself ---
 
+// Returns T_prjlvalue
 static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_dt, jl_value_t *rt)
 {
     // XXX: need to handle parameterized zero-byte types (singleton)
@@ -1278,7 +1280,7 @@ static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *u
                     else {
                         Value *notany = ctx.builder.CreateICmpNE(
                                 boxed(ctx, runtime_sp),
-                                maybe_decay_untracked(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
+                                track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
                         error_unless(ctx, notany, make_errmsg(fname, n, rt_err_msg_notany));
                         always_error = false;
                     }
