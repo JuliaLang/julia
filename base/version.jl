@@ -221,7 +221,7 @@ A `VersionNumber` object describing which version of Julia is in use. For detail
 """
 const VERSION = try
     ver = VersionNumber(VERSION_STRING)
-    if !isempty(ver.prerelease)
+    if !isempty(ver.prerelease) && !GIT_VERSION_INFO.tagged_commit
         if GIT_VERSION_INFO.build_number >= 0
             ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
         else
