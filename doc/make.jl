@@ -221,7 +221,10 @@ struct BuildBotConfig <: Documenter.DeployConfig end
 function Documenter.deploy_folder(::BuildBotConfig; devurl, kwargs...)
     haskey(ENV, "DOCUMENTER_KEY") || return nothing
     if Base.GIT_VERSION_INFO.tagged_commit
-        return "v$(Base.VERSION)"
+        # Strip extra pre-release info (1.5.0-rc2.0 -> 1.5.0-rc2)
+        ver = VersionNumber(VERSION.major, VERSION.minor, VERSION.patch,
+            isempty(VERSION.prerelease) ? () : (VERSION.prerelease[1],))
+        return "v$(ver)"
     elseif Base.GIT_VERSION_INFO.branch == "master"
         return devurl
     end
@@ -230,11 +233,33 @@ end
 
 const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
 
+# Hack to make rc docs visible in the version selector
+struct Versions versions end
+function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
+    # Find all available docs
+    available_folders = readdir(dir)
+    cd(() -> filter!(!islink, available_folders), dir)
+    filter!(x -> occursin(Base.VERSION_REGEX, x), available_folders)
+
+    # Look for docs for an "active" release candidate and insert it
+    vnums = [VersionNumber(x) for x in available_folders]
+    master_version = maximum(vnums)
+    filter!(x -> x.major == 1 && x.minor == master_version.minor-1, vnums)
+    rc = maximum(vnums)
+    if !isempty(rc.prerelease) && occursin(r"^rc", rc.prerelease[1])
+        src = "v$(rc)"
+        @assert src ∈ available_folders
+        push!(v.versions, src => src, pop!(v.versions))
+    end
+
+    return Documenter.Writers.HTMLWriter.expand_versions(dir, v.versions)
+end
+
 deploydocs(
     repo = "github.com/JuliaLang/docs.julialang.org.git",
     deploy_config = BuildBotConfig(),
     target = joinpath(buildroot, "doc", "_build", "html", "en"),
     dirname = "en",
     devurl = devurl,
-    versions = ["v#.#", devurl => devurl]
+    versions = Versions(["v#.#", devurl => devurl]),
 )
