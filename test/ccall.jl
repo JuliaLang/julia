@@ -1686,3 +1686,18 @@ end
     @ccall free(strp[]::Cstring)::Cvoid
     @test str == "hi+1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-1.1-2.2-3.3-4.4-5.5-6.6-7.7-8.8-9.9\n"
 end
+
+@testset "Cwstring" begin
+    n = 100
+    buffer = Array{Cwchar_t}(undef, n)
+    if Sys.iswindows()
+        # sprintf throws an error on Windows, see https://github.com/JuliaLang/julia/pull/36040#issuecomment-634774055
+        len = @ccall swprintf_s(buffer::Ptr{Cwchar_t}, n::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
+    else
+        len = @ccall swprintf(buffer::Ptr{Cwchar_t}, n::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
+    end
+    str = GC.@preserve buffer unsafe_string(pointer(buffer), len)
+    @test str == "α+β=15"
+    str = GC.@preserve buffer unsafe_string(Cwstring(pointer(buffer)))
+    @test str == "α+β=15"
+end
