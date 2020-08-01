@@ -122,8 +122,6 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
             t, found = get_type(ex, context_module)
         end
         found || return Completion[]
-        # Ensure REPLCompletion do not crash when asked to complete a tuple, #15329
-        !lookup_module && t <: Tuple && return Completion[]
     end
 
     suggestions = Completion[]
@@ -147,8 +145,8 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
         end
     elseif val !== nothing # looking for a property of an instance
         for property in propertynames(val, false)
-            s = string(property)
-            if startswith(s, name)
+            # TODO: support integer arguments (#36872)
+            if property isa Symbol && startswith(string(property), name)
                 push!(suggestions, PropertyCompletion(val, property))
             end
         end
