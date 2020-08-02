@@ -1090,7 +1090,7 @@ This macro can then be called with the following syntax:
 foo"str"flag
 ```
 
-The type of flag in the above mentioned syntax would be a String with contents of whatever trails after the string literal.
+The type of flag in the above mentioned syntax would be a `String` with contents of whatever trails after the string literal.
 
 ## Generated functions
 
