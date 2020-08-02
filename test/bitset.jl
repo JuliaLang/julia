@@ -244,6 +244,9 @@ end
 
     @test issubset(BitSet([1, 2, 4]), BitSet(1:10))
     @test issubset(BitSet([]), BitSet([]))
+    @test issubset(BitSet([0]), BitSet([-1,0]))
+    @test !issubset(BitSet([-1]), BitSet([]))
+    @test !issubset(BitSet([65]), BitSet([]))
     @test BitSet([1, 2, 4]) < BitSet(1:10)
     @test !(BitSet([]) < BitSet([]))
     @test BitSet([1, 2, 4]) <= BitSet(1:10)

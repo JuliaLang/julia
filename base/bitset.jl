@@ -416,7 +416,17 @@ function ==(s1::BitSet, s2::BitSet)
     return true
 end
 
-issubset(a::BitSet, b::BitSet) = a == intersect(a,b)
+function issubset(a::BitSet, b::BitSet)
+    n = length(a.bits)
+    shift = b.offset - a.offset
+    i, j = shift, shift + length(b.bits)
+
+    f(a, b) = a == a & b
+    return (
+        all(@inbounds iszero(a.bits[i]) for i in 1:min(n, i)) &&
+        all(@inbounds f(a.bits[i], b.bits[i - shift]) for i in max(1, i+1):min(n, j)) &&
+        all(@inbounds iszero(a.bits[i]) for i in max(1, j+1):n))
+end
 ⊊(a::BitSet, b::BitSet) = a <= b && a != b
 
 
