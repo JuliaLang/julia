@@ -238,6 +238,7 @@ of function arguments that are containers of abstract types; see [Performance Ti
 ## Primitive Types
 
 !!! warning
+
     It is almost always preferable to wrap an existing primitive type in a new
     composite type than to define your own primitive type.
 
