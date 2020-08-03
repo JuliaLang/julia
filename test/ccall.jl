@@ -1581,6 +1581,67 @@ let
     @test dest[] == (7,8,9)
 end
 
+using Base: RefField
+struct ManyFields
+    a::Bool
+    b::Int64
+    c::Any
+    d::Integer
+    e::Complex{BigFloat}
+end
+mutable struct ManyFields2
+    a::Bool
+    b::Int64
+    c::Any
+    d::Integer
+    e::Complex{BigFloat}
+end
+@testset "RefField" begin
+    mf = ManyFields(true, 1021, "hello", 5432, 1im)
+    a  = RefField(mf, :a)
+    b  = RefField(mf, :b)
+    c  = RefField(mf, :c)
+    d  = RefField(mf, :d)
+    e  = RefField(mf, :e)
+    @test a[] === true
+    @test b[] === 1021
+    @test c[] === "hello"
+    @test d[] === 5432
+    @test e[] == 1im
+    a_ptr = Base.unsafe_convert(Ptr{ManyFields}, a.x)
+    b_ptr = Base.unsafe_convert(Ptr{ManyFields}, b.x) + 8
+    c_ptr = Base.unsafe_convert(Ptr{ManyFields}, c.x) + 16
+    d_ptr = Base.unsafe_convert(Ptr{ManyFields}, d.x) + 24
+    e_ptr = Base.unsafe_convert(Ptr{ManyFields}, e.x) + 32
+    @test Base.unsafe_convert(Ptr{Bool}, a) == a_ptr
+    @test Base.unsafe_convert(Ptr{Int64}, b) == b_ptr
+    @test Base.unsafe_convert(Ptr{Any}, c) == c_ptr
+    @test Base.unsafe_convert(Ptr{Integer}, d) == unsafe_load(Ptr{Ptr{Integer}}(d_ptr))
+    @test Base.unsafe_convert(Ptr{Complex{BigFloat}}, e) == unsafe_load(Ptr{Ptr{Integer}}(e_ptr))
+end
+@testset "RefField" begin
+    mf = ManyFields2(true, 1021, "hello", 5432, 1im)
+    a  = RefField(mf, :a)
+    b  = RefField(mf, :b)
+    c  = RefField(mf, :c)
+    d  = RefField(mf, :d)
+    e  = RefField(mf, :e)
+    @test a[] === true
+    @test b[] === 1021
+    @test c[] === "hello"
+    @test d[] === 5432
+    @test e[] == 1im
+    a_ptr = Base.unsafe_convert(Ptr{ManyFields2}, a.x)
+    b_ptr = Base.unsafe_convert(Ptr{ManyFields2}, b.x) + 8
+    c_ptr = Base.unsafe_convert(Ptr{ManyFields2}, c.x) + 16
+    d_ptr = Base.unsafe_convert(Ptr{ManyFields2}, d.x) + 24
+    e_ptr = Base.unsafe_convert(Ptr{ManyFields2}, e.x) + 32
+    @test Base.unsafe_convert(Ptr{Bool}, a) == a_ptr
+    @test Base.unsafe_convert(Ptr{Int64}, b) == b_ptr
+    @test Base.unsafe_convert(Ptr{Any}, c) == c_ptr
+    @test Base.unsafe_convert(Ptr{Integer}, d) == unsafe_load(Ptr{Ptr{Integer}}(d_ptr))
+    @test Base.unsafe_convert(Ptr{Complex{BigFloat}}, e) == unsafe_load(Ptr{Ptr{Integer}}(e_ptr))
+end
 
 # @ccall macro
 using Base: ccall_macro_parse, ccall_macro_lower

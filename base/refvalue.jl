@@ -11,7 +11,7 @@ RefValue(x::T) where {T} = RefValue{T}(x)
 isassigned(x::RefValue) = isdefined(x, :x)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
-    if allocatedinline(T)
+    if allocatedinline(T) || T === Any
         p = pointer_from_objref(b)
     elseif isconcretetype(T) && T.mutable
         p = pointer_from_objref(b.x)
@@ -23,9 +23,6 @@ function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
         p = pointerref(Ptr{Ptr{Cvoid}}(pointer_from_objref(b)), 1, Core.sizeof(Ptr{Cvoid}))
     end
     return convert(P, p)
-end
-function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
-    return convert(P, pointer_from_objref(b))
 end
 unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
 
