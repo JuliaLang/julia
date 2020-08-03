@@ -289,27 +289,40 @@ Base.step(r::ConstantRange) = 0
     end
 
     @testset "unstable algorithms" begin
-        for alg in [QuickSort, PartialQuickSort(length(a))]
-            b = sort(a, alg=alg)
-            @test issorted(b)
-            b = sort(a, alg=alg, rev=true)
-            @test issorted(b, rev=true)
-            b = sort(a, alg=alg, by=x->1/x)
-            @test issorted(b, by=x->1/x)
-        end
+        b = sort(a, alg=QuickSort)
+        @test issorted(b)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
+        b = sort(a, alg=QuickSort, rev=true)
+        @test issorted(b, rev=true)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
+        b = sort(a, alg=QuickSort, by=x->1/x)
+        @test issorted(b, by=x->1/x)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
     end
 end
 @testset "PartialQuickSort" begin
     a = rand(1:10000, 1000)
     # test PartialQuickSort only does a partial sort
+    let alg = PartialQuickSort(1:div(length(a), 10))
+        k = alg.k
+        b = sort(a, alg=alg)
+        c = sort(a, alg=alg, by=x->1/x)
+        d = sort(a, alg=alg, rev=true)
+        @test issorted(b[k])
+        @test issorted(c[k], by=x->1/x)
+        @test issorted(d[k], rev=true)
+        @test !issorted(b)
+        @test !issorted(c, by=x->1/x)
+        @test !issorted(d, rev=true)
+    end
     let alg = PartialQuickSort(div(length(a), 10))
         k = alg.k
         b = sort(a, alg=alg)
         c = sort(a, alg=alg, by=x->1/x)
         d = sort(a, alg=alg, rev=true)
-        @test issorted(b[1:k])
-        @test issorted(c[1:k], by=x->1/x)
-        @test issorted(d[1:k], rev=true)
+        @test b[k] == sort(a)[k]
+        @test c[k] == sort(a, by=x->1/x)[k]
+        @test d[k] == sort(a, rev=true)[k]
         @test !issorted(b)
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
@@ -357,7 +370,8 @@ end
             # stable algorithms
             for alg in [MergeSort]
                 p = sortperm(v, alg=alg, rev=rev)
-                @test p == sortperm(float(v), alg=alg, rev=rev)
+                p2 = sortperm(float(v), alg=alg, rev=rev)
+                @test p == p2
                 @test p == pi
                 s = copy(v)
                 permute!(s, p)
@@ -367,9 +381,10 @@ end
             end
 
             # unstable algorithms
-            for alg in [QuickSort, PartialQuickSort(n)]
+            for alg in [QuickSort, PartialQuickSort(1:n)]
                 p = sortperm(v, alg=alg, rev=rev)
-                @test p == sortperm(float(v), alg=alg, rev=rev)
+                p2 = sortperm(float(v), alg=alg, rev=rev)
+                @test p == p2
                 @test isperm(p)
                 @test v[p] == si
                 s = copy(v)
@@ -377,6 +392,22 @@ end
                 @test s == si
                 invpermute!(s, p)
                 @test s == v
+            end
+            for alg in [PartialQuickSort(n)]
+                p = sortperm(v, alg=alg, rev=rev)
+                p2 = sortperm(float(v), alg=alg, rev=rev)
+                if n == 0
+                    @test isempty(p) && isempty(p2)
+                else
+                    @test p[n] == p2[n]
+                    @test v[p][n] == si[n]
+                    @test isperm(p)
+                    s = copy(v)
+                    permute!(s, p)
+                    @test s[n] == si[n]
+                    invpermute!(s, p)
+                    @test s == v
+                end
             end
         end
 
