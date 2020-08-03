@@ -1206,7 +1206,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         # Move to next block
         compact.idx += 1
         if finish_current_bb!(compact, active_bb, old_result_idx, true)
-            return iterate(compact, (compact.idx-1, active_bb + 1))
+            return iterate(compact, (compact.idx, active_bb + 1))
         else
             return Pair{Pair{Int, Int}, Any}(Pair{Int,Int}(compact.idx-1, old_result_idx), compact.result[old_result_idx][:inst]), (compact.idx, active_bb + 1)
         end
