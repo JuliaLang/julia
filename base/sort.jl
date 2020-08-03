@@ -616,31 +616,8 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::MergeSortAlg, o::
     return v
 end
 
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{<:Integer},
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                o::Ordering)
-    @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-        j = partition!(v, lo, hi, o)
-        if j >= a.k
-            # we don't need to sort anything bigger than j
-            hi = j-1
-        elseif j-lo < hi-j
-            # recurse on the smaller chunk
-            # this is necessary to preserve O(log(n))
-            # stack space in the worst case (rather than O(n))
-            lo < (j-1) && sort!(v, lo, j-1, a, o)
-            lo = j+1
-        else
-            (j+1) < hi && sort!(v, j+1, hi, a, o)
-            hi = j-1
-        end
-    end
-    return v
-end
-
-
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{T},
-               o::Ordering) where T<:OrdinalRange
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
@@ -650,6 +627,9 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{
         elseif j >= last(a.k)
             hi = j-1
         else
+            # recurse on the smaller chunk
+            # this is necessary to preserve O(log(n))
+            # stack space in the worst case (rather than O(n))
             if j-lo < hi-j
                 lo < (j-1) && sort!(v, lo, j-1, a, o)
                 lo = j+1
