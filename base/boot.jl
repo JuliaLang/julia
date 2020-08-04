@@ -406,6 +406,8 @@ eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecial
 eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v, false))))
 eval(Core, :(Const(@nospecialize(v), actual::Bool) = $(Expr(:new, :Const, :v, :actual))))
 eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
+eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
+    $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
