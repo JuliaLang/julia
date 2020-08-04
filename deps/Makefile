@@ -23,7 +23,7 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
+# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind libwhich
 # CMake libs: llvm libgit2 libssh2 mbedtls
 #
@@ -111,12 +111,6 @@ ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 DEP_LIBS += libssh2
 endif
 
-ifneq ($(OS), WINNT)
-ifeq ($(USE_SYSTEM_CURL), 0)
-DEP_LIBS += curl
-endif
-endif
-
 DEP_LIBS += libgit2
 endif # USE_SYSTEM_LIBGIT2
 
@@ -178,7 +172,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2 get-libwhich
+getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-libgit2 get-libwhich
 
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
@@ -195,7 +189,6 @@ include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
 include $(SRCDIR)/mbedtls.mk
 include $(SRCDIR)/libssh2.mk
-include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/zlib.mk
