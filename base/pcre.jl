@@ -194,7 +194,6 @@ end
 function substring_number_from_name(re, name)
     n = ccall((:pcre2_substring_number_from_name_8, PCRE_LIB), Cint,
                (Ptr{Cvoid}, Cstring), re, name)
-    n < 0 && error("PCRE error: $(err_message(n))")
     return Int(n)
 end
 
