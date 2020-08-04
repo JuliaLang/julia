@@ -121,6 +121,18 @@ function VersionNumber(v::AbstractString)
     return VersionNumber(major, minor, patch, prerl, build)
 end
 
+parse(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
+function tryparse(::Type{VersionNumber}, v::AbstractString)
+    try
+        return VersionNumber(v)
+    catch e
+        if isa(e, InterruptException)
+            rethrow(e)
+        end
+        return nothing
+    end
+end
+
 """
     @v_str
 
