@@ -445,9 +445,9 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
-@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir)
+@test_throws Base._UVError(Sys.iswindows() ? "chmod" : "unlink", Base.UV_ENOENT) rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
-@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
+@test_throws Base._UVError(Sys.iswindows() ? "chmod" : "unlink", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 if !Sys.iswindows()
