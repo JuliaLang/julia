@@ -403,7 +403,7 @@ try
           error("break me")
           end
           """)
-    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn "LoadError: break me\nStacktrace:\n [1] error" try
             Base.require(Main, :FooBar2)
             error("the \"break me\" test failed")
         catch exc
