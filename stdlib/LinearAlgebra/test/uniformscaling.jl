@@ -376,29 +376,12 @@ end
 end
 
 @testset "equality comparison of matrices with UniformScaling" begin
-    # AbstractMatrix methods
-    diagI = Diagonal(fill(1, 3))
-    rdiagI = view(diagI, 1:2, 1:3)
-    bidiag = Bidiagonal(fill(2, 3), fill(2, 2), :U)
-    @test diagI  ==  I == diagI  # test isone(I) path / equality
-    @test 2diagI !=  I != 2diagI # test isone(I) path / inequality
-    @test 0diagI == 0I == 0diagI # test iszero(I) path / equality
-    @test 2diagI != 0I != 2diagI # test iszero(I) path / inequality
-    @test 2diagI == 2I == 2diagI # test generic path / equality
-    @test 0diagI != 2I != 0diagI # test generic path / inequality on diag
-    @test bidiag != 2I != bidiag # test generic path / inequality off diag
-    @test rdiagI !=  I != rdiagI # test square matrix check
-    # StridedMatrix specialization
     denseI = [1 0 0; 0 1 0; 0 0 1]
     rdenseI = [1 0 0 0; 0 1 0 0; 0 0 1 0]
     alltwos = fill(2, (3, 3))
-    @test denseI  ==  I == denseI  # test isone(I) path / equality
-    @test 2denseI !=  I != 2denseI # test isone(I) path / inequality
-    @test 0denseI == 0I == 0denseI # test iszero(I) path / equality
-    @test 2denseI != 0I != 2denseI # test iszero(I) path / inequality
-    @test 2denseI == 2I == 2denseI # test generic path / equality
-    @test 0denseI != 2I != 0denseI # test generic path / inequality on diag
-    @test alltwos != 2I != alltwos # test generic path / inequality off diag
+    @test denseI  !=  I != denseI  # test isone(I) path / inequality
+    @test 0denseI != 0I != 0denseI # test iszero(I) path / inequality
+    @test 2denseI != 2I != 2denseI # test generic path / inequality
     @test rdenseI !=  I != rdenseI # test square matrix check
 end
 
