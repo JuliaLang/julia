@@ -4,7 +4,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
 
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>

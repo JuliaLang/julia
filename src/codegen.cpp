@@ -2,7 +2,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
 #if defined(_OS_WINDOWS_)
 // use ELF because RuntimeDyld COFF i686 support didn't exist
 // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
@@ -5785,6 +5784,12 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
 #ifdef JL_DEBUG_BUILD
     f->addFnAttr(Attribute::StackProtectStrong);
+#endif
+
+#ifdef JL_TSAN_ENABLED
+    // TODO: enable this only when a argument like `-race` is passed to Julia
+    //       add a macro for no_sanitize_thread
+    f->addFnAttr(llvm::Attribute::SanitizeThread);
 #endif
 
     // add the optimization level specified for this module, if any

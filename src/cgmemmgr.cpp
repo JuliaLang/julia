@@ -2,7 +2,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
 
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include "julia.h"
