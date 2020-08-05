@@ -539,7 +539,7 @@ norm1(x) = generic_norm1(x)
 norm2(x) = generic_norm2(x)
 normp(x, p) = generic_normp(x, p)
 function norm0(itr)
-    T = typeof(float(norm(first(itr))))
+    T = typeofnorm(itr)
     return T(count(!iszero, itr))
 end
 
@@ -547,26 +547,31 @@ end
 @inline strip_val(::Val{p}) where {p} = p
 @inline abspow(x, p) = norm(x)^p
 @inline abspow(x, ::Val) = abspow(x, strip_val(p))
-@inline abspow(x, ::Val{2}) = abs2(x)
+@inline abspow(x, ::Val{2}) = norm_sqr(x)
 invpow(x, p) = x^(1/strip_val(p))
 
 _issubnormal(x) = false
 _issubnormal(x::Union{Float16, Float32, Float64}) = issubnormal(x)
-
-function abstract_array_normp(arr::AbstractArray, p)
-    T = typeof(norm(oneunit(eltype(arr))))
+function typeofnorm(arr)
+    return typeof(float(norm(first(arr))))
+end
+function abstract_array_normp(arr, p)
+    T = typeofnorm(arr)
     psum = zero(T)/oneunit(T) # accumulates Σ(x/normcrude)^p
+    # normcrude is a crude approximation of norm(arr, p) used to
+    # scale down to prevent overflows
     normcrude = if strip_val(p) < 0
         normMinusInf(arr)
     else
         normInf(arr)
     end
     if isinf(normcrude) || iszero(normcrude)
-        return T(normcrude)
+        return T(normcrude)::T
     end
     if _issubnormal(normcrude)
-        for x in arr
+        @simd for x in arr
             # oneunit(T)/normcrude will overflow
+            # so we need to do the division in every iteration
             # for subnormal normcrude
             xp = abspow(x/normcrude, p)
             psum += xp
@@ -578,13 +583,14 @@ function abstract_array_normp(arr::AbstractArray, p)
             psum += xp
         end
     end
-    return T(invpow(psum, p) * normcrude)
+    return T(invpow(psum, p) * normcrude)::T
 end
 
-norm1(  arr::AbstractArray{<:Number}) = sum(norm, arr)
-norm2(  arr::AbstractArray{<:Number}) = abstract_array_normp(arr, Val(2))
-normp(  arr::AbstractArray{<:Number}) = abstract_array_normp(arr, p)
-normInf(arr::AbstractArray{<:Number}) = maximum(norm, arr)
+norm1(  arr::AbstractArray) = typeofnorm(arr)(sum(norm, arr))
+norm2(  arr::AbstractArray) = abstract_array_normp(arr, Val(2))
+normp(  arr::AbstractArray) = abstract_array_normp(arr, p)
+normInf(arr::AbstractArray) = typeofnorm(arr)(maximum(norm, arr))
+normMinusInf(arr::AbstractArray) = typeofnorm(arr)(generic_normMinusInf(arr))
 
 """
     norm(A, p::Real=2)
@@ -629,14 +635,14 @@ julia> norm(v, 1)
 julia> norm(v, Inf)
 6.0
 
-julia> norm([1 2 3; 4 5 6; 7 8 9])
-16.881943016134134
+julia> norm([1 2 3; 4 5 6; 7 8 9]) ≈ sqrt(sum(abs2, 1:9))
+true
 
-julia> norm([1 2 3 4 5 6 7 8 9])
-16.881943016134134
+julia> norm([1 2 3 4 5 6 7 8 9]) ≈ sqrt(sum(abs2, 1:9))
+true
 
-julia> norm(1:9)
-16.881943016134134
+julia> norm(1:9) ≈ sqrt(sum(abs2, 1:9))
+true
 
 julia> norm(hcat(v,v), 1) == norm(vcat(v,v), 1) != norm([v,v], 1)
 true
