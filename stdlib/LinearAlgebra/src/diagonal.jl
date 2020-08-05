@@ -174,8 +174,22 @@ end
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
-(*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
-(*)(D::Diagonal, V::AbstractVector) = D.diag .* V
+
+function (*)(Da::Diagonal, Db::Diagonal)
+    nDa, mDb = size(Da, 2), size(Db, 1)
+    if nDa != mDb
+        throw(DimensionMismatch("second dimension of Da, $nDa, does not match first dimension of Db, $mDb"))
+    end
+    return Diagonal(Da.diag .* Db.diag)
+end
+
+function (*)(D::Diagonal, V::AbstractVector)
+    nD = size(D, 2)
+    if nD != length(V)
+        throw(DimensionMismatch("second dimension of D, $nD, does not match length of V, $(length(V))"))
+    end
+    return D.diag .* V
+end
 
 (*)(A::AbstractTriangular, D::Diagonal) =
     rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)

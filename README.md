@@ -81,7 +81,7 @@ Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.4.2
+    git checkout v1.5.0
 
 Now run `make` to build the `julia` executable.
 
@@ -130,12 +130,12 @@ The Julia source code is organized as follows:
 
 ## Terminal, Editors and IDEs
 
-The Julia REPL is quite powerful.  See the section in the manual on
+The Julia REPL is quite powerful. See the section in the manual on
 [the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
 
-On Windows we highly recommend running Julia using a modern terminal,
-such as installing the [Windows Terminal from the Microsoft Store](https://aka.ms/terminal).
+On Windows we highly recommend running Julia in a modern terminal,
+such as [Windows Terminal from the Microsoft Store](https://aka.ms/terminal).
 
 Support for editing Julia is available for many
 [widely used editors](https://github.com/JuliaEditorSupport):

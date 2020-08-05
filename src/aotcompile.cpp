@@ -2,7 +2,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
 
 // target support
 #include <llvm/ADT/Triple.h>
@@ -23,6 +22,9 @@
 #include <llvm/Transforms/Vectorize.h>
 #if defined(JL_ASAN_ENABLED)
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
+#endif
+#if defined(JL_TSAN_ENABLED)
+#include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #endif
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
@@ -624,6 +626,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         }
         PM->add(createMemCpyOptPass());
         PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
+        PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (lower_intrinsics) {
             PM->add(createBarrierNoopPass());
             PM->add(createLowerExcHandlersPass());
@@ -641,6 +644,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(JL_MSAN_ENABLED)
         PM->add(createMemorySanitizerPass(true));
+#endif
+#if defined(JL_TSAN_ENABLED)
+        PM->add(createThreadSanitizerLegacyPassPass());
 #endif
         return;
     }
@@ -694,8 +700,10 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
     PM->add(createLICMPass());
+    PM->add(createJuliaLICMPass());
     PM->add(createLoopUnswitchPass());
     PM->add(createLICMPass());
+    PM->add(createJuliaLICMPass());
     // Subsequent passes not stripping metadata from terminator
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createIndVarSimplifyPass());
@@ -763,6 +771,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(JL_MSAN_ENABLED)
     PM->add(createMemorySanitizerPass(true));
+#endif
+#if defined(JL_TSAN_ENABLED)
+    PM->add(createThreadSanitizerLegacyPassPass());
 #endif
 }
 

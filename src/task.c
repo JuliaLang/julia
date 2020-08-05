@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#ifdef JL_ASAN_ENABLED
+#if defined(JL_ASAN_ENABLED)
 static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {
     __sanitizer_start_switch_fiber(NULL, bottom, size);
 }
@@ -50,6 +50,22 @@ static inline void sanitizer_finish_switch_fiber(void) {
 #else
 static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {}
 static inline void sanitizer_finish_switch_fiber(void) {}
+#endif
+
+#if defined(JL_TSAN_ENABLED)
+static inline void *tsan_create_fiber() {
+    return __tsan_create_fiber(0);
+}
+// static inline void tsan_destroy_fiber(jl_task_t *fiber) {
+//     __tsan_destroy_fiber(fiber->tsan_state);
+// }
+static inline void tsan_switch_to_fiber(jl_task_t *fiber)  {
+    __tsan_switch_to_fiber(fiber->tsan_state, 0);
+}
+#else
+static inline void *tsan_create_fiber() {}
+// static inline void tsan_destroy_fiber(void *fiber) {}
+static inline void tsan_switch_to_fiber(jl_task_t *fiber)  {}
 #endif
 
 #if defined(_OS_WINDOWS_)
@@ -151,6 +167,7 @@ static void NOINLINE JL_NORETURN restore_stack(jl_task_t *t, jl_ptls_t ptls, cha
     assert(_x != NULL && _y != NULL);
     memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
 
+    tsan_switch_to_fiber(t);
     sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_set_fiber(&t->ctx);
     abort(); // unreachable
@@ -162,6 +179,7 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
     void *_y = t->stkbuf;
     assert(_x != NULL && _y != NULL);
     memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
+    tsan_switch_to_fiber(t);
     sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     jl_swap_fiber(&lastt->ctx, &t->ctx);
     sanitizer_finish_switch_fiber();
@@ -347,16 +365,19 @@ static void ctx_switch(jl_ptls_t ptls)
         else
 #endif
         if (!lastt_ctx) {
+            tsan_switch_to_fiber(t);
             sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
             jl_set_fiber(&t->ctx); // (doesn't return)
             abort(); // unreachable
         } else {
+            tsan_switch_to_fiber(t);
             sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
             jl_swap_fiber(lastt_ctx, &t->ctx);
             sanitizer_finish_switch_fiber();
         }
     }
     else {
+        tsan_switch_to_fiber(t);
         sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
         if (always_copy_stacks) {
 #ifdef COPY_STACKS
@@ -588,6 +609,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 #ifdef ENABLE_TIMINGS
     t->timing_stack = jl_root_timing;
 #endif
+#ifdef JL_TSAN_ENABLED
+    t->tsan_state = tsan_create_fiber();
+#endif
 
 #if defined(JL_DEBUG_BUILD)
     if (!t->copy_stack)
@@ -604,6 +628,18 @@ JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     return (jl_value_t*)ptls->current_task;
+}
+
+JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return ptls->safe_restore;
+}
+
+JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->safe_restore = sr;
 }
 
 #ifdef JL_HAVE_ASYNCIFY
@@ -774,6 +810,7 @@ static void start_basefiber(void)
     jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
         start_task(); // sanitizer_finish_switch_fiber is part of start_task
+    tsan_switch_to_fiber(jl_root_task);
     sanitizer_start_switch_fiber(jl_root_task->stkbuf, jl_root_task->bufsz);
     jl_longjmp(jl_root_task->ctx.uc_mcontext, 1);
     abort(); // unreachable
@@ -842,6 +879,7 @@ static void jl_init_basefiber(size_t ssize)
     char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
     ptls->stackbase = stkbuf + ssize;
     ptls->stacksize = ssize;
+    // TSAN doesn't like COPY_STACKS
     sanitizer_start_switch_fiber(stkbuf, sksize);
     jl_start_fiber(jl_root_task, &ptls->base_ctx); // finishes initializing jl_basectx
     sanitizer_finish_switch_fiber();
@@ -1102,6 +1140,10 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->excstack = NULL;
     ptls->current_task->tid = ptls->tid;
     ptls->current_task->sticky = 1;
+
+#ifdef JL_TSAN_ENABLED
+    ptls->current_task->tsan_state = tsan_create_fiber();
+#endif
 
 #ifdef COPY_STACKS
     if (always_copy_stacks) {

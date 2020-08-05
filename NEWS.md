@@ -12,6 +12,10 @@ New language features
 Language changes
 ----------------
 
+* The `-->` operator now lowers to a `:call` expression, so it can be defined as
+  a function like other operators. The dotted version `.-->` is now parsed as well.
+  For backwards compatibility, `-->` still parses using its own expression head
+  instead of `:call`.
 
 Compiler/Runtime improvements
 -----------------------------
@@ -76,6 +80,7 @@ Standard library changes
 * `first` and `last` functions now accept an integer as second argument to get that many
   leading or trailing elements of any iterable ([#34868]).
 * `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
+* `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).

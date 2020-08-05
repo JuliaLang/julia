@@ -2,7 +2,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
 #if defined(_OS_WINDOWS_)
 // use ELF because RuntimeDyld COFF i686 support didn't exist
 // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
@@ -407,6 +406,7 @@ static const auto jlgetworld_global = new JuliaVariable{
 static const auto jltls_states_func = new JuliaFunction{
     "julia.ptls_states",
     [](LLVMContext &C) { return FunctionType::get(PointerType::get(T_ppjlvalue, 0), false); },
+    nullptr,
 };
 
 
@@ -476,21 +476,25 @@ static const auto jlcheckassign_func = new JuliaFunction{
     "jl_checked_assignment",
     [](LLVMContext &C) { return FunctionType::get(T_void,
             {T_pjlvalue, PointerType::get(T_jlvalue, AddressSpace::CalleeRooted)}, false); },
+    nullptr,
 };
 static const auto jldeclareconst_func = new JuliaFunction{
     "jl_declare_constant",
     [](LLVMContext &C) { return FunctionType::get(T_void,
             {T_pjlvalue}, false); },
+    nullptr,
 };
 static const auto jlgetbindingorerror_func = new JuliaFunction{
     "jl_get_binding_or_error",
     [](LLVMContext &C) { return FunctionType::get(T_pjlvalue,
                 {T_pjlvalue, T_pjlvalue}, false); },
+    nullptr,
 };
 static const auto jlboundp_func = new JuliaFunction{
     "jl_boundp",
     [](LLVMContext &C) { return FunctionType::get(T_int32,
                 {T_pjlvalue, T_pjlvalue}, false); },
+    nullptr,
 };
 static const auto jltopeval_func = new JuliaFunction{
     "jl_toplevel_eval",
@@ -538,40 +542,48 @@ static const auto jlmethod_func = new JuliaFunction{
     "jl_method_def",
     [](LLVMContext &C) { return FunctionType::get(T_void,
                 {T_prjlvalue, T_prjlvalue, T_pjlvalue}, false); },
+    nullptr,
 };
 static const auto jlgenericfunction_func = new JuliaFunction{
     "jl_generic_function_def",
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
                 {T_pjlvalue, T_pjlvalue, T_pprjlvalue, T_pjlvalue, T_pjlvalue}, false); },
+    nullptr,
 };
 static const auto jlenter_func = new JuliaFunction{
     "jl_enter_handler",
     [](LLVMContext &C) { return FunctionType::get(T_void,
             {T_pint8}, false); },
+    nullptr,
 };
 static const auto jl_current_exception_func = new JuliaFunction{
     "jl_current_exception",
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue, false); },
+    nullptr,
 };
 static const auto jlleave_func = new JuliaFunction{
     "jl_pop_handler",
     [](LLVMContext &C) { return FunctionType::get(T_void,
             {T_int32}, false); },
+    nullptr,
 };
 static const auto jl_restore_excstack_func = new JuliaFunction{
     "jl_restore_excstack",
     [](LLVMContext &C) { return FunctionType::get(T_void,
             {T_size}, false); },
+    nullptr,
 };
 static const auto jl_excstack_state_func = new JuliaFunction{
     "jl_excstack_state",
     [](LLVMContext &C) { return FunctionType::get(T_size, false); },
+    nullptr,
 };
 static const auto jlegal_func = new JuliaFunction{
     "jl_egal",
     [](LLVMContext &C) {
         Type *T = PointerType::get(T_jlvalue, AddressSpace::CalleeRooted);
         return FunctionType::get(T_int32, {T, T}, false); },
+    nullptr,
 };
 static const auto jl_alloc_obj_func = new JuliaFunction{
     "julia.gc_alloc_obj",
@@ -621,12 +633,14 @@ static const auto jlisa_func = new JuliaFunction{
     "jl_isa",
     [](LLVMContext &C) { return FunctionType::get(T_int32,
             {T_prjlvalue, T_prjlvalue}, false); },
+    nullptr,
 };
 
 static const auto jlsubtype_func = new JuliaFunction{
     "jl_subtype",
     [](LLVMContext &C) { return FunctionType::get(T_int32,
             {T_prjlvalue, T_prjlvalue}, false); },
+    nullptr,
 };
 static const auto jlapplytype_func = new JuliaFunction{
     "jl_instantiate_type_in_env",
@@ -641,6 +655,7 @@ static const auto jl_object_id__func = new JuliaFunction{
     "jl_object_id_",
     [](LLVMContext &C) { return FunctionType::get(T_size,
             {T_prjlvalue, PointerType::get(T_int8, AddressSpace::Derived)}, false); },
+    nullptr,
 };
 static const auto setjmp_func = new JuliaFunction{
     jl_setjmp_name,
@@ -669,11 +684,13 @@ static const auto jldlsym_func = new JuliaFunction{
     "jl_load_and_lookup",
     [](LLVMContext &C) { return FunctionType::get(T_pvoidfunc,
             {T_pint8, T_pint8, PointerType::get(T_pint8, 0)}, false); },
+    nullptr,
 };
 static const auto jltypeassert_func = new JuliaFunction{
     "jl_typeassert",
     [](LLVMContext &C) { return FunctionType::get(T_void,
             {T_prjlvalue, T_prjlvalue}, false); },
+    nullptr,
 };
 static const auto jlgetnthfieldchecked_func = new JuliaFunction{
     "jl_get_nth_field_checked",
@@ -704,11 +721,13 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction{
 static const auto diff_gc_total_bytes_func = new JuliaFunction{
     "jl_gc_diff_total_bytes",
     [](LLVMContext &C) { return FunctionType::get(T_int64, false); },
+    nullptr,
 };
 static const auto sync_gc_total_bytes_func = new JuliaFunction{
     "jl_gc_sync_total_bytes",
     [](LLVMContext &C) { return FunctionType::get(T_int64,
             {T_int64}, false); },
+    nullptr,
 };
 static const auto jlarray_data_owner_func = new JuliaFunction{
     "jl_array_data_owner",
@@ -745,14 +764,17 @@ BOX_FUNC(ssavalue, T_prjlvalue, T_size, nullptr);
 static const auto gcroot_flush_func = new JuliaFunction{
     "julia.gcroot_flush",
     [](LLVMContext &C) { return FunctionType::get(T_void, false); },
+    nullptr,
 };
 static const auto gc_preserve_begin_func = new JuliaFunction{
     "llvm.julia.gc_preserve_begin",
     [](LLVMContext &C) { return FunctionType::get(Type::getTokenTy(C), true); },
+    nullptr,
 };
 static const auto gc_preserve_end_func = new JuliaFunction {
     "llvm.julia.gc_preserve_end",
     [](LLVMContext &C) { return FunctionType::get(T_void, {Type::getTokenTy(C)}, false); },
+    nullptr,
 };
 static const auto except_enter_func = new JuliaFunction{
     "julia.except_enter",
@@ -3796,7 +3818,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
                     ConstantInt::get(T_int8, 0));
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
             ctx.builder.CreateMemCpy(phi, MaybeAlign(min_align), dest, MaybeAlign(0), nbytes, false);
 #else
             ctx.builder.CreateMemCpy(phi, min_align, dest, 0, nbytes, false);
@@ -3840,7 +3862,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         // here it's moved into phi in the successor (from dest)
         dest = emit_static_alloca(ctx, vtype);
         Value *phi = emit_static_alloca(ctx, vtype);
-#if JL_LLVM_VERSION >= 110000
+#if JL_LLVM_VERSION >= 100000
         ctx.builder.CreateMemCpy(phi, MaybeAlign(julia_alignment(phiType)),
              dest, MaybeAlign(0),
              jl_datatype_size(phiType), false);
@@ -5762,6 +5784,12 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
 #ifdef JL_DEBUG_BUILD
     f->addFnAttr(Attribute::StackProtectStrong);
+#endif
+
+#ifdef JL_TSAN_ENABLED
+    // TODO: enable this only when a argument like `-race` is passed to Julia
+    //       add a macro for no_sanitize_thread
+    f->addFnAttr(llvm::Attribute::SanitizeThread);
 #endif
 
     // add the optimization level specified for this module, if any

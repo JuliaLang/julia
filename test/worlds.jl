@@ -315,15 +315,14 @@ struct Normed35855 <: FixedPoint35855{UInt8}
     i::UInt8
     Normed35855(i::Integer, _) = new(i % UInt8)
 end
-(::Type{X})(x::Real) where X<:FixedPoint35855{T} where T = X(round(T, typemax(T)*x), 0)
-
-@test_broken worlds(mi) == w
+(::Type{X})(x::Real) where {T, X<:FixedPoint35855{T}} = X(round(T, typemax(T)*x), 0)
+@test worlds(mi) == w
 
 mi = instance(convert, (Type{Nothing}, String))
 w = worlds(mi)
 abstract type Colorant35855 end
-Base.convert(::Type{C}, c) where C<:Colorant35855 = false
-@test_broken worlds(mi) == w
+Base.convert(::Type{C}, c) where {C<:Colorant35855} = false
+@test worlds(mi) == w
 
 # invoke_in_world
 f_inworld(x) = "world one; x=$x"

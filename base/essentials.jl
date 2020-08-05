@@ -64,7 +64,7 @@ function example_function(@nospecialize x)
     ...
 end
 
-function example_function(@nospecialize(x = 1), y)
+function example_function(x, @nospecialize(y = 1))
     ...
 end
 

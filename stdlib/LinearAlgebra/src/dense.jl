@@ -1020,7 +1020,7 @@ this function, see [^AH16_1].
 [^AH16_1]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 
 # Examples
-```jldoctest
+```julia-repl
 julia> acos(cos([0.5 0.1; -0.2 0.3]))
 2×2 Matrix{ComplexF64}:
   0.5-8.32667e-17im  0.1+0.0im
@@ -1051,7 +1051,7 @@ see [^AH16_2].
 [^AH16_2]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 
 # Examples
-```jldoctest
+```julia-repl
 julia> asin(sin([0.5 0.1; -0.2 0.3]))
 2×2 Matrix{ComplexF64}:
   0.5-4.16334e-17im  0.1-5.55112e-17im
@@ -1082,7 +1082,7 @@ compute the inverse tangent. Otherwise, the inverse tangent is determined by usi
 [^AH16_3]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 
 # Examples
-```jldoctest
+```julia-repl
 julia> atan(tan([0.5 0.1; -0.2 0.3]))
 2×2 Matrix{ComplexF64}:
   0.5+1.38778e-17im  0.1-2.77556e-17im

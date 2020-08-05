@@ -65,6 +65,23 @@
 #  define JL_THREAD_LOCAL
 #endif
 
+// Duplicated from options.h
+#if defined(__has_feature) // Clang flavor
+#if __has_feature(address_sanitizer)
+#define JL_ASAN_ENABLED
+#endif
+#if __has_feature(memory_sanitizer)
+#define JL_MSAN_ENABLED
+#endif
+#if __has_feature(thread_sanitizer)
+#define JL_TSAN_ENABLED
+#endif
+#else // GCC flavor
+#if defined(__SANITIZE_ADDRESS__)
+#define JL_ASAN_ENABLED
+#endif
+#endif // __has_feature
+
 #define container_of(ptr, type, member) \
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
@@ -1793,6 +1810,10 @@ typedef struct _jl_task_t {
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
 
+#if defined(JL_TSAN_ENABLED)
+    void *tsan_state;
+#endif
+
     // current exception handler
     jl_handler_t *eh;
     // saved gc stack top for context switches
@@ -2074,6 +2095,11 @@ typedef struct {
 
 #define jl_current_task (jl_get_ptls_states()->current_task)
 #define jl_root_task (jl_get_ptls_states()->root_task)
+
+JL_DLLEXPORT jl_value_t *jl_get_current_task(void);
+
+JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void);
+JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *);
 
 // codegen interface ----------------------------------------------------------
 // The root propagation here doesn't have to be literal, but callers should

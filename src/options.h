@@ -154,24 +154,19 @@
 
 // sanitizer defaults ---------------------------------------------------------
 
-// XXX: these macros are duplicated from julia_internal.h
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define JL_ASAN_ENABLED
-#endif
-#elif defined(__SANITIZE_ADDRESS__)
-#define JL_ASAN_ENABLED
-#endif
-#if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
-#define JL_MSAN_ENABLED
-#endif
+#ifndef JULIA_H
+#error "Must be included after julia.h"
 #endif
 
 // Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
 #if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
 #define MEMDEBUG
 #define KEEP_BODIES
+#endif
+
+// TSAN doesn't like COPY_STACKS
+#if defined(JL_TSAN_ENABLED) && defined(COPY_STACKS)
+#undef COPY_STACKS
 #endif
 
 // Memory sanitizer needs TLS, which llvm only supports for the small memory model
