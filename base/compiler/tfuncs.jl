@@ -242,7 +242,7 @@ end
 add_tfunc(===, 2, 2, egal_tfunc, 1)
 
 function isdefined_nothrow(argtypes::Array{Any, 1})
-    length(argtypes) == 2 || return false
+    length(argtypes) === 2 || return false
     return typeintersect(widenconst(argtypes[1]), Module) === Union{} ?
         (argtypes[2] ⊑ Symbol || argtypes[2] ⊑ Int) :
          argtypes[2] ⊑ Symbol
@@ -320,8 +320,8 @@ function sizeof_nothrow(@nospecialize(x))
             return isinline
         end
         isa(x, DataType) || return false
-        x.layout == C_NULL && return false
-        (datatype_nfields(x) == 0 && !datatype_pointerfree(x)) && return false
+        x.layout === C_NULL && return false
+        (datatype_nfields(x) === 0 && !datatype_pointerfree(x)) && return false
         return true
     else
         x = widenconst(x)
@@ -437,9 +437,9 @@ add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
 function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
     if a <: Ptr
-        if isa(a,DataType) && isa(a.parameters[1],Type)
+        if isa(a, DataType) && isa(a.parameters[1], Type)
             return a.parameters[1]
-        elseif isa(a,UnionAll) && !has_free_typevars(a)
+        elseif isa(a, UnionAll) && !has_free_typevars(a)
             unw = unwrap_unionall(a)
             if isa(unw,DataType)
                 return rewrap_unionall(unw.parameters[1], a)
@@ -609,15 +609,15 @@ end
 add_tfunc(<:, 2, 2, subtype_tfunc, 0)
 
 is_dt_const_field(fld::Int) = (
-     fld == DATATYPE_NAME_FIELDINDEX ||
-     fld == DATATYPE_PARAMETERS_FIELDINDEX ||
-     fld == DATATYPE_TYPES_FIELDINDEX ||
-     fld == DATATYPE_SUPER_FIELDINDEX ||
-     fld == DATATYPE_MUTABLE_FIELDINDEX ||
-     fld == DATATYPE_INSTANCE_FIELDINDEX
+     fld === DATATYPE_NAME_FIELDINDEX ||
+     fld === DATATYPE_PARAMETERS_FIELDINDEX ||
+     fld === DATATYPE_TYPES_FIELDINDEX ||
+     fld === DATATYPE_SUPER_FIELDINDEX ||
+     fld === DATATYPE_MUTABLE_FIELDINDEX ||
+     fld === DATATYPE_INSTANCE_FIELDINDEX
     )
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
-    if fld == DATATYPE_INSTANCE_FIELDINDEX
+    if fld === DATATYPE_INSTANCE_FIELDINDEX
         return isdefined(sv, fld) ? Const(getfield(sv, fld)) : Union{}
     elseif is_dt_const_field(fld) && isdefined(sv, fld)
         return Const(getfield(sv, fld))
@@ -632,7 +632,7 @@ function fieldcount_noerror(@nospecialize t)
             return nothing
         end
         t = t::DataType
-    elseif t == Union{}
+    elseif t === Union{}
         return 0
     end
     if !(t isa DataType)
@@ -660,7 +660,7 @@ end
 function try_compute_fieldidx(typ::DataType, @nospecialize(field))
     if isa(field, Symbol)
         field = fieldindex(typ, field, false)
-        field == 0 && return nothing
+        field === 0 && return nothing
     elseif isa(field, Integer)
         max_fields = fieldcount_noerror(typ)
         max_fields === nothing && return nothing
@@ -672,13 +672,14 @@ function try_compute_fieldidx(typ::DataType, @nospecialize(field))
 end
 
 function getfield_nothrow(argtypes::Vector{Any})
-    2 <= length(argtypes) <= 3 || return false
-    length(argtypes) == 2 && return getfield_nothrow(argtypes[1], argtypes[2], Const(true))
+    nargs = length(argtypes)
+    2 <= nargs <= 3 || return false
+    nargs === 2 && return getfield_nothrow(argtypes[1], argtypes[2], Const(true))
     return getfield_nothrow(argtypes[1], argtypes[2], argtypes[3])
 end
 function getfield_nothrow(@nospecialize(s00), @nospecialize(name), @nospecialize(inbounds))
     bounds_check_disabled = isa(inbounds, Const) && inbounds.val === false
-    # If we don't have invounds and don't know the field, don't even bother
+    # If we don't have inbounds and don't know the field, don't even bother
     if !bounds_check_disabled
         isa(name, Const) || return false
     end
@@ -717,7 +718,7 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), @nospecialize
         s.abstract && return false
         # If all fields are always initialized, and bounds check is disabled, we can assume
         # we don't throw
-        if bounds_check_disabled && !isvatuple(s) && s.name !== NamedTuple.body.body.name && fieldcount(s) == s.ninitialized
+        if bounds_check_disabled && !isvatuple(s) && s.name !== NamedTuple.body.body.name && fieldcount(s) === s.ninitialized
             return true
         end
         # Else we need to know what the field is
@@ -764,9 +765,9 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 end
             elseif isa(sv, Core.TypeName)
                 fld = isa(nv, Symbol) ? fieldindex(Core.TypeName, nv, false) : nv
-                if (fld == TYPENAME_NAME_FIELDINDEX ||
-                    fld == TYPENAME_MODULE_FIELDINDEX ||
-                    fld == TYPENAME_WRAPPER_FIELDINDEX)
+                if (fld === TYPENAME_NAME_FIELDINDEX ||
+                    fld === TYPENAME_MODULE_FIELDINDEX ||
+                    fld === TYPENAME_WRAPPER_FIELDINDEX)
                     return AbstractEvalConstant(getfield(sv, fld))
                 end
             end
@@ -836,7 +837,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         if !(Int <: name || Symbol <: name)
             return Bottom
         end
-        if length(ftypes) == 1
+        if length(ftypes) === 1
             return rewrap_unionall(unwrapva(ftypes[1]), s00)
         end
         # union together types of all fields
@@ -886,8 +887,7 @@ fieldtype_tfunc(@nospecialize(s0), @nospecialize(name), @nospecialize(inbounds))
 function fieldtype_nothrow(@nospecialize(s0), @nospecialize(name))
     s0 === Bottom && return true # unreachable
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
-        # We have no idea
-        return false
+        return false  # We have no idea
     end
 
     if !isa(name, Const) || (!isa(name.val, Symbol) && !isa(name.val, Int))
@@ -1092,7 +1092,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     end
     largs = length(args)
     if headtype === Union
-        largs == 0 && return Const(Bottom)
+        largs === 0 && return Const(Bottom)
         hasnonType = false
         for i = 1:largs
             ai = args[i]
@@ -1114,7 +1114,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
                 end
             end
         end
-        largs == 1 && return isa(args[1], Type) ? typeintersect(args[1], Type) : Type
+        largs === 1 && return isa(args[1], Type) ? typeintersect(args[1], Type) : Type
         hasnonType && return Type
         ty = Union{}
         allconst = true
@@ -1168,7 +1168,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             if istuple
                 # in the last parameter of a Tuple type, if the upper bound is Any
                 # then this could be a Vararg type.
-                if i == largs && ub === Any
+                if i === largs && ub === Any
                     push!(tparams, Vararg)
                 # XXX
                 #elseif isT
@@ -1189,7 +1189,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
                     # If the names are known, keep the upper bound, but otherwise widen to Tuple.
                     # This is a widening heuristic to avoid keeping type information
                     # that's unlikely to be useful.
-                    if !(uw.parameters[1] isa Tuple || (i == 2 && tparams[1] isa Tuple))
+                    if !(uw.parameters[1] isa Tuple || (i === 2 && tparams[1] isa Tuple))
                         ub = Any
                     end
                 else
@@ -1341,36 +1341,36 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
     elseif f === Core._typevar
-        length(argtypes) == 3 || return false
+        length(argtypes) === 3 || return false
         return typevar_nothrow(argtypes[1], argtypes[2], argtypes[3])
     elseif f === invoke
         return false
     elseif f === getfield
         return getfield_nothrow(argtypes)
     elseif f === fieldtype
-        length(argtypes) == 2 || return false
+        length(argtypes) === 2 || return false
         return fieldtype_nothrow(argtypes[1], argtypes[2])
     elseif f === apply_type
         return apply_type_nothrow(argtypes, rt)
     elseif f === isa
-        length(argtypes) == 2 || return false
+        length(argtypes) === 2 || return false
         return argtypes[2] ⊑ Type
     elseif f === (<:)
-        length(argtypes) == 2 || return false
+        length(argtypes) === 2 || return false
         return argtypes[1] ⊑ Type && argtypes[2] ⊑ Type
     elseif f === UnionAll
-        return length(argtypes) == 2 &&
+        return length(argtypes) === 2 &&
             (argtypes[1] ⊑ TypeVar && argtypes[2] ⊑ Type)
     elseif f === isdefined
         return isdefined_nothrow(argtypes)
     elseif f === Core.sizeof
-        length(argtypes) == 1 || return false
+        length(argtypes) === 1 || return false
         return sizeof_nothrow(argtypes[1])
     elseif f === Core.kwfunc
-        length(argtypes) == 1 || return false
+        length(argtypes) === 1 || return false
         return isa(rt, Const)
     elseif f === Core.ifelse
-        length(argtypes) == 3 || return false
+        length(argtypes) === 3 || return false
         return argtypes[1] ⊑ Bool
     end
     return false
@@ -1467,7 +1467,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
     end
     tf = tf::Tuple{Int, Int, Any}
     if !(tf[1] <= length(argtypes) <= tf[2])
-        # wrong # of args
+        # wrong number of args
         return Bottom
     end
     return tf[3](argtypes...)
@@ -1485,7 +1485,7 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
     tf = T_IFUNC[iidx]
     tf = tf::Tuple{Int, Int, Any}
     if !(tf[1] <= length(argtypes) <= tf[2])
-        # wrong # of args
+        # wrong number of args
         return false
     end
     # TODO: We could do better for cglobal
@@ -1511,7 +1511,7 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         # Nothrow as long as the types are ok. N.B.: dereferencability is not
         # modeled here, but can cause errors (e.g. ReadOnlyMemoryError). We follow LLVM here
         # in that it is legal to remove unused non-volatile loads.
-        length(argtypes) == 3 || return false
+        length(argtypes) === 3 || return false
         return argtypes[1] ⊑ Ptr && argtypes[2] ⊑ Int && argtypes[3] ⊑ Int
     end
     if f === Intrinsics.pointerset
@@ -1554,7 +1554,7 @@ end
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
-    if length(argtypes) == 3
+    if length(argtypes) === 3
         tt = argtypes[3]
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
             aft = argtypes[2]
