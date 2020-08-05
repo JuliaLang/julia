@@ -213,7 +213,7 @@ function instance(f, types)
         for i = 1:length(specs)
             if isassigned(specs, i)
                 mi = specs[i]::Core.MethodInstance
-                if mi.specTypes === tt
+                if mi.specTypes <: tt && tt <: mi.specTypes
                     inst = mi
                     break
                 end
@@ -324,6 +324,18 @@ abstract type Colorant35855 end
 Base.convert(::Type{C}, c) where {C<:Colorant35855} = false
 @test worlds(mi) == w
 
+# NamedTuple and extensions of eltype
+outer(anyc) = inner(anyc[])
+inner(s::Union{Vector,Dict}; kw=false) = inneri(s, kwi=maximum(s), kwb=kw)
+inneri(s, args...; kwargs...) = inneri(IOBuffer(), s, args...; kwargs...)
+inneri(io::IO, s::Union{Vector,Dict}; kwi=0, kwb=false) = (print(io, first(s), " "^kwi, kwb); String(take!(io)))
+@test outer(Ref{Any}([1,2,3])) == "1   false"
+mi = instance(Core.kwfunc(inneri), (NamedTuple{(:kwi,:kwb),TT} where TT<:Tuple{Any,Bool}, typeof(inneri), Vector{T} where T))
+w = worlds(mi)
+abstract type Container{T} end
+Base.eltype(::Type{C}) where {T,C<:Container{T}} = T
+@test worlds(mi) == w
+
 # invoke_in_world
 f_inworld(x) = "world one; x=$x"
 g_inworld(x; y) = "world one; x=$x, y=$y"
@@ -336,4 +348,3 @@ wc_aiw2 = get_world_counter()
 @test Base.invoke_in_world(wc_aiw2, f_inworld, 2) == "world two; x=2"
 @test Base.invoke_in_world(wc_aiw1, g_inworld, 2, y=3) == "world one; x=2, y=3"
 @test Base.invoke_in_world(wc_aiw2, g_inworld, 2, y=3) == "world two; x=2, y=3"
-
