@@ -289,6 +289,7 @@ void jl_init_threadtls(int16_t tid)
 #ifdef _OS_WINDOWS_
     ptls->needs_resetstkoflw = 0;
 #endif
+    small_arraylist_new(&ptls->locks, 0);
     jl_init_thread_heap(ptls);
     jl_install_thread_signal_handler(ptls);
 

@@ -1799,6 +1799,11 @@ typedef struct _jl_task_t {
     uint8_t sticky; // record whether this Task can be migrated to a new thread
 
 // hidden state:
+    // id of owning thread - does not need to be defined until the task runs
+    int16_t tid;
+    // multiqueue priority
+    int16_t prio;
+
     jl_ucontext_t ctx; // saved thread state
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
@@ -1818,13 +1823,6 @@ typedef struct _jl_task_t {
     // current world age
     size_t world_age;
 
-    // id of owning thread
-    // does not need to be defined until the task runs
-    int16_t tid;
-    /* for the multiqueue */
-    int16_t prio;
-    // This is statically initialized when the task is not holding any locks
-    arraylist_t locks;
     jl_timing_block_t *timing_stack;
 } jl_task_t;
 

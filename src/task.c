@@ -287,13 +287,8 @@ static void ctx_switch(jl_ptls_t ptls)
     jl_task_t *t = *pt;
     assert(t != ptls->current_task);
     jl_task_t *lastt = ptls->current_task;
-    // If the current task is not holding any locks, free the locks list
-    // so that it can be GC'd without leaking memory
-    arraylist_t *locks = &lastt->locks;
-    if (locks->len == 0 && locks->items != locks->_space) {
-        arraylist_free(locks);
-        arraylist_new(locks, 0);
-    }
+    // none of these locks should be held across a task switch
+    assert(ptls->locks.len == 0);
 
     int killed = (lastt->state == done_sym || lastt->state == failed_sym);
     if (!t->started && !t->copy_stack) {
@@ -617,7 +612,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 #ifdef JL_TSAN_ENABLED
     t->tsan_state = tsan_create_fiber();
 #endif
-    arraylist_new(&t->locks, 0);
 
 #if defined(JL_DEBUG_BUILD)
     if (!t->copy_stack)
@@ -1146,7 +1140,6 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->excstack = NULL;
     ptls->current_task->tid = ptls->tid;
     ptls->current_task->sticky = 1;
-    arraylist_new(&ptls->current_task->locks, 0);
 
 #ifdef JL_TSAN_ENABLED
     ptls->current_task->tsan_state = tsan_create_fiber();
