@@ -644,13 +644,19 @@ true
 julia> norm(1:9) ≈ sqrt(sum(abs2, 1:9))
 true
 
-julia> norm(hcat(v,v), 1) == norm(vcat(v,v), 1) != norm([v,v], 1)
+julia> norm(hcat(v,v), 1) == norm(vcat(v,v), 1)
 true
 
-julia> norm(hcat(v,v), 2) == norm(vcat(v,v), 2) == norm([v,v], 2)
+julia> !(norm(vcat(v,v), 1) ≈ norm([v,v], 1))
 true
 
-julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
+julia> norm(hcat(v,v), 2) ≈ norm(vcat(v,v), 2) ≈ norm([v,v], 2)
+true
+
+julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf)
+true
+
+julia> !(norm(vcat(v,v), Inf) ≈ norm([v,v], Inf))
 true
 ```
 """
