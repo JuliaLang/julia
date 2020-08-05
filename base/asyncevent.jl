@@ -256,11 +256,11 @@ function Timer(cb::Function, timeout::Real; interval::Real=0.0)
 end
 
 """
-    timedwait(testcb::Function, timeout::Real; pollint::Real=0.1)
+    timedwait(callback::Function, timeout::Real; pollint::Real=0.1)
 
-Waits until `testcb` returns `true` or for `timeout` seconds, whichever is earlier.
-`testcb` is polled every `pollint` seconds. The minimum duration for `timeout` and `pollint`
-is 1 millisecond or `0.001`.
+Waits until `callback` returns `true` or `timeout` seconds have passed, whichever is earlier.
+`callback` is polled every `pollint` seconds. The minimum value for `timeout` and `pollint`
+is `0.001`, that is, 1 millisecond.
 
 Returns :ok or :timed_out
 """
