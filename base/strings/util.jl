@@ -256,7 +256,7 @@ julia> rstrip(a)
 """
 function rstrip(f, s::AbstractString)
     for (i, c) in Iterators.reverse(pairs(s))
-        f(c) || return @inbounds SubString(s, 1, i)
+        f(c::AbstractChar) || return @inbounds SubString(s, 1, i::Int)
     end
     SubString(s, 1, 0)
 end
@@ -389,26 +389,26 @@ function split(str::T, splitter::AbstractChar;
     _split(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 
-function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
+function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Vector)
     i = 1 # firstindex(str)
-    n = lastindex(str)
-    r = findfirst(splitter,str)
+    n = lastindex(str)::Int
+    r = findfirst(splitter,str)::Union{Nothing,Int,UnitRange{Int}}
     if !isnothing(r)
-        j, k = first(r), nextind(str,last(r))
+        j, k = first(r), nextind(str,last(r))::Int
         while 0 < j <= n && length(strs) != limit-1
             if i < k
                 if keepempty || i < j
-                    push!(strs, @inbounds SubString(str,i,prevind(str,j)))
+                    push!(strs, @inbounds SubString(str,i,prevind(str,j)::Int))
                 end
                 i = k
             end
-            (k <= j) && (k = nextind(str,j))
-            r = findnext(splitter,str,k)
+            (k <= j) && (k = nextind(str,j)::Int)
+            r = findnext(splitter,str,k)::Union{Nothing,Int,UnitRange{Int}}
             isnothing(r) && break
-            j, k = first(r), nextind(str,last(r))
+            j, k = first(r), nextind(str,last(r))::Int
         end
     end
-    if keepempty || i <= ncodeunits(str)
+    if keepempty || i <= ncodeunits(str)::Int
         push!(strs, @inbounds SubString(str,i))
     end
     return strs
@@ -464,13 +464,13 @@ function rsplit(str::T, splitter::AbstractChar;
 end
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
-    n = lastindex(str)
-    r = something(findlast(splitter, str), 0)
+    n = lastindex(str)::Int
+    r = something(findlast(splitter, str)::Union{Nothing,Int,UnitRange{Int}}, 0)
     j, k = first(r), last(r)
     while j > 0 && k > 0 && length(strs) != limit-1
-        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k),n))
-        n = prevind(str, j)
-        r = something(findprev(splitter,str,n), 0)
+        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k)::Int,n))
+        n = prevind(str, j)::Int
+        r = something(findprev(splitter,str,n)::Union{Nothing,Int,UnitRange{Int}}, 0)
         j, k = first(r), last(r)
     end
     (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))

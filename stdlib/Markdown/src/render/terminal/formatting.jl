@@ -9,23 +9,33 @@ end
 words(s) = split(s, " ")
 lines(s) = split(s, "\n")
 
-# This could really be more efficient
-function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
-    if occursin(r"\n", s)
-        return vcat(map(s->wrapped_lines(io, s, width = width, i = i), split(s, "\n"))...)
-    end
+function wrapped_lines!(lines, io::IO, s::AbstractString, width, i)
     ws = words(s)
-    lines = AbstractString[ws[1]]
-    i += ws[1] |> ansi_length
-    for word in ws[2:end]
+    for word in ws
         word_length = ansi_length(word)
         if i + word_length + 1 > width
             i = word_length
             push!(lines, word)
         else
             i += word_length + 1
-            lines[end] *= " " * word
+            if isempty(lines)
+                push!(lines, word)
+            else
+                lines[end] *= " " * word   # this could be more efficient
+            end
         end
+    end
+    return i
+end
+
+function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
+    lines = AbstractString[]
+    if occursin(r"\n", s)
+        for ss in split(s, "\n")
+            i = wrapped_lines!(lines, io, ss, width, i)
+        end
+    else
+        wrapped_lines!(lines, io, s, width, i)
     end
     return lines
 end

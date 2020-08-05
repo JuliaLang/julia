@@ -1587,11 +1587,11 @@ with string types besides the standard `String` type.
 struct GenericString <: AbstractString
     string::AbstractString
 end
-Base.ncodeunits(s::GenericString) = ncodeunits(s.string)
-Base.codeunit(s::GenericString) = codeunit(s.string)
-Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)
-Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)
-Base.iterate(s::GenericString, i::Integer=1) = iterate(s.string, i)
+Base.ncodeunits(s::GenericString) = ncodeunits(s.string)::Int
+Base.codeunit(s::GenericString) = codeunit(s.string)::Type{<:Union{UInt8, UInt16, UInt32}}
+Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)::Union{UInt8, UInt16, UInt32}
+Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)::Bool
+Base.iterate(s::GenericString, i::Integer=1) = iterate(s.string, i)::Union{Nothing,Tuple{AbstractChar,Int}}
 Base.reverse(s::GenericString) = GenericString(reverse(s.string))
 Base.reverse(s::SubString{GenericString}) =
     GenericString(typeof(s.string)(reverse(String(s))))
