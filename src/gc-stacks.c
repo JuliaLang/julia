@@ -226,6 +226,12 @@ void sweep_stack_pools(void)
                     t->stkbuf = NULL;
                     _jl_free_stack(ptls2, stkbuf, bufsz);
                 }
+#ifdef JL_TSAN_ENABLED
+                if (t->ctx.tsan_state) {
+                    __tsan_destroy_fiber(t->ctx.tsan_state);
+                    t->ctx.tsan_state = NULL;
+                }
+#endif
             }
             if (n >= l - ndel)
                 break;
