@@ -67,7 +67,7 @@
                         (string #\( (deparse (caddr e)) #\))))))
         ((memq (car e) '(... |'|))
          (string (deparse (cadr e)) (car e)))
-        ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
+        ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|) (eq? (car e) '-->))
          (if (length= e 2)
              (string (car e) (deparse (cadr e)))
              (string (deparse (cadr e)) " " (car e) " " (deparse (caddr e)))))
