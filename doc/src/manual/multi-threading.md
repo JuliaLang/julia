@@ -92,9 +92,9 @@ julia> begin
 where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
 
 Additionally, Julia is not memory safe in the presence of a data race. Be very
-careful about reading a global variable (or closure variable) if another thread
-might write to it! Instead, always use the lock pattern above when changing any
-data (such as assigning to a global) visible to multiple threads.
+careful about reading _any_ data if another thread might write to it!
+Instead, always use the lock pattern above when changing data (such as assigning
+to a global or closure variable) accessed by other threads.
 
 ```julia
 Thread 1:
@@ -104,11 +104,11 @@ global b = true
 
 Thread 2:
 while !b; end
-bad(a) # it is NOT safe to access `a` here!
+bad_read1(a) # it is NOT safe to access `a` here!
 
 Thread 3:
 while !@isdefined(a); end
-use(a) # it is NOT safe to access `a` here
+bad_read2(a) # it is NOT safe to access `a` here
 ```
 
 ## The `@threads` Macro
