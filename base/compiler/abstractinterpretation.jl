@@ -1071,6 +1071,7 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
         if 1 <= n <= length(sv.sptypes)
             t = sv.sptypes[n]
         end
+        return t
     elseif e.head === :boundscheck
         return Bool
     else
@@ -1202,7 +1203,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 t = Const(true) # definitely assigned previously
             end
         elseif isa(sym, Symbol)
-            if isdefined(sv.mod, sym.name)
+            if isdefined(sv.mod, sym)
                 t = Const(true)
             end
         elseif isa(sym, GlobalRef)
