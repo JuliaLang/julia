@@ -85,11 +85,21 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
+    sorted = get(io, :sorted, false)
 
     summary(io, t)
     isempty(t) && return
     print(io, ":")
     show_circular(io, t) && return
+
+    if sorted
+        try # sorting fails when elements are not comparable, collect can fail too
+            t = sort!(collect(t))
+        catch
+            sorted = false
+        end
+    end
+
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
