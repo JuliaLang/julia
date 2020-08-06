@@ -31,6 +31,7 @@
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
+#include "llvm-pass-helpers.h"
 
 #include <map>
 #include <set>
@@ -39,19 +40,7 @@
 
 using namespace llvm;
 
-extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
-
 namespace {
-
-static void copyMetadata(Instruction *dest, const Instruction *src)
-{
-    dest->copyMetadata(*src);
-}
-
-static bool isBundleOperand(CallInst *call, unsigned idx)
-{
-    return call->isBundleOperand(idx);
-}
 
 static void removeGCPreserve(CallInst *call, Instruction *val)
 {
@@ -117,7 +106,7 @@ static bool hasObjref(Type *ty)
  * * Handle jl_box*
  */
 
-struct AllocOpt : public FunctionPass {
+struct AllocOpt : public FunctionPass, public JuliaPassContext {
     static char ID;
     AllocOpt()
         : FunctionPass(ID)
@@ -125,28 +114,12 @@ struct AllocOpt : public FunctionPass {
         llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
     }
 
-    LLVMContext *ctx;
-
     const DataLayout *DL;
 
-    Function *alloc_obj;
-    Function *ptr_from_objref;
     Function *lifetime_start;
     Function *lifetime_end;
-    Function *gc_preserve_begin;
-    Function *typeof_func;
-    Function *write_barrier_func;
 
-    Type *T_int8;
-    Type *T_int32;
     Type *T_int64;
-    Type *T_size;
-    Type *T_pint8;
-    Type *T_prjlvalue;
-    Type *T_pjlvalue;
-    Type *T_pprjlvalue;
-
-    MDNode *tbaa_tag;
 
 private:
     bool doInitialization(Module &m) override;
@@ -411,7 +384,7 @@ bool Optimizer::isSafepoint(Instruction *inst)
         return false;
     if (auto callee = call->getCalledFunction()) {
         // Known functions emitted in codegen that are not safepoints
-        if (callee == pass.ptr_from_objref || callee->getName() == "memcmp") {
+        if (callee == pass.pointer_from_objref_func || callee->getName() == "memcmp") {
             return false;
         }
     }
@@ -442,7 +415,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
-    if (call->getCalledValue() != pass.alloc_obj)
+    if (call->getCalledValue() != pass.alloc_obj_func)
         return -1;
     assert(call->getNumArgOperands() == 3);
     size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
@@ -614,7 +587,7 @@ void Optimizer::checkInst(Instruction *I)
                     use_info.addrescaped = true;
                     return true;
                 }
-                if (pass.gc_preserve_begin == callee) {
+                if (pass.gc_preserve_begin_func == callee) {
                     for (auto user: call->users())
                         use_info.uses.insert(cast<Instruction>(user));
                     use_info.preserves.insert(call);
@@ -622,7 +595,7 @@ void Optimizer::checkInst(Instruction *I)
                     return true;
                 }
             }
-            if (pass.ptr_from_objref == callee) {
+            if (pass.pointer_from_objref_func == callee) {
                 use_info.addrescaped = true;
                 return true;
             }
@@ -630,7 +603,7 @@ void Optimizer::checkInst(Instruction *I)
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
-            if (!isBundleOperand(call, opno) ||
+            if (!call->isBundleOperand(opno) ||
                 call->getOperandBundleForOperand(opno).getTagName() != "jl_roots") {
                 use_info.escaped = true;
                 return false;
@@ -922,7 +895,7 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto newCall = CallInst::Create(newF, args, "", call);
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
-    newCall->setAttributes(AttributeList::get(*pass.ctx, old_attrs.getFnAttributes(),
+    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), old_attrs.getFnAttributes(),
                                               old_attrs.getRetAttributes(), {}));
     newCall->setDebugLoc(call->getDebugLoc());
     call->replaceAllUsesWith(newCall);
@@ -961,7 +934,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
     else {
-        buff = prolog_builder.CreateAlloca(Type::getIntNTy(*pass.ctx, sz * 8));
+        buff = prolog_builder.CreateAlloca(Type::getIntNTy(pass.getLLVMContext(), sz * 8));
         buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
@@ -1011,7 +984,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledValue();
-            if (pass.ptr_from_objref == callee) {
+            if (pass.pointer_from_objref_func == callee) {
                 call->replaceAllUsesWith(new_i);
                 call->eraseFromParent();
                 return;
@@ -1022,7 +995,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                 return;
             }
             // Also remove the preserve intrinsics so that it can be better optimized.
-            if (pass.gc_preserve_begin == callee) {
+            if (pass.gc_preserve_begin_func == callee) {
                 if (has_ref) {
                     call->replaceUsesOfWith(orig_i, buff);
                 }
@@ -1064,7 +1037,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                                                      gep->getName(), gep);
             new_gep->setIsInBounds(gep->isInBounds());
             new_gep->takeName(gep);
-            copyMetadata(new_gep, gep);
+            new_gep->copyMetadata(*gep);
             push_frame(gep, new_gep);
         }
         else {
@@ -1127,7 +1100,7 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledValue();
-            if (pass.gc_preserve_begin == callee) {
+            if (pass.gc_preserve_begin_func == callee) {
                 removeGCPreserve(call, orig_i);
                 return;
             }
@@ -1200,7 +1173,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             allocty = field.elty;
         }
         else {
-            allocty = Type::getIntNTy(*pass.ctx, field.size * 8);
+            allocty = Type::getIntNTy(pass.getLLVMContext(), field.size * 8);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
         insertLifetime(prolog_builder.CreateBitCast(slot.slot, pass.T_pint8),
@@ -1404,7 +1377,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.gc_preserve_begin == callee) {
+            if (pass.gc_preserve_begin_func == callee) {
                 SmallVector<Value*,8> operands;
                 for (auto &arg: call->arg_operands()) {
                     if (arg.get() == orig_i || isa<Constant>(arg.get()))
@@ -1420,7 +1393,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     ref->setOrdering(AtomicOrdering::NotAtomic);
                     operands.push_back(ref);
                 }
-                auto new_call = builder.CreateCall(pass.gc_preserve_begin, operands);
+                auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
                 new_call->setAttributes(call->getAttributes());
                 call->replaceAllUsesWith(new_call);
@@ -1428,7 +1401,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 return;
             }
             // remove from operand bundle
-            assert(isBundleOperand(call, use->getOperandNo()));
+            assert(call->isBundleOperand(use->getOperandNo()));
             assert(call->getOperandBundleForOperand(use->getOperandNo()).getTagName() ==
                    "jl_roots");
             SmallVector<OperandBundleDef,2> bundles;
@@ -1493,42 +1466,23 @@ cleanup:
 
 bool AllocOpt::doInitialization(Module &M)
 {
-    ctx = &M.getContext();
-    DL = &M.getDataLayout();
-
-    alloc_obj = M.getFunction("julia.gc_alloc_obj");
-    if (!alloc_obj)
+    initAll(M);
+    if (!alloc_obj_func)
         return false;
 
-    ptr_from_objref = M.getFunction("julia.pointer_from_objref");
-    gc_preserve_begin = M.getFunction("llvm.julia.gc_preserve_begin");
-    typeof_func = M.getFunction("julia.typeof");
-    write_barrier_func = M.getFunction("julia.write_barrier");
+    DL = &M.getDataLayout();
 
-    T_prjlvalue = alloc_obj->getReturnType();
-    T_pjlvalue = PointerType::get(cast<PointerType>(T_prjlvalue)->getElementType(), 0);
-    T_pprjlvalue = PointerType::get(T_prjlvalue, 0);
-
-    T_int8 = Type::getInt8Ty(*ctx);
-    T_int32 = Type::getInt32Ty(*ctx);
-    T_int64 = Type::getInt64Ty(*ctx);
-    T_size = sizeof(void*) == 8 ? T_int64 : T_int32;
-    T_pint8 = PointerType::get(T_int8, 0);
+    T_int64 = Type::getInt64Ty(getLLVMContext());
 
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
-
-    MDNode *tbaa_data;
-    MDNode *tbaa_data_scalar;
-    std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child("jtbaa_data");
-    tbaa_tag = tbaa_make_child("jtbaa_tag", tbaa_data_scalar).first;
 
     return true;
 }
 
 bool AllocOpt::runOnFunction(Function &F)
 {
-    if (!alloc_obj)
+    if (!alloc_obj_func)
         return false;
     Optimizer optimizer(F, *this);
     optimizer.initialize();
