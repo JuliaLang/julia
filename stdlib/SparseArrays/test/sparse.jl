@@ -1939,6 +1939,14 @@ end
     @test -A == B
 end
 
+@testset "unary plus creates a copy (issue #33271)" begin
+    A = sparse([1,3], [1,3], [-0.5, 0.5])
+    pA = +A
+    @test typeof(pA) === typeof(A)
+    @test pA == A
+    @test pA !== A
+end
+
 @testset "sparse matrix norms" begin
     Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
     Ar = sprandn(10,10,.1)

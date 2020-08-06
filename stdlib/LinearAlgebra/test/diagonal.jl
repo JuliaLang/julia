@@ -391,6 +391,12 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+    @testset "unary plus creates a copy (issue #33271)" begin
+        pD = +D
+        @test typeof(pD) === typeof(D)
+        @test pD == D
+        @test pD !== D
+    end
 end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin

@@ -262,7 +262,10 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 
 ### linear algebra
 
-(-)(A::Adjoint)   = Adjoint(  -A.parent)
+(+)(A::Adjoint) = Adjoint(+A.parent)
+(-)(A::Adjoint) = Adjoint(-A.parent)
+
+(+)(A::Transpose) = Transpose(+A.parent)
 (-)(A::Transpose) = Transpose(-A.parent)
 
 ## multiplication *

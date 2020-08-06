@@ -375,6 +375,13 @@ Random.seed!(1)
             @test typeof(Diag*SymTri)  <: Tridiagonal
         end
 
+        @testset "unary plus creates a copy (issue #33271)" begin
+            pT = +T
+            @test typeof(pT) === typeof(T)
+            @test pT == T
+            @test pT !== T
+        end
+
         @test inv(T)*Tfull ≈ Matrix(I, n, n)
         @test factorize(T) === T
     end

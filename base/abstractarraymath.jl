@@ -94,7 +94,7 @@ conj!(x::AbstractArray{<:Real}) = x
 real(x::AbstractArray{<:Real}) = x
 imag(x::AbstractArray{<:Real}) = zero(x)
 
-+(x::AbstractArray{<:Number}) = x
++(x::AbstractArray{<:Number}) = copy(x)
 *(x::AbstractArray{<:Number,2}) = x
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"

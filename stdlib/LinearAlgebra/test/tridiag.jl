@@ -299,6 +299,12 @@ end
             @test mA isa mat_type
             @test -mA == A
         end
+        @testset "unary plus creates a copy (issue #33271)" begin
+            pA = +A
+            @test typeof(pA) === typeof(A)
+            @test pA == A
+            @test pA !== A
+        end
         if mat_type == SymTridiagonal
             @testset "Tridiagonal/SymTridiagonal mixing ops" begin
                 B = convert(Tridiagonal{elty}, A)

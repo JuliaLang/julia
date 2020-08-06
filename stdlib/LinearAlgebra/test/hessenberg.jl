@@ -55,6 +55,12 @@ let n = 10
         H = UpperHessenberg(Areal)
         @test Array(Hc + H) == Array(Hc) + Array(H)
         @test Array(Hc - H) == Array(Hc) - Array(H)
+        @testset "unary plus creates a copy (#issue 33271)" begin
+            pH = +H
+            @test typeof(pH) === typeof(H)
+            @test pH == H
+            @test pH !== H
+        end
     end
 
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int), herm in (false, true)

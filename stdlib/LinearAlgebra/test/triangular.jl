@@ -174,6 +174,12 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
         # Unary operations
         @test -A1 == -Matrix(A1)
+        @testset "unary plus creates a copy (issue #33271)" begin
+            pA1 = +A1
+            @test typeof(pA1) === typeof(A1)
+            @test pA1 == A1
+            @test pA1 !== A1
+        end
 
         # copy and copyto! (test views as well, see issue #14317)
         let vrange = 1:n-1, viewA1 = t1(view(A1.data, vrange, vrange))

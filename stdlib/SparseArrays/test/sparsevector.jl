@@ -1457,4 +1457,12 @@ end
     end
 end
 
+@testset "unary plus creates a copy (issue #33271)" begin
+    A = SparseVector(5, [1,3], [-0.5, 0.5])
+    pA = +A
+    @test typeof(pA) === typeof(A)
+    @test pA == A
+    @test pA !== A
+end
+
 end # module

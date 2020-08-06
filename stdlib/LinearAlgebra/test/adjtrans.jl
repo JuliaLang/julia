@@ -557,4 +557,14 @@ end
     @test transpose(Int[]) * Int[] == 0
 end
 
+@testset "unary plus creates a copy (issue #33271)" begin
+    P = rand(3,3)
+    for A = (adjoint(P), transpose(P))
+        pA = +A
+        @test typeof(pA) === typeof(A)
+        @test pA == A
+        @test pA !== A
+    end
+end
+
 end # module TestAdjointTranspose

@@ -92,6 +92,15 @@ end
                 @test (-Hermitian([true false; true false]))::Hermitian{Int,Matrix{Int}} == [-1 0; 0 0]
             end
 
+            @testset "unary plus creates a copy (issue #33271)" begin
+                for A = (Symmetric(asym), Hermitian(aherm))
+                    pA = +A
+                    @test typeof(pA) === typeof(A)
+                    @test pA == A
+                    @test pA !== A
+                end
+            end
+
             @testset "Addition and subtraction for Symmetric/Hermitian matrices" begin
                 for f in (+, -)
                     @test (f(Symmetric(asym), Symmetric(aposs)))::typeof(Symmetric(asym)) == f(asym, aposs)

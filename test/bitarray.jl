@@ -814,6 +814,15 @@ timesofar("dequeue")
         @test b1 == .~i1
         @test bitcheck(b1)
     end
+
+    @testset "unary plus creates a copy (issue #33271)" begin
+        for A = (b1, b0)
+            pA = +A
+            @test typeof(pA) === typeof(A)
+            @test pA == A
+            @test pA !== A
+        end
+    end
 end
 
 timesofar("unary arithmetic")

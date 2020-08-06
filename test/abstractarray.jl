@@ -742,6 +742,14 @@ end
         @test +(A) == A
         @test *(A) == A
     end
+    @testset "unary plus creates a copy (issue #33271)" begin
+        for A = (ones(), rand(3), rand(3,3), rand(3,3,3))
+            pA = +A
+            @test typeof(pA) === typeof(A)
+            @test pA == A
+            @test pA !== A
+        end
+    end
 end
 
 @testset "reverse dim on empty" begin
