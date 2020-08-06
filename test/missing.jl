@@ -491,6 +491,11 @@ end
             @test_throws ArgumentError reduce(x -> x/2, itr)
             @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
         end
+
+        # issue #35504
+        nt = NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
+            (missing, missing))
+        @test sum(skipmissing(nt)) === 0
     end
 
     @testset "filter" begin

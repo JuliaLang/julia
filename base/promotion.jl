@@ -129,14 +129,29 @@ Falls back to [`typejoin`](@ref).
 """
 promote_typejoin(@nospecialize(a), @nospecialize(b)) = _promote_typejoin(a, b)::Type
 _promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
-_promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-_promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-_promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-_promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
+_promote_typejoin(@nospecialize(a::Union), @nospecialize(b)) =
+    _promote_typejoin(a.a, _promote_typejoin(a.b, b))
+_promote_typejoin(@nospecialize(a), @nospecialize(b::Union)) =
+    _promote_typejoin(_promote_typejoin(a, b.a), b.b)
+function _promote_typejoin(@nospecialize(a::Union), @nospecialize(b::Union))
+    a2 = _promote_typejoin(a.a, b.a)
+    b2 = _promote_typejoin(a.b, b.b)
+    if a2 isa Union && b2 isa Union
+        Ts = Core.Compiler.typesubtract(Union{a2, b2}, Union{Nothing, Missing})
+        return Union{Ts isa Union ? typejoin(Ts.a, Ts.b) : Ts,
+                     typeintersect(Union{a2, b2}, Union{Nothing, Missing})}
+    else
+        _promote_typejoin(a2, b2)
+    end
+end
+_promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} = Union{T, Nothing}
+_promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} = Union{T, Nothing}
+_promote_typejoin(::Type{Missing}, ::Type{T}) where {T} = Union{T, Missing}
+_promote_typejoin(::Type{T}, ::Type{Missing}) where {T} = Union{T, Missing}
+_promote_typejoin(::Type{Nothing}, T::Union) = Union{_promote_typejoin(T.a, T.b), Nothing}
+_promote_typejoin(T::Union, ::Type{Nothing}) = Union{_promote_typejoin(T.a, T.b), Nothing}
+_promote_typejoin(::Type{Missing}, T::Union) = Union{_promote_typejoin(T.a, T.b), Missing}
+_promote_typejoin(T::Union, ::Type{Missing}) = Union{_promote_typejoin(T.a, T.b), Missing}
 _promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
 _promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
 _promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing

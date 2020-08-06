@@ -168,11 +168,29 @@ for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, T) === Union{Int, T}
     @test Base.promote_typejoin(T, String) === Union{T, String}
     @test Base.promote_typejoin(Vector{Int}, T) === Union{Vector{Int}, T}
-    @test Base.promote_typejoin(Vector, T) === Any
-    @test Base.promote_typejoin(Real, T) === Any
-    @test Base.promote_typejoin(Int, String) === Any
-    @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
-    @test Base.promote_typejoin(Int, Union{String, T}) === Any
+    @test Base.promote_typejoin(Vector, T) === Union{Vector, T}
+    @test Base.promote_typejoin(Real, T) === Union{Real, T}
+    for U in (String, Float64)
+        @test Base.promote_typejoin(Int, U) === typejoin(Int, U)
+        @test Base.promote_typejoin(Int, Union{U, T}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{Int, U}, T) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Int64) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{T, Int64}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{Missing, Int64}) ===
+            Union{typejoin(Int, U), T, Missing}
+        @test Base.promote_typejoin(Union{T, U}, Union{Nothing, Int64}) ===
+            Union{typejoin(Int, U), T, Nothing}
+        @test Base.promote_typejoin(Union{T, Nothing, U}, Union{Nothing, Missing, Int64}) ===
+            Union{typejoin(Int, U), T, Nothing, Missing}
+        @test Base.promote_typejoin(Union{T, Missing, U}, Union{Nothing, Missing, Int64}) ===
+            Union{typejoin(Int, U), T, Nothing, Missing}
+        @test Base.promote_typejoin(Union{Nothing, Missing, U},
+                                    Union{Nothing, Missing, Int64}) ===
+            Union{typejoin(Int, U), Nothing, Missing}
+        @test Base.promote_typejoin(Union{Nothing, Missing, U},
+                                    Union{Nothing, Missing, Int64}) ===
+            Union{typejoin(Int, U), Nothing, Missing}
+    end
     @test Base.promote_typejoin(T, Union{}) === T
     @test Base.promote_typejoin(Union{}, T) === T
 end

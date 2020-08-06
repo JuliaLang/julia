@@ -69,6 +69,8 @@ end
     NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))
 
 @test eltype((a=[1,2], b=[3,4])) === Vector{Int}
+@test eltype(NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
+    (missing, missing))) === Union{Real, Missing}
 
 @test Tuple((a=[1,2], b=[3,4])) == ([1,2], [3,4])
 @test Tuple(NamedTuple()) === ()
