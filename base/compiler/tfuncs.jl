@@ -6,8 +6,6 @@
 
 @nospecialize
 
-const AbstractEvalConstant = Const
-
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 
 const INT_INF = typemax(Int) # integer infinity
@@ -767,7 +765,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 if (fld == TYPENAME_NAME_FIELDINDEX ||
                     fld == TYPENAME_MODULE_FIELDINDEX ||
                     fld == TYPENAME_WRAPPER_FIELDINDEX)
-                    return AbstractEvalConstant(getfield(sv, fld))
+                    return Const(getfield(sv, fld))
                 end
             end
             if isa(sv, Module) && isa(nv, Symbol)
@@ -777,7 +775,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 return Bottom
             end
             if (isa(sv, SimpleVector) || !ismutable(sv)) && isdefined(sv, nv)
-                return AbstractEvalConstant(getfield(sv, nv))
+                return Const(getfield(sv, nv))
             end
         end
         s = typeof(sv)
