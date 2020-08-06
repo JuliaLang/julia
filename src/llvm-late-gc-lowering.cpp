@@ -600,12 +600,12 @@ Value *LateLowerGCFrame::MaybeExtractScalar(State &S, std::pair<Value*,int> ValE
 std::vector<Value*> LateLowerGCFrame::MaybeExtractVector(State &S, Value *BaseVec, Instruction *InsertBefore) {
     auto Numbers = NumberAllBase(S, BaseVec);
     std::vector<Value*> V{Numbers.size()};
-    Value *V_null = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+    Value *V_rnull = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
     for (unsigned i = 0; i < V.size(); ++i) {
         if (Numbers[i] >= 0)
             V[i] = GetPtrForNumber(S, Numbers[i], InsertBefore);
         else
-            V[i] = V_null;
+            V[i] = V_rnull;
     }
     return V;
 }

@@ -366,6 +366,7 @@ static Value *llvm_type_rewrite(
 
 // --- argument passing and scratch space utilities ---
 
+// Returns T_prjlvalue
 static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
 {
     // box if concrete type was not statically known
@@ -441,7 +442,7 @@ static Value *julia_to_native(
     // We're passing Any
     if (toboxed) {
         assert(!byRef); // don't expect any ABI to pass pointers by pointer
-        return maybe_decay_untracked(boxed(ctx, jvinfo));
+        return boxed(ctx, jvinfo);
     }
     assert(jl_is_datatype(jlto) && julia_struct_has_layout((jl_datatype_t*)jlto, jlto_env));
 
@@ -1028,6 +1029,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
 // --- code generator for ccall itself ---
 
+// Returns T_prjlvalue
 static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_dt, jl_value_t *rt)
 {
     // XXX: need to handle parameterized zero-byte types (singleton)
@@ -1278,7 +1280,7 @@ static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *u
                     else {
                         Value *notany = ctx.builder.CreateICmpNE(
                                 boxed(ctx, runtime_sp),
-                                maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
+                                track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
                         error_unless(ctx, notany, make_errmsg(fname, n, rt_err_msg_notany));
                         always_error = false;
                     }
@@ -1729,7 +1731,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 emit_typeof_boxed(ctx, val),
                 val.isghost ? ConstantPointerNull::get(T_pint8_derived) :
                     ctx.builder.CreateBitCast(
-                        decay_derived(data_pointer(ctx, val)),
+                        decay_derived(ctx, data_pointer(ctx, val)),
                         T_pint8_derived)
             };
             Value *ret = ctx.builder.CreateCall(prepare_call(jl_object_id__func), makeArrayRef(args));
@@ -1795,7 +1797,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         v = julia_to_native(ctx, largty, toboxed, jargty_in_env, unionall_env, arg, byRef, ai);
         bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type);
         if (byRef) {
-            v = decay_derived(v);
+            v = decay_derived(ctx, v);
             // julia_to_native should already have done the alloca and store
             assert(v->getType() == pargty);
         }

@@ -804,8 +804,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 ifelse_tbaa = x.tbaa;
             }
             else {
-                x_ptr = decay_derived(x_ptr);
-                y_ptr = decay_derived(y_ptr);
+                x_ptr = decay_derived(ctx, x_ptr);
+                y_ptr = decay_derived(ctx, y_ptr);
                 if (x_ptr->getType() != y_ptr->getType())
                     y_ptr = ctx.builder.CreateBitCast(y_ptr, x_ptr->getType());
                 ifelse_result = ctx.builder.CreateSelect(isfalse, y_ptr, x_ptr);
@@ -861,6 +861,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 if (!y_vboxed)
                     y_vboxed = ConstantPointerNull::get(cast<PointerType>(x_vboxed->getType()));
                 ret.Vboxed = ctx.builder.CreateSelect(isfalse, y_vboxed, x_vboxed);
+                assert(ret.Vboxed->getType() == T_prjlvalue);
             }
             return ret;
         }
