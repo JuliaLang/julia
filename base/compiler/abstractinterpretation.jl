@@ -884,7 +884,7 @@ function abstract_call_unionall(argtypes::Vector{Any})
             !isa(tv, TypeVar) && return Any
             body = UnionAll(tv, body)
         end
-        ret = canconst ? AbstractEvalConstant(body) : Type{body}
+        ret = canconst ? Const(body) : Type{body}
         return ret
     end
     return Any
@@ -1080,7 +1080,7 @@ end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if isa(e, QuoteNode)
-        return AbstractEvalConstant((e::QuoteNode).value)
+        return Const((e::QuoteNode).value)
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
     elseif isa(e, Slot)
@@ -1089,7 +1089,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
         return abstract_eval_global(e.mod, e.name)
     end
 
-    return AbstractEvalConstant(e)
+    return Const(e)
 end
 
 function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
@@ -1231,7 +1231,7 @@ end
 
 function abstract_eval_global(M::Module, s::Symbol)
     if isdefined(M,s) && isconst(M,s)
-        return AbstractEvalConstant(getfield(M,s))
+        return Const(getfield(M,s))
     end
     return Any
 end
