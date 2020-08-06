@@ -160,7 +160,7 @@ endif
 # unlist targets that have not been converted to use the staged-install
 DEP_LIBS_STAGED := $(filter-out suitesparse-wrapper,$(DEP_LIBS))
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
-DEP_LIBS_STAGED := $(filter-out osxunwind,$(DEP_LIBS))
+DEP_LIBS_STAGED := $(filter-out osxunwind,$(DEP_LIBS_STAGED))
 endif
 
 
