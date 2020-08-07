@@ -21,7 +21,8 @@ void __sanitizer_finish_switch_fiber(void*, const void**, size_t*);
 #endif
 #ifdef JL_TSAN_ENABLED
 void *__tsan_create_fiber(unsigned flags);
-// void __tsan_destroy_fiber(void *fiber);
+void *__tsan_get_current_fiber(void);
+void __tsan_destroy_fiber(void *fiber);
 void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #endif
 #ifdef __cplusplus

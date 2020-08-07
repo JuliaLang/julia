@@ -65,7 +65,6 @@
 #  define JL_THREAD_LOCAL
 #endif
 
-// Duplicated from options.h
 #if defined(__has_feature) // Clang flavor
 #if __has_feature(address_sanitizer)
 #define JL_ASAN_ENABLED
@@ -74,6 +73,9 @@
 #define JL_MSAN_ENABLED
 #endif
 #if __has_feature(thread_sanitizer)
+#if __clang_major__ < 11
+#error Thread sanitizer runtime libraries in clang < 11 leak memory and cannot be used
+#endif
 #define JL_TSAN_ENABLED
 #endif
 #else // GCC flavor
@@ -1809,10 +1811,6 @@ typedef struct _jl_task_t {
     size_t bufsz; // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
-
-#if defined(JL_TSAN_ENABLED)
-    void *tsan_state;
-#endif
 
     // current exception handler
     jl_handler_t *eh;

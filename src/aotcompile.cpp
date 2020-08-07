@@ -20,12 +20,8 @@
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Vectorize.h>
-#if defined(JL_ASAN_ENABLED)
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
-#endif
-#if defined(JL_TSAN_ENABLED)
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
-#endif
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>

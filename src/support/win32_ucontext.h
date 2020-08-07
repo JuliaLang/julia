@@ -16,6 +16,9 @@ typedef struct {
         size_t ss_size;
     } uc_stack;
     jmp_buf uc_mcontext;
+#ifdef JL_TSAN_ENABLED
+    void *tsan_state;
+#endif
 } win32_ucontext_t;
 void jl_makecontext(win32_ucontext_t *ucp, void (*func)(void));
 void jl_swapcontext(win32_ucontext_t *oucp, const win32_ucontext_t *ucp);
