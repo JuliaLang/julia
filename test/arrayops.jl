@@ -594,6 +594,33 @@ end
         @test findprev(b, T(1)) isa keytype(b)
         @test findprev(b, T(2)) isa keytype(b)
     end
+
+    @testset "issue #36938" begin
+        # 👎 denotes tests that are broken.
+        @test findfirst(fill(true, (0, 2))) === nothing     # 👎
+        @test findfirst(fill(true, (2, 0))) === nothing
+        @test findfirst(fill(true, (0, 0))) === nothing
+
+        @test findlast(fill(true, (0, 2))) === nothing      # 👎
+        @test findlast(fill(true, (2, 0))) === nothing
+        @test findlast(fill(true, (0, 0))) === nothing
+
+        @test findnext(fill(true, (2, 2)), CartesianIndex(1, 3)) === nothing
+        @test findnext(fill(true, (2, 2)), CartesianIndex(3, 1)) === nothing    # 👎
+        @test findnext(fill(true, (2, 2)), CartesianIndex(3, 3)) === nothing
+
+        @test_throws BoundsError findnext(fill(true, (2, 2)), CartesianIndex(1, 0))
+        @test_throws BoundsError findnext(fill(true, (2, 2)), CartesianIndex(0, 1))
+        @test_throws BoundsError findnext(fill(true, (2, 2)), CartesianIndex(0, 0))
+
+        @test_throws BoundsError findprev(fill(true, (2, 2)), CartesianIndex(1, 3))
+        @test_throws BoundsError findprev(fill(true, (2, 2)), CartesianIndex(3, 1))
+        @test_throws BoundsError findprev(fill(true, (2, 2)), CartesianIndex(3, 3))
+
+        @test findprev(fill(true, (2, 2)), CartesianIndex(1, 0)) === nothing
+        @test findprev(fill(true, (2, 2)), CartesianIndex(0, 1)) === nothing
+        @test findprev(fill(true, (2, 2)), CartesianIndex(0, 0)) === nothing
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
