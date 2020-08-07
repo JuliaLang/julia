@@ -1,0 +1,14 @@
+name = "Scratch"
+uuid = "6c6a2e73-6563-6170-7368-637461726353"
+authors = ["Elliot Saba <staticfloat@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+
+[extras]
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "Pkg"]
