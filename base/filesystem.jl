@@ -219,26 +219,26 @@ const SEEK_END = Int32(2)
 
 function seek(f::File, n::Integer)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_SET)
-    systemerror("seek", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seek")
     return f
 end
 
 function seekend(f::File)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, 0, SEEK_END)
-    systemerror("seekend", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seekend")
     return f
 end
 
 function skip(f::File, n::Integer)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_CUR)
-    systemerror("skip", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("skip")
     return f
 end
 
 function position(f::File)
     check_open(f)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, 0, SEEK_CUR)
-    systemerror("lseek", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("lseek")
     return ret
 end
 
