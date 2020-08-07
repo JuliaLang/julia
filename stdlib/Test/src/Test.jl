@@ -1400,13 +1400,21 @@ function _inferred(ex, mod, allow = :(Union{}))
     end)
 end
 
+function is_in_mods(m::Module, recursive::Bool, mods)
+    while true
+        m in mods && return true
+        recursive || return false
+        p = parentmodule(m)
+        p === m && return false
+        m = p
+    end
+end
+
 """
-    detect_ambiguities(mod1, mod2...; imported=false, recursive=false, ambiguous_bottom=false)
+    detect_ambiguities(mod1, mod2...; recursive=false, ambiguous_bottom=false)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
-Use `imported=true` if you wish to also test functions that were
-imported into these modules from elsewhere.
 Use `recursive=true` to test in all submodules.
 
 `ambiguous_bottom` controls whether ambiguities triggered only by
@@ -1414,9 +1422,11 @@ Use `recursive=true` to test in all submodules.
 want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
 function detect_ambiguities(mods...;
-                            imported::Bool = false,
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
+    @nospecialize mods
+    ambs = Set{Tuple{Method,Method}}()
+    mods = collect(mods)::Vector{Module}
     function sortdefs(m1::Method, m2::Method)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1424,102 +1434,90 @@ function detect_ambiguities(mods...;
         end
         return ord12 ? (m1, m2) : (m2, m1)
     end
-    ambs = Set{Tuple{Method,Method}}()
-    for mod in mods
-        for n in names(mod, all = true, imported = imported)
-            Base.isdeprecated(mod, n) && continue
-            if !isdefined(mod, n)
-                println("Skipping ", mod, '.', n)  # typically stale exports
-                continue
-            end
-            f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                subambs = detect_ambiguities(f,
-                    imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
-                union!(ambs, subambs)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.mt !== Symbol.name.mt
-                mt = Base.MethodList(f.name.mt)
-                for m in mt
-                    ambig = Int32[0]
-                    for match2 in Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
-                        ambig[1] == 0 && break
-                        m2 = match2.method
-                        if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
-                            push!(ambs, sortdefs(m, m2))
-                        end
-                    end
-                end
-            end
-        end
-    end
-    function is_in_mods(m::Module)
-        while true
-            m in mods && return true
-            recursive || return false
-            p = parentmodule(m)
-            p === m && return false
-            m = p
-        end
-    end
-    let mt = Base.MethodList(Symbol.name.mt)
-        for m in mt
-            if is_in_mods(m.module)
-                ambig = Int32[0]
-                for match2 in Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
-                    ambig[1] == 0 && break
-                    m2 = match2.method
-                    if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
+    function examine(mt::Core.MethodTable)
+        for m in Base.MethodList(mt)
+            is_in_mods(m.module, recursive, mods) || continue
+            ambig = Int32[0]
+            ms = Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+            ambig[1] == 0 && continue
+            for match2 in ms
+                m2 = match2.method
+                 if !(m === m2 || Base.morespecific(m2.sig, m.sig))
+                    if Base.isambiguous(m, m2; ambiguous_bottom)
                         push!(ambs, sortdefs(m, m2))
                     end
                 end
             end
         end
     end
+    work = Base.loaded_modules_array()
+    while !isempty(work)
+        mod = pop!(work)
+        for n in names(mod, all = true)
+            Base.isdeprecated(mod, n) && continue
+            if !isdefined(mod, n)
+                is_in_mods(mod, recursive, mods) && println("Skipping ", mod, '.', n)  # typically stale exports
+                continue
+            end
+            f = Base.unwrap_unionall(getfield(mod, n))
+            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
+                push!(work, f)
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+                examine(f.name.mt)
+            end
+        end
+    end
+    examine(Symbol.name.mt)
+    examine(DataType.name.mt)
     return collect(ambs)
 end
 
 """
-    detect_unbound_args(mod1, mod2...; imported=false, recursive=false)
+    detect_unbound_args(mod1, mod2...; recursive=false)
 
 Returns a vector of `Method`s which may have unbound type parameters.
-Use `imported=true` if you wish to also test functions that were
-imported into these modules from elsewhere.
 Use `recursive=true` to test in all submodules.
 """
 function detect_unbound_args(mods...;
-                             imported::Bool = false,
                              recursive::Bool = false)
+    @nospecialize mods
     ambs = Set{Method}()
-    for mod in mods
-        for n in names(mod, all = true, imported = imported)
+    mods = collect(mods)::Vector{Module}
+    function examine(mt::Core.MethodTable)
+        for m in Base.MethodList(mt)
+            has_unbound_vars(m.sig) || continue
+            is_in_mods(m.module, recursive, mods) || continue
+            tuple_sig = Base.unwrap_unionall(m.sig)::DataType
+            if Base.isvatuple(tuple_sig)
+                params = tuple_sig.parameters[1:(end - 1)]
+                tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
+                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
+                if mf !== nothing && mf !== m && mf.sig <: tuple_sig
+                    continue
+                end
+            end
+            push!(ambs, m)
+        end
+    end
+    work = Base.loaded_modules_array()
+    while !isempty(work)
+        mod = pop!(work)
+        for n in names(mod, all = true)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
-                println("Skipping ", mod, '.', n)  # typically stale exports
+                is_in_mods(mod, recursive, mods) && println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                subambs = detect_unbound_args(f, imported=imported, recursive=recursive)
-                union!(ambs, subambs)
-            elseif isa(f, DataType) && isdefined(f.name, :mt)
-                mt = Base.MethodList(f.name.mt)
-                for m in mt
-                    if has_unbound_vars(m.sig)
-                        tuple_sig = Base.unwrap_unionall(m.sig)::DataType
-                        if Base.isvatuple(tuple_sig)
-                            params = tuple_sig.parameters[1:(end - 1)]
-                            tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
-                            mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
-                            if mf !== nothing && mf !== m && mf.sig <: tuple_sig
-                                continue
-                            end
-                        end
-                        push!(ambs, m)
-                    end
-                end
+            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
+                push!(work, f)
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+                examine(f.name.mt)
             end
         end
     end
+    examine(Symbol.name.mt)
+    examine(DataType.name.mt)
     return collect(ambs)
 end
 
