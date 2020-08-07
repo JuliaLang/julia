@@ -11,6 +11,9 @@ New language features
 
 Language changes
 ----------------
+* Instances of `UniformScaling` can no longer compare equal to diagonal matrices.
+  Previous behavior violated the transitivity of `==` since previously,
+  `UniformScaling` compared equal to diagonal matrices of different sizes.
 
 
 Compiler/Runtime improvements
