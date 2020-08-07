@@ -1720,18 +1720,7 @@ julia> findnext(A, CartesianIndex(1, 1))
 CartesianIndex(2, 1)
 ```
 """
-function findnext(A, start)
-    l = last(keys(A))
-    i = oftype(l, start)
-    i > l && return nothing
-    while true
-        A[i] && return i
-        i == l && break
-        # nextind(A, l) can throw/overflow
-        i = nextind(A, i)
-    end
-    return nothing
-end
+findnext(A, start) = findnext(identity, A, start)
 
 """
     findfirst(A)
@@ -1766,14 +1755,7 @@ julia> findfirst(A)
 CartesianIndex(2, 1)
 ```
 """
-function findfirst(A)
-    for (i, a) in pairs(A)
-        if a
-            return i
-        end
-    end
-    return nothing
-end
+findfirst(A) = findfirst(identity, A)
 
 # Needed for bootstrap, and allows defining only an optimized findnext method
 findfirst(A::Union{AbstractArray, AbstractString}) = findnext(A, first(keys(A)))
@@ -1907,18 +1889,7 @@ julia> findprev(A, CartesianIndex(2, 1))
 CartesianIndex(2, 1)
 ```
 """
-function findprev(A, start)
-    f = first(keys(A))
-    i = oftype(f, start)
-    i < f && return nothing
-    while true
-        A[i] && return i
-        i == f && break
-        # prevind(A, f) can throw/underflow
-        i = prevind(A, i)
-    end
-    return nothing
-end
+findprev(A, start) = findprev(identity, A, start)
 
 """
     findlast(A)
@@ -1954,14 +1925,7 @@ julia> findlast(A)
 CartesianIndex(2, 1)
 ```
 """
-function findlast(A)
-    for (i, a) in Iterators.reverse(pairs(A))
-        if a
-            return i
-        end
-    end
-    return nothing
-end
+findlast(A) = findlast(identity, A)
 
 # Needed for bootstrap, and allows defining only an optimized findprev method
 findlast(A::Union{AbstractArray, AbstractString}) = findprev(A, last(keys(A)))
@@ -2145,9 +2109,8 @@ julia> findall(falses(3))
 Int64[]
 ```
 """
-function findall(A)
-    collect(first(p) for p in pairs(A) if last(p))
-end
+findall(A) = findall(identity, A)
+
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
 function findall(A::AbstractArray{Bool})
     n = count(A)
