@@ -45,6 +45,9 @@ end
 
 An object of type [`UniformScaling`](@ref), representing an identity matrix of any size.
 
+!!! compat "Julia 1.6"
+    From Julia 1.6, `UniformScaling` never compares equal to diagonal matrices.
+
 # Examples
 ```jldoctest
 julia> fill(1, (5,6)) * I == fill(1, (5,6))
