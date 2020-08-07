@@ -8,7 +8,7 @@
 Create a async condition that wakes up tasks waiting for it
 (by calling [`wait`](@ref) on the object)
 when notified from C by a call to `uv_async_send`.
-Waiting tasks are woken with an error when the object is closed (by [`close`](@ref).
+Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
 Use [`isopen`](@ref) to check whether it is still active.
 """
 mutable struct AsyncCondition
@@ -59,7 +59,7 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 
 Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
 `interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
-the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
+the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
 """
 mutable struct Timer
@@ -225,7 +225,7 @@ calls the function `callback`.
 Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
 and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
 is only triggered once. The function `callback` is called with a single argument, the timer itself.
-When the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
+When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
 
 # Examples
