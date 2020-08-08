@@ -73,3 +73,37 @@ end
 
 promote_rule(::Type{Pair{A1,B1}}, ::Type{Pair{A2,B2}}) where {A1,B1,A2,B2} =
     Pair{promote_type(A1, A2), promote_type(B1, B2)}
+
+"""
+    keytype(type)
+
+Get the key type of a pair type. Behaves similarly to [`eltype`](@ref).
+
+# Examples
+```jldoctest
+julia> keytype(Int32(1) => "foo")
+Int32
+
+julia> keytype(Pair(Int32(1) => "foo"))
+Int32
+```
+"""
+keytype(::Type{<:Pair{K,V}}) where {K,V} = K
+keytype(a::Pair) = keytype(typeof(a))
+
+"""
+    valtype(type)
+
+Get the value type of a pair type. Behaves similarly to [`eltype`](@ref).
+
+# Examples
+```jldoctest
+julia> valtype(Int32(1) => "foo")
+String
+
+julia> valtype(Pair(Int32(1), "foo"))
+String
+```
+"""
+valtype(::Type{<:Pair{K,V}}) where {K,V} = V
+valtype(a::Pair) = valtype(typeof(a))

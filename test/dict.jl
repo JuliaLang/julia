@@ -31,6 +31,9 @@ using Random
     @test eltype(p) == Int
     @test eltype(4 => 5.6) == Union{Int,Float64}
     @test vcat(1 => 2.0, 1.0 => 2) == [1.0 => 2.0, 1.0 => 2.0]
+    @test valtype(4 => 5.6) == Float64
+    @test keytype(4 => 5.6) == Int
+    @test keytype(4 => ("a" => 1)) == Pair{String,Int}
 end
 
 @testset "Dict" begin
