@@ -234,6 +234,11 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
         gv = new GlobalVariable(*M, T_pjlvalue,
                                 false, GlobalVariable::PrivateLinkage,
                                 NULL, localname);
+    // LLVM passes sometimes strip metadata when moving load around
+    // since the load at the new location satisfy the same condition as the origional one.
+    // Mark the global as constant to LLVM code using our own metadata
+    // which is much less likely to be striped.
+    gv->setMetadata("julia.constgv", MDNode::get(gv->getContext(), None));
     assert(localname == gv->getName());
     assert(!gv->hasInitializer());
     return gv;
