@@ -728,6 +728,33 @@ end
 mul!(C::AbstractVector, A::Adjoint{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 mul!(C::AbstractVector, A::Transpose{<:Any,<:AbstractTriangular}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
+# preserve triangular structure in in-place multiplication
+for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
+                        (:UpperTriangular, :UpperTriangular, :UnitUpperTriangular),
+                        (:UpperTriangular, :UnitUpperTriangular, :UpperTriangular),
+                        (:UnitUpperTriangular, :UnitUpperTriangular, :UnitUpperTriangular),
+                        (:LowerTriangular, :LowerTriangular, :LowerTriangular),
+                        (:LowerTriangular, :LowerTriangular, :UnitLowerTriangular),
+                        (:LowerTriangular, :UnitLowerTriangular, :LowerTriangular),
+                        (:UnitLowerTriangular, :UnitLowerTriangular, :UnitLowerTriangular))
+    @eval begin
+        function mul!(C::$cty, A::$aty, B::$bty)
+            m, n = size(B, 1), size(B, 2)
+            if m != size(A, 1)
+                throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
+            end
+            if C === A || C === B
+                throw(ArgumentError("output matrix must not be aliased with input matrix"))
+            end
+
+            for i in 1:n
+                C[:,i] = A*B[:,i]
+            end
+            return C
+        end
+    end
+end
+
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
                             (:UpperTriangular, 'U', 'N'),

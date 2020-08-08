@@ -605,6 +605,42 @@ end
     end
 end
 
+@testset "inplace mul of appropriate types should preserve triagular structure" begin
+    for elty1 in (Float32, Float64, ComplexF32, ComplexF64, Int)
+        for elty2 in (Float32, Float64, ComplexF32, ComplexF64, Int)
+
+            A = UpperTriangular(rand(elty1, 5, 5))
+            A2 = UpperTriangular(rand(elty2, 5, 5))
+            Au = UnitUpperTriangular(rand(elty1, 5, 5))
+            Au2 = UnitUpperTriangular(rand(elty2, 5, 5))
+            B = LowerTriangular(rand(elty1, 5, 5))
+            B2 = LowerTriangular(rand(elty2, 5, 5))
+            Bu = UnitLowerTriangular(rand(elty1, 5, 5))
+            Bu2 = UnitLowerTriangular(rand(elty2, 5, 5))
+
+            @test mul!(similar(A), A, A) ≈ A*A
+            @test mul!(similar(A,promote_type(elty1,elty2)), A, A2) ≈ A*A2
+            @test mul!(similar(A,promote_type(elty1,elty2)), A2, A) ≈ A2*A
+            @test mul!(similar(A2), A2, A2) ≈ A2*A2
+
+            @test mul!(similar(A), A, Au) ≈ A*Au
+            @test mul!(similar(A,promote_type(elty1,elty2)), A, Au2) ≈ A*Au2
+            @test mul!(similar(A,promote_type(elty1,elty2)), Au2, A) ≈ Au2*A
+            @test mul!(similar(Au2), Au2, Au2) ≈ Au2*Au2
+
+            @test mul!(similar(B), B, B) ≈ B*B
+            @test mul!(similar(B,promote_type(elty1,elty2)), B, B2) ≈ B*B2
+            @test mul!(similar(B,promote_type(elty1,elty2)), B2, B) ≈ B2*B
+            @test mul!(similar(B2), B2, B2) ≈ B2*B2
+
+            @test mul!(similar(B), B, Bu) ≈ B*Bu
+            @test mul!(similar(B,promote_type(elty1,elty2)), B, Bu2) ≈ B*Bu2
+            @test mul!(similar(B,promote_type(elty1,elty2)), Bu2, B) ≈ Bu2*B
+            @test mul!(similar(Bu2), Bu2, Bu2) ≈ Bu2*Bu2
+        end
+    end
+end
+
 @testset "special printing of Lower/UpperTriangular" begin
     @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64,Matrix{Int64}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
                    sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))))
