@@ -61,7 +61,10 @@ julia> subtypes(AbstractFloat)
 ```
 
 Any abstract subtype will also be included in this list, but further subtypes thereof will not;
-recursive application of [`subtypes`](@ref) may be used to inspect the full type tree.
+recursive application of [`subtypes`](@ref) may be used to inspect the full type tree. 
+
+Note that [`subtypes`](@ref) is located inside [`InteractiveUtils`](@ref) but is automatically
+exported when using the REPL.
 
 ## DataType layout
 
