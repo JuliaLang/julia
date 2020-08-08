@@ -38,10 +38,38 @@ julia> open("/tmp/test.txt") do f
  0x08
 ```
 
-Note the lack of a newline at the end of `/tmp/text.txt`.  Julia automatically inserts a newline before the `julia>` prompt.
-
 Due to the colloquial usage of `sha256` to refer to `sha2_256`, convenience functions are provided, mapping `shaxxx()` function calls to `sha2_xxx()`.  For SHA-3, no such colloquialisms exist and the user must use the full `sha3_xxx()` names.
 
 `shaxxx()` takes `AbstractString` and array-like objects (`NTuple` and `Array`) with elements of type `UInt8`.
+
+To create a hash from multiple items the `SHAX_XXX_CTX()` types can be used to create a stateful hash object that
+is updated with `update!` and finalized with `digest!`
+
+```julia
+julia> ctx = SHA2_256_CTX()
+SHA2 256-bit hash state
+
+julia> update!(ctx, b"some data")
+0x0000000000000009
+
+julia> update!(ctx, b"some more data")
+0x0000000000000017
+
+julia> digest!(ctx)
+32-element Vector{UInt8}:
+ 0xbe
+ 0xcf
+ 0x23
+ 0xda
+ 0xaf
+ 0x02
+    ⋮
+ 0x25
+ 0x52
+ 0x19
+ 0xa0
+ 0x8b
+ 0xc5
+```
 
 Note that, at the time of this writing, the SHA3 code is not optimized, and as such is roughly an order of magnitude slower than SHA2.
