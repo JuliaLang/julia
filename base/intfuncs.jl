@@ -616,7 +616,7 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 ## integer to string functions ##
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
-    m = 8sizeof(x) - leading_zeros(x)::Int
+    m = 8sizeof(x) - leading_zeros(x)
     n = neg + max(pad, m)
     a = StringVector(n)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
@@ -643,7 +643,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
-    m = div(8sizeof(x) - leading_zeros(x)::Int + 2, 3)
+    m = div(8sizeof(x) - leading_zeros(x) + 2, 3)
     n = neg + max(pad, m)
     a = StringVector(n)
     i = n
@@ -660,7 +660,7 @@ end
 const _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
-    n = neg + (ndigits(x, base=10, pad=pad) % Int)::Int
+    n = neg + ndigits(x, pad=pad)
     a = StringVector(n)
     i = n
     @inbounds while i >= 2
@@ -679,7 +679,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
-    m = 2sizeof(x) - (leading_zeros(x)::Int >> 2)
+    m = 2sizeof(x) - (leading_zeros(x) >> 2)
     n = neg + max(pad, m)
     a = StringVector(n)
     i = n
@@ -707,7 +707,7 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     2 <= abs(base) <= 62 || throw(DomainError(base, "base must satisfy 2 ≤ abs(base) ≤ 62"))
     b = (base % Int)::Int
     digits = abs(b) <= 36 ? base36digits : base62digits
-    n = neg + (ndigits(x, base=b, pad=pad) % Int)::Int
+    n = neg + ndigits(x, base=b, pad=pad)
     a = StringVector(n)
     i = n
     @inbounds while i > neg
