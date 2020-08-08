@@ -339,6 +339,8 @@ end
     @test digits(-3, base = 2) == -[1, 1]
     @test digits(-42, base = 4) == -[2, 2, 2]
 
+    @test_throws DomainError string(5, base = typemin(Int128) + 10)
+
     @testset "digits/base with bases powers of 2" begin
         @test digits(4, base = 2) == [0, 0, 1]
         @test digits(5, base = Int32(2), pad=Int32(3)) == [1, 0, 1]
