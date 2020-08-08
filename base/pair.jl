@@ -84,7 +84,7 @@ Get the key type of a pair type. Behaves similarly to [`eltype`](@ref).
 julia> keytype(Int32(1) => "foo")
 Int32
 
-julia> keytype(Pair(Int32(1) => "foo"))
+julia> keytype(Pair(Int32(1), "foo"))
 Int32
 ```
 """
