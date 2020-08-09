@@ -646,30 +646,34 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
 
     @inbounds begin
     if tA == 'T'  # fastest case
-        for k = 1:mA
-            aoffs = (k-1)*Astride
-            if mB == 0
-                s = false
-            else
+        if nA == 0
+            for k = 1:mA
+                _modify!(_add, false, C, k)
+            end
+        else
+            for k = 1:mA
+                aoffs = (k-1)*Astride
                 s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
+                for i = 1:nA
+                    s += transpose(A[aoffs+i]) * B[i]
+                end
+                _modify!(_add, s, C, k)
             end
-            for i = 1:nA
-                s += transpose(A[aoffs+i]) * B[i]
-            end
-            _modify!(_add, s, C, k)
         end
     elseif tA == 'C'
-        for k = 1:mA
-            aoffs = (k-1)*Astride
-            if mB == 0
-                s = false
-            else
+        if nA == 0
+            for k = 1:mA
+                _modify!(_add, false, C, k)
+            end
+        else
+            for k = 1:mA
+                aoffs = (k-1)*Astride
                 s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
+                for i = 1:nA
+                    s += A[aoffs + i]'B[i]
+                end
+                _modify!(_add, s, C, k)
             end
-            for i = 1:nA
-                s += A[aoffs + i]'B[i]
-            end
-            _modify!(_add, s, C, k)
         end
     else # tA == 'N'
         for i = 1:mA
