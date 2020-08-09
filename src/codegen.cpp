@@ -659,10 +659,13 @@ static const auto jlapplytype_func = new JuliaFunction{
     "jl_instantiate_type_in_env",
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
             {T_pjlvalue, T_pjlvalue, T_pprjlvalue}, false); },
-    [](LLVMContext &C) { return AttributeList::get(C,
+    [](LLVMContext &C) {
+        return AttributeList::get(C,
             AttributeSet(),
-            Attributes(C, {Attribute::NonNull}),
-            None); },
+            AttributeSet::get(C, makeArrayRef({Attribute::get(C, Attribute::NonNull),
+                                               Attribute::getWithAlignment(C, Align(16))})),
+            None);
+    },
 };
 static const auto jl_object_id__func = new JuliaFunction{
     "jl_object_id_",

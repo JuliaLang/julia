@@ -335,6 +335,11 @@ static unsigned julia_alignment(jl_value_t *jt)
         // Array always has this alignment
         return JL_SMALL_BYTE_ALIGNMENT;
     }
+    if (jt == (jl_value_t*)jl_datatype_type) {
+        // types are never allocated in julia code/on the stack
+        // and this is the guarantee we have for the GC bits
+        return 16;
+    }
     assert(jl_is_datatype(jt) && ((jl_datatype_t*)jt)->layout);
     unsigned alignment = jl_datatype_align(jt);
     if (alignment > JL_HEAP_ALIGNMENT)

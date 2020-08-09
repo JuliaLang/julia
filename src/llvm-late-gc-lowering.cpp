@@ -1133,6 +1133,14 @@ static bool isLoadFromConstGV(LoadInst *LI)
     return false;
 }
 
+static uint64_t getLoadValueAlign(LoadInst *LI)
+{
+    MDNode *md = LI->getMetadata(LLVMContext::MD_align);
+    if (!md)
+        return 1;
+    return mdconst::extract<ConstantInt>(md->getOperand(0))->getLimitedValue();
+}
+
 static bool LooksLikeFrameRef(Value *V) {
     if (isSpecialPtr(V->getType()))
         return false;
@@ -2106,11 +2114,54 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                     });
                 newI->takeName(CI);
 
+                // LLVM alignment/bit check is not happy about addrspacecast and refuse
+                // to remove write barrier because of it.
+                // We pretty much only load using `T_size` so try our best to strip
+                // as many cast as possible.
+#if JL_LLVM_VERSION >= 100000
+                auto tag = CI->getArgOperand(2)->stripPointerCastsAndAliases();
+#else
+                auto tag = CI->getArgOperand(2)->stripPointerCasts();
+#endif
+                if (auto C = dyn_cast<ConstantExpr>(tag)) {
+                    if (C->getOpcode() == Instruction::IntToPtr) {
+                        tag = C->getOperand(0);
+                    }
+                }
+                else if (auto LI = dyn_cast<LoadInst>(tag)) {
+                    // Make sure the load is correctly marked as aligned
+                    // since LLVM might have removed them.
+                    // We can't do this in general since the load might not be
+                    // a type in other branches.
+                    // However, it should be safe for us to do this on const globals
+                    // which should be the important cases as well.
+                    if (isLoadFromConstGV(LI) && getLoadValueAlign(LI) < 16) {
+                        Type *T_int64 = Type::getInt64Ty(LI->getContext());
+                        auto op = ConstantAsMetadata::get(ConstantInt::get(T_int64, 16));
+                        LI->setMetadata(LLVMContext::MD_align,
+                                        MDNode::get(LI->getContext(), { op }));
+                    }
+                }
+                // As a last resort, if we didn't manage to strip down the tag
+                // for LLVM, emit an alignment assumption.
+                auto tag_type = tag->getType();
+                if (tag_type->isPointerTy()) {
+                    auto &DL = CI->getModule()->getDataLayout();
+#if JL_LLVM_VERSION >= 100000
+                    auto align = tag->getPointerAlignment(DL).valueOrOne().value();
+#else
+                    auto align = tag->getPointerAlignment(DL);
+#endif
+                    if (align < 16) {
+                        // On 5 <= LLVM < 12, it is illegal to call this on
+                        // non-integral pointer. This relies on stripping the
+                        // non-integralness from datalayout before this pass
+                        builder.CreateAlignmentAssumption(DL, tag, 16);
+                    }
+                }
                 // Set the tag.
                 StoreInst *store = builder.CreateAlignedStore(
-                    CI->getArgOperand(2),
-                    EmitTagPtr(builder, T_prjlvalue, newI),
-                    sizeof(size_t));
+                    tag, EmitTagPtr(builder, tag_type, newI), sizeof(size_t));
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 

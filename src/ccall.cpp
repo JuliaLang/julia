@@ -381,7 +381,10 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
                 ctx.spvals_ptr,
                 ConstantInt::get(T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)))
     };
-    return ctx.builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
+    auto call = ctx.builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
+    call->addAttribute(AttributeList::ReturnIndex,
+                       Attribute::getWithAlignment(jl_LLVMContext, Align(16)));
+    return call;
 }
 
 static const std::string make_errmsg(const char *fname, int n, const char *err)

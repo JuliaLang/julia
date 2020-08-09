@@ -627,11 +627,14 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createBarrierNoopPass());
             PM->add(createLowerExcHandlersPass());
             PM->add(createGCInvariantVerifierPass(false));
+            PM->add(createRemoveNIPass());
             PM->add(createLateLowerGCFramePass());
             PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
         }
-        PM->add(createRemoveNIPass());
+        else {
+            PM->add(createRemoveNIPass());
+        }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
@@ -751,15 +754,26 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
+        // Needed **before** LateLowerGCFrame on LLVM < 12
+        // due to bug in `CreateAlignmentAssumption`.
+        PM->add(createRemoveNIPass());
         PM->add(createLateLowerGCFramePass());
         PM->add(createFinalLowerGCPass());
+        // We need these two passes and the instcombine below
+        // after GC lowering to let LLVM do some constant propagation on the tags.
+        // and remove some unnecessary write barrier checks.
+        PM->add(createGVNPass());
+        PM->add(createSCCPPass());
         // Remove dead use of ptls
         PM->add(createDeadCodeEliminationPass());
         PM->add(createLowerPTLSPass(dump_native));
+        PM->add(createInstructionCombiningPass());
         // Clean up write barrier and ptls lowering
         PM->add(createCFGSimplificationPass());
     }
-    PM->add(createRemoveNIPass());
+    else {
+        PM->add(createRemoveNIPass());
+    }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
 #if defined(JL_ASAN_ENABLED)
