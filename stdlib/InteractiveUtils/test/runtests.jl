@@ -2,6 +2,10 @@
 
 using Test, InteractiveUtils
 
+@testset "highlighting" begin
+    include("highlighting.jl")
+end
+
 # test methodswith
 # `methodswith` relies on exported symbols
 export func4union, Base
@@ -75,11 +79,6 @@ has_unused() = (a = rand(5))
 # some of this info with debug info.
 #@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
 
-# Make sure that "expected" unions are highlighted with warning color instead of error color
-iob = IOBuffer()
-code_warntype(IOContext(iob, :color => true), x -> (x > 1 ? "foo" : nothing), Tuple{Int64})
-str = String(take!(iob))
-@test occursin(Base.text_colors[Base.warn_color()], str)
 
 # Make sure getproperty and setproperty! works with @code_... macros
 struct T1234321
