@@ -670,7 +670,8 @@ Estimate the return type of `f` given arguments of type `ArgType`. In other word
     This function is not part of the stable API. It is an implementation detail of the compiler,
     that can and will change any time. For instance it might give sharper bounds as
     inference improves or looser bounds to improve latency.
-    Using `return_type` is very likely to lead to undefined behaviour.
+    Using `return_type` is very likely to lead to unpredictable behaviour. Programs that rely on `return_type`
+    are typically fragile and will have desired behaviour for some types and broken behaviour for others.
 """
 function return_type(@nospecialize(f), @nospecialize(t))
     world = ccall(:jl_get_tls_world_age, UInt, ())
