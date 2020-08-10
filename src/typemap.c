@@ -778,7 +778,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                     if (!subtype) return NULL;
                 }
             }
-            if (is_cache_leaf(ty, 1)) {
+            if (is_cache_leaf(ty, 0)) {
                 if (cache->arg1 != (jl_array_t*)jl_an_empty_vec_any) {
                     jl_typemap_t *ml = mtcache_hash_lookup(cache->arg1, ty);
                     if (ml != jl_nothing) {
