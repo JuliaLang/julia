@@ -1994,6 +1994,7 @@ typedef struct {
     int8_t incremental;
     int8_t image_file_specified;
     int8_t warn_scope;
+    int8_t image_codegen;
 } jl_options_t;
 
 extern JL_DLLEXPORT jl_options_t jl_options;
