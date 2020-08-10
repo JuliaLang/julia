@@ -1536,7 +1536,13 @@ cat_similar(A, T, shape) = Array{T}(undef, shape)
 cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
 
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
-cat_shape(dims, shapes::Tuple) = reduce((x,y)->_cshp(1, dims, x, y), shapes; init=())
+function cat_shape(dims, shapes::Tuple)
+    out_shape = ()
+    for s in shapes
+        out_shape = _cshp(1, dims, out_shape, s)
+    end
+    return out_shape
+end
 
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
