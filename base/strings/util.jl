@@ -521,7 +521,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
             i = k = nextind(str, k)
         end
         r = something(findnext(pattern,str,k), 0)
-        r == 0:-1 || n == count && break
+        r === 0:-1 || n == count && break
         j, k = first(r), last(r)
         n += 1
     end
