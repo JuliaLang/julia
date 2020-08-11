@@ -197,6 +197,31 @@ function const_prop_profitable(@nospecialize(arg))
     return false
 end
 
+# This is a heuristic to avoid trying to const prop through complicated functions
+# where we would spend a lot of time, but are probably unliekly to get an improved
+# result anyway.
+function const_prop_heuristic(interp::AbstractInterpreter, method::Method, mi::MethodInstance)
+    # Peek at the inferred result for the function to determine if the optimizer
+    # was able to cut it down to something simple (inlineable in particular).
+    # If so, there's a good chance we might be able to const prop all the way
+    # through and learn something new.
+    code = get(code_cache(interp), mi, nothing)
+    declared_inline = isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
+    cache_inlineable = declared_inline
+    if isdefined(code, :inferred) && !cache_inlineable
+        cache_inf = code.inferred
+        if !(cache_inf === nothing)
+            cache_src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), cache_inf)
+            cache_src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), cache_inf)
+            cache_inlineable = cache_src_inferred && cache_src_inlineable
+        end
+    end
+    if !cache_inlineable
+        return false
+    end
+    return true
+end
+
 function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch, sv::InferenceState, edgecycle::Bool)
     method = match.method
     nargs::Int = method.nargs
@@ -248,21 +273,8 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     mi === nothing && return Any
     mi = mi::MethodInstance
     # decide if it's likely to be worthwhile
-    if !force_inference
-        code = get(code_cache(interp), mi, nothing)
-        declared_inline = isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
-        cache_inlineable = declared_inline
-        if isdefined(code, :inferred) && !cache_inlineable
-            cache_inf = code.inferred
-            if !(cache_inf === nothing)
-                cache_src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), cache_inf)
-                cache_src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), cache_inf)
-                cache_inlineable = cache_src_inferred && cache_src_inlineable
-            end
-        end
-        if !cache_inlineable
-            return Any
-        end
+    if !force_inference && !const_prop_heuristic(interp, method, mi)
+        return Any
     end
     inf_cache = get_inference_cache(interp)
     inf_result = cache_lookup(mi, argtypes, inf_cache)
