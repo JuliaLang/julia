@@ -202,7 +202,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
-    if t.state === :failed
+    if istaskfailed(t)
         println(io)
         show_task_exception(io, t)
     end

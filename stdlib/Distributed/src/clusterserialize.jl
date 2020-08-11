@@ -117,7 +117,7 @@ function serialize(s::ClusterSerializer, t::Task)
         end
         serialize(s, bt)
     end
-    serialize(s, t.state)
+    serialize(s, t._state)
     serialize(s, t.result)
     serialize(s, t.exception)
 end
@@ -257,11 +257,11 @@ function deserialize(s::ClusterSerializer, ::Type{Task})
     t.code = deserialize(s)
     t.storage = deserialize(s)
     state_or_bt = deserialize(s)
-    if state_or_bt isa Symbol
-        t.state = state_or_bt
+    if state_or_bt isa UInt8
+        t._state = state_or_bt
     else
         t.backtrace = state_or_bt
-        t.state = deserialize(s)
+        t._state = deserialize(s)
     end
     t.result = deserialize(s)
     t.exception = deserialize(s)

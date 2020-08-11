@@ -121,6 +121,30 @@ Get the currently running [`Task`](@ref).
 """
 current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 
+# task states
+
+const task_state_runnable = UInt8(0)
+const task_state_done     = UInt8(1)
+const task_state_failed   = UInt8(2)
+
+@inline function getproperty(t::Task, field::Symbol)
+    if field === :state
+        # TODO: this field name should be deprecated in 2.0
+        st = getfield(t, :_state)
+        if st === task_state_runnable
+            return :runnable
+        elseif st === task_state_done
+            return :done
+        elseif st === task_state_failed
+            return :failed
+        else
+            @assert false
+        end
+    else
+        return getfield(t, field)
+    end
+end
+
 """
     istaskdone(t::Task) -> Bool
 
@@ -143,7 +167,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = ((t.state === :done) | istaskfailed(t))
+istaskdone(t::Task) = t._state !== task_state_runnable
 
 """
     istaskstarted(t::Task) -> Bool
@@ -184,7 +208,7 @@ julia> istaskfailed(b)
 true
 ```
 """
-istaskfailed(t::Task) = (t.state === :failed)
+istaskfailed(t::Task) = (t._state === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 
@@ -433,7 +457,7 @@ function task_done_hook(t::Task)
 
     if err && !handled && Threads.threadid() == 1
         if isa(result, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task.state === :runnable && isempty(Workqueue) &&
+            active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, result) # this terminates the task
         end
@@ -448,7 +472,7 @@ function task_done_hook(t::Task)
         # issue #19467
         if Threads.threadid() == 1 &&
             isa(e, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task.state === :runnable && isempty(Workqueue) &&
+            active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, e)
         else
@@ -525,7 +549,7 @@ function __preinit_threads__()
 end
 
 function enq_work(t::Task)
-    (t.state === :runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
     tid = Threads.threadid(t)
     # Note there are three reasons a Task might be put into a sticky queue
     # even if t.sticky == false:
@@ -585,7 +609,7 @@ true
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
-    t.state === :runnable || Base.error("schedule: Task not runnable")
+    t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
         t.queue === nothing || Base.list_deletefirst!(t.queue, t)
         setfield!(t, :exception, arg)
@@ -671,7 +695,7 @@ end
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
     W = Workqueues[Threads.threadid()]
-    if ct !== othertask && othertask.state === :runnable
+    if ct !== othertask && othertask._state === task_state_runnable
         # we failed to yield to othertask
         # return it to the head of a queue to be retried later
         tid = Threads.threadid(othertask)
@@ -688,7 +712,7 @@ end
 function trypoptask(W::StickyWorkqueue)
     isempty(W) && return
     t = popfirst!(W)
-    if t.state !== :runnable
+    if t._state !== task_state_runnable
         # assume this somehow got queued twice,
         # probably broken now, but try discarding this switch and keep going
         # can't throw here, because it's probably not the fault of the caller to wait

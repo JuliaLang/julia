@@ -1325,7 +1325,16 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     deserialize_cycle(s, t)
     t.code = deserialize(s)
     t.storage = deserialize(s)
-    t.state = deserialize(s)
+    state = deserialize(s)
+    if state === :runnable
+        t._state = Base.task_state_runnable
+    elseif state === :done
+        t._state = Base.task_state_done
+    elseif state === :failed
+        t._state = Base.task_state_failed
+    else
+        @assert false
+    end
     t.result = deserialize(s)
     t.exception = deserialize(s)
     t
