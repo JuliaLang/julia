@@ -231,6 +231,8 @@ include("channels.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
+include("uuid.jl")
+include("contextvariables.jl")
 
 # Logging
 include("logging.jl")
@@ -339,7 +341,6 @@ include("initdefs.jl")
 include("threadcall.jl")
 
 # code loading
-include("uuid.jl")
 include("loading.jl")
 
 # misc useful functions & macros

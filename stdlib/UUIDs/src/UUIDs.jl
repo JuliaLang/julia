@@ -112,6 +112,8 @@ function uuid4(rng::AbstractRNG=Random.RandomDevice())
     UUID(u)
 end
 
+Base._uuid4(rng::AbstractRNG=Random.default_rng()) = uuid4(rng)
+
 """
     uuid5(ns::UUID, name::String) -> UUID
 

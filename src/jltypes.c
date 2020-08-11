@@ -2451,10 +2451,11 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(11,
+                        jl_perm_symsvec(12,
                                         "next",
                                         "queue",
                                         "storage",
+                                        "ctxvars",
                                         "state",
                                         "donenotify",
                                         "result",
@@ -2463,7 +2464,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "logstate",
                                         "code",
                                         "sticky"),
-                        jl_svec(11,
+                        jl_svec(12,
+                                jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -2475,7 +2477,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_bool_type),
-                        0, 1, 9);
+                        0, 1, 10);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
 

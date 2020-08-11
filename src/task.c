@@ -635,6 +635,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->next = jl_nothing;
     t->queue = jl_nothing;
     t->tls = jl_nothing;
+    t->ctxvars = ptls->current_task->ctxvars;  // inherit parent context
     t->state = runnable_sym;
     t->start = start;
     t->result = jl_nothing;
@@ -1210,6 +1211,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->started = 1;
     ptls->current_task->next = jl_nothing;
     ptls->current_task->queue = jl_nothing;
+    ptls->current_task->ctxvars = jl_nothing;
     ptls->current_task->state = runnable_sym;
     ptls->current_task->start = NULL;
     ptls->current_task->result = jl_nothing;
