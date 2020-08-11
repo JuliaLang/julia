@@ -677,18 +677,11 @@ function compileable_specialization(match::MethodMatch, sv::OptimizationState)
     return mi
 end
 
-function analyze_method!(idx::Int, sig::Signature, match::MethodMatch,
+function analyze_method!(idx::Int, atypes::Vector{Any}, match::MethodMatch,
                          stmt::Expr, sv::OptimizationState,
                          isinvoke::Bool, @nospecialize(stmttyp))
-    f, ft, atypes, atype_unlimited = sig.f, sig.ft, sig.atypes, sig.atype
     method = match.method
     methsig = method.sig
-
-    # Check whether this call just evaluates to a constant
-    if isa(f, widenconst(ft)) &&
-            isa(stmttyp, Const) && stmttyp.actual && is_inlineable_constant(stmttyp.val)
-        return ConstantCase(quoted(stmttyp.val), method, Any[match.sparams...], match.spec_types)
-    end
 
     # Check that we habe the correct number of arguments
     na = Int(method.nargs)
@@ -707,6 +700,10 @@ function analyze_method!(idx::Int, sig::Signature, match::MethodMatch,
         isa(match.sparams[i], TypeVar) && return nothing
     end
 
+    if !sv.params.inlining
+        return compileable_specialization(match, sv)
+    end
+
     # See if there exists a specialization for this method signature
     mi = specialize_method(match, true) # Union{Nothing, MethodInstance}
     if !isa(mi, MethodInstance)
@@ -715,12 +712,8 @@ function analyze_method!(idx::Int, sig::Signature, match::MethodMatch,
 
     isconst, src = find_inferred(mi, atypes, sv, stmttyp)
     if isconst
-        if sv.params.inlining
-            add_backedge!(mi, sv)
-            return ConstantCase(src, method, Any[match.sparams...], match.spec_types)
-        else
-            return compileable_specialization(match, sv)
-        end
+        add_backedge!(mi, sv)
+        return ConstantCase(src, method, Any[match.sparams...], match.spec_types)
     end
     if src === nothing
         return compileable_specialization(match, sv)
@@ -729,7 +722,7 @@ function analyze_method!(idx::Int, sig::Signature, match::MethodMatch,
     src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
     src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
 
-    if !(src_inferred && src_inlineable && sv.params.inlining)
+    if !(src_inferred && src_inlineable)
         return compileable_specialization(match, sv)
     end
 
@@ -976,7 +969,7 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, invoke_data::Invok
             sig.atype, method.sig)::SimpleVector
     methsp = methsp::SimpleVector
     match = MethodMatch(metharg, methsp, method, true)
-    result = analyze_method!(idx, sig, match, stmt, sv, true, calltype)
+    result = analyze_method!(idx, sig.atypes, match, stmt, sv, true, calltype)
     handle_single_case!(ir, stmt, idx, result, true, todo)
     update_valid_age!(sv, WorldRange(invoke_data.min_valid, invoke_data.max_valid))
     return nothing
@@ -1083,8 +1076,7 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Any}, idx::Int, @nospecia
                 fully_covered = false
                 continue
             end
-            case_sig = Signature(sig.f, sig.ft, sig.atypes, match.spec_types)
-            case = analyze_method!(idx, case_sig, match,
+            case = analyze_method!(idx, sig.atypes, match,
                 stmt, sv, false, calltype)
             if case === nothing
                 fully_covered = false
@@ -1111,7 +1103,7 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Any}, idx::Int, @nospecia
             match = meth[1]
         end
         fully_covered = true
-        case = analyze_method!(idx, sig, match, stmt, sv, false, calltype)
+        case = analyze_method!(idx, sig.atypes, match, stmt, sv, false, calltype)
         case === nothing && return
         push!(cases, Pair{Any,Any}(match.spec_types, case))
     end
@@ -1150,6 +1142,12 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
 
         (sig, invoke_data) = r
 
+        # Check whether this call was @pure and evaluates to a constant
+        if isa(sig.f, widenconst(sig.ft)) &&
+                isa(calltype, Const) && calltype.actual && is_inlineable_constant(calltype.val)
+            ir.stmts[idx][:inst] = quoted(calltype.val)
+            continue
+        end
 
         # Ok, now figure out what method to call
         if invoke_data !== nothing
