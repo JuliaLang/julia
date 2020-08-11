@@ -67,6 +67,7 @@ static inline void jl_lock_frame_push(jl_mutex_t *lock)
 static inline void jl_lock_frame_pop(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    assert(ptls->locks.len > 0);
     ptls->locks.len--;
 }
 

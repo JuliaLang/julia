@@ -25,7 +25,7 @@ extern "C" {
 static char const *const extensions[] = { "", ".dylib" };
 #elif defined(_OS_WINDOWS_)
 static char const *const extensions[] = { "", ".dll" };
-extern int needsSymRefreshModuleList;
+extern volatile int needsSymRefreshModuleList;
 #else
 static char const *const extensions[] = { "", ".so" };
 #endif
@@ -92,12 +92,14 @@ static void win32_formatmessage(DWORD code, char *reason, int len)
 JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
 {
 #if defined(_OS_WINDOWS_)
-    needsSymRefreshModuleList = 1;
     size_t len = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
     if (!len) return NULL;
     WCHAR *wfilename = (WCHAR*)alloca(len * sizeof(WCHAR));
     if (!MultiByteToWideChar(CP_UTF8, 0, filename, -1, wfilename, len)) return NULL;
-    return LoadLibraryExW(wfilename, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    HANDLE lib = LoadLibraryExW(wfilename, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    if (lib)
+        needsSymRefreshModuleList = 1;
+    return lib;
 #else
     dlerror(); /* Reset error status. */
     return dlopen(filename,
