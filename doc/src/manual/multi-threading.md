@@ -316,7 +316,7 @@ There are a few approaches to dealing with this problem:
    The following example demonstrates how this strategy could be applied to
    `Distributed.finalize_ref`:
 
-   ```
+   ```julia
    function finalize_ref(r::AbstractRemoteRef)
        if r.where > 0 # Check if the finalizer is already run
            if islocked(client_refs) || !trylock(client_refs)
