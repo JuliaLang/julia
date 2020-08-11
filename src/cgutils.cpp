@@ -437,7 +437,7 @@ static Value *maybe_bitcast(jl_codectx_t &ctx, Value *V, Type *to) {
 static Value *julia_binding_gv(jl_codectx_t &ctx, Value *bv)
 {
     Value *offset = ConstantInt::get(T_size, offsetof(jl_binding_t, value) / sizeof(size_t));
-    return ctx.builder.CreateInBoundsGEP(bv, offset);
+    return ctx.builder.CreateInBoundsGEP(T_prjlvalue, bv, offset);
 }
 
 static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
@@ -2822,7 +2822,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
                 tbaa_decorate(tbaa_unionselbyte, ctx.builder.CreateAlignedStore(
                         ConstantInt::get(T_int8, 0),
-                        ctx.builder.CreateInBoundsGEP(emit_bitcast(ctx, strct, T_pint8),
+                        ctx.builder.CreateInBoundsGEP(T_int8, emit_bitcast(ctx, strct, T_pint8),
                                 ConstantInt::get(T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1)),
                         1));
             }
@@ -2871,7 +2871,7 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
                                         PointerType::get(T_sigatomic, 0));
     Constant *offset = ConstantInt::getSigned(T_int32,
         offsetof(jl_tls_states_t, defer_signal) / sizeof(sig_atomic_t));
-    return ctx.builder.CreateInBoundsGEP(ptls, ArrayRef<Value*>(offset), "jl_defer_signal");
+    return ctx.builder.CreateInBoundsGEP(T_sigatomic, ptls, ArrayRef<Value*>(offset), "jl_defer_signal");
 }
 
 static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)

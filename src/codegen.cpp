@@ -2812,7 +2812,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             Instruction *own_ptr;
                             if (jl_is_long(ndp)) {
                                 own_ptr = ctx.builder.CreateAlignedLoad(T_prjlvalue,
-                                        ctx.builder.CreateConstGEP1_32(T_prjlvalue,
+                                        ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue,
                                             emit_bitcast(ctx, decay_derived(ctx, aryv), T_pprjlvalue),
                                             jl_array_data_owner_offset(nd) / sizeof(jl_value_t*)),
                                         sizeof(void*));
@@ -4457,6 +4457,7 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0)
 static void emit_last_age_field(jl_codectx_t &ctx)
 {
     ctx.world_age_field = ctx.builder.CreateInBoundsGEP(
+            T_size,
             ctx.builder.CreateBitCast(ctx.ptlsStates, T_psize),
             ConstantInt::get(T_size, offsetof(jl_tls_states_t, world_age) / sizeof(size_t)));
 }
@@ -4791,7 +4792,7 @@ static Function* gen_cfun_wrapper(
                     *closure_types = jl_alloc_vec_any(0);
                 jl_array_ptr_1d_push(*closure_types, jargty);
                 Value *runtime_dt = ctx.builder.CreateAlignedLoad(T_prjlvalue,
-                        ctx.builder.CreateConstGEP1_32(T_prjlvalue, nestPtr, jl_array_len(*closure_types)),
+                        ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, nestPtr, jl_array_len(*closure_types)),
                         sizeof(void*));
                 BasicBlock *boxedBB = BasicBlock::Create(jl_LLVMContext, "isboxed", cw);
                 BasicBlock *loadBB = BasicBlock::Create(jl_LLVMContext, "need-load", cw);
@@ -4859,7 +4860,7 @@ static Function* gen_cfun_wrapper(
                         *closure_types = jl_alloc_vec_any(0);
                     jl_array_ptr_1d_push(*closure_types, jargty);
                     Value *runtime_dt = ctx.builder.CreateAlignedLoad(T_prjlvalue,
-                            ctx.builder.CreateConstGEP1_32(T_prjlvalue, nestPtr, jl_array_len(*closure_types)),
+                            ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, nestPtr, jl_array_len(*closure_types)),
                             sizeof(void*));
                     Value *strct = box_ccall_result(ctx, val, runtime_dt, jargty);
                     inputarg = mark_julia_type(ctx, strct, true, jargty_proper);
@@ -5251,12 +5252,12 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             tbaa_decorate(tbaa, ctx.builder.CreateStore(F, derived_strct));
             tbaa_decorate(tbaa, ctx.builder.CreateStore(
                 ctx.builder.CreatePtrToInt(literal_pointer_val(ctx, fexpr_rt.constant), T_size),
-                ctx.builder.CreateConstGEP1_32(T_size, derived_strct, 1)));
+                ctx.builder.CreateConstInBoundsGEP1_32(T_size, derived_strct, 1)));
             Value *zero = ConstantInt::get(T_size, 0);
             tbaa_decorate(tbaa, ctx.builder.CreateStore(zero,
-                    ctx.builder.CreateConstGEP1_32(T_size, derived_strct, 2)));
+                    ctx.builder.CreateConstInBoundsGEP1_32(T_size, derived_strct, 2)));
             tbaa_decorate(tbaa, ctx.builder.CreateStore(zero,
-                    ctx.builder.CreateConstGEP1_32(T_size, derived_strct, 3)));
+                    ctx.builder.CreateConstInBoundsGEP1_32(T_size, derived_strct, 3)));
             F = strct;
         }
     }

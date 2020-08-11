@@ -1560,7 +1560,7 @@ static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> 
         for (unsigned j = 0; j < Idxs.size(); ++j) {
             IdxList[j + 1] = ConstantInt::get(T_int32, Idxs[j]);
         }
-        Value *GEP = irbuilder.CreateGEP(VTy, V, IdxList);
+        Value *GEP = irbuilder.CreateInBoundsGEP(VTy, V, IdxList);
         Type *T = GetElementPtrInst::getIndexedType(VTy, IdxList);
         assert(T->isPointerTy());
         V = irbuilder.CreateAlignedLoad(T, GEP, sizeof(void*));
@@ -1976,7 +1976,7 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
     assert(T == T_size || isa<PointerType>(T));
     auto TV = cast<PointerType>(V->getType());
     auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
-    return builder.CreateGEP(T, cast, ConstantInt::get(T_size, -1));
+    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1));
 }
 
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Value *V)
@@ -2161,7 +2161,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 IRBuilder<> Builder (CI);
                 for (; arg_it != CI->arg_end(); ++arg_it) {
                     Builder.CreateAlignedStore(*arg_it,
-                            Builder.CreateGEP(T_prjlvalue, Frame, ConstantInt::get(T_int32, slot++)),
+                            Builder.CreateInBoundsGEP(T_prjlvalue, Frame, ConstantInt::get(T_int32, slot++)),
                             sizeof(void*));
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?

@@ -107,7 +107,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     StoreInst *inst = builder.CreateAlignedStore(
                 ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
                 builder.CreateBitCast(
-                        builder.CreateConstGEP1_32(gcframe, 0),
+                        builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0),
                         T_size->getPointerTo()),
                 sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -115,7 +115,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     inst = builder.CreateAlignedStore(
             builder.CreateAlignedLoad(pgcstack, sizeof(void*)),
             builder.CreatePointerCast(
-                    builder.CreateConstGEP1_32(gcframe, 1),
+                    builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1),
                     PointerType::get(T_ppjlvalue, 0)),
             sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -133,7 +133,7 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(target);
     Instruction *gcpop =
-        cast<Instruction>(builder.CreateConstGEP1_32(gcframe, 1));
+        cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
     Instruction *inst = builder.CreateAlignedLoad(gcpop, sizeof(void*));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
@@ -159,7 +159,7 @@ Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
     index = builder.CreateAdd(index, ConstantInt::get(T_int32, 2));
 
     // Lower the intrinsic as a GEP.
-    auto gep = builder.CreateGEP(gcframe, index);
+    auto gep = builder.CreateInBoundsGEP(T_prjlvalue, gcframe, index);
     gep->takeName(target);
     return gep;
 }
@@ -174,8 +174,8 @@ Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 Instruction *FinalLowerGC::getPgcstack(Instruction *ptlsStates)
 {
     Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
-    return GetElementPtrInst::Create(
-        nullptr,
+    return GetElementPtrInst::CreateInBounds(
+        T_ppjlvalue,
         ptlsStates,
         ArrayRef<Value*>(offset),
         "jl_pgcstack");
