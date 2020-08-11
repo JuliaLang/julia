@@ -182,6 +182,9 @@ Macros are a way to run generated code without calling [`eval`](@ref Base.eval),
 code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
+Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
+and file name the macro is called from, and `__module__`, which is the module the macro is expanded
+in.
 
 # Examples
 ```jldoctest
