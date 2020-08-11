@@ -386,5 +386,6 @@ Process(`echo 1`, ProcessExited(0))
 ```
 """
 macro cmd(str)
-    return :(cmd_gen($(esc(shell_parse(str, special=shell_special)[1]))))
+    cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
+    return :(cmd_gen($(esc(cmd_ex))))
 end
