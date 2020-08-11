@@ -507,6 +507,10 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern = _pat_replacer(pattern)
     r = something(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
+    if j == 0
+        _free_pat_replacer(pattern)
+        return str
+    end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
         if i == a || i <= k
