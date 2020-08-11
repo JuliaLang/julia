@@ -927,8 +927,8 @@ function sincospi(x::T) where T<:Rational
     end
 end
 
-sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
-cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
+sinpi(x::T) where {T<:Integer} = zero(signed(T))
+cospi(x::T) where {T<:Integer} = isodd(x) ? -one(signed(T)) : one(signed(T))
 sincospi(x::Integer) = (sinpi(x), cospi(x))
 sinpi(x::Real) = sinpi(float(x))
 cospi(x::Real) = cospi(float(x))
