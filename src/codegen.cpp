@@ -866,6 +866,9 @@ static void add_return_attr(T *f, Attribute::AttrKind Kind)
 
 static MDNode *best_tbaa(jl_value_t *jt) {
     jt = jl_unwrap_unionall(jt);
+    if (jt == (jl_value_t*)jl_datatype_type ||
+        (jl_is_type_type(jt) && jl_is_datatype(jl_tparam0(jt))))
+        return tbaa_const;
     if (!jl_is_datatype(jt))
         return tbaa_value;
     if (jl_is_abstracttype(jt))
