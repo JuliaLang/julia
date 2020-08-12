@@ -17,7 +17,7 @@ function rstrip_shell(s::AbstractString)
 end
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
-                     special::AbstractString="")
+                     special::AbstractString="", filename="none")
     s = SubString(str, firstindex(str))
     s = rstrip_shell(lstrip(s))
 
@@ -71,7 +71,8 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 # string interpolation syntax (see #3150)
                 ex, j = :var, stpos+3
             else
-                ex, j = Meta.parse(s,stpos,greedy=false)
+                # use parseatom instead of parse to respect filename (#28188)
+                ex, j = Meta.parseatom(s, stpos, filename=filename)
             end
             last_parse = (stpos:prevind(s, j)) .+ s.offset
             update_arg(ex);
