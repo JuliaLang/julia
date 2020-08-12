@@ -1124,11 +1124,12 @@ static bool isLoadFromConstGV(LoadInst *LI)
 {
     // We only emit single slot GV in codegen
     // but LLVM global merging can change the pointer operands to GEPs/bitcasts
-    if (!isa<GlobalVariable>(LI->getPointerOperand()->stripInBoundsOffsets()))
-        return false;
-    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_const"}))
-        return true;
+    if (auto gv = dyn_cast<GlobalVariable>(LI->getPointerOperand()->stripInBoundsOffsets())) {
+        MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
+        if (isTBAA(TBAA, {"jtbaa_const"}) || gv->getMetadata("julia.constgv")) {
+            return true;
+        }
+    }
     return false;
 }
 
