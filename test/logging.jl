@@ -44,7 +44,7 @@ end
     foo_val = 10
     bar_val = 100
     logs,_ = collect_test_logs() do
-        @info "test"  bar_val  progress=0.1  foo=foo_val  2*3  real_line=(@__LINE__)
+        @info "test"  bar_val  progress=0.1  foo=foo_val  2*3  bar(x)=1.2  real_line=(@__LINE__)
         @info begin
             value_in_msg_block = 1000.0
             "test2"
@@ -69,6 +69,7 @@ end
     @test kwargs[:progress] == 0.1
     @test kwargs[:foo] === foo_val
     @test kwargs[Symbol(:(2*3))] === 6
+    @test kwargs[Symbol(:(bar(x)))] === 1.2
 
     # Keyword values accessible from message block
     record2 = logs[2]

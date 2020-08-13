@@ -312,10 +312,10 @@ function process_logmsg_exs(_orig_module, _file, _line, level, message, exs...)
     _module = _orig_module
     kwargs = Any[]
     for ex in exs
-        if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
+        if ex isa Expr && ex.head === :(=)
             k,v = ex.args
             if !(k isa Symbol)
-                throw(ArgumentError("Expected symbol for key in key value pair `$ex`"))
+                k = Symbol(k)
             end
 
             # Recognize several special keyword arguments
