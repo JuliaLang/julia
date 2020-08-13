@@ -7,7 +7,7 @@ import ..Random: TaskLocal, rand, rand!, UnsafeView, Xoshiro, SamplerType
 
 
 #Vector-width. Influences random stream. We may want to tune this before merging.
-xoshiroWidth() = Val(4)
+xoshiroWidth() = Val(8)
 #Simd threshold. Influences random stream. We may want to tune this before merging.
 simdThreshold(::Type{T}) where T = 2048
 simdThreshold(::Type{Bool}) = 4096
@@ -154,19 +154,19 @@ function forkRand(rng::Union{TaskLocal, Xoshiro}, ::Val{N}) where N
     (s0, s1, s2, s3)
 end
 
-@inline function taskLocalRngBulk(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}, ::Val{N}) where {T<:Union{UInt8, Float32, Float64, Bool}, N}
+@inline function xoshiro_bulk(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}, ::Val{N}) where {T<:Union{UInt8, Float32, Float64, Bool}, N}
     if len >= simdThreshold(T)
-        written = taskLocalRngBulk_simd(rng, dst, len, T, Val(N))
+        written = xoshiro_bulk_simd(rng, dst, len, T, Val(N))
         len -= written
         dst += written
     end
     if len != 0
-        taskLocalRngBulk_nosimd(rng, dst, len,  T)
+        xoshiro_bulk_nosimd(rng, dst, len,  T)
     end
     nothing
 end
 
-@noinline function taskLocalRngBulk_nosimd(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}) where {T}
+@noinline function xoshiro_bulk_nosimd(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}) where {T}
     #we rely on specialization, llvm const-prop + instcombine to remove unneeded masking
     mskOR =  oneBits(T)
     mskAND = mskBits(T)
@@ -211,10 +211,10 @@ end
     else
        rng.s0, rng.s1, rng.s2, rng.s3 =  s0, s1, s2, s3
     end
-    
+    nothing
 end
 
-@noinline function taskLocalRngBulk_nosimd(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool})
+@noinline function xoshiro_bulk_nosimd(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool})
     if rng isa TaskLocal
         task = current_task()
         s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
@@ -245,7 +245,6 @@ end
     if(i < len)
         #we may overgenerate some bytes here, if len mod 64 <= 56 and len mod 8 != 0
         res = _rotl23(_plus(s0,s3))
-        res = _or(_and(res, mskAND), mskOR)
         while i+8 <= len
             resLoc = _and(res, 0x0101010101010101)
             res = _lshr(res, 1)
@@ -268,12 +267,12 @@ end
     else
        rng.s0, rng.s1, rng.s2, rng.s3 =  s0, s1, s2, s3
     end
-    
+    nothing
 end
 
 
 
-@noinline function taskLocalRngBulk_simd(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}, ::Val{N}) where {T,N}
+@noinline function xoshiro_bulk_simd(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}, ::Val{N}) where {T,N}
     #we rely on specialization, llvm const-prop + instcombine to remove unneeded masking
     mskOR =  oneBits(T, Val(N))
     mskAND = mskBits(T, Val(N))
@@ -296,7 +295,7 @@ end
     end
     return i
 end
-@noinline function taskLocalRngBulk_simd(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, ::Val{N}) where {N}
+@noinline function xoshiro_bulk_simd(rng::Union{TaskLocal, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, ::Val{N}) where {N}
 
     s0, s1, s2, s3 = forkRand(rng, Val(N))
     msk = ntuple(i->VecElement(0x0101010101010101), Val(N))
@@ -323,7 +322,7 @@ end
 
 
 function rand!(rng::Union{TaskLocal, Xoshiro}, dst::Union{Array{Float32}, UnsafeView{Float32}}, ::SamplerType{Float32} = SamplerType{Float32}()) 
-    GC.@preserve dst taskLocalRngBulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*4, Float32, xoshiroWidth())
+    GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*4, Float32, xoshiroWidth())
     @inbounds @simd for i =1:length(dst)
         dst[i] = dst[i] - 1.0f0
     end
@@ -331,7 +330,7 @@ function rand!(rng::Union{TaskLocal, Xoshiro}, dst::Union{Array{Float32}, Unsafe
 end
 
 function rand!(rng::Union{TaskLocal, Xoshiro}, dst::Union{Array{Float64}, UnsafeView{Float64}}, ::SamplerType{Float64} = SamplerType{Float64}()) 
-    GC.@preserve dst taskLocalRngBulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*8, Float64, xoshiroWidth())
+    GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*8, Float64, xoshiroWidth())
     @inbounds @simd for i =1:length(dst)
         dst[i] = dst[i] - 1.0e0
     end
@@ -339,12 +338,12 @@ function rand!(rng::Union{TaskLocal, Xoshiro}, dst::Union{Array{Float64}, Unsafe
 end
 
 function rand!(rng::Union{TaskLocal, Xoshiro}, dst::Union{Array{T}, UnsafeView{T}}, ::SamplerType{T} = SamplerType{T}()) where {T<:Base.BitInteger}
-    GC.@preserve dst taskLocalRngBulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof(T), UInt8, xoshiroWidth())
+    GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof(T), UInt8, xoshiroWidth())
     dst
 end
 
 function rand!(rng::Union{TaskLocal, Xoshiro}, dst::Union{Array{Bool}, UnsafeView{Bool}}, ::SamplerType{Bool} = SamplerType{Bool}())
-    GC.@preserve dst taskLocalRngBulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst), Bool, xoshiroWidth())
+    GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst), Bool, xoshiroWidth())
     dst
 end
 
