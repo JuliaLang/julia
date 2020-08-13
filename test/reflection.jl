@@ -451,6 +451,11 @@ fLargeTable() = 4
 @test_throws MethodError fLargeTable(Val(1), Val(1))
 @test fLargeTable(Val(1), 1) == 1
 @test fLargeTable(1, Val(1)) == 2
+fLargeTable(::Union, ::Union) = "a"
+@test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
+fLargeTable(::Union, ::Union) = "b"
+@test length(methods(fLargeTable)) == 205
+@test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
 # issue #15280
 function f15280(x) end

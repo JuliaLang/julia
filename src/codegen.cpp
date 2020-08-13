@@ -404,6 +404,18 @@ static const auto jlgetworld_global = new JuliaVariable{
     [](LLVMContext &C) { return (Type*)T_size; },
 };
 
+static const auto jlboxed_int8_cache = new JuliaVariable{
+    "jl_boxed_int8_cache",
+    true,
+    [](LLVMContext &C) { return (Type*)ArrayType::get(T_pjlvalue, 256); },
+};
+
+static const auto jlboxed_uint8_cache = new JuliaVariable{
+    "jl_boxed_uint8_cache",
+    true,
+    [](LLVMContext &C) { return (Type*)ArrayType::get(T_pjlvalue, 256); },
+};
+
 static const auto jltls_states_func = new JuliaFunction{
     "julia.ptls_states",
     [](LLVMContext &C) { return FunctionType::get(PointerType::get(T_ppjlvalue, 0), false); },
@@ -746,8 +758,6 @@ static const auto box_##ct##_func = new JuliaFunction{                        \
             {at}, false); },                                                  \
     attrs,                                                                    \
 }
-BOX_FUNC(int8, T_pjlvalue, T_int8, get_attrs_sext);
-BOX_FUNC(uint8, T_pjlvalue, T_int8, get_attrs_zext);
 BOX_FUNC(int16, T_prjlvalue, T_int16, get_attrs_sext);
 BOX_FUNC(uint16, T_prjlvalue, T_int16, get_attrs_zext);
 BOX_FUNC(int32, T_prjlvalue, T_int32, get_attrs_sext);
@@ -7475,7 +7485,7 @@ static void init_jit_functions(void)
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
-    imaging_mode = jl_generating_output() && !jl_options.incremental;
+    imaging_mode = jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
     jl_default_cgparams.module_setup = jl_nothing;
     jl_default_cgparams.module_activation = jl_nothing;
     jl_default_cgparams.raise_exception = jl_nothing;

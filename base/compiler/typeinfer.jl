@@ -21,29 +21,33 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
         finish(caller, interp)
     end
     # collect results for the new expanded frame
-    results = InferenceResult[ frames[i].result for i in 1:length(frames) ]
+    results = Tuple{InferenceResult, Bool}[ ( frames[i].result,
+        frames[i].cached || frames[i].parent !== nothing ) for i in 1:length(frames) ]
     # empty!(frames)
     valid_worlds = frame.valid_worlds
     cached = frame.cached
     if cached || frame.parent !== nothing
-        for caller in results
+        for (caller, doopt) in results
             opt = caller.src
             if opt isa OptimizationState
-                optimize(opt, OptimizationParams(interp), caller.result)
-                finish(opt.src, interp)
-                # finish updating the result struct
-                validate_code_in_debug_mode(opt.linfo, opt.src, "optimized")
-                if opt.const_api
-                    if caller.result isa Const
-                        caller.src = caller.result
+                run_optimizer = doopt && may_optimize(interp)
+                if run_optimizer
+                    optimize(opt, OptimizationParams(interp), caller.result)
+                    finish(opt.src, interp)
+                    # finish updating the result struct
+                    validate_code_in_debug_mode(opt.linfo, opt.src, "optimized")
+                    if opt.const_api
+                        if caller.result isa Const
+                            caller.src = caller.result
+                        else
+                            @assert isconstType(caller.result)
+                            caller.src = Const(caller.result.parameters[1])
+                        end
+                    elseif opt.src.inferred
+                        caller.src = opt.src::CodeInfo # stash a copy of the code (for inlining)
                     else
-                        @assert isconstType(caller.result)
-                        caller.src = Const(caller.result.parameters[1])
+                        caller.src = nothing
                     end
-                elseif opt.src.inferred
-                    caller.src = opt.src::CodeInfo # stash a copy of the code (for inlining)
-                else
-                    caller.src = nothing
                 end
                 valid_worlds = intersect(valid_worlds, opt.valid_worlds)
             end
@@ -72,14 +76,14 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     return true
 end
 
-function CodeInstance(result::InferenceResult, valid_worlds::WorldRange,
-                      may_compress=true, allow_discard_tree=true)
-    inferred_result = result.src
+function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::Any),
+                      valid_worlds::WorldRange)
     local const_flags::Int32
     if inferred_result isa Const
         # use constant calling convention
         rettype_const = (result.src::Const).val
         const_flags = 0x3
+        inferred_result = nothing
     else
         if isa(result.result, Const)
             rettype_const = (result.result::Const).val
@@ -94,28 +98,6 @@ function CodeInstance(result::InferenceResult, valid_worlds::WorldRange,
             rettype_const = nothing
             const_flags = 0x00
         end
-        if inferred_result isa CodeInfo
-            def = result.linfo.def
-            toplevel = !isa(def, Method)
-            if !toplevel
-                cache_the_tree = !allow_discard_tree || (result.src.inferred &&
-                    (result.src.inlineable ||
-                    ccall(:jl_isa_compileable_sig, Int32, (Any, Any), result.linfo.specTypes, def) != 0))
-                if cache_the_tree
-                    if may_compress
-                        nslots = length(inferred_result.slotflags)
-                        resize!(inferred_result.slottypes, nslots)
-                        resize!(inferred_result.slotnames, nslots)
-                        inferred_result = ccall(:jl_compress_ir, Any, (Any, Any), def, inferred_result)
-                    end
-                else
-                    inferred_result = nothing
-                end
-            end
-        end
-    end
-    if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}})
-        inferred_result = nothing
     end
     return CodeInstance(result.linfo,
         widenconst(result.result), rettype_const, inferred_result,
@@ -131,8 +113,47 @@ already_inferred_quick_test(interp::NativeInterpreter, mi::MethodInstance) =
 already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) =
     false
 
-# inference completed on `me`
-# update the MethodInstance
+function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
+    def = linfo.def
+    toplevel = !isa(def, Method)
+    if toplevel
+        return ci
+    end
+    cache_the_tree = !may_discard_trees(interp) || (ci.inferred &&
+        (ci.inlineable ||
+        ccall(:jl_isa_compileable_sig, Int32, (Any, Any), linfo.specTypes, def) != 0))
+    if cache_the_tree
+        if may_compress(interp)
+            nslots = length(ci.slotflags)
+            resize!(ci.slottypes, nslots)
+            resize!(ci.slotnames, nslots)
+            return ccall(:jl_compress_ir, Any, (Any, Any), def, ci)
+        else
+            return ci
+        end
+    else
+        return nothing
+    end
+end
+
+function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
+                                    @nospecialize(inferred_result))
+    local const_flags::Int32
+    # If we decided not to optimize, drop the OptimizationState now.
+    # External interpreters can override as necessary to cache additional information
+    if inferred_result isa OptimizationState
+        inferred_result = inferred_result.src
+    end
+    if inferred_result isa CodeInfo
+        inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
+    end
+    # The global cache can only handle objects that codegen understands
+    if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}, Const})
+        inferred_result = nothing
+    end
+    return inferred_result
+end
+
 function cache_result!(interp::AbstractInterpreter, result::InferenceResult, valid_worlds::WorldRange)
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
@@ -143,13 +164,15 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult, val
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        code_cache(interp)[result.linfo] = CodeInstance(result, valid_worlds,
-            may_compress(interp), may_discard_trees(interp))
+        inferred_result = transform_result_for_cache(interp, result.linfo, result.src)
+        code_cache(interp)[result.linfo] = CodeInstance(result, inferred_result, valid_worlds)
     end
     unlock_mi_inference(interp, result.linfo)
     nothing
 end
 
+# inference completed on `me`
+# update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
     if me.limited && me.cached && me.parent !== nothing
@@ -161,16 +184,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     else
         # annotate fulltree with type information
         type_annotate!(me)
-        can_optimize = may_optimize(interp)
-        run_optimizer = (me.cached || me.parent !== nothing) && can_optimize
-        if run_optimizer
-            # construct the optimizer for later use, if we're building this IR to cache it
-            # (otherwise, we'll run the optimization passes later, outside of inference)
-            opt = OptimizationState(me, OptimizationParams(interp), interp)
-            me.result.src = opt
-        elseif !can_optimize
-            me.result.src = me.src
-        end
+        me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
     end
     me.result.result = me.bestguess
     nothing

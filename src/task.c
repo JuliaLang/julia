@@ -93,10 +93,6 @@ volatile int jl_in_stackwalk = 0;
 #define STATIC_OR_JS static
 #endif
 
-jl_sym_t *done_sym;
-jl_sym_t *failed_sym;
-jl_sym_t *runnable_sym;
-
 extern size_t jl_page_size;
 static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT;
 STATIC_OR_JS void jl_set_fiber(jl_ucontext_t *t);
@@ -195,9 +191,9 @@ void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNR
     t->result = resultval;
     jl_gc_wb(t, t->result);
     if (t->exception != jl_nothing)
-        jl_atomic_store_release(&t->state, failed_sym);
+        jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
     else
-        jl_atomic_store_release(&t->state, done_sym);
+        jl_atomic_store_release(&t->_state, JL_TASK_STATE_DONE);
     if (t->copy_stack) // early free of stkbuf
         t->stkbuf = NULL;
     // ensure that state is cleared
@@ -303,8 +299,7 @@ static void ctx_switch(jl_ptls_t ptls)
     }
 #endif
 
-
-    int killed = (lastt->state == done_sym || lastt->state == failed_sym);
+    int killed = lastt->_state != JL_TASK_STATE_RUNNABLE;
     if (!t->started && !t->copy_stack) {
         // may need to allocate the stack
         if (t->stkbuf == NULL) {
@@ -451,8 +446,7 @@ JL_DLLEXPORT void jl_switch(void)
     if (t == ct) {
         return;
     }
-    if (t->state == done_sym || t->state == failed_sym ||
-            (t->started && t->stkbuf == NULL)) {
+    if (t->_state != JL_TASK_STATE_RUNNABLE || (t->started && t->stkbuf == NULL)) {
         ct->exception = t->exception;
         ct->result = t->result;
         return;
@@ -713,7 +707,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->next = jl_nothing;
     t->queue = jl_nothing;
     t->tls = jl_nothing;
-    t->state = runnable_sym;
+    t->_state = JL_TASK_STATE_RUNNABLE;
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
@@ -809,10 +803,6 @@ void JL_DLLEXPORT jl_schedule_task(jl_task_t *task)
 // Do one-time initializations for task system
 void jl_init_tasks(void) JL_GC_DISABLED
 {
-    done_sym = jl_symbol("done");
-    failed_sym = jl_symbol("failed");
-    runnable_sym = jl_symbol("runnable");
-
     char *acs = getenv("JULIA_COPY_STACKS");
     if (acs) {
         if (!strcmp(acs, "1") || !strcmp(acs, "yes"))
@@ -1290,7 +1280,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->started = 1;
     ptls->current_task->next = jl_nothing;
     ptls->current_task->queue = jl_nothing;
-    ptls->current_task->state = runnable_sym;
+    ptls->current_task->_state = JL_TASK_STATE_RUNNABLE;
     ptls->current_task->start = NULL;
     ptls->current_task->result = jl_nothing;
     ptls->current_task->donenotify = jl_nothing;

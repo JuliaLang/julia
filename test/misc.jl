@@ -842,3 +842,8 @@ end
 @testset "fieldtypes Module" begin
     @test fieldtypes(Module) isa Tuple
 end
+
+
+@testset "issue #28188" begin
+    @test `$(@__FILE__)` == let file = @__FILE__; `$file` end
+end

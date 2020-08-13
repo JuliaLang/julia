@@ -1260,7 +1260,7 @@ function tuple_tfunc(atypes::Vector{Any})
         end
     end
     if all_are_const
-        return Const(tuple(Any[atypes[i].val for i in 1:length(atypes)]...))
+        return Const(ntuple(i -> atypes[i].val, length(atypes)))
     end
     params = Vector{Any}(undef, length(atypes))
     anyinfo = false

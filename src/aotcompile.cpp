@@ -867,6 +867,11 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         Function *F = NULL;
         if (m) {
             // if compilation succeeded, prepare to return the result
+            // For imaging mode, global constants are currently private without initializer
+            // which isn't legal. Convert them to extern linkage so that the code can compile
+            // and will better match what's actually in sysimg.
+            for (auto &global : output.globals)
+                global.second->setLinkage(GlobalValue::ExternalLinkage);
             if (optimize)
                 PM->run(*m.get());
             const std::string *fname;

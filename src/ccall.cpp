@@ -192,7 +192,10 @@ static GlobalVariable *emit_plt_thunk(
         // Known failures includes vararg (not needed here) and sret.
 #if (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
                         defined(_CPU_AARCH64_))
-        ret->setTailCallKind(CallInst::TCK_MustTail);
+        // Ref https://bugs.llvm.org/show_bug.cgi?id=47058
+        // LLVM, as of 10.0.1 emits wrong/worse code when musttail is set
+        if (!attrs.hasAttrSomewhere(Attribute::ByVal))
+            ret->setTailCallKind(CallInst::TCK_MustTail);
 #endif
         if (functype->getReturnType() == T_void) {
             irbuilder.CreateRetVoid();
