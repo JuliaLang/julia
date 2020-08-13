@@ -71,7 +71,7 @@ This ensures your package is resilient against situations such as scratch spaces
 
 > Can I create a scratch space that is not shared across versions of my package?
 
-Yes!  Make use of the `key` parameter and Pkg's ability to look up the current version of your package at compile-time:
+Yes!  Make use of the `key` parameter and the version of your package at compile-time:
 
 ```julia
 module VersionSpecificExample
