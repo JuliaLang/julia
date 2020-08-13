@@ -290,7 +290,7 @@ try
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, ]),
+                 :Statistics, TOML]),
                 # Plus precompilation module generated at build time
                 let id = Base.PkgId("__PackagePrecompilationStatementModule")
                     Dict(id => Base.module_build_id(Base.root_module(id)))
