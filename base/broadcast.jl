@@ -137,7 +137,7 @@ BroadcastStyle(a::AbstractArrayStyle, ::Style{Tuple})    = a
 BroadcastStyle(::A, ::A) where A<:ArrayStyle             = A()
 BroadcastStyle(::ArrayStyle, ::ArrayStyle)               = Unknown()
 BroadcastStyle(::A, ::A) where A<:AbstractArrayStyle     = A()
-@pure function BroadcastStyle(a::A, b::B) where {A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}} where {M,N}
+Base.@pure function BroadcastStyle(a::A, b::B) where {A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}} where {M,N}
     if Base.typename(A) === Base.typename(B)
         return A(Val(max(M, N)))
     end
@@ -695,23 +695,22 @@ function promote_typejoin_union(::Type{T}) where T
     if T === Union{}
         return Union{}
     elseif T isa Union
-        promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
+        return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
     elseif T <: Tuple
-        typejoin_union_tuple(T)
+        return typejoin_union_tuple(T)
     else
-        T
+        return T
     end
 end
 
 @pure function typejoin_union_tuple(::Type{T}) where {T}
-    p = T.parameters
+    p = (Core.Compiler.unwrap_unionall(T)::DataType).parameters
     lr = length(p)::Int
     if lr == 0
         return Tuple{}
     end
-    lf, fixed = Core.Compiler.full_va_len(p)
-    c = Vector{Any}(undef, lf)
-    for i = 1:lf
+    c = Vector{Any}(undef, lr)
+    for i = 1:lr
         pi = p[i]
         U = Core.Compiler.unwrapva(pi)
         if U === Union{}
@@ -721,7 +720,12 @@ end
         else
             ci = U
         end
-        c[i] = i == lf && Core.Compiler.isvarargtype(pi) ? Vararg{ci} : ci
+        if i == lr && Core.Compiler.isvarargtype(pi)
+            N = (Core.Compiler.unwrap_unionall(pi)::DataType).parameters[2]
+            c[i] = Vararg{ci, N}
+        else
+            c[i] = ci
+        end
     end
     return Tuple{c...}
 end
@@ -913,13 +917,9 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     dest = similar(bc′, typeof(val))
     @inbounds dest[I] = val
     # Now handle the remaining values
-    if dest isa AbstractArray
-        # Give inference a helping hand on the element type and dimensionality
-        # (work-around for #28382)
-        return copyto_nonleaf!(dest, bc′, iter, state, 1)::AbstractArray{<:ElType, ndims(dest)}
-    else
-        return copyto_nonleaf!(dest, bc′, iter, state, 1)
-    end
+    # The typeassert gives inference a helping hand on the element type and dimensionality
+    # (work-around for #28382)
+    return copyto_nonleaf!(dest, bc′, iter, state, 1)::(dest isa AbstractArray ? AbstractArray{<:ElType, ndims(dest)} : Any)
 end
 
 ## general `copyto!` methods
