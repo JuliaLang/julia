@@ -1577,7 +1577,7 @@ JL_DLLEXPORT void JL_NORETURN jl_exceptionf(jl_datatype_t *ty,
 JL_DLLEXPORT void JL_NORETURN jl_too_few_args(const char *fname, int min);
 JL_DLLEXPORT void JL_NORETURN jl_too_many_args(const char *fname, int max);
 JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
-                                            jl_value_t *expected,
+                                            jl_value_t *expected JL_MAYBE_UNROOTED,
                                             jl_value_t *got JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
                                                const char *context,
@@ -1604,7 +1604,7 @@ JL_DLLEXPORT void JL_NORETURN jl_eof_error(void);
 // enclosing JL_CATCH.
 // FIXME: Teach the static analyzer about this rather than using
 // JL_GLOBALLY_ROOTED which is far too optimistic.
-JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void);
 JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 
@@ -1841,8 +1841,8 @@ JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
 JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh);
 JL_DLLEXPORT void jl_pop_handler(int n);
-JL_DLLEXPORT size_t jl_excstack_state(void);
-JL_DLLEXPORT void jl_restore_excstack(size_t state);
+JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT;
 
 #if defined(_OS_WINDOWS_)
 #if defined(_COMPILER_GCC_)

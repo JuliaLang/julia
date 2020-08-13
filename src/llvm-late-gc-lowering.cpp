@@ -225,6 +225,41 @@ using namespace llvm;
       simply sink the alloca into the GCFrame.
 */
 
+static bool isNoSafepointFunc(Function *f)
+{
+    // Some of these do have safepoint, but only in error path
+    // and never needs the input argument to be rooted in those cases.
+    const char *const names[] = {
+        "memcmp",
+        "jl_throw",
+        "jl_error",
+        "jl_type_error",
+        "jl_undefined_var_error",
+        "jl_bounds_error_ints",
+        "jl_bounds_error_int",
+        "jl_bounds_error_unboxed_int",
+        "jl_current_exception",
+        "jl_restore_excstack",
+        "jl_excstack_state",
+        "julia.loopinfo_marker",
+        "jl_object_id_",
+        "jl_gc_diff_total_bytes",
+        "jl_gc_sync_total_bytes",
+        "jl_array_data_owner",
+        "jl_f_typeof",
+        "jl_f_ifelse",
+        "jl_f_throw",
+        "jl_f_setfield",
+    };
+    auto name = f->getName();
+    for (auto f: names) {
+        if (name == f) {
+            return true;
+        }
+    }
+    return false;
+}
+
 struct BBState {
     // Uses in this BB
     // These do not get updated after local analysis
@@ -1496,7 +1531,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
                         callee == ptls_getter ||
-                        callee == write_barrier_func || callee->getName() == "memcmp") {
+                        callee == write_barrier_func || isNoSafepointFunc(callee)) {
                         continue;
                     }
                     if (callee->hasFnAttribute(Attribute::ReadNone) ||

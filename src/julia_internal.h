@@ -339,8 +339,8 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
 
 
-JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void);
-JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset);
+JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT;
 void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_ptls_t ptls);

@@ -2761,7 +2761,7 @@ JL_DLLEXPORT int jl_gc_is_enabled(void)
     return !ptls->disable_gc;
 }
 
-JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes)
+JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes) JL_NOTSAFEPOINT
 {
     jl_gc_num_t num = gc_num;
     combine_thread_gc_counts(&num);
@@ -2782,7 +2782,7 @@ JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
 }
 
 // TODO: these were supposed to be thread local
-JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
+JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT
 {
     int64_t oldtb = last_gc_total_bytes;
     int64_t newtb;
@@ -2791,7 +2791,7 @@ JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
     return newtb - oldtb;
 }
 
-JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset)
+JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT
 {
     int64_t oldtb = last_gc_total_bytes;
     int64_t newtb;
