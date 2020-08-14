@@ -864,6 +864,9 @@ end
     sincospi(x)
 
 Simultaneously compute `sinpi(x)` and `cospi(x)`, where the `x` is in radians.
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 function sincospi(x::T) where T<:AbstractFloat
     if !isfinite(x)
