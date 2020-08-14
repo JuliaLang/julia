@@ -1551,7 +1551,7 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
-function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
     if length(argtypes) == 3
         tt = argtypes[3]
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
@@ -1564,7 +1564,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, v
                     if contains_is(argtypes_vec, Union{})
                         return Const(Union{})
                     end
-                    rt = abstract_call(interp, nothing, argtypes_vec, vtypes, sv, -1).rt
+                    rt = abstract_call(interp, nothing, argtypes_vec, sv, -1).rt
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))
