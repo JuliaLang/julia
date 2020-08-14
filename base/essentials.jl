@@ -855,6 +855,20 @@ julia> peek(b, Char)
 function peek end
 
 """
+    @__SOURCE__ -> LineNumberNode
+
+Expand to the current `LineNumberNode`, which contains the line number and file name of the
+location of the macrocall.
+Return `LineNumberNode(0, "none")` if the source could not be determined.
+
+!!! compat "Julia 1.6"
+    This macro requires Julia 1.6 or later.
+"""
+macro __SOURCE__()
+    return Expr(:quote, __source__)
+end
+
+"""
     @__LINE__ -> Int
 
 Expand to the line number of the location of the macrocall.

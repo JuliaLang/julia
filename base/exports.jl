@@ -941,6 +941,7 @@ export
     @__FILE__,
     @__DIR__,
     @__LINE__,
+    @__SOURCE__,
     @__MODULE__,
     @int128_str,
     @uint128_str,
