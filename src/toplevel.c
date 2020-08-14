@@ -816,7 +816,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     jl_value_t *result;
     if (has_intrinsics || (!has_defs && fast && has_loops &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
-                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN)) {
+                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN &&
+                           jl_get_module_compile(m) != JL_OPTIONS_COMPILE_OFF &&
+                           jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         mfunc = method_instance_for_thunk(thk, m);
         jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
@@ -826,7 +828,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         // helps in common cases.
         size_t world = jl_world_counter;
         ptls->world_age = world;
-        if (!has_defs) {
+        if (!has_defs && jl_get_module_infer(m) != 0) {
             (void)jl_type_infer(mfunc, world, 0);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);

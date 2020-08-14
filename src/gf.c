@@ -1850,9 +1850,18 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     jl_code_instance_t *codeinst = jl_method_compiled(mi, world);
     if (codeinst)
         return codeinst;
+    int compile_option = jl_options.compile_enabled;
+    jl_method_t *def = mi->def.method;
+    // disabling compilation per-module can override global setting
+    if (jl_is_method(def)) {
+        int mod_setting = jl_get_module_compile(((jl_method_t*)def)->module);
+        if (mod_setting == JL_OPTIONS_COMPILE_OFF ||
+            mod_setting == JL_OPTIONS_COMPILE_MIN)
+            compile_option = ((jl_method_t*)def)->module->compile;
+    }
 
-    if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF ||
-        jl_options.compile_enabled == JL_OPTIONS_COMPILE_MIN) {
+    if (compile_option == JL_OPTIONS_COMPILE_OFF ||
+        compile_option == JL_OPTIONS_COMPILE_MIN) {
         // copy fptr from the template method definition
         jl_method_t *def = mi->def.method;
         if (jl_is_method(def) && def->unspecialized) {
@@ -1878,7 +1887,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             jl_mi_cache_insert(mi, codeinst);
             return codeinst;
         }
-        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
+        if (compile_option == JL_OPTIONS_COMPILE_OFF) {
             jl_printf(JL_STDERR, "code missing for ");
             jl_static_show(JL_STDERR, (jl_value_t*)mi);
             jl_printf(JL_STDERR, " : sysimg may not have been built with --compile=all\n");

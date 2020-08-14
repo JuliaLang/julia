@@ -36,6 +36,8 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->counter = 1;
     m->nospecialize = 0;
     m->optlevel = -1;
+    m->compile = -1;
+    m->infer = -1;
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -86,6 +88,39 @@ JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m)
         lvl = m->optlevel;
     }
     return lvl;
+}
+
+JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value)
+{
+    self->compile = value;
+}
+
+JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m)
+{
+    int value = m->compile;
+    while (value == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->compile;
+    }
+    return value;
+}
+
+JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value)
+{
+    self->infer = value;
+    // no reason to specialize if inference is off
+    if (!value)
+        jl_set_module_nospecialize(self, 1);
+}
+
+JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m)
+{
+    int value = m->infer;
+    while (value == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->infer;
+    }
+    return value;
 }
 
 JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)

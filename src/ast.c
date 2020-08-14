@@ -64,6 +64,7 @@ jl_sym_t *coverageeffect_sym; jl_sym_t *escape_sym;
 jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
 jl_sym_t *optlevel_sym; jl_sym_t *thismodule_sym;
 jl_sym_t *atom_sym; jl_sym_t *statement_sym; jl_sym_t *all_sym;
+jl_sym_t *compile_sym; jl_sym_t *infer_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -382,6 +383,8 @@ void jl_init_common_symbols(void)
     nospecialize_sym = jl_symbol("nospecialize");
     specialize_sym = jl_symbol("specialize");
     optlevel_sym = jl_symbol("optlevel");
+    compile_sym = jl_symbol("compile");
+    infer_sym = jl_symbol("infer");
     macrocall_sym = jl_symbol("macrocall");
     escape_sym = jl_symbol("escape");
     hygienicscope_sym = jl_symbol("hygienic-scope");

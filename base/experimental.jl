@@ -120,6 +120,46 @@ macro optlevel(n::Int)
     return Expr(:meta, :optlevel, n)
 end
 
+"""
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no}
+
+Set compiler options for code in the enclosing module. Options correspond directly to
+command-line options with the same name, where applicable. The following options
+are currently supported:
+
+  * `optimize`: Set optimization level.
+  * `compile`: Toggle native code compilation. Currently only `min` is supported, which
+    requests the minimum possible amount of compilation.
+  * `infer`: Enable or disable type inference. If disabled, implies [`@nospecialize`](@ref).
+"""
+macro compiler_options(args...)
+    opts = Expr(:block)
+    for ex in args
+        if isa(ex, Expr) && ex.head === :(=) && length(ex.args) == 2
+            if ex.args[1] === :optimize
+                push!(opts.args, Expr(:meta, :optlevel, ex.args[2]::Int))
+            elseif ex.args[1] === :compile
+                a = ex.args[2]
+                a = #a === :no  ? 0 :
+                    #a === :yes ? 1 :
+                    #a === :all ? 2 :
+                    a === :min ? 3 : error("invalid argument to \"compile\" option")
+                push!(opts.args, Expr(:meta, :compile, a))
+            elseif ex.args[1] === :infer
+                a = ex.args[2]
+                a = a === false || a === :no  ? 0 :
+                    a === true  || a === :yes ? 1 : error("invalid argument to \"infer\" option")
+                push!(opts.args, Expr(:meta, :infer, a))
+            else
+                error("unknown option \"$(ex.args[1])\"")
+            end
+        else
+            error("invalid option syntax")
+        end
+    end
+    return opts
+end
+
 # UI features for errors
 
 """

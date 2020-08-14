@@ -46,13 +46,17 @@ void jl_write_compiler_output(void)
         jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
-            // TODO: this would be better handled if moved entirely to jl_precompile
-            // since it's a slightly duplication of effort
-            jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
-            JL_GC_PUSH1(&tt);
-            tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
-            jl_compile_hint((jl_tupletype_t*)tt);
-            JL_GC_POP();
+            int setting = jl_get_module_compile((jl_module_t*)m);
+            if (setting != JL_OPTIONS_COMPILE_OFF &&
+                setting != JL_OPTIONS_COMPILE_MIN) {
+                // TODO: this would be better handled if moved entirely to jl_precompile
+                // since it's a slightly duplication of effort
+                jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
+                JL_GC_PUSH1(&tt);
+                tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
+                jl_compile_hint((jl_tupletype_t*)tt);
+                JL_GC_POP();
+            }
         }
     }
 
