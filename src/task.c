@@ -52,9 +52,7 @@ static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size)
 static inline void sanitizer_finish_switch_fiber(void) {}
 #endif
 
-#if defined(_OS_WINDOWS_)
-volatile int jl_in_stackwalk = 0;
-#else
+#if !defined(_OS_WINDOWS_)
 #ifdef JL_HAVE_UCONTEXT
 #include <ucontext.h>
 #endif
