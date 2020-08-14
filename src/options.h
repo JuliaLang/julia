@@ -120,7 +120,7 @@
 
 // controls for when threads sleep
 #define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
-#define DEFAULT_THREAD_SLEEP_THRESHOLD  4*1000*1000 // nanoseconds (4ms)
+#define DEFAULT_THREAD_SLEEP_THRESHOLD  16*1000 // nanoseconds (16us)
 
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
