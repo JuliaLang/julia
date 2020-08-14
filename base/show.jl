@@ -1747,7 +1747,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         print(io, head, ' ')
         show_list(io, allow_macroname.(args), ", ", indent)
 
-    elseif head === :macrocall && nargs >= 2
+    elseif head === :macrocall && nargs >= 2 && args[2] isa LineNumberNode
         # handle some special syntaxes
         # `a b c`
         if is_core_macro(args[1], "@cmd")
