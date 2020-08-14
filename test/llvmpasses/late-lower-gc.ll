@@ -1,6 +1,6 @@
 ; RUN: opt -load libjulia%shlibext -LateLowerGCFrame -S %s | FileCheck %s
 
-@tag = external addrspace(10) global {}
+@tag = external addrspace(10) global {}, align 16
 
 declare void @boxed_simple({} addrspace(10)*, {} addrspace(10)*)
 declare {} addrspace(10)* @jl_box_int64(i64)
