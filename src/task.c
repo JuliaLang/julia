@@ -67,9 +67,7 @@ static inline void tsan_destroy_ctx(jl_ptls_t ptls, jl_ucontext_t *ctx) {}
 static inline void tsan_switch_to_ctx(jl_ucontext_t *ctx) {}
 #endif
 
-#if defined(_OS_WINDOWS_)
-volatile int jl_in_stackwalk = 0;
-#else
+#if !defined(_OS_WINDOWS_)
 #ifdef JL_HAVE_UCONTEXT
 #include <ucontext.h>
 #endif

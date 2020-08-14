@@ -96,15 +96,18 @@ void __cdecl crt_sig_handler(int sig, int num)
     }
 }
 
+// StackOverflowException needs extra stack space to record the backtrace
+// so we keep one around, shared by all threads
+static jl_mutex_t backtrace_lock;
 static jl_ucontext_t collect_backtrace_fiber;
 static jl_ucontext_t error_return_fiber;
-static PCONTEXT error_ctx;
+static PCONTEXT stkerror_ctx;
+static jl_ptls_t stkerror_ptls;
 static int have_backtrace_fiber;
 static void JL_NORETURN start_backtrace_fiber(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     // collect the backtrace
-    ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, error_ctx, ptls->pgcstack, 0);
+    stkerror_ptls->bt_size = rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx, stkerror_ptls->pgcstack);
     // switch back to the execution fiber
     jl_setcontext(&error_return_fiber);
     abort();
@@ -130,11 +133,14 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
         assert(excpt != NULL);
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
-            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, ptls->pgcstack, 0);
+            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, ptls->pgcstack);
         }
         else if (have_backtrace_fiber) {
-            error_ctx = ctxThread;
+            JL_LOCK(&backtrace_lock);
+            stkerror_ctx = ctxThread;
+            stkerror_ptls = ptls;
             jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
+            JL_UNLOCK_NOGC(&backtrace_lock);
         }
         ptls->sig_exception = excpt;
     }
@@ -331,6 +337,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
             DWORD timeout = nsecprof/GIGA;
             timeout = min(max(timeout, tc.wPeriodMin*2), tc.wPeriodMax/2);
             Sleep(timeout);
+            JL_LOCK_NOGC(&jl_in_stackwalk);
             if ((DWORD)-1 == SuspendThread(hMainThread)) {
                 fputs("failed to suspend main thread. aborting profiling.", stderr);
                 break;
@@ -345,11 +352,12 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 }
                 // Get backtrace data
                 bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                    bt_size_max - bt_size_cur - 1, &ctxThread, NULL, 1);
+                        bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
                 // Mark the end of this block with 0
-                bt_data_prof[bt_size_cur].uintptr = 0;
-                bt_size_cur++;
+                if (bt_size_cur < bt_size_max)
+                    bt_data_prof[bt_size_cur++].uintptr = 0;
             }
+            JL_UNLOCK_NOGC(&jl_in_stackwalk);
             if ((DWORD)-1 == ResumeThread(hMainThread)) {
                 fputs("failed to resume main thread! aborting.", stderr);
                 gc_debug_critical_error();
@@ -420,5 +428,6 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     collect_backtrace_fiber.uc_stack.ss_sp = (void*)stk;
     collect_backtrace_fiber.uc_stack.ss_size = ssize;
     jl_makecontext(&collect_backtrace_fiber, start_backtrace_fiber);
+    JL_MUTEX_INIT(&backtrace_lock);
     have_backtrace_fiber = 1;
 }
