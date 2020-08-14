@@ -235,6 +235,7 @@ static DISubroutineType *jl_di_func_null_sig;
 // constants
 static Constant *V_null;
 static Constant *V_rnull;
+static Constant *V_size0;
 static bool type_is_ghost(Type *ty)
 {
     return (ty == T_void || ty->isEmptyTy());
@@ -2679,7 +2680,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
                 else {
                     Value *idx_dyn = emit_unbox(ctx, T_size, idx, (jl_value_t*)jl_long_type);
-                    error_unless(ctx, ctx.builder.CreateICmpSGT(idx_dyn, ConstantInt::get(T_size, 0)),
+                    error_unless(ctx, ctx.builder.CreateICmpSGT(idx_dyn, V_size0),
                                  "arraysize: dimension out of range");
                     BasicBlock *outBB = BasicBlock::Create(jl_LLVMContext, "outofrange", ctx.f);
                     BasicBlock *inBB = BasicBlock::Create(jl_LLVMContext, "inrange");
@@ -3047,32 +3048,27 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // String and SimpleVector's length fields have the same layout
             auto ptr = emit_bitcast(ctx, boxed(ctx, obj), T_psize);
             Value *len = tbaa_decorate(tbaa_mutab, ctx.builder.CreateAlignedLoad(T_size, ptr, sizeof(size_t)));
+            MDBuilder MDB(jl_LLVMContext);
             if (sty == jl_simplevector_type) {
+                auto rng = MDB.createRange(
+                    V_size0, ConstantInt::get(T_size, INTPTR_MAX / sizeof(void*) - 1));
+                cast<LoadInst>(len)->setMetadata(LLVMContext::MD_range, rng);
                 len = ctx.builder.CreateMul(len, ConstantInt::get(T_size, sizeof(void*)));
                 len = ctx.builder.CreateAdd(len, ConstantInt::get(T_size, sizeof(void*)));
+            }
+            else {
+                auto rng = MDB.createRange(V_size0, ConstantInt::get(T_size, INTPTR_MAX));
+                cast<LoadInst>(len)->setMetadata(LLVMContext::MD_range, rng);
             }
             *ret = mark_julia_type(ctx, len, false, jl_long_type);
             return true;
         }
         else if (jl_is_array_type(sty)) {
             auto len = emit_arraylen(ctx, obj);
-            jl_value_t *ety = jl_tparam0(sty);
             Value *elsize;
-            size_t elsz = 0, al = 0;
-            int union_max = jl_islayout_inline(ety, &elsz, &al);
-            bool isboxed = (union_max == 0);
-            if (!jl_has_free_typevars(ety)) {
-                if (isboxed) {
-                    elsize = ConstantInt::get(T_size, sizeof(void*));
-                }
-                else if (jl_is_primitivetype(ety)) {
-                    // Primitive types should use the array element size, but
-                    // this can be different from the type's size
-                    elsize = ConstantInt::get(T_size, LLT_ALIGN(elsz, al));
-                }
-                else {
-                    elsize = ConstantInt::get(T_size, elsz);
-                }
+            size_t elsz;
+            if (arraytype_constelsize(sty, &elsz)) {
+                elsize = ConstantInt::get(T_size, elsz);
             }
             else {
                 elsize = ctx.builder.CreateZExt(emit_arrayelsize(ctx, obj), T_size);
@@ -5256,10 +5252,9 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             tbaa_decorate(tbaa, ctx.builder.CreateStore(
                 ctx.builder.CreatePtrToInt(literal_pointer_val(ctx, fexpr_rt.constant), T_size),
                 ctx.builder.CreateConstInBoundsGEP1_32(T_size, derived_strct, 1)));
-            Value *zero = ConstantInt::get(T_size, 0);
-            tbaa_decorate(tbaa, ctx.builder.CreateStore(zero,
+            tbaa_decorate(tbaa, ctx.builder.CreateStore(V_size0,
                     ctx.builder.CreateConstInBoundsGEP1_32(T_size, derived_strct, 2)));
-            tbaa_decorate(tbaa, ctx.builder.CreateStore(zero,
+            tbaa_decorate(tbaa, ctx.builder.CreateStore(V_size0,
                     ctx.builder.CreateConstInBoundsGEP1_32(T_size, derived_strct, 3)));
             F = strct;
         }
@@ -7363,6 +7358,7 @@ static void init_julia_llvm_env(Module *m)
     T_pprjlvalue = PointerType::get(T_prjlvalue, 0);
     V_null = Constant::getNullValue(T_pjlvalue);
     V_rnull = Constant::getNullValue(T_prjlvalue);
+    V_size0 = Constant::getNullValue(T_size);
 
     std::vector<Type*> ftargs(0);
     ftargs.push_back(T_prjlvalue);  // function

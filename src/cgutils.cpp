@@ -808,18 +808,18 @@ static Value *emit_nthptr_addr(jl_codectx_t &ctx, Value *v, Value *idx)
             idx);
 }
 
-static Value *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, Value *idx, MDNode *tbaa, Type *ptype)
+static LoadInst *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, Value *idx, MDNode *tbaa, Type *ptype)
 {
     // p = (jl_value_t**)v; *(ptype)&p[n]
     Value *vptr = emit_nthptr_addr(ctx, v, idx);
-    return tbaa_decorate(tbaa, ctx.builder.CreateLoad(emit_bitcast(ctx, vptr, ptype)));
+    return cast<LoadInst>(tbaa_decorate(tbaa, ctx.builder.CreateLoad(emit_bitcast(ctx, vptr, ptype))));
 }
 
-static Value *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, ssize_t n, MDNode *tbaa, Type *ptype)
+static LoadInst *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, ssize_t n, MDNode *tbaa, Type *ptype)
 {
     // p = (jl_value_t**)v; *(ptype)&p[n]
     Value *vptr = emit_nthptr_addr(ctx, v, n);
-    return tbaa_decorate(tbaa, ctx.builder.CreateLoad(emit_bitcast(ctx, vptr, ptype)));
+    return cast<LoadInst>(tbaa_decorate(tbaa, ctx.builder.CreateLoad(emit_bitcast(ctx, vptr, ptype))));
 }
 
 static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v);
@@ -853,8 +853,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
                 [&](unsigned idx, jl_datatype_t *jt) { },
                 p.typ,
                 counter);
-        Value *datatype_or_p = (imaging_mode ? Constant::getNullValue(T_ppjlvalue) :
-                                Constant::getNullValue(T_prjlvalue));
+        Value *datatype_or_p = imaging_mode ? Constant::getNullValue(T_ppjlvalue) : V_rnull;
         counter = 0;
         for_each_uniontype_small(
             [&](unsigned idx, jl_datatype_t *jt) {
@@ -1006,7 +1005,7 @@ static Value *emit_datatype_abstract(jl_codectx_t &ctx, Value *dt)
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *dt)
 {
     Value *immut = ctx.builder.CreateNot(emit_datatype_mutabl(ctx, dt));
-    Value *nofields = ctx.builder.CreateICmpEQ(emit_datatype_nfields(ctx, dt), ConstantInt::get(T_size, 0));
+    Value *nofields = ctx.builder.CreateICmpEQ(emit_datatype_nfields(ctx, dt), V_size0);
     Value *sized = ctx.builder.CreateICmpSGT(emit_datatype_size(ctx, dt), ConstantInt::get(T_int32, 0));
     return ctx.builder.CreateAnd(immut, ctx.builder.CreateAnd(nofields, sized));
 }
@@ -1819,15 +1818,51 @@ static bool arraytype_constshape(jl_value_t *ty)
             jl_is_long(jl_tparam1(ty)) && jl_unbox_long(jl_tparam1(ty)) != 1);
 }
 
+static bool arraytype_constelsize(jl_datatype_t *ty, size_t *elsz)
+{
+    assert(jl_is_array_type(ty));
+    jl_value_t *ety = jl_tparam0(ty);
+    if (jl_has_free_typevars(ety))
+        return false;
+    // `jl_islayout_inline` requires `*elsz` and `al` to be initialized.
+    size_t al = 0;
+    *elsz = 0;
+    int union_max = jl_islayout_inline(ety, elsz, &al);
+    bool isboxed = (union_max == 0);
+    if (isboxed) {
+        *elsz = sizeof(void*);
+    }
+    else if (jl_is_primitivetype(ety)) {
+        // Primitive types should use the array element size, but
+        // this can be different from the type's size
+        *elsz = LLT_ALIGN(*elsz, al);
+    }
+    return true;
+}
+
+static intptr_t arraytype_maxsize(jl_value_t *ty)
+{
+    if (!jl_is_array_type(ty))
+        return INTPTR_MAX;
+    size_t elsz;
+    if (arraytype_constelsize((jl_datatype_t*)ty, &elsz) || elsz == 0)
+        return INTPTR_MAX;
+    return INTPTR_MAX / elsz;
+}
+
 static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *dim)
 {
     Value *t = boxed(ctx, tinfo);
     int o = offsetof(jl_array_t, nrows) / sizeof(void*) - 1;
     MDNode *tbaa = arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arraysize;
-    return emit_nthptr_recast(ctx,
+    auto load = emit_nthptr_recast(ctx,
             t,
             ctx.builder.CreateAdd(dim, ConstantInt::get(dim->getType(), o)),
             tbaa, T_psize);
+    MDBuilder MDB(jl_LLVMContext);
+    auto rng = MDB.createRange(V_size0, ConstantInt::get(T_size, arraytype_maxsize(tinfo.typ)));
+    load->setMetadata(LLVMContext::MD_range, rng);
+    return load;
 }
 
 static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int dim)
@@ -1851,6 +1886,9 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     MDNode *tbaa = arraytype_constshape(ty) ? tbaa_const : tbaa_arraylen;
     LoadInst *len = ctx.builder.CreateAlignedLoad(addr, sizeof(size_t));
     len->setOrdering(AtomicOrdering::NotAtomic);
+    MDBuilder MDB(jl_LLVMContext);
+    auto rng = MDB.createRange(V_size0, ConstantInt::get(T_size, arraytype_maxsize(tinfo.typ)));
+    len->setMetadata(LLVMContext::MD_range, rng);
     return tbaa_decorate(tbaa, len);
 #else
     jl_value_t *p1 = jl_tparam1(ty); // FIXME: check that ty is an array type
@@ -1996,7 +2034,7 @@ static Value *emit_array_nd_index(
         const jl_cgval_t *argv, size_t nidxs, jl_value_t *inbounds)
 {
     Value *a = boxed(ctx, ainfo);
-    Value *i = ConstantInt::get(T_size, 0);
+    Value *i = V_size0;
     Value *stride = ConstantInt::get(T_size, 1);
 #if CHECK_BOUNDS==1
     bool bc = bounds_check_enabled(ctx, inbounds);
@@ -2482,9 +2520,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
                     // TODO: this Select is very bad for performance, but is necessary to work around LLVM bugs with the undef option that we want to use:
                     //   select copy dest -> dest to simulate an undef value / conditional copy
                     // src_ptr = ctx.builder.CreateSelect(skip, dest, src_ptr);
-                    nbytes = ctx.builder.CreateSelect(skip,
-                        ConstantInt::get(T_size, 0),
-                        nbytes);
+                    nbytes = ctx.builder.CreateSelect(skip, V_size0, nbytes);
                 }
                 emit_memcpy(ctx, dest, tbaa_dst, src_ptr, src.tbaa, nbytes, alignment, isVolatile);
             }
