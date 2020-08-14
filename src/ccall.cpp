@@ -1227,6 +1227,10 @@ std::string generate_func_sig(const char *fname)
             continue;
         attributes = attributes.addAttributes(jl_LLVMContext, i + 1, as);
     }
+    // If return value is boxed it must be non-null.
+    if (retboxed)
+        attributes = attributes.addAttribute(jl_LLVMContext, AttributeList::ReturnIndex,
+                                             Attribute::NonNull);
     if (rt == jl_bottom_type) {
         attributes = attributes.addAttribute(jl_LLVMContext,
                                              AttributeList::FunctionIndex,
@@ -1692,8 +1696,25 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     else if (is_libjulia_func(jl_string_ptr)) {
         assert(lrt == T_size);
         assert(!isVa && !llvmcall && nccallargs == 1);
-        Value *obj = ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, argv[0])), T_size);
-        Value *strp = ctx.builder.CreateAdd(obj, ConstantInt::get(T_size, sizeof(void*)));
+        auto obj = emit_bitcast(ctx, emit_pointer_from_objref(ctx, boxed(ctx, argv[0])),
+                                T_pprjlvalue);
+        // The inbounds gep makes it more clear to LLVM that the resulting value is not
+        // a null pointer.
+        auto strp = ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, obj, 1);
+        strp = ctx.builder.CreatePtrToInt(strp, T_size);
+        JL_GC_POP();
+        return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_symbol_name)) {
+        assert(lrt == T_size);
+        assert(!isVa && !llvmcall && nccallargs == 1);
+        auto obj = emit_bitcast(ctx, emit_pointer_from_objref(ctx, boxed(ctx, argv[0])),
+                                T_pprjlvalue);
+        // The inbounds gep makes it more clear to LLVM that the resulting value is not
+        // a null pointer.
+        auto strp = ctx.builder.CreateConstInBoundsGEP1_32(
+            T_prjlvalue, obj, (sizeof(jl_sym_t) + sizeof(void*) - 1) / sizeof(void*));
+        strp = ctx.builder.CreatePtrToInt(strp, T_size);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
     }

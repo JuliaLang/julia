@@ -361,7 +361,7 @@ static AttributeList get_attrs_sext(LLVMContext &C)
 {
     return AttributeList::get(C,
                 AttributeSet(),
-                AttributeSet(),
+                Attributes(C, {Attribute::NonNull}),
                 {Attributes(C, {Attribute::SExt})});
 }
 
@@ -369,7 +369,7 @@ static AttributeList get_attrs_zext(LLVMContext &C)
 {
     return AttributeList::get(C,
                 AttributeSet(),
-                AttributeSet(),
+                Attributes(C, {Attribute::NonNull}),
                 {Attributes(C, {Attribute::ZExt})});
 }
 
@@ -614,7 +614,7 @@ static const auto jl_newbits_func = new JuliaFunction{
                 {T_prjlvalue, T_pint8}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
-            Attributes(C, {Attribute::NoAlias, Attribute::NonNull}),
+            Attributes(C, {Attribute::NonNull}),
             None); },
 };
 static const auto jl_typeof_func = new JuliaFunction{
@@ -769,9 +769,9 @@ BOX_FUNC(uint32, T_prjlvalue, T_int32, get_attrs_zext);
 BOX_FUNC(int64, T_prjlvalue, T_int64, get_attrs_sext);
 BOX_FUNC(uint64, T_prjlvalue, T_int64, get_attrs_zext);
 BOX_FUNC(char, T_prjlvalue, T_char, get_attrs_zext);
-BOX_FUNC(float32, T_prjlvalue, T_float32, nullptr);
-BOX_FUNC(float64, T_prjlvalue, T_float64, nullptr);
-BOX_FUNC(ssavalue, T_prjlvalue, T_size, nullptr);
+BOX_FUNC(float32, T_prjlvalue, T_float32, get_func_attrs);
+BOX_FUNC(float64, T_prjlvalue, T_float64, get_func_attrs);
+BOX_FUNC(ssavalue, T_prjlvalue, T_size, get_func_attrs);
 #undef BOX_FUNC
 
 
@@ -805,7 +805,7 @@ static const auto pointer_from_objref_func = new JuliaFunction{
             {PointerType::get(T_jlvalue, AddressSpace::Derived)}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet::get(C, makeArrayRef({Attribute::get(C, Attribute::ReadNone), Attribute::get(C, Attribute::NoUnwind)})),
-            AttributeSet(),
+            Attributes(C, {Attribute::NonNull}),
             None); },
 };
 
