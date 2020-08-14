@@ -1254,6 +1254,17 @@
              (if (and (or (symbol? ex) (valid-modref? ex))
                       (not (operator? ex))
                       (not (ts:space? s)))
+               (if macrocall?
+                 ;; @a"str" => @a("str")
+                 (let* ((macstr (parse-atom s))
+                        (nxt (peek-token s))
+                        (macname ex))
+                   (if (and (symbol? nxt) (not (operator? nxt))
+                            (not (ts:space? s)))
+                       ;; string literal suffix, "s"x
+                       (loop `(call ,macname ,macstr
+                                    ,(string (take-token s))))
+                       (loop `(call ,macname ,macstr))))
                  ;; custom string and command literals; x"s" => @x_str "s"
                  (let* ((startloc  (line-number-node s))
                         (macstr (begin (take-token s)
@@ -1265,8 +1276,8 @@
                        ;; string literal suffix, "s"x
                        (loop `(macrocall ,macname ,startloc ,macstr
                                          ,(string (take-token s))))
-                       (loop `(macrocall ,macname ,startloc ,macstr))))
-                 ex))
+                       (loop `(macrocall ,macname ,startloc ,macstr)))))
+               ex))
             (else ex))))))
 
 (define expect-end-current-line 0)

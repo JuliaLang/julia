@@ -2306,3 +2306,16 @@ end
 @test_throws ParseError("invalid operator \".<---\"") Meta.parse("1 .<--- 2")
 @test_throws ParseError("invalid operator \"--\"") Meta.parse("a---b")
 @test_throws ParseError("invalid operator \".--\"") Meta.parse("a.---b")
+
+@testset "@macro\"string\"" begin
+    @test :(@foo"bar") == :(@foo("bar"))
+    @test :(@foo"bar"baz) == :(@foo("bar", "baz"))
+
+    # remove LineNumberNode
+    ex = :(@foo"b$(a)r"); deleteat!(ex.args, 2)
+    @test ex == Expr(:macrocall, Symbol("@foo"), Expr(:string, "b", :a, "r"))
+
+    # remove LineNumberNode
+    ex, cmd = :(@foo`b$(a)r`baz), :(`b$(a)r`); deleteat!(ex.args, 2)
+    @test ex == Expr(:macrocall, Symbol("@foo"), cmd, "baz")
+end
