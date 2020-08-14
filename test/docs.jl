@@ -433,6 +433,7 @@ macro example_1(f)
     end |> esc
 end
 
+const LINE_NUMBER_F = @__LINE__() + 1
 "f"
 @example_1 f
 
@@ -446,16 +447,23 @@ macro example_2(f)
     end |> esc
 end
 
+const LINE_NUMBER_G = @__LINE__() + 1
 "g"
 @example_2 g
 
 @example_2 _g
+
+const LINE_NUMBER_T = @__LINE__() + 1
+"T"
+Base.@kwdef struct T end
 
 end
 
 let md = meta(MacroGenerated)[@var(MacroGenerated.f)]
     @test md.order == [Tuple{Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"f")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_F
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_f)
@@ -464,9 +472,18 @@ let md = meta(MacroGenerated)[@var(MacroGenerated.g)]
     @test md.order == [Tuple{Any}, Tuple{Any, Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"g")
     @test docstrings_equal(md.docs[Tuple{Any, Any}], doc"g")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_G
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_g)
+
+let md = meta(MacroGenerated)[@var(MacroGenerated.T)]
+    @test md.order == Type[Union{}]
+    @test docstrings_equal(md.docs[Union{}], doc"T")
+    @test md.docs[Union{}].data[:linenumber] == MacroGenerated.LINE_NUMBER_T
+    @test md.docs[Union{}].data[:path] == @__FILE__()
+end
 
 module DocVars
 
