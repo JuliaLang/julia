@@ -32,7 +32,7 @@ and installing Julia, below.
 - **Binaries:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Documentation:** <https://docs.julialang.org>
-- **Packages:** <https://pkg.julialang.org/>
+- **Packages:** <https://julialang.org/packages/>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
