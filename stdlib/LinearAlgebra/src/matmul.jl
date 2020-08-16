@@ -183,6 +183,37 @@ for elty in (Float32,Float64)
 end
 
 """
+    muladd(A, y, z)
+
+Combined multiply-add, `A*y .+ z`, for either matrix-matrix multiplication or
+matrix-vector multiplication. The result is always the size of `A*y`, although
+`z` have fewer dimensions.
+
+# Examples
+```jldoctest
+julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; C=[0, 100];
+
+julia> muladd(A, B, C)
+2×2 Matrix{Float64}:
+   3.0    3.0
+ 107.0  107.0
+```
+"""
+function Base.muladd(A::AbstractMatrix{TA}, y::AbstractVector{Ty}, z::AbstractVector{Tz}) where {TA, Ty, Tz}
+    T = promote_type(TA, Ty, Tz)
+    C = similar(A, T, size(A,1))
+    C .= z
+    mul!(C, A, y, true, true)
+end
+
+function Base.muladd(A::AbstractMatrix{TA}, y::AbstractMatrix{Ty}, z::AbstractVecOrMat{Tz}) where {TA, Ty, Tz}
+    T = promote_type(TA, Ty, Tz)
+    C = similar(A, T, size(A,1), size(y,2))
+    C .= z
+    mul!(C, A, y, true, true)
+end
+
+"""
     mul!(Y, A, B) -> Y
 
 Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,
