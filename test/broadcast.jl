@@ -510,13 +510,17 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
     aa = Array19745(a)
     fadd(aa) = aa .+ 1
     fadd2(aa) = aa .+ 1 .* 2
+    fadd3(aa) = aa .+ [missing; 1:9]
     fprod(aa) = aa .* aa'
     @test a .+ 1  == @inferred(fadd(aa))
     @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
+    @test isequal(a .+ [missing; 1:9], fadd3(aa))
+    @test_broken Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
+    @test isa(aa .* [missing; 1:9], Array19745)
     a1 = AD1(rand(2,3))
     a2 = AD2(rand(2))
     @test a1 .+ 1 isa AD1
