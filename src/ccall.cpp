@@ -1518,7 +1518,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             return mark_or_box_ccall_result(
                     ctx,
                     ctx.builder.CreateAddrSpaceCast(
-                        ctx.builder.CreateIntToPtr(ary, T_pjlvalue),
+                        emit_inttoptr(ctx, ary, T_pjlvalue),
                         T_prjlvalue), // WARNING: this addrspace cast necessarily implies that the value is rooted elsewhere!
                     retboxed, rt, unionall, static_rt);
         }
@@ -1704,13 +1704,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *destp = emit_unbox(ctx, T_size, dst, (jl_value_t*)jl_voidpointer_type);
 
         ctx.builder.CreateMemCpy(
-                ctx.builder.CreateIntToPtr(destp, T_pint8),
+                emit_inttoptr(ctx, destp, T_pint8),
 #if JL_LLVM_VERSION >= 100000
                 MaybeAlign(1),
 #else
                 1,
 #endif
-                ctx.builder.CreateIntToPtr(
+                emit_inttoptr(ctx,
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
                     T_pint8),
 #if JL_LLVM_VERSION >= 100000
@@ -1881,7 +1881,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     else if (symarg.jl_ptr != NULL) {
         null_pointer_check(ctx, symarg.jl_ptr);
         Type *funcptype = PointerType::get(functype, 0);
-        llvmf = ctx.builder.CreateIntToPtr(symarg.jl_ptr, funcptype);
+        llvmf = emit_inttoptr(ctx, symarg.jl_ptr, funcptype);
     }
     else if (symarg.fptr != NULL) {
         Type *funcptype = PointerType::get(functype, 0);
