@@ -235,12 +235,12 @@ function serialize_array_data(s::IO, a)
     require_one_based_indexing(a)
     isempty(a) && return 0
     if eltype(a) === Bool
-        last = a[1]
+        last = a[1]::Bool
         count = 1
         for i = 2:length(a)
-            if a[i] != last || count == 127
+            if a[i]::Bool != last || count == 127
                 write(s, UInt8((UInt8(last) << 7) | count))
-                last = a[i]
+                last = a[i]::Bool
                 count = 1
             else
                 count += 1
@@ -1155,7 +1155,7 @@ function deserialize_array(s::AbstractSerializer)
     end
     A = Array{elty, length(dims)}(undef, dims)
     s.table[slot] = A
-    sizehint!(s.table, s.counter + div(length(A),4))
+    sizehint!(s.table, s.counter + div(length(A)::Int,4))
     deserialize_fillarray!(A, s)
     return A
 end

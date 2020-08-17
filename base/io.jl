@@ -258,13 +258,13 @@ end
 
 function peek(s::IO, ::Type{T}) where T
     mark(s)
-    try read(s, T)
+    try read(s, T)::T
     finally
         reset(s)
     end
 end
 
-peek(s) = peek(s, UInt8)
+peek(s) = peek(s, UInt8)::UInt8
 
 # Generic `open` methods
 
@@ -362,7 +362,7 @@ unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writ
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
 flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
 
-read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)
+read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)::UInt8
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io)::IO)
 readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
@@ -379,7 +379,7 @@ for f in (
         :readavailable, :isreadable)
     @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
 end
-peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)
+peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
 
 iswritable(io::AbstractPipe) = iswritable(pipe_writer(io)::IO)
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)::IO) || isopen(pipe_reader(io)::IO)
@@ -747,14 +747,14 @@ function read!(s::IO, a::AbstractArray{T}) where T
 end
 
 function read(io::IO, ::Type{Char})
-    b0 = read(io, UInt8)
+    b0 = read(io, UInt8)::UInt8
     l = 8(4-leading_ones(b0))
     c = UInt32(b0) << 24
     if l < 24
         s = 16
-        while s ≥ l && !eof(io)
+        while s ≥ l && !eof(io)::Bool
             peek(io) & 0xc0 == 0x80 || break
-            b = read(io, UInt8)
+            b = read(io, UInt8)::UInt8
             c |= UInt32(b) << s
             s -= 8
         end

@@ -444,11 +444,11 @@ else
 function expanduser(path::AbstractString)
     y = iterate(path)
     y === nothing && return path
-    c, i = y
+    c, i = y::Tuple{eltype(path),Int}
     c != '~' && return path
     y = iterate(path, i)
     y === nothing && return homedir()
-    y[1] == '/' && return homedir() * path[i:end]
+    y[1]::eltype(path) == '/' && return homedir() * path[i:end]
     throw(ArgumentError("~user tilde expansion not yet implemented"))
 end
 function contractuser(path::AbstractString)

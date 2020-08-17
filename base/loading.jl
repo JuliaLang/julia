@@ -131,10 +131,11 @@ end
 const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 
 function slug(x::UInt32, p::Int)
+    y::UInt32 = x
     sprint(sizehint=p) do io
         n = length(slug_chars)
         for i = 1:p
-            x, d = divrem(x, n)
+            y, d = divrem(y, n)
             write(io, slug_chars[1+d])
         end
     end
@@ -1249,7 +1250,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
 
     uuid_tuple = uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, uuid)
 
-    io = open(pipeline(`$(julia_cmd()) -O0
+    io = open(pipeline(`$(julia_cmd()::Cmd) -O0
                        --output-ji $output --output-incremental=yes
                        --startup-file=no --history-file=no --warn-overwrite=yes
                        --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
