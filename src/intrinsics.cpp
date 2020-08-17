@@ -309,7 +309,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         Type *INTT_to = INTT(to);
         if (to != INTT_to)
             unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
-        unboxed = ctx.builder.CreateIntToPtr(unboxed, to);
+        unboxed = emit_inttoptr(ctx, unboxed, to);
     }
     else if (ty != to) {
         unboxed = ctx.builder.CreateBitCast(unboxed, to);
@@ -490,7 +490,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         else if (vxt->isPointerTy() && !llvmt->isPointerTy())
             vx = ctx.builder.CreatePtrToInt(vx, llvmt);
         else if (!vxt->isPointerTy() && llvmt->isPointerTy())
-            vx = ctx.builder.CreateIntToPtr(vx, llvmt);
+            vx = emit_inttoptr(ctx, vx, llvmt);
         else
             vx = emit_bitcast(ctx, vx, llvmt);
     }
@@ -1029,14 +1029,14 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case add_ptr: {
         return ctx.builder.CreatePtrToInt(
             ctx.builder.CreateGEP(T_int8,
-                ctx.builder.CreateIntToPtr(x, T_pint8), y), t);
+                emit_inttoptr(ctx, x, T_pint8), y), t);
 
     }
 
     case sub_ptr: {
         return ctx.builder.CreatePtrToInt(
             ctx.builder.CreateGEP(T_int8,
-                ctx.builder.CreateIntToPtr(x, T_pint8), ctx.builder.CreateNeg(y)), t);
+                emit_inttoptr(ctx, x, T_pint8), ctx.builder.CreateNeg(y)), t);
 
     }
 

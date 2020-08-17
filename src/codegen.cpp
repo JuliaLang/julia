@@ -1186,6 +1186,14 @@ static void undef_derived_strct(IRBuilder<> &irbuilder, Value *ptr, jl_datatype_
     }
 }
 
+static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
+{
+    // Almost all of our inttoptr are generated due to representing `Ptr` with `T_size`
+    // in LLVM and most of these integers are generated from `ptrtoint` in the first place.
+    if (auto I = dyn_cast<PtrToIntInst>(v))
+        return ctx.builder.CreateBitCast(I->getOperand(0), ty);
+    return ctx.builder.CreateIntToPtr(v, ty);
+}
 
 static inline jl_cgval_t ghostValue(jl_value_t *typ)
 {
