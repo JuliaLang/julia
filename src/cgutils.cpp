@@ -1802,10 +1802,21 @@ static Value *emit_n_varargs(jl_codectx_t &ctx)
 #endif
 }
 
+static bool arraytype_constdim(jl_value_t *ty, size_t *dim)
+{
+    if (jl_is_array_type(ty) && jl_is_long(jl_tparam1(ty))) {
+        *dim = jl_unbox_long(jl_tparam1(ty));
+        return true;
+    }
+    return false;
+}
+
 static bool arraytype_constshape(jl_value_t *ty)
 {
-    return (jl_is_array_type(ty) && jl_is_concrete_type(ty) &&
-            jl_is_long(jl_tparam1(ty)) && jl_unbox_long(jl_tparam1(ty)) != 1);
+    size_t dim;
+    if (!arraytype_constdim(ty, &dim))
+        return false;
+    return dim != 1;
 }
 
 static bool arraytype_constelsize(jl_datatype_t *ty, size_t *elsz)
@@ -1842,9 +1853,21 @@ static intptr_t arraytype_maxsize(jl_value_t *ty)
 
 static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *dim)
 {
+    size_t ndim;
+    MDNode *tbaa = tbaa_arraysize;
+    if (arraytype_constdim(tinfo.typ, &ndim)) {
+        if (ndim == 0)
+            return ConstantInt::get(T_size, 1);
+        if (ndim > 1) {
+            if (tinfo.constant && isa<ConstantInt>(dim)) {
+                auto n = cast<ConstantInt>(dim)->getZExtValue() - 1;
+                return ConstantInt::get(T_size, jl_array_dim(tinfo.constant, n));
+            }
+            tbaa = tbaa_const;
+        }
+    }
     Value *t = boxed(ctx, tinfo);
     int o = offsetof(jl_array_t, nrows) / sizeof(void*) - 1;
-    MDNode *tbaa = arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arraysize;
     auto load = emit_nthptr_recast(ctx,
             t,
             ctx.builder.CreateAdd(dim, ConstantInt::get(dim->getType(), o)),
@@ -1867,13 +1890,23 @@ static Value *emit_vectormaxsize(jl_codectx_t &ctx, const jl_cgval_t &ary)
 
 static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
-    Value *t = boxed(ctx, tinfo);
+    size_t ndim;
     jl_value_t *ty = tinfo.typ;
+    MDNode *tbaa = tbaa_arraylen;
+    if (arraytype_constdim(ty, &ndim)) {
+        if (ndim == 0)
+            return ConstantInt::get(T_size, 1);
+        if (ndim != 1) {
+            if (tinfo.constant)
+                return ConstantInt::get(T_size, jl_array_len(tinfo.constant));
+            tbaa = tbaa_const;
+        }
+    }
+    Value *t = boxed(ctx, tinfo);
 #ifdef STORE_ARRAY_LEN
     Value *addr = ctx.builder.CreateStructGEP(jl_array_llvmt,
             emit_bitcast(ctx, decay_derived(ctx, t), jl_parray_llvmt),
             1); //index (not offset) of length field in jl_parray_llvmt
-    MDNode *tbaa = arraytype_constshape(ty) ? tbaa_const : tbaa_arraylen;
     LoadInst *len = ctx.builder.CreateAlignedLoad(addr, Align(sizeof(size_t)));
     len->setOrdering(AtomicOrdering::NotAtomic);
     MDBuilder MDB(jl_LLVMContext);
@@ -1881,6 +1914,7 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     len->setMetadata(LLVMContext::MD_range, rng);
     return tbaa_decorate(tbaa, len);
 #else
+    (void)tbaa;
     jl_value_t *p1 = jl_tparam1(ty); // FIXME: check that ty is an array type
     if (jl_is_long(p1)) {
         size_t nd = jl_unbox_long(p1);
@@ -1911,6 +1945,8 @@ static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo,
         ctx.builder.CreateStructGEP(jl_array_llvmt,
             emit_bitcast(ctx, t, jl_parray_llvmt),
             0); // index (not offset) of data field in jl_parray_llvmt
+    // Normally allocated array of 0 dimention always have a inline pointer.
+    // However, we can't rely on that here since arrays can also be constructed from C pointers.
     MDNode *tbaa = arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arrayptr;
     PointerType *PT = cast<PointerType>(addr->getType());
     PointerType *PPT = cast<PointerType>(PT->getElementType());
