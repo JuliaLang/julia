@@ -2,6 +2,8 @@
 
 ## semantic version numbers (https://semver.org/)
 
+const VerTuple = Tuple{Vararg{Union{UInt64,String}}}
+
 const VInt = UInt32
 """
     VersionNumber
@@ -24,12 +26,12 @@ struct VersionNumber
     major::VInt
     minor::VInt
     patch::VInt
-    prerelease::Tuple{Vararg{Union{UInt64,String}}}
-    build::Tuple{Vararg{Union{UInt64,String}}}
+    prerelease::VerTuple
+    build::VerTuple
 
     function VersionNumber(major::VInt, minor::VInt, patch::VInt,
-            pre::Tuple{Vararg{Union{UInt64,String}}},
-            bld::Tuple{Vararg{Union{UInt64,String}}})
+            pre::VerTuple,
+            bld::VerTuple)
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -118,7 +120,7 @@ function VersionNumber(v::AbstractString)
     end
     prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
-    return VersionNumber(major, minor, patch, prerl, build)
+    return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
 end
 
 parse(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
@@ -149,25 +151,22 @@ v"2.0.1-rc1"
 """
 macro v_str(v); VersionNumber(v); end
 
-typemin(::Type{VersionNumber}) = v"0-"
-
 function typemax(::Type{VersionNumber})
     ∞ = typemax(VInt)
     VersionNumber(∞, ∞, ∞, (), ("",))
 end
+
+typemin(::Type{VersionNumber}) = v"0-"
 
 ident_cmp(a::Integer, b::Integer) = cmp(a, b)
 ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
 ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
 ident_cmp(a::String,  b::String ) = cmp(a, b)
 
-function ident_cmp(
-    A::Tuple{Vararg{Union{Integer,String}}},
-    B::Tuple{Vararg{Union{Integer,String}}},
-)
-    for (a, b) in zip(A, B)
-       c = ident_cmp(a,b)::Int
-       (c != 0) && return c
+function ident_cmp(A::VerTuple, B::VerTuple)
+    for (a, b) in Iterators.Zip{Tuple{VerTuple,VerTuple}}((A, B))
+        c = ident_cmp(a, b)
+        (c != 0) && return c
     end
     length(A) < length(B) ? -1 :
     length(B) < length(A) ? +1 : 0

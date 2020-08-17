@@ -608,7 +608,7 @@ Core.atdoc!(docm)
 
 function loaddocs(docs)
     for (mod, ex, str, file, line) in docs
-        data = Dict(:path => string(file), :linenumber => line)
+        data = Dict{Symbol,Any}(:path => string(file), :linenumber => line)
         doc = docstr(str, data)
         docstring = docm(LineNumberNode(line, file), mod, doc, ex, false) # expand the real @doc macro now
         Core.eval(mod, Expr(Core.unescape, docstring, Docs))

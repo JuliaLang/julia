@@ -1213,7 +1213,7 @@ cd(dirwalk) do
     has_symlinks && symlink(abspath("sub_dir2"), joinpath("sub_dir1", "link"))
     for follow_symlinks in follow_symlink_vec
         chnl = walkdir(".", follow_symlinks=follow_symlinks)
-        root, dirs, files = take!(chnl)
+        root, dirs, files = @inferred(take!(chnl))
         @test root == "."
         @test dirs == ["sub_dir1", "sub_dir2"]
         @test files == ["file1", "file2"]

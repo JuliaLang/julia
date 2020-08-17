@@ -467,12 +467,12 @@ end
 
 # Define `mul!` for (Unit){Upper,Lower}Triangular matrices times a
 # number.
-for (Trig, UnitTrig) in [(UpperTriangular, UnitUpperTriangular),
-                         (LowerTriangular, UnitLowerTriangular)]
-    for (TB, TC) in [(Trig, Number),
-                     (Number, Trig),
-                     (UnitTrig, Number),
-                     (Number, UnitTrig)]
+for (Trig, UnitTrig) in Any[(UpperTriangular, UnitUpperTriangular),
+                            (LowerTriangular, UnitLowerTriangular)]
+    for (TB, TC) in Any[(Trig, Number),
+                        (Number, Trig),
+                        (UnitTrig, Number),
+                        (Number, UnitTrig)]
         @eval @inline mul!(A::$Trig, B::$TB, C::$TC, alpha::Number, beta::Number) =
             _mul!(A, B, C, MulAddMul(alpha, beta))
     end

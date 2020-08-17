@@ -876,7 +876,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         end
         nothing
     end
-    return Channel(chnl -> _walkdir(chnl, root))
+    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, root))
 end
 
 function unlink(p::AbstractString)
