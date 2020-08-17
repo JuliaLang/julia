@@ -3,7 +3,7 @@
 module LineEdit
 
 import ..REPL
-using REPL: AbstractREPL
+using REPL: AbstractREPL, Options
 
 using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
@@ -91,9 +91,9 @@ options(s::PromptState) =
     if isdefined(s.p, :repl) && isdefined(s.p.repl, :options)
         # we can't test isa(s.p.repl, LineEditREPL) as LineEditREPL is defined
         # in the REPL module
-        s.p.repl.options
+        s.p.repl.options::Options
     else
-        REPL.GlobalOptions
+        REPL.GlobalOptions::Options
     end
 
 function setmark(s::MIState, guess_region_active::Bool=true)
