@@ -1029,6 +1029,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
             return (uintptr_t)jl_box_uint8(offset);
         // offset -= 256;
         assert(0 && "corrupt relocation item id");
+        jl_unreachable(); // terminate control flow if assertion is disabled.
     case BuiltinFunctionRef:
         assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer ID");
         return (uintptr_t)id_to_fptrs[offset];

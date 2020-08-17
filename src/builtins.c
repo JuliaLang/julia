@@ -471,7 +471,7 @@ static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_
     return newheap;
 }
 
-void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
+STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
 {
     size_t oldalloc = *n_alloc;
     if (oldalloc >= newalloc)

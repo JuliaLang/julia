@@ -2879,6 +2879,7 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
     return ctx.builder.CreateInBoundsGEP(T_sigatomic, ptls, ArrayRef<Value*>(offset), "jl_defer_signal");
 }
 
+#ifndef NDEBUG
 static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 {
     return
@@ -2893,3 +2894,4 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            (a->raise_exception == b->raise_exception) &&
            (a->generic_context == b->generic_context);
 }
+#endif
