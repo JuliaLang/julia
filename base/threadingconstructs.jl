@@ -150,9 +150,29 @@ Create and run a [`Task`](@ref) on any available thread. To wait for the task to
 finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref)
 to wait and then obtain its return value.
 
-Values can be interpolated into `@spawn` via `\$`, which copies the value directly into the
-constructed underlying closure. This allows you to insert the _value_ of a variable,
-isolating the aysnchronous code from changes to the variable's value in the current task.
+Values of a variable `x` can be interpolated into `Threads.@spawn` using `\$x`.
+This allows you to insert the _value_ of a variable, isolating the aysnchronous
+code from changes to the variable's value in the current task. However, note that
+interpolation does not [`copy`](@ref) the variable value, i.e. if `x` is mutated
+instead of reassigned, these changes will be visible in the `Threads.@spawn` block.
+
+
+# Examples
+```jldoctest
+julia> x = ["original"]
+       barrier = Threads.Event()
+       t = Threads.@spawn begin
+           wait(barrier) # Wait for change in x
+           println(" x = ", x)
+           println("\\\$x = ", \$x)
+       end
+       push!(x, "modified")
+       x = ["reassigned"]
+       notify(barrier)
+       wait(t)
+ x = ["reassigned"]
+\$x = ["original", "modified"]
+```
 
 !!! note
     See the manual chapter on threading for important caveats.
