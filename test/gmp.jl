@@ -296,7 +296,7 @@ end
 @testset "digits" begin
     n = Int64(2080310129088201558)
     N = big(n)
-    for base in (2,7,10,11,16,30,50,62,64,100), pad in (0,1,10,100)c
+    for base in (2,7,10,11,16,30,50,62,64,100), pad in (0,1,10,100)
         @test digits(n; base, pad) == digits(N; base, pad)
         @test digits(-n; base, pad) == digits(-N; base, pad)
         @test digits!(Vector{Int}(undef, pad), n; base) == digits!(Vector{Int}(undef, pad), N; base)
