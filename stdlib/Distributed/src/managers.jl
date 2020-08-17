@@ -268,6 +268,7 @@ end
 
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
+    id = Int(id)
     if op === :interrupt
         ospid = config.ospid
         if ospid !== nothing
