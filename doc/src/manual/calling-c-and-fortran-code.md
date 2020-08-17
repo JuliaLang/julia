@@ -967,8 +967,8 @@ and load in the new changes. One can either restart Julia or use the
 ```julia
 lib = Libdl.dlopen("./my_lib.so") # Open the library explicitly.
 sym = Libdl.dlsym(lib, :my_fcn)   # Get a symbol for the function to call.
-ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the
-same).  Libdl.dlclose(lib) # Close the library explicitly.
+ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the same).
+Libdl.dlclose(lib) # Close the library explicitly.
 ```
 
 Note that when using `ccall` with the tuple input
