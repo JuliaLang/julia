@@ -697,11 +697,11 @@ end
 function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
     if 2 ≤ base ≤ 62
         s = codeunits(string(n; base))
-        offset = length(s)+1
-        for i = 1:min(length(a), length(s))
+        j = length(s)+1
+        for i in eachindex(a)[1:min(length(a), length(s))]
             # base ≤ 36: 0-9, plus a-z for 10-35
             # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
-            x = s[offset-i]
+            x = s[j -= 1]
             a[i] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
         end
         return a
