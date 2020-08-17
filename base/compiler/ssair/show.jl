@@ -75,7 +75,7 @@ show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io,
 show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
 function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String)
     args = map(1:length(stmt.edges)) do i
-        e = stmt.edges[i]
+        e = stmt.edges[i]::Int
         v = !isassigned(stmt.values, i) ? "#undef" :
             sprint() do io′
                 show_unquoted(io′, stmt.values[i], indent)
@@ -713,7 +713,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
         stmt = GotoNode(block_for_inst(cfg, stmt.label))
     elseif stmt isa PhiNode
         e = stmt.edges
-        stmt = PhiNode(Any[block_for_inst(cfg, e[i]) for i in 1:length(e)], stmt.values)
+        stmt = PhiNode(Any[block_for_inst(cfg, e[i]::Int) for i in 1:length(e)], stmt.values)
     end
     show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
     print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)

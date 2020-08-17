@@ -202,7 +202,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 push!(possible_predecessors, n)
             end
             for n in possible_predecessors
-                pred = def.edges[n]
+                pred = def.edges[n]::Int
                 val = def.values[n]
                 if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)

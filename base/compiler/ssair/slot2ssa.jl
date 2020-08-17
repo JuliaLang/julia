@@ -129,7 +129,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
             val = stmt.values[i]
             isa(val, Union{SlotNumber, TypedSlot}) || continue
             cond(val) || continue
-            bb_idx = block_for_inst(ir.cfg, stmt.edges[i])
+            bb_idx = block_for_inst(ir.cfg, stmt.edges[i]::Int)
             from_bb_terminator = last(ir.cfg.blocks[bb_idx].stmts)
             stmt.values[i] = fixup_slot!(ir, ci, from_bb_terminator, slot_id(val), val, rename(val))
         end
@@ -355,6 +355,7 @@ function rename_phinode_edges(node, bb, result_order, bb_rename)
     new_values = Any[]
     new_edges = Any[]
     for (idx, edge) in pairs(node.edges)
+        edge = edge::Int
         (edge == 0 || haskey(bb_rename, edge)) || continue
         new_edge_from = edge == 0 ? 0 : rename_incoming_edge(edge, bb, result_order, bb_rename)
         push!(new_edges, new_edge_from)
@@ -683,6 +684,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             end
             isa(stmt, PhiNode) || continue
             for (edgeidx, edge) in pairs(stmt.edges)
+                edge = edge::Int
                 from_bb = edge == 0 ? 0 : block_for_inst(cfg, edge)
                 from_bb == pred || continue
                 isassigned(stmt.values, edgeidx) || break
@@ -827,7 +829,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             ssavalmap[idx] = SSAValue(idx)
             result_types[idx] = ci.ssavaluetypes[idx]
             if isa(stmt, PhiNode)
-                edges = Any[edge == 0 ? 0 : block_for_inst(cfg, edge) for edge in stmt.edges]
+                edges = Any[edge::Int == 0 ? 0 : block_for_inst(cfg, edge::Int) for edge in stmt.edges]
                 new_code[idx] = PhiNode(edges, stmt.values)
             else
                 new_code[idx] = stmt

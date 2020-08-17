@@ -71,7 +71,7 @@ function basic_blocks_starts(stmts::Vector{Any})
         end
         if isa(stmt, PhiNode)
             for edge in stmt.edges
-                if edge === idx - 1
+                if edge::Int === idx - 1
                     push!(jump_dests, idx)
                 end
             end
@@ -992,7 +992,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             # There's only one predecessor left - just replace it
             ssa_rename[idx] = values[1]
         else
-            edges = compact.cfg_transforms_enabled ? map!(i->compact.bb_rename_pred[i], stmt.edges, stmt.edges) : stmt.edges
+            edges = compact.cfg_transforms_enabled ? map!(i->compact.bb_rename_pred[i::Int], stmt.edges, stmt.edges) : stmt.edges
             result[result_idx][:inst] = PhiNode(edges, values)
             result_idx += 1
         end

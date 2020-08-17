@@ -111,7 +111,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
             end
         elseif isexpr(terminator, :enter)
             @label enter_check
-            if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
+            if length(block.succs) != 2 || (block.succs != [terminator.args[1]::Int, idx+1] && block.succs != [idx+1, terminator.args[1]::Int])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error()
             end
@@ -150,7 +150,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
         if isa(stmt, PhiNode)
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)
-                edge = stmt.edges[i]
+                edge = stmt.edges[i]::Int
                 if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
                     #@Base.show ir.argtypes
                     #@Base.show ir
@@ -174,7 +174,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
                     error()
                 end
-                check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print)
+                check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]::Int].stmts)+1, print)
             end
         elseif isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
