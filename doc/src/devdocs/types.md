@@ -42,14 +42,14 @@ Union{UInt8, Signed}
 julia> typejoin(Signed, Union{UInt8, Int8})
 Integer
 
-julia> typeintersect(Tuple{Integer,Float64}, Tuple{Int,Real})
-Tuple{Int64,Float64}
+julia> typeintersect(Tuple{Integer, Float64}, Tuple{Int, Real})
+Tuple{Int64, Float64}
 
-julia> Union{Tuple{Integer,Float64}, Tuple{Int,Real}}
-Union{Tuple{Int64,Real}, Tuple{Integer,Float64}}
+julia> Union{Tuple{Integer, Float64}, Tuple{Int, Real}}
+Union{Tuple{Int64, Real}, Tuple{Integer, Float64}}
 
-julia> typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})
-Tuple{Integer,Real}
+julia> typejoin(Tuple{Integer, Float64}, Tuple{Int, Real})
+Tuple{Integer, Real}
 ```
 
 While these operations may seem abstract, they lie at the heart of Julia.  For example, method
@@ -99,7 +99,7 @@ UnionAll
       name: Symbol N
       lb: Union{}
       ub: Any
-    body: Array{T,N} <: DenseArray{T,N}
+    body: Array{T, N} <: DenseArray{T, N}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
@@ -162,8 +162,8 @@ julia> TV, NV = TypeVar(:T), TypeVar(:N)
 julia> Array
 Array
 
-julia> Array{TV,NV}
-Array{T,N}
+julia> Array{TV, NV}
+Array{T, N}
 ```
 
 These can be distinguished by examining the `name` field of the type, which is an object of type
@@ -185,7 +185,7 @@ TypeName
         name: Symbol N
         lb: Union{}
         ub: Any
-      body: Array{T,N} <: DenseArray{T,N}
+      body: Array{T, N} <: DenseArray{T, N}
   cache: SimpleVector
     ...
 
@@ -232,10 +232,10 @@ own type:
 julia> struct MyType{T,N} end
 
 julia> MyType{Int,2}
-MyType{Int64,2}
+MyType{Int64, 2}
 
 julia> MyType{Float32, 5}
-MyType{Float32,5}
+MyType{Float32, 5}
 ```
 
 When you instantiate a parametric type, each concrete type gets saved in a type
@@ -252,7 +252,7 @@ julia> Tuple
 Tuple
 
 julia> Tuple.parameters
-svec(Vararg{Any,N} where N)
+svec(Vararg{Any, N} where N)
 ```
 
 Unlike other types, tuple types are covariant in their parameters, so this definition permits
@@ -260,10 +260,10 @@ Unlike other types, tuple types are covariant in their parameters, so this defin
 
 ```jldoctest
 julia> typeintersect(Tuple, Tuple{Int,Float64})
-Tuple{Int64,Float64}
+Tuple{Int64, Float64}
 
 julia> typeintersect(Tuple{Vararg{Any}}, Tuple{Int,Float64})
-Tuple{Int64,Float64}
+Tuple{Int64, Float64}
 ```
 
 However, if a variadic (`Vararg`) tuple type has free variables it can describe different kinds
@@ -271,7 +271,7 @@ of tuples:
 
 ```jldoctest
 julia> typeintersect(Tuple{Vararg{T} where T}, Tuple{Int,Float64})
-Tuple{Int64,Float64}
+Tuple{Int64, Float64}
 
 julia> typeintersect(Tuple{Vararg{T}} where T, Tuple{Int,Float64})
 Union{}
@@ -492,7 +492,7 @@ breakpoints in other functions.
 As a warm-up, try the following:
 
 ```julia
-mysubtype(Tuple{Int,Float64}, Tuple{Integer,Real})
+mysubtype(Tuple{Int, Float64}, Tuple{Integer, Real})
 ```
 
 We can make it more interesting by trying a more complex case:

@@ -24,7 +24,7 @@ end
 
 @test replstr(Array{Any}(undef, 2)) == "2-element Vector{Any}:\n #undef\n #undef"
 @test replstr(Array{Any}(undef, 2,2)) == "2×2 Matrix{Any}:\n #undef  #undef\n #undef  #undef"
-@test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any, 3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Vector{Float32}:\n 1.0f10"
 
 struct T5589
@@ -772,7 +772,7 @@ Base.methodloc_callback[] = nothing
     @test replstr(Matrix(1.0I, 10, 10)) == "10×10 Matrix{Float64}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
     # an array too long vertically to fit on screen, and too long horizontally:
     @test replstr(Vector(1.:100.)) == "100-element Vector{Float64}:\n   1.0\n   2.0\n   3.0\n   4.0\n   5.0\n   6.0\n   7.0\n   8.0\n   9.0\n  10.0\n   ⋮\n  92.0\n  93.0\n  94.0\n  95.0\n  96.0\n  97.0\n  98.0\n  99.0\n 100.0"
-    @test occursin(r"1×100 (LinearAlgebra\.)?Adjoint{Float64,Vector{Float64}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0", replstr(Vector(1.:100.)'))
+    @test occursin(r"1×100 (LinearAlgebra\.)?Adjoint{Float64, Vector{Float64}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0", replstr(Vector(1.:100.)'))
     # too big in both directions to fit on screen:
     @test replstr((1.:100.)*(1:100)') == "100×100 Matrix{Float64}:\n   1.0    2.0    3.0    4.0    5.0    6.0  …    97.0    98.0    99.0    100.0\n   2.0    4.0    6.0    8.0   10.0   12.0      194.0   196.0   198.0    200.0\n   3.0    6.0    9.0   12.0   15.0   18.0      291.0   294.0   297.0    300.0\n   4.0    8.0   12.0   16.0   20.0   24.0      388.0   392.0   396.0    400.0\n   5.0   10.0   15.0   20.0   25.0   30.0      485.0   490.0   495.0    500.0\n   6.0   12.0   18.0   24.0   30.0   36.0  …   582.0   588.0   594.0    600.0\n   7.0   14.0   21.0   28.0   35.0   42.0      679.0   686.0   693.0    700.0\n   8.0   16.0   24.0   32.0   40.0   48.0      776.0   784.0   792.0    800.0\n   9.0   18.0   27.0   36.0   45.0   54.0      873.0   882.0   891.0    900.0\n  10.0   20.0   30.0   40.0   50.0   60.0      970.0   980.0   990.0   1000.0\n   ⋮                                  ⋮    ⋱                          \n  92.0  184.0  276.0  368.0  460.0  552.0     8924.0  9016.0  9108.0   9200.0\n  93.0  186.0  279.0  372.0  465.0  558.0     9021.0  9114.0  9207.0   9300.0\n  94.0  188.0  282.0  376.0  470.0  564.0     9118.0  9212.0  9306.0   9400.0\n  95.0  190.0  285.0  380.0  475.0  570.0     9215.0  9310.0  9405.0   9500.0\n  96.0  192.0  288.0  384.0  480.0  576.0  …  9312.0  9408.0  9504.0   9600.0\n  97.0  194.0  291.0  388.0  485.0  582.0     9409.0  9506.0  9603.0   9700.0\n  98.0  196.0  294.0  392.0  490.0  588.0     9506.0  9604.0  9702.0   9800.0\n  99.0  198.0  297.0  396.0  495.0  594.0     9603.0  9702.0  9801.0   9900.0\n 100.0  200.0  300.0  400.0  500.0  600.0     9700.0  9800.0  9900.0  10000.0"
 
@@ -791,7 +791,7 @@ Base.methodloc_callback[] = nothing
     @test replstr(Int32[]) == "Int32[]"
     @test replstr([Int32[]]) == "1-element Vector{Vector{Int32}}:\n []"
     @test replstr(permutedims([Int32[],Int32[]])) == "1×2 Matrix{Vector{Int32}}:\n []  []"
-    @test replstr(permutedims([Dict(),Dict()])) == "1×2 Matrix{Dict{Any,Any}}:\n Dict()  Dict()"
+    @test replstr(permutedims([Dict(),Dict()])) == "1×2 Matrix{Dict{Any, Any}}:\n Dict()  Dict()"
     @test replstr(permutedims([undef,undef])) == "1×2 Matrix{UndefInitializer}:\n UndefInitializer()  UndefInitializer()"
     @test replstr([zeros(3,0),zeros(2,0)]) == "2-element Vector{Matrix{Float64}}:\n 3×0 Matrix{Float64}\n 2×0 Matrix{Float64}"
 end
@@ -840,13 +840,13 @@ end
 
 # test structured zero matrix printing for select structured types
 let A = reshape(1:16, 4, 4)
-    @test occursin(r"4×4 (LinearAlgebra\.)?Diagonal{Int(32|64),Vector{Int(32|64)}}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16", replstr(Diagonal(A)))
-    @test occursin(r"4×4 (LinearAlgebra\.)?Bidiagonal{Int(32|64),Vector{Int(32|64)}}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16", replstr(Bidiagonal(A, :U)))
-    @test occursin(r"4×4 (LinearAlgebra\.)?Bidiagonal{Int(32|64),Vector{Int(32|64)}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16", replstr(Bidiagonal(A, :L)))
-    @test occursin(r"4×4 (LinearAlgebra\.)?SymTridiagonal{Int(32|64),Vector{Int(32|64)}}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32", replstr(SymTridiagonal(A + A')))
-    @test occursin(r"4×4 (LinearAlgebra\.)?Tridiagonal{Int(32|64),Vector{Int(32|64)}}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16", replstr(Tridiagonal(diag(A, -1), diag(A), diag(A, +1))))
-    @test occursin(r"4×4 (LinearAlgebra\.)?UpperTriangular{Int(32|64),Matrix{Int(32|64)}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16", replstr(UpperTriangular(copy(A))))
-    @test occursin(r"4×4 (LinearAlgebra\.)?LowerTriangular{Int(32|64),Matrix{Int(32|64)}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16", replstr(LowerTriangular(copy(A))))
+    @test occursin(r"4×4 (LinearAlgebra\.)?Diagonal{Int(32|64), Vector{Int(32|64)}}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16", replstr(Diagonal(A)))
+    @test occursin(r"4×4 (LinearAlgebra\.)?Bidiagonal{Int(32|64), Vector{Int(32|64)}}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16", replstr(Bidiagonal(A, :U)))
+    @test occursin(r"4×4 (LinearAlgebra\.)?Bidiagonal{Int(32|64), Vector{Int(32|64)}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16", replstr(Bidiagonal(A, :L)))
+    @test occursin(r"4×4 (LinearAlgebra\.)?SymTridiagonal{Int(32|64), Vector{Int(32|64)}}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32", replstr(SymTridiagonal(A + A')))
+    @test occursin(r"4×4 (LinearAlgebra\.)?Tridiagonal{Int(32|64), Vector{Int(32|64)}}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16", replstr(Tridiagonal(diag(A, -1), diag(A), diag(A, +1))))
+    @test occursin(r"4×4 (LinearAlgebra\.)?UpperTriangular{Int(32|64), Matrix{Int(32|64)}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16", replstr(UpperTriangular(copy(A))))
+    @test occursin(r"4×4 (LinearAlgebra\.)?LowerTriangular{Int(32|64), Matrix{Int(32|64)}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16", replstr(LowerTriangular(copy(A))))
 end
 
 # Vararg methods in method tables
@@ -868,8 +868,8 @@ show_f5(A::AbstractArray{T, N}, indices::Vararg{Int,N}) where {T, N} = [indices.
 test_mt(show_f1, "show_f1(x...)")
 test_mt(show_f2, "show_f2(x...)")
 test_mt(show_f3, "show_f3(x...)")
-test_mt(show_f4, "show_f4(x::Vararg{Any,3})")
-test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indices::Vararg{$Int,N})")
+test_mt(show_f4, "show_f4(x::Vararg{Any, 3})")
+test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 
 # Issue #15525, printing of vcat
 @test sprint(show, :([a;])) == ":([a;])"
@@ -1103,14 +1103,14 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(x, y)
     push!(y, x)
     push!(y, z)
-    @test replstr(x) == "1-element Vector{Any}:\n Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any},Vector{Any}}([#= circular reference @-3 =#] => [#= circular reference @-2 =#])]"
-    @test repr(z) == "Base.ImmutableDict{Vector{Any},Vector{Any}}([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any},Vector{Any}}(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Vector{Any},Vector{Any}}(#= circular reference @-2 =#)])"
+    @test replstr(x) == "1-element Vector{Any}:\n Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}([#= circular reference @-3 =#] => [#= circular reference @-2 =#])]"
+    @test repr(z) == "Base.ImmutableDict{Vector{Any}, Vector{Any}}([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
           1: Array{Any}((2,))
             1: Array{Any}((1,))#= circular reference @-2 =#
-            2: Base.ImmutableDict{Vector{Any},Vector{Any}}
-              parent: Base.ImmutableDict{Vector{Any},Vector{Any}}
+            2: Base.ImmutableDict{Vector{Any}, Vector{Any}}
+              parent: Base.ImmutableDict{Vector{Any}, Vector{Any}}
                 parent: #undef
                 key: #undef
                 value: #undef
@@ -1155,7 +1155,7 @@ let repr = sprint(dump, :(x = 1))
     @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
 end
 let repr = sprint(dump, Pair{String,Int64})
-    @test repr == "Pair{String,Int64} <: Any\n  first::String\n  second::Int64\n"
+    @test repr == "Pair{String, Int64} <: Any\n  first::String\n  second::Int64\n"
 end
 let repr = sprint(dump, Tuple)
     @test repr == "Tuple <: Any\n"
@@ -1261,9 +1261,9 @@ test_repr("(:).a")
 @test repr(GlobalRef(Main, :(:))) == ":(Main.:(:))"
 
 # Test compact printing of homogeneous tuples
-@test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"
-@test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4,Float64}"
-@test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32,Float32,Float32}"
+@test repr(NTuple{7,Int64}) == "NTuple{7, Int64}"
+@test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4, Float64}"
+@test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
 
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
 @test isa(repr("text/plain", String(UInt8[0x00:0xff;])), String)
@@ -1283,7 +1283,7 @@ end
 
 struct TypeWith4Params{a,b,c,d}
 end
-@test endswith(string(TypeWith4Params{Int8,Int8,Int8,Int8}), "TypeWith4Params{Int8,Int8,Int8,Int8}")
+@test endswith(string(TypeWith4Params{Int8,Int8,Int8,Int8}), "TypeWith4Params{Int8, Int8, Int8, Int8}")
 
 # issues #20332 and #20781
 struct T20332{T}
@@ -1361,10 +1361,10 @@ end
 @testset "printing of Pair's" begin
     for (p, s) in (Pair(1.0,2.0)                          => "1.0 => 2.0",
                    Pair(Pair(1,2), Pair(3,4))             => "(1 => 2) => (3 => 4)",
-                   Pair{Integer,Int64}(1, 2)              => "Pair{Integer,Int64}(1, 2)",
-                   (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
+                   Pair{Integer,Int64}(1, 2)              => "Pair{Integer, Int64}(1, 2)",
+                   (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer, Int64}(1, 2) => 3",
                    ((1+2im) => (3+4im))                   => "1 + 2im => 3 + 4im",
-                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2 => Pair{Real,Int64}(3, 4))")
+                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2 => Pair{Real, Int64}(3, 4))")
         local s
         @test sprint(show, p) == s
     end
@@ -1372,11 +1372,11 @@ end
     # - if one member is printed as "Pair{...}(...)", no need to put parens around
     s = IOBuffer()
     show(IOContext(s, :compact => false), (1=>2) => Pair{Any,Any}(3,4))
-    @test String(take!(s)) == "(1 => 2) => Pair{Any,Any}(3, 4)"
+    @test String(take!(s)) == "(1 => 2) => Pair{Any, Any}(3, 4)"
 
     # issue #28327
     d = Dict(Pair{Integer,Integer}(1,2)=>Pair{Integer,Integer}(1,2))
-    @test showstr(d) == "Dict{Pair{Integer,Integer},Pair{Integer,Integer}}((1 => 2) => (1 => 2))" # correct parenthesis
+    @test showstr(d) == "Dict{Pair{Integer, Integer}, Pair{Integer, Integer}}((1 => 2) => (1 => 2))" # correct parenthesis
 
     # issue #29536
     d = Dict((+)=>1)
@@ -1387,7 +1387,7 @@ end
 end
 
 @testset "alignment for pairs" begin  # (#22899)
-    @test replstr([1=>22,33=>4]) == "2-element Vector{Pair{$Int,$Int}}:\n  1 => 22\n 33 => 4"
+    @test replstr([1=>22,33=>4]) == "2-element Vector{Pair{$Int, $Int}}:\n  1 => 22\n 33 => 4"
     # first field may have "=>" in its representation
     @test replstr(Pair[(1=>2)=>3, 4=>5]) ==
         "2-element Vector{Pair}:\n (1 => 2) => 3\n        4 => 5"
@@ -1395,7 +1395,7 @@ end
         "2-element Vector{Any}:\n Dict(1 => 2) => (3 => 4)\n            1 => 2"
     # left-alignment when not using the "=>" symbol
     @test replstr(Any[Pair{Integer,Int64}(1, 2), Pair{Integer,Int64}(33, 4)]) ==
-        "2-element Vector{Any}:\n Pair{Integer,Int64}(1, 2)\n Pair{Integer,Int64}(33, 4)"
+        "2-element Vector{Any}:\n Pair{Integer, Int64}(1, 2)\n Pair{Integer, Int64}(33, 4)"
 end
 
 @testset "alignment for complex arrays" begin # (#34763)
@@ -1405,26 +1405,26 @@ end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
     # 0-dim
-    @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
+    @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int}, 0}:\n0 + 0im"
     A = Array{Pair,0}(undef); A[] = 1=>2
-    @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
+    @test replstr(A) == "0-dimensional Array{Pair, 0}:\n1 => 2"
     # 1-dim
     @test replstr(zeros(Complex{Int}, 2)) ==
         "2-element Vector{Complex{$Int}}:\n 0 + 0im\n 0 + 0im"
-    @test replstr([1=>2, 3=>4]) == "2-element Vector{Pair{$Int,$Int}}:\n 1 => 2\n 3 => 4"
+    @test replstr([1=>2, 3=>4]) == "2-element Vector{Pair{$Int, $Int}}:\n 1 => 2\n 3 => 4"
     # 2-dim
     @test replstr(zeros(Complex{Int}, 2, 1)) ==
         "2×1 Matrix{Complex{$Int}}:\n 0 + 0im\n 0 + 0im"
     @test replstr(zeros(Complex{Int}, 1, 2)) ==
         "1×2 Matrix{Complex{$Int}}:\n 0+0im  0+0im"
-    @test replstr([1=>2 3=>4]) == "1×2 Matrix{Pair{$Int,$Int}}:\n 1=>2  3=>4"
+    @test replstr([1=>2 3=>4]) == "1×2 Matrix{Pair{$Int, $Int}}:\n 1=>2  3=>4"
     @test replstr([1=>2 for x in 1:2, y in 1:1]) ==
-        "2×1 Matrix{Pair{$Int,$Int}}:\n 1 => 2\n 1 => 2"
+        "2×1 Matrix{Pair{$Int, $Int}}:\n 1 => 2\n 1 => 2"
     # 3-dim
     @test replstr(zeros(Complex{Int}, 1, 1, 1)) ==
-        "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
+        "1×1×1 Array{Complex{$Int}, 3}:\n[:, :, 1] =\n 0 + 0im"
     @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
-        "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
+        "1×2×1 Array{Complex{$Int}, 3}:\n[:, :, 1] =\n 0+0im  0+0im"
 end
 
 @testset "arrays printing follows the :compact property when specified" begin
@@ -1437,7 +1437,7 @@ end
     @test showstr([x x; x x]) == showstr([x x; x x], :compact => false) ==
         "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
     @test replstr([x, x], :compact => false) ==
-        "2-element Array{Float64,1}:\n 3.141592653589793\n 3.141592653589793"
+        "2-element Array{Float64, 1}:\n 3.141592653589793\n 3.141592653589793"
     @test replstr([x, x]) == "2-element Vector{Float64}:\n 3.141592653589793\n 3.141592653589793"
     @test replstr([x, x], :compact => true) == "2-element Vector{Float64}:\n 3.14159\n 3.14159"
     @test replstr([x x; x x]) == replstr([x x; x x], :compact => true) ==
@@ -1496,23 +1496,23 @@ end
 end
 
 let x = TypeVar(:_), y = TypeVar(:_)
-    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1,_2} where _2 where _1"
-    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1,_1} where _1"
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where _2 where _1"
+    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1, _1} where _1"
     x = TypeVar(:a)
     y = TypeVar(:a)
     z = TypeVar(:a)
-    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1,a2,a} where a2 where a1 where a"
+    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1, a2, a} where a2 where a1 where a"
 end
 
 @testset "showarg" begin
     A = reshape(Vector(Int16(1):Int16(2*3*5)), 2, 3, 5)
-    @test summary(A) == "2×3×5 Array{Int16,3}"
+    @test summary(A) == "2×3×5 Array{Int16, 3}"
     v = view(A, :, 3, 2:5)
-    @test summary(v) == "2×4 view(::Array{Int16,3}, :, 3, 2:5) with eltype Int16"
+    @test summary(v) == "2×4 view(::Array{Int16, 3}, :, 3, 2:5) with eltype Int16"
     r = reshape(v, 4, 2)
-    @test summary(r) == "4×2 reshape(view(::Array{Int16,3}, :, 3, 2:5), 4, 2) with eltype Int16"
+    @test summary(r) == "4×2 reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2) with eltype Int16"
     p = PermutedDimsArray(r, (2, 1))
-    @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16,3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
+    @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
 end
 
 @testset "Methods" begin
@@ -1570,10 +1570,10 @@ end
     @test showstr([Float16(1)]) == "Float16[1.0]"
     @test showstr([[Float16(1)]]) == "Vector{Float16}[[1.0]]"
     @test replstr(Real[Float16(1)]) == "1-element Vector{Real}:\n Float16(1.0)"
-    @test replstr(Array{Real}[Real[1]]) == "1-element Vector{Array{Real,N} where N}:\n [1]"
+    @test replstr(Array{Real}[Real[1]]) == "1-element Vector{Array{Real, N} where N}:\n [1]"
     # printing tuples (Issue #25042)
     @test replstr(fill((Int64(1), zeros(Float16, 3)), 1)) ==
-                 "1-element Vector{Tuple{Int64,Vector{Float16}}}:\n (1, [0.0, 0.0, 0.0])"
+                 "1-element Vector{Tuple{Int64, Vector{Float16}}}:\n (1, [0.0, 0.0, 0.0])"
     @testset "nested Any eltype" begin
         x = Any[Any[Any[1]]]
         # The element of x (i.e. x[1]) has an eltype which can't be deduced
@@ -1592,40 +1592,40 @@ end
     # issue #27747
     let t = (x = Integer[1, 2],)
         v = [t, t]
-        @test showstr(v) == "NamedTuple{(:x,),Tuple{Vector{Integer}}}[(x = [1, 2],), (x = [1, 2],)]"
-        @test replstr(v) == "2-element Vector{NamedTuple{(:x,),Tuple{Vector{Integer}}}}:\n (x = [1, 2],)\n (x = [1, 2],)"
+        @test showstr(v) == "NamedTuple{(:x,), Tuple{Vector{Integer}}}[(x = [1, 2],), (x = [1, 2],)]"
+        @test replstr(v) == "2-element Vector{NamedTuple{(:x,), Tuple{Vector{Integer}}}}:\n (x = [1, 2],)\n (x = [1, 2],)"
     end
 
     # issue #25857
-    @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int,Vararg{$Int,N} where N}[(1,), (1, 2), (1, 2, 3)]"
+    @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int, Vararg{$Int, N} where N}[(1,), (1, 2), (1, 2, 3)]"
 
     # issues #25466 & #26256
-    @test replstr([:A => [1]]) == "1-element Vector{Pair{Symbol,Vector{$Int}}}:\n :A => [1]"
+    @test replstr([:A => [1]]) == "1-element Vector{Pair{Symbol, Vector{$Int}}}:\n :A => [1]"
 
     # issue #26881
-    @test showstr([keys(Dict('a' => 'b'))]) == "Base.KeySet{Char,Dict{Char,Char}}[['a']]"
-    @test showstr([values(Dict('a' => 'b'))]) == "Base.ValueIterator{Dict{Char,Char}}[['b']]"
-    @test replstr([keys(Dict('a' => 'b'))]) == "1-element Vector{Base.KeySet{Char,Dict{Char,Char}}}:\n ['a']"
+    @test showstr([keys(Dict('a' => 'b'))]) == "Base.KeySet{Char, Dict{Char, Char}}[['a']]"
+    @test showstr([values(Dict('a' => 'b'))]) == "Base.ValueIterator{Dict{Char, Char}}[['b']]"
+    @test replstr([keys(Dict('a' => 'b'))]) == "1-element Vector{Base.KeySet{Char, Dict{Char, Char}}}:\n ['a']"
 
     @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
-    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer,Integer}[1 => 2]"
-    @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer,Integer}(1 => 2)"
-    @test showstr(Dict(true=>false)) == "Dict{Bool,Bool}(1 => 0)"
+    @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer, Integer}[1 => 2]"
+    @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer, Integer}(1 => 2)"
+    @test showstr(Dict(true=>false)) == "Dict{Bool, Bool}(1 => 0)"
     @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
 
     # issue #27979 (dislaying arrays of pairs containing arrays as first member)
-    @test replstr([[1.0]=>1.0]) == "1-element Vector{Pair{Vector{Float64},Float64}}:\n [1.0] => 1.0"
+    @test replstr([[1.0]=>1.0]) == "1-element Vector{Pair{Vector{Float64}, Float64}}:\n [1.0] => 1.0"
 
     # issue #28159
-    @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Vector{NamedTuple{names,Tuple{$Int,$Int}} where names}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
+    @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Vector{NamedTuple{names, Tuple{$Int, $Int}} where names}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
 
     @test replstr(Vector[Any[1]]) == "1-element Vector{Vector{T} where T}:\n Any[1]"
     @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
-        "1-element Vector{AbstractDict{Integer,Integer}}:\n Dict(1 => 2)"
+        "1-element Vector{AbstractDict{Integer, Integer}}:\n Dict(1 => 2)"
 
     # issue #34343
     @test showstr([[1], Int[]]) == "[[1], $Int[]]"
-    @test showstr([Dict(1=>1), Dict{Int,Int}()]) == "[Dict(1 => 1), Dict{$Int,$Int}()]"
+    @test showstr([Dict(1=>1), Dict{Int,Int}()]) == "[Dict(1 => 1), Dict{$Int, $Int}()]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -1866,7 +1866,7 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 end
 
 # issue #30505
-@test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char,Char}}[('a', 'b')]"
+@test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char, Char}}[('a', 'b')]"
 
 # issue #30927
 Z = Array{Float64}(undef,0,0)
@@ -1934,22 +1934,22 @@ end
     @test showstr(fill(nothing)) == "fill(nothing)"
     @test showstr(BitArray(0)) == "BitArray(0)"
 
-    @test replstr(zeros(Int32)) == "0-dimensional Array{Int32,0}:\n0"
-    @test replstr(collect('b')) == "0-dimensional Array{Char,0}:\n'b'"
-    @test replstr(fill(nothing)) == "0-dimensional Array{Nothing,0}:\nnothing"
+    @test replstr(zeros(Int32)) == "0-dimensional Array{Int32, 0}:\n0"
+    @test replstr(collect('b')) == "0-dimensional Array{Char, 0}:\n'b'"
+    @test replstr(fill(nothing)) == "0-dimensional Array{Nothing, 0}:\nnothing"
     @test replstr(BitArray(0)) == "0-dimensional BitArray{0}:\n0"
 
     # UndefInitializer
     @test showstr(fill(undef)) == "fill($undef)"
-    @test replstr(fill(undef)) == "0-dimensional Array{UndefInitializer,0}:\n$undef"
+    @test replstr(fill(undef)) == "0-dimensional Array{UndefInitializer, 0}:\n$undef"
 
     # `#undef` values
-    @test showstr(Array{String, 0}(undef)) == "Array{String,0}($undef)"
-    @test replstr(Array{String, 0}(undef)) == "0-dimensional Array{String,0}:\n$(Base.undef_ref_str)"
+    @test showstr(Array{String, 0}(undef)) == "Array{String, 0}($undef)"
+    @test replstr(Array{String, 0}(undef)) == "0-dimensional Array{String, 0}:\n$(Base.undef_ref_str)"
 
     # "undef" with isbits type
     @test startswith(showstr(Array{Int32, 0}(undef)), "fill(")
-    @test startswith(replstr(Array{Int32, 0}(undef)), "0-dimensional Array{Int32,0}:\n")
+    @test startswith(replstr(Array{Int32, 0}(undef)), "0-dimensional Array{Int32, 0}:\n")
 end
 
 # issue #31402, Print Symbol("true") as Symbol("true") instead of :true

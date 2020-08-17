@@ -273,11 +273,11 @@ Assigning `a` to `b` does not create a copy of `b`; instead use [`copy`](@ref) o
 
 ```jldoctest
 julia> b = [1]; a = b; b[1] = 2; a
-1-element Array{Int64,1}:
+1-element Array{Int64, 1}:
  2
 
 julia> b = [1]; a = copy(b); b[1] = 2; a
-1-element Array{Int64,1}:
+1-element Array{Int64, 1}:
  1
 
 ```
@@ -287,7 +287,7 @@ julia> function f!(x); x[:] .+= 1; end
 f! (generic function with 1 method)
 
 julia> a = [1]; f!(a); a
-1-element Array{Int64,1}:
+1-element Array{Int64, 1}:
  2
 
 ```
@@ -306,7 +306,7 @@ julia> a, b
 Assignment can operate on multiple variables in series, and will return the value of the right-hand-most expression:
 ```jldoctest
 julia> a = [1]; b = [2]; c = [3]; a = b = c
-1-element Array{Int64,1}:
+1-element Array{Int64, 1}:
  3
 
 julia> b[1] = 2; a, b, c
@@ -316,11 +316,11 @@ julia> b[1] = 2; a, b, c
 Assignment at out-of-bounds indices does not grow a collection. If the collection is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
 ```jldoctest
 julia> a = [1, 1]; a[3] = 2
-ERROR: BoundsError: attempt to access 2-element Array{Int64,1} at index [3]
+ERROR: BoundsError: attempt to access 2-element Array{Int64, 1} at index [3]
 [...]
 
 julia> push!(a, 2, 3)
-4-element Array{Int64,1}:
+4-element Array{Int64, 1}:
  1
  1
  2
@@ -334,7 +334,7 @@ ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
-2-element Array{Int64,1}:
+2-element Array{Int64, 1}:
  2
  3
 
@@ -357,14 +357,14 @@ assignment expression is converted into a single loop.
 julia> A = zeros(4, 4); B = [1, 2, 3, 4];
 
 julia> A .= B
-4×4 Array{Float64,2}:
+4×4 Array{Float64, 2}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
  4.0  4.0  4.0  4.0
 
 julia> A
-4×4 Array{Float64,2}:
+4×4 Array{Float64, 2}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
@@ -725,12 +725,12 @@ the last index of a dimension.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Array{Int64, 2}:
  1  2
  3  4
 
 julia> A[end, :]
-2-element Array{Int64,1}:
+2-element Array{Int64, 1}:
  3
  4
 ```
@@ -1848,7 +1848,7 @@ Rational{Int64}
 julia> M = [1 2; 3.5 4];
 
 julia> typeof(M)
-Matrix{Float64} = Array{Float64,2}
+Matrix{Float64} = Array{Float64, 2}
 ```
 """
 typeof
@@ -1899,7 +1899,7 @@ Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`undef`](@ref
 # Examples
 ```julia-repl
 julia> Vector{Float64}(undef, 3)
-3-element Array{Float64,1}:
+3-element Array{Float64, 1}:
  6.90966e-310
  6.90966e-310
  6.90966e-310
@@ -1949,7 +1949,7 @@ Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`undef`](@
 # Examples
 ```julia-repl
 julia> Matrix{Float64}(undef, 2, 3)
-2×3 Array{Float64,2}:
+2×3 Array{Float64, 2}:
  6.93517e-310  6.93517e-310  6.93517e-310
  6.93517e-310  6.93517e-310  1.29396e-320
 ```
@@ -2003,13 +2003,13 @@ match the length or number of `dims`. See [`undef`](@ref).
 
 # Examples
 ```julia-repl
-julia> A = Array{Float64,2}(undef, 2, 3) # N given explicitly
-2×3 Array{Float64,2}:
+julia> A = Array{Float64, 2}(undef, 2, 3) # N given explicitly
+2×3 Array{Float64, 2}:
  6.90198e-310  6.90198e-310  6.90198e-310
  6.90198e-310  6.90198e-310  0.0
 
 julia> B = Array{Float64}(undef, 2) # N determined by the input
-2-element Array{Float64,1}:
+2-element Array{Float64, 1}:
  1.87103e-320
  0.0
 ```
@@ -2072,8 +2072,8 @@ an alias for `UndefInitializer()`.
 
 # Examples
 ```julia-repl
-julia> Array{Float64,1}(UndefInitializer(), 3)
-3-element Array{Float64,1}:
+julia> Array{Float64, 1}(UndefInitializer(), 3)
+3-element Array{Float64, 1}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
@@ -2090,8 +2090,8 @@ array-constructor-caller would like an uninitialized array.
 
 # Examples
 ```julia-repl
-julia> Array{Float64,1}(undef, 3)
-3-element Array{Float64,1}:
+julia> Array{Float64, 1}(undef, 3)
+3-element Array{Float64, 1}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
@@ -2337,8 +2337,8 @@ arguments accepted by varargs methods (see the section on [Varargs Functions](@r
 
 # Examples
 ```jldoctest
-julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
-Tuple{AbstractString,Vararg{Int64,N} where N}
+julia> mytupletype = Tuple{AbstractString, Vararg{Int}}
+Tuple{AbstractString, Vararg{Int64, N} where N}
 
 julia> isa(("1",), mytupletype)
 true

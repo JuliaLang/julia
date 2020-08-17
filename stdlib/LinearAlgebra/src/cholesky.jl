@@ -46,21 +46,21 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholesky(A)
-Cholesky{Float64,Matrix{Float64}}
+Cholesky{Float64, Matrix{Float64}}
 U factor:
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.U
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.L
-3×3 LowerTriangular{Float64,Matrix{Float64}}:
+3×3 LowerTriangular{Float64, Matrix{Float64}}:
   2.0   ⋅    ⋅
   6.0  1.0   ⋅
  -8.0  5.0  3.0
@@ -103,9 +103,9 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholesky(A, Val(true))
-CholeskyPivoted{Float64,Matrix{Float64}}
+CholeskyPivoted{Float64, Matrix{Float64}}
 U factor with rank 3:
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  9.89949  -4.34366  -1.61624
   ⋅        4.25825   1.1694
   ⋅         ⋅        0.142334
@@ -317,21 +317,21 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholesky(A)
-Cholesky{Float64,Matrix{Float64}}
+Cholesky{Float64, Matrix{Float64}}
 U factor:
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.U
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.L
-3×3 LowerTriangular{Float64,Matrix{Float64}}:
+3×3 LowerTriangular{Float64, Matrix{Float64}}:
   2.0   ⋅    ⋅
   6.0  1.0   ⋅
  -8.0  5.0  3.0

@@ -23,7 +23,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  2.0  0.0  0.0  0.0
 
 julia> F = svd(A)
-SVD{Float64,Float64,Matrix{Float64}}
+SVD{Float64, Float64, Matrix{Float64}}
 U factor:
 4×4 Matrix{Float64}:
  0.0  1.0  0.0   0.0
@@ -288,7 +288,7 @@ julia> B = [0. 1.; 1. 0.]
  1.0  0.0
 
 julia> F = svd(A, B)
-GeneralizedSVD{Float64,Matrix{Float64}}
+GeneralizedSVD{Float64, Matrix{Float64}}
 U factor:
 2×2 Matrix{Float64}:
  1.0  0.0
@@ -302,11 +302,11 @@ Q factor:
  1.0  0.0
  0.0  1.0
 D1 factor:
-2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+2×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:
  0.707107   ⋅
   ⋅        0.707107
 D2 factor:
-2×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+2×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:
  0.707107   ⋅
   ⋅        0.707107
 R0 factor:

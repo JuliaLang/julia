@@ -2120,7 +2120,7 @@ f5577(::Type) = true
 # issue #6426
 f6426(x,args...) = f6426(x,map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 f6426(x,t::Tuple{Vararg{Type}}) = string(t)
-@test f6426(1, (1.,2.)) == "(Tuple{Float64,Float64},)"
+@test f6426(1, (1.,2.)) == "(Tuple{Float64, Float64},)"
 
 # issue #6502
 f6502() = convert(Tuple{Vararg{Int}}, (10,))
@@ -7229,7 +7229,7 @@ struct NFANode34126
     NFANode34126() = new(Tuple{Nothing,NFANode34126}[])
 end
 
-@test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing,$NFANode34126}[])"
+@test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing, $NFANode34126}[])"
 
 # issue #35416
 struct Node35416{T,K,X}

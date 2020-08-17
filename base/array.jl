@@ -450,7 +450,7 @@ julia> fill(1.0, (2,3))
  1.0  1.0  1.0
 
 julia> fill(42)
-0-dimensional Array{Int64,0}:
+0-dimensional Array{Int64, 0}:
 42
 ```
 
@@ -795,7 +795,7 @@ Retrieve the value(s) stored at the given key or index within a collection. The 
 # Examples
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
-Dict{String,Int64} with 2 entries:
+Dict{String, Int64} with 2 entries:
   "b" => 2
   "a" => 1
 
@@ -2093,7 +2093,7 @@ julia> findall(!iszero, A)
  CartesianIndex(2, 2)
 
 julia> d = Dict(:A => 10, :B => -1, :C => 0)
-Dict{Symbol,Int64} with 3 entries:
+Dict{Symbol, Int64} with 3 entries:
   :A => 10
   :B => -1
   :C => 0

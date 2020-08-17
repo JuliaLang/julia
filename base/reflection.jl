@@ -254,7 +254,7 @@ variables defined as of the call site.
 julia> let x = 1, y = 2
            Base.@locals
        end
-Dict{Symbol,Any} with 2 entries:
+Dict{Symbol, Any} with 2 entries:
   :y => 2
   :x => 1
 
@@ -270,9 +270,9 @@ julia> function f(x)
        end;
 
 julia> f(42)
-Dict{Symbol,Any}(:x => 42)
-Dict{Symbol,Any}(:i => 1,:x => 42)
-Dict{Symbol,Any}(:y => 2,:x => 42)
+Dict{Symbol, Any}(:x => 42)
+Dict{Symbol, Any}(:i => 1, :x => 42)
+Dict{Symbol, Any}(:y => 2, :x => 42)
 ```
 """
 macro locals()
@@ -571,7 +571,7 @@ use it in the following manner to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-12-element Vector{Tuple{UInt64,Symbol,DataType}}:
+12-element Vector{Tuple{UInt64, Symbol, DataType}}:
  (0x0000000000000000, :device, UInt64)
  (0x0000000000000008, :inode, UInt64)
  (0x0000000000000010, :mode, UInt64)
@@ -1347,7 +1347,7 @@ foo (generic function with 2 methods)
 julia> m1, m2 = collect(methods(foo));
 
 julia> typeintersect(m1.sig, m2.sig)
-Tuple{typeof(foo),Complex{Union{}}}
+Tuple{typeof(foo), Complex{Union{}}}
 
 julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
 true

@@ -758,7 +758,7 @@ for new string types if necessary.
 # Examples
 ```jldoctest
 julia> codeunits("Juλia")
-6-element Base.CodeUnits{UInt8,String}:
+6-element Base.CodeUnits{UInt8, String}:
  0x4a
  0x75
  0xce

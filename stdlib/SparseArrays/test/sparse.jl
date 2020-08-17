@@ -2292,15 +2292,15 @@ end
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), spzeros(Float64, Int64, 0, 0))
-    @test String(take!(io)) == "0×0 SparseArrays.SparseMatrixCSC{Float64,Int64} with 0 stored entries"
+    @test String(take!(io)) == "0×0 SparseArrays.SparseMatrixCSC{Float64, Int64} with 0 stored entries"
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n 1.0"
+    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64, Int64} with 1 stored entry:\n 1.0"
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
-    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32,Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ "
+    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32, Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ "
 
     A = sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0])
     show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n 1.0  2.0"
+    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:\n 1.0  2.0"
     _show_with_braille_patterns(convert(IOContext, io), A)
     @test String(take!(io)) == "⠉"
 
@@ -2319,13 +2319,13 @@ end
 
     A = sparse(Int64[1, 2, 4, 2, 3], Int64[1, 1, 1, 2, 2], Int64[1, 1, 1, 1, 1], 4, 2)
     show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64,Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅"
+    @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64, Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅"
     _show_with_braille_patterns(convert(IOContext, io), A)
     @test String(take!(io)) == "⡳"
 
     A = sparse(Int64[1, 3, 2, 4], Int64[1, 1, 2, 2], Int64[1, 1, 1, 1], 7, 3)
     show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "7×3 SparseArrays.SparseMatrixCSC{Int64,Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅"
+    @test String(take!(io)) == "7×3 SparseArrays.SparseMatrixCSC{Int64, Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅"
     _show_with_braille_patterns(convert(IOContext, io), A)
     @test String(take!(io)) == "⢕" * Char(10240) * "\n" * Char(10240)^2
 
@@ -2335,7 +2335,7 @@ end
     @test String(take!(io)) == brailleString
 
     # Issue #30589
-    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool,$Int} with 2 stored entries:\n 1  1"
+    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool, $Int} with 2 stored entries:\n 1  1"
 
     function _filled_sparse(m::Integer, n::Integer)
         C = CartesianIndices((m, n))[:]

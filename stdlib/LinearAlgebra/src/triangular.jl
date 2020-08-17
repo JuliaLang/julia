@@ -74,7 +74,7 @@ julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
  7.0  8.0  9.0
 
 julia> LowerTriangular(A)
-3×3 LowerTriangular{Float64,Matrix{Float64}}:
+3×3 LowerTriangular{Float64, Matrix{Float64}}:
  1.0   ⋅    ⋅
  4.0  5.0   ⋅
  7.0  8.0  9.0
@@ -95,7 +95,7 @@ julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
  7.0  8.0  9.0
 
 julia> UpperTriangular(A)
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  1.0  2.0  3.0
   ⋅   5.0  6.0
   ⋅    ⋅   9.0
@@ -118,7 +118,7 @@ julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
  7.0  8.0  9.0
 
 julia> UnitLowerTriangular(A)
-3×3 UnitLowerTriangular{Float64,Matrix{Float64}}:
+3×3 UnitLowerTriangular{Float64, Matrix{Float64}}:
  1.0   ⋅    ⋅
  4.0  1.0   ⋅
  7.0  8.0  1.0
@@ -141,7 +141,7 @@ julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
  7.0  8.0  9.0
 
 julia> UnitUpperTriangular(A)
-3×3 UnitUpperTriangular{Float64,Matrix{Float64}}:
+3×3 UnitUpperTriangular{Float64, Matrix{Float64}}:
  1.0  2.0  3.0
   ⋅   1.0  6.0
   ⋅    ⋅   1.0
