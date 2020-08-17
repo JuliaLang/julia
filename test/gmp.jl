@@ -293,6 +293,14 @@ let s, n = bigfib(1000001)
     @test startswith(s, "316047687386689")
 end
 
+@testset "digits"
+    n = Int64(2080310129088201558)
+    N = big(n)
+    for base in (2,7,10,11,16,30,50,62,64,100), pad in (0,1,10,100)
+        @test digits(n; base, pad) == digits(N; base, pad)
+    end
+end
+
 # serialization (#5133)
 let n = parse(BigInt, "359334085968622831041960188598043661065388726959079837"),
     b = IOBuffer()
