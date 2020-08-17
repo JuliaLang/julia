@@ -706,7 +706,7 @@ function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:
             a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
         end
         lasti = lastindex(a)
-        while i < lasti; a[i+=1] = 0; end
+        while i < lasti; a[i+=1] = zero(T); end
         return isneg(n) ? map!(-,a,a) : a
     end
     return invoke(digits!, Tuple{typeof(a), Integer}, a, n; base) # slow generic fallback
