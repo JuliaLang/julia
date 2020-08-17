@@ -119,9 +119,11 @@ function _compute_eltype(t::Type{<:Tuple})
     t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
     # TODO: handle Union/UnionAll correctly here
+    length(t´.parameters) == 1 && return rewrap_unionall(unwrapva(t´.parameters[1]), t)
     r = Union{}
     for ti in t´.parameters
         r = promote_typejoin(r, rewrap_unionall(unwrapva(ti), t))
+        r === Any && break
     end
     return r
 end

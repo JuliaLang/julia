@@ -439,7 +439,7 @@ mutable struct T10647{T}; x::T; end
     Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
-@testset "IdDict{Any,Any}" begin
+@testset "IdDict{Any,Any} and partial inference" begin
     a = IdDict{Any,Any}()
     a[1] = a
     a[a] = 2
@@ -478,6 +478,13 @@ end
     @test isa(d, IdDict{Any,Any})
     @test d == IdDict{Any,Any}(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Any,Any}
+
+    d = IdDict{Any,Int32}(:hi => 7)
+    let c = Ref{Any}(1.5)
+        f() = c[]
+        @test @inferred(get!(f, d, :hi)) === Int32(7)
+        @test_throws InexactError(:Int32, Int32, 1.5) get!(f, d, :hello)
+    end
 end
 
 @testset "IdDict" begin

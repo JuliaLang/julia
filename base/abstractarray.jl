@@ -82,7 +82,7 @@ end
 Return `true` if the indices of `A` start with something other than 1 along any axis.
 If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
 """
-has_offset_axes(A)    = _tuple_any(x->first(x)!=1, axes(A))
+has_offset_axes(A)    = _tuple_any(x->Int(first(x))::Int != 1, axes(A))
 has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
 has_offset_axes(::Colon) = false
 
@@ -588,11 +588,11 @@ See also [`checkbounds`](@ref).
 """
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple)
     @_inline_meta
-    checkindex(Bool, IA[1], I[1]) & checkbounds_indices(Bool, tail(IA), tail(I))
+    checkindex(Bool, IA[1], I[1])::Bool & checkbounds_indices(Bool, tail(IA), tail(I))
 end
 function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple)
     @_inline_meta
-    checkindex(Bool, OneTo(1), I[1]) & checkbounds_indices(Bool, (), tail(I))
+    checkindex(Bool, OneTo(1), I[1])::Bool & checkbounds_indices(Bool, (), tail(I))
 end
 checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@_inline_meta; all(x->unsafe_length(x)==1, IA))
 checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
@@ -1065,7 +1065,7 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
-    unsafe_convert(Ptr{T}, x) + _memory_offset(x, i)
+    unsafe_convert(Ptr{T}, x) + Int(_memory_offset(x, i))::Int
 end
 
 # The distance from pointer(x) to the element at x[I...] in bytes
