@@ -209,7 +209,7 @@ end
 
 is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
 
-function show_spec_linfo(io::IO, frame::StackFrame)
+function show_spec_linfo(@nospecialize(io::IO), frame::StackFrame)
     if frame.linfo === nothing
         if frame.func === empty_sym
             print(io, "ip:0x", string(frame.pointer, base=16))

@@ -12,7 +12,7 @@ julia> struct MyException <: Exception
            msg::AbstractString
        end
 
-julia> function Base.showerror(io::IO, err::MyException)
+julia> function Base.showerror(@nospecialize(io::IO), err::MyException)
            print(io, "MyException: ")
            print(io, err.msg)
        end
@@ -27,16 +27,16 @@ julia> throw(MyException("test exception"))
 ERROR: MyException: test exception
 ```
 """
-showerror(io::IO, ex) = show(io, ex)
+showerror(@nospecialize(io::IO), ex) = show(io, ex)
 
-show_index(io::IO, x::Any) = show(io, x)
-show_index(io::IO, x::Slice) = show_index(io, x.indices)
-show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
-show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
-show_index(io::IO, x::Colon) = print(io, ':')
+show_index(@nospecialize(io::IO), x::Any) = show(io, x)
+show_index(@nospecialize(io::IO), x::Slice) = show_index(io, x.indices)
+show_index(@nospecialize(io::IO), x::LogicalIndex) = show_index(io, x.mask)
+show_index(@nospecialize(io::IO), x::OneTo) = print(io, "1:", x.stop)
+show_index(@nospecialize(io::IO), x::Colon) = print(io, ':')
 
 
-function showerror(io::IO, ex::BoundsError)
+function showerror(@nospecialize(io::IO), ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
@@ -59,7 +59,7 @@ function showerror(io::IO, ex::BoundsError)
     Experimental.show_error_hints(io, ex)
 end
 
-function showerror(io::IO, ex::TypeError)
+function showerror(@nospecialize(io::IO), ex::TypeError)
     print(io, "TypeError: ")
     if ex.expected === Bool
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
@@ -83,7 +83,7 @@ function showerror(io::IO, ex::TypeError)
     Experimental.show_error_hints(io, ex)
 end
 
-function showerror(io::IO, ex, bt; backtrace=true)
+function showerror(@nospecialize(io::IO), ex, bt; backtrace=true)
     try
         showerror(io, ex)
     finally
@@ -91,21 +91,21 @@ function showerror(io::IO, ex, bt; backtrace=true)
     end
 end
 
-function showerror(io::IO, ex::LoadError, bt; backtrace=true)
+function showerror(@nospecialize(io::IO), ex::LoadError, bt; backtrace=true)
     print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
     print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
-showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
+showerror(@nospecialize(io::IO), ex::LoadError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::InitError, bt; backtrace=true)
+function showerror(@nospecialize(io::IO), ex::InitError, bt; backtrace=true)
     print(io, "InitError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
     print(io, "\nduring initialization of module ", ex.mod)
 end
-showerror(io::IO, ex::InitError) = showerror(io, ex, [])
+showerror(@nospecialize(io::IO), ex::InitError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::DomainError)
+function showerror(@nospecialize(io::IO), ex::DomainError)
     if isa(ex.val, AbstractArray)
         compact = get(io, :compact, true)
         limit = get(io, :limit, true)
@@ -121,7 +121,7 @@ function showerror(io::IO, ex::DomainError)
     nothing
 end
 
-function showerror(io::IO, ex::SystemError)
+function showerror(@nospecialize(io::IO), ex::SystemError)
     if @static(Sys.iswindows() ? ex.extrainfo isa WindowsErrorInfo : false)
         errstring = Libc.FormatMessage(ex.extrainfo.errnum)
         extrainfo = ex.extrainfo.extrainfo
@@ -136,29 +136,29 @@ function showerror(io::IO, ex::SystemError)
     end
 end
 
-showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
-showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
-showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
-showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
-function showerror(io::IO, ex::ErrorException)
+showerror(@nospecialize(io::IO), ::DivideError) = print(io, "DivideError: integer division error")
+showerror(@nospecialize(io::IO), ::StackOverflowError) = print(io, "StackOverflowError:")
+showerror(@nospecialize(io::IO), ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
+showerror(@nospecialize(io::IO), ::EOFError) = print(io, "EOFError: read end of file")
+function showerror(@nospecialize(io::IO), ex::ErrorException)
     print(io, ex.msg)
     if ex.msg == "type String has no field data"
         println(io)
         print(io, "Use `codeunits(str)` instead.")
     end
 end
-showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
+showerror(@nospecialize(io::IO), ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
-showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
-showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
-showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
-showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
+showerror(@nospecialize(io::IO), ex::InterruptException) = print(io, "InterruptException:")
+showerror(@nospecialize(io::IO), ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
+showerror(@nospecialize(io::IO), ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
+showerror(@nospecialize(io::IO), ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
-showerror(io::IO, ex::UndefKeywordError) =
+showerror(@nospecialize(io::IO), ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
 
-function showerror(io::IO, ex::UndefVarError)
+function showerror(@nospecialize(io::IO), ex::UndefVarError)
     if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
         return showerror(io, ErrorException("""
         `$(ex.var)` has been moved to the package LegacyStrings.jl:
@@ -169,7 +169,7 @@ function showerror(io::IO, ex::UndefVarError)
     print(io, "UndefVarError: $(ex.var) not defined")
 end
 
-function showerror(io::IO, ex::InexactError)
+function showerror(@nospecialize(io::IO), ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
     nameof(ex.T) === ex.func || print(io, ex.T, ", ")
     print(io, ex.val, ')')
@@ -178,7 +178,7 @@ end
 
 typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
 
-function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
+function print_with_compare(@nospecialize(io::IO), @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
     if a.name === b.name
         Base.show_type_name(io, a.name)
         n = length(a.parameters)
@@ -187,7 +187,7 @@ function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b:
             if i > length(b.parameters)
                 printstyled(io, a.parameters[i], color=color)
             else
-                print_with_compare(io::IO, a.parameters[i], b.parameters[i], color)
+                print_with_compare(@nospecialize(io::IO), a.parameters[i], b.parameters[i], color)
             end
             i < n && print(io, ',')
         end
@@ -197,7 +197,7 @@ function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b:
     end
 end
 
-function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), color::Symbol)
+function print_with_compare(@nospecialize(io::IO), @nospecialize(a), @nospecialize(b), color::Symbol)
     if a === b
         print(io, a)
     else
@@ -205,7 +205,7 @@ function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), color::S
     end
 end
 
-function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_param))
+function show_convert_error(@nospecialize(io::IO), ex::MethodError, @nospecialize(arg_types_param))
     # See #13033
     T = striptype(ex.args[1])
     if T === nothing
@@ -221,7 +221,7 @@ function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_par
     end
 end
 
-function showerror(io::IO, ex::MethodError)
+function showerror(@nospecialize(io::IO), ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
     is_arg_types = isa(ex.args, DataType)
@@ -332,7 +332,7 @@ end
 striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
-function showerror_ambiguous(io::IO, meth, f, args)
+function showerror_ambiguous(@nospecialize(io::IO), meth, f, args)
     print(io, "MethodError: ")
     show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
     print(io, "(")
@@ -370,7 +370,7 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
 end
 
-function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
+function show_method_candidates(@nospecialize(io::IO), ex::MethodError, @nospecialize kwargs=())
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param = Any[arg_types.parameters...]
@@ -566,7 +566,7 @@ stacktrace_contract_userdir()::Bool =
 stacktrace_linebreaks()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
-function show_full_backtrace(io::IO, trace; print_linebreaks::Bool)
+function show_full_backtrace(@nospecialize(io::IO), trace; print_linebreaks::Bool)
     n = length(trace)
     ndigits_max = ndigits(n)
 
@@ -586,7 +586,7 @@ end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function show_reduced_backtrace(io::IO, t::Vector)
+function show_reduced_backtrace(@nospecialize(io::IO), t::Vector)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
@@ -672,7 +672,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolordict, modulecolorcycler)
+function print_stackframe(@nospecialize(io::IO), i, frame, n, digit_align_width, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
     if m !== nothing
         while parentmodule(m) !== m
@@ -692,7 +692,7 @@ end
 
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+function print_stackframe(@nospecialize(io::IO), i, frame, n, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = replaceuserpath(file))
@@ -735,7 +735,7 @@ function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
     # filename, separator, line
     # use escape codes for formatting, printstyled can't do underlined and color
     # codes are bright black (90) and underlined (4)
-    function print_underlined(io::IO, s...)
+    function print_underlined(@nospecialize(io::IO), s...)
         colored = get(io, :color, false)::Bool
         start_s = colored ? "\033[90;4m" : ""
         end_s   = colored ? "\033[0m"    : ""
@@ -748,7 +748,7 @@ function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
 end
 
 
-function show_backtrace(io::IO, t::Vector)
+function show_backtrace(@nospecialize(io::IO), t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
@@ -865,7 +865,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     return _simplify_include_frames(ret)
 end
 
-function show_exception_stack(io::IO, stack::Vector)
+function show_exception_stack(@nospecialize(io::IO), stack::Vector)
     # Display exception stack with the top of the stack first.  This ordering
     # means that the user doesn't have to scroll up in the REPL to discover the
     # root cause.
@@ -881,7 +881,7 @@ function show_exception_stack(io::IO, stack::Vector)
 end
 
 # Defined here rather than error.jl for bootstrap ordering
-function show(io::IO, ip::InterpreterIP)
+function show(@nospecialize(io::IO), ip::InterpreterIP)
     print(io, typeof(ip))
     if ip.code isa Core.CodeInfo
         print(io, " in top-level CodeInfo for $(ip.mod) at statement $(Int(ip.stmt))")
