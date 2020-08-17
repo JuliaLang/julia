@@ -695,14 +695,14 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
 end
 
 function digits(n::BigInt; base::Integer = 10, pad::Integer = 1)
-  if base ≥ 2
-    if base ≤ 36 # 0-9, plus a-z for 10-35
-      return reverse!(map(x -> Int(x>0x39 ? x-0x57 : x-0x30), codeunits(string(n; base, pad))))
-    elseif base ≤ 62 # 0-9, plus A-Z for 10-35 and a-z for 36..61
-      return reverse!(map(x -> Int(x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30), codeunits(string(n; base, pad))))
+    if base ≥ 2
+        if base ≤ 36 # 0-9, plus a-z for 10-35
+            return reverse!(map(x -> Int(x>0x39 ? x-0x57 : x-0x30), codeunits(string(n; base, pad))))
+        elseif base ≤ 62 # 0-9, plus A-Z for 10-35 and a-z for 36..61
+            return reverse!(map(x -> Int(x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30), codeunits(string(n; base, pad))))
+        end
     end
-  end
-  return invoke(digits, Tuple{Integer}, n; base, pad) # slow generic fallback
+    return invoke(digits, Tuple{Integer}, n; base, pad) # slow generic fallback
 end
 
 function ndigits0zpb(x::BigInt, b::Integer)
