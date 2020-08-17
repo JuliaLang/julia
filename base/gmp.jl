@@ -694,6 +694,8 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     String(sv)
 end
 
+digits(n::BigInt; base::Integer = 10, pad::Integer = 1) = reverse!(map(x -> Int(x-0x30), codeunits(string(n; base, pad))))
+
 function ndigits0zpb(x::BigInt, b::Integer)
     b < 2 && throw(DomainError(b, "`b` cannot be less than 2."))
     x.size == 0 && return 0 # for consistency with other ndigits0z methods
