@@ -1,0 +1,6 @@
+authors = ["Valentin Churavy <v.churavy@gmail.com>"]
+name = "TestPkg2"
+uuid = "d353d51e-a7ee-11e8-3291-15e5127f6df0"
+version = "0.1.0"
+
+[deps]
