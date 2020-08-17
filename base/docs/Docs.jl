@@ -83,7 +83,7 @@ function initmeta(m::Module)
     nothing
 end
 
-function signature!(tv, expr::Expr)
+function signature!(tv::Vector{Any}, expr::Expr)
     is_macrocall = isexpr(expr, :macrocall)
     if is_macrocall || isexpr(expr, :call)
         sig = :(Union{Tuple{}})
@@ -112,7 +112,7 @@ function signature!(tv, expr::Expr)
         return signature!(tv, expr.args[1])
     end
 end
-signature!(tv, @nospecialize(other)) = :(Union{})
+signature!(tv::Vector{Any}, @nospecialize(other)) = :(Union{})
 signature(expr::Expr) = signature!([], expr)
 signature(@nospecialize other) = signature!([], other)
 
@@ -166,13 +166,13 @@ function docstr(binding::Binding, typesig = Union{})
     end
     error("could not find matching docstring for '$binding :: $typesig'.")
 end
-docstr(object, data = Dict()) = _docstr(object, data)
+docstr(object, data = Dict{Symbol,Any}()) = _docstr(object, data)
 
-_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            nothing, data)
-_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), nothing, data)
-_docstr(object,                 data) = DocStr(Core.svec(),     object, data)
+_docstr(vec::Core.SimpleVector, data::Dict{Symbol,Any}) = DocStr(vec,            nothing, data)
+_docstr(str::AbstractString,    data::Dict{Symbol,Any}) = DocStr(Core.svec(str), nothing, data)
+_docstr(object,                 data::Dict{Symbol,Any}) = DocStr(Core.svec(),     object, data)
 
-_docstr(doc::DocStr, data) = (doc.data = merge(data, doc.data); doc)
+_docstr(doc::DocStr, data::Dict{Symbol,Any}) = (doc.data = merge(data, doc.data); doc)
 
 macro ref(x)
     binding = bindingexpr(namify(x))
@@ -451,7 +451,7 @@ function __doc__!(source, mod, meta, def, define::Bool)
         # the Base image). We just need to convert each `@__doc__` marker to an `@doc`.
         finddoc(def) do each
             each.head = :macrocall
-            each.args = [Symbol("@doc"), source, mod, nothing, meta, each.args[end], define]
+            each.args = Any[Symbol("@doc"), source, mod, nothing, meta, each.args[end], define]
         end
     else
         # `def` has already been defined during Base image gen so we just need to find and
@@ -608,7 +608,7 @@ include("utils.jl")
 # Swap out the bootstrap macro with the real one.
 Core.atdoc!(docm)
 
-function loaddocs(docs)
+function loaddocs(docs::Vector{Core.SimpleVector})
     for (mod, ex, str, file, line) in docs
         data = Dict{Symbol,Any}(:path => string(file), :linenumber => line)
         doc = docstr(str, data)
