@@ -694,7 +694,16 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     String(sv)
 end
 
-digits(n::BigInt; base::Integer = 10, pad::Integer = 1) = reverse!(map(x -> Int(x-0x30), codeunits(string(n; base, pad))))
+function digits(n::BigInt; base::Integer = 10, pad::Integer = 1)
+  if base == 10
+    dig = map(x -> Int(x-0x30), codeunits(string(n; base, pad)))
+  elseif base ≤ 62
+    dig = map(x -> Int(x > 0x39 ? x-0x41 : x-0x30), codeunits(string(n; base, pad)))
+  else
+    return invoke(digits, (Integer,), n; base, pad) # slow generic method
+  end
+  return reverse!(dig)
+end
 
 function ndigits0zpb(x::BigInt, b::Integer)
     b < 2 && throw(DomainError(b, "`b` cannot be less than 2."))
