@@ -1940,7 +1940,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "hash", "mt", "partial");
     jl_typename_type->types = jl_svec(9, jl_symbol_type, jl_any_type, jl_simplevector_type,
                                       jl_type_type, jl_simplevector_type, jl_simplevector_type,
-                                      jl_any_type, jl_any_type, jl_any_type);
+                                      jl_any_type, jl_methtable_type, jl_any_type);
     jl_typename_type->abstract = 0;
     jl_typename_type->mutabl = 1;
     jl_typename_type->ninitialized = 2;
@@ -2269,7 +2269,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "pure"),
                         jl_svec(18,
                             jl_array_any_type,
-                            jl_any_type,
+                            jl_array_int32_type,
                             jl_any_type,
                             jl_array_uint8_type,
                             jl_any_type,

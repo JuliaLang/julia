@@ -59,6 +59,8 @@ function copy_exprs(x::PhiCNode)
 end
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
 
+exprarray(head, args::Array{Any,1}) = (ex = Expr(head); ex.args = args; ex)
+
 # create copies of the CodeInfo definition, and any mutable fields
 function copy(c::CodeInfo)
     cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)

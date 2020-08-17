@@ -243,7 +243,7 @@ function showerror(io::IO, ex::MethodError)
         name = ft.name.mt.name
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
-        ex = MethodError(f, ex.args[3:end])
+        ex = MethodError(f, ex.args[3:end::Int])
     end
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
@@ -270,7 +270,7 @@ function showerror(io::IO, ex::MethodError)
             for (i, (k, v)) in enumerate(kwargs)
                 print(io, k, "=")
                 show(IOContext(io, :limit => true), v)
-                i == length(kwargs) || print(io, ", ")
+                i == length(kwargs)::Int || print(io, ", ")
             end
         end
         print(io, ")")
@@ -311,7 +311,7 @@ function showerror(io::IO, ex::MethodError)
         vec_args = []
         hasrows = false
         for arg in ex.args
-            isrow = isa(arg,Array) && ndims(arg)==2 && size(arg,1)==1
+            isrow = isa(arg,Array) && ndims(arg)::Int==2 && size(arg,1)::Int==1
             hasrows |= isrow
             push!(vec_args, isrow ? vec(arg) : arg)
         end
@@ -404,6 +404,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 iob = IOContext(iob, :unionall_env => sig0.var)
                 sig0 = sig0.body
             end
+            sig0 = sig0::DataType
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
             print(iob, "  ")
@@ -435,8 +436,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
                     if get(io, :color, false)
-                        Base.with_output_color(Base.error_color(), iob) do iob
-                            print(iob, "::", sigstr...)
+                        let sigstr=sigstr
+                            Base.with_output_color(Base.error_color(), iob) do iob
+                                print(iob, "::", sigstr...)
+                            end
                         end
                     else
                         print(iob, "!Matched::", sigstr...)
@@ -469,7 +472,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                         sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
-                            sigstr = (sigtype.parameters[1], "...")
+                            sigstr = ((sigtype::DataType).parameters[1], "...")
                         else
                             sigstr = (sigtype,)
                         end
@@ -477,8 +480,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                             print(iob, ", ")
                         end
                         if get(io, :color, false)
-                            Base.with_output_color(Base.error_color(), iob) do iob
-                                print(iob, "::", sigstr...)
+                            let sigstr=sigstr
+                                Base.with_output_color(Base.error_color(), iob) do iob
+                                    print(iob, "::", sigstr...)
+                                end
                             end
                         else
                             print(iob, "!Matched::", sigstr...)
@@ -493,12 +498,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 print(iob, ")")
                 show_method_params(iob0, tv)
                 print(iob, " at ", method.file, ":", method.line)
-                if !isempty(kwargs)
+                if !isempty(kwargs)::Bool
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
                         for (k, v) in kwargs
-                            if !(k in kwords)
-                                push!(unexpected, k)
+                            if !(k::Symbol in kwords)
+                                push!(unexpected, k::Symbol)
                             end
                         end
                     end
@@ -566,7 +571,7 @@ stacktrace_contract_userdir()::Bool =
 stacktrace_linebreaks()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
-function show_full_backtrace(io::IO, trace; print_linebreaks::Bool)
+function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     n = length(trace)
     ndigits_max = ndigits(n)
 
@@ -776,7 +781,7 @@ function show_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    frames = first.(filtered)
+    frames = (first.(filtered))::Vector{StackFrame}
     show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
     return
 end
@@ -796,12 +801,13 @@ function _simplify_include_frames(trace)
     while i >= 1
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
-        if isnothing(first_ignored)
+        if first_ignored === nothing
             if mod === Base && frame.func === :_include
                 # Hide include() machinery by default
                 first_ignored = i
             end
         else
+            first_ignored = first_ignored::Int
             # Hack: allow `mod==nothing` as a workaround for inlined functions.
             # TODO: Fix this by improving debug info.
             if mod in (Base,Core,nothing) && 1+first_ignored-i <= 5
@@ -816,7 +822,7 @@ function _simplify_include_frames(trace)
         end
         i -= 1
     end
-    if !isnothing(first_ignored)
+    if first_ignored !== nothing
         kept_frames[i:first_ignored] .= false
     end
     return trace[kept_frames]

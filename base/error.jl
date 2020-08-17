@@ -67,7 +67,7 @@ end
 
 # convert dual arrays (raw bt buffer, array of GC managed values) to a single
 # array of locations
-function _reformat_bt(bt, bt2)
+function _reformat_bt(bt::Array{<:Any,1}, bt2::Array{<:Any,1})
     ret = Vector{Union{InterpreterIP,Ptr{Cvoid}}}()
     i, j = 1, 1
     while i <= length(bt)
@@ -79,22 +79,22 @@ function _reformat_bt(bt, bt2)
             continue
         end
         # Extended backtrace entry
-        entry_metadata = reinterpret(UInt, bt[i+1])
+        entry_metadata = reinterpret(UInt, bt[i+1])::UInt
         njlvalues =  entry_metadata & 0x7
         nuintvals = (entry_metadata >> 3) & 0x7
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = bt2[j]
-            mod = njlvalues == 2 ? bt2[j+1] : nothing
+            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Nothing}
+            mod = njlvalues == 2 ? bt2[j+1]::Union{Module,Nothing} : nothing
             push!(ret, InterpreterIP(code, header, mod))
         else
             # Tags we don't know about are an error
             throw(ArgumentError("Unexpected extended backtrace entry tag $tag at bt[$i]"))
         end
         # See jl_bt_entry_size
-        j += njlvalues
-        i += Int(2 + njlvalues + nuintvals)
+        j += Int(njlvalues)
+        i += 2 + Int(njlvalues + nuintvals)
     end
     ret
 end
@@ -141,7 +141,7 @@ uncaught exceptions.
     future release (see https://github.com/JuliaLang/julia/pull/29901).
 """
 function catch_stack(task=current_task(); include_bt=true)
-    raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, include_bt, typemax(Cint))
+    raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, include_bt, typemax(Cint))::Vector{Any}
     formatted = Any[]
     stride = include_bt ? 3 : 1
     for i = reverse(1:stride:length(raw))
