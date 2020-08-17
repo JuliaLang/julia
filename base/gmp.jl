@@ -695,14 +695,11 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
 end
 
 function digits(n::BigInt; base::Integer = 10, pad::Integer = 1)
-  if base == 10
-    dig = map(x -> Int(x-0x30), codeunits(string(n; base, pad)))
-  elseif base ≤ 62
-    dig = map(x -> Int(x > 0x39 ? x-0x41 : x-0x30), codeunits(string(n; base, pad)))
+  if base ≤ 62
+    return reverse!(map(x -> Int(x > 0x39 ? x-0x41 : x-0x30), codeunits(string(n; base, pad))))
   else
     return invoke(digits, (Integer,), n; base, pad) # slow generic method
   end
-  return reverse!(dig)
 end
 
 function ndigits0zpb(x::BigInt, b::Integer)
