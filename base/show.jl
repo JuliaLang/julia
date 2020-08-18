@@ -560,7 +560,17 @@ function make_typealias(x::Type)
                         #   T = Array{Array{T,1}, 1} where T
                         #   (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), T, Vector)
                         #   env[1].ub.var == T.var
-                        applied = alias{env...}
+                        applied = try
+                                # this can fail if `x` contains a covariant
+                                # union, and the non-matching branch of the
+                                # union has additional restrictions on the
+                                # bounds of the environment that are not met by
+                                # the instantiation found above
+                                alias{env...}
+                            catch ex
+                                ex isa TypeError || rethrow()
+                                continue
+                            end
                         for p in xenv
                             applied = rewrap_unionall(applied, p)
                         end
@@ -649,7 +659,20 @@ function make_typealiases(x::Type)
                     ti === Union{} && continue
                     mod in modulesof!(Set(), alias) || continue # make sure this alias wasn't from an unrelated part of the Union
                     env = env::SimpleVector
-                    applied = isempty(env) ? alias : alias{env...}
+                    applied = alias
+                    if !isempty(env)
+                        applied = try
+                                # this can fail if `x` contains a covariant
+                                # union, and the non-matching branch of the
+                                # union has additional restrictions on the
+                                # bounds of the environment that are not met by
+                                # the instantiation found above
+                                alias{env...}
+                            catch ex
+                                ex isa TypeError || rethrow()
+                                continue
+                            end
+                    end
                     ul = unionlen(applied)
                     for p in xenv
                         applied = rewrap_unionall(applied, p)
