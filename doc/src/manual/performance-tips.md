@@ -1051,10 +1051,10 @@ julia> @views fview(x) = sum(x[2:end-1]);
 julia> x = rand(10^6);
 
 julia> @time fcopy(x);
-  0.003051 seconds (7 allocations: 7.630 MB)
+  0.003051 seconds (3 allocations: 7.629 MB)
 
 julia> @time fview(x);
-  0.001020 seconds (6 allocations: 224 bytes)
+  0.001020 seconds (1 allocation: 16 bytes)
 ```
 
 Notice both the 3× speedup and the decreased memory allocation
