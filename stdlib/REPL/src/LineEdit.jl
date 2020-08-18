@@ -12,14 +12,26 @@ import ..Terminals: raw!, width, height, cmove, getX,
 import Base: ensureroom, show, AnyDict, position
 using Base: something
 
-abstract type TextInterface end
-abstract type ModeState end
+abstract type TextInterface end                # see interface immediately below
+abstract type ModeState end                    # see interface below
 abstract type HistoryProvider end
 abstract type CompletionProvider end
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
 @nospecialize # use only declared type signatures
+
+# interface for TextInterface
+function Base.getproperty(ti::TextInterface, name::Symbol)
+    if name === :hp
+        return getfield(ti, :hp)::HistoryProvider
+    elseif name === :complete
+        return getfield(ti, :complete)::CompletionProvider
+    elseif name === :keymap_dict
+        return getfield(ti, :keymap_dict)::Dict{Char,Any}
+    end
+    return getfield(ti, name)
+end
 
 struct ModalInterface <: TextInterface
     modes::Vector{TextInterface}
@@ -38,7 +50,7 @@ mutable struct Prompt <: TextInterface
     complete::CompletionProvider
     on_enter::Function
     on_done::Function
-    hist::HistoryProvider
+    hist::HistoryProvider  # TODO?: rename this `hp` (consistency with other TextInterfaces), or is the type-assert useful for mode(s)?
     sticky::Bool
 end
 
@@ -49,7 +61,7 @@ mutable struct MIState
     interface::ModalInterface
     current_mode::TextInterface
     aborted::Bool
-    mode_state::IdDict{Any,Any}
+    mode_state::IdDict{TextInterface,ModeState}
     kill_ring::Vector{String}
     kill_idx::Int
     previous_key::Vector{Char}
@@ -59,6 +71,8 @@ mutable struct MIState
 end
 
 MIState(i, c, a, m) = MIState(i, c, a, m, String[], 0, Char[], 0, :none, :none)
+
+const BufferLike = Union{MIState,ModeState,IOBuffer}
 
 function show(io::IO, s::MIState)
     print(io, "MI State (", mode(s), " active)")
@@ -1719,6 +1733,34 @@ mutable struct PrefixSearchState <: ModeState
     parent::Prompt
     PrefixSearchState(terminal, histprompt, prefix, response_buffer) =
         new(terminal, histprompt, prefix, response_buffer, InputAreaState(0,0), 0)
+end
+
+# interface for ModeState
+function Base.getproperty(s::ModeState, name::Symbol)
+    if name === :terminal
+        return getfield(s, :terminal)::AbstractTerminal
+    elseif name === :prompt
+        return getfield(s, :prompt)::Prompt
+    elseif name === :histprompt
+        return getfield(s, :histprompt)::Union{HistoryPrompt,PrefixHistoryPrompt}
+    elseif name === :parent
+        return getfield(s, :parent)::Prompt
+    elseif name === :response_buffer
+        return getfield(s, :response_buffer)::IOBuffer
+    elseif name === :ias
+        return getfield(s, :ias)::InputAreaState
+    elseif name === :indent
+        return getfield(s, :indent)::Int
+    # # unique fields, but no harm in declaring them
+    # elseif name === :input_buffer
+    #     return getfield(s, :input_buffer)::IOBuffer
+    # elseif name === :region_active
+    #     return getfield(s, :region_active)::Symbol
+    # elseif name === :undo_buffers
+    #     return getfield(s, :undo_buffers)::Vector{IOBuffer}
+    # elseif name === :undo_idx
+    end
+    return getfield(s, name)
 end
 
 init_state(terminal, p::PrefixHistoryPrompt) = PrefixSearchState(terminal, p, "", IOBuffer())

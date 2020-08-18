@@ -55,16 +55,46 @@ struct DictCompletion <: Completion
     key::String
 end
 
-completion_text(c::KeywordCompletion) = c.keyword
-completion_text(c::PathCompletion) = c.path
-completion_text(c::ModuleCompletion) = c.mod
-completion_text(c::PackageCompletion) = c.package
-completion_text(c::PropertyCompletion) = string(c.property)
-completion_text(c::FieldCompletion) = string(c.field)
-completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method))
-completion_text(c::BslashCompletion) = c.bslash
-completion_text(c::ShellCompletion) = c.text
-completion_text(c::DictCompletion) = c.key
+# interface definition
+function Base.getproperty(c::Completion, name::Symbol)
+    if name === :keyword
+        return getfield(c, :keyword)::String
+    elseif name === :path
+        return getfield(c, :path)::String
+    elseif name === :parent
+        return getfield(c, :parent)::Module
+    elseif name === :mod
+        return getfield(c, :mod)::String
+    elseif name === :package
+        return getfield(c, :package)::String
+    elseif name === :property
+        return getfield(c, :property)::Symbol
+    elseif name === :field
+        return getfield(c, :field)::Symbol
+    elseif name === :method
+        return getfield(c, :method)::Method
+    elseif name === :bslash
+        return getfield(c, :bslash)::String
+    elseif name === :text
+        return getfield(c, :text)::String
+    elseif name === :key
+        return getfield(c, :key)::String
+    end
+    return getfield(c, name)
+end
+
+_completion_text(c::KeywordCompletion) = c.keyword
+_completion_text(c::PathCompletion) = c.path
+_completion_text(c::ModuleCompletion) = c.mod
+_completion_text(c::PackageCompletion) = c.package
+_completion_text(c::PropertyCompletion) = string(c.property)
+_completion_text(c::FieldCompletion) = string(c.field)
+_completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method))
+_completion_text(c::BslashCompletion) = c.bslash
+_completion_text(c::ShellCompletion) = c.text
+_completion_text(c::DictCompletion) = c.key
+
+completion_text(c) = _completion_text(c)::String
 
 const Completions = Tuple{Vector{Completion}, UnitRange{Int64}, Bool}
 

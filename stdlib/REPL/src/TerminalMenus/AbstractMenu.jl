@@ -51,6 +51,16 @@ subtypes.
 """
 abstract type AbstractMenu end
 
+function getproperty(m::AbstractMenu, name::Symbol)
+    if name === :pagesize
+        return getfield(m, :pagesize)::Int
+    elseif name === :pageoffset
+        return getfield(m, :pageoffset)::Int
+    end
+    return getfield(m, name)
+end
+
+
 # TODO Julia2.0: get rid of parametric intermediate, making it just
 #   abstract type ConfiguredMenu <: AbstractMenu end
 # Or perhaps just make all menus ConfiguredMenus
