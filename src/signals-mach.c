@@ -462,6 +462,7 @@ void *mach_profile_listener(void *arg)
         HANDLE_MACH_ERROR("mach_msg", ret);
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
+        jl_lock_profile();
         for (i = jl_n_threads; i-- > 0; ) {
             // if there is no space left, break early
             if (bt_size_cur >= bt_size_max - 1)
@@ -506,13 +507,15 @@ void *mach_profile_listener(void *arg)
 
                 // Mark the end of this block with 0
                 bt_data_prof[bt_size_cur++].uintptr = 0;
-
-                // Reset the alarm
-                kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
-                HANDLE_MACH_ERROR("clock_alarm", ret)
             }
             // We're done! Resume the thread.
             jl_thread_resume(i, 0);
+        }
+        jl_unlock_profile();
+        if (running) {
+            // Reset the alarm
+            kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
+            HANDLE_MACH_ERROR("clock_alarm", ret)
         }
     }
 }
@@ -547,6 +550,7 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     timerprof.tv_nsec = nsecprof%GIGA;
 
     running = 1;
+    // ensure the alarm is running
     ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
     HANDLE_MACH_ERROR("clock_alarm", ret);
 
