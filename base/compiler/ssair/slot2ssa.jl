@@ -129,7 +129,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
             val = stmt.values[i]
             isa(val, Union{SlotNumber, TypedSlot}) || continue
             cond(val) || continue
-            bb_idx = block_for_inst(ir.cfg, stmt.edges[i])
+            bb_idx = block_for_inst(ir.cfg, Int(stmt.edges[i]))
             from_bb_terminator = last(ir.cfg.blocks[bb_idx].stmts)
             stmt.values[i] = fixup_slot!(ir, ci, from_bb_terminator, slot_id(val), val, rename(val))
         end
@@ -353,8 +353,9 @@ end
 
 function rename_phinode_edges(node, bb, result_order, bb_rename)
     new_values = Any[]
-    new_edges = Any[]
+    new_edges = Int32[]
     for (idx, edge) in pairs(node.edges)
+        edge = Int(edge)
         (edge == 0 || haskey(bb_rename, edge)) || continue
         new_edge_from = edge == 0 ? 0 : rename_incoming_edge(edge, bb, result_order, bb_rename)
         push!(new_edges, new_edge_from)
@@ -683,10 +684,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             end
             isa(stmt, PhiNode) || continue
             for (edgeidx, edge) in pairs(stmt.edges)
-                from_bb = edge == 0 ? 0 : block_for_inst(cfg, edge)
+                from_bb = edge == 0 ? 0 : block_for_inst(cfg, Int(edge))
                 from_bb == pred || continue
                 isassigned(stmt.values, edgeidx) || break
-                stmt.values[edgeidx] = rename_uses!(ir, ci, edge, stmt.values[edgeidx], incoming_vals)
+                stmt.values[edgeidx] = rename_uses!(ir, ci, Int(edge), stmt.values[edgeidx], incoming_vals)
                 break
             end
         end
@@ -827,7 +828,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             ssavalmap[idx] = SSAValue(idx)
             result_types[idx] = ci.ssavaluetypes[idx]
             if isa(stmt, PhiNode)
-                edges = Any[edge == 0 ? 0 : block_for_inst(cfg, edge) for edge in stmt.edges]
+                edges = Int32[edge == 0 ? 0 : block_for_inst(cfg, Int(edge)) for edge in stmt.edges]
                 new_code[idx] = PhiNode(edges, stmt.values)
             else
                 new_code[idx] = stmt

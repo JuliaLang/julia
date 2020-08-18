@@ -78,7 +78,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 11 # do not make changes without bumping the version #!
+const ser_version = 12 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -1044,6 +1044,15 @@ function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
         _meth = deserialize(s)
     end
     return Core.LineInfoNode(_meth::Symbol, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{PhiNode})
+    edges = deserialize(s)
+    if edges isa Vector{Any}
+        edges = Vector{Int32}(edges)
+    end
+    values = deserialize(s)::Vector{Any}
+    return PhiNode(edges, values)
 end
 
 function deserialize(s::AbstractSerializer, ::Type{CodeInfo})

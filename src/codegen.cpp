@@ -6509,7 +6509,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             } else if (jl_is_phinode(stmt)) {
                 jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(stmt, 0);
                 for (size_t j = 0; j < jl_array_len(edges); ++j) {
-                    size_t edge = jl_unbox_long(jl_array_ptr_ref(edges, j));
+                    size_t edge = ((int32_t*)jl_array_data(edges))[j];
                     if (edge == i)
                         branch_targets.insert(i + 1);
                 }
@@ -6757,7 +6757,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         PHINode *TindexN = cast_or_null<PHINode>(phi_result.TIndex);
         DenseSet<BasicBlock*> preds;
         for (size_t i = 0; i < jl_array_len(edges); ++i) {
-            size_t edge = jl_unbox_long(jl_array_ptr_ref(edges, i));
+            size_t edge = ((int32_t*)jl_array_data(edges))[i];
             jl_value_t *value = jl_array_ptr_ref(values, i);
             // This edge value is undef, handle it the same as if the edge wasn't listed at all
             if (!value)
@@ -6776,7 +6776,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 // Only codegen this branch once for each PHI (the expression must be the same on all branches)
 #ifndef NDEBUG
                 for (size_t j = 0; j < i; ++j) {
-                    size_t j_edge = jl_unbox_long(jl_array_ptr_ref(edges, j));
+                    size_t j_edge = ((int32_t*)jl_array_data(edges))[j];
                     if (j_edge == edge) {
                         assert(jl_egal(value, jl_array_ptr_ref(values, j)));
                     }

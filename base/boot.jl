@@ -118,7 +118,7 @@
 #end
 
 #struct PhiNode
-#    edges::Vector{Any}
+#    edges::Vector{Int32}
 #    values::Vector{Any}
 #end
 
@@ -391,7 +391,7 @@ LineNumberNode(l::Int, f::String) = LineNumberNode(l, Symbol(f))
 eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
-eval(Core, :(PhiNode(edges::Array{Any, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
+eval(Core, :(PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
 eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
 eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
