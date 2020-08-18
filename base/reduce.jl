@@ -956,7 +956,15 @@ julia> count([true, false, true, true])
 """
 count(itr) = count(identity, itr)
 
-count(f, itr) = mapreduce(_bool(f), add_sum, itr, init=0)
+count(f, itr) = _simple_count(f, itr)
+
+function _simple_count(pred, itr)
+    n = 0
+    for x in itr
+        n += pred(x)::Bool
+    end
+    return n
+end
 
 function count(::typeof(identity), x::Array{Bool})
     n = 0
