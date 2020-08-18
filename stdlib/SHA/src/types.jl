@@ -99,7 +99,7 @@ function Base.getproperty(ctx::SHA3_CTX, fieldname::Symbol)
     elseif fieldname === :bc
         return getfield(ctx, :bc)::Vector{UInt64}
     else
-        error("SHA3_CTX has no field ", fieldname)
+        error("type ", typeof(ctx), " has no field ", fieldname)
     end
 end
 
