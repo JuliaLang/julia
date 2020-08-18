@@ -589,7 +589,12 @@ function (*)(A::AbstractQ, B::StridedMatrix)
     end
     lmul!(Anew, Bnew)
 end
-
+function (*)(A::LinearAlgebra.AbstractQ, I::UniformScaling)
+    return Matrix(A) .* I.λ
+end
+function (*)(I::UniformScaling, A::LinearAlgebra.AbstractQ)
+    return Matrix(A) .* I.λ
+end
 ### QcB
 lmul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
     (A = adjA.parent; LAPACK.gemqrt!('L','T',A.factors,A.T,B))
