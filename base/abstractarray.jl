@@ -1315,10 +1315,11 @@ unaliascopy(A::Array) = copy(A)
 unaliascopy(A::AbstractArray)::typeof(A) = (@_noinline_meta; _unaliascopy(A, copy(A)))
 _unaliascopy(A::T, C::T) where {T} = C
 _unaliascopy(A, C) = throw(ArgumentError("""
-    an array of type `$(typeof(A).name)` shares memory with another argument and must
-    make a preventative copy of itself in order to maintain consistent semantics,
-    but `copy(A)` returns a new array of type `$(typeof(C))`. To fix, implement:
-        `Base.unaliascopy(A::$(typeof(A).name))::typeof(A)`"""))
+    an array of type `$(typename(typeof(A)).wrapper)` shares memory with another argument
+    and must make a preventative copy of itself in order to maintain consistent semantics,
+    but `copy(::$(typeof(A)))` returns a new array of type `$(typeof(C))`.
+    To fix, implement:
+        `Base.unaliascopy(A::$(typename(typeof(A)).wrapper))::typeof(A)`"""))
 unaliascopy(A) = A
 
 """
