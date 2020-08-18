@@ -32,6 +32,7 @@ import Base:
     ==,
     catch_stack
 
+_displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
 include("Terminals.jl")
 using .Terminals
@@ -56,7 +57,9 @@ import ..LineEdit:
     history_search,
     accept_result,
     terminal,
-    MIState
+    MIState,
+    PromptState,
+    TextInterface
 
 include("REPLCompletions.jl")
 using .REPLCompletions
@@ -207,7 +210,7 @@ end
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     with_repl_linfo(d.repl) do io
-        io = IOContext(io, :limit => true, :module => Main)
+        io = IOContext(io, :limit => true, :module => Main::Module)
         get(io, :color, false) && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
             # this can override the :limit property set initially
@@ -223,12 +226,12 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
-        io = IOContext(io, :module => Main)
+        io = IOContext(io, :module => Main::Module)
         print_response(io, response, show_value, have_color, specialdisplay(repl))
     end
     return nothing
 end
-function print_response(errio::IO, @nospecialize(response), show_value::Bool, have_color::Bool, specialdisplay=nothing)
+function print_response(errio::IO, @nospecialize(response), show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
     while true
@@ -429,14 +432,14 @@ struct LatexCompletions <: CompletionProvider end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
-function complete_line(c::REPLCompletionProvider, s)
+function complete_line(c::REPLCompletionProvider, s::PromptState)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, lastindex(partial))
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
-function complete_line(c::ShellCompletionProvider, s)
+function complete_line(c::ShellCompletionProvider, s::PromptState)
     # First parse everything up to the current position
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
@@ -444,7 +447,7 @@ function complete_line(c::ShellCompletionProvider, s)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
-function complete_line(c::LatexCompletions, s)
+function complete_line(c::LatexCompletions, s::PromptState)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)
     ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
@@ -487,7 +490,7 @@ munged_history_message(path::String) = """
 Invalid history file ($path) format:
 An editor may have converted tabs to spaces at line """
 
-function hist_getline(file)
+function hist_getline(file::IO)
     while !eof(file)
         line = readline(file, keep=true)
         isempty(line) && return line
@@ -496,7 +499,7 @@ function hist_getline(file)
     return ""
 end
 
-function hist_from_file(hp, file, path)
+function hist_from_file(hp::REPLHistoryProvider, file::IO, path::String)
     hp.history_file = file
     seek(file, 0)
     countlines = 0
@@ -540,7 +543,7 @@ function hist_from_file(hp, file, path)
     return hp
 end
 
-function mode_idx(hist::REPLHistoryProvider, mode)
+function mode_idx(hist::REPLHistoryProvider, mode::TextInterface)
     c = :julia
     for (k,v) in hist.mode_mapping
         isequal(v, mode) && (c = k)
@@ -548,7 +551,7 @@ function mode_idx(hist::REPLHistoryProvider, mode)
     return c
 end
 
-function add_history(hist::REPLHistoryProvider, s)
+function add_history(hist::REPLHistoryProvider, s::PromptState)
     str = rstrip(String(take!(copy(s.input_buffer))))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
@@ -668,7 +671,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
                              hist::REPLHistoryProvider,
                              prefix::AbstractString,
                              backwards::Bool,
-                             cur_idx = hist.cur_idx)
+                             cur_idx::Int = hist.cur_idx)
     cur_response = String(take!(copy(LineEdit.buffer(s))))
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
@@ -676,7 +679,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     end
     hist.last_idx = -1
     max_idx = length(hist.history)+1
-    idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):max_idx)
+    idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):1:max_idx)
     for idx in idxs
         if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
             m = history_move(s, hist, idx)
@@ -721,13 +724,10 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     b = b ≤ ncodeunits(response_str) ? prevind(response_str, b) : b-1
     b = min(lastindex(response_str), b) # ensure that b is valid
 
-    searchfunc1, searchfunc2, searchstart, skipfunc = backwards ?
-                                                      (findlast, findprev, b, prevind) :
-                                                      (findfirst, findnext, a, nextind)
-
+    searchstart = backwards ? b : a
     if searchdata == response_str[a:b]
         if skip_current
-            searchstart = skipfunc(response_str, searchstart)
+            searchstart = backwards ? prevind(response_str, b) : nextind(response_str, a)
         else
             return true
         end
@@ -736,7 +736,8 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     # Start searching
     # First the current response buffer
     if 1 <= searchstart <= lastindex(response_str)
-        match = searchfunc2(searchdata, response_str, searchstart)
+        match = backwards ? findprev(searchdata, response_str, searchstart) :
+                            findnext(searchdata, response_str, searchstart)
         if match !== nothing
             seek(response_buffer, first(match) - 1)
             return true
@@ -744,10 +745,10 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     end
 
     # Now search all the other buffers
-    idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
+    idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):1:length(hist.history))
     for idx in idxs
         h = hist.history[idx]
-        match = searchfunc1(searchdata, h)
+        match = backwards ? findlast(searchdata, h) : findfirst(searchdata, h)
         if match !== nothing && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
@@ -785,12 +786,12 @@ function eval_with_backend(ast, backend::REPLBackendRef)
     return take!(backend.response_channel) # (val, iserr)
 end
 
-function respond(f, repl, main; pass_empty = false, suppress_on_semicolon = true)
-    return function do_respond(s, buf, ok)
+function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon::Bool = true)
+    return function do_respond(s::MIState, buf, ok::Bool)
         if !ok
             return transition(s, :abort)
         end
-        line = String(take!(buf))
+        line = String(take!(buf)::Vector{UInt8})
         if !isempty(line) || pass_empty
             reset(repl)
             local response
@@ -1157,7 +1158,7 @@ input_color(r::StreamREPL) = r.input_color
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
 function ends_with_semicolon(line::AbstractString)
-    match = findlast(isequal(';'), line)
+    match = findlast(isequal(';'), line)::Union{Nothing,Int}
     if match !== nothing
         # state for comment parser, assuming that the `;` isn't in a string or comment
         # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer
@@ -1211,7 +1212,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
-    while !eof(repl.stream)
+    while !eof(repl.stream)::Bool
         if have_color
             print(repl.stream,repl.prompt_color)
         end
