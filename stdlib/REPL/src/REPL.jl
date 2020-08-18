@@ -822,7 +822,7 @@ end
 
 function mode_keymap(julia_prompt::Prompt)
     AnyDict(
-    '\b' => function (s,o...)
+    '\b' => function (s::MIState,o...)
         if isempty(s) || position(LineEdit.buffer(s)) == 0
             buf = copy(LineEdit.buffer(s))
             transition(s, julia_prompt) do
@@ -832,7 +832,7 @@ function mode_keymap(julia_prompt::Prompt)
             LineEdit.edit_backspace(s)
         end
     end,
-    "^C" => function (s,o...)
+    "^C" => function (s::MIState,o...)
         LineEdit.move_input_end(s)
         LineEdit.refresh_line(s)
         print(LineEdit.terminal(s), "^C\n\n")
@@ -971,7 +971,7 @@ function setup_interface(
     end
 
     repl_keymap = AnyDict(
-        ';' => function (s,o...)
+        ';' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
                 transition(s, shell_mode) do
@@ -981,7 +981,7 @@ function setup_interface(
                 edit_insert(s, ';')
             end
         end,
-        '?' => function (s,o...)
+        '?' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
                 transition(s, help_mode) do
@@ -993,7 +993,7 @@ function setup_interface(
         end,
 
         # Bracketed Paste Mode
-        "\e[200~" => (s,o...)->begin
+        "\e[200~" => (s::MIState,o...)->begin
             input = LineEdit.bracketed_paste(s) # read directly from s until reaching the end-bracketed-paste marker
             sbuffer = LineEdit.buffer(s)
             curspos = position(sbuffer)
@@ -1081,7 +1081,7 @@ function setup_interface(
         # Open the editor at the location of a stackframe or method
         # This is accessing a contextual variable that gets set in
         # the show_backtrace and show_method_table functions.
-        "^Q" => (s, o...) -> begin
+        "^Q" => (s::MIState, o...) -> begin
             linfos = repl.last_shown_line_infos
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)

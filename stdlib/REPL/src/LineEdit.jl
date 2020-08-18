@@ -1407,10 +1407,10 @@ struct KeyAlias
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-function match_input(f::Function, s, term, cs, keymap)
+function match_input(f::Function, s::Union{Nothing,MIState}, term, cs::Vector{Char}, keymap)
     update_key_repeats(s, cs)
     c = String(cs)
-    return function (s, p)
+    return function (s, p)  # s::Union{Nothing,MIState}; p can be (at least) a LineEditREPL, PrefixSearchState, Nothing
         r = Base.invokelatest(f, s, p, c)
         if isa(r, Symbol)
             return r
@@ -1421,10 +1421,10 @@ function match_input(f::Function, s, term, cs, keymap)
 end
 
 match_input(k::Nothing, s, term, cs, keymap) = (s,p) -> return :ok
-match_input(k::KeyAlias, s, term, cs, keymap) =
+match_input(k::KeyAlias, s::Union{Nothing,MIState}, term, cs, keymap::Dict{Char}) =
     match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
 
-function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
+function match_input(k::Dict{Char}, s::Union{Nothing,MIState}, term::Union{AbstractTerminal,IOBuffer}=terminal(s), cs::Vector{Char}=Char[], keymap::Dict{Char} = k)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
     eof(term) && return (s, p) -> :abort
@@ -1678,14 +1678,14 @@ init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer
 
 terminal(s::SearchState) = s.terminal
 
-function update_display_buffer(s::SearchState, data::SearchState)
+function update_display_buffer(s::SearchState, data::ModeState)
     s.failed = !history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, false)
     s.failed && beep(s)
     refresh_line(s)
     nothing
 end
 
-function history_next_result(s::MIState, data::SearchState)
+function history_next_result(s::MIState, data::ModeState)
     data.failed = !history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, true)
     data.failed && beep(s)
     refresh_line(data)
@@ -1923,27 +1923,27 @@ end
 function setup_search_keymap(hp)
     p = HistoryPrompt(hp)
     pkeymap = AnyDict(
-        "^R"      => (s,data,c)->(history_set_backward(data, true); history_next_result(s, data)),
-        "^S"      => (s,data,c)->(history_set_backward(data, false); history_next_result(s, data)),
-        '\r'      => (s,o...)->accept_result(s, p),
+        "^R"      => (s::MIState,data::ModeState,c)->(history_set_backward(data, true); history_next_result(s, data)),
+        "^S"      => (s::MIState,data::ModeState,c)->(history_set_backward(data, false); history_next_result(s, data)),
+        '\r'      => (s::MIState,o...)->accept_result(s, p),
         '\n'      => '\r',
         # Limited form of tab completions
-        '\t'      => (s,data,c)->(complete_line(s); update_display_buffer(s, data)),
-        "^L"      => (s,data,c)->(Terminals.clear(terminal(s)); update_display_buffer(s, data)),
+        '\t'      => (s::MIState,data::ModeState,c)->(complete_line(s); update_display_buffer(s, data)),
+        "^L"      => (s::MIState,data::ModeState,c)->(Terminals.clear(terminal(s)); update_display_buffer(s, data)),
 
         # Backspace/^H
-        '\b'      => (s,data,c)->(edit_backspace(data.query_buffer) ?
+        '\b'      => (s::MIState,data::ModeState,c)->(edit_backspace(data.query_buffer) ?
                         update_display_buffer(s, data) : beep(s)),
         127       => KeyAlias('\b'),
         # Meta Backspace
-        "\e\b"    => (s,data,c)->(isempty(edit_delete_prev_word(data.query_buffer)) ?
+        "\e\b"    => (s::MIState,data::ModeState,c)->(isempty(edit_delete_prev_word(data.query_buffer)) ?
                                   beep(s) : update_display_buffer(s, data)),
         "\e\x7f"  => "\e\b",
         # Word erase to whitespace
-        "^W"      => (s,data,c)->(isempty(edit_werase(data.query_buffer)) ?
+        "^W"      => (s::MIState,data::ModeState,c)->(isempty(edit_werase(data.query_buffer)) ?
                                   beep(s) : update_display_buffer(s, data)),
         # ^C and ^D
-        "^C"      => (s,data,c)->(edit_clear(data.query_buffer);
+        "^C"      => (s::MIState,data::ModeState,c)->(edit_clear(data.query_buffer);
                        edit_clear(data.response_buffer);
                        update_display_buffer(s, data);
                        reset_state(data.histprompt.hp);
@@ -1952,25 +1952,25 @@ function setup_search_keymap(hp)
         # Other ways to cancel search mode (it's difficult to bind \e itself)
         "^G"      => "^C",
         "\e\e"    => "^C",
-        "^K"      => (s,o...)->transition(s, state(s, p).parent),
-        "^Y"      => (s,data,c)->(edit_yank(s); update_display_buffer(s, data)),
-        "^U"      => (s,data,c)->(edit_clear(data.query_buffer);
+        "^K"      => (s::MIState,o...)->transition(s, state(s, p).parent),
+        "^Y"      => (s::MIState,data::ModeState,c)->(edit_yank(s); update_display_buffer(s, data)),
+        "^U"      => (s::MIState,data::ModeState,c)->(edit_clear(data.query_buffer);
                      edit_clear(data.response_buffer);
                      update_display_buffer(s, data)),
         # Right Arrow
-        "\e[C"    => (s,o...)->(accept_result(s, p); edit_move_right(s)),
+        "\e[C"    => (s::MIState,o...)->(accept_result(s, p); edit_move_right(s)),
         # Left Arrow
-        "\e[D"    => (s,o...)->(accept_result(s, p); edit_move_left(s)),
+        "\e[D"    => (s::MIState,o...)->(accept_result(s, p); edit_move_left(s)),
         # Up Arrow
-        "\e[A"    => (s,o...)->(accept_result(s, p); edit_move_up(s)),
+        "\e[A"    => (s::MIState,o...)->(accept_result(s, p); edit_move_up(s)),
         # Down Arrow
-        "\e[B"    => (s,o...)->(accept_result(s, p); edit_move_down(s)),
-        "^B"      => (s,o...)->(accept_result(s, p); edit_move_left(s)),
-        "^F"      => (s,o...)->(accept_result(s, p); edit_move_right(s)),
+        "\e[B"    => (s::MIState,o...)->(accept_result(s, p); edit_move_down(s)),
+        "^B"      => (s::MIState,o...)->(accept_result(s, p); edit_move_left(s)),
+        "^F"      => (s::MIState,o...)->(accept_result(s, p); edit_move_right(s)),
         # Meta B
-        "\eb"     => (s,o...)->(accept_result(s, p); edit_move_word_left(s)),
+        "\eb"     => (s::MIState,o...)->(accept_result(s, p); edit_move_word_left(s)),
         # Meta F
-        "\ef"     => (s,o...)->(accept_result(s, p); edit_move_word_right(s)),
+        "\ef"     => (s::MIState,o...)->(accept_result(s, p); edit_move_word_right(s)),
         # Ctrl-Left Arrow
         "\e[1;5D" => "\eb",
         # Ctrl-Left Arrow on rxvt
@@ -1979,27 +1979,27 @@ function setup_search_keymap(hp)
         "\e[1;5C" => "\ef",
         # Ctrl-Right Arrow on rxvt
         "\eOc" => "\ef",
-        "^A"         => (s,o...)->(accept_result(s, p); move_line_start(s); refresh_line(s)),
-        "^E"         => (s,o...)->(accept_result(s, p); move_line_end(s); refresh_line(s)),
-        "^Z"      => (s,o...)->(return :suspend),
+        "^A"         => (s::MIState,o...)->(accept_result(s, p); move_line_start(s); refresh_line(s)),
+        "^E"         => (s::MIState,o...)->(accept_result(s, p); move_line_end(s); refresh_line(s)),
+        "^Z"      => (s::MIState,o...)->(return :suspend),
         # Try to catch all Home/End keys
-        "\e[H"    => (s,o...)->(accept_result(s, p); move_input_start(s); refresh_line(s)),
-        "\e[F"    => (s,o...)->(accept_result(s, p); move_input_end(s); refresh_line(s)),
+        "\e[H"    => (s::MIState,o...)->(accept_result(s, p); move_input_start(s); refresh_line(s)),
+        "\e[F"    => (s::MIState,o...)->(accept_result(s, p); move_input_end(s); refresh_line(s)),
         # Use ^N and ^P to change search directions and iterate through results
-        "^N"      => (s,data,c)->(history_set_backward(data, false); history_next_result(s, data)),
-        "^P"      => (s,data,c)->(history_set_backward(data, true); history_next_result(s, data)),
+        "^N"      => (s::MIState,data::ModeState,c)->(history_set_backward(data, false); history_next_result(s, data)),
+        "^P"      => (s::MIState,data::ModeState,c)->(history_set_backward(data, true); history_next_result(s, data)),
         # Bracketed paste mode
-        "\e[200~" => (s,data,c)-> begin
+        "\e[200~" => (s::MIState,data::ModeState,c)-> begin
             ps = state(s, mode(s))
             input = readuntil(ps.terminal, "\e[201~", keep=false)
             edit_insert(data.query_buffer, input); update_display_buffer(s, data)
         end,
-        "*"       => (s,data,c)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))
+        "*"       => (s::MIState,data::ModeState,c::StringLike)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))
     )
     p.keymap_dict = keymap([pkeymap, escape_defaults])
     skeymap = AnyDict(
-        "^R"    => (s,o...)->(enter_search(s, p, true)),
-        "^S"    => (s,o...)->(enter_search(s, p, false)),
+        "^R"    => (s::MIState,o...)->(enter_search(s, p, true)),
+        "^S"    => (s::MIState,o...)->(enter_search(s, p, false)),
     )
     return (p, skeymap)
 end
@@ -2149,9 +2149,9 @@ end
 const default_keymap =
 AnyDict(
     # Tab
-    '\t' => (s,o...)->edit_tab(s, true),
+    '\t' => (s::MIState,o...)->edit_tab(s, true),
     # Enter
-    '\r' => (s,o...)->begin
+    '\r' => (s::MIState,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
             commit_line(s)
             return :done
@@ -2161,13 +2161,13 @@ AnyDict(
     end,
     '\n' => KeyAlias('\r'),
     # Backspace/^H
-    '\b' => (s,o...) -> is_region_active(s) ? edit_kill_region(s) : edit_backspace(s),
+    '\b' => (s::MIState,o...) -> is_region_active(s) ? edit_kill_region(s) : edit_backspace(s),
     127 => KeyAlias('\b'),
     # Meta Backspace
-    "\e\b" => (s,o...)->edit_delete_prev_word(s),
+    "\e\b" => (s::MIState,o...)->edit_delete_prev_word(s),
     "\e\x7f" => "\e\b",
     # ^D
-    "^D" => (s,o...)->begin
+    "^D" => (s::MIState,o...)->begin
         if buffer(s).size > 0
             edit_delete(s)
         else
@@ -2175,25 +2175,25 @@ AnyDict(
         end
     end,
     # Ctrl-Space
-    "\0" => (s,o...)->setmark(s),
-    "^G" => (s,o...)->(deactivate_region(s); refresh_line(s)),
-    "^X^X" => (s,o...)->edit_exchange_point_and_mark(s),
-    "^B" => (s,o...)->edit_move_left(s),
-    "^F" => (s,o...)->edit_move_right(s),
-    "^P" => (s,o...)->edit_move_up(s),
-    "^N" => (s,o...)->edit_move_down(s),
+    "\0" => (s::MIState,o...)->setmark(s),
+    "^G" => (s::MIState,o...)->(deactivate_region(s); refresh_line(s)),
+    "^X^X" => (s::MIState,o...)->edit_exchange_point_and_mark(s),
+    "^B" => (s::MIState,o...)->edit_move_left(s),
+    "^F" => (s::MIState,o...)->edit_move_right(s),
+    "^P" => (s::MIState,o...)->edit_move_up(s),
+    "^N" => (s::MIState,o...)->edit_move_down(s),
     # Meta-Up
-    "\e[1;3A" => (s,o...) -> edit_transpose_lines_up!(s),
+    "\e[1;3A" => (s::MIState,o...) -> edit_transpose_lines_up!(s),
     # Meta-Down
-    "\e[1;3B" => (s,o...) -> edit_transpose_lines_down!(s),
-    "\e[1;2D" => (s,o...)->edit_shift_move(s, edit_move_left),
-    "\e[1;2C" => (s,o...)->edit_shift_move(s, edit_move_right),
-    "\e[1;2A" => (s,o...)->edit_shift_move(s, edit_move_up),
-    "\e[1;2B" => (s,o...)->edit_shift_move(s, edit_move_down),
+    "\e[1;3B" => (s::MIState,o...) -> edit_transpose_lines_down!(s),
+    "\e[1;2D" => (s::MIState,o...)->edit_shift_move(s, edit_move_left),
+    "\e[1;2C" => (s::MIState,o...)->edit_shift_move(s, edit_move_right),
+    "\e[1;2A" => (s::MIState,o...)->edit_shift_move(s, edit_move_up),
+    "\e[1;2B" => (s::MIState,o...)->edit_shift_move(s, edit_move_down),
     # Meta B
-    "\eb" => (s,o...)->edit_move_word_left(s),
+    "\eb" => (s::MIState,o...)->edit_move_word_left(s),
     # Meta F
-    "\ef" => (s,o...)->edit_move_word_right(s),
+    "\ef" => (s::MIState,o...)->edit_move_word_right(s),
     # Ctrl-Left Arrow
     "\e[1;5D" => "\eb",
     # Ctrl-Left Arrow on rxvt
@@ -2203,29 +2203,29 @@ AnyDict(
     # Ctrl-Right Arrow on rxvt
     "\eOc" => "\ef",
     # Meta Enter
-    "\e\r" => (s,o...)->edit_insert_newline(s),
-    "\e." =>  (s,o...)->edit_insert_last_word(s),
+    "\e\r" => (s::MIState,o...)->edit_insert_newline(s),
+    "\e." =>  (s::MIState,o...)->edit_insert_last_word(s),
     "\e\n" => "\e\r",
-    "^_" => (s,o...)->edit_undo!(s),
-    "\e_" => (s,o...)->edit_redo!(s),
+    "^_" => (s::MIState,o...)->edit_undo!(s),
+    "\e_" => (s::MIState,o...)->edit_redo!(s),
     # Simply insert it into the buffer by default
-    "*" => (s,data,c)->(edit_insert(s, c)),
-    "^U" => (s,o...)->edit_kill_line_backwards(s),
-    "^K" => (s,o...)->edit_kill_line_forwards(s),
-    "^Y" => (s,o...)->edit_yank(s),
-    "\ey" => (s,o...)->edit_yank_pop(s),
-    "\ew" => (s,o...)->edit_copy_region(s),
-    "\eW" => (s,o...)->edit_kill_region(s),
-    "^A" => (s,o...)->(move_line_start(s); refresh_line(s)),
-    "^E" => (s,o...)->(move_line_end(s); refresh_line(s)),
+    "*" => (s::MIState,data,c::StringLike)->(edit_insert(s, c)),
+    "^U" => (s::MIState,o...)->edit_kill_line_backwards(s),
+    "^K" => (s::MIState,o...)->edit_kill_line_forwards(s),
+    "^Y" => (s::MIState,o...)->edit_yank(s),
+    "\ey" => (s::MIState,o...)->edit_yank_pop(s),
+    "\ew" => (s::MIState,o...)->edit_copy_region(s),
+    "\eW" => (s::MIState,o...)->edit_kill_region(s),
+    "^A" => (s::MIState,o...)->(move_line_start(s); refresh_line(s)),
+    "^E" => (s::MIState,o...)->(move_line_end(s); refresh_line(s)),
     # Try to catch all Home/End keys
-    "\e[H"  => (s,o...)->(move_input_start(s); refresh_line(s)),
-    "\e[F"  => (s,o...)->(move_input_end(s); refresh_line(s)),
-    "^L" => (s,o...)->(Terminals.clear(terminal(s)); refresh_line(s)),
-    "^W" => (s,o...)->edit_werase(s),
+    "\e[H"  => (s::MIState,o...)->(move_input_start(s); refresh_line(s)),
+    "\e[F"  => (s::MIState,o...)->(move_input_end(s); refresh_line(s)),
+    "^L" => (s::MIState,o...)->(Terminals.clear(terminal(s)); refresh_line(s)),
+    "^W" => (s::MIState,o...)->edit_werase(s),
     # Meta D
-    "\ed" => (s,o...)->edit_delete_next_word(s),
-    "^C" => (s,o...)->begin
+    "\ed" => (s::MIState,o...)->edit_delete_next_word(s),
+    "^C" => (s::MIState,o...)->begin
         try # raise the debugger if present
             ccall(:jl_raise_debugger, Int, ())
         catch
@@ -2237,60 +2237,60 @@ AnyDict(
         transition(s, :reset)
         refresh_line(s)
     end,
-    "^Z" => (s,o...)->(return :suspend),
+    "^Z" => (s::MIState,o...)->(return :suspend),
     # Right Arrow
-    "\e[C" => (s,o...)->edit_move_right(s),
+    "\e[C" => (s::MIState,o...)->edit_move_right(s),
     # Left Arrow
-    "\e[D" => (s,o...)->edit_move_left(s),
+    "\e[D" => (s::MIState,o...)->edit_move_left(s),
     # Up Arrow
-    "\e[A" => (s,o...)->edit_move_up(s),
+    "\e[A" => (s::MIState,o...)->edit_move_up(s),
     # Down Arrow
-    "\e[B" => (s,o...)->edit_move_down(s),
+    "\e[B" => (s::MIState,o...)->edit_move_down(s),
     # Meta-Right Arrow
-    "\e[1;3C" => (s,o...) -> edit_indent_right(s, 1),
+    "\e[1;3C" => (s::MIState,o...) -> edit_indent_right(s, 1),
     # Meta-Left Arrow
-    "\e[1;3D" => (s,o...) -> edit_indent_left(s, 1),
+    "\e[1;3D" => (s::MIState,o...) -> edit_indent_left(s, 1),
     # Delete
-    "\e[3~" => (s,o...)->edit_delete(s),
+    "\e[3~" => (s::MIState,o...)->edit_delete(s),
     # Bracketed Paste Mode
-    "\e[200~" => (s,o...)->begin
+    "\e[200~" => (s::MIState,o...)->begin
         input = bracketed_paste(s)
         edit_insert(s, input)
     end,
-    "^T" => (s,o...)->edit_transpose_chars(s),
-    "\et" => (s,o...)->edit_transpose_words(s),
-    "\eu" => (s,o...)->edit_upper_case(s),
-    "\el" => (s,o...)->edit_lower_case(s),
-    "\ec" => (s,o...)->edit_title_case(s),
+    "^T" => (s::MIState,o...)->edit_transpose_chars(s),
+    "\et" => (s::MIState,o...)->edit_transpose_words(s),
+    "\eu" => (s::MIState,o...)->edit_upper_case(s),
+    "\el" => (s::MIState,o...)->edit_lower_case(s),
+    "\ec" => (s::MIState,o...)->edit_title_case(s),
 )
 
 const history_keymap = AnyDict(
-    "^P" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
-    "^N" => (s,o...)->(edit_move_down(s) || history_next(s, mode(s).hist)),
-    "\ep" => (s,o...)->(history_prev(s, mode(s).hist)),
-    "\en" => (s,o...)->(history_next(s, mode(s).hist)),
+    "^P" => (s::MIState,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
+    "^N" => (s::MIState,o...)->(edit_move_down(s) || history_next(s, mode(s).hist)),
+    "\ep" => (s::MIState,o...)->(history_prev(s, mode(s).hist)),
+    "\en" => (s::MIState,o...)->(history_next(s, mode(s).hist)),
     # Up Arrow
-    "\e[A" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
+    "\e[A" => (s::MIState,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
     # Down Arrow
-    "\e[B" => (s,o...)->(edit_move_down(s) || history_next(s, mode(s).hist)),
+    "\e[B" => (s::MIState,o...)->(edit_move_down(s) || history_next(s, mode(s).hist)),
     # Page Up
-    "\e[5~" => (s,o...)->(history_prev(s, mode(s).hist)),
+    "\e[5~" => (s::MIState,o...)->(history_prev(s, mode(s).hist)),
     # Page Down
-    "\e[6~" => (s,o...)->(history_next(s, mode(s).hist)),
-    "\e<" => (s,o...)->(history_first(s, mode(s).hist)),
-    "\e>" => (s,o...)->(history_last(s, mode(s).hist)),
+    "\e[6~" => (s::MIState,o...)->(history_next(s, mode(s).hist)),
+    "\e<" => (s::MIState,o...)->(history_first(s, mode(s).hist)),
+    "\e>" => (s::MIState,o...)->(history_last(s, mode(s).hist)),
 )
 
 const prefix_history_keymap = merge!(
     AnyDict(
-        "^P" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
-        "^N" => (s,data,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
+        "^P" => (s::MIState,data::ModeState,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
+        "^N" => (s::MIState,data::ModeState,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
         # Up Arrow
-        "\e[A" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
+        "\e[A" => (s::MIState,data::ModeState,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
         # Down Arrow
-        "\e[B" => (s,data,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
+        "\e[B" => (s::MIState,data::ModeState,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
         # by default, pass through to the parent mode
-        "*"    => (s,data,c)->begin
+        "*"    => (s::MIState,data::ModeState,c::StringLike)->begin
             accept_result(s, data.histprompt);
             ps = state(s, mode(s))
             map = keymap(ps, mode(s))
@@ -2318,12 +2318,12 @@ function setup_prefix_keymap(hp::HistoryProvider, parent_prompt::Prompt)
     p = PrefixHistoryPrompt(hp, parent_prompt)
     p.keymap_dict = keymap([prefix_history_keymap])
     pkeymap = AnyDict(
-        "^P" => (s,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
-        "^N" => (s,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
+        "^P" => (s::MIState,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
+        "^N" => (s::MIState,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
         # Up Arrow
-        "\e[A" => (s,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
+        "\e[A" => (s::MIState,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
         # Down Arrow
-        "\e[B" => (s,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
+        "\e[B" => (s::MIState,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
     )
     return (p, pkeymap)
 end
