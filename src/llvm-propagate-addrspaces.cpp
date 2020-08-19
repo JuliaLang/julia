@@ -47,6 +47,7 @@ struct PropagateJuliaAddrspaces : public FunctionPass, public InstVisitor<Propag
     SmallPtrSet<Value *, 4> Visited;
     std::vector<Instruction *> ToDelete;
     std::vector<std::pair<Instruction *, Instruction *>> ToInsert;
+    unsigned baseAS;
     PropagateJuliaAddrspaces() : FunctionPass(ID) {};
 
 public:
@@ -62,6 +63,7 @@ private:
 };
 
 bool PropagateJuliaAddrspaces::runOnFunction(Function &F) {
+    baseAS = F.getParent()->getDataLayout().getAllocaAddrSpace();
     visit(F);
     for (auto it : ToInsert)
         it.first->insertBefore(it.second);
@@ -178,7 +180,7 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
-            Type *NewRetTy = cast<PointerType>(InstV->getType())->getElementType()->getPointerTo(0);
+            Type *NewRetTy = cast<PointerType>(InstV->getType())->getElementType()->getPointerTo(baseAS);
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
@@ -186,7 +188,7 @@ Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction 
     }
 
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
-        PointerType *TargetType = cast<PointerType>(CurrentV->getType())->getElementType()->getPointerTo(0);
+        PointerType *TargetType = cast<PointerType>(CurrentV->getType())->getElementType()->getPointerTo(baseAS);
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
