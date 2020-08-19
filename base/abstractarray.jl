@@ -1411,7 +1411,7 @@ promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK
-_cat(catdim::Integer) = Vector{Any}()
+_cat(catdim::Int) = Vector{Any}()
 
 typed_vcat(::Type{T}) where {T} = Vector{T}()
 typed_hcat(::Type{T}) where {T} = Vector{T}()

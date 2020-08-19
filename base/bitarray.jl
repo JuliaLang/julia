@@ -458,7 +458,9 @@ function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Arra
     return dest
 end
 
-function copyto!(dest::BitArray, doffs::Integer, src::Array, soffs::Integer, n::Integer)
+copyto!(dest::BitArray, doffs::Integer, src::Array, soffs::Integer, n::Integer) =
+    _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
+function _copyto_int!(dest::BitArray, doffs::Int, src::Array, soffs::Int, n::Int)
     n == 0 && return dest
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
@@ -803,8 +805,8 @@ function sizehint!(B::BitVector, sz::Integer)
     return B
 end
 
-function resize!(B::BitVector, n::Integer)
-    n = Int(n)
+resize!(B::BitVector, n::Integer) = _resize_int!(B, Int(n))
+function _resize_int!(B::BitVector, n::Int)
     n0 = length(B)
     n == n0 && return B
     n >= 0 || throw(BoundsError(B, n))
@@ -880,7 +882,8 @@ function popfirst!(B::BitVector)
     return item
 end
 
-function insert!(B::BitVector, i::Integer, item)
+insert!(B::BitVector, i::Integer, item) = _insert_int!(B, Int(i), item)
+function _insert_int!(B::BitVector, i::Int, item)
     i = Int(i)
     n = length(B)
     1 <= i <= n+1 || throw(BoundsError(B, i))
@@ -1027,10 +1030,11 @@ end
 const _default_bit_splice = BitVector()
 
 function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins::AbstractArray = _default_bit_splice)
+    _splice_int!(B, isa(r, UnitRange{Int}) ? r : Int(r), ins)
+end
+function _splice_int!(B::BitVector, r, ins)
     n = length(B)
-    i_f = Int(first(r))
-    i_l = Int(last(r))
-
+    i_f, i_l = first(r), last(r)
     1 <= i_f <= n+1 || throw(BoundsError(B, i_f))
     i_l <= n || throw(BoundsError(B, n+1))
 
@@ -1157,8 +1161,9 @@ end
 
 # TODO some of this could be optimized
 
-function reverse(A::BitArray; dims::Integer)
-    nd = ndims(A); d = Int(dims)
+reverse(A::BitArray; dims::Integer) = _reverse_int(A, Int(dims))
+function _reverse_int(A::BitArray, d::Int)
+    nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
     sd == 1 && return copy(A)
@@ -1167,7 +1172,7 @@ function reverse(A::BitArray; dims::Integer)
 
     nnd = 0
     for i = 1:nd
-        nnd += Int(size(A,i)==1 || i==d)
+        nnd += size(A,i)==1 || i==d
     end
     if nnd == nd
         # reverse along the only non-singleton dimension
@@ -1359,7 +1364,8 @@ details and examples.
 """
 (>>>)(B::BitVector, i::Int) = (i >=0 ? B >> unsigned(i) : B << unsigned(-i))
 
-function circshift!(dest::BitVector, src::BitVector, i::Integer)
+circshift!(dest::BitVector, src::BitVector, i::Integer) = _circshift_int!(dest, src, Int(i))
+function _circshift_int!(dest::BitVector, src::BitVector, i::Int)
     i = Int(i)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
     n = length(dest)
@@ -1415,14 +1421,13 @@ function findnext(B::BitArray, start::Integer)
     start = Int(start)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
-    unsafe_bitfindnext(B.chunks, Int(start))
+    unsafe_bitfindnext(B.chunks, start)
 end
 
 #findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
 # aux function: same as findnext(~B, start), but performed without temporaries
-function findnextnot(B::BitArray, start::Integer)
-    start = Int(start)
+function findnextnot(B::BitArray, start::Int)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
 
@@ -1457,15 +1462,15 @@ findfirstnot(B::BitArray) = findnextnot(B,1)
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Bool},
                   B::BitArray, start::Integer)
     v = pred.x
-    v == false && return findnextnot(B, start)
+    v == false && return findnextnot(B, Int(start))
     v == true && return findnext(B, start)
     return nothing
 end
 #findfirst(B::BitArray, v) = findnext(B, 1, v)  ## defined in array.jl
 
 # returns the index of the first element for which the function returns true
-function findnext(testf::Function, B::BitArray, start::Integer)
-    start = Int(start)
+findnext(testf::Function, B::BitArray, start::Integer) = _findnext_int(testf, B, Int(start))
+function _findnext_int(testf::Function, B::BitArray, start::Int)
     f0::Bool = testf(false)
     f1::Bool = testf(true)
     !f0 && f1 && return findnext(B, start)
@@ -1504,7 +1509,7 @@ function findprev(B::BitArray, start::Integer)
     unsafe_bitfindprev(B.chunks, start)
 end
 
-function findprevnot(B::BitArray, start::Integer)
+function findprevnot(B::BitArray, start::Int)
     start = Int(start)
     start > 0 || return nothing
     start > length(B) && throw(BoundsError(B, start))
@@ -1533,15 +1538,15 @@ findlastnot(B::BitArray) = findprevnot(B, length(B))
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Bool},
                   B::BitArray, start::Integer)
     v = pred.x
-    v == false && return findprevnot(B, start)
+    v == false && return findprevnot(B, Int(start))
     v == true && return findprev(B, start)
     return nothing
 end
 #findlast(B::BitArray, v) = findprev(B, 1, v)  ## defined in array.jl
 
 # returns the index of the previous element for which the function returns true
-function findprev(testf::Function, B::BitArray, start::Integer)
-    start = Int(start)
+findprev(testf::Function, B::BitArray, start::Integer) = _findprev_int(testf, B, Int(start))
+function _findprev_int(testf::Function, B::BitArray, start::Int)
     f0::Bool = testf(false)
     f1::Bool = testf(true)
     !f0 && f1 && return findprev(B, start)
@@ -1824,7 +1829,8 @@ function vcat(A::BitMatrix...)
 end
 
 # general case, specialized for BitArrays and Integers
-function _cat(dims::Integer, X::Union{BitArray, Bool}...)
+_cat(dims::Integer, X::Union{BitArray, Bool}...) = _cat(Int(dims)::Int, X...)
+function _cat(dims::Int, X::Union{BitArray, Bool}...)
     dims = Int(dims)
     catdims = dims2cat(dims)
     shape = cat_shape(catdims, map(cat_size, X))
