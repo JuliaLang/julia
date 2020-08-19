@@ -100,7 +100,7 @@ function print_matrix_row(io::IO,
         k > length(A) && break
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
-            a = alignment(io, x)
+            a = alignment(io, x)::Tuple{Int,Int}
 
             # First try 3-arg show
             sx = sprint(show, "text/plain", x, context=io, sizehint=0)

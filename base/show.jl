@@ -491,8 +491,8 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-modulesof!(s::Set{Any}, x::TypeVar) = modulesof!(s, x.ub)
-function modulesof!(s::Set{Any}, x::Type)
+modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
+function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, x.name.module)
@@ -534,10 +534,10 @@ function makeproper(io::IO, x::Type)
     return properx
 end
 
-function make_typealias(x::Type)
+function make_typealias(@nospecialize(x::Type))
     Any <: x && return
     x <: Tuple && return
-    mods = modulesof!(Set(), x)
+    mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     xenv = UnionAll[]
@@ -628,10 +628,10 @@ function show_typealias(io::IO, x::Type)
     return true
 end
 
-function make_typealiases(x::Type)
+function make_typealiases(@nospecialize(x::Type))
     Any <: x && return Core.svec(), Union{}
     x <: Tuple && return Core.svec(), Union{}
-    mods = modulesof!(Set(), x)
+    mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
     aliases = SimpleVector[]
     vars = Dict{Symbol,TypeVar}()
@@ -647,7 +647,7 @@ function make_typealiases(x::Type)
                 if alias isa Type && !has_free_typevars(alias) && !isvarargtype(alias) && !print_without_params(alias) && !(alias <: Tuple)
                     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
                     ti === Union{} && continue
-                    mod in modulesof!(Set(), alias) || continue # make sure this alias wasn't from an unrelated part of the Union
+                    mod in modulesof!(Set{Module}(), alias) || continue # make sure this alias wasn't from an unrelated part of the Union
                     env = env::SimpleVector
                     applied = isempty(env) ? alias : alias{env...}
                     ul = unionlen(applied)
