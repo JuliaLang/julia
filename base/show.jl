@@ -1897,7 +1897,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                 end
                 print(io, ")")
             else
-                escape_string(io, x, "\"\$")
+                escape_string(io, String(x)::String, "\"\$")
             end
         end
         print(io, '"')
