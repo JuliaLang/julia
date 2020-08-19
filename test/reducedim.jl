@@ -4,6 +4,10 @@ using Random
 
 # main tests
 
+# issue #35800
+# tested very early since it can be state-dependent
+@test @inferred(mapreduce(x->count(!iszero,x), +, [rand(1)]; init = 0.)) == 1.0
+
 function safe_mapslices(op, A, region)
     newregion = intersect(region, 1:ndims(A))
     return isempty(newregion) ? A : mapslices(op, A, dims = newregion)

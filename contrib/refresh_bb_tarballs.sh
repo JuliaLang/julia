@@ -35,6 +35,12 @@ fi
 # Get "contrib/" directory path
 CONTRIB_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+# Get the source hash for each project
+for proj in ${BB_PROJECTS}; do
+    PROJ="$(echo ${proj} | tr [a-z] [A-Z])"
+    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=0 DEPS_GIT=0 extract-${proj}
+done
+
 # For each triplet and each project, download the BB tarball and save its hash:
 for triplet in ${TRIPLETS}; do
 	for proj in ${BB_PROJECTS}; do

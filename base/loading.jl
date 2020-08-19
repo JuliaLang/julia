@@ -1256,9 +1256,9 @@ const MAX_NUM_PRECOMPILE_FILES = 10
 function compilecache(pkg::PkgId, path::String)
     # decide where to put the resulting cache file
     cachefile = compilecache_path(pkg)
+    cachepath = dirname(cachefile)
     # prune the directory with cache files
     if pkg.uuid !== nothing
-        cachepath = dirname(cachefile)
         entrypath, entryfile = cache_file_entry(pkg)
         cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
         if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES
@@ -1276,20 +1276,34 @@ function compilecache(pkg::PkgId, path::String)
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
     @logmsg verbosity "Precompiling $pkg"
-    p = create_expr_cache(path, cachefile, concrete_deps, pkg.uuid)
-    if success(p)
-        # append checksum to the end of the .ji file:
-        open(cachefile, "a+") do f
-            write(f, _crc32c(seekstart(f)))
+
+    # create a temporary file in `cachepath` directory, write the cache in it,
+    # write the checksum, _and then_ atomically move the file to `cachefile`.
+    tmppath, tmpio = mktemp(cachepath)
+    local p
+    try
+        close(tmpio)
+        p = create_expr_cache(path, tmppath, concrete_deps, pkg.uuid)
+        if success(p)
+            # append checksum to the end of the .ji file:
+            open(tmppath, "a+") do f
+                write(f, _crc32c(seekstart(f)))
+            end
+            # inherit permission from the source file
+            chmod(tmppath, filemode(path) & 0o777)
+
+            # this is atomic according to POSIX:
+            rename(tmppath, cachefile; force=true)
+            return cachefile
         end
-        # inherit permission from the source file
-        chmod(cachefile, filemode(path) & 0o777)
-    elseif p.exitcode == 125
+    finally
+        rm(tmppath, force=true)
+    end
+    if p.exitcode == 125
         return PrecompilableError()
     else
         error("Failed to precompile $pkg to $cachefile.")
     end
-    return cachefile
 end
 
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)

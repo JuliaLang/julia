@@ -55,7 +55,8 @@ SRCS += codegen llvm-ptls
 RUNTIME_SRCS += jitlayers aotcompile debuginfo disasm llvm-simdloop llvm-muladd \
 	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
-	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-api llvm-remove-addrspaces
+	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-api llvm-remove-addrspaces \
+	llvm-remove-ni
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -120,7 +121,7 @@ CLANG_LDFLAGS += -Wl,-undefined,dynamic_lookup
 endif
 
 
-COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS) $(LIBUNWIND)
+COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(LLVMLINK) $(OSLIBS)
 DEBUG_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)
 RELEASE_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a $(COMMON_LIBS)
 

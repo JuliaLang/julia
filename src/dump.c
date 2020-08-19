@@ -2837,11 +2837,10 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i)
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
     JL_TIMING(SAVE_MODULE);
-    char *tmpfname = strcat(strcpy((char *) alloca(strlen(fname)+8), fname), ".XXXXXX");
     ios_t f;
     jl_array_t *mod_array = NULL, *udeps = NULL;
-    if (ios_mkstemp(&f, tmpfname) == NULL) {
-        jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", tmpfname);
+    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
+        jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", fname);
         return 1;
     }
     JL_GC_PUSH2(&mod_array, &udeps);
@@ -2955,12 +2954,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
     write_int32(&f, 0); // mark the end of the source text
     ios_close(&f);
-
     JL_GC_POP();
-    if (jl_fs_rename(tmpfname, fname) < 0) {
-        jl_printf(JL_STDERR, "Cannot write cache file \"%s\".\n", fname);
-        return 1;
-    }
 
     return 0;
 }
