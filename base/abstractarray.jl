@@ -369,6 +369,7 @@ function first(predicate, itr)
     for x in itr
         predicate(x) && return Some(x)
     end
+    return nothing
 end
 
 """
@@ -443,7 +444,7 @@ function last(predicate, itr)
     for x in itr
         out = ifelse(predicate(x), Some(x), out)
     end
-    out
+    return out
 end
 
 # faster version for arrays
@@ -451,6 +452,7 @@ function last(predicate, a::AbstractArray)
     @inbounds for i in reverse(eachindex(a))
         predicate(a[i]) && return Some(a[i])
     end
+    return nothing
 end
 
 """
