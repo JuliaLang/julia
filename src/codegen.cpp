@@ -704,6 +704,12 @@ static const auto jldlsym_func = new JuliaFunction{
             {T_pint8, T_pint8, PointerType::get(T_pint8, 0)}, false); },
     nullptr,
 };
+static const auto jllazydlsym_func = new JuliaFunction{
+    "jl_lazy_load_and_lookup",
+    [](LLVMContext &C) { return FunctionType::get(T_pvoidfunc,
+            {T_prjlvalue, T_pint8}, false); },
+    nullptr,
+};
 static const auto jltypeassert_func = new JuliaFunction{
     "jl_typeassert",
     [](LLVMContext &C) { return FunctionType::get(T_void,

@@ -1656,6 +1656,8 @@ end
 # #6080
 @test Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x))) == Expr(:error, "invalid syntax &x")
 
+@test Meta.lower(@__MODULE__, :(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ())))) == Expr(:error, "ccall function name and library expression cannot reference local variables")
+
 @test_throws ParseError Meta.parse("x.'")
 @test_throws ParseError Meta.parse("0.+1")
 
