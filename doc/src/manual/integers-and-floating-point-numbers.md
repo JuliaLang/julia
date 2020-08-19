@@ -694,8 +694,8 @@ where syntactic conflicts arise:
 In all cases the ambiguity is resolved in favor of interpretation as numeric literals:
 
   * Expressions starting with `0x` are always hexadecimal literals.
-  * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
-  * Expressions starting with a numeric literal followed by `f` are always 32-bit floating-point literals.
+  * Expressions starting with a numeric literal followed by `e` or `E` and another numeric literal are always floating-point literals.
+  * Expressions starting with a numeric literal followed by `f` and another numeric literal are always 32-bit floating-point literals.
 
 Unlike `E`, which is equivalent to `e` in numeric literals for historical reasons, `F` is just another
 letter and does not behave like `f` in numeric literals. Hence, expressions starting with a numeric literal
