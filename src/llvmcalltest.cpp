@@ -6,6 +6,7 @@
 
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
+#include <llvm/Support/raw_ostream.h>
 
 #include "julia.h"
 #include "codegen_shared.h"
