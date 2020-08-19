@@ -364,6 +364,7 @@ JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s)
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int explici)
 {
     jl_binding_t *b = jl_get_binding(from, s);
+    jl_printf(JL_STDERR, "b == NULL: %i\n", b == NULL);
     if (b == NULL) {
         jl_printf(JL_STDERR,
                   "WARNING: could not import %s.%s into %s\n",
@@ -376,12 +377,13 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int 
                 return;
             }
             else if (to != jl_main_module && to != jl_base_module &&
-                     jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
+                     (jl_options.depwarn == JL_OPTIONS_DEPWARN_ON ||
+                      jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR) ) {
                 /* with #22763, external packages wanting to replace
                    deprecated Base bindings should simply export the new
                    binding */
                 jl_printf(JL_STDERR,
-                          "WARNING: importing deprecated binding %s.%s into %s.\n",
+                          "WARNING: importing foobar deprecated binding %s.%s into %s.\n",
                           jl_symbol_name(from->name), jl_symbol_name(s),
                           jl_symbol_name(to->name));
             }
@@ -630,7 +632,9 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
     // Only print a warning for deprecated == 1 (renamed).
     // For deprecated == 2 (moved to a package) the binding is to a function
     // that throws an error, so we don't want to print a warning too.
-    if (b->deprecated == 1 && jl_options.depwarn) {
+    if (b->deprecated == 1 &&
+        (jl_options.depwarn == JL_OPTIONS_DEPWARN_ON ||
+         jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR) ) {
         if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
             jl_printf(JL_STDERR, "WARNING: ");
         jl_binding_t *dep_message_binding = NULL;
