@@ -67,7 +67,7 @@ end
 
 # convert dual arrays (raw bt buffer, array of GC managed values) to a single
 # array of locations
-function _reformat_bt(bt::Array{<:Any,1}, bt2::Array{<:Any,1})
+function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
     ret = Vector{Union{InterpreterIP,Ptr{Cvoid}}}()
     i, j = 1, 1
     while i <= length(bt)
