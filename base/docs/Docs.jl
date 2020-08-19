@@ -332,7 +332,7 @@ function metadata(__source__, __module__, expr, ismodule)
     end
     if isexpr(expr, :struct)
         # Field docs for concrete types.
-        P = Pair{Any,Any}
+        P = Pair{Symbol,Any}
         fields = P[]
         last_docstr = nothing
         for each in expr.args[3].args
@@ -350,10 +350,10 @@ function metadata(__source__, __module__, expr, ismodule)
                 last_docstr = each
             end
         end
-        dict = :($(Dict)($([(:($(P)($(quot(f)), $d)))::Expr for (f, d) in fields]...)))
+        dict = :($(Dict{Symbol,Any})($([(:($(P)($(quot(f)), $d)))::Expr for (f, d) in fields]...)))
         push!(args, :($(Pair)(:fields, $dict)))
     end
-    return :($(Dict)($(args...)))
+    return :($(Dict{Symbol,Any})($(args...)))
 end
 
 function keyworddoc(__source__, __module__, str, def::Base.BaseDocs.Keyword)
