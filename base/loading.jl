@@ -1515,7 +1515,7 @@ function stale_cachefile(modpath::String, cachefile::String)
                     skip_timecheck = true
                     break
                 end
-                @debug "Rejecting cache file $cachefile because it provides the wrong uuid (got $build_id) for $mod (want $req_build_id)"
+                @debug "Rejecting cache file $cachefile because it provides the wrong uuid (got $build_id) for $req_key (want $req_build_id)"
                 return true # cachefile doesn't provide the required version of the dependency
             end
         end

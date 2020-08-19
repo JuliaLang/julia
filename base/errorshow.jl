@@ -287,7 +287,8 @@ function showerror(io::IO, ex::MethodError)
             )
             varnames = ("scalar", "array")
             first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
-            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$f $second")
+            fstring = f === Base.:+ ? "+" : "-"  # avoid depending on show_default for functions (invalidation)
+            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$fstring $second")
         end
     end
     if ft <: AbstractArray
