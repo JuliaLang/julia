@@ -462,6 +462,17 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 
 // --- mapping between julia and llvm types ---
 
+static bool type_is_permalloc(jl_value_t *typ)
+{
+    // Singleton should almost always be handled by the later optimization passes.
+    // Also do it here since it is cheap and save some effort in LLVM passes.
+    if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ))
+        return true;
+    return typ == (jl_value_t*)jl_symbol_type ||
+        typ == (jl_value_t*)jl_int8_type ||
+        typ == (jl_value_t*)jl_uint8_type;
+}
+
 static unsigned convert_struct_offset(Type *lty, unsigned byte_offset)
 {
     const DataLayout &DL = jl_data_layout;
@@ -1277,7 +1288,7 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, MDNode *tbaa_dest = nullptr, bool isVolatile = false);
 static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
-static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*);
+static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*);
 
 std::vector<unsigned> first_ptr(Type *T)
 {
@@ -1399,8 +1410,8 @@ static void typed_store(jl_codectx_t &ctx,
         tbaa_decorate(tbaa, store);
     if (parent != NULL) {
         if (!isboxed)
-            emit_write_multibarrier(ctx, parent, r);
-        else
+            emit_write_multibarrier(ctx, parent, r, rhs.typ);
+        else if (!type_is_permalloc(rhs.typ))
             emit_write_barrier(ctx, parent, r);
     }
 }
@@ -2605,9 +2616,35 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
     ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
 }
 
-static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg)
+static void find_perm_offsets(jl_datatype_t *typ, SmallVector<unsigned,4> &res, unsigned offset)
 {
-    auto ptrs = ExtractTrackedValues(agg, agg->getType(), false, ctx.builder);
+    // This is a inlined field at `offset`.
+    if (!typ->layout || typ->layout->npointers == 0)
+        return;
+    size_t nf = jl_svec_len(typ->types);
+    for (size_t i = 0; i < nf; i++) {
+        jl_value_t *_fld = jl_svecref(typ->types, i);
+        if (!jl_is_datatype(_fld))
+            continue;
+        jl_datatype_t *fld = (jl_datatype_t*)_fld;
+        if (jl_field_isptr(typ, i)) {
+            // pointer field, check if field is perm-alloc
+            if (type_is_permalloc((jl_value_t*)fld))
+                res.push_back(offset + jl_field_offset(typ, i));
+            continue;
+        }
+        // inline field
+        find_perm_offsets(fld, res, offset + jl_field_offset(typ, i));
+    }
+}
+
+static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg,
+                                    jl_value_t *jltype)
+{
+    SmallVector<unsigned,4> perm_offsets;
+    if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
+        find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
+    auto ptrs = ExtractTrackedValues(agg, agg->getType(), false, ctx.builder, perm_offsets);
     emit_write_barrier(ctx, parent, ptrs);
 }
 
@@ -2633,7 +2670,7 @@ static void emit_setfield(jl_codectx_t &ctx,
                         emit_bitcast(ctx, addr, T_pprjlvalue),
                         sizeof(jl_value_t*))))
                     ->setOrdering(AtomicOrdering::Unordered);
-            if (wb && strct.isboxed)
+            if (wb && strct.isboxed && !type_is_permalloc(rhs.typ))
                 emit_write_barrier(ctx, boxed(ctx, strct), r);
         }
         else if (jl_is_uniontype(jfty)) {
