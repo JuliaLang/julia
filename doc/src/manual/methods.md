@@ -165,7 +165,7 @@ f (generic function with 2 methods)
 This output tells us that `f` is a function object with two methods. To find out what the signatures
 of those methods are, use the [`methods`](@ref) function:
 
-```julia-repl
+```jldoctest fofxy
 julia> methods(f)
 # 2 methods for generic function "f":
 [1] f(x::Float64, y::Float64) in Main at none:1
