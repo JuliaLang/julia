@@ -2,6 +2,8 @@
 
 // --- the ccall, cglobal, and llvm intrinsics ---
 #include "llvm/Support/Path.h" // for llvm::sys::path
+#include <llvm/Bitcode/BitcodeReader.h>
+#include <llvm/Linker/Linker.h>
 
 // somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
@@ -542,46 +544,6 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
     }
 }
 
-
-static void jl_rethrow_with_add(const char *fmt, ...)
-{
-    jl_value_t *exc = jl_current_exception();
-    if (jl_typeis(exc, jl_errorexception_type)) {
-        char *str = jl_string_data(jl_fieldref(exc, 0));
-        char buf[1024];
-        va_list args;
-        va_start(args, fmt);
-        int nc = vsnprintf(buf, sizeof(buf), fmt, args);
-        va_end(args);
-        nc += snprintf(buf + nc, sizeof(buf) - nc, ": %s", str);
-        jl_value_t *msg = jl_pchar_to_string(buf, nc);
-        JL_GC_PUSH1(&msg);
-        jl_throw(jl_new_struct(jl_errorexception_type, msg));
-    }
-    jl_rethrow();
-}
-
-static jl_value_t* try_eval(jl_codectx_t &ctx, jl_value_t *ex, const char *failure)
-{
-    jl_value_t *constant = static_eval(ctx, ex, true, true);
-    if (jl_is_ssavalue(ex) && !constant)
-        jl_error(failure);
-    else if (constant)
-        return constant;
-
-    JL_TRY {
-        size_t last_age = jl_get_ptls_states()->world_age;
-        jl_get_ptls_states()->world_age = ctx.world;
-        constant = jl_interpret_toplevel_expr_in(ctx.module, ex, ctx.source, ctx.linfo->sparam_vals);
-        jl_get_ptls_states()->world_age = last_age;
-    }
-    JL_CATCH {
-        jl_rethrow_with_add(failure);
-    }
-
-    return constant;
-}
-
 // --- code generator for cglobal ---
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs);
@@ -649,232 +611,80 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     return mark_julia_type(ctx, res, false, rt);
 }
 
-static Function *llvmcall_proto(Function *F, Module *M = nullptr)
-{
-    // Copy the declaration characteristics of the Function (not the body)
-    Function *NewF = Function::Create(F->getFunctionType(),
-                                      Function::ExternalLinkage,
-                                      F->getName(),
-                                      M);
+// --- code generator for llvmcall ---
 
-    // Declarations are not allowed to have personality routines, but
-    // copyAttributesFrom sets them anyway. Temporarily unset the personality
-    // routine from `F`, since copying it and then resetting is more expensive
-    // as well as introducing an extra use from this unowned function, which
-    // can cause crashes in the LLVMContext's global destructor.
-    llvm::Constant *OldPersonalityFn = nullptr;
-    if (F->hasPersonalityFn()) {
-        OldPersonalityFn = F->getPersonalityFn();
-        F->setPersonalityFn(nullptr);
-    }
-
-    // FunctionType does not include any attributes. Copy them over manually
-    // as codegen may make decisions based on the presence of certain attributes
-    NewF->copyAttributesFrom(F);
-
-    if (OldPersonalityFn)
-        F->setPersonalityFn(OldPersonalityFn);
-
-    // DLLImport only needs to be set for the shadow module
-    // it just gets annoying in the JIT
-    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
-
-    return NewF;
-}
-
-class FunctionMover final : public ValueMaterializer
-{
-public:
-    FunctionMover(llvm::Module *dest,llvm::Module *src) :
-        ValueMaterializer(), VMap(), destModule(dest), srcModule(src),
-        LazyFunctions(0)
-    {
-    }
-    ValueToValueMapTy VMap;
-    llvm::Module *destModule;
-    llvm::Module *srcModule;
-    std::vector<Function *> LazyFunctions;
-
-    Function *CloneFunctionProto(Function *F)
-    {
-        assert(!F->isDeclaration());
-        Function *NewF = Function::Create(F->getFunctionType(),
-                                          Function::ExternalLinkage,
-                                          F->getName(),
-                                          destModule);
-        LazyFunctions.push_back(F);
-        VMap[F] = NewF;
-        return NewF;
-    }
-
-    void CloneFunctionBody(Function *F)
-    {
-        Function *NewF = (Function*)(Value*)VMap[F];
-        assert(NewF != NULL);
-
-        Function::arg_iterator DestI = NewF->arg_begin();
-        for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
-            DestI->setName(I->getName());    // Copy the name over...
-            VMap[&*I] = &*(DestI++);        // Add mapping to VMap
-        }
-
-        SmallVector<ReturnInst*, 8> Returns;
-        llvm::CloneFunctionInto(NewF,F,VMap,true,Returns,"",NULL,NULL,this);
-        NewF->setComdat(nullptr);
-        NewF->setSection("");
-    }
-
-    Function *CloneFunction(Function *F)
-    {
-        Function *NewF = (llvm::Function*)MapValue(F,VMap,RF_None,NULL,this);
-        ResolveLazyFunctions();
-        return NewF;
-    }
-
-    void ResolveLazyFunctions()
-    {
-        while (!LazyFunctions.empty()) {
-            Function *F = LazyFunctions.back();
-            LazyFunctions.pop_back();
-
-            CloneFunctionBody(F);
-        }
-    }
-
-    Value *InjectFunctionProto(Function *F)
-    {
-        Function *NewF = destModule->getFunction(F->getName());
-        if (!NewF) {
-            NewF = llvmcall_proto(F);
-            NewF->setComdat(nullptr);
-            destModule->getFunctionList().push_back(NewF);
-        }
-        return NewF;
-    }
-
-    Value *materialize(Value *V) override
-    {
-        Function *F = dyn_cast<Function>(V);
-        if (F) {
-            if (isIntrinsicFunction(F)) {
-                auto Fcopy = destModule->getOrInsertFunction(F->getName(), F->getFunctionType());
-#if JL_LLVM_VERSION >= 90000
-                return Fcopy.getCallee();
-#else
-                return Fcopy;
-#endif
-            }
-            if (F->isDeclaration() || F->getParent() != destModule) {
-                if (F->getName().empty())
-                    return CloneFunctionProto(F);
-                Function *shadow = srcModule->getFunction(F->getName());
-                if (shadow != NULL && !shadow->isDeclaration()) {
-                    Function *oldF = destModule->getFunction(F->getName());
-                    if (oldF)
-                        return oldF;
-                    if (jl_ExecutionEngine->findSymbol(F->getName(), false))
-                        return InjectFunctionProto(F);
-                    return CloneFunctionProto(shadow);
-                }
-                else if (!F->isDeclaration()) {
-                    return CloneFunctionProto(F);
-                }
-            }
-            // Still a declaration and still in a different module
-            if (F->isDeclaration() && F->getParent() != destModule) {
-                // Create forward declaration in current module
-                return InjectFunctionProto(F);
-            }
-        }
-        else if (isa<GlobalVariable>(V)) {
-            GlobalVariable *GV = cast<GlobalVariable>(V);
-            assert(GV != NULL);
-            GlobalVariable *oldGV = destModule->getGlobalVariable(GV->getName());
-            if (oldGV != NULL)
-                return oldGV;
-            GlobalVariable *newGV = new GlobalVariable(*destModule,
-                GV->getType()->getElementType(),
-                GV->isConstant(),
-                GV->getLinkage(),
-                NULL,
-                GV->getName(),
-                NULL,
-                GV->getThreadLocalMode(),
-                GV->getType()->getPointerAddressSpace());
-            newGV->copyAttributesFrom(GV);
-            newGV->setComdat(nullptr);
-            if (GV->isDeclaration())
-                return newGV;
-            if (!GV->getName().empty()) {
-                uint64_t addr = jl_ExecutionEngine->getGlobalValueAddress(GV->getName());
-                if (addr != 0) {
-                    newGV->setExternallyInitialized(true);
-                    return newGV;
-                }
-            }
-            if (GV->hasInitializer()) {
-                Value *C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
-                newGV->setInitializer(cast<Constant>(C));
-            }
-            return newGV;
-        }
-        return NULL;
-    };
-};
-
-static Function *prepare_llvmcall(Module *M, Function *Callee)
-{
-    GlobalValue *local = M->getNamedValue(Callee->getName());
-    if (!local)
-        local = llvmcall_proto(Callee, M);
-    return cast<Function>(local);
-}
-
-
-// llvmcall(ir, (rettypes...), (argtypes...), args...)
 static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 {
+    // parse and validate arguments
+    //
+    // two forms of llvmcall are supported:
+    // - llvmcall(ir, (rettypes...), (argtypes...), args...)
+    //   where `ir` represents IR that should be pasted in a function body
+    // - llvmcall((mod, fn), (rettypes...), (argtypes...), args...)
+    //   where `mod` represents the assembly of an entire LLVM module,
+    //   and `fn` the name of the function to call
     JL_NARGSV(llvmcall, 3);
-    jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
+    jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *entry = NULL;
     jl_value_t *ir_arg = args[1];
-    JL_GC_PUSH4(&ir, &rt, &at, &decl);
+    JL_GC_PUSH4(&ir, &rt, &at, &entry);
     if (jl_is_ssavalue(ir_arg))
         ir_arg = jl_arrayref((jl_array_t*)ctx.source->code, ((jl_ssavalue_t*)ir_arg)->id - 1);
-    ir = try_eval(ctx, ir_arg, "error statically evaluating llvm IR argument");
+    ir = static_eval(ctx, ir_arg, true, true);
+    if (!ir) {
+        emit_error(ctx, "error statically evaluating llvm IR argument");
+        return jl_cgval_t();
+    }
     if (jl_is_ssavalue(args[2]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *rtt = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[2])->id - 1);
         if (jl_is_type_type(rtt))
             rt = jl_tparam0(rtt);
     }
-    if (rt == NULL)
-        rt = try_eval(ctx, args[2], "error statically evaluating llvmcall return type");
+    if (!rt) {
+        rt = static_eval(ctx, args[2], true, true);
+        if (!rt) {
+            emit_error(ctx, "error statically evaluating llvmcall return type");
+            return jl_cgval_t();
+        }
+    }
     if (jl_is_ssavalue(args[3]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *att = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[3])->id - 1);
         if (jl_is_type_type(att))
             at = jl_tparam0(att);
     }
-    if (at == NULL)
-        at = try_eval(ctx, args[3], "error statically evaluating llvmcall argument tuple");
-    if (jl_is_tuple(ir)) {
-        // if the IR is a tuple, we expect (declarations, ir)
-        if (jl_nfields(ir) != 2)
-            jl_error("Tuple as first argument to llvmcall must have exactly two children");
-        decl = jl_fieldref(ir,0);
-        ir = jl_fieldref(ir,1);
-        if (!jl_is_string(decl))
-            jl_error("Declarations passed to llvmcall must be a string");
+    if (!at) {
+        at = static_eval(ctx, args[3], true, true);
+        if (!at) {
+            emit_error(ctx, "error statically evaluating llvmcall argument tuple");
+            return jl_cgval_t();
+        }
     }
-    bool isString = jl_is_string(ir);
-    bool isPtr = jl_is_cpointer(ir);
-    if (!isString && !isPtr) {
-        jl_error("IR passed to llvmcall must be a string or pointer to an LLVM Function");
+    if (jl_is_tuple(ir)) {
+        // if the IR is a tuple, we expect (mod, fn)
+        if (jl_nfields(ir) != 2) {
+            emit_error(ctx, "Tuple as first argument to llvmcall must have exactly two children");
+            return jl_cgval_t();
+        }
+        entry = jl_fieldref(ir, 1);
+        if (!jl_is_string(entry)) {
+            emit_error(ctx, "Function name passed to llvmcall must be a string");
+            return jl_cgval_t();
+        }
+        ir = jl_fieldref(ir, 0);
+
+        if (!jl_is_string(ir) && !jl_typeis(ir, jl_array_uint8_type)) {
+            emit_error(ctx, "Module IR passed to llvmcall must be a string or an array of bytes");
+            return jl_cgval_t();
+        }
+    }
+    else {
+        if (!jl_is_string(ir)) {
+            emit_error(ctx, "Function IR passed to llvmcall must be a string");
+            return jl_cgval_t();
+        }
     }
 
     JL_TYPECHK(llvmcall, type, rt);
     JL_TYPECHK(llvmcall, type, at);
-
-    std::string ir_string;
-    raw_string_ostream ir_stream(ir_string);
 
     // Generate arguments
     std::string arguments;
@@ -896,7 +706,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         Type *t = julia_type_to_llvm(ctx, tti, &toboxed);
         argtypes.push_back(t);
         if (4 + i > nargs) {
-            jl_error("Missing arguments to llvmcall!");
+            emit_error(ctx, "Missing arguments to llvmcall!");
+            return jl_cgval_t();
         }
         jl_value_t *argi = args[4 + i];
         jl_cgval_t arg = emit_expr(ctx, argi);
@@ -906,17 +717,21 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         argvals[i] = llvm_type_rewrite(ctx, v, t, issigned);
     }
 
-    Function *f;
     bool retboxed;
     Type *rettype = julia_type_to_llvm(ctx, rtt, &retboxed);
-    if (isString) {
-        // Make sure to find a unique name
-        std::string ir_name;
-        while (true) {
-            raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << globalUnique++;
-            if (jl_Module->getFunction(ir_name) == NULL)
-                break;
-        }
+
+    // Make sure to find a unique name
+    std::string ir_name;
+    while (true) {
+        raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << globalUnique++;
+        if (jl_Module->getFunction(ir_name) == NULL)
+            break;
+    }
+
+    // generate a temporary module that contains our IR
+    std::unique_ptr<Module> Mod;
+    if (entry == NULL) {
+        // we only have function IR, which we should put in a function
 
         bool first = true;
         for (std::vector<Type *>::iterator it = argtypes.begin(); it != argtypes.end(); ++it) {
@@ -933,91 +748,100 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         rettype->print(rtypename);
         std::map<uint64_t,std::string> localDecls;
 
-        if (decl != NULL) {
-            // parse string line by line
-            StringRef declarations(jl_string_data(decl), jl_string_len(decl));
-            while (!declarations.empty()) {
-                StringRef declstr;
-                std::tie(declstr, declarations) = declarations.split('\n');
-                // Find name of declaration by searching for '@'
-                size_t atpos = declstr.find('@') + 1;
-                // Find end of declaration by searching for '('
-                size_t bracepos = declstr.find('(', atpos);
-                // Declaration name is the string between @ and (
-                StringRef declname = declstr.substr(atpos, bracepos - atpos);
-
-                // Check if declaration already present in module
-                if (jl_Module->getNamedValue(declname) == NULL) {
-                    ir_stream << "; Declarations\n" << declstr << "\n";
-                }
-            }
-        }
+        std::string ir_string;
+        raw_string_ostream ir_stream(ir_string);
         ir_stream << "; Number of arguments: " << nargt << "\n"
         << "define "<<rtypename.str()<<" @\"" << ir_name << "\"("<<argstream.str()<<") {\n"
         << jl_string_data(ir) << "\n}";
-        SMDiagnostic Err = SMDiagnostic();
-        // Do not enable update debug info since it runs the verifier on the whole module
-        // and will error on the function we are currently emitting.
-        ModuleSummaryIndex index = ModuleSummaryIndex(true);
-        bool failed = parseAssemblyInto(MemoryBufferRef(ir_stream.str(), "llvmcall"),
-                                        jl_Module, &index, Err, nullptr,
-                                        /* UpdateDebugInfo */ false);
-        f = jl_Module->getFunction(ir_name);
-        if (failed) {
-            // try to get the module in a workable state again
-            if (f)
-                f->eraseFromParent();
 
+        SMDiagnostic Err = SMDiagnostic();
+        Mod = parseAssemblyString(ir_stream.str(), Err, jl_LLVMContext);
+        if (!Mod) {
             std::string message = "Failed to parse LLVM assembly: \n";
             raw_string_ostream stream(message);
             Err.print("", stream, true);
             emit_error(ctx, stream.str());
             return jl_cgval_t();
         }
+
+        Function *f = Mod->getFunction(ir_name);
+        f->addFnAttr(Attribute::AlwaysInline);
     }
     else {
-        assert(isPtr);
-        // Create Function skeleton
-        f = (llvm::Function*)jl_unbox_voidpointer(ir);
+        // we have the IR or bitcode of an entire module, which we can parse directly
+
+        if (jl_is_string(ir)) {
+            SMDiagnostic Err = SMDiagnostic();
+            Mod = parseAssemblyString(jl_string_data(ir), Err, jl_LLVMContext);
+            if (!Mod) {
+                std::string message = "Failed to parse LLVM assembly: \n";
+                raw_string_ostream stream(message);
+                Err.print("", stream, true);
+                emit_error(ctx, stream.str());
+                return jl_cgval_t();
+            }
+        }
+        else {
+            auto Buf = MemoryBuffer::getMemBuffer(
+                StringRef((char *)jl_array_data(ir), jl_array_len(ir)), "llvmcall",
+                /*RequiresNullTerminator*/ false);
+            Expected<std::unique_ptr<Module>> ModuleOrErr =
+                parseBitcodeFile(*Buf, jl_LLVMContext);
+            if (Error Err = ModuleOrErr.takeError()) {
+                std::string Message;
+                handleAllErrors(std::move(Err),
+                                [&](ErrorInfoBase &EIB) { Message = EIB.message(); });
+                std::string message = "Failed to parse LLVM bitcode: \n";
+                raw_string_ostream stream(message);
+                stream << Message;
+                emit_error(ctx, stream.str());
+                return jl_cgval_t();
+            }
+            Mod = std::move(ModuleOrErr.get());
+        }
+
+        Function *f = Mod->getFunction(jl_string_data(entry));
+        if (!f) {
+            emit_error(ctx, "Module IR does not contain specified entry function");
+            return jl_cgval_t();
+        }
+        f->setName(ir_name);
+
+        // verify the function type
         assert(!f->isDeclaration());
         assert(f->getReturnType() == rettype);
         int i = 0;
         for (std::vector<Type *>::iterator it = argtypes.begin();
             it != argtypes.end(); ++it, ++i)
             assert(*it == f->getFunctionType()->getParamType(i));
-
-        if (f->getParent() != jl_Module) {
-            FunctionMover mover(jl_Module, f->getParent());
-            f = mover.CloneFunction(f);
-        }
-
-        std::string message = "Malformed LLVM function: \n";
-        raw_string_ostream stream(message);
-        if (verifyFunction(*f, &stream)) {
-            emit_error(ctx, stream.str());
-            return jl_cgval_t();
-        }
     }
 
-    // Since we dumped all of f's dependencies into the active module,
-    // we cannot reasonably inline it, so leave it there and just emit
-    // a regular call
-    if (!isString) {
-        static int llvmcallnumbering = 0;
-        std::string name;
-        llvm::raw_string_ostream(name) << "jl_llvmcall" << llvmcallnumbering++;
-        f->setName(name);
-        f = prepare_llvmcall(jl_Module, llvmcall_proto(f));
-    }
-    else {
-        f->setLinkage(GlobalValue::LinkOnceODRLinkage);
-    }
+    // copy module properties that should always match
+    Mod->setTargetTriple(jl_Module->getTargetTriple());
+    Mod->setDataLayout(jl_Module->getDataLayout());
 
-    CallInst *inst = ctx.builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
-    if (isString) {
-        f->addFnAttr(Attribute::AlwaysInline);
-        inst->setAttributes(f->getAttributes());
+    // verify the definition
+    Function *def = Mod->getFunction(ir_name);
+    assert(def);
+    std::string message = "Malformed LLVM function: \n";
+    raw_string_ostream stream(message);
+    if (verifyFunction(*def, &stream)) {
+        emit_error(ctx, stream.str());
+        return jl_cgval_t();
     }
+    def->setLinkage(GlobalVariable::LinkOnceODRLinkage);
+
+    // generate a call
+    FunctionType *decl_typ = FunctionType::get(rettype, argtypes, def->isVarArg());
+    Function *decl = Function::Create(decl_typ, def->getLinkage(), def->getAddressSpace(),
+                                      def->getName(), jl_Module);
+    decl->setAttributes(def->getAttributes());
+    CallInst *inst = ctx.builder.CreateCall(decl, ArrayRef<Value *>(&argvals[0], nargt));
+
+    // save the module to be linked later.
+    // we cannot do this right now, because linking mutates the destination module,
+    // which might invalidate LLVM values cached in cgval_t's (specifically constant arrays)
+    ctx.llvmcall_modules.push_back(std::move(Mod));
 
     JL_GC_POP();
 

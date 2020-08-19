@@ -1074,6 +1074,8 @@ public:
     bool use_cache = false;
     const jl_cgparams_t *params = NULL;
 
+    std::vector<std::unique_ptr<llvm::Module>> llvmcall_modules;
+
     jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params)
       : builder(llvmctx),
         emission_context(params),
@@ -7011,6 +7013,20 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         }
         ctx.roots = NULL;
         JL_UNLOCK(&m->writelock);
+    }
+
+    // link the dependent llvmcall modules, but switch their function's linkage to private
+    // so that they don't show up in the execution engine.
+    for (auto &Mod : ctx.llvmcall_modules) {
+        SmallVector<std::string, 1> Exports;
+        for (const auto &F: Mod->functions())
+            if (!F.isDeclaration())
+                Exports.push_back(F.getName());
+        if (Linker::linkModules(*jl_Module, std::move(Mod))) {
+            jl_error("Failed to link LLVM bitcode");
+        }
+        for (auto FN: Exports)
+            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::PrivateLinkage);
     }
 
     if (JL_HOOK_TEST(ctx.params, emitted_function)) {

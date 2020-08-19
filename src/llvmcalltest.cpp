@@ -7,15 +7,20 @@
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
 
+#include "julia.h"
 #include "codegen_shared.h"
 
 using namespace llvm;
 
 extern "C" {
 
-JL_DLLEXPORT llvm::Function *MakeIdentityFunction(llvm::PointerType *AnyTy) {
+JL_DLLEXPORT const char *MakeIdentityFunction(jl_value_t* jl_AnyTy) {
+    LLVMContext Ctx;
+    PointerType *AnyTy = PointerType::get(StructType::get(Ctx), 0);
+    // FIXME: get AnyTy via jl_type_to_llvm(Ctx, jl_AnyTy)
+
     Type *TrackedTy = PointerType::get(AnyTy->getElementType(), AddressSpace::Tracked);
-    Module *M = new llvm::Module("shadow", AnyTy->getContext());
+    Module *M = new llvm::Module("shadow", Ctx);
     Function *F = Function::Create(
         FunctionType::get(
             TrackedTy, {TrackedTy}, false),
@@ -24,15 +29,21 @@ JL_DLLEXPORT llvm::Function *MakeIdentityFunction(llvm::PointerType *AnyTy) {
         M
     );
 
-    IRBuilder<> Builder(BasicBlock::Create(AnyTy->getContext(), "top", F));
+    IRBuilder<> Builder(BasicBlock::Create(Ctx, "top", F));
     Builder.CreateRet(&*F->arg_begin());
 
-    return F;
+    std::string buf;
+    raw_string_ostream os(buf);
+    M->print(os, NULL);
+    os.flush();
+    return strdup(buf.c_str());
 }
 
-JL_DLLEXPORT llvm::Function *MakeLoadGlobalFunction(llvm::PointerType *AnyTy) {
-    auto M = new Module("shadow", AnyTy->getContext());
-    auto intType = Type::getInt32Ty(AnyTy->getContext());
+JL_DLLEXPORT const char *MakeLoadGlobalFunction() {
+    LLVMContext Ctx;
+
+    auto M = new Module("shadow", Ctx);
+    auto intType = Type::getInt32Ty(Ctx);
     auto G = new GlobalVariable(
         *M,
         intType,
@@ -41,17 +52,21 @@ JL_DLLEXPORT llvm::Function *MakeLoadGlobalFunction(llvm::PointerType *AnyTy) {
         Constant::getNullValue(intType),
         "test_global_var");
 
-    auto resultType = Type::getInt64Ty(AnyTy->getContext());
+    auto resultType = Type::getInt64Ty(Ctx);
     auto F = Function::Create(
         FunctionType::get(resultType, {}, false),
         GlobalValue::ExternalLinkage,
         "load_global_var",
         M);
 
-    IRBuilder<> Builder(BasicBlock::Create(AnyTy->getContext(), "top", F));
+    IRBuilder<> Builder(BasicBlock::Create(Ctx, "top", F));
     Builder.CreateRet(Builder.CreatePtrToInt(G, resultType));
 
-    return F;
+    std::string buf;
+    raw_string_ostream os(buf);
+    M->print(os, NULL);
+    os.flush();
+    return strdup(buf.c_str());
 }
 
 }

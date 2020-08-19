@@ -227,11 +227,13 @@ try
 
     @eval begin function ccallable_test()
         Base.llvmcall(
-        (""" declare i32 @f35014(i32)""",
-         """
-         %1 = call i32 @f35014(i32 3)
-         ret i32 %1
-         """), Cint, Tuple{})
+        ("""declare i32 @f35014(i32)
+            define i32 @entry() {
+            0:
+                %1 = call i32 @f35014(i32 3)
+                ret i32 %1
+            }""", "entry"
+        ), Cint, Tuple{})
     end
     @test ccallable_test() == 4
     end
