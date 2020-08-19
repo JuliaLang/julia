@@ -34,9 +34,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters, b.parameters
-        lar = length(ap)::Int
-        lbr = length(bp)::Int
+        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
+        lar = length(ap)
+        lbr = length(bp)
         if lar == 0
             return Tuple{Vararg{tailjoin(bp, 1)}}
         end
@@ -78,10 +78,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
+    a, b = a::DataType, b::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
-                a = supertype(a)
+                a = supertype(a)::DataType
             end
             if a.name === Type.body.name
                 ap = a.parameters[1]
@@ -115,7 +116,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             end
             return aprimary
         end
-        b = supertype(b)
+        b = supertype(b)::DataType
     end
     return Any
 end
@@ -149,7 +150,7 @@ function full_va_len(p)
     if isvarargtype(last)
         N = unwrap_unionall(last).parameters[2]
         if isa(N, Integer)
-            return (length(p) + N - 1)::Int, true
+            return length(p)::Int + Int(N) - 1, true
         end
         return length(p)::Int, false
     end

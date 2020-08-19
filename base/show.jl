@@ -1298,11 +1298,11 @@ function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     if head === :(.)
         print(io, '.')
     end
-    if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
+    if !isempty(func_args) && isa(func_args[1], Expr) && (func_args[1]::Expr).head === :parameters
         print(io, op)
         show_list(io, func_args[2:end], ", ", indent, 0, quote_level, false, kw)
         print(io, "; ")
-        show_list(io, func_args[1].args, ", ", indent, 0, quote_level, false, kw)
+        show_list(io, (func_args[1]::Expr).args, ", ", indent, 0, quote_level, false, kw)
         print(io, cl)
     else
         show_enclosed_list(io, op, func_args, ", ", cl, indent, 0, quote_level, false, kw)
@@ -1394,13 +1394,13 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
     end
 end
 
-function show_generator(io, ex, indent, quote_level)
+function show_generator(io, ex::Expr, indent, quote_level)
     if ex.head === :flatten
-        fg = ex
+        fg::Expr = ex
         ranges = Any[]
         while isa(fg, Expr) && fg.head === :flatten
-            push!(ranges, fg.args[1].args[2:end])
-            fg = fg.args[1].args[1]
+            push!(ranges, (fg.args[1]::Expr).args[2:end])
+            fg = (fg.args[1]::Expr).args[1]::Expr
         end
         push!(ranges, fg.args[2:end])
         show_unquoted(io, fg.args[1], indent, 0, quote_level)
@@ -1624,7 +1624,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
-        funcargslike = head === :(.) ? args[2].args : args[2:end]
+        funcargslike = head === :(.) ? (args[2]::Expr).args : args[2:end]
         show_call(head == :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
 
     # comprehensions
@@ -1745,7 +1745,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     elseif head === :export
         print(io, head, ' ')
-        show_list(io, allow_macroname.(args), ", ", indent)
+        show_list(io, mapany(allow_macroname, args), ", ", indent)
 
     elseif head === :macrocall && nargs >= 2
         # handle some special syntaxes
@@ -2031,7 +2031,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         env_io = IOContext(env_io, :unionall_env => sig.var)
         sig = sig.body
     end
-    sig = sig.parameters
+    sig = (sig::DataType).parameters
     show_signature_function(env_io, sig[1], demangle)
     first = true
     print_within_stacktrace(io, "(", color=:light_black)
@@ -2153,7 +2153,6 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     if src.slotnames !== nothing
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
     end
-    @assert src.codelocs !== nothing
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?

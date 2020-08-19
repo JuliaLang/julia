@@ -2,7 +2,7 @@
 
 # Method and method table pretty-printing
 
-function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (argname, argtype)
+function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
     t = sig.parameters[i]
     if i == nargs && isva && !isvarargtype(t)
         t = Vararg{t,length(sig.parameters)-nargs+1}
@@ -10,10 +10,10 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
-    s = string(n)
+    s = string(n)::String
     i = findfirst(isequal('#'), s)
     if i !== nothing
-        s = s[1:prevind(s, i)]
+        s = s[1:prevind(s, i)::Int]
     end
     if t === Any && !isempty(s)
         return s, ""
@@ -80,7 +80,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)
-        sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
+        sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
@@ -88,7 +88,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
             kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
             # ensure the kwarg... is always printed last. The order of the arguments are not
             # necessarily the same as defined in the function
-            i = findfirst(x -> endswith(string(x), "..."), kws)
+            i = findfirst(x -> endswith(string(x)::String, "..."), kws)
             if i !== nothing
                 push!(kws, kws[i])
                 deleteat!(kws, i)

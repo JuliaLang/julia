@@ -326,7 +326,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
         (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     src->code = NULL;
-    src->codelocs = jl_nothing;
+    src->codelocs = NULL;
     src->ssavaluetypes = NULL;
     src->ssaflags = NULL;
     src->method_for_inference_limit_heuristics = jl_nothing;
