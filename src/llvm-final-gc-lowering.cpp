@@ -73,8 +73,8 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     AllocaInst *gcframe = new AllocaInst(
         T_prjlvalue,
         0,
-        ConstantInt::get(T_int32, nRoots + 2));
-    gcframe->setAlignment(Align(16));
+        ConstantInt::get(T_int32, nRoots + 2),
+        Align(16));
     gcframe->insertAfter(target);
     gcframe->takeName(target);
 
@@ -109,20 +109,20 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                 builder.CreateBitCast(
                         builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0),
                         T_size->getPointerTo()),
-                sizeof(void*));
+                Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     Value *pgcstack = builder.Insert(getPgcstack(ptlsStates));
     inst = builder.CreateAlignedStore(
-            builder.CreateAlignedLoad(pgcstack, sizeof(void*)),
+            builder.CreateAlignedLoad(pgcstack, Align(sizeof(void*))),
             builder.CreatePointerCast(
                     builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1),
                     PointerType::get(T_ppjlvalue, 0)),
-            sizeof(void*));
+            Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
             gcframe,
             builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
-            sizeof(void*));
+            Align(sizeof(void*)));
 }
 
 void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
@@ -134,14 +134,14 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     builder.SetInsertPoint(target);
     Instruction *gcpop =
         cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
-    Instruction *inst = builder.CreateAlignedLoad(gcpop, sizeof(void*));
+    Instruction *inst = builder.CreateAlignedLoad(gcpop, Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
         inst,
         builder.CreateBitCast(
             builder.Insert(getPgcstack(ptlsStates)),
             PointerType::get(T_prjlvalue, 0)),
-        sizeof(void*));
+        Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
 }
 
@@ -307,7 +307,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
                 continue;
             }
 
-            auto callee = CI->getCalledValue();
+            Value *callee = CI->getCalledOperand();
 
             if (callee == newGCFrameFunc) {
                 replaceInstruction(CI, lowerNewGCFrame(CI, F), it);

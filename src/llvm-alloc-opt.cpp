@@ -415,7 +415,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
-    if (call->getCalledValue() != pass.alloc_obj_func)
+    if (call->getCalledOperand() != pass.alloc_obj_func)
         return -1;
     assert(call->getNumArgOperands() == 3);
     size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
@@ -567,7 +567,7 @@ void Optimizer::checkInst(Instruction *I)
         if (auto call = dyn_cast<CallInst>(inst)) {
             // TODO handle `memcmp`
             // None of the intrinsics should care if the memory is stack or heap allocated.
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
@@ -983,7 +983,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             user->replaceUsesOfWith(orig_i, new_i);
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
             if (pass.pointer_from_objref_func == callee) {
                 call->replaceAllUsesWith(new_i);
                 call->eraseFromParent();
@@ -1099,7 +1099,7 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
             return;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
             if (pass.gc_preserve_begin_func == callee) {
                 removeGCPreserve(call, orig_i);
                 return;
@@ -1263,7 +1263,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             }
             // TODO: should we use `load->clone()`, or manually copy any other metadata?
 #if JL_LLVM_VERSION >= 100000
-            newload->setAlignment(MaybeAlign(load->getAlignment()));
+            newload->setAlignment(load->getAlign());
 #else
             newload->setAlignment(load->getAlignment());
 #endif
@@ -1307,7 +1307,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             }
             // TODO: should we use `store->clone()`, or manually copy any other metadata?
 #if JL_LLVM_VERSION >= 100000
-            newstore->setAlignment(MaybeAlign(store->getAlignment()));
+            newstore->setAlignment(store->getAlign());
 #else
             newstore->setAlignment(store->getAlignment());
 #endif
@@ -1317,7 +1317,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             return;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledValue();
+            auto callee = call->getCalledOperand();
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
                 if (Intrinsic::ID id = intrinsic->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
@@ -1344,7 +1344,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                     val = ConstantExpr::getIntToPtr(val, pass.T_pjlvalue);
                                     ptr = ConstantExpr::getAddrSpaceCast(val, pass.T_prjlvalue);
                                 }
-                                StoreInst *store = builder.CreateAlignedStore(ptr, slot.slot, sizeof(void*));
+                                StoreInst *store = builder.CreateAlignedStore(ptr, slot.slot, Align(sizeof(void*)));
                                 store->setOrdering(AtomicOrdering::NotAtomic);
                                 continue;
                             }
@@ -1388,7 +1388,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 for (auto &slot: slots) {
                     if (!slot.isref)
                         continue;
-                    LoadInst *ref = builder.CreateAlignedLoad(pass.T_prjlvalue, slot.slot, sizeof(void*));
+                    LoadInst *ref = builder.CreateAlignedLoad(pass.T_prjlvalue, slot.slot, Align(sizeof(void*)));
                     // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
                     ref->setOrdering(AtomicOrdering::NotAtomic);
                     operands.push_back(ref);
@@ -1419,7 +1419,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 for (auto &slot: slots) {
                     if (!slot.isref)
                         continue;
-                    LoadInst *ref = builder.CreateAlignedLoad(pass.T_prjlvalue, slot.slot, sizeof(void*));
+                    LoadInst *ref = builder.CreateAlignedLoad(pass.T_prjlvalue, slot.slot, Align(sizeof(void*)));
                     // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
                     ref->setOrdering(AtomicOrdering::NotAtomic);
                     operands.push_back(ref);
