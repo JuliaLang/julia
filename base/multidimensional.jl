@@ -1419,7 +1419,7 @@ function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) wh
     nothing
 end
 
-for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
+for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @generated function permutedims!(P::$PT{$(V...)}, B::$BT{$(V...)}, perm) where $(V...)
         quote
             checkdims_perm(P, B, perm)

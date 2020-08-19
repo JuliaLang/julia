@@ -201,7 +201,8 @@ end
 beep(::ModeState) = nothing
 cancel_beep(::ModeState) = nothing
 
-for f in [:terminal, :on_enter, :add_history, :_buffer, :(Base.isempty),
+for f in Union{Symbol,Expr}[
+          :terminal, :on_enter, :add_history, :_buffer, :(Base.isempty),
           :replace_line, :refresh_multi_line, :input_string, :update_display_buffer,
           :empty_undo, :push_undo, :pop_undo, :options, :cancel_beep, :beep,
           :deactivate_region, :activate_region, :is_region_active, :region_active]

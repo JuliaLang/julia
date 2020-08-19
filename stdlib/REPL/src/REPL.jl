@@ -994,9 +994,9 @@ function setup_interface(
 
     # Setup history
     # We will have a unified history for all REPL modes
-    hp = REPLHistoryProvider(Dict{Symbol,Any}(:julia => julia_prompt,
-                                              :shell => shell_mode,
-                                              :help  => help_mode))
+    hp = REPLHistoryProvider(Dict{Symbol,Prompt}(:julia => julia_prompt,
+                                                 :shell => shell_mode,
+                                                 :help  => help_mode))
     if repl.history_file
         try
             hist_path = find_hist_file()
@@ -1172,7 +1172,7 @@ function setup_interface(
 
     shell_mode.keymap_dict = help_mode.keymap_dict = LineEdit.keymap(b)
 
-    allprompts = [julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt]
+    allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt]
     return ModalInterface(allprompts)
 end
 

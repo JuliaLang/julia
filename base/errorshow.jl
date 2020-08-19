@@ -281,7 +281,7 @@ function showerror(io::IO, ex::MethodError)
         if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
             any(x -> x <: Number, arg_types_param)
 
-            nouns = Dict(
+            nouns = Dict{Any,String}(
                 Base.:+ => "addition",
                 Base.:- => "subtraction",
             )
@@ -381,7 +381,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     lines = []
     # These functions are special cased to only show if first argument is matched.
     special = f === convert || f === getindex || f === setindex!
-    funcs = Any[(f, arg_types_param)]
+    funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
 
     # An incorrect call method produces a MethodError for convert.
     # It also happens that users type convert when they mean call. So
