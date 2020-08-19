@@ -550,7 +550,7 @@ STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
     uintptr_t safepoint_addr = (uintptr_t)jl_safepoint_pages;
     return addr >= safepoint_addr && addr < safepoint_addr + jl_page_size * 3;
 }
-extern volatile uint32_t jl_gc_running;
+extern uint32_t jl_gc_running;
 // All the functions are safe to be called from within a signal handler
 // provided that the thread will not be interrupted by another asynchronous
 // signal.
@@ -594,7 +594,7 @@ static inline void jl_set_gc_and_wait(void)
     jl_ptls_t ptls = jl_get_ptls_states();
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
-    int8_t state = jl_gc_state(ptls);
+    int8_t state = ptls->gc_state;
     jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
     jl_safepoint_wait_gc();
     jl_atomic_store_release(&ptls->gc_state, state);

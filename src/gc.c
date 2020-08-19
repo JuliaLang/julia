@@ -193,17 +193,16 @@ static void jl_gc_wait_for_the_world(void)
 {
     if (jl_n_threads > 1)
         jl_wake_libuv();
-    for (int i = 0;i < jl_n_threads;i++) {
+    for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        // FIXME: The acquire load pairs with the release stores
+        // This acquire load pairs with the release stores
         // in the signal handler of safepoint so we are sure that
-        // all the stores on those threads are visible. However,
-        // we're currently not using atomic stores in mutator threads.
-        // We should either use atomic store release there too or use signals
-        // to flush the memory operations on those threads.
-        while (!ptls2->gc_state || !jl_atomic_load_acquire(&ptls2->gc_state)) {
+        // all the stores on those threads are visible.
+        // We're currently also using atomic store release in mutator threads
+        // (in jl_gc_state_set), but we may want to use signals to flush the
+        // memory operations on those threads lazily instead.
+        while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state))
             jl_cpu_pause(); // yield?
-        }
     }
 }
 
@@ -482,7 +481,7 @@ JL_DLLEXPORT void jl_finalize_th(jl_ptls_t ptls, jl_value_t *o)
     arraylist_new(&copied_list, 0);
     // No need to check the to_finalize list since the user is apparently
     // still holding a reference to the object
-    for (int i = 0;i < jl_n_threads;i++) {
+    for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         finalize_object(&ptls2->finalizers, o, &copied_list, ptls != ptls2);
     }
@@ -3084,8 +3083,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     }
     gc_debug_print();
 
-    int8_t old_state = jl_gc_state(ptls);
-    ptls->gc_state = JL_GC_STATE_WAITING;
+    int8_t old_state = ptls->gc_state;
+    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
     // `jl_safepoint_start_gc()` makes sure only one thread can
     // run the GC.
     if (!jl_safepoint_start_gc()) {

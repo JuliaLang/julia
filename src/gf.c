@@ -334,7 +334,7 @@ JL_DLLEXPORT jl_value_t *jl_call_in_typeinf_world(jl_value_t **args, int nargs)
 
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
 {
-    jl_code_instance_t *codeinst = mi->cache;
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         if (codeinst->min_world <= min_world && max_world <= codeinst->max_world) {
             jl_value_t *code = codeinst->inferred;
@@ -351,7 +351,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world)
 {
-    jl_code_instance_t *codeinst = mi->cache;
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         if (codeinst->min_world == min_world &&
             codeinst->max_world == max_world &&
@@ -377,7 +377,6 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     assert(min_world <= max_world && "attempting to set invalid world constraints");
     jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_gc_alloc(ptls, sizeof(jl_code_instance_t),
             jl_code_instance_type);
-    JL_GC_PUSH1(&codeinst);
     codeinst->def = mi;
     codeinst->min_world = min_world;
     codeinst->max_world = max_world;
@@ -388,15 +387,14 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         inferred_const = NULL;
     codeinst->rettype_const = inferred_const;
     codeinst->invoke = NULL;
+    codeinst->specptr.fptr = NULL;
     if ((const_flags & 1) != 0) {
         assert(const_flags & 2);
-        jl_atomic_store_release(&codeinst->invoke, jl_fptr_const_return);
+        codeinst->invoke = jl_fptr_const_return;
     }
-    codeinst->specptr.fptr = NULL;
     codeinst->isspecsig = 0;
     codeinst->precompile = 0;
     codeinst->next = NULL;
-    JL_GC_POP();
     return codeinst;
 }
 
@@ -1159,7 +1157,7 @@ static jl_method_instance_t *cache_method(
         jl_typemap_entry_t *old = (jl_typemap_entry_t*)jl_eqtable_get(mt->leafcache, (jl_value_t*)tt, jl_nothing);
         newentry->next = old;
         jl_gc_wb(newentry, old);
-        mt->leafcache = jl_eqtable_put(mt->leafcache, (jl_value_t*)tt, (jl_value_t*)newentry, NULL);
+        jl_atomic_store_release(&mt->leafcache, jl_eqtable_put(mt->leafcache, (jl_value_t*)tt, (jl_value_t*)newentry, NULL));
         jl_gc_wb(mt, mt->leafcache);
     }
     else {
@@ -1177,7 +1175,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
     // caller must hold the mt->writelock
     assert(tt->isdispatchtuple || tt->hasfreetypevars);
     if (tt->isdispatchtuple) {
-        jl_array_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
+        jl_array_t *leafcache = mt->leafcache;
         jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
         if (entry)
             return entry->func.linfo;
@@ -1773,7 +1771,8 @@ jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t w
 {
     assert(nargs > 0 && "expected caller to handle this case");
     jl_methtable_t *mt = jl_gf_mtable(args[0]);
-    jl_typemap_entry_t *entry = jl_typemap_assoc_exact(mt->cache, args[0], &args[1], nargs, jl_cachearg_offset(mt), world);
+    jl_typemap_t *cache = jl_atomic_load_relaxed(&mt->cache); // XXX: gc root for this?
+    jl_typemap_entry_t *entry = jl_typemap_assoc_exact(cache, args[0], &args[1], nargs, jl_cachearg_offset(mt), world);
     if (entry)
         return entry->func.linfo;
     jl_tupletype_t *tt = arg_type_tuple(args[0], &args[1], nargs);
@@ -1833,12 +1832,11 @@ jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPA
 
 jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 {
-    jl_code_instance_t *codeinst;
-    codeinst = mi->cache;
-
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
-        if (codeinst->min_world <= world && world <= codeinst->max_world && codeinst->invoke != NULL) {
-            return codeinst;
+        if (codeinst->min_world <= world && world <= codeinst->max_world) {
+            if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
+                return codeinst;
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
@@ -1856,15 +1854,15 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         // copy fptr from the template method definition
         jl_method_t *def = mi->def.method;
         if (jl_is_method(def) && def->unspecialized) {
-            jl_code_instance_t *unspec = def->unspecialized->cache;
-            if (unspec && unspec->invoke != NULL) {
+            jl_code_instance_t *unspec = jl_atomic_load_relaxed(&def->unspecialized->cache);
+            if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
                 jl_code_instance_t *codeinst = jl_new_codeinst(mi,
                     (jl_value_t*)jl_any_type, NULL, NULL,
                     0, 1, ~(size_t)0);
                 codeinst->isspecsig = 0;
                 codeinst->specptr = unspec->specptr;
                 codeinst->rettype_const = unspec->rettype_const;
-                jl_atomic_store_release(&codeinst->invoke, unspec->invoke);
+                codeinst->invoke = unspec->invoke;
                 jl_mi_cache_insert(mi, codeinst);
                 return codeinst;
             }
@@ -1874,7 +1872,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             jl_code_instance_t *codeinst = jl_new_codeinst(mi,
                 (jl_value_t*)jl_any_type, NULL, NULL,
                 0, 1, ~(size_t)0);
-            jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
+            codeinst->invoke = jl_fptr_interpret_call;
             jl_mi_cache_insert(mi, codeinst);
             return codeinst;
         }
@@ -1890,10 +1888,12 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_method_instance_t *unspec = jl_get_unspecialized(mi);
         jl_code_instance_t *ucache = jl_get_method_inferred(unspec, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
         // ask codegen to make the fptr for unspec
-        if (ucache->invoke == NULL)
+        if (jl_atomic_load_relaxed(&ucache->invoke) == NULL)
             jl_generate_fptr_for_unspecialized(ucache);
-        if (ucache->invoke != jl_fptr_sparam &&
-            ucache->invoke != jl_fptr_interpret_call) {
+        assert(jl_atomic_load_relaxed(&ucache->invoke) != NULL);
+        if (jl_atomic_load_relaxed(&ucache->invoke) != jl_fptr_sparam &&
+            jl_atomic_load_relaxed(&ucache->invoke) != jl_fptr_interpret_call) {
+            // only these care about the exact specTypes, otherwise we can use it directly
             return ucache;
         }
         codeinst = jl_new_codeinst(mi, (jl_value_t*)jl_any_type, NULL, NULL,
@@ -1901,10 +1901,10 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         codeinst->isspecsig = 0;
         codeinst->specptr = ucache->specptr;
         codeinst->rettype_const = ucache->rettype_const;
-        jl_atomic_store_release(&codeinst->invoke, ucache->invoke);
+        codeinst->invoke = ucache->invoke;
         jl_mi_cache_insert(mi, codeinst);
     }
-    codeinst->precompile = 1;
+    jl_atomic_store_relaxed(&codeinst->precompile, 1);
     return codeinst;
 }
 
@@ -1916,20 +1916,28 @@ JL_DLLEXPORT jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, 
 
 JL_DLLEXPORT jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
-    return m->specptr.fptr1(f, args, nargs);
+    while (1) {
+        jl_fptr_args_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr1);
+        if (invoke)
+            return invoke(f, args, nargs);
+    }
 }
 
 JL_DLLEXPORT jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     jl_svec_t *sparams = m->def->sparam_vals;
     assert(sparams != jl_emptysvec);
-    return m->specptr.fptr3(f, args, nargs, sparams);
+    while (1) {
+        jl_fptr_sparam_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr3);
+        if (invoke)
+            return invoke(f, args, nargs, sparams);
+    }
 }
 
 // Return the index of the invoke api, if known
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *codeinst)
 {
-    jl_callptr_t f = codeinst->invoke;
+    jl_callptr_t f = jl_atomic_load_relaxed(&codeinst->invoke);
     if (f == NULL)
         return 0;
     if (f == &jl_fptr_args)
@@ -2011,23 +2019,15 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES
 
 static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
 {
-    int generating_llvm = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
-    // If we are saving ji files (e.g. package pre-compilation or intermediate sysimg build steps),
-    // don't bother generating anything since it won't be saved.
-    if (jl_rettype_inferred(mi, world, world) == jl_nothing)
+    jl_value_t *codeinst = jl_rettype_inferred(mi, world, world);
+    if (codeinst == jl_nothing) {
         (void)jl_type_infer(mi, world, 1);
-    // If we are saving ji files (e.g. package pre-compilation or intermediate sysimg build steps),
-    // don't bother generating output in the current environment
-    if (generating_llvm) {
-        jl_value_t *codeinst = jl_rettype_inferred(mi, world, world);
-        if (codeinst != jl_nothing) {
-            if (((jl_code_instance_t*)codeinst)->invoke == jl_fptr_const_return)
-                return; // probably not a good idea to generate code
-            ((jl_code_instance_t*)codeinst)->precompile = 1;
-        }
-        // If we are saving LLVM or native code, generate the LLVM IR so that it'll
-        // be included in the saved LLVM module.
-        // TODO: compilation is now stateless
+        codeinst = jl_rettype_inferred(mi, world, world);
+    }
+    if (codeinst != jl_nothing) {
+        if (jl_atomic_load_relaxed(&((jl_code_instance_t*)codeinst)->invoke) == jl_fptr_const_return)
+            return; // probably not a good idea to generate code
+        jl_atomic_store_relaxed(&((jl_code_instance_t*)codeinst)->precompile, 1);
     }
 }
 
@@ -2127,11 +2127,14 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
 STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world)
 {
     // manually inlined copy of jl_method_compiled
-    jl_code_instance_t *codeinst = mfunc->cache;
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mfunc->cache);
     while (codeinst) {
-        if (codeinst->min_world <= world && world <= codeinst->max_world && codeinst->invoke != NULL) {
-            jl_value_t *res = codeinst->invoke(F, args, nargs, codeinst);
-            return verify_type(res);
+        if (codeinst->min_world <= world && world <= codeinst->max_world) {
+            jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+            if (invoke != NULL) {
+                jl_value_t *res = invoke(F, args, nargs, codeinst);
+                return verify_type(res);
+            }
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
@@ -2147,7 +2150,8 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
     errno = last_errno;
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
-    jl_value_t *res = codeinst->invoke(F, args, nargs, codeinst);
+    jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+    jl_value_t *res = invoke(F, args, nargs, codeinst);
     return verify_type(res);
 }
 
@@ -2186,11 +2190,9 @@ void call_cache_stats()
     int pick_which_stat[4] = {0, 0, 0, 0};
     int i, count = 0;
     for (i = 0; i < N_CALL_CACHE; i++) {
-        if (call_cache[i])
+        if (jl_atomic_load_relaxed(&call_cache[i]))
             count++;
-    }
-    for (i = 0; i < N_CALL_CACHE; i++) {
-        ++pick_which_stat[pick_which[i] & 3];
+        ++pick_which_stat[jl_atomic_load_relaxed(&pick_which[i]) & 3];
     }
     jl_safe_printf("cache occupied: %d / %d; pick_which stats: {%d, %d, %d, %d}\n",
             count, N_CALL_CACHE,
@@ -2241,7 +2243,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     //}
 #define LOOP_BODY(_i) do { \
             i = _i; \
-            entry = call_cache[cache_idx[i]]; \
+            entry = jl_atomic_load_relaxed(&call_cache[cache_idx[i]]); \
             if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
                 sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
                 world >= entry->min_world && world <= entry->max_world) { \
@@ -2262,14 +2264,16 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         mt = jl_gf_mtable(F);
         jl_array_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
         entry = NULL;
-        if (leafcache != (jl_array_t*)jl_an_empty_vec_any && jl_typeis(mt->cache, jl_typemap_level_type)) {
+        if (leafcache != (jl_array_t*)jl_an_empty_vec_any &&
+                jl_typeis(jl_atomic_load_relaxed(&mt->cache), jl_typemap_level_type)) {
             // hashing args is expensive, but looking at mt->cache is probably even more expensive
             tt = lookup_arg_type_tuple(F, args, nargs);
             if (tt != NULL)
                 entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
         }
         if (entry == NULL) {
-            entry = jl_typemap_assoc_exact(mt->cache, F, args, nargs, jl_cachearg_offset(mt), world);
+            jl_typemap_t *cache = jl_atomic_load_relaxed(&mt->cache); // XXX: gc root required?
+            entry = jl_typemap_assoc_exact(cache, F, args, nargs, jl_cachearg_offset(mt), world);
             if (entry == NULL) {
                 last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
                 if (tt == NULL) {
@@ -2281,7 +2285,11 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
             // put the entry into the cache if it's valid for a leafsig lookup,
             // using pick_which to slightly randomize where it ends up
-            call_cache[cache_idx[++pick_which[cache_idx[0]] & 3]] = entry;
+            // (intentionally not atomically synchronized, since we're just using it for randomness)
+            // TODO: use the thread's `cong` instead as a source of randomness
+            int which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
+            jl_atomic_store_relaxed(&pick_which[cache_idx[0]], which);
+            jl_atomic_store_release(&call_cache[cache_idx[which & 3]], entry);
         }
     }
 
@@ -2641,7 +2649,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
     }
     // then check the full cache if it seems profitable
     if (((jl_datatype_t*)unw)->isdispatchtuple) {
-        jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->cache, &search, jl_cachearg_offset(mt), /*subtype*/1);
+        jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->cache), &search, jl_cachearg_offset(mt), /*subtype*/1);
         if (entry && (((jl_datatype_t*)unw)->isdispatchtuple || entry->guardsigs == jl_emptysvec)) {
             jl_method_instance_t *mi = entry->func.linfo;
             jl_method_t *meth = mi->def.method;
@@ -3010,7 +3018,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
             env.matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, 0);
             jl_method_t *meth = env.matc->method;
             jl_svec_t *tpenv = env.matc->sparams;
+            JL_LOCK(&mt->writelock);
             cache_method(mt, &mt->cache, (jl_value_t*)mt, type, meth, world, env.min_valid, env.max_valid, tpenv);
+            JL_UNLOCK(&mt->writelock);
         }
     }
     JL_GC_POP();
