@@ -1481,6 +1481,71 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ctx.builder.SetInsertPoint(contBB);
         return ghostValue(jl_nothing_type);
     }
+    else if (is_libjulia_func(jl_svec_len)) {
+        assert(!isVa && !llvmcall && nccallargs == 1);
+        const jl_cgval_t &svecv = argv[0];
+        Value *len;
+        if (svecv.constant && svecv.typ == (jl_value_t*)jl_simplevector_type) {
+            // Check the type as well before we call
+            len = ConstantInt::get(T_size, jl_svec_len(svecv.constant));
+        }
+        else {
+            auto ptr = emit_bitcast(ctx, boxed(ctx, svecv), T_psize);
+            len = ctx.builder.CreateAlignedLoad(T_size, ptr, Align(sizeof(size_t)));
+            // Only mark with TBAA if we are sure about the type.
+            // This could otherwise be in a dead branch
+            if (svecv.typ == (jl_value_t*)jl_simplevector_type)
+                tbaa_decorate(tbaa_const, cast<Instruction>(len));
+            MDBuilder MDB(jl_LLVMContext);
+            auto rng = MDB.createRange(
+                V_size0, ConstantInt::get(T_size, INTPTR_MAX / sizeof(void*) - 1));
+            cast<LoadInst>(len)->setMetadata(LLVMContext::MD_range, rng);
+        }
+        JL_GC_POP();
+        return mark_or_box_ccall_result(ctx, len, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_svec_isassigned) &&
+             argv[1].typ == (jl_value_t*)jl_long_type) {
+        assert(!isVa && !llvmcall && nccallargs == 2);
+        const jl_cgval_t &svecv = argv[0];
+        const jl_cgval_t &idxv = argv[1];
+        Value *idx = emit_unbox(ctx, T_size, idxv, (jl_value_t*)jl_long_type);
+        idx = ctx.builder.CreateAdd(idx, ConstantInt::get(T_size, 1));
+        auto ptr = emit_bitcast(ctx, boxed(ctx, svecv), T_pprjlvalue);
+        Value *slot_addr = ctx.builder.CreateInBoundsGEP(T_prjlvalue,
+                                                         decay_derived(ctx, ptr), idx);
+        LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, slot_addr,
+                                                       Align(sizeof(void*)));
+        load->setAtomic(AtomicOrdering::Unordered);
+        // Only mark with TBAA if we are sure about the type.
+        // This could otherwise be in a dead branch
+        if (svecv.typ == (jl_value_t*)jl_simplevector_type)
+            tbaa_decorate(tbaa_const, load);
+        Value *res = ctx.builder.CreateZExt(ctx.builder.CreateICmpNE(load, V_rnull), T_int8);
+        JL_GC_POP();
+        return mark_or_box_ccall_result(ctx, res, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_svec_ref) && argv[1].typ == (jl_value_t*)jl_long_type) {
+        assert(lrt == T_prjlvalue);
+        assert(!isVa && !llvmcall && nccallargs == 2);
+        const jl_cgval_t &svecv = argv[0];
+        const jl_cgval_t &idxv = argv[1];
+        Value *idx = emit_unbox(ctx, T_size, idxv, (jl_value_t*)jl_long_type);
+        idx = ctx.builder.CreateAdd(idx, ConstantInt::get(T_size, 1));
+        auto ptr = emit_bitcast(ctx, boxed(ctx, svecv), T_pprjlvalue);
+        Value *slot_addr = ctx.builder.CreateInBoundsGEP(T_prjlvalue,
+                                                         decay_derived(ctx, ptr), idx);
+        LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, slot_addr,
+                                                       Align(sizeof(void*)));
+        load->setAtomic(AtomicOrdering::Unordered);
+        // Only mark with TBAA if we are sure about the type.
+        // This could otherwise be in a dead branch
+        if (svecv.typ == (jl_value_t*)jl_simplevector_type)
+            tbaa_decorate(tbaa_const, load);
+        null_pointer_check(ctx, load);
+        JL_GC_POP();
+        return mark_or_box_ccall_result(ctx, load, retboxed, rt, unionall, static_rt);
+    }
     else if (is_libjulia_func(jl_array_isassigned) &&
              argv[1].typ == (jl_value_t*)jl_ulong_type) {
         assert(!isVa && !llvmcall && nccallargs == 2);

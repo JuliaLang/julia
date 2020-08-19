@@ -3046,9 +3046,20 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         jl_datatype_t *sty = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
         assert(jl_string_type->mutabl);
         if (sty == jl_string_type || sty == jl_simplevector_type) {
+            if (obj.constant) {
+                size_t sz;
+                if (sty == jl_string_type) {
+                    sz = jl_string_len(obj.constant);
+                }
+                else {
+                    sz = (1 + jl_svec_len(obj.constant)) * sizeof(void*);
+                }
+                *ret = mark_julia_type(ctx, ConstantInt::get(T_size, sz), false, jl_long_type);
+                return true;
+            }
             // String and SimpleVector's length fields have the same layout
             auto ptr = emit_bitcast(ctx, boxed(ctx, obj), T_psize);
-            Value *len = tbaa_decorate(tbaa_mutab, ctx.builder.CreateAlignedLoad(T_size, ptr, Align(sizeof(size_t))));
+            Value *len = tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_size, ptr, Align(sizeof(size_t))));
             MDBuilder MDB(jl_LLVMContext);
             if (sty == jl_simplevector_type) {
                 auto rng = MDB.createRange(
