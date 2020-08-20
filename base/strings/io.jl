@@ -157,7 +157,7 @@ end
 """
     string(xs...)
 
-Create a string from any values, except `nothing`, using the [`print`](@ref) function.
+Create a string from any values using the [`print`](@ref) function.
 
 `string` should usually not be defined directly. Instead, define a method
 `print(io::IO, x::MyType)`. If `string(x)` for a certain type needs to be
