@@ -510,7 +510,12 @@ end
 with_methodtable_hint(f, repl) = f(outstream(repl))
 function with_methodtable_hint(f, repl::LineEditREPL)
     linfos = Tuple{String,Int}[]
-    io = IOContext(outstream(repl), :last_shown_line_infos => linfos)
+    out = outstream(repl)
+    # This avoids compiling a lot of IO for TTYTerminal
+    if out isa TTYTerminal
+        out = out.out_stream
+    end
+    io = IOContext(out, :last_shown_line_infos => linfos)
     f(io)
     if !isempty(linfos)
         repl.last_shown_line_infos = linfos
