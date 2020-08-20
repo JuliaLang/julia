@@ -213,9 +213,10 @@ prevented. This is shown in the following example:
         Function Definition
     =#
 end
-
-If the function is trivial (for example returning a constant) it might get inlined anyway.
 ```
+
+!!! note
+    If the function is trivial (for example returning a constant) it might get inlined anyway.
 """
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
