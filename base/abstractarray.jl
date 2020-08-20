@@ -350,6 +350,9 @@ Get the first element of `coll` satisfying `predicate` wrapped in [`Some`](@ref)
 
 If no element of `coll` satisfies `predicate`, return `nothing`.
 
+!!! compat "Julia 1.6"
+    This method was added in Julia 1.6.
+
 # Examples
 ```jldoctest
 julia> first(>(5), 1:10)
@@ -424,6 +427,9 @@ Get the last element of `coll` satisfying `predicate` wrapped in [`Some`](@ref).
 
 If no element of `coll` satisfies `predicate`, return `nothing`.
 
+!!! compat "Julia 1.6"
+    This method was added in Julia 1.6.
+    
 # Examples
 ```jldoctest
 julia> last(<(5), 1:10)
