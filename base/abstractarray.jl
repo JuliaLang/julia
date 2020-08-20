@@ -346,7 +346,7 @@ end
 """
     first(predicate, coll)
 
-Get the first element of `coll` satisfying `predicate` wrapped in `Some`.
+Get the first element of `coll` satisfying `predicate` wrapped in [`Some`](@ref).
 
 If no element of `coll` satisfies `predicate`, return `nothing`.
 
@@ -355,10 +355,10 @@ If no element of `coll` satisfies `predicate`, return `nothing`.
 julia> first(>(5), 1:10)
 Some(6)
 
-julia> first(isodd, 2:2:10) |> isnothing
+julia> isnothing(first(isodd, 2:2:10))
 true
 
-julia> first(iseven, [5; 3; 4; 2; 6; 8]) |> something
+julia> something(first(iseven, [5, 3, 4, 2, 6, 8]))
 4
 
 julia> something(first(>(10), 1:10), 0)
@@ -420,7 +420,7 @@ last(a) = a[end]
 """
     last(predicate, coll)
 
-Get the last element of `coll` satisfying `predicate` wrapped in `Some`.
+Get the last element of `coll` satisfying `predicate` wrapped in [`Some`](@ref).
 
 If no element of `coll` satisfies `predicate`, return `nothing`.
 
@@ -429,10 +429,10 @@ If no element of `coll` satisfies `predicate`, return `nothing`.
 julia> last(<(5), 1:10)
 Some(4)
 
-julia> last(isodd, 2:2:10) |> isnothing
+julia> isnothing(last(isodd, 2:2:10))
 true
 
-julia> last(iseven, [5; 3; 4; 2; 6; 9]) |> something
+julia> something(last(iseven, [5; 3; 4; 2; 6; 9]))
 6
 
 julia> something(last(>(10), 1:10), 0)
