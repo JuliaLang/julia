@@ -40,11 +40,13 @@ return `false`.
 
 Each successful `trylock` must be matched by an [`unlock`](@ref).
 """
-function trylock(rl::ReentrantLock)
+function trylock(rl::ReentrantLock; reentrant::Bool=true)
     t = current_task()
     if t === rl.locked_by
-        rl.reentrancy_cnt += 1
-        return true
+        if reentrant
+            rl.reentrancy_cnt += 1
+        end
+        return reentrant
     end
     lock(rl.cond_wait)
     if rl.reentrancy_cnt == 0
