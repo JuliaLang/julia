@@ -95,6 +95,13 @@ typedef Instruction TerminatorInst;
 #include "processor.h"
 #include "julia_assert.h"
 
+JL_STREAM *dump_emitted_mi_name_stream = NULL;
+extern "C" JL_DLLEXPORT
+void jl_dump_emitted_mi_name(void *s)
+{
+    dump_emitted_mi_name_stream = (JL_STREAM*)s;
+}
+
 extern "C" {
 
 #include "builtin_proto.h"
@@ -7149,6 +7156,16 @@ jl_compile_result_t jl_emit_code(
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
         std::tie(m, decls) = emit_function(li, src, jlrettype, params);
+        if (dump_emitted_mi_name_stream != NULL) {
+            jl_printf(dump_emitted_mi_name_stream, "%s\t", decls.specFunctionObject.c_str());
+            // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
+            // break CSV parsing if there are any internal quotes in the Type name (e.g. in
+            // Symbol("...")). The \t delineator should be enough to ensure whitespace is
+            // handled correctly. (And we don't need to worry about any tabs in the printed
+            // string, because tabs are printed as "\t" by `show`.)
+            jl_static_show(dump_emitted_mi_name_stream, li->specTypes);
+            jl_printf(dump_emitted_mi_name_stream, "\n");
+        }
     }
     JL_CATCH {
         // Something failed! This is very, very bad.

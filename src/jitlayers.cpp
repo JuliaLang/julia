@@ -38,6 +38,12 @@ void jl_dump_compiles(void *s)
 {
     dump_compiles_stream = (JL_STREAM*)s;
 }
+JL_STREAM *dump_llvm_opt_stream = NULL;
+extern "C" JL_DLLEXPORT
+void jl_dump_llvm_opt(void *s)
+{
+    dump_llvm_opt_stream = (JL_STREAM*)s;
+}
 
 static void jl_add_to_ee(std::unique_ptr<Module> m);
 static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
@@ -523,7 +529,36 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
 
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
+    uint64_t start_time = 0;
+    if (dump_llvm_opt_stream != NULL) {
+        // Print LLVM function statistics _before_ optimization
+        // Print all the information about this invocation as a YAML object
+        jl_printf(dump_llvm_opt_stream, "- \n");
+        // We print the name and some statistics for each function in the module, both
+        // before optimization and again afterwards.
+        jl_printf(dump_llvm_opt_stream, "  before: \n");
+        for (auto &F : M.functions()) {
+            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                continue;
+            }
+            // Count number of Basic Blocks
+            int bbs = 0;
+            for (auto &B : F.getBasicBlockList()) {
+                std::ignore = B;
+                ++bbs;
+            }
+
+            // Each function is printed as a YAML object with several attributes
+            jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
+            jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+        }
+
+        start_time = jl_hrtime();
+    }
+
     JL_TIMING(LLVM_OPT);
+
     int optlevel;
     if (jl_generating_output()) {
         optlevel = 0;
@@ -563,6 +598,32 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
         OS.flush();
         llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
                                  "The module's content was printed above. Please file a bug report");
+    }
+
+    uint64_t end_time = 0;
+    if (dump_llvm_opt_stream != NULL) {
+        end_time = jl_hrtime();
+        jl_printf(dump_llvm_opt_stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
+        jl_printf(dump_llvm_opt_stream, "  optlevel: %d\n", optlevel);
+
+        // Print LLVM function statistics _after_ optimization
+        jl_printf(dump_llvm_opt_stream, "  after: \n");
+        for (auto &F : M.functions()) {
+            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                continue;
+            }
+
+            // Count number of Basic Blocks
+            int bbs = 0;
+            for (auto &B : F.getBasicBlockList()) {
+                std::ignore = B;
+                ++bbs;
+            }
+
+            jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
+            jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+        }
     }
 
     return CompilerResultT(std::move(ObjBuffer));
