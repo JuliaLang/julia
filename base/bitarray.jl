@@ -601,9 +601,11 @@ end
 
 gen_bitarray(::IsInfinite, itr) =  throw(ArgumentError("infinite-size iterable used in BitArray constructor"))
 
-gen_bitarrayN(::Type{BitVector}, itsz, itr) = gen_bitarray(itsz, itr)
-gen_bitarrayN(::Type{BitVector}, itsz::HasShape{1}, itr) where N = gen_bitarray(itsz, itr)
+gen_bitarrayN(::Type{BitVector}, itsz, itr)                        = gen_bitarray(itsz, itr)
+gen_bitarrayN(::Type{BitVector}, itsz::HasShape{1}, itr)           = gen_bitarray(itsz, itr)
 gen_bitarrayN(::Type{BitArray{N}}, itsz::HasShape{N}, itr) where N = gen_bitarray(itsz, itr)
+# The first of these is just for ambiguity resolution
+gen_bitarrayN(::Type{BitVector}, itsz::HasShape{N}, itr) where N      = throw(DimensionMismatch("cannot create a $T from a $N-dimensional iterator"))
 gen_bitarrayN(@nospecialize(T::Type), itsz::HasShape{N}, itr) where N = throw(DimensionMismatch("cannot create a $T from a $N-dimensional iterator"))
 gen_bitarrayN(@nospecialize(T::Type), itsz, itr) = throw(DimensionMismatch("cannot create a $T from a generic iterator"))
 
