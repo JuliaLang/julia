@@ -1237,11 +1237,9 @@ static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t 
         else
             va = NULL;
     }
-    struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va}};
-    env.match.ti = NULL;
-    env.match.env = jl_emptysvec;
-    env.newentry = newentry;
-    env.shadowed = NULL;
+    struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va,
+            /* .ti = */ NULL, /* .env = */ jl_emptysvec, /* .issubty = */ 0},
+        /* .newentry = */ newentry, /* .shadowed */ NULL};
     JL_GC_PUSH3(&env.match.env, &env.match.ti, &env.shadowed);
     jl_typemap_intersection_visitor(defs, 0, &env.match);
     JL_GC_POP();
@@ -2603,13 +2601,10 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         else
             va = NULL;
     }
-    struct ml_matches_env env = {{ml_matches_visitor, (jl_value_t*)type, va}, intersections, world, lim};
-    env.match.ti = NULL;
-    env.match.env = jl_emptysvec;
-    env.t = jl_an_empty_vec_any;
-    env.matc = NULL;
-    env.min_valid = *min_valid;
-    env.max_valid = *max_valid;
+    struct ml_matches_env env = {{ml_matches_visitor, (jl_value_t*)type, va,
+            /* .ti = */ NULL, /* .env = */ jl_emptysvec, /* .issubty = */ 0},
+        intersections, world, lim, /* .t = */ jl_an_empty_vec_any,
+        /* .min_valid = */ *min_valid, /* .max_valid = */ *max_valid, /* .matc = */ NULL};
     struct jl_typemap_assoc search = {(jl_value_t*)type, world, jl_emptysvec, 1, ~(size_t)0};
     JL_GC_PUSH5(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti);
 
