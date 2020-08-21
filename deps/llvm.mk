@@ -447,6 +447,18 @@ $(eval $(call LLVM_PATCH,llvm-10.0-PPC-LI-Elimination)) # delete for LLVM 11
 $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 endif # LLVM_VER 10.0
 
+ifeq ($(LLVM_VER_SHORT),11.0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+#$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
+endif # LLVM_VER 11.0
+
+
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)
 $(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))

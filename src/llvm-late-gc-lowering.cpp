@@ -16,7 +16,9 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
+#if JL_LLVM_VERSION < 110000
 #include <llvm/IR/CallSite.h>
+#endif
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
@@ -1571,7 +1573,7 @@ static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> 
         Value *GEP = irbuilder.CreateInBoundsGEP(VTy, V, IdxList);
         Type *T = GetElementPtrInst::getIndexedType(VTy, IdxList);
         assert(T->isPointerTy());
-        V = irbuilder.CreateAlignedLoad(T, GEP, sizeof(void*));
+        V = irbuilder.CreateAlignedLoad(T, GEP, Align(sizeof(void*)));
         // since we're doing stack operations, it should be safe do this non-atomically
         cast<LoadInst>(V)->setOrdering(AtomicOrdering::NotAtomic);
     }
@@ -1650,7 +1652,7 @@ unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilde
         Value *Elem = Ptrs[i];
         assert(Elem->getType()->isPointerTy());
         Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(Elem->getType(), Dst, i);
-        StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, sizeof(void*));
+        StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
         shadowStore->setOrdering(AtomicOrdering::NotAtomic);
         // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     }
@@ -2024,7 +2026,7 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Value *V)
 {
     auto addr = EmitTagPtr(builder, T_size, V);
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, sizeof(size_t));
+    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, Align(sizeof(size_t)));
     load->setOrdering(AtomicOrdering::Unordered);
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
@@ -2117,7 +2119,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 continue;
             }
             CallingConv::ID CC = CI->getCallingConv();
-            auto callee = CI->getCalledValue();
+            Value *callee = CI->getCalledOperand();
             if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
                 /* No replacement */
@@ -2181,7 +2183,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 auto tag_type = tag->getType();
                 if (tag_type->isPointerTy()) {
                     auto &DL = CI->getModule()->getDataLayout();
-#if JL_LLVM_VERSION >= 100000
+#if JL_LLVM_VERSION >= 110000
+                    auto align = tag->getPointerAlignment(DL).value();
+#elif JL_LLVM_VERSION >= 100000
                     auto align = tag->getPointerAlignment(DL).valueOrOne().value();
 #else
                     auto align = tag->getPointerAlignment(DL);
@@ -2195,7 +2199,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 }
                 // Set the tag.
                 StoreInst *store = builder.CreateAlignedStore(
-                    tag, EmitTagPtr(builder, tag_type, newI), sizeof(size_t));
+                    tag, EmitTagPtr(builder, tag_type, newI), Align(sizeof(size_t)));
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
@@ -2247,7 +2251,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 for (; arg_it != CI->arg_end(); ++arg_it) {
                     Builder.CreateAlignedStore(*arg_it,
                             Builder.CreateInBoundsGEP(T_prjlvalue, Frame, ConstantInt::get(T_int32, slot++)),
-                            sizeof(void*));
+                            Align(sizeof(void*)));
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :

@@ -46,19 +46,20 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetRegistry.h>
-#include "llvm/Support/TargetSelect.h"
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
-#include "llvm/Support/FormattedStream.h"
+#include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/NativeFormatting.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/DebugInfo/DIContext.h>
-#include "llvm/DebugInfo/DWARF/DWARFContext.h"
+#include <llvm/DebugInfo/DWARF/DWARFContext.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
-#include "llvm/IR/AssemblyAnnotationWriter.h"
-#include "llvm/IR/LegacyPassManager.h"
+#include <llvm/IR/AssemblyAnnotationWriter.h>
+#include <llvm/IR/LegacyPassManager.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -437,7 +438,7 @@ jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_modul
     else {
         Module *m = llvmf->getParent();
         if (strip_ir_metadata) {
-            std::string llvmfn = llvmf->getName();
+            std::string llvmfn(llvmf->getName());
             jl_strip_llvm_addrspaces(m);
             jl_strip_llvm_debug(m, true, &AAW);
             // rewriting the function type creates a new function, so look it up again

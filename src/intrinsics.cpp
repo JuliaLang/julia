@@ -341,7 +341,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         Type *dest_ty = unboxed->getType()->getPointerTo();
         if (dest->getType() != dest_ty)
             dest = emit_bitcast(ctx, dest, dest_ty);
-        tbaa_decorate(tbaa_dest, ctx.builder.CreateAlignedStore(unboxed, dest, julia_alignment(jt)));
+        tbaa_decorate(tbaa_dest, ctx.builder.CreateAlignedStore(unboxed, dest, Align(julia_alignment(jt))));
         return NULL;
     }
 
@@ -387,12 +387,12 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
                     (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
                     (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
                     DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
-                Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
+                Instruction *load = ctx.builder.CreateAlignedLoad(p, Align(alignment));
                 return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
             }
         }
         p = maybe_bitcast(ctx, p, ptype);
-        Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
+        Instruction *load = ctx.builder.CreateAlignedLoad(p, Align(alignment));
         return tbaa_decorate(x.tbaa, load);
     }
 }
@@ -580,7 +580,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
         return mark_julia_type(
                 ctx,
-                ctx.builder.CreateAlignedLoad(ctx.builder.CreateInBoundsGEP(T_prjlvalue, thePtr, im1), align_nb),
+                ctx.builder.CreateAlignedLoad(ctx.builder.CreateInBoundsGEP(T_prjlvalue, thePtr, im1), Align(align_nb)),
                 true,
                 ety);
     }
@@ -655,7 +655,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         thePtr = emit_unbox(ctx, T_psize, e, e.typ);
         Instruction *store = ctx.builder.CreateAlignedStore(
           ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), T_size),
-            ctx.builder.CreateInBoundsGEP(T_size, thePtr, im1), align_nb);
+            ctx.builder.CreateInBoundsGEP(T_size, thePtr, im1), Align(align_nb));
         tbaa_decorate(tbaa_data, store);
     }
     else if (!jl_isbits(ety)) {
