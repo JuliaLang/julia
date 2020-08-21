@@ -224,7 +224,7 @@ Array{UInt8}(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
 Vector{T}(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
-Symbol(x...) = Symbol(string(x...))
+Symbol(x...) = Symbol(string(x...)::AbstractString)
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)

@@ -2743,3 +2743,4 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test !Core.Compiler.sizeof_nothrow(UnionAll)
 
 @test Base.return_types(Expr, Tuple{Vararg}) == Any[Expr]
+@test all(==(Symbol), Base.return_types(Symbol, Tuple{Vararg}))
