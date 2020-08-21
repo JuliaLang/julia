@@ -1012,6 +1012,7 @@ STATIC_INLINE jl_value_t *jl_field_type_concrete(jl_datatype_t *st JL_PROPAGATES
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->layout->nfields)
 #define jl_datatype_isinlinealloc(t) (((jl_datatype_t *)(t))->isinlinealloc)
 
+JL_DLLEXPORT void *jl_symbol_name(jl_sym_t *s);
 // inline version with strong type check to detect typos in a `->name` chain
 STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s) JL_NOTSAFEPOINT
 {
