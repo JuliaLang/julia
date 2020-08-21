@@ -36,8 +36,8 @@ jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
     else
         len = (end-n) - 1;  // extract `f` from `#f#...`
     if (is10digit(n[1]))
-        return jl_symbol_n(n, len+1);
-    return jl_symbol_n(&n[1], len);
+        return _jl_symbol(n, len+1);
+    return _jl_symbol(&n[1], len);
 }
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)

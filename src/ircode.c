@@ -924,7 +924,7 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms)
     JL_GC_PUSH1(&names);
     for (i = 0; i < len; i++) {
         size_t namelen = strlen(namestr);
-        jl_sym_t *name = jl_symbol_n(namestr, namelen);
+        jl_sym_t *name = _jl_symbol(namestr, namelen);
         jl_array_ptr_set(names, i, name);
         namestr += namelen + 1;
     }
@@ -940,7 +940,7 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i)
     while (remaining) {
         size_t namelen = strlen(namestr);
         if (i-- == 0) {
-            jl_sym_t *name = jl_symbol_n(namestr, namelen);
+            jl_sym_t *name = _jl_symbol(namestr, namelen);
             return (jl_value_t*)name;
         }
         namestr += namelen + 1;

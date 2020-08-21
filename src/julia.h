@@ -1320,7 +1320,7 @@ JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, size_t len) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_gensym(void);
-JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len);
+JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len);
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
