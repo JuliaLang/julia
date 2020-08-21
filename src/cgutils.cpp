@@ -2514,7 +2514,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
     if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
         // TODO: make this a lifetime_end & dereferencable annotation?
         ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai,
-#if JL_LLVM_VERSION >= 100000
+#if JL_LLVM_VERSION >= 110000
                 ai->getAlign()
 #else
                 ai->getAlignment()

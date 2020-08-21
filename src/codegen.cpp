@@ -3692,14 +3692,14 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             ssaslot->insertAfter(varslot);
             if (vi.isVolatile) {
                 Value *unbox = ctx.builder.CreateAlignedLoad(ssaslot->getAllocatedType(), varslot,
-#if JL_LLVM_VERSION >= 100000
+#if JL_LLVM_VERSION >= 110000
                         varslot->getAlign(),
 #else
                         varslot->getAlignment(),
 #endif
                         true);
                 ctx.builder.CreateAlignedStore(unbox, ssaslot,
-#if JL_LLVM_VERSION >= 100000
+#if JL_LLVM_VERSION >= 110000
                         ssaslot->getAlign()
 #else
                         ssaslot->getAlignment()
@@ -3710,7 +3710,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 const DataLayout &DL = jl_data_layout;
                 uint64_t sz = DL.getTypeStoreSize(T);
                 emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz,
-#if JL_LLVM_VERSION >= 100000
+#if JL_LLVM_VERSION >= 110000
                         ssaslot->getAlign().value()
 #else
                         ssaslot->getAlignment()
