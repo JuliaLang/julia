@@ -1412,7 +1412,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             end
         end
         return Any
-    elseif f === Expr
+    elseif f === Core._expr
         if length(argtypes) < 1 && !isva
             return Bottom
         end
