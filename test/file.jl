@@ -432,6 +432,13 @@ cp(newfile, c_file)
 @test_throws SystemError rm(c_tmpdir)
 @test_throws SystemError rm(c_tmpdir, force=true)
 
+# Test force-deletion of directories with children and that have no write permissions
+nw_tmpdir = mktempdir()
+touch(joinpath(nw_tmpdir, "foo"))
+chmod(nw_tmpdir, 0o555, recursive=true)
+rm(nw_tmpdir; recursive=true, force=true)
+@test !isdir(nw_tmpdir)
+
 # create temp dir in specific directory
 d_tmpdir = mktempdir(c_tmpdir)
 @test isdir(d_tmpdir)

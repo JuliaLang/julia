@@ -274,6 +274,10 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         end
     else
         if recursive
+            # If folders don't have write access, we can't remove children from them.
+            if force
+                chmod(path, filemode(path) | 0o200)
+            end
             for p in readdir(path)
                 rm(joinpath(path, p), force=force, recursive=true)
             end
