@@ -223,6 +223,7 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
 
 """
     zero(x)
+    zero(T::type)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
 
