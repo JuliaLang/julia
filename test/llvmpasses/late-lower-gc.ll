@@ -8,6 +8,7 @@ declare {}*** @julia.ptls_states()
 declare void @jl_safepoint()
 declare {} addrspace(10)* @jl_apply_generic({} addrspace(10)*, {} addrspace(10)**, i32)
 declare noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj(i8*, i64, {} addrspace(10)*)
+declare i32 @rooting_callee({} addrspace(12)*, {} addrspace(12)*)
 
 define void @gc_frame_lowering(i64 %a, i64 %b) {
 top:
@@ -72,6 +73,24 @@ top:
     %lv2 = load i64, i64 addrspace(10)* %v64, align 8, !range !0, !tbaa !4
 ; CHECK-NEXT: ret void
     ret void
+}
+
+define i32 @callee_root({} addrspace(10)* %v0, {} addrspace(10)* %v1) {
+top:
+; CHECK-LABEL: @callee_root
+; CHECK-NOT: @julia.new_gc_frame
+  %v2 = call {}*** @julia.ptls_states()
+  %v3 = bitcast {} addrspace(10)* %v0 to {} addrspace(10)* addrspace(10)*
+  %v4 = addrspacecast {} addrspace(10)* addrspace(10)* %v3 to {} addrspace(10)* addrspace(11)*
+  %v5 = load atomic {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %v4 unordered, align 8
+  %v6 = bitcast {} addrspace(10)* %v1 to {} addrspace(10)* addrspace(10)*
+  %v7 = addrspacecast {} addrspace(10)* addrspace(10)* %v6 to {} addrspace(10)* addrspace(11)*
+  %v8 = load atomic {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %v7 unordered, align 8
+  %v9 = addrspacecast {} addrspace(10)* %v5 to {} addrspace(12)*
+  %v10 = addrspacecast {} addrspace(10)* %v8 to {} addrspace(12)*
+  %v11 = call i32 @rooting_callee({} addrspace(12)* %v9, {} addrspace(12)* %v10)
+  ret i32 %v11
+; CHECK: ret i32
 }
 
 !0 = !{i64 0, i64 23}

@@ -295,6 +295,8 @@ struct State {
     // Those values that - if live out from our parent basic block - are live
     // at this safepoint.
     std::vector<std::vector<int>> LiveIfLiveOut;
+    // The set of values that are kept alive by the callee.
+    std::vector<std::vector<int>> CalleeRoots;
     // We don't bother doing liveness on Allocas that were not mem2reg'ed.
     // they just get directly sunk into the root array.
     std::vector<AllocaInst *> Allocas;
@@ -359,7 +361,7 @@ private:
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
-    void RefineLiveSet(BitVector &LS, State &S);
+    void RefineLiveSet(BitVector &LS, State &S, const std::vector<int> &CalleeRoots);
     Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V);
     Value *EmitLoadTag(IRBuilder<> &builder, Value *V);
 };
@@ -1002,7 +1004,7 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
     }
 }
 
-static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
+static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, std::vector<int> CalleeRoots) {
     int Number = ++S.MaxSafepointNumber;
     S.SafepointNumbering[CI] = Number;
     S.ReverseSafepointNumbering.push_back(CI);
@@ -1012,6 +1014,7 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
     // computation)
     S.LiveSets.push_back(BBS.UpExposedUses);
     S.LiveIfLiveOut.push_back(std::vector<int>{});
+    S.CalleeRoots.push_back(std::move(CalleeRoots));
     return Number;
 }
 
@@ -1514,7 +1517,25 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Intrinsics are never safepoints.
                     continue;
                 }
-                int SafepointNumber = NoteSafepoint(S, BBS, CI);
+                std::vector<int> CalleeRoots;
+                for (Use &U : CI->arg_operands()) {
+                    // Find all callee rooted arguments.
+                    // Record them instead of simply remove them from live values here
+                    // since they can be useful during refinment
+                    // (e.g. to remove roots of objects that are refined to these)
+                    Value *V = U;
+                    if (isa<Constant>(V) || !isa<PointerType>(V->getType()) ||
+                        getValueAddrSpace(V) != AddressSpace::CalleeRooted)
+                        continue;
+                    V = V->stripPointerCasts();
+                    if (!isTrackedValue(V))
+                        continue;
+                    auto Num = Number(S, V);
+                    if (Num < 0)
+                        continue;
+                    CalleeRoots.push_back(Num);
+                }
+                int SafepointNumber = NoteSafepoint(S, BBS, CI, std::move(CalleeRoots));
                 BBS.HasSafepoint = true;
                 BBS.TopmostSafepoint = SafepointNumber;
                 BBS.Safepoints.push_back(SafepointNumber);
@@ -1844,12 +1865,18 @@ JL_USED_FUNC static void dumpSafepointsForBBName(Function &F, State &S, const ch
     }
 }
 
-void LateLowerGCFrame::RefineLiveSet(BitVector &LS, State &S)
+void LateLowerGCFrame::RefineLiveSet(BitVector &LS, State &S, const std::vector<int> &CalleeRoots)
 {
     BitVector FullLS(S.MaxPtrNumber + 1, false);
     FullLS |= LS;
     // First expand the live set according to the refinement map
     // so that we can see all the values that are effectively live.
+    for (auto Num: CalleeRoots) {
+        // For callee rooted values, they are all kept alive at the safepoint.
+        // Make sure they are marked (even though they probably are already)
+        // so that other values can be refined to them.
+        FullLS[Num] = 1;
+    }
     bool changed;
     do {
         changed = false;
@@ -1890,6 +1917,11 @@ void LateLowerGCFrame::RefineLiveSet(BitVector &LS, State &S)
             LS[Idx] = 0;
         }
     }
+    for (auto Num: CalleeRoots) {
+        // Now unmark all values that are rooted by the callee after
+        // refining other values to them.
+        LS[Num] = 0;
+    }
 }
 
 void LateLowerGCFrame::ComputeLiveSets(State &S) {
@@ -1908,7 +1940,7 @@ void LateLowerGCFrame::ComputeLiveSets(State &S) {
             if (HasBitSet(BBS.LiveOut, Live))
                 LS[Live] = 1;
         }
-        RefineLiveSet(LS, S);
+        RefineLiveSet(LS, S, S.CalleeRoots[idx]);
         // If the function has GC preserves, figure out whether we need to
         // add in any extra live values.
         if (!S.GCPreserves.empty()) {
