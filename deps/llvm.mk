@@ -429,9 +429,9 @@ $(eval $(call LLVM_PATCH,llvm-9.0-D65174-limit-merge-stores)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm9-D71443-PPC-MC-redef-symbol)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-9.0-D78196)) # remove for 11.0
 $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
-$(eval $(call LLVM_PATCH,llvm-9.0-D85499))
-$(eval $(call LLVM_PATCH,llvm-D80101))
-$(eval $(call LLVM_PATCH,llvm-D84031))
+$(eval $(call LLVM_PATCH,llvm-9.0-D85499)) # landed as D85553
+$(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 endif # LLVM_VER 9.0
 
 ifeq ($(LLVM_VER_SHORT),10.0)
@@ -447,8 +447,11 @@ $(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-10.0-PPC_SELECT_CC)) # delete for LLVM 11
 $(eval $(call LLVM_PATCH,llvm-10.0-PPC-LI-Elimination)) # delete for LLVM 11
 $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
-$(eval $(call LLVM_PATCH,llvm-D80101))
-$(eval $(call LLVM_PATCH,llvm-D84031))
+$(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-r_aarch64_prel32)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-r_ppc_rel)) # remove for LLVM 12
 endif # LLVM_VER 10.0
 
 ifeq ($(LLVM_VER_SHORT),11.0)
@@ -460,6 +463,9 @@ $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
 #$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
+$(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
 endif # LLVM_VER 11.0
 
 
