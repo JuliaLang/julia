@@ -1318,6 +1318,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
+            assert(callee); // makes it clear for clang analyser that `callee` is not NULL
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
                 if (Intrinsic::ID id = intrinsic->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
