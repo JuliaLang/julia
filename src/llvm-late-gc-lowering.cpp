@@ -368,7 +368,7 @@ static unsigned getValueAddrSpace(Value *V) {
     return V->getType()->getPointerAddressSpace();
 }
 
-static unsigned isTrackedValue(Value *V) {
+static bool isTrackedValue(Value *V) {
     PointerType *PT = dyn_cast<PointerType>(V->getType()->getScalarType());
     return PT && PT->getAddressSpace() == AddressSpace::Tracked;
 }
@@ -1426,8 +1426,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 for (int Num : Nums) {
                                     if (Num < 0)
                                         continue;
-                                    if (Num >= 0)
-                                        args.push_back(Num);
+                                    args.push_back(Num);
                                 }
                             }
                         }
