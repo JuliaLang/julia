@@ -170,7 +170,7 @@ julia> fieldnames(Rational)
 ```
 """
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
-                           (_fieldnames(t)...,))
+                           (_fieldnames(t)...,))::Tuple{Vararg{Symbol}}
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(::Core.TypeofBottom) =
     throw(ArgumentError("The empty type does not have field names since it does not have instances."))
@@ -871,8 +871,8 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     max = UInt[typemax(UInt)]
     has_ambig = Int32[0]
     ms = _methods_by_ftype(tt, -1, world, true, min, max, has_ambig)
-    ms === false && return false
-    return MethodList(Method[m.method for m in ms], typeof(f).name.mt)
+    isa(ms, Bool) && return ms
+    return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
 end
 
 function methods(@nospecialize(f),

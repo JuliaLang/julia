@@ -520,7 +520,7 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)

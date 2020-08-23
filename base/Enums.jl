@@ -116,7 +116,7 @@ julia> instances(Fruit)
 (apple, orange, kiwi)
 ```
 """
-macro enum(T, syms...)
+macro enum(T::Union{Symbol,Expr}, syms...)
     if isempty(syms)
         throw(ArgumentError("no arguments given for Enum $T"))
     end
@@ -131,7 +131,7 @@ macro enum(T, syms...)
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    values = basetype[]
+    values = basetype[]::Vector
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
     lo = hi = 0

@@ -476,7 +476,7 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     mode_mapping::Dict{Symbol,Prompt}
     modes::Vector{Symbol}
 end
-REPLHistoryProvider(mode_mapping) =
+REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
     REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 

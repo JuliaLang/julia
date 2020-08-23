@@ -169,9 +169,10 @@ function _views(ex::Expr)
             # splat the corresponding temp var.
             I = similar(i, Any)
             for k = 1:length(i)
-                if Meta.isexpr(lhs.args[k+1], :...)
+                argk1 = lhs.args[k+1]
+                if Meta.isexpr(argk1, :...)
                     I[k] = Expr(:..., i[k])
-                    lhs.args[k+1] = lhs.args[k+1].args[1] # unsplat
+                    lhs.args[k+1] = (argk1::Expr).args[1] # unsplat
                 else
                     I[k] = i[k]
                 end
