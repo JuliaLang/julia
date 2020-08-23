@@ -1173,7 +1173,7 @@ function undot(x::Expr)
     if x.head === :.=
         Expr(:(=), x.args...)
     elseif x.head === :block # occurs in for x=..., y=...
-        Expr(:block, map(undot, x.args)...)
+        Expr(:block, mapany(undot, x.args)...)
     else
         x
     end

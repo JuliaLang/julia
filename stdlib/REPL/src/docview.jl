@@ -9,7 +9,7 @@ using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, 
 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
-using Base: with_output_color
+using Base: with_output_color, mapany
 
 import REPL
 
@@ -186,7 +186,7 @@ function doc(binding::Binding, sig::Type = Union{})
             end
         end
         # Get parsed docs and concatenate them.
-        md = catdoc(map(parsedoc, results)...)
+        md = catdoc(mapany(parsedoc, results)...)
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
             md.meta[:results] = results
@@ -391,7 +391,7 @@ function _repl(x, brief::Bool=true)
         pargs = Any[]
         for arg in x.args[2:end]
             if isexpr(arg, :parameters)
-                kwargs = map(arg.args) do kwarg
+                kwargs = mapany(arg.args) do kwarg
                     if kwarg isa Symbol
                         kwarg = :($kwarg::Any)
                     elseif isexpr(kwarg, :kw)

@@ -698,7 +698,7 @@ julia> fieldtypes(Foo)
 (Int64, String)
 ```
 """
-fieldtypes(T::Type) = ntuple(i -> fieldtype(T, i), fieldcount(T))
+fieldtypes(T::Type) = ntupleany(i -> fieldtype(T, i), fieldcount(T))
 
 # return all instances, for types that can be enumerated
 
