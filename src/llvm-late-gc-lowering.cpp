@@ -1121,17 +1121,77 @@ static bool isLoadFromImmut(LoadInst *LI)
     return false;
 }
 
-// Check if this is a load from an constant global.
-static bool isLoadFromConstGV(LoadInst *LI)
+static bool isConstGV(GlobalVariable *gv)
 {
-    // We only emit single slot GV in codegen
-    // but LLVM global merging can change the pointer operands to GEPs/bitcasts
-    if (auto gv = dyn_cast<GlobalVariable>(LI->getPointerOperand()->stripInBoundsOffsets())) {
-        MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-        if (isTBAA(TBAA, {"jtbaa_const"}) || gv->getMetadata("julia.constgv")) {
+    return gv->isConstant() || gv->getMetadata("julia.constgv");
+}
+
+static bool isLoadFromConstGV(LoadInst *LI, bool &task_local);
+static bool isLoadFromConstGV(Value *v, bool &task_local)
+{
+    v = v->stripInBoundsOffsets();
+    if (auto LI = dyn_cast<LoadInst>(v))
+        return isLoadFromConstGV(LI, task_local);
+    if (auto gv = dyn_cast<GlobalVariable>(v))
+        return isConstGV(gv);
+    // null pointer
+    if (isa<ConstantData>(v))
+        return true;
+    // literal pointers
+    if (auto CE = dyn_cast<ConstantExpr>(v))
+        return (CE->getOpcode() == Instruction::IntToPtr &&
+                isa<ConstantData>(CE->getOperand(0)));
+    if (auto SL = dyn_cast<SelectInst>(v))
+        return (isLoadFromConstGV(SL->getTrueValue(), task_local) &&
+                isLoadFromConstGV(SL->getFalseValue(), task_local));
+    if (auto Phi = dyn_cast<PHINode>(v)) {
+        auto n = Phi->getNumIncomingValues();
+        for (unsigned i = 0; i < n; ++i) {
+            if (!isLoadFromConstGV(Phi->getIncomingValue(i), task_local)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    if (auto call = dyn_cast<CallInst>(v)) {
+        auto callee = call->getCalledFunction();
+        if (callee && callee->getName() == "julia.typeof") {
+            return true;
+        }
+        if (callee && callee->getName() == "julia.ptls_states") {
+            task_local = true;
             return true;
         }
     }
+    if (isa<Argument>(v)) {
+        task_local = true;
+        return true;
+    }
+    return false;
+}
+
+// Check if this is can be traced through constant loads to an constant global
+// or otherwise globally rooted value.
+// Almost all `tbaa_const` loads satisfies this with the exception of
+// task local constants which are constant as far as the code is concerned but aren't
+// global constants. For task local constant `task_local` will be true when this function
+// returns.
+//
+// The white list implemented here and above in `isLoadFromConstGV(Value*)` should
+// cover all the cases we and LLVM generates.
+static bool isLoadFromConstGV(LoadInst *LI, bool &task_local)
+{
+    // We only emit single slot GV in codegen
+    // but LLVM global merging can change the pointer operands to GEPs/bitcasts
+    auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
+    auto gv = dyn_cast<GlobalVariable>(load_base);
+    if (isTBAA(LI->getMetadata(LLVMContext::MD_tbaa), {"jtbaa_immut", "jtbaa_const"})) {
+        if (gv)
+            return true;
+        return isLoadFromConstGV(load_base, task_local);
+    }
+    if (gv)
+        return isConstGV(gv);
     return false;
 }
 
@@ -1466,6 +1526,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 // from.
                 SmallVector<int, 1> RefinedPtr{};
                 Type *Ty = LI->getType()->getScalarType();
+                bool task_local = false;
                 if (isLoadFromImmut(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
                     RefinedPtr.push_back(Number(S, LI->getPointerOperand()));
                 } else if (LI->getType()->isPointerTy() &&
@@ -1474,10 +1535,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Loads from a jlcall argument array
                     RefinedPtr.push_back(-1);
                 }
-                else if (isLoadFromConstGV(LI)) {
+                else if (isLoadFromConstGV(LI, task_local)) {
                     // If this is a const load from a global,
                     // we know that the object is a constant as well and doesn't need rooting.
-                    RefinedPtr.push_back(-2);
+                    // If this is a task local constant, we don't need to root it within the
+                    // task but we do need to issue write barriers for when the current task dies.
+                    RefinedPtr.push_back(task_local ? -1 : -2);
                 }
                 if (!Ty->isPointerTy() || Ty->getPointerAddressSpace() != AddressSpace::Loaded) {
                     MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
@@ -1534,10 +1597,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
             } else if (auto *ASCI = dyn_cast<AddrSpaceCastInst>(&I)) {
                 if (isTrackedValue(ASCI)) {
                     SmallVector<int, 1> RefinedPtr{};
+                    bool task_local = false;
                     auto origin = ASCI->getPointerOperand()->stripPointerCasts();
                     if (auto LI = dyn_cast<LoadInst>(origin)) {
-                        if (isLoadFromConstGV(LI)) {
-                            RefinedPtr.push_back(-2);
+                        if (isLoadFromConstGV(LI, task_local)) {
+                            RefinedPtr.push_back(task_local ? -1 : -2);
                         }
                     }
                     MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints, std::move(RefinedPtr));
@@ -2170,7 +2234,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                     // a type in other branches.
                     // However, it should be safe for us to do this on const globals
                     // which should be the important cases as well.
-                    if (isLoadFromConstGV(LI) && getLoadValueAlign(LI) < 16) {
+                    bool task_local = false;
+                    if (isLoadFromConstGV(LI, task_local) && getLoadValueAlign(LI) < 16) {
                         Type *T_int64 = Type::getInt64Ty(LI->getContext());
                         auto op = ConstantAsMetadata::get(ConstantInt::get(T_int64, 16));
                         LI->setMetadata(LLVMContext::MD_align,
