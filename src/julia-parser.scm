@@ -1834,9 +1834,8 @@
             ((#\;)
              (take-token s)
              (if (eqv? (peek-token s) #\;)
-               (parser-depwarn s "Multiple semicolons in an array concatenation expression currently have
-                                  no effect, but will map to higher-dimensional concatenation in a future 
-                                  version of Julia."
+               (parser-depwarn s (string "Multiple semicolons in an array concatenation expression currently have no effect, "
+                                  "but will map to higher-dimensional concatenation in a future version of Julia.")
                                  "Please remove extra semicolons to preserve forward compatibility e.g. [1;;3] => [1;3]."))
              (set! gotnewline #f)
              (loop '() (update-outer vec outer)))
