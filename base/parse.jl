@@ -227,14 +227,16 @@ end
 end
 
 """
-    tryparse(type, str; base)
+    tryparse(type, str, default; base)
 
 Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
+Optionally you can specify a fallback value to return instead of [`nothing`](@ref).
 """
-function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
+function tryparse(::Type{T}, s::AbstractString, default = nothing; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
     # Zero base means, "figure it out"
-    tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
+    val = tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
+    isnothing(default) ? val : something(val, default)
 end
 
 function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
@@ -284,9 +286,14 @@ function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int,
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
-tryparse(::Type{Float16}, s::AbstractString) =
-    convert(Union{Float16, Nothing}, tryparse(Float32, s))
+function tryparse(::Type{T}, s::AbstractString, default = nothing) where {T<:Union{Float32,Float64}}
+    val = tryparse(T, String(s))
+    isnothing(default) ? val : something(val, default)
+end
+function tryparse(::Type{Float16}, s::AbstractString, default = nothing)
+    val = convert(Union{Float16, Nothing}, tryparse(Float32, s))
+    isnothing(default) ? val : something(val, default)
+end
 tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
     convert(Union{Float16, Nothing}, tryparse_internal(Float32, s, startpos, endpos))
 
@@ -381,5 +388,7 @@ parse(::Type{T}, s::AbstractString; kwargs...) where T<:Real =
 parse(::Type{T}, s::AbstractString) where T<:Complex =
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
 
-tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =
-    tryparse_internal(T, s, firstindex(s), lastindex(s), false)
+function tryparse(T::Type{Complex{S}}, s::AbstractString, default = nothing) where S<:Real
+    val = tryparse_internal(T, s, firstindex(s), lastindex(s), false)
+    isnothing(default) ? val : something(val, default)
+end
