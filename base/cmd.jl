@@ -11,7 +11,7 @@ struct Cmd <: AbstractCmd
     exec::Vector{String}
     ignorestatus::Bool
     flags::UInt32 # libuv process flags
-    env::Union{Array{String},Nothing}
+    env::Union{Vector{String},Nothing}
     dir::String
     Cmd(exec::Vector{String}) =
         new(exec, false, 0x00, nothing, "")
