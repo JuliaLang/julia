@@ -1024,8 +1024,8 @@ end
 function _rmprocs(pids, waitfor)
     lock(worker_lock)
     try
-        rmprocset = []
-        for p in vcat(pids...)
+        rmprocset = Union{LocalProcess, Worker}[]
+        for p in pids
             if p == 1
                 @warn "rmprocs: process 1 not removed"
             else

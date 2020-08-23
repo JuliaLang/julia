@@ -180,7 +180,7 @@ function _views(ex::Expr)
             Expr(:let,
                  Expr(:block,
                       :($a = $(_views(lhs.args[1]))),
-                      [:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...),
+                      Any[:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...),
                  Expr(first(h) == '.' ? :(.=) : :(=), :($a[$(I...)]),
                       Expr(:call, Symbol(h[1:end-1]),
                            :($maybeview($a, $(I...))),

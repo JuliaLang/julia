@@ -967,7 +967,7 @@ function setup_interface(
 
     # Canonicalize user keymap input
     if isa(extra_repl_keymap, Dict)
-        extra_repl_keymap = [extra_repl_keymap]
+        extra_repl_keymap = AnyDict[extra_repl_keymap]
     end
 
     repl_keymap = AnyDict(
