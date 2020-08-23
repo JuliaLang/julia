@@ -340,11 +340,12 @@ For users coming to Julia from R, these are some noteworthy differences:
   * There are no private functions/variables/modules/... in Julia.  Everthing is accessible
     through fully qualified paths (or relative paths, if desired).
   * `using MyNamespace::myfun` (C++) corresponds roughly to `import MyModule.myfun` (Julia).
-  * `using namespace MyNamespace` (C++) corresponds roughly to `using MyModule` (Julia) - though
-     only `export`ed symbols are made available to the calling module.
+  * `using namespace MyNamespace` (C++) corresponds roughly to `using MyModule` (Julia)
+    * In Julia, only `export`ed symbols are made available to the calling module.
+    * In C++, only elements found in the included (public) header files are made available.
   * Caveat: `import`/`using` keywords (Julia) also *load* modules (see below).
-  * Caveat: `import`/`using` (Julia) works only at the global scope level (`module`s), whereas
-    `using namespace X` (C++) works within arbitrary scopes (ex: function scope).
+  * Caveat: `import`/`using` (Julia) works only at the global scope level (`module`s)
+    * In C++, `using namespace X` works within arbitrary scopes (ex: function scope).
 
 ### Julia &hArr; C/C++: Module loading
   * When you think of a C/C++ "**library**", you are likely looking for a Julia "**package**".
@@ -353,24 +354,20 @@ For users coming to Julia from R, these are some noteworthy differences:
     * Reminder: Julia `module`s are global scopes (not necessarily "software modules").
   * **Instead of build/`make` scripts**, Julia uses "Project Environments" (sometimes called
     either "Project" or "Environment").
-    * C/C++ code typically target more conventional applications, whereas "Project Environments"
-      (Julia) provide a set of packages to experiment with particular problem spaces.
-      Julia users typically use custom "scripts" for this type of experimentation.
-    * To develop a "conventional" application/project, you can initialize its root directory
-      as a "Project Environment", and house your application-specific code/packages there.
-      This will provide good control over project dependencies, and future reproducibility.
-    * Available packages are added to a "Project Environment" with the `pkg> add` tool.
-      Note: `pkg> add` does not load said package.
+    * Build scripts are only needed for more complex applications
+      (like those needing to compile, or download C/C++ executables :) ).
+    * C/C++ code typically target more conventional applications, whereas Julia
+      "Project Environments" provide a set of packages to experiment with particular problem
+      spaces. Julia users typically use problem-specific "scripts" for this type of experimentation.
+    * To develop a "conventional" application/project in Julia, you can initialize its root directory
+      as a "Project Environment", and house application-specific code/packages there.
+      This provides good control over project dependencies, and future reproducibility.
+    * Available packages are added to a "Project Environment" with the `pkg> add` tool
+      (This does not **load** said package, however).
     * The list of available packages (direct dependencies) for a "Project Environment" are
       saved in its `Project.toml` file.
     * The *full* dependency information for a "Project Environment" is auto-generated & saved
       in its `Manifest.toml` file.
-  * **Directory-based package repositories** (Julia) can be made available by adding repository
-    paths to the `Base.LOAD_PATH` array.
-    * By default, Julia also treats the current working directory as a type of "package repository".
-    * Directory-based packages do not require using the `pkg> add` tool to be used.
-    * Directory-based package repositories are the **quickest solution** to developping local
-      libraries of "software modules".
   * Packages ("software modules") available to the "Project Environment" are loaded with
     `import` or `using`.
     * In C/C++, you `#include <moduleheader>` to get object/function delarations, and link in
@@ -378,6 +375,13 @@ For users coming to Julia from R, these are some noteworthy differences:
     * In Julia, whatever is loaded is available to *all other* loaded modules through its
       fully qualified path (no header file required).
     * Use `import SomePkg: SubModule.SubSubmodule` (Julia) to access package submodules.
+  * **Directory-based package repositories** (Julia) can be made available by adding repository
+    paths to the `Base.LOAD_PATH` array.
+    * By default, Julia also treats the current working directory as a type of "package repository".
+    * Packages from directory-based repositories do not require the `pkg> add` tool prior to
+      being loaded with `import` or `using`. They are simply available to the project.
+    * Directory-based package repositories are the **quickest solution** to developping local
+      libraries of "software modules".
 
 ### Julia &hArr; C/C++: Assembling modules
   * In C/C++, `.c`/`.cpp` files are compiled & added to a library with build/`make` scripts.
@@ -391,9 +395,9 @@ For users coming to Julia from R, these are some noteworthy differences:
     * **Do not use** `include "..."` (Julia) to load code from other "software modules"
       (use `import`/`using` instead).
     * `include "path/to/some/module.jl"` (Julia) would instantiate multiple versions of the
-      same code in different modules (creating *distinct* types (etc.) with similar names).
+      same code in different modules (creating *distinct* types (etc.) with the *same* names).
     * `include "somefile.jl"` is typically used to assemble multiple files *within the same
-      Julia package ("software module")*. It is therefore relatively straightforward to ensure
+      Julia package* ("software module"). It is therefore relatively straightforward to ensure
       file are `include`d only once (No `#ifdef` confusion).
 
 ### Julia &hArr; C/C++: Module interface
