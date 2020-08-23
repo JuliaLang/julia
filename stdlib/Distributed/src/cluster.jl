@@ -765,7 +765,7 @@ let next_pid = 2    # 1 is reserved for the client (always)
 end
 
 mutable struct ProcessGroup
-    name::AbstractString
+    name::String
     workers::Array{Any,1}
     refs::Dict{RRID,Any}                  # global references
     topology::Symbol
