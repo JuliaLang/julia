@@ -339,7 +339,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * C/C++ `namespace`s correspond roughly to Julia `module`s.
   * There are no private functions/variables/modules/... in Julia.  Everthing is accessible
     through fully qualified paths (or relative paths, if desired).
-  * `using MyNamespace::myfun` (C++) corresponds roughly to `import MyModule.myfun` (Julia).
+  * `using MyNamespace::myfun` (C++) corresponds roughly to `import MyModule: myfun` (Julia).
   * `using namespace MyNamespace` (C++) corresponds roughly to `using MyModule` (Julia)
     * In Julia, only `export`ed symbols are made available to the calling module.
     * In C++, only elements found in the included (public) header files are made available.
