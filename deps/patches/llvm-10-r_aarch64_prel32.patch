@@ -1,0 +1,66 @@
+From c530dd687328d4208f91e62b600d25ec6e7f0f39 Mon Sep 17 00:00:00 2001
+From: Fangrui Song <i@maskray.me>
+Date: Fri, 17 Jul 2020 23:49:15 -0700
+Subject: [PATCH 2/2] [RelocationResolver] Support R_AARCH64_PREL32
+
+Code from D83800 by Yichao Yu
+---
+ llvm/lib/Object/RelocationResolver.cpp  |  6 ++++++
+ llvm/test/DebugInfo/AArch64/eh-frame.ll | 21 +++++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+ create mode 100644 llvm/test/DebugInfo/AArch64/eh-frame.ll
+
+diff --git llvm/lib/Object/RelocationResolver.cpp llvm/lib/Object/RelocationResolver.cpp
+index eedb236f83d..80339ebf7b9 100644
+--- llvm/lib/Object/RelocationResolver.cpp
++++ llvm/lib/Object/RelocationResolver.cpp
+@@ -62,6 +62,8 @@ static bool supportsAArch64(uint64_t Type) {
+   switch (Type) {
+   case ELF::R_AARCH64_ABS32:
+   case ELF::R_AARCH64_ABS64:
++  case ELF::R_AARCH64_PREL32:
++  case ELF::R_AARCH64_PREL64:
+     return true;
+   default:
+     return false;
+@@ -74,6 +76,10 @@ static uint64_t resolveAArch64(RelocationRef R, uint64_t S, uint64_t A) {
+     return (S + getELFAddend(R)) & 0xFFFFFFFF;
+   case ELF::R_AARCH64_ABS64:
+     return S + getELFAddend(R);
++  case ELF::R_AARCH64_PREL32:
++    return (S + getELFAddend(R) - R.getOffset()) & 0xFFFFFFFF;
++  case ELF::R_AARCH64_PREL64:
++    return S + getELFAddend(R) - R.getOffset();
+   default:
+     llvm_unreachable("Invalid relocation type");
+   }
+diff --git llvm/test/DebugInfo/AArch64/eh-frame.ll llvm/test/DebugInfo/AArch64/eh-frame.ll
+new file mode 100644
+index 00000000000..9651159271e
+--- /dev/null
++++ llvm/test/DebugInfo/AArch64/eh-frame.ll
+@@ -0,0 +1,21 @@
++; RUN: llc -filetype=obj -mtriple=aarch64 %s -o %t.o
++; RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=REL32
++; RUN: llvm-dwarfdump --eh-frame %t.o 2>&1 | FileCheck %s
++
++; REL32:      R_AARCH64_PREL32 .text 0x0
++; REL32-NEXT: R_AARCH64_PREL32 .text 0x4
++
++; CHECK-NOT:  warning:
++; CHECK: FDE cie=00000000 pc=00000000...00000004
++;; TODO Take relocation into consideration
++; CHECK: FDE cie=00000000 pc=00000000...00000004
++
++define void @foo() {
++entry:
++  ret void
++}
++
++define void @bar() {
++entry:
++  ret void
++}
+-- 
+2.28.0
+
