@@ -844,13 +844,14 @@ function show_type_name(io::IO, tn::Core.TypeName)
     nothing
 end
 
-function show_datatype(io::IO, x::DataType)
+function show_datatype(io::IO, @nospecialize(x::DataType))
+    parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
-    n = length(x.parameters)::Int
+    n = length(parameters)
 
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
-    if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
-        print(io, "NTuple{", n, ", ", x.parameters[1], "}")
+    if istuple && n > 3 && all(i -> (parameters[1] === i), parameters)
+        print(io, "NTuple{", n, ", ", parameters[1], "}")
     else
         show_type_name(io, x.name)
         if (n > 0 || istuple) && x !== Tuple
@@ -860,7 +861,7 @@ function show_datatype(io::IO, x::DataType)
             # since this information is still useful.
             print(io, '{')
             for i = 1:n
-                p = x.parameters[i]
+                p = parameters[i]
                 show(io, p)
                 i < n && print(io, ", ")
             end
