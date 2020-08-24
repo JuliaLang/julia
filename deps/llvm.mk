@@ -88,6 +88,7 @@ LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
 LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
+LLVM_CMAKE += -DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF -DCOMPILER_RT_ENABLE_TVOS=OFF
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
@@ -187,6 +188,15 @@ endif # BUILD_CUSTOM_LIBCXX
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)"
+# We force some flags into other build systems, but LLVM doesn't need them,
+# and it makes it harder for it to compile some of its support libraries,
+# so let's force those to be ignored here
+LLVM_CMAKE += -DCMAKE_CXX_COMPILER_ARG1=""
+LLVM_CMAKE += -DCMAKE_C_COMPILER_ARG1=""
+ifeq ($(OS),Darwin)
+# Explicitly use the default for -mmacosx-version-min=10.9 and later
+LLVM_CMAKE += -DLLVM_ENABLE_LIBCXX=ON
+endif
 
 ifeq ($(BUILD_LLVM_CLANG),0)
 # block default building of Clang
