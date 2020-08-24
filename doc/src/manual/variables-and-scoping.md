@@ -226,11 +226,11 @@ variable `s`. We can also see that the update `s = s + i` in the `for` loop must
 through 10.
 
 Let's dig into the fact that the `for` loop body has its own scope for a second by writing a slightly
-more verbose variation which we'll call `sum_to′`, in which we save the sum `s + i` in a variable `t`
+more verbose variation which we'll call `verbose_sum_to`, in which we save the sum `s + i` in a variable `t`
 before updating `s`:
 
 ```jldoctest
-julia> function sum_to′(n)
+julia> function verbose_sum_to(n)
            s = 0 # new local
            for i = 1:n
                t = s + i # new local `t`
@@ -238,9 +238,9 @@ julia> function sum_to′(n)
            end
            return s, @isdefined(t)
        end
-sum_to′ (generic function with 1 method)
+verbose_sum_to (generic function with 1 method)
 
-julia> sum_to′(10)
+julia> verbose_sum_to(10)
 (55, false)
 ```
 
@@ -253,7 +253,7 @@ where it appears, i.e. inside of the loop body. Even if there were a global name
 no difference—the hard scope rule isn't affected by anything in global scope.
 
 Let's move onto some more ambiguous cases covered by the soft scope rule. We'll explore this by
-extracting the bodies of the `greet` and `sum_to′` functions into soft scope contexts. First, let's put the
+extracting the bodies of the `greet` and `verbose_sum_to` functions into soft scope contexts. First, let's put the
 body of `greet` in a `for` loop—which is soft, rather than hard—and evaluate it in the REPL:
 
 ```jldoctest
@@ -271,7 +271,7 @@ ERROR: UndefVarError: x not defined
 
 Since the global `x` is not defined when the `for` loop is evaluated, the first clause of the soft
 scope rule applies and `x` is created as local to the `for` loop and therefore global `x` remains
-undefined after the loop executes. Next, let's consider the body of `sum_to′` extracted into global
+undefined after the loop executes. Next, let's consider the body of `verbose_sum_to` extracted into global
 scope, fixing its argument to `n = 10`
 
 ```julia
