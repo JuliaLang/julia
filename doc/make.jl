@@ -194,7 +194,10 @@ else
     Documenter.HTML(
         prettyurls = ("deploy" in ARGS),
         canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
-        assets = ["assets/julia-manual.css", ],
+        assets = [
+            "assets/julia-manual.css",
+            "assets/julia.ico",
+        ],
         analytics = "UA-28835595-6",
         collapselevel = 1,
         sidebar_sitename = false,
