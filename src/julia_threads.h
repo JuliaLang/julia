@@ -274,6 +274,11 @@ extern "C" {
 JL_DLLEXPORT void (jl_cpu_pause)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
+#ifdef __clang_analyzer__
+// Note that the sigint safepoint can also trigger GC, albeit less likely
+void jl_gc_safepoint_(jl_ptls_t tls);
+void jl_sigint_safepoint(jl_ptls_t tls);
+#else
 // gc safepoint and gc states
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
@@ -284,11 +289,6 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
         jl_signal_fence();                              \
         (void)safepoint_load;                           \
     } while (0)
-#ifdef __clang_analyzer__
-// This is a sigint safepoint, not a GC safepoint (which
-// JL_NOTSAFEPOINT refers to)
-void jl_sigint_safepoint(jl_ptls_t tls) JL_NOTSAFEPOINT;
-#else
 #define jl_sigint_safepoint(ptls) do {                  \
         jl_signal_fence();                              \
         size_t safepoint_load = ptls->safepoint[-1];    \
