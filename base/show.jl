@@ -916,7 +916,7 @@ function show(io::IO, p::Pair)
 end
 
 function show_pairtyped(io::IO, p::Pair{K,V}) where {K,V}
-    print(io, "Pair{", K, ',', V, '}')
+    show(io, typeof(p))
     show(io, (p.first, p.second))
 end
 
