@@ -2275,6 +2275,13 @@ macro m36272()
 end
 @test @m36272()(1) == 1
 
+# issue #37134
+macro m37134()
+    :(x :: Int -> 62)
+end
+@test @m37134()(1) == 62
+@test_throws MethodError @m37134()(1.0) == 62
+
 @testset "unary ± and ∓" begin
     @test Meta.parse("±x") == Expr(:call, :±, :x)
     @test Meta.parse("∓x") == Expr(:call, :∓, :x)
