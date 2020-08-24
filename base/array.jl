@@ -2107,6 +2107,10 @@ julia> findall(x -> x >= 0, d)
 """
 findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p)))
 
+# Broadcasting is much faster for small testf, and computing
+# integer indices from logical index using findall has a negligible cost
+findall(testf::Function, A::AbstractArray) = findall(testf.(A))
+
 """
     findall(A)
 
@@ -2404,7 +2408,8 @@ function findall(pred::Fix2{typeof(in),<:Union{Array{<:Real},Real}}, x::Array{<:
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-findall(pred::Fix2{typeof(in)}, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
+findall(pred::Fix2{typeof(in)}, x::AbstractArray) = _findin(x, pred.x)
+findall(pred::Fix2{typeof(in)}, x::Tuple) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)
