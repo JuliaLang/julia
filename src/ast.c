@@ -299,7 +299,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOI
     return ctx;
 }
 
-static void jl_ast_ctx_leave(jl_ast_context_t *ctx) JL_NOTSAFEPOINT
+static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 {
     JL_SIGATOMIC_END();
     if (--ctx->ref)
@@ -850,8 +850,10 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module
     value_t arg = julia_to_scm(fl_ctx, expr);
     value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, funcname)), arg);
     jl_value_t *result = scm_to_julia(fl_ctx, e, inmodule);
+    JL_GC_PUSH1(&result);
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
+    JL_GC_POP();
     return result;
 }
 
@@ -865,8 +867,10 @@ jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr, j
     value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, funcname)), arg,
                           symbol(fl_ctx, file), fixnum(line));
     jl_value_t *result = scm_to_julia(fl_ctx, e, inmodule);
+    JL_GC_PUSH1(&result);
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
+    JL_GC_POP();
     return result;
 }
 
