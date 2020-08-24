@@ -38,9 +38,10 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         print(io, stmt.typ)
         print(io, ")")
     elseif isexpr(stmt, :invoke)
+        stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
         print(io, "invoke ")
-        linfo = stmt.args[1]
+        linfo = stmt.args[1]::Core.MethodInstance
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
@@ -55,8 +56,8 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
     # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
-    elseif isexpr(stmt, :enter) && length(stmt.args) == 1 && stmt.args[1] isa Int
-        print(io, "\$(Expr(:enter, #", stmt.args[1]::Int, "))")
+    elseif isexpr(stmt, :enter) && length((stmt::Expr).args) == 1 && (stmt::Expr).args[1] isa Int
+        print(io, "\$(Expr(:enter, #", (stmt::Expr).args[1]::Int, "))")
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa PhiNode
@@ -239,12 +240,12 @@ function compute_ir_line_annotations(code::IRCode)
     loc_methods = String[]
     loc_lineno = String[]
     cur_group = 1
-    last_line = 0
     last_lineno = 0
-    last_stack = []
+    last_stack = Int[]
     last_printed_depth = 0
     linetable = code.linetable
     lines = code.stmts.line
+    last_line = zero(eltype(lines))
     for idx in 1:length(lines)
         buf = IOBuffer()
         line = lines[idx]
@@ -259,7 +260,9 @@ function compute_ir_line_annotations(code::IRCode)
             x = min(length(last_stack), length(stack))
             if length(stack) != 0
                 # Compute the last depth that was in common
-                first_mismatch = findfirst(i->last_stack[i] != stack[i], 1:x)
+                first_mismatch = let last_stack=last_stack
+                    findfirst(i->last_stack[i] != stack[i], 1:x)
+                end
                 # If the first mismatch is the last stack frame, that might just
                 # be a line number mismatch in inner most frame. Ignore those
                 if length(last_stack) == length(stack) && first_mismatch == length(stack)
@@ -316,6 +319,7 @@ function compute_ir_line_annotations(code::IRCode)
         push!(loc_methods, loc_method)
         last_line = line
         (lineno != 0) && (last_lineno = lineno)
+        nothing
     end
     return (loc_annotations, loc_methods, loc_lineno)
 end
@@ -357,7 +361,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
             #empty!(context)
             #context_depth[] = 0
             nframes = length(DI)
-            nctx = 0
+            nctx::Int = 0
             pop_skips = 0
             # compute the size of the matching prefix in the inlining information stack
             for i = 1:min(length(context), nframes)
@@ -366,7 +370,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                 CtxLine === FrameLine || break
                 nctx = i
             end
-            update_line_only = false
+            update_line_only::Bool = false
             if collapse && 0 < nctx
                 # check if we're adding more frames with the same method name,
                 # if so, drop all existing calls to it from the top of the context
@@ -396,14 +400,14 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     end
                 else
                     npops = length(context) - nctx
-                end
-                # look at the first non-matching element to see if we are only changing the line number
-                if !update_line_only && nctx < nframes
-                    let CtxLine = context[nctx + 1],
-                        FrameLine = DI[nframes - nctx]
-                        if CtxLine.file === FrameLine.file &&
-                                method_name(CtxLine) === method_name(FrameLine)
-                            update_line_only = true
+                    # look at the first non-matching element to see if we are only changing the line number
+                    if !update_line_only && nctx < nframes
+                        let CtxLine = context[nctx + 1],
+                            FrameLine = DI[nframes - nctx]
+                            if CtxLine.file === FrameLine.file &&
+                                    method_name(CtxLine) === method_name(FrameLine)
+                                update_line_only = true
+                            end
                         end
                     end
                 end
@@ -416,35 +420,12 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     println(io)
                 end
             end
-            # see what change we made to the outermost line number
-            if update_line_only
-                frame = DI[nframes - nctx]
-                nctx += 1
-                push!(context, frame)
-                if frame.line != typemax(frame.line) && frame.line != 0
-                    print(io, linestart)
-                    Base.with_output_color(linecolor, io) do io
-                        print(io, indent("│"), " @ ", frame.file, ":", frame.line, " within `", method_name(frame), "'")
-                        if collapse
-                            method = method_name(frame)
-                            while nctx < nframes
-                                frame = DI[nframes - nctx]
-                                method_name(frame) === method || break
-                                nctx += 1
-                                push!(context, frame)
-                                print(io, " @ ", frame.file, ":", frame.line)
-                            end
-                        end
-                    end
-                    println(io)
-                end
-            end
-            # now print the rest of the new frames
+            # now print the new frames
             while nctx < nframes
-                frame = DI[nframes - nctx]
+                frame::LineInfoNode = DI[nframes - nctx]
                 nctx += 1
-                started = false
-                if showtypes && !isa(frame.method, Symbol) && nctx != 1
+                started::Bool = false
+                if !update_line_only && showtypes && !isa(frame.method, Symbol) && nctx != 1
                     print(io, linestart)
                     Base.with_output_color(linecolor, io) do io
                         print(io, indent("│"))
@@ -457,8 +438,12 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                 Base.with_output_color(linecolor, io) do io
                     print(io, indent("│"))
                     push!(context, frame)
-                    context_depth[] += 1
-                    nctx != 1 && print(io, started ? "│" : "┌")
+                    if update_line_only
+                        update_line_only = false
+                    else
+                        context_depth[] += 1
+                        nctx != 1 && print(io, started ? "│" : "┌")
+                    end
                     print(io, " @ ", frame.file)
                     if frame.line != typemax(frame.line) && frame.line != 0
                         print(io, ":", frame.line)
@@ -497,7 +482,7 @@ end
 
 
 function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_printer; verbose_linetable=false)
-    cols = displaysize(io)[2]
+    cols = (displaysize(io)::Tuple{Int,Int})[2]
     used = BitSet()
     stmts = code.stmts
     isempty(stmts) && return # unlikely, but avoid errors from reducing over empty sets
@@ -749,7 +734,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
 end
 
 function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(code.linetable), line_info_postprinter=default_expr_type_printer)
-    ioctx = IOContext(io, :displaysize => displaysize(io))
+    ioctx = IOContext(io, :displaysize => displaysize(io)::Tuple{Int,Int})
     stmts = code.code
     used = BitSet()
     cfg = compute_basic_blocks(stmts)

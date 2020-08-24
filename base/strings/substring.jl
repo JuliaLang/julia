@@ -44,8 +44,8 @@ end
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
+SubString(s::AbstractString) = SubString(s, 1, lastindex(s)::Int)
+SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::Int)
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
@@ -62,7 +62,7 @@ function String(s::SubString{String})
 end
 
 ncodeunits(s::SubString) = s.ncodeunits
-codeunit(s::SubString) = codeunit(s.string)
+codeunit(s::SubString) = codeunit(s.string)::Type{<:Union{UInt8, UInt16, UInt32}}
 length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
@@ -75,7 +75,7 @@ function iterate(s::SubString, i::Integer=firstindex(s))
     @boundscheck checkbounds(s, i)
     y = iterate(s.string, s.offset + i)
     y === nothing && return nothing
-    c, i = y
+    c, i = y::Tuple{AbstractChar,Int}
     return c, i - s.offset
 end
 
@@ -87,7 +87,7 @@ end
 function isvalid(s::SubString, i::Integer)
     ib = true
     @boundscheck ib = checkbounds(Bool, s, i)
-    @inbounds return ib && isvalid(s.string, s.offset + i)
+    @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
 byte_string_classify(s::SubString{String}) =

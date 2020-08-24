@@ -109,7 +109,7 @@ display_error(er, bt=nothing) = display_error(stderr, er, bt)
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
-    have_color = get(stdout, :color, false)
+    have_color = get(stdout, :color, false)::Bool
     while true
         try
             if have_color
@@ -277,19 +277,19 @@ function exec_options(opts)
     # load file
     if arg_is_program
         # program
-        if !is_interactive
+        if !is_interactive::Bool
             exit_on_sigint(true)
         end
         try
             include(Main, PROGRAM_FILE)
         catch
             invokelatest(display_error, catch_stack())
-            if !is_interactive
+            if !is_interactive::Bool
                 exit(1)
             end
         end
     end
-    repl |= is_interactive
+    repl |= is_interactive::Bool
     if repl
         interactiveinput = isa(stdin, TTY)
         if interactiveinput
@@ -371,13 +371,12 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            color_set || (global have_color = REPL.Terminals.hascolor(term))
             banner && Base.banner(term)
             if term.term_type == "dumb"
                 active_repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
             else
-                active_repl = REPL.LineEditREPL(term, have_color, true)
+                active_repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
                 active_repl.history_file = history_file
             end
             # Make sure any displays pushed in .julia/config/startup.jl ends up above the
@@ -487,7 +486,7 @@ function _start()
         invokelatest(display_error, catch_stack())
         exit(1)
     end
-    if is_interactive && have_color === true
+    if is_interactive && get(stdout, :color, false)
         print(color_normal)
     end
 end

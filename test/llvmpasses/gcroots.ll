@@ -14,13 +14,13 @@ top:
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 ; CHECK: call {} addrspace(10)* @jl_box_int64
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
-; CHECK: [[GEP0:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; CHECK: [[GEP0:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
 ; CHECK-NEXT: store {} addrspace(10)* %aboxed, {} addrspace(10)** [[GEP0]]
     %bboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %b)
 ; CHECK-NEXT: %bboxed =
 ; Make sure the same gc slot isn't re-used
-; CHECK-NOT: getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0]]
-; CHECK: [[GEP1:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT1:[0-9]+]]
+; CHECK-NOT: getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0]]
+; CHECK: [[GEP1:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT1:[0-9]+]]
 ; CHECK-NEXT: store {} addrspace(10)* %bboxed, {} addrspace(10)** [[GEP1]]
 ; CHECK-NEXT: call void @boxed_simple
     call void @boxed_simple({} addrspace(10)* %aboxed,
@@ -32,7 +32,7 @@ define void @leftover_alloca({} addrspace(10)* %a) {
 ; If this pass encounters an alloca, it'll just sink it into the gcframe,
 ; relying on mem2reg to catch simple cases such as this earlier
 ; CHECK-LABEL: @leftover_alloca
-; CHECK: %var = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe
+; CHECK: %var = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe
     %ptls = call {}*** @julia.ptls_states()
     %var = alloca {} addrspace(10)*
     store {} addrspace(10)* %a, {} addrspace(10)** %var
@@ -50,7 +50,7 @@ define void @simple_union() {
     %ptls = call {}*** @julia.ptls_states()
 ; CHECK: %a = call { {} addrspace(10)*, i8 } @union_ret()
     %a = call { {} addrspace(10)*, i8 } @union_ret()
-; CHECK: [[GEP0:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; CHECK: [[GEP0:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
 ; CHECK-NEXT: [[EXTRACT:%.*]] = extractvalue { {} addrspace(10)*, i8 } %a, 0
 ; CHECK-NEXT: store {} addrspace(10)* [[EXTRACT]], {} addrspace(10)** [[GEP0]]
     call void @union_arg({{} addrspace(10)*, i8} %a)
@@ -85,7 +85,7 @@ blabel:
     br label %common
 common:
     %phi = phi {} addrspace(10)* [ %aboxed, %alabel ], [ %bboxed, %blabel ]
-; CHECK:  [[GEP:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
+; CHECK:  [[GEP:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
 ; CHECK:  store {} addrspace(10)* %phi, {} addrspace(10)** [[GEP]]
     call void @one_arg_boxed({} addrspace(10)* %phi)
     ret void
@@ -188,7 +188,7 @@ define {{} addrspace(10)*, i8} @ret_use_struct() {
     %ptls = call {}*** @julia.ptls_states()
 ; CHECK: %aunion = call { {} addrspace(10)*, i8 } @union_ret()
     %aunion = call { {} addrspace(10)*, i8 } @union_ret()
-; CHECK-DAG: [[GEP0:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; CHECK-DAG: [[GEP0:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
 ; CHECK-DAG: [[EXTRACT:%.*]] = extractvalue { {} addrspace(10)*, i8 } %aunion, 0
 ; CHECK-NEXT: store {} addrspace(10)* [[EXTRACT]], {} addrspace(10)** [[GEP0]]
 ; CHECK-NEXT: call void @jl_safepoint()
@@ -381,14 +381,14 @@ header:
 a:
 ; This needs a store
 ; CHECK-LABEL: a:
-; CHECK:  [[GEP1:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; CHECK:  [[GEP1:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]]
 ; CHECK:  store {} addrspace(10)* %phi, {} addrspace(10)** [[GEP1]]
     call void @one_arg_boxed({} addrspace(10)* %phi)
     br label %latch
 
 latch:
 ; This as well in case we went the other path
-; CHECK:  [[GEP2:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0]]
+; CHECK:  [[GEP2:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 [[GEPSLOT0]]
 ; CHECK:  store {} addrspace(10)* %phi, {} addrspace(10)** [[GEP2]]
     %obj = call {} addrspace(10)* @alloc()
     %cond = call i1 @check_property({} addrspace(10)* %phi)
@@ -644,7 +644,7 @@ top:
 define i8 @vector_arrayptrs() {
 ; CHECK-LABEL: @vector_arrayptrs
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
-; CHECK: [[GEP0:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
+; CHECK: [[GEP0:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
 ; CHECK: store {} addrspace(10)* %obj1, {} addrspace(10)** [[GEP0]]
 ;
 top:
@@ -665,7 +665,7 @@ define i8 @masked_arrayptrs() {
 ; CHECK-LABEL: @masked_arrayptrs
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
 ; CHECK: %arrayptrs = call <2 x i8 addrspace(13)*> @llvm.masked.load.v2p13i8.p11v2p13i8(<2 x i8 addrspace(13)*> addrspace(11)* %arrayptrptr, i32 16, <2 x i1> <i1 true, i1 false>, <2 x i8 addrspace(13)*> zeroinitializer)
-; CHECK: [[GEP0:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
+; CHECK: [[GEP0:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
 ; CHECK: store {} addrspace(10)* %obj1, {} addrspace(10)** [[GEP0]]
 ;
 top:
@@ -686,7 +686,7 @@ define i8 @gather_arrayptrs() {
 ; CHECK-LABEL: @gather_arrayptrs
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
 ; CHECK: %arrayptrs = call <2 x i8 addrspace(13)*> @llvm.masked.gather.v2p13i8.v2p11p13i8(<2 x i8 addrspace(13)* addrspace(11)*> %arrayptrptrs, i32 16, <2 x i1> <i1 true, i1 false>, <2 x i8 addrspace(13)*> zeroinitializer)
-; CHECK: [[GEP0:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
+; CHECK: [[GEP0:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
 ; CHECK: store {} addrspace(10)* %obj1, {} addrspace(10)** [[GEP0]]
 ;
 top:
@@ -706,7 +706,7 @@ define i8 @gather_arrayptrs_alltrue() {
 ; CHECK-LABEL: @gather_arrayptrs
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
 ; CHECK: %arrayptrs = call <2 x i8 addrspace(13)*> @llvm.masked.gather.v2p13i8.v2p11p13i8(<2 x i8 addrspace(13)* addrspace(11)*> %arrayptrptrs, i32 16, <2 x i1> <i1 true, i1 true>, <2 x i8 addrspace(13)*> zeroinitializer)
-; CHECK: [[GEP0:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
+; CHECK: [[GEP0:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
 ; CHECK: store {} addrspace(10)* %obj1, {} addrspace(10)** [[GEP0]]
 ;
 top:
@@ -725,7 +725,7 @@ top:
 define i8 @lost_select_decayed(i1 %arg1) {
 ; CHECK-LABEL: @lost_select_decayed
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
-; CHECK: [[GEP0:%.*]] = getelementptr {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
+; CHECK: [[GEP0:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
 ; CHECK: store {} addrspace(10)* [[SOMETHING:%.*]], {} addrspace(10)** [[GEP0]]
 top:
     %ptls = call {}*** @julia.ptls_states()

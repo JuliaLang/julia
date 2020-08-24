@@ -471,7 +471,7 @@ static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_
     return newheap;
 }
 
-void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
+STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
 {
     size_t oldalloc = *n_alloc;
     if (oldalloc >= newalloc)
@@ -1583,6 +1583,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Argument", (jl_value_t*)jl_argument_type);
     add_builtin("Const", (jl_value_t*)jl_const_type);
     add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);
+    add_builtin("MethodMatch", (jl_value_t*)jl_method_match_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);

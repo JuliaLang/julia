@@ -323,6 +323,7 @@ to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (eachindex(IndexLin
 # In simple cases, we know that we don't need to use axes(A), optimize those.
 # Having this here avoids invalidations from multidimensional.jl: to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}})
 to_indices(A, I::Tuple{}) = ()
+to_indices(A, I::Tuple{Vararg{Int}}) = I
 to_indices(A, I::Tuple{Vararg{Integer}}) = (@_inline_meta; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
 to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
@@ -332,7 +333,7 @@ _maybetail(::Tuple{}) = ()
 _maybetail(t::Tuple) = tail(t)
 
 """
-   Slice(indices)
+    Slice(indices)
 
 Represent an AbstractUnitRange of indices as a vector of the indices themselves,
 with special handling to signal they represent a complete slice of a dimension (:).
@@ -367,7 +368,7 @@ iterate(S::Slice, s...) = iterate(S.indices, s...)
 
 
 """
-   IdentityUnitRange(range::AbstractUnitRange)
+    IdentityUnitRange(range::AbstractUnitRange)
 
 Represent an AbstractUnitRange `range` as an offset vector such that `range[i] == i`.
 

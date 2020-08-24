@@ -46,19 +46,20 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetRegistry.h>
-#include "llvm/Support/TargetSelect.h"
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
-#include "llvm/Support/FormattedStream.h"
+#include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/NativeFormatting.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/DebugInfo/DIContext.h>
-#include "llvm/DebugInfo/DWARF/DWARFContext.h"
+#include <llvm/DebugInfo/DWARF/DWARFContext.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
-#include "llvm/IR/AssemblyAnnotationWriter.h"
-#include "llvm/IR/LegacyPassManager.h"
+#include <llvm/IR/AssemblyAnnotationWriter.h>
+#include <llvm/IR/LegacyPassManager.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -208,14 +209,14 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
         }
         else {
             npops = context.size() - nctx;
-        }
-        // look at the first non-matching element to see if we are only changing the line number
-        if (!update_line_only && nctx < nframes) {
-            const DILineInfo &CtxLine = context.at(nctx);
-            const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
-            if (CtxLine.FileName == FrameLine.FileName &&
-                    StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';')) {
-                update_line_only = true;
+            // look at the first non-matching element to see if we are only changing the line number
+            if (!update_line_only && nctx < nframes) {
+                const DILineInfo &CtxLine = context.at(nctx);
+                const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+                if (CtxLine.FileName == FrameLine.FileName &&
+                        StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';')) {
+                    update_line_only = true;
+                }
             }
         }
         context.resize(nctx);
@@ -225,46 +226,26 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
             Out << LineStart << inlining_indent("│") << repeat{npops, "└"} << '\n';
         }
     }
-    // see what change we made to the outermost line number
-    if (update_line_only) {
-        const DILineInfo &frame = DI.at(nframes - 1 - nctx);
-        nctx += 1;
-        context.push_back(frame);
-        if (frame.Line != UINT_MAX && frame.Line != 0) {
-            StringRef method = StringRef(frame.FunctionName).rtrim(';');
-            Out << LineStart << inlining_indent("│")
-                << " @ " << frame.FileName
-                << ":" << frame.Line
-                << " within `" << method << "'";
-            if (collapse_recursive) {
-                while (nctx < nframes) {
-                    const DILineInfo &frame = DI.at(nframes - 1 - nctx);
-                    if (StringRef(frame.FunctionName).rtrim(';') != method)
-                        break;
-                    nctx += 1;
-                    context.push_back(frame);
-                    Out << " @ " << frame.FileName
-                        << ":" << frame.Line;
-                }
-            }
-            Out << "\n";
-        }
-    }
-    // now print the rest of the new frames
+    // print the new frames
     while (nctx < nframes) {
         const DILineInfo &frame = DI.at(nframes - 1 - nctx);
         Out << LineStart << inlining_indent("│");
         nctx += 1;
         context.push_back(frame);
-        this->inline_depth += 1;
-        if (bracket_outer || nctx != 1)
-            Out << "┌";
+        if (update_line_only) {
+            update_line_only = false;
+        }
+        else {
+            this->inline_depth += 1;
+            if (bracket_outer || nctx != 1)
+                Out << "┌";
+        }
         Out << " @ " << frame.FileName;
         if (frame.Line != UINT_MAX && frame.Line != 0)
             Out << ":" << frame.Line;
-        Out << " within `" << StringRef(frame.FunctionName).rtrim(';') << "'";
+        StringRef method = StringRef(frame.FunctionName).rtrim(';');
+        Out << " within `" << method << "'";
         if (collapse_recursive) {
-            StringRef method = StringRef(frame.FunctionName).rtrim(';');
             while (nctx < nframes) {
                 const DILineInfo &frame = DI.at(nframes - 1 - nctx);
                 if (StringRef(frame.FunctionName).rtrim(';') != method)
@@ -457,7 +438,7 @@ jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_modul
     else {
         Module *m = llvmf->getParent();
         if (strip_ir_metadata) {
-            std::string llvmfn = llvmf->getName();
+            std::string llvmfn(llvmf->getName());
             jl_strip_llvm_addrspaces(m);
             jl_strip_llvm_debug(m, true, &AAW);
             // rewriting the function type creates a new function, so look it up again

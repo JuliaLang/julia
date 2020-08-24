@@ -414,6 +414,18 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
     return dst
 end
 
+function unsafe_string(p::Ptr{T}, length::Integer) where {T<:Union{UInt16,UInt32,Cwchar_t}}
+    transcode(String, unsafe_wrap(Array, p, length; own=false))
+end
+function unsafe_string(cw::Cwstring)
+    p = convert(Ptr{Cwchar_t}, cw)
+    n = 1
+    while unsafe_load(p, n) != 0
+        n += 1
+    end
+    return unsafe_string(p, n - 1)
+end
+
 # deferring (or un-deferring) ctrl-c handler for external C code that
 # is not interrupt safe (see also issue #2622).  The sigatomic_begin/end
 # functions should always be called in matched pairs, ideally via:
@@ -681,7 +693,7 @@ with a Julia variable named `s`. See also `ccall`.
 
 Varargs are supported with the following convention:
 
-    @ccall sprintf("%s = %d"::Cstring ; "foo"::Cstring, foo::Cint)::Cint
+    @ccall printf("%s = %d"::Cstring ; "foo"::Cstring, foo::Cint)::Cint
 
 The semicolon is used to separate required arguments (of which there
 must be at least one) from variadic arguments.

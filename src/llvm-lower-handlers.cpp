@@ -7,15 +7,17 @@
 
 #include <llvm/ADT/DepthFirstIterator.h>
 #include <llvm/Analysis/CFG.h>
-#include <llvm/IR/Value.h>
+#include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #include "julia.h"
 #include "julia_assert.h"
@@ -183,10 +185,8 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
     Instruction *firstInst = &F.getEntryBlock().front();
     std::vector<AllocaInst *> buffs;
     for (int i = 0; i < MaxDepth; ++i) {
-        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()),
-                                       0,
-                                       handler_sz, "", firstInst);
-        buff->setAlignment(Align(16));
+        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), 0,
+                handler_sz, Align(16), "", firstInst);
         buffs.push_back(buff);
     }
 

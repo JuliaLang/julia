@@ -47,9 +47,15 @@ typedef win32_ucontext_t jl_ucontext_t;
 #if defined(JL_HAVE_ASM) || defined(JL_HAVE_SIGALTSTACK)
 typedef struct {
     jl_jmp_buf uc_mcontext;
+#if defined(JL_TSAN_ENABLED)
+    void *tsan_state;
+#endif
 } jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_ASYNCIFY)
+#if defined(JL_TSAN_ENABLED)
+#error TSAN not currently supported with asyncify
+#endif
 typedef struct {
     // This is the extent of the asyncify stack, but because the top of the
     // asyncify stack (stacktop) is also the bottom of the C stack, we can
@@ -62,7 +68,12 @@ typedef struct {
 #if defined(JL_HAVE_UCONTEXT) || defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
-typedef ucontext_t jl_ucontext_t;
+typedef struct {
+    ucontext_t ctx;
+#if defined(JL_TSAN_ENABLED)
+    void *tsan_state;
+#endif
+} jl_ucontext_t;
 #endif
 #endif
 
@@ -225,6 +236,9 @@ struct _jl_tls_states_t {
     // Saved exception for previous external API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
+
+    // currently-held locks, to be released when an exception is thrown
+    small_arraylist_t locks;
 
     JULIA_DEBUG_SLEEPWAKE(
         uint64_t uv_run_enter;

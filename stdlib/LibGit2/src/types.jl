@@ -1007,7 +1007,7 @@ function Base.getproperty(obj::GitObject, name::Symbol)
     end
 end
 
-for (typ, owntyp, sup, cname) in [
+for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
     (:GitRepo,           nothing,                 :AbstractGitObject, :git_repository),
     (:GitConfig,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_config),
     (:GitIndex,          :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_index),

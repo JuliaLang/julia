@@ -10,9 +10,9 @@ import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
-    tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
-    IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, @boundscheck, @inbounds
+    tail, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
+    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, AbstractRange,
+    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple
 
 import .Base:
     first, last,
@@ -274,12 +274,6 @@ get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
 
 # zip
 
-zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
-zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
-zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
-zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
-zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
-
 struct Zip{Is<:Tuple}
     is::Is
 end
@@ -333,15 +327,17 @@ function _zip_min_length(is)
     end
 end
 _zip_min_length(is::Tuple{}) = nothing
-size(z::Zip) = mapreduce(size, _zip_promote_shape, z.is)
-axes(z::Zip) = mapreduce(axes, _zip_promote_shape, z.is)
-_zip_promote_shape((a,)::Tuple{OneTo}, (b,)::Tuple{OneTo}) = (intersect(a, b),)
-_zip_promote_shape((m,)::Tuple{Integer},(n,)::Tuple{Integer}) = (min(m,n),)
-_zip_promote_shape(a, b) = promote_shape(a, b)
-eltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_eltype(Is)
-_zip_eltype(::Type{Is}) where {Is<:Tuple} =
-    tuple_type_cons(eltype(tuple_type_head(Is)), _zip_eltype(tuple_type_tail(Is)))
-_zip_eltype(::Type{Tuple{}}) = Tuple{}
+size(z::Zip) = _promote_tuple_shape(Base.map(size, z.is)...)
+axes(z::Zip) = _promote_tuple_shape(Base.map(axes, z.is)...)
+_promote_tuple_shape((a,)::Tuple{OneTo}, (b,)::Tuple{OneTo}) = (intersect(a, b),)
+_promote_tuple_shape((m,)::Tuple{Integer}, (n,)::Tuple{Integer}) = (min(m, n),)
+_promote_tuple_shape(a, b) = promote_shape(a, b)
+_promote_tuple_shape(a, b...) = _promote_tuple_shape(a, _promote_tuple_shape(b...))
+_promote_tuple_shape(a) = a
+eltype(::Type{Zip{Is}}) where {Is<:Tuple} = Tuple{ntuple(n -> eltype(fieldtype(Is, n)), _counttuple(Is)::Int)...}
+#eltype(::Type{Zip{Tuple{}}}) = Tuple{}
+#eltype(::Type{Zip{Tuple{A}}}) where {A} = Tuple{eltype(A)}
+#eltype(::Type{Zip{Tuple{A, B}}}) where {A, B} = Tuple{eltype(A), eltype(B)}
 @inline isdone(z::Zip) = _zip_any_isdone(z.is, Base.map(_ -> (), z.is))
 @inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, Base.map(tuple, ss))
 @inline function _zip_any_isdone(is, ss)
@@ -396,17 +392,21 @@ function _zip_isdone(is, ss)
 end
 _zip_isdone(::Tuple{}, ::Tuple{}) = (false, ())
 
-IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_size(Is)
-_zip_iterator_size(::Type{Is}) where {Is<:Tuple} =
-    zip_iteratorsize(IteratorSize(tuple_type_head(Is)),
-                     _zip_iterator_size(tuple_type_tail(Is)))
-_zip_iterator_size(::Type{Tuple{I}}) where {I} = IteratorSize(I)
-_zip_iterator_size(::Type{Tuple{}}) = IsInfinite()
-IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_eltype(Is)
-_zip_iterator_eltype(::Type{Is}) where {Is<:Tuple} =
-    and_iteratoreltype(IteratorEltype(tuple_type_head(Is)),
-                       _zip_iterator_eltype(tuple_type_tail(Is)))
-_zip_iterator_eltype(::Type{Tuple{}}) = HasEltype()
+IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratorsize(ntuple(n -> IteratorSize(fieldtype(Is, n)), _counttuple(Is)::Int)...)
+IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratoreltype(ntuple(n -> IteratorEltype(fieldtype(Is, n)), _counttuple(Is)::Int)...)
+
+zip_iteratorsize() = IsInfinite()
+zip_iteratorsize(I) = I
+zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
+zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
+zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
+zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
+zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
+zip_iteratorsize(a, b, tail...) = zip_iteratorsize(a, zip_iteratorsize(b, tail...))
+
+zip_iteratoreltype() = HasEltype()
+zip_iteratoreltype(a) = a
+zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
 reverse(z::Zip) = Zip(Base.map(reverse, z.is))
 
@@ -523,7 +523,7 @@ end
 length(itr::Accumulate) = length(itr.itr)
 size(itr::Accumulate) = size(itr.itr)
 
-IteratorSize(::Type{<:Accumulate{F,I}}) where {F,I} = IteratorSize(I)
+IteratorSize(::Type{<:Accumulate{<:Any,I}}) where {I} = IteratorSize(I)
 IteratorEltype(::Type{<:Accumulate}) = EltypeUnknown()
 
 # Rest -- iterate starting at the given state
@@ -778,8 +778,8 @@ function iterate(ibl::TakeWhile, itr...)
 end
 
 IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
-eltype(::Type{TakeWhile{I,P}}) where {I,P} = eltype(I)
-IteratorEltype(::Type{TakeWhile{I,P}}) where {I,P} = IteratorEltype(I)
+eltype(::Type{TakeWhile{I,P}} where P) where {I} = eltype(I)
+IteratorEltype(::Type{TakeWhile{I}} where P) where {I} = IteratorEltype(I)
 
 
 # dropwhile
@@ -931,7 +931,10 @@ product(iters...) = ProductIterator(iters)
 
 IteratorSize(::Type{ProductIterator{Tuple{}}}) = HasShape{0}()
 IteratorSize(::Type{ProductIterator{T}}) where {T<:Tuple} =
-    prod_iteratorsize( IteratorSize(tuple_type_head(T)), IteratorSize(ProductIterator{tuple_type_tail(T)}) )
+    prod_iteratorsize(ntuple(n -> IteratorSize(fieldtype(T, n)), _counttuple(T)::Int)..., HasShape{0}())
+
+prod_iteratorsize() = HasShape{0}()
+prod_iteratorsize(I) = I
 
 prod_iteratorsize(::HasLength, ::HasLength) = HasShape{2}()
 prod_iteratorsize(::HasLength, ::HasShape{N}) where {N} = HasShape{N+1}()
@@ -943,6 +946,7 @@ prod_iteratorsize(::IsInfinite, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(a, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(::IsInfinite, b) = IsInfinite()
 prod_iteratorsize(a, b) = SizeUnknown()
+prod_iteratorsize(a, b, tail...) = prod_iteratorsize(a, prod_iteratorsize(b, tail...))
 
 size(P::ProductIterator) = _prod_size(P.iterators)
 _prod_size(::Tuple{}) = ()
@@ -965,16 +969,17 @@ length(P::ProductIterator) = prod(size(P))
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
+
 function IteratorEltype(::Type{ProductIterator{T}}) where {T<:Tuple}
-    I = tuple_type_head(T)
-    P = ProductIterator{tuple_type_tail(T)}
-    IteratorEltype(I) == EltypeUnknown() ? EltypeUnknown() : IteratorEltype(P)
+    E = ntuple(n -> IteratorEltype(fieldtype(T, n)), _counttuple(T)::Int)
+    any(I -> I == EltypeUnknown(), E) && return EltypeUnknown()
+    return E[end]
 end
 
-eltype(::Type{<:ProductIterator{I}}) where {I} = _prod_eltype(I)
+eltype(::Type{ProductIterator{I}}) where {I} = _prod_eltype(I)
 _prod_eltype(::Type{Tuple{}}) = Tuple{}
 _prod_eltype(::Type{I}) where {I<:Tuple} =
-    Base.tuple_type_cons(eltype(tuple_type_head(I)),_prod_eltype(tuple_type_tail(I)))
+    Tuple{ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...}
 
 iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
@@ -1072,7 +1077,7 @@ _flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
 IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
-    fieldcount(T)*length(f.it)
+    return N * length(f.it)
 end
 flatten_length(f, ::Type{<:Number}) = length(f.it)
 flatten_length(f, T) = throw(ArgumentError(
@@ -1131,9 +1136,9 @@ eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{e
 # But for some common implementations in Base we know the answer exactly
 eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
 
-IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
-IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
-IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:Vector} = IteratorEltype(T)
+IteratorEltype(::Type{PartitionIterator{T}}) where {T} = IteratorEltype(T)
+IteratorEltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
+IteratorEltype(::Type{PartitionIterator{T}}) where {T<:Vector} = IteratorEltype(T)
 
 partition_iteratorsize(::HasShape) = HasLength()
 partition_iteratorsize(isz) = isz

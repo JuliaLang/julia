@@ -431,6 +431,10 @@ CXX_DISABLE_ASSERTION := -DJL_NDEBUG
 DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
+ifeq ($(LLVM_ASSERTIONS),0)
+CXX_DISABLE_ASSERTION += -DNDEBUG
+endif
+
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)
@@ -492,7 +496,7 @@ ifeq ($(USE_LIBCPP),1)
 $(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
 endif
 ifeq ($(SANITIZE),1)
-$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+$(error Sanitizers are only supported with clang. Try setting SANITIZE=0)
 endif
 CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
@@ -539,7 +543,7 @@ ifeq ($(USE_LIBCPP),1)
 $(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
 endif
 ifeq ($(SANITIZE),1)
-$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+$(error Sanitizers only supported with clang. Try setting SANITIZE=0)
 endif
 CC  := icc
 CXX := icpc
@@ -670,17 +674,27 @@ endif
 endif
 
 ifeq ($(SANITIZE),1)
+SANITIZE_OPTS :=
+SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
-SANITIZE_OPTS := -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
-SANITIZE_LDFLAGS := $(SANITIZE_OPTS)
-else
-SANITIZE_OPTS := -fsanitize=address -mllvm -asan-stack=0
-SANITIZE_LDFLAGS := -fsanitize=address
+SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
+endif
+ifeq ($(SANITIZE_ADDRESS),1)
+SANITIZE_OPTS += -fsanitize=address -mllvm -asan-stack=0
+SANITIZE_LDFLAGS += -fsanitize=address
+endif
+ifeq ($(SANITIZE_THREAD),1)
+SANITIZE_OPTS += -fsanitize=thread
+SANITIZE_LDFLAGS += -fsanitize=thread
+endif
+ifeq ($(SANITIZE_OPTS),)
+$(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)
 endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
 JLDFLAGS += $(SANITIZE_LDFLAGS)
-endif
+endif # SANITIZE
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
 TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
@@ -940,17 +954,17 @@ LIBUNWIND:=
 else
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 ifneq ($(OS),Darwin)
-LIBUNWIND:=-lunwind-generic -lunwind
+LIBUNWIND:=-lunwind
 # Only for linux since we want to use not yet released libunwind features
 JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
 ifeq ($(OS),Darwin)
-LIBUNWIND:=$(build_libdir)/libosxunwind.a
+LIBUNWIND:=-losxunwind
 JCPPFLAGS+=-DLIBOSXUNWIND
 else
-LIBUNWIND:=$(build_libdir)/libunwind-generic.a $(build_libdir)/libunwind.a
+LIBUNWIND:=-lunwind
 endif
 endif
 endif
@@ -1206,12 +1220,12 @@ OSLIBS += -lelf -lkvm -lrt -lpthread
 OSLIBS += -lgcc_s
 
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
+	$(NO_WHOLE_ARCHIVE)
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
-OSLIBS += -framework CoreFoundation $(LIBUNWIND)
+OSLIBS += -framework CoreFoundation
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
 JLDFLAGS :=

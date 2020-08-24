@@ -41,7 +41,7 @@ end
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of
 instruction pointers that may be stored. Each instruction pointer corresponds to a single
-line of code; backtraces generally consist of a long list of instruction pointers. Default
+line of code; backtraces generally consist of a long list of instruction pointers. Current
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
 """

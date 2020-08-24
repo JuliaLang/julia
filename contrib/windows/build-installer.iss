@@ -2,7 +2,7 @@
 #define AppNameLong AppName + " " + AppVersion
 #define AppMainExeName "bin\julia.exe"
 #define CurrentYear GetDateTimeString('yyyy', '', '')
-#define DirName AppName + " " + AppVersion
+#define DirName AppName + "-" + AppVersion
 
 
 [LangOptions]
@@ -20,12 +20,12 @@ UninstallAppFullTitle=Uninstaller - {#AppNameLong}
 WizardSelectDir=Select Installation Directory
 SelectDirDesc=
 SelectDirLabel3=
-SelectDirBrowseLabel=Restart installer as Administrator to install {#AppName} system wide.%n%n%nInstallation directory:
+SelectDirBrowseLabel=Installation directory:
 WizardPreparing=Installing
 PreparingDesc=
 InstallingLabel=
 ClickFinish=
-FinishedHeadingLabel=Installation Successfull
+FinishedHeadingLabel=Installation Successful
 FinishedLabelNoIcons=[name] has been successfully installed.
 FinishedLabel=[name] has been successfully installed.
 StatusExtractFiles=Extracting...
@@ -110,7 +110,8 @@ Root: HKA; Subkey: "{code:GetEnvironmentKey}"; ValueType: expandsz; ValueName: "
 [Code]
 
 procedure InitializeWizard;
-
+var
+  InfoLabel: TNewStaticText;
 begin
   WizardForm.Bevel.Visible := False;
   WizardForm.Bevel1.Visible := False;
@@ -121,6 +122,13 @@ begin
   WizardForm.InnerPage.Color := WizardForm.Color;
   WizardForm.TasksList.Color := WizardForm.Color;
   WizardForm.ReadyMemo.Color := WizardForm.Color;
+
+  if not IsAdmin then begin
+    InfoLabel := TNewStaticText.Create(WizardForm);
+    InfoLabel.Parent := WizardForm.SelectDirPage;
+    InfoLabel.Top := WizardForm.DirEdit.Top + WizardForm.DirEdit.Height + ScaleY(16);
+    InfoLabel.Caption := 'Restart installer as Administrator to install {#AppName} system wide'
+  end;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);

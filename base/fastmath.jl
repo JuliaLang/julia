@@ -106,19 +106,20 @@ function make_fastmath(expr::Expr)
             # simple assignment
             expr = :($var = $op($var, $rhs))
         elseif isa(var, Expr) && var.head === :ref
+            var = var::Expr
             # array reference
             arr = var.args[1]
             inds = var.args[2:end]
             arrvar = gensym()
-            indvars = Any[gensym() for i in inds]
+            indvars = Any[gensym() for _ in inds]
             expr = quote
                 $(Expr(:(=), arrvar, arr))
-                $(Expr(:(=), Expr(:tuple, indvars...), Expr(:tuple, inds...)))
+                $(Expr(:(=), Base.exprarray(:tuple, indvars), Base.exprarray(:tuple, inds)))
                 $arrvar[$(indvars...)] = $op($arrvar[$(indvars...)], $rhs)
             end
         end
     end
-    Expr(make_fastmath(expr.head), Base.mapany(make_fastmath, expr.args)...)
+    Base.exprarray(make_fastmath(expr.head), Base.mapany(make_fastmath, expr.args))
 end
 function make_fastmath(symb::Symbol)
     fast_symb = get(fast_op, symb, :nothing)

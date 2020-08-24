@@ -44,7 +44,7 @@ In some applications, it is convenient to store explicit zero values in a `Spars
 *are* accepted by functions in `Base` (but there is no guarantee that they will be preserved in
 mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many
 routines. The [`nnz`](@ref) function returns the number of elements explicitly stored in the
-sparse data structure, including structural nonzeros. In order to count the exact number of
+sparse data structure, including non-structural zeros. In order to count the exact number of
 numerical nonzeros, use [`count(!iszero, x)`](@ref), which inspects every stored element of a sparse
 matrix. [`dropzeros`](@ref), and the in-place [`dropzeros!`](@ref), can be used to
 remove stored zeros from the sparse matrix.
@@ -194,7 +194,7 @@ section of the standard library reference.
 |:-------------------------- |:---------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`spzeros(m,n)`](@ref)     | [`zeros(m,n)`](@ref)   | Creates a *m*-by-*n* matrix of zeros. ([`spzeros(m,n)`](@ref) is empty.)                                                                                              |
 | [`sparse(I, n, n)`](@ref)  | [`Matrix(I,n,n)`](@ref)| Creates a *n*-by-*n* identity matrix.                                                                                                                                 |
-| [`Array(S)`](@ref)         | [`sparse(A)`](@ref)    | Interconverts between dense and sparse formats.                                                                                                                       |
+| [`sparse(A)`](@ref)        | [`Array(S)`](@ref)   | Interconverts between dense and sparse formats.                                                                                                                       |
 | [`sprand(m,n,d)`](@ref)    | [`rand(m,n)`](@ref)    | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed uniformly on the half-open interval ``[0, 1)``.                            |
 | [`sprandn(m,n,d)`](@ref)   | [`randn(m,n)`](@ref)   | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed according to the standard normal (Gaussian) distribution.                  |
 | [`sprandn(rng,m,n,d)`](@ref) | [`randn(rng,m,n)`](@ref) | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements generated with the `rng` random number generator                                   |

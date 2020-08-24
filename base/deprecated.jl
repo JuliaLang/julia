@@ -207,4 +207,31 @@ macro get!(h, key0, default)
     end
 end
 
+pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple) = pointer(V, CartesianIndex(is))
+
 # END 1.5 deprecations
+
+# BEGIN 1.6 deprecations
+
+# These changed from SimpleVector to `MethodMatch`. These definitions emulate
+# being a SimpleVector to ease transition for packages that make explicit
+# use of (internal) APIs that return raw method matches.
+iterate(match::Core.MethodMatch, field::Int=1) =
+    field > nfields(match) ? nothing : (getfield(match, field), field+1)
+getindex(match::Core.MethodMatch, field::Int) =
+    getfield(match, field)
+
+
+# these were internal functions, but some packages seem to be relying on them
+tuple_type_head(T::Type) = fieldtype(T, 1)
+tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
+function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
+    @_pure_meta
+    Tuple{S, T.parameters...}
+end
+
+# these were internal functions, but some packages seem to be relying on them
+@deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes)
+cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not recursively calls itself
+
+# END 1.6 deprecations

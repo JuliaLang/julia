@@ -11,6 +11,7 @@ OrderStyle(::Type{<:Real}) = Ordered()
 OrderStyle(::Type{<:AbstractString}) = Ordered()
 OrderStyle(::Type{Symbol}) = Ordered()
 OrderStyle(::Type{<:Any}) = Unordered()
+OrderStyle(::Type{Union{}}) = Ordered()
 
 # trait for objects that support arithmetic
 abstract type ArithmeticStyle end

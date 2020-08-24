@@ -250,10 +250,10 @@ function complete_path(path::AbstractString, pos; use_envpath=false, shell_escap
                 filesinpath = readdir(pathdir)
             catch e
                 # Bash allows dirs in PATH that can't be read, so we should as well.
-                if isa(e, SystemError)
+                if isa(e, Base.IOError)
                     continue
                 else
-                    # We only handle SystemErrors here
+                    # We only handle IOError here
                     rethrow()
                 end
             end
@@ -384,12 +384,12 @@ function get_type_call(expr::Expr)
     end
     # use _methods_by_ftype as the function is supplied as a type
     world = Base.get_world_counter()
-    mt = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
-    length(mt) == 1 || return (Any, false)
-    m = first(mt)
+    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
+    length(matches) == 1 || return (Any, false)
+    match = first(matches)
     # Typeinference
     interp = Core.Compiler.NativeInterpreter()
-    return_type = Core.Compiler.typeinf_type(interp, m[3], m[1], m[2])
+    return_type = Core.Compiler.typeinf_type(interp, match.method, match.spec_types, match.sparams)
     return_type === nothing && return (Any, false)
     return (return_type, true)
 end

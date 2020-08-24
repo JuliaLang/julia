@@ -321,7 +321,7 @@ and take ownership of the fd handle.
 Call `open(Libc.dup(fd))` to avoid the ownership capture
 of the original handle.
 
-!!! warn
+!!! warning
     Do not call this on a handle that's already owned by some
     other part of the system.
 """
@@ -1165,6 +1165,12 @@ for (x, writable, unix_fd, c_symbol) in
             close(handle) # handle has been dup'ed in $(_f)
             $x = devnull
             return devnull
+        end
+        function ($f)(io::IOContext)
+            io2, _dict = unwrapcontext(io)
+            ($f)(io2)
+            global $x = io
+            return io
         end
     end
 end

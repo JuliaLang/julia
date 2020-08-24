@@ -1933,6 +1933,12 @@ end
     @test typeof(min.(A12118, B12118)) == SparseMatrixCSC{Int,Int}
 end
 
+@testset "unary minus for SparseMatrixCSC{Bool}" begin
+    A = sparse([1,3], [1,3], [true, true])
+    B = sparse([1,3], [1,3], [-1, -1])
+    @test -A == B
+end
+
 @testset "sparse matrix norms" begin
     Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
     Ar = sprandn(10,10,.1)

@@ -392,6 +392,13 @@ end
     @test @inferred(unique(x->x^2, Integer[3, -4, 5, 4])) == Integer[3, -4, 5]
     @test @inferred(unique(iseven, Integer[3, -4, 5, 4]; seen=Set{Bool}())) == Integer[3, -4]
     @test @inferred(unique(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])) == [5, 1, 9]
+    for r = (Base.OneTo(-1), Base.OneTo(0), Base.OneTo(1), Base.OneTo(5),
+             1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
+             StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
+             StepRangeLen(1.0, 0.0, 0), StepRangeLen(1.0, -0.0, 1), StepRangeLen(1.0, 0.0, 2),
+             LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
+        @test @inferred(unique(r)) == invoke(unique, Tuple{Any}, r)
+    end
 end
 
 @testset "issue 20105" begin
@@ -440,6 +447,9 @@ end
     @test @inferred(unique!(iseven, [2, 3, 5, 7, 9])) == [2, 3]
     @test @inferred(unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1])) == [1, 2]
     @test @inferred(unique!(x -> x % 2 == 0 ? :even : "odd", [1, 2, 3, 4, 2, 2, 1]; seen=Set{Union{Symbol,String}}())) == [1, 2]
+
+    @test isempty(unique!(Union{}[]))
+    @test eltype(unique!([i for i in ["1"] if i isa Int])) <: Union{}
 end
 
 @testset "allunique" begin
@@ -458,6 +468,13 @@ end
     @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
     @test allunique(('a':1:'c')[1:2]) == true
+    for r = (Base.OneTo(-1), Base.OneTo(0), Base.OneTo(1), Base.OneTo(5),
+             1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
+             StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
+             StepRangeLen(1.0, 0.0, 0), StepRangeLen(1.0, -0.0, 1), StepRangeLen(1.0, 0.0, 2),
+             LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
+        @test allunique(r) == invoke(allunique, Tuple{Any}, r)
+    end
 end
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])

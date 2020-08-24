@@ -1994,3 +1994,12 @@ end
     @test contains(string(methods(foo)), "foo(α)")
     @test contains(string(methods(bar)), "bar(ℓ)")
 end
+
+module M37012
+struct AnInteger{S<:Integer} end
+struct AStruct{N} end
+const AValue{S} = Union{AStruct{S}, AnInteger{S}}
+end
+@test Base.make_typealias(M37012.AStruct{1}) === nothing
+@test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
+@test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"

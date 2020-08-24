@@ -8,6 +8,7 @@ const shell_special = "#{}()[]<>|&*?~;"
 function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
+        i::Int; c::AbstractChar
         ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
         isspace(c) || return SubString(s, 1, i)
         c_old = c
@@ -16,7 +17,7 @@ function rstrip_shell(s::AbstractString)
 end
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
-                     special::AbstractString="")
+                     special::AbstractString="", filename="none")
     s = SubString(str, firstindex(str))
     s = rstrip_shell(lstrip(s))
 
@@ -38,8 +39,8 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         end
     end
     function consume_upto(s, i, j)
-        update_arg(s[i:prevind(s, j)])
-        something(peek(st), (lastindex(s)+1,'\0'))[1]
+        update_arg(s[i:prevind(s, j)::Int])
+        something(peek(st), (lastindex(s)::Int+1,'\0'))[1]
     end
     function append_arg()
         if isempty(arg); arg = Any["",]; end
@@ -48,6 +49,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     end
 
     for (j, c) in st
+        j::Int; c::AbstractChar
         if !in_single_quotes && !in_double_quotes && isspace(c)
             i = consume_upto(s, i, j)
             append_arg()
@@ -69,7 +71,8 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 # string interpolation syntax (see #3150)
                 ex, j = :var, stpos+3
             else
-                ex, j = Meta.parse(s,stpos,greedy=false)
+                # use parseatom instead of parse to respect filename (#28188)
+                ex, j = Meta.parseatom(s, stpos, filename=filename)
             end
             last_parse = (stpos:prevind(s, j)) .+ s.offset
             update_arg(ex);

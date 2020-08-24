@@ -167,6 +167,11 @@ function getindex(m::RegexMatch, name::Symbol)
     m[idx]
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
+function haskey(m::RegexMatch, name::Symbol)
+    idx = PCRE.substring_number_from_name(m.regex.regex, name)
+    return idx > 0
+end
+haskey(m::RegexMatch, name::AbstractString) = haskey(m, Symbol(name))
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
@@ -422,11 +427,11 @@ struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
-ncodeunits(s::SubstitutionString) = ncodeunits(s.string)
-codeunit(s::SubstitutionString) = codeunit(s.string)
-codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
-isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)
-iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)
+ncodeunits(s::SubstitutionString) = ncodeunits(s.string)::Int
+codeunit(s::SubstitutionString) = codeunit(s.string)::Type{<:Union{UInt8, UInt16, UInt32}}
+codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)::Union{UInt8, UInt16, UInt32}
+isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)::Bool
+iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)::Union{Nothing,Tuple{AbstractChar,Int}}
 
 function show(io::IO, s::SubstitutionString)
     print(io, "s")

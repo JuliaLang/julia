@@ -166,6 +166,8 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
     return out
 end
 
+unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
+
 """
     unique(f, itr)
 
@@ -262,7 +264,7 @@ function unique!(f, A::AbstractVector; seen::Union{Nothing,Set}=nothing)
         return A
     end
 
-    i = firstindex(A)
+    i = firstindex(A)::Int
     x = @inbounds A[i]
     y = f(x)
     if seen === nothing
@@ -289,7 +291,7 @@ function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
         end
         i += 1
     end
-    return resize!(A, current - firstindex(A) + 1)::typeof(A)
+    return resize!(A, current - firstindex(A)::Int + 1)::typeof(A)
 end
 
 
@@ -393,9 +395,7 @@ end
 
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
-allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
-allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)
-allunique(r::StepRangeLen{T,R,S}) where {T,R,S} = (step(r) != zero(S)) || (length(r) <= 1)
+allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 

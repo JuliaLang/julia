@@ -202,7 +202,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
-    if t.state === :failed
+    if istaskfailed(t)
         println(io)
         show_task_exception(io, t)
     end
@@ -395,7 +395,7 @@ function _show_default(io::IO, @nospecialize(x))
     show(io, inferencebarrier(t))
     print(io, '(')
     nf = nfields(x)
-    nb = sizeof(x)
+    nb = sizeof(x)::Int
     if nf != 0 || nb == 0
         if !show_circular(io, x)
             recur_io = IOContext(io, Pair{Symbol,Any}(:SHOWN_SET, x),
@@ -491,8 +491,8 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-modulesof!(s::Set{Any}, x::TypeVar) = modulesof!(s, x.ub)
-function modulesof!(s::Set{Any}, x::Type)
+modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
+function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, x.name.module)
@@ -534,10 +534,10 @@ function makeproper(io::IO, x::Type)
     return properx
 end
 
-function make_typealias(x::Type)
+function make_typealias(@nospecialize(x::Type))
     Any <: x && return
     x <: Tuple && return
-    mods = modulesof!(Set(), x)
+    mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     xenv = UnionAll[]
@@ -560,7 +560,17 @@ function make_typealias(x::Type)
                         #   T = Array{Array{T,1}, 1} where T
                         #   (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), T, Vector)
                         #   env[1].ub.var == T.var
-                        applied = alias{env...}
+                        applied = try
+                                # this can fail if `x` contains a covariant
+                                # union, and the non-matching branch of the
+                                # union has additional restrictions on the
+                                # bounds of the environment that are not met by
+                                # the instantiation found above
+                                alias{env...}
+                            catch ex
+                                ex isa TypeError || rethrow()
+                                continue
+                            end
                         for p in xenv
                             applied = rewrap_unionall(applied, p)
                         end
@@ -628,10 +638,10 @@ function show_typealias(io::IO, x::Type)
     return true
 end
 
-function make_typealiases(x::Type)
+function make_typealiases(@nospecialize(x::Type))
     Any <: x && return Core.svec(), Union{}
     x <: Tuple && return Core.svec(), Union{}
-    mods = modulesof!(Set(), x)
+    mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
     aliases = SimpleVector[]
     vars = Dict{Symbol,TypeVar}()
@@ -647,9 +657,22 @@ function make_typealiases(x::Type)
                 if alias isa Type && !has_free_typevars(alias) && !isvarargtype(alias) && !print_without_params(alias) && !(alias <: Tuple)
                     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
                     ti === Union{} && continue
-                    mod in modulesof!(Set(), alias) || continue # make sure this alias wasn't from an unrelated part of the Union
+                    mod in modulesof!(Set{Module}(), alias) || continue # make sure this alias wasn't from an unrelated part of the Union
                     env = env::SimpleVector
-                    applied = isempty(env) ? alias : alias{env...}
+                    applied = alias
+                    if !isempty(env)
+                        applied = try
+                                # this can fail if `x` contains a covariant
+                                # union, and the non-matching branch of the
+                                # union has additional restrictions on the
+                                # bounds of the environment that are not met by
+                                # the instantiation found above
+                                alias{env...}
+                            catch ex
+                                ex isa TypeError || rethrow()
+                                continue
+                            end
+                    end
                     ul = unionlen(applied)
                     for p in xenv
                         applied = rewrap_unionall(applied, p)
@@ -1077,7 +1100,7 @@ const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√)
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
     :(.=), :(.+=), :(.-=), :(.*=), :(./=), :(.\=), :(.^=), :(.&=), :(.|=), :(.÷=), :(.%=), :(.>>>=), :(.>>=), :(.<<=),
-    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:)])
+    :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->)])
 const expr_infix = Set{Symbol}([:(:), :(->), Symbol("::")])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
@@ -1298,11 +1321,11 @@ function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     if head === :(.)
         print(io, '.')
     end
-    if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
+    if !isempty(func_args) && isa(func_args[1], Expr) && (func_args[1]::Expr).head === :parameters
         print(io, op)
         show_list(io, func_args[2:end], ", ", indent, 0, quote_level, false, kw)
         print(io, "; ")
-        show_list(io, func_args[1].args, ", ", indent, 0, quote_level, false, kw)
+        show_list(io, (func_args[1]::Expr).args, ", ", indent, 0, quote_level, false, kw)
         print(io, cl)
     else
         show_enclosed_list(io, op, func_args, ", ", cl, indent, 0, quote_level, false, kw)
@@ -1394,13 +1417,13 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
     end
 end
 
-function show_generator(io, ex, indent, quote_level)
+function show_generator(io, ex::Expr, indent, quote_level)
     if ex.head === :flatten
-        fg = ex
+        fg::Expr = ex
         ranges = Any[]
         while isa(fg, Expr) && fg.head === :flatten
-            push!(ranges, fg.args[1].args[2:end])
-            fg = fg.args[1].args[1]
+            push!(ranges, (fg.args[1]::Expr).args[2:end])
+            fg = (fg.args[1]::Expr).args[1]::Expr
         end
         push!(ranges, fg.args[2:end])
         show_unquoted(io, fg.args[1], indent, 0, quote_level)
@@ -1624,7 +1647,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
-        funcargslike = head === :(.) ? args[2].args : args[2:end]
+        funcargslike = head === :(.) ? (args[2]::Expr).args : args[2:end]
         show_call(head == :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
 
     # comprehensions
@@ -1745,7 +1768,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     elseif head === :export
         print(io, head, ' ')
-        show_list(io, allow_macroname.(args), ", ", indent)
+        show_list(io, mapany(allow_macroname, args), ", ", indent)
 
     elseif head === :macrocall && nargs >= 2
         # handle some special syntaxes
@@ -2031,7 +2054,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         env_io = IOContext(env_io, :unionall_env => sig.var)
         sig = sig.body
     end
-    sig = sig.parameters
+    sig = (sig::DataType).parameters
     show_signature_function(env_io, sig[1], demangle)
     first = true
     print_within_stacktrace(io, "(", color=:light_black)
@@ -2153,7 +2176,6 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     if src.slotnames !== nothing
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
     end
-    @assert src.codelocs !== nothing
     if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
         println(io)
         # TODO: static parameter values?
@@ -2492,11 +2514,11 @@ type, indicating that any recursed calls are not at the top level.
 Printing the parent as `::Array{Float64,3}` is the fallback (non-toplevel)
 behavior, because no specialized method for `Array` has been defined.
 """
-function showarg(io::IO, ::Type{T}, toplevel) where {T}
+function showarg(io::IO, T::Type, toplevel)
     toplevel || print(io, "::")
     print(io, "Type{", T, "}")
 end
-function showarg(io::IO, x, toplevel)
+function showarg(io::IO, @nospecialize(x), toplevel)
     toplevel || print(io, "::")
     print(io, typeof(x))
 end

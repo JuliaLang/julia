@@ -524,14 +524,14 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 assertion_counter = 0
-function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
+function getfield_elim_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     insertions = Vector{Any}()
     defuses = IdDict{Int, Tuple{IdSet{Int}, SSADefUse}}()
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
     revisit_worklist = Int[]
     #ndone, nmax = 0, 200
-    for (idx, stmt) in compact
+    for ((_, idx), stmt) in compact
         isa(stmt, Expr) || continue
         #ndone >= nmax && continue
         #ndone += 1
@@ -721,6 +721,13 @@ function getfield_elim_pass!(ir::IRCode, domtree::DomTree)
     used_ssas = copy(compact.used_ssas)
     simple_dce!(compact)
     ir = complete(compact)
+
+    # Compute domtree, needed below, now that we have finished compacting the
+    # IR. This needs to be after we iterate through the IR with
+    # `IncrementalCompact` because removing dead blocks can invalidate the
+    # domtree.
+    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
+
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
@@ -872,7 +879,7 @@ function adce_pass!(ir::IRCode)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
     compact = IncrementalCompact(ir)
-    for (idx, stmt) in compact
+    for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
         end
@@ -1034,30 +1041,49 @@ function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))
+    function follow_merge_into(idx::Int)
+        while merge_into[idx] != 0
+            idx = merge_into[idx]
+        end
+        return idx
+    end
+    function follow_merged_succ(idx::Int)
+        while merged_succ[idx] != 0
+            idx = merged_succ[idx]
+        end
+        return idx
+    end
 
-    # Walk the CFG at from the entry block and aggressively combine blocks
+    # Walk the CFG from the entry block and aggressively combine blocks
     for (idx, bb) in enumerate(bbs)
         if length(bb.succs) == 1
             succ = bb.succs[1]
             if length(bbs[succ].preds) == 1
-                merge_into[succ] = idx
-                merged_succ[idx] = succ
+                # Prevent cycles by making sure we don't end up back at `idx`
+                # by following what is to be merged into `succ`
+                if follow_merged_succ(succ) != idx
+                    merge_into[succ] = idx
+                    merged_succ[idx] = succ
+                end
             end
         end
     end
+
+    # Assign new BB numbers
     max_bb_num = 1
     bb_rename_succ = zeros(Int, length(bbs))
-    # Lay out the basic blocks
     for i = 1:length(bbs)
+        # Drop blocks that will be merged away
         if merge_into[i] != 0
             bb_rename_succ[i] = -1
-            continue
         end
-        # Drop unreachable blocks
+        # Drop blocks with no predecessors
         if i != 1 && length(ir.cfg.blocks[i].preds) == 0
             bb_rename_succ[i] = -1
         end
+
         bb_rename_succ[i] != 0 && continue
+
         curr = i
         while true
             bb_rename_succ[curr] = max_bb_num
@@ -1065,9 +1091,7 @@ function cfg_simplify!(ir::IRCode)
             # Now walk the chain of blocks we merged.
             # If we end in something that may fall through,
             # we have to schedule that block next
-            while merged_succ[curr] != 0
-                curr = merged_succ[curr]
-            end
+            curr = follow_merged_succ(curr)
             terminator = ir.stmts[ir.cfg.blocks[curr].stmts[end]][:inst]
             if isa(terminator, GotoNode) || isa(terminator, ReturnNode)
                 break
@@ -1075,19 +1099,24 @@ function cfg_simplify!(ir::IRCode)
             curr += 1
         end
     end
+
+    # Figure out how predecessors should be renamed
     bb_rename_pred = zeros(Int, length(bbs))
     for i = 1:length(bbs)
         if merged_succ[i] != 0
+            # Block `i` should no longer be a predecessor (before renaming)
+            # because it is being merged with its sole successor
             bb_rename_pred[i] = -1
             continue
         end
-        bbnum = i
-        while merge_into[bbnum] != 0
-            bbnum = merge_into[bbnum]
-        end
+        bbnum = follow_merge_into(i)
         bb_rename_pred[i] = bb_rename_succ[bbnum]
     end
+
+    # Compute map from new to old blocks
     result_bbs = Int[findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
+
+    # Compute new block lengths
     result_bbs_lengths = zeros(Int, max_bb_num-1)
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
@@ -1096,41 +1125,40 @@ function cfg_simplify!(ir::IRCode)
             ms = merged_succ[ms]
         end
     end
+
+    # Compute statement indices the new blocks start at
     bb_starts = Vector{Int}(undef, 1+length(result_bbs_lengths))
     bb_starts[1] = 1
     for i = 1:length(result_bbs_lengths)
         bb_starts[i+1] = bb_starts[i] + result_bbs_lengths[i]
     end
-    # Figure out the pred and succ lists for each basic block in our merged result
+
     cresult_bbs = let result_bbs = result_bbs,
                       merged_succ = merged_succ,
                       merge_into = merge_into,
                       bbs = bbs,
                       bb_rename_succ = bb_rename_succ
-            function compute_succs(i)
-                # Look at the original successor
-                orig_bb = result_bbs[i]
-                while merged_succ[orig_bb] != 0
-                    orig_bb = merged_succ[orig_bb]
-                end
-                newsuccs = map(i->bb_rename_succ[i], bbs[orig_bb].succs)
-                return newsuccs
-            end
-            function compute_preds(i)
-                orig_bb = result_bbs[i]
-                preds = bbs[orig_bb].preds
-                newpreds = map(preds) do pred
-                    while merge_into[pred] != 0
-                        pred = merge_into[pred]
-                    end
-                    bb_rename_succ[pred]
-                end
-                return newpreds
-            end
-            BasicBlock[BasicBlock(
-                StmtRange(bb_starts[i], i + 1 > length(bb_starts) ? length(compact.result) : bb_starts[i + 1] - 1),
-                compute_preds(i), compute_succs(i)) for i = 1:length(result_bbs)]
+
+        # Compute (renamed) successors and predecessors given (renamed) block
+        function compute_succs(i)
+            orig_bb = follow_merged_succ(result_bbs[i])
+            return map(i -> bb_rename_succ[i], bbs[orig_bb].succs)
         end
+        function compute_preds(i)
+            orig_bb = result_bbs[i]
+            preds = bbs[orig_bb].preds
+            return map(pred -> bb_rename_pred[pred], preds)
+        end
+
+        BasicBlock[
+            BasicBlock(StmtRange(bb_starts[i],
+                                 i+1 > length(bb_starts) ?
+                                    length(compact.result) : bb_starts[i+1]-1),
+                       compute_preds(i),
+                       compute_succs(i))
+            for i = 1:length(result_bbs)]
+    end
+
     compact = IncrementalCompact(ir, true)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
@@ -1139,6 +1167,7 @@ function cfg_simplify!(ir::IRCode)
     compact.bb_rename_succ = bb_rename_succ
     compact.bb_rename_pred = bb_rename_pred
     compact.result_bbs = cresult_bbs
+    result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
         while ms != 0
@@ -1158,7 +1187,6 @@ function cfg_simplify!(ir::IRCode)
             ms = merged_succ[ms]
         end
     end
-
     compact.active_result_bb = length(bb_starts)
     return finish(compact)
 end

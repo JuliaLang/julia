@@ -659,7 +659,10 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Type{Base.RefValue{Any}}}, Const(:x))
     @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Base.RefValue{Any}}), Const(:x))
     @test fieldtype_nothrow(Type{Union{Base.RefValue{T}, Base.RefValue{Any}}} where {T<:Real}, Const(:x))
+    @test !fieldtype_nothrow(Type{Tuple{}}, Const(1))
+    @test fieldtype_nothrow(Type{Tuple{Int}}, Const(1))
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(1))
+    @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(2))
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
 end
@@ -753,7 +756,7 @@ end
 g11015(::Type{S}, ::S) where {S} = 1
 f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
 g11015(::Type{Bool}, ::Bool) = 2.0
-@test Int <: Base.return_types(f11015, (AT11015,))[1]
+@test Base.return_types(f11015, (AT11015,)) == Any[Int]
 @test f11015(AT11015(true)) === 1
 
 # better inference of apply (#20343)
@@ -795,12 +798,6 @@ g19957(x) = f19957(x...)
 fUnionAll(::Type{T}) where {T} = Type{S} where S <: T
 @inferred fUnionAll(Real) == Type{T} where T <: Real
 @inferred fUnionAll(Rational{T} where T <: AbstractFloat) == Type{T} where T<:(Rational{S} where S <: AbstractFloat)
-
-fComplicatedUnionAll(::Type{T}) where {T} = Type{Tuple{S,rand() >= 0.5 ? Int : Float64}} where S <: T
-let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
-    @test pub(pub(x, 1), 1) == Real
-    @test pub(pub(x, 1), 2) == Int || pub(pub(x, 1), 2) == Float64
-end
 
 # issue #20733
 # run this test in a separate process to avoid interfering with `getindex`
@@ -1400,12 +1397,17 @@ egal_conditional_lattice3(x, y) = x === y + y ? "" : 1
 
 using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
-@test sizeof_tfunc(Type{Ptr}) === Int
+@test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
 @test sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
 @test sizeof_nothrow(Const(Ptr))
-@test !sizeof_nothrow(Type{Ptr})
-@test !sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
+@test sizeof_nothrow(Type{Ptr})
+@test sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
 @test !sizeof_nothrow(Const(Tuple))
+@test !sizeof_nothrow(Type{Vector{Int}})
+@test !sizeof_nothrow(Type{Union{Int, String}})
+@test sizeof_nothrow(String)
+@test !sizeof_nothrow(Type{String})
+@test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
 let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
     @test sizeof_tfunc(PT) === Const(16)
     @test nfields_tfunc(PT) === Const(2)
@@ -1481,8 +1483,8 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
-    @test opt.max_valid === Core.Compiler.get_world_counter()
-    @test opt.min_valid === Core.Compiler.min_world(opt.src) === UInt(1)
+    @test opt.valid_worlds.max_world === Core.Compiler.get_world_counter()
+    @test opt.valid_worlds.min_world === Core.Compiler.min_world(opt.src) === UInt(1)
     @test opt.nargs == 3
 end
 
@@ -1553,11 +1555,11 @@ f24852_kernel(x, y::Number) = f24852_kernel3(x, (y,))
 
 function f24852_kernel_cinfo(fsig::Type)
     world = typemax(UInt) # FIXME
-    sig, spvals, method = Base._methods_by_ftype(fsig, -1, world)[1]
-    isdefined(method, :source) || return (nothing, :(f(x, y)))
-    code_info = Base.uncompressed_ir(method)
-    Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 1, 0, :propagate)
-    if startswith(String(method.name), "f24852")
+    match = Base._methods_by_ftype(fsig, -1, world)[1]
+    isdefined(match.method, :source) || return (nothing, :(f(x, y)))
+    code_info = Base.uncompressed_ir(match.method)
+    Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 1, 0, :propagate)
+    if startswith(String(match.method.name), "f24852")
         for a in code_info.code
             if a isa Expr && a.head == :(=)
                 a = a.args[2]
@@ -1569,7 +1571,7 @@ function f24852_kernel_cinfo(fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
-    return method, code_info
+    return match.method, code_info
 end
 
 function f24852_gen_cinfo_uninflated(X, Y, _, f, x, y)
@@ -2716,3 +2718,26 @@ function f_apply_union_split(fs, x)
 end
 
 @test Base.return_types(f_apply_union_split, Tuple{Tuple{typeof(sqrt), typeof(abs)}, Int64}) == Any[Union{Int64, Float64}]
+
+# Precision of typeassert with PartialStruct
+function f_typ_assert(x::Int)
+    y = (x, 1)
+    y = y::Any
+    Val{y[2]}
+end
+@test Base.return_types(f_typ_assert, (Int,)) == Any[Type{Val{1}}]
+
+function f_typ_assert2(x::Any)
+    y = (x::Union{Int, Float64}, 1)
+    y = y::Tuple{Int, Any}
+    (y[1], Val{y[2]}())
+end
+@test Base.return_types(f_typ_assert2, (Any,)) == Any[Tuple{Int, Val{1}}]
+
+f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
+@test Base.return_types(f_generator_splat, (Tuple{Symbol, Int64, Float64},)) == Any[Tuple{Symbol, Int64, Float64}]
+
+# Issue #36710 - sizeof(::UnionAll) tfunc correctness
+@test (sizeof(Ptr),) == sizeof.((Ptr,)) == sizeof.((Ptr{Cvoid},))
+@test Core.Compiler.sizeof_tfunc(UnionAll) === Int
+@test !Core.Compiler.sizeof_nothrow(UnionAll)

@@ -213,15 +213,17 @@ function process_batch_errors!(p, f, results, on_error, retry_delays, retry_chec
         exceptions = [x.ex for x in errors]
         state = iterate(retry_delays)
         state !== nothing && (state = state[2])
-        if (length(retry_delays) > 0) &&
-                (retry_check === nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
-            # BatchProcessingError.data is a tuple of original args
-            error_processed = pmap(x->f(x...), p, [x.data for x in errors];
-                    on_error = on_error, retry_delays = collect(retry_delays)[2:end], retry_check = retry_check)
-        elseif on_error !== nothing
-            error_processed = map(on_error, exceptions)
-        else
-            throw(CompositeException(exceptions))
+        error_processed = let state=state
+            if (length(retry_delays)::Int > 0) &&
+                    (retry_check === nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
+                # BatchProcessingError.data is a tuple of original args
+                pmap(x->f(x...), p, [x.data for x in errors];
+                        on_error = on_error, retry_delays = collect(retry_delays)[2:end::Int], retry_check = retry_check)
+            elseif on_error !== nothing
+                map(on_error, exceptions)
+            else
+                throw(CompositeException(exceptions))
+            end
         end
 
         for (idx, v) in enumerate(error_processed)

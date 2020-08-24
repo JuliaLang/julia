@@ -387,7 +387,10 @@ julia> count(<=(2), A, dims=2)
 ```
 """
 count(A::AbstractArrayOrBroadcasted; dims=:) = count(identity, A, dims=dims)
-count(f, A::AbstractArrayOrBroadcasted; dims=:) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
+count(f, A::AbstractArrayOrBroadcasted; dims=:) = _count(f, A, dims)
+
+_count(f, A::AbstractArrayOrBroadcasted, dims::Colon) = _simple_count(f, A)
+_count(f, A::AbstractArrayOrBroadcasted, dims) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
 
 """
     count!([f=identity,] r, A)
@@ -444,6 +447,31 @@ julia> sum(A, dims=2)
 sum(A::AbstractArray; dims)
 
 """
+    sum(f, A::AbstractArray; dims)
+
+Sum the results of calling function `f` on each element of an array over the given
+dimensions.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> sum(abs2, A, dims=1)
+1×2 Matrix{Int64}:
+ 10  20
+
+julia> sum(abs2, A, dims=2)
+2×1 Matrix{Int64}:
+  5
+ 25
+```
+"""
+sum(f, A::AbstractArray; dims)
+
+"""
     sum!(r, A)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
@@ -490,6 +518,31 @@ julia> prod(A, dims=2)
 ```
 """
 prod(A::AbstractArray; dims)
+
+"""
+    prod(f, A::AbstractArray; dims)
+
+Multiply the results of calling the function `f` on each element of an array over the given
+dimensions.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> prod(abs2, A, dims=1)
+1×2 Matrix{Int64}:
+ 9  64
+
+julia> prod(abs2, A, dims=2)
+2×1 Matrix{Int64}:
+   4
+ 144
+```
+"""
+prod(f, A::AbstractArray; dims)
 
 """
     prod!(r, A)
@@ -542,6 +595,31 @@ julia> maximum(A, dims=2)
 maximum(A::AbstractArray; dims)
 
 """
+    maximum(f, A::AbstractArray; dims)
+
+Compute the maximum value from of calling the function `f` on each element of an array over the given
+dimensions.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> maximum(abs2, A, dims=1)
+1×2 Matrix{Int64}:
+ 9  16
+
+julia> maximum(abs2, A, dims=2)
+2×1 Matrix{Int64}:
+  4
+ 16
+```
+"""
+maximum(f, A::AbstractArray; dims)
+
+"""
     maximum!(r, A)
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
@@ -592,6 +670,31 @@ julia> minimum(A, dims=2)
 minimum(A::AbstractArray; dims)
 
 """
+    minimum(f, A::AbstractArray; dims)
+
+Compute the minimum value from of calling the function `f` on each element of an array over the given
+dimensions.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> minimum(abs2, A, dims=1)
+1×2 Matrix{Int64}:
+ 1  4
+
+julia> minimum(abs2, A, dims=2)
+2×1 Matrix{Int64}:
+ 1
+ 9
+```
+"""
+minimum(f, A::AbstractArray; dims)
+
+"""
     minimum!(r, A)
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
@@ -640,6 +743,30 @@ julia> all(A, dims=2)
 all(A::AbstractArray; dims)
 
 """
+    all(p, A; dims)
+
+Determine whether predicate p returns true for all elements along the given dimensions of an array.
+
+# Examples
+```jldoctest
+julia> A = [1 -1; 2 2]
+2×2 Matrix{Int64}:
+ 1  -1
+ 2   2
+
+julia> all(i -> i > 0, A, dims=1)
+1×2 Matrix{Bool}:
+ 1  0
+
+julia> all(i -> i > 0, A, dims=2)
+2×1 Matrix{Bool}:
+ 0
+ 1
+```
+"""
+all(::Function, ::AbstractArray; dims)
+
+"""
     all!(r, A)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
@@ -686,6 +813,30 @@ julia> any(A, dims=2)
 ```
 """
 any(::AbstractArray; dims)
+
+"""
+    any(p, A; dims)
+
+Determine whether predicate p returns true for any elements along the given dimensions of an array.
+
+# Examples
+```jldoctest
+julia> A = [1 -1; 2 -2]
+2×2 Matrix{Int64}:
+ 1  -1
+ 2  -2
+
+julia> any(i -> i > 0, A, dims=1)
+1×2 Matrix{Bool}:
+ 1  0
+
+julia> any(i -> i > 0, A, dims=2)
+2×1 Matrix{Bool}:
+ 1
+ 1
+```
+"""
+any(::Function, ::AbstractArray; dims)
 
 """
     any!(r, A)

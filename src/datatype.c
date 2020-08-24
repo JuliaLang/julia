@@ -96,6 +96,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->zeroinit = 0;
     t->isinlinealloc = 0;
     t->has_concrete_subtype = 1;
+    t->cached_by_hash = 0;
     t->layout = NULL;
     t->names = NULL;
     t->types = NULL;
@@ -818,15 +819,15 @@ JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
     return v;
 }
 
-static jl_value_t *boxed_int8_cache[256];
+JL_DLLEXPORT jl_value_t *jl_boxed_int8_cache[256];
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x)
 {
-    return boxed_int8_cache[(uint8_t)x];
+    return jl_boxed_int8_cache[(uint8_t)x];
 }
-static jl_value_t *boxed_uint8_cache[256];
+JL_DLLEXPORT jl_value_t *jl_boxed_uint8_cache[256];
 JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x)
 {
-    return boxed_uint8_cache[x];
+    return jl_boxed_uint8_cache[x];
 }
 
 void jl_init_int32_int64_cache(void)
@@ -844,7 +845,7 @@ void jl_init_int32_int64_cache(void)
 #endif
     }
     for(i=0; i < 256; i++) {
-        boxed_uint8_cache[i] = jl_permbox8(jl_uint8_type, i);
+        jl_boxed_uint8_cache[i] = jl_permbox8(jl_uint8_type, i);
     }
 }
 
@@ -855,7 +856,7 @@ void jl_init_box_caches(void)
         boxed_char_cache[i] = jl_permbox32(jl_char_type, i << 24);
     }
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i] = jl_permbox8(jl_int8_type, i);
+        jl_boxed_int8_cache[i] = jl_permbox8(jl_int8_type, i);
     }
     for(i=0; i < NBOX_C; i++) {
         boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, i-NBOX_C/2);

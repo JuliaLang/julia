@@ -358,12 +358,12 @@ function cmd_gen(parsed)
         (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
         append!(args, cmd.exec)
         for arg in tail(parsed)
-            append!(args, arg_gen(arg...))
+            append!(args, arg_gen(arg...)::Vector{String})
         end
         return Cmd(Cmd(args), ignorestatus, flags, env, dir)
     else
         for arg in parsed
-            append!(args, arg_gen(arg...))
+            append!(args, arg_gen(arg...)::Vector{String})
         end
         return Cmd(args)
     end
@@ -386,5 +386,6 @@ Process(`echo 1`, ProcessExited(0))
 ```
 """
 macro cmd(str)
-    return :(cmd_gen($(esc(shell_parse(str, special=shell_special)[1]))))
+    cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
+    return :(cmd_gen($(esc(cmd_ex))))
 end

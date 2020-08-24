@@ -13,6 +13,7 @@
 // define `jl_unw_get` as a macro, since (like setjmp)
 // returning from the callee function will invalidate the context
 #ifdef _OS_WINDOWS_
+jl_mutex_t jl_in_stackwalk;
 #define jl_unw_get(context) RtlCaptureContext(context)
 #elif !defined(JL_DISABLE_LIBUNWIND)
 #define jl_unw_get(context) unw_getcontext(context)
@@ -24,8 +25,8 @@ void jl_unw_get(void *context) {};
 extern "C" {
 #endif
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int lockless) JL_NOTSAFEPOINT;
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, int lockless) JL_NOTSAFEPOINT;
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
 
 static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintptr_t sp) JL_NOTSAFEPOINT
 {
@@ -67,15 +68,14 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 // elements written to bt_data (and sp if non-NULL) are returned in bt_size.
 int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
                  uintptr_t *sp, size_t maxsize, int skip, jl_gcframe_t **ppgcstack,
-                 int from_signal_handler, int lockless) JL_NOTSAFEPOINT
+                 int from_signal_handler) JL_NOTSAFEPOINT
 {
     volatile size_t n = 0;
     volatile int need_more_space = 0;
     uintptr_t return_ip = 0;
     uintptr_t thesp = 0;
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    assert(!jl_in_stackwalk);
-    jl_in_stackwalk = 1;
+    JL_LOCK_NOGC(&jl_in_stackwalk);
     if (!from_signal_handler) {
         // Workaround 32-bit windows bug missing top frame
         // See for example https://bugs.chromium.org/p/crashpad/issues/detail?id=53
@@ -96,7 +96,7 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
                 need_more_space = 1;
                 break;
             }
-            have_more_frames = jl_unw_step(cursor, &return_ip, &thesp, lockless);
+            have_more_frames = jl_unw_step(cursor, &return_ip, &thesp);
             if (skip > 0) {
                 skip--;
                 continue;
@@ -172,20 +172,20 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
     ptls->safe_restore = old_buf;
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    jl_in_stackwalk = 0;
+    JL_UNLOCK_NOGC(&jl_in_stackwalk);
 #endif
     *bt_size = n;
     return need_more_space;
 }
 
 NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
-                                  bt_context_t *context, jl_gcframe_t *pgcstack, int lockless) JL_NOTSAFEPOINT
+                                  bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, context, lockless))
+    if (!jl_unw_init(&cursor, context))
         return 0;
     size_t bt_size = 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1, lockless);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
     return bt_size;
 }
 
@@ -201,10 +201,10 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     jl_unw_get(&context);
     jl_gcframe_t *pgcstack = jl_pgcstack;
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, &context, 0))
+    if (!jl_unw_init(&cursor, &context))
         return 0;
     size_t bt_size = 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0, 0);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0);
     return bt_size;
 }
 
@@ -235,7 +235,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     memset(&context, 0, sizeof(context));
     jl_unw_get(&context);
     jl_gcframe_t *pgcstack = jl_pgcstack;
-    if (jl_unw_init(&cursor, &context, 0)) {
+    if (jl_unw_init(&cursor, &context)) {
         // Skip frame for jl_backtrace_from_here itself
         skip += 1;
         size_t offset = 0;
@@ -249,7 +249,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             }
             size_t size_incr = 0;
             have_more_frames = jl_unw_stepn(&cursor, (jl_bt_element_t*)jl_array_data(ip) + offset,
-                                            &size_incr, sp_ptr, maxincr, skip, &pgcstack, 0, 0);
+                                            &size_incr, sp_ptr, maxincr, skip, &pgcstack, 0);
             skip = 0;
             offset += size_incr;
         }
@@ -329,8 +329,7 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 {
     JL_TYPECHK(catch_stack, task, (jl_value_t*)task);
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (task != ptls->current_task &&
-        task->state != failed_sym && task->state != done_sym) {
+    if (task != ptls->current_task && task->_state == JL_TASK_STATE_RUNNABLE) {
         jl_error("Inspecting the exception stack of a task which might "
                  "be running concurrently isn't allowed.");
     }
@@ -375,13 +374,11 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
 #ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
-    if (fn) return fn;
-    if (jl_in_stackwalk) {
-        return 0;
-    }
-    jl_in_stackwalk = 1;
+    if (fn)
+        return fn;
+    JL_LOCK_NOGC(&jl_in_stackwalk);
     PVOID ftable = SymFunctionTableAccess64(hProcess, AddrBase);
-    jl_in_stackwalk = 0;
+    JL_UNLOCK_NOGC(&jl_in_stackwalk);
     return ftable;
 #else
     return SymFunctionTableAccess64(hProcess, AddrBase);
@@ -395,16 +392,15 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
 #ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
-    if (fn) return ImageBase;
-    if (jl_in_stackwalk) {
-        return 0;
-    }
-    jl_in_stackwalk = 1;
+    if (fn)
+        return ImageBase;
+    JL_LOCK_NOGC(&jl_in_stackwalk);
     DWORD64 fbase = SymGetModuleBase64(hProcess, dwAddr);
-    jl_in_stackwalk = 0;
+    JL_UNLOCK_NOGC(&jl_in_stackwalk);
     return fbase;
 #else
-    if (dwAddr == HistoryTable.dwAddr) return HistoryTable.ImageBase;
+    if (dwAddr == HistoryTable.dwAddr)
+        return HistoryTable.ImageBase;
     DWORD64 ImageBase = jl_getUnwindInfo(dwAddr);
     if (ImageBase) {
         HistoryTable.dwAddr = dwAddr;
@@ -415,45 +411,23 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
 #endif
 }
 
-static DWORD64 WINAPI JuliaAsyncGetModuleBase64(
-        _In_  HANDLE hProcess,
-        _In_  DWORD64 dwAddr)
-{
-    //jl_printf(JL_STDOUT, "lookup base %d\n", dwAddr);
-#ifdef _CPU_X86_64_
-    return JuliaGetModuleBase64(hProcess, dwAddr);
-#else
-    if (dwAddr == HistoryTable.dwAddr) return HistoryTable.ImageBase;
-    DWORD64 ImageBase = jl_trygetUnwindInfo(dwAddr);
-    if (ImageBase) {
-        HistoryTable.dwAddr = dwAddr;
-        HistoryTable.ImageBase = ImageBase;
-        return ImageBase;
-    }
-    return SymGetModuleBase64(hProcess, dwAddr);
-#endif
-}
-
 // Might be called from unmanaged thread.
-int needsSymRefreshModuleList;
+volatile int needsSymRefreshModuleList;
 BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
+
 void jl_refresh_dbg_module_list(void)
 {
-    if (needsSymRefreshModuleList && hSymRefreshModuleList != 0 && !jl_in_stackwalk) {
-        jl_in_stackwalk = 1;
+    if (needsSymRefreshModuleList && hSymRefreshModuleList != NULL) {
         hSymRefreshModuleList(GetCurrentProcess());
-        jl_in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
 }
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int lockless)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
+    int result;
+    JL_LOCK_NOGC(&jl_in_stackwalk);
     jl_refresh_dbg_module_list();
 #if !defined(_CPU_X86_64_)
-    if (jl_in_stackwalk) {
-        return 0;
-    }
-    jl_in_stackwalk = 1;
     memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
     cursor->stackframe.AddrPC.Offset = Context->Eip;
     cursor->stackframe.AddrStack.Offset = Context->Esp;
@@ -462,15 +436,15 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int lockless)
     cursor->stackframe.AddrStack.Mode = AddrModeFlat;
     cursor->stackframe.AddrFrame.Mode = AddrModeFlat;
     cursor->context = *Context;
-    BOOL result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
-        &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
-            lockless ? JuliaAsyncGetModuleBase64 : JuliaGetModuleBase64, NULL);
-    jl_in_stackwalk = 0;
-    return result;
+    result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
+            &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
+            JuliaGetModuleBase64, NULL);
 #else
     *cursor = *Context;
-    return 1;
+    result = 1;
 #endif
+    JL_UNLOCK_NOGC(&jl_in_stackwalk);
+    return result;
 }
 
 static int readable_pointer(LPCVOID pointer)
@@ -487,10 +461,8 @@ static int readable_pointer(LPCVOID pointer)
     return 1;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, int lockless)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 {
-    DWORD64 WINAPI (*GetModuleBase64)(HANDLE, DWORD64) = lockless ?
-        JuliaAsyncGetModuleBase64 : JuliaGetModuleBase64;
     // Might be called from unmanaged thread.
 #ifndef _CPU_X86_64_
     *ip = (uintptr_t)cursor->stackframe.AddrPC.Offset;
@@ -504,7 +476,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, int lo
     }
 
     BOOL result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
-        &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, GetModuleBase64, NULL);
+        &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
     return result;
 #else
     *ip = (uintptr_t)cursor->Rip;
@@ -517,7 +489,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, int lo
         return cursor->Rip != 0;
     }
 
-    DWORD64 ImageBase = GetModuleBase64(GetCurrentProcess(), cursor->Rip);
+    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip);
     if (!ImageBase)
         return 0;
 
@@ -552,12 +524,12 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, int lo
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // stacktrace using libunwind
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int lockless)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
 {
     return unw_init_local(cursor, context) == 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, int lockless)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 {
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
@@ -577,7 +549,7 @@ NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize
     bt_cursor_t cursor;
     if (unw_init_local_dwarf(&cursor, context) != UNW_ESUCCESS)
         return 0;
-    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1, 0);
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
     return bt_size;
 }
 #endif
@@ -589,7 +561,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, int lockless)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 {
     return 0;
 }

@@ -4,7 +4,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
 
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
@@ -48,9 +47,17 @@ void jl_link_global(GlobalVariable *GV, void *addr)
 {
     Constant *P = literal_static_pointer_val(addr, GV->getValueType());
     GV->setInitializer(P);
-    GV->setConstant(true);
-    GV->setLinkage(GlobalValue::PrivateLinkage);
-    GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+    if (jl_options.image_codegen) {
+        // If we are forcing imaging mode codegen for debugging,
+        // emit external non-const symbol to avoid LLVM optimizing the code
+        // similar to non-imaging mode.
+        GV->setLinkage(GlobalValue::ExternalLinkage);
+    }
+    else {
+        GV->setConstant(true);
+        GV->setLinkage(GlobalValue::PrivateLinkage);
+        GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+    }
 }
 
 void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)

@@ -12,11 +12,7 @@
 #include "clang/StaticAnalyzer/Frontend/FrontendActions.h"
 #include "clang/Tooling/CompilationDatabase.h"
 #include "clang/Tooling/Tooling.h"
-#if LLVM_VERSION_MAJOR >= 8
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
-#else
-#include "clang/StaticAnalyzer/Core/CheckerRegistry.h"
-#endif
 
 #include <iostream>
 #include <memory>
@@ -34,6 +30,7 @@
 using std::make_unique;
 #else
 using llvm::make_unique;
+#define PathSensitiveBugReport BugReport
 #endif
 
 namespace {
@@ -42,6 +39,16 @@ using namespace ento;
 
 #define PDP std::shared_ptr<PathDiagnosticPiece>
 #define MakePDP make_unique<PathDiagnosticEventPiece>
+
+static const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
+{
+#if LLVM_VERSION_MAJOR >= 10
+    return N->getStmtForDiagnostics();
+#else
+    return PathDiagnosticLocation::getStmt(N);
+#endif
+}
+
 
 class GCChecker
     : public Checker<
@@ -60,7 +67,7 @@ class GCChecker
   template <typename callback>
   void report_error(callback f, CheckerContext &C, const char *message) const;
   void report_error(CheckerContext &C, const char *message) const {
-    return report_error([](BugReport *) {}, C, message);
+    return report_error([](PathSensitiveBugReport *) {}, C, message);
   }
   void
   report_value_error(CheckerContext &C, SymbolRef Sym, const char *message,
@@ -227,11 +234,7 @@ private:
 
 public:
   void checkBeginFunction(CheckerContext &Ctx) const;
-#if LLVM_VERSION_MAJOR >= 7
   void checkEndFunction(const clang::ReturnStmt *RS, CheckerContext &Ctx) const;
-#else
-  void checkEndFunction(CheckerContext &Ctx) const;
-#endif
 #if LLVM_VERSION_MAJOR >= 9
   bool evalCall(const CallEvent &Call, CheckerContext &C) const;
 #else
@@ -248,12 +251,7 @@ public:
   void checkBind(SVal Loc, SVal Val, const Stmt *S, CheckerContext &) const;
   void checkLocation(SVal Loc, bool IsLoad, const Stmt *S,
                      CheckerContext &) const;
-  class GCBugVisitor
-#if LLVM_VERSION_MAJOR >= 7
-      : public BugReporterVisitor {
-#else
-      : public BugReporterVisitorImpl<GCBugVisitor> {
-#endif
+  class GCBugVisitor : public BugReporterVisitor {
   public:
     GCBugVisitor() {}
 
@@ -262,19 +260,10 @@ public:
       ID.AddPointer(&X);
     }
 
-    PDP VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR < 8
-                  const ExplodedNode *PrevN,
-#endif
-                  BugReporterContext &BRC, BugReport &BR) override;
+    PDP VisitNode(const ExplodedNode *N, BugReporterContext &BRC, PathSensitiveBugReport &BR) override;
   };
 
-  class GCValueBugVisitor
-#if LLVM_VERSION_MAJOR >= 7
-      : public BugReporterVisitor {
-#else
-      : public BugReporterVisitorImpl<GCValueBugVisitor> {
-#endif
+  class GCValueBugVisitor : public BugReporterVisitor {
   protected:
     SymbolRef Sym;
 
@@ -288,17 +277,13 @@ public:
     }
 
     PDP ExplainNoPropagation(const ExplodedNode *N, PathDiagnosticLocation Pos,
-                             BugReporterContext &BRC, BugReport &BR);
+                             BugReporterContext &BRC, PathSensitiveBugReport &BR);
     PDP ExplainNoPropagationFromExpr(const clang::Expr *FromWhere,
                                      const ExplodedNode *N,
                                      PathDiagnosticLocation Pos,
-                                     BugReporterContext &BRC, BugReport &BR);
+                                     BugReporterContext &BRC, PathSensitiveBugReport &BR);
 
-    PDP VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR < 8
-                  const ExplodedNode *PrevN,
-#endif
-                  BugReporterContext &BRC, BugReport &BR) override;
+    PDP VisitNode(const ExplodedNode *N, BugReporterContext &BRC, PathSensitiveBugReport &BR) override;
   }; // namespace
 };
 
@@ -372,22 +357,19 @@ static const VarRegion *walk_back_to_global_VR(const MemRegion *Region) {
 } // namespace Helpers
 
 PDP GCChecker::GCBugVisitor::VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR < 8
-                                       const ExplodedNode *,
-#endif
-                                       BugReporterContext &BRC, BugReport &BR) {
+                                       BugReporterContext &BRC, PathSensitiveBugReport &BR) {
   const ExplodedNode *PrevN = N->getFirstPred();
   unsigned NewGCDepth = N->getState()->get<GCDepth>();
   unsigned OldGCDepth = PrevN->getState()->get<GCDepth>();
   if (NewGCDepth != OldGCDepth) {
-    PathDiagnosticLocation Pos(PathDiagnosticLocation::getStmt(N),
+    PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
                                BRC.getSourceManager(), N->getLocationContext());
     return MakePDP(Pos, "GC frame changed here.");
   }
   unsigned NewGCState = N->getState()->get<GCDisabledAt>();
   unsigned OldGCState = PrevN->getState()->get<GCDisabledAt>();
   if (false /*NewGCState != OldGCState*/) {
-    PathDiagnosticLocation Pos(PathDiagnosticLocation::getStmt(N),
+    PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
                                BRC.getSourceManager(), N->getLocationContext());
     return MakePDP(Pos, "GC enabledness changed here.");
   }
@@ -396,7 +378,7 @@ PDP GCChecker::GCBugVisitor::VisitNode(const ExplodedNode *N,
 
 PDP GCChecker::GCValueBugVisitor::ExplainNoPropagationFromExpr(
     const clang::Expr *FromWhere, const ExplodedNode *N,
-    PathDiagnosticLocation Pos, BugReporterContext &BRC, BugReport &BR) {
+    PathDiagnosticLocation Pos, BugReporterContext &BRC, PathSensitiveBugReport &BR) {
   const MemRegion *Region =
       N->getState()->getSVal(FromWhere, N->getLocationContext()).getAsRegion();
   SymbolRef Parent = walkToRoot(
@@ -450,7 +432,7 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagationFromExpr(
 
 PDP GCChecker::GCValueBugVisitor::ExplainNoPropagation(
     const ExplodedNode *N, PathDiagnosticLocation Pos, BugReporterContext &BRC,
-    BugReport &BR) {
+    PathSensitiveBugReport &BR) {
   if (N->getLocation().getAs<StmtPoint>()) {
     const clang::Stmt *TheS = N->getLocation().castAs<StmtPoint>().getStmt();
     const clang::CallExpr *CE = dyn_cast<CallExpr>(TheS);
@@ -476,15 +458,11 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagation(
 }
 
 PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
-#if LLVM_VERSION_MAJOR < 8
-                                            const ExplodedNode *,
-#endif
-                                            BugReporterContext &BRC,
-                                            BugReport &BR) {
+                                            BugReporterContext &BRC, PathSensitiveBugReport &BR) {
   const ExplodedNode *PrevN = N->getFirstPred();
   const ValueState *NewValueState = N->getState()->get<GCValueMap>(Sym);
   const ValueState *OldValueState = PrevN->getState()->get<GCValueMap>(Sym);
-  const Stmt *Stmt = PathDiagnosticLocation::getStmt(N);
+  const Stmt *Stmt = getStmtForDiagnostics(N);
 
   PathDiagnosticLocation Pos;
   if (Stmt)
@@ -555,7 +533,7 @@ void GCChecker::report_error(callback f, CheckerContext &C,
 
   if (!BT)
     BT.reset(new BugType(this, "Invalid GC thingy", categories::LogicError));
-  auto Report = make_unique<BugReport>(*BT, message, N);
+  auto Report = make_unique<PathSensitiveBugReport>(*BT, message, N);
   Report->addVisitor(make_unique<GCBugVisitor>());
   f(Report.get());
   C.emitReport(std::move(Report));
@@ -571,7 +549,7 @@ void GCChecker::report_value_error(CheckerContext &C, SymbolRef Sym,
 
   if (!BT)
     BT.reset(new BugType(this, "Invalid GC thingy", categories::LogicError));
-  auto Report = make_unique<BugReport>(*BT, message, N);
+  auto Report = make_unique<PathSensitiveBugReport>(*BT, message, N);
   Report->addVisitor(make_unique<GCValueBugVisitor>(Sym));
   Report->addVisitor(make_unique<GCBugVisitor>());
   Report->addVisitor(make_unique<ConditionBRVisitor>());
@@ -625,7 +603,7 @@ bool GCChecker::propagateArgumentRootedness(CheckerContext &C,
     const ValueState *ValS = State->get<GCValueMap>(ArgSym);
     if (!ValS) {
       report_error(
-          [&](BugReport *Report) {
+          [&](PathSensitiveBugReport *Report) {
             Report->addNote(
                 "Tried to find root for this parameter in inlined call",
                 PathDiagnosticLocation::create(P, C.getSourceManager()));
@@ -717,7 +695,10 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
     C.addTransition(State);
   if (!C.inTopFrame())
     return;
-  if (C.getState()->get<GCDepth>() > 0)
+  // If `RS` is NULL, the function did not return normally.
+  // This could be either an abort/assertion failure or an exception throw.
+  // Do not require the GC frame to match in such case.
+  if (RS && C.getState()->get<GCDepth>() > 0)
     report_error(C, "Non-popped GC frame present at end of function");
 }
 
@@ -767,6 +748,7 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_excstack_t") ||
                    Name.endswith_lower("jl_task_t") ||
                    Name.endswith_lower("jl_uniontype_t") ||
+                   Name.endswith_lower("jl_method_match_t") ||
                    // Probably not technically true for these, but let's allow
                    // it
                    Name.endswith_lower("typemap_intersection_env") ||
@@ -1648,11 +1630,8 @@ extern "C" const char clang_analyzerAPIVersionString[] =
     CLANG_ANALYZER_API_VERSION_STRING;
 extern "C" void clang_registerCheckers(CheckerRegistry &registry) {
   registry.addChecker<GCChecker>(
-      "julia.GCChecker", "Validates julia gc invariants"
-#if LLVM_VERSION_MAJOR >= 8
-      ,
+      "julia.GCChecker", "Validates julia gc invariants",
       "https://docs.julialang.org/en/v1/devdocs/gc-sa/"
-#endif
   );
 }
 #endif

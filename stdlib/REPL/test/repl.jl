@@ -90,7 +90,7 @@ end
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-fake_repl(options = REPL.Options(confirm_exit=false,hascolor=false)) do stdin_write, stdout_read, repl
+fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_write, stdout_read, repl
     repl.specialdisplay = REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -1251,4 +1251,3 @@ Base.wait(frontend_task)
 macro throw_with_linenumbernode(err)
     Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
 end
-

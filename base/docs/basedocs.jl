@@ -126,8 +126,30 @@ kw"__init__"
 """
     baremodule
 
-`baremodule` declares a module that does not contain `using Base`
-or a definition of [`eval`](@ref Base.eval). It does still import `Core`.
+`baremodule` declares a module that does not contain `using Base` or local definitions of
+[`eval`](@ref Base.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+
+```julia
+module Mod
+
+...
+
+end
+```
+
+is equivalent to
+
+```julia
+baremodule Mod
+
+using Base
+
+eval(x) = Core.eval(Mod, x)
+include(p) = Base.include(Mod, p)
+
+...
+
+end
 """
 kw"baremodule"
 
@@ -160,6 +182,9 @@ Macros are a way to run generated code without calling [`eval`](@ref Base.eval),
 code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
+Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
+and file name the macro is called from, and `__module__`, which is the module the macro is expanded
+in.
 
 # Examples
 ```jldoctest
@@ -929,24 +954,23 @@ In most cases, this simply results in a call to `convert(argtype, argvalue)`.
 kw"ccall"
 
 """
-    llvmcall(IR::String, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
-    llvmcall((declarations::String, IR::String), ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
+    llvmcall(fun_ir::String, returntype, Tuple{argtype1, ...}, argvalue1, ...)
+    llvmcall((mod_ir::String, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
+    llvmcall((mod_bc::Vector{UInt8}, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
 
-Call LLVM IR string in the first argument. Similar to an LLVM function `define` block,
-arguments are available as consecutive unnamed SSA variables (%0, %1, etc.).
+Call the LLVM code provided in the first argument. There are several ways to specify this
+first argument:
 
-The optional declarations string contains external functions declarations that are
-necessary for llvm to compile the IR string. Multiple declarations can be passed in by
-separating them with line breaks.
+- as a literal string, representing function-level IR (similar to an LLVM `define` block),
+  with arguments are available as consecutive unnamed SSA variables (%0, %1, etc.);
+- as a 2-element tuple, containing a string of module IR and a string representing the name
+  of the entry-point function to call;
+- as a 2-element tuple, but with the module provided as an `Vector{UINt8}` with bitcode.
 
-Note that the argument type tuple must be a literal tuple, and not a tuple-valued
-variable or expression.
-
-Each `ArgumentValue` to `llvmcall` will be converted to the corresponding
-`ArgumentType`, by automatic insertion of calls to `unsafe_convert(ArgumentType,
-cconvert(ArgumentType, ArgumentValue))`. (See also the documentation for
-[`unsafe_convert`](@ref Base.unsafe_convert) and [`cconvert`](@ref Base.cconvert) for further details.)
-In most cases, this simply results in a call to `convert(ArgumentType, ArgumentValue)`.
+Note that contrary to `ccall`, the argument types must be specified as a tuple type, and not
+a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
+not as variables or expressions (it may be necessary to use `@eval` to generate these
+literals).
 
 See `test/llvmcall.jl` for usage examples.
 """

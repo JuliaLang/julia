@@ -130,12 +130,12 @@ end
 # NOTE: remotecall_fetch does it automatically, but this will be more efficient as
 # it avoids the overhead associated with a local remotecall.
 
-for func = (:length, :isready, :workers, :nworkers, :take!)
+for (func, rt) = ((:length, Int), (:isready, Bool), (:workers, Vector{Int}), (:nworkers, Int), (:take!, Int))
     func_local = Symbol(string("wp_local_", func))
     @eval begin
         function ($func)(pool::WorkerPool)
             if pool.ref.where != myid()
-                return remotecall_fetch(ref->($func_local)(fetch(ref).value), pool.ref.where, pool.ref)
+                return remotecall_fetch(ref->($func_local)(fetch(ref).value), pool.ref.where, pool.ref)::$rt
             else
                 return ($func_local)(pool)
             end

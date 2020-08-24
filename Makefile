@@ -127,7 +127,7 @@ release-candidate: release testall
 	@echo 6. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
 	@echo 7. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
 	@echo 8. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
-	@echo 9. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
+	@echo 9. Follow packaging instructions in doc/build/distributing.md to create binary packages for all platforms
 	@echo 10. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
 	@echo 11. Update checksums on AWS for tarball and packaged binaries
 	@echo 12. Announce on mailing lists
@@ -180,6 +180,11 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
 ifeq ($(USE_LLVM_SHLIB),1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-9jl
+endif
+ifeq ($(OS),Darwin)
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libosxunwind
+else
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
 endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
@@ -373,10 +378,7 @@ endif
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-checked
 	# Copy in beautiful new man page
 	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
-	# Copy icon and .desktop file
-	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
-	$(INSTALL_F) $(JULIAHOME)/contrib/julia.svg $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
-	-touch -c $(DESTDIR)$(datarootdir)/icons/hicolor/
+	# Copy .desktop file
 	mkdir -p $(DESTDIR)$(datarootdir)/applications/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
 	# Install appdata file

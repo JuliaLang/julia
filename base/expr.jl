@@ -59,6 +59,8 @@ function copy_exprs(x::PhiCNode)
 end
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
 
+exprarray(head, args::Array{Any,1}) = (ex = Expr(head); ex.args = args; ex)
+
 # create copies of the CodeInfo definition, and any mutable fields
 function copy(c::CodeInfo)
     cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
@@ -211,9 +213,10 @@ prevented. This is shown in the following example:
         Function Definition
     =#
 end
-
-If the function is trivial (for example returning a constant) it might get inlined anyway.
 ```
+
+!!! note
+    If the function is trivial (for example returning a constant) it might get inlined anyway.
 """
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)

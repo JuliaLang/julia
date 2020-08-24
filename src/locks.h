@@ -54,13 +54,10 @@ static inline void jl_mutex_lock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 static inline void jl_lock_frame_push(jl_mutex_t *lock)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    // For early bootstrap
-    if (__unlikely(!ptls->current_task))
-        return;
-    arraylist_t *locks = &ptls->current_task->locks;
-    size_t len = locks->len;
+    small_arraylist_t *locks = &ptls->locks;
+    uint32_t len = locks->len;
     if (__unlikely(len >= locks->max)) {
-        arraylist_grow(locks, 1);
+        small_arraylist_grow(locks, 1);
     }
     else {
         locks->len = len + 1;
@@ -70,9 +67,8 @@ static inline void jl_lock_frame_push(jl_mutex_t *lock)
 static inline void jl_lock_frame_pop(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (__likely(ptls->current_task)) {
-        ptls->current_task->locks.len--;
-    }
+    assert(ptls->locks.len > 0);
+    ptls->locks.len--;
 }
 
 #define JL_SIGATOMIC_BEGIN() do {               \
