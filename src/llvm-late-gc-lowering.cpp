@@ -1871,27 +1871,25 @@ void LateLowerGCFrame::RefineLiveSet(BitVector &LS, State &S)
         }
     } while (changed);
     // Now remove all values from the LiveSet that's kept alive by other objects
-    do {
-        changed = false;
-        for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
-            if (!S.Refinements.count(Idx))
+    // This loop only mutate `LS` which isn't read from in the loop body so
+    // a single pass is enough.
+    for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
+        if (!S.Refinements.count(Idx))
+            continue;
+        const auto &RefinedPtr = S.Refinements[Idx];
+        if (RefinedPtr.empty())
+            continue;
+        bool rooted = true;
+        for (auto RefPtr: RefinedPtr) {
+            if (RefPtr < 0 || HasBitSet(FullLS, RefPtr))
                 continue;
-            auto &RefinedPtr = S.Refinements[Idx];
-            if (RefinedPtr.empty())
-                continue;
-            bool rooted = true;
-            for (auto RefPtr: RefinedPtr) {
-                if (RefPtr < 0 || HasBitSet(FullLS, RefPtr))
-                    continue;
-                rooted = false;
-                break;
-            }
-            if (rooted) {
-                changed = true;
-                LS[Idx] = 0;
-            }
+            rooted = false;
+            break;
         }
-    } while (changed);
+        if (rooted) {
+            LS[Idx] = 0;
+        }
+    }
 }
 
 void LateLowerGCFrame::ComputeLiveSets(State &S) {
