@@ -463,7 +463,7 @@ mutable struct LineEditREPL <: AbstractREPL
             in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
     end
 end
-outstream(r::LineEditREPL) = r.t
+outstream(r::LineEditREPL) = r.t isa TTYTerminal ? r.t.out_stream : r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
@@ -510,12 +510,7 @@ end
 with_methodtable_hint(f, repl) = f(outstream(repl))
 function with_methodtable_hint(f, repl::LineEditREPL)
     linfos = Tuple{String,Int}[]
-    out = outstream(repl)
-    # This avoids compiling a lot of IO for TTYTerminal
-    if out isa TTYTerminal
-        out = out.out_stream
-    end
-    io = IOContext(out, :last_shown_line_infos => linfos)
+    io = IOContext(outstream(repl), :last_shown_line_infos => linfos)
     f(io)
     if !isempty(linfos)
         repl.last_shown_line_infos = linfos
