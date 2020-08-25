@@ -2051,6 +2051,7 @@
                        (n   (length lhss))
                        (st  (gensy)))
                   `(block
+                    (local ,st)
                     ,@ini
                     ,.(map (lambda (i lhs)
                              (expand-forms
