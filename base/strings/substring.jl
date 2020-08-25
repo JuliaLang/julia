@@ -62,7 +62,7 @@ function String(s::SubString{String})
 end
 
 ncodeunits(s::SubString) = s.ncodeunits
-codeunit(s::SubString) = codeunit(s.string)::Type{<:Union{UInt8, UInt16, UInt32}}
+codeunit(s::SubString) = codeunit(s.string)::CodeunitType
 length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
