@@ -1667,6 +1667,9 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         return ghostValue(jfty);
     bool maybe_null = idx >= (unsigned)jt->ninitialized;
     size_t byte_offset = jl_field_offset(jt, idx);
+    auto tbaa = strct.tbaa;
+    if (tbaa == tbaa_datatype && byte_offset != offsetof(jl_datatype_t, types))
+        tbaa = tbaa_const;
     if (strct.ispointer()) {
         Value *staddr = maybe_decay_tracked(ctx, data_pointer(ctx, strct));
         bool isboxed;
@@ -1699,7 +1702,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             LoadInst *Load = ctx.builder.CreateAlignedLoad(T_prjlvalue, maybe_bitcast(ctx, addr, T_pprjlvalue), Align(sizeof(void*)));
             Load->setOrdering(AtomicOrdering::Unordered);
             maybe_mark_load_dereferenceable(Load, maybe_null, jl_field_type(jt, idx));
-            Value *fldv = tbaa_decorate(strct.tbaa, Load);
+            Value *fldv = tbaa_decorate(tbaa, Load);
             if (maybe_null)
                 null_pointer_check(ctx, fldv);
             return mark_julia_type(ctx, fldv, true, jfty);
@@ -1726,17 +1729,17 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 Type *ET = IntegerType::get(jl_LLVMContext, 8 * al);
                 AllocaInst *lv = emit_static_alloca(ctx, ET);
                 lv->setOperand(0, ConstantInt::get(T_int32, (fsz + al - 1) / al));
-                emit_memcpy(ctx, lv, strct.tbaa, addr, strct.tbaa, fsz, al);
+                emit_memcpy(ctx, lv, tbaa, addr, tbaa, fsz, al);
                 addr = lv;
             }
-            return mark_julia_slot(addr, jfty, tindex, strct.tbaa);
+            return mark_julia_slot(addr, jfty, tindex, tbaa);
         }
         else if (!jt->mutabl && !(maybe_null && jfty == (jl_value_t*)jl_bool_type)) {
             // just compute the pointer and let user load it when necessary
-            return mark_julia_slot(addr, jfty, NULL, strct.tbaa);
+            return mark_julia_slot(addr, jfty, NULL, tbaa);
         }
         unsigned align = jl_field_align(jt, idx);
-        return typed_load(ctx, addr, NULL, jfty, strct.tbaa, nullptr, true, align);
+        return typed_load(ctx, addr, NULL, jfty, tbaa, nullptr, true, align);
     }
     else if (isa<UndefValue>(strct.V)) {
         return jl_cgval_t();
