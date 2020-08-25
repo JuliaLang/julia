@@ -753,6 +753,13 @@ function signature_type(@nospecialize(f), @nospecialize(args))
     end
 end
 
+function call_type(@nospecialize(tt))
+    ft = tt.parameters[1]
+    argt = Tuple{tt.parameters[2:end]...}
+    name = Symbol(String(ft.name.name)[2:end])  # strip off leading '#'
+    return (getfield(ft.name.module, name), argt)
+end
+
 """
     code_lowered(f, types; generated=true, debuginfo=:default)
 
@@ -926,6 +933,14 @@ function visit(f, d::Core.TypeMapEntry)
     while d !== nothing
         f(d.func)
         d = d.next
+    end
+    nothing
+end
+function visit(f, d::SimpleVector)
+    for i = 1:length(d)
+        if isassigned(d, i)
+            f(d[i])
+        end
     end
     nothing
 end
