@@ -204,27 +204,31 @@ end
 ==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
-    with_methodtable_hint(d.repl) do io
-        io = IOContext(io, :limit => true, :module => Main)
-        get(io, :color, false) && write(io, answer_color(d.repl))
-        if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
-            # this can override the :limit property set initially
-            io = foldl(IOContext, d.repl.options.iocontext, init=io)
-        end
-        show(io, mime, x)
-        println(io)
+    linfos = Tuple{String,Int}[]
+    io = IOContext(outstream(d.repl), :limit => true, :module => Main, :last_shown_line_infos => linfos)
+    get(io, :color, false) && write(io, answer_color(d.repl))
+    if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
+        # this can override the :limit property set initially
+        io = foldl(IOContext, d.repl.options.iocontext, init=io)
     end
-    nothing
+    show(io, mime, x)
+    println(io)
+    if !isempty(linfos)
+        repl.last_shown_line_infos = linfos
+    end
+    return nothing
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
-    with_methodtable_hint(repl) do io
-        io = IOContext(io, :module => Main)
-        print_response(io, response, show_value, have_color, specialdisplay(repl))
+    linfos = Tuple{String,Int}[]
+    io = IOContext(outstream(repl), :module => Main, :last_shown_line_infos => linfos)
+    print_response(io, response, show_value, have_color, specialdisplay(repl))
+    if !isempty(linfos)
+        repl.last_shown_line_infos = linfos
     end
-    nothing
+    return nothing
 end
 function print_response(errio::IO, @nospecialize(response), show_value::Bool, have_color::Bool, specialdisplay=nothing)
     Base.sigatomic_begin()
@@ -505,22 +509,6 @@ function complete_line(c::LatexCompletions, s)
     full = LineEdit.input_string(s)
     ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
     return unique!(map(completion_text, ret)), partial[range], should_complete
-end
-
-with_methodtable_hint(f, repl) = f(outstream(repl))
-function with_methodtable_hint(f, repl::LineEditREPL)
-    linfos = Tuple{String,Int}[]
-    io = IOContext(outstream(repl), :last_shown_line_infos => linfos)
-    f(io)
-    if !isempty(linfos)
-        repl.last_shown_line_infos = linfos
-        println(
-            io,
-            "\nTo edit a specific method, type the corresponding number into the " *
-            "REPL and press Ctrl+Q",
-        )
-    end
-    nothing
 end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
@@ -1146,7 +1134,7 @@ function setup_interface(
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)
             n === nothing && @goto writeback
-            if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
+            if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
                 @goto writeback
             end
             InteractiveUtils.edit(linfos[n][1], linfos[n][2])
