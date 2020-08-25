@@ -1567,6 +1567,23 @@ reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}) =
 reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
     _typed_hcat(mapreduce(eltype, promote_type, A), A)
 
+function reduce(::typeof(cat), A::AbstractArray{<:AbstractVecOrMat})
+    B = _typed_hcat(mapreduce(eltype, promote_type, A), vec(A))
+    reshape(B, _cat_firstax(A)..., axes(A)...)
+end
+function reduce(::typeof(cat), A::AbstractArray{<:AbstractArray})
+    B = _typed_hcat(mapreduce(eltype, promote_type, A), vec(vec.(A))) # should probably be _typed_cat
+    reshape(B, _cat_firstax(A)..., axes(A)...)
+end
+
+function _cat_firstax(A)
+    ax1 = axes(first(A))
+    for a in A
+        axes(a) == ax1 || throw(DimensionMismatch("expected arrays of consistent size")) # should maybe call _cs(d, a, b)
+    end
+    ax1
+end
+
 ## cat: general case
 
 # helper functions
@@ -1754,19 +1771,55 @@ typed_hcat(::Type{T}, X...) where T = cat_t(T, X...; dims=Val(2))
 """
     cat(A...; dims=dims)
 
-Concatenate the input arrays along the specified dimensions in the iterable `dims`. For
-dimensions not in `dims`, all input arrays should have the same size, which will also be the
+Concatenate the input arrays along the specified dimensions in the iterable `dims`.
+
+For dimensions not in `dims`, all input arrays should have the same size, which will also be the
 size of the output array along that dimension. For dimensions in `dims`, the size of the
 output array is the sum of the sizes of the input arrays along that dimension. If `dims` is
 a single number, the different arrays are tightly stacked along that dimension. If `dims` is
 an iterable containing several dimensions, this allows one to construct block diagonal
 matrices and their higher-dimensional analogues by simultaneously increasing several
-dimensions for every new input array and putting zero blocks elsewhere. For example,
-`cat(matrices...; dims=(1,2))` builds a block diagonal matrix, i.e. a block matrix with
-`matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
-diagonal.
+dimensions for every new input array and putting zero blocks elsewhere.
+
+When all input arrays are N-dimensional, `dims` has a default value of `N+1`
+
+!!! compat "Julia 1.6"
+     The default value `dims=N+1` requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> cat(ones(2,2), fill(pi,2), zeros(2,3,1); dims=2)
+2×6×1 Array{Float64,3}:
+[:, :, 1] =
+ 1.0  1.0  3.14159  0.0  0.0  0.0
+ 1.0  1.0  3.14159  0.0  0.0  0.0
+
+julia> cat([true], trues(2,2), trues(2,4); dims=(1,2))
+5×7 Array{Bool,2}:
+ 1  0  0  0  0  0  0
+ 0  1  1  0  0  0  0
+ 0  1  1  0  0  0  0
+ 0  0  0  1  1  1  1
+ 0  0  0  1  1  1  1
+
+julia> cat([1 1; 1 1], fill(√2,2,2), [4 8; 16 32])
+2×2×3 Array{Float64,3}:
+[:, :, 1] =
+ 1.0  1.0
+ 1.0  1.0
+
+[:, :, 2] =
+ 1.41421  1.41421
+ 1.41421  1.41421
+
+[:, :, 3] =
+  4.0   8.0
+ 16.0  32.0
+```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
+@inline cat(A::AbstractArray{<:Any,N}...; dims=N+1) where {N} = _cat(dims, A...)
+
 _cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(T, A...; dims=catdims)
 
 # The specializations for 1 and 2 inputs are important
