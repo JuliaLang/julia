@@ -1177,6 +1177,8 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
 #  define jl_unreachable() ((void)jl_assume(0))
 #endif
 
+jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
+
 // Tools for locally disabling spurious compiler warnings
 //
 // Particular calls which are used elsewhere in the code include:

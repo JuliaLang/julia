@@ -1932,7 +1932,7 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *mod_list)
         uuid.hi = read_uint64(s);
         uuid.lo = read_uint64(s);
         uint64_t build_id = read_uint64(s);
-        jl_sym_t *sym = jl_symbol_n(name, len);
+        jl_sym_t *sym = _jl_symbol(name, len);
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_list, i);
         if (!m || !jl_is_module(m) || m->uuid.hi != uuid.hi || m->uuid.lo != uuid.lo || m->name != sym || m->build_id != build_id) {
             return jl_get_exceptionf(jl_errorexception_type,

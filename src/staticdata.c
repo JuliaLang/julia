@@ -949,7 +949,7 @@ static void jl_read_symbols(jl_serializer_state *s)
         const char *str = (const char*)base;
         base += len + 1;
         //printf("symbol %3d: %s\n", len, str);
-        jl_sym_t *sym = jl_symbol_n(str, len);
+        jl_sym_t *sym = _jl_symbol(str, len);
         arraylist_push(&deser_sym, (void*)sym);
     }
 }

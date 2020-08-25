@@ -707,7 +707,7 @@ end
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    return unsafe_write(io, pname, Int(ccall(:strlen, Csize_t, (Cstring,), pname)))
+    return unsafe_write(io, pname, ccall(:strlen, Csize_t, (Cstring,), pname))
 end
 
 function write(to::IO, from::IO)
