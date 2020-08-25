@@ -81,6 +81,8 @@ See also: [`ncodeunits`](@ref)
 """
 codeunit(s::AbstractString)
 
+const CodeunitType = Union{Type{UInt8},Type{UInt16},Type{UInt32}}
+
 """
     codeunit(s::AbstractString, i::Integer) -> Union{UInt8, UInt16, UInt32}
 
@@ -174,7 +176,7 @@ julia> sizeof("∀")
 3
 ```
 """
-sizeof(s::AbstractString) = ncodeunits(s)::Int * sizeof(codeunit(s)::Type{<:Union{UInt8,UInt16,UInt32}})
+sizeof(s::AbstractString) = ncodeunits(s)::Int * sizeof(codeunit(s)::CodeunitType)
 firstindex(s::AbstractString) = 1
 lastindex(s::AbstractString) = thisind(s, ncodeunits(s)::Int)
 isempty(s::AbstractString) = iszero(ncodeunits(s)::Int)
@@ -602,7 +604,7 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
 ## string map, filter ##
 
 function map(f, s::AbstractString)
-    out = StringVector(max(4, sizeof(s)::Int÷sizeof(codeunit(s)::Type{<:Union{UInt8,UInt16,UInt32}})))
+    out = StringVector(max(4, sizeof(s)::Int÷sizeof(codeunit(s)::CodeunitType)))
     index = UInt(1)
     for c::AbstractChar in s
         c′ = f(c)
