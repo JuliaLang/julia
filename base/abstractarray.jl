@@ -2232,13 +2232,7 @@ end
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
 mapany(f, A::AbstractArray) = map!(f, Vector{Any}(undef, length(A)), A)
-function mapany(f, itr)
-    ret = []
-    for x in itr
-        push!(ret, f(x))
-    end
-    return ret
-end
+mapany(f, itr) = Any[f(x) for x in itr]
 
 # default to returning an Array for `map` on general iterators
 """
