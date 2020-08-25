@@ -243,11 +243,11 @@ function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::I
     end
 end
 
-function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
+function tryparse(::Type{BigFloat}, s::AbstractString, default = nothing; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
     z = BigFloat(precision=precision)
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ref{BigFloat}, Cstring, Int32, MPFRRoundingMode), z, s, base, rounding)
-    err == 0 ? z : nothing
+    err == 0 ? z : default
 end
 
 BigFloat(x::AbstractString, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =

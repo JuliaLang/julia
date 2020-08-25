@@ -256,8 +256,9 @@ end
     @test tryparse(Bool, "falss", true) === true
     @test tryparse(Float64, "1.2.", 8.) === 8.
     @test tryparse(Float32, "1.2.", 8.f0) === 8.f0
-    @test tryparse(Float16, "1.2.", 3) === 3
+    @test tryparse(Float16, "1.2.", Float16(1.2)) === Float16(1.2)
     @test tryparse(Complex{Int}, "1+2ii", 12im) === 12im
+    @test tryparse(BigInt, "100000000000000000m", 4) === 4
 end
 
 # parsing complex numbers (#22250)

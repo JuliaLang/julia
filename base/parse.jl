@@ -103,24 +103,24 @@ end
 end
 
 
-function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
+function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool, default = nothing) where T<:Integer
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if sgn == 0 && base == 0 && i == 0
         raise && throw(ArgumentError("input string is empty or only contains whitespace"))
-        return nothing
+        return default
     end
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-        return nothing
+        return default
     end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
-        return nothing
+        return default
     end
     c, i = parseint_iterate(s,i,endpos)
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
-        return nothing
+        return default
     end
 
     base = convert(T, base)
@@ -135,7 +135,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         d::T = __convert_digit(_c, base)
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
-            return nothing
+            return default
         end
         n *= base
         n += d
@@ -153,7 +153,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         d::T = __convert_digit(_c, base)
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
-            return nothing
+            return default
         end
         (T <: Signed) && (d *= sgn)
 
@@ -161,7 +161,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         n, ov_add = add_with_overflow(n, d)
         if ov_mul | ov_add
             raise && throw(OverflowError("overflow parsing $(repr(SubString(s,startpos,endpos)))"))
-            return nothing
+            return default
         end
         (i > endpos) && return n
         c, i = iterate(s,i)::Tuple{Char, Int}
@@ -170,21 +170,21 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         c, i = iterate(s,i)::Tuple{Char, Int}
         if !isspace(c)
             raise && throw(ArgumentError("extra characters after whitespace in $(repr(SubString(s,startpos,endpos)))"))
-            return nothing
+            return default
         end
     end
     return n
 end
 
 function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
-        startpos::Int, endpos::Int, base::Integer, raise::Bool)
+        startpos::Int, endpos::Int, base::Integer, raise::Bool, default = nothing)
     if isempty(sbuff)
         raise && throw(ArgumentError("input string is empty"))
-        return nothing
+        return default
     end
 
     if isnumeric(sbuff[1])
-        intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
+        intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false, default)
         (intres == 1) && return true
         (intres == 0) && return false
         raise && throw(ArgumentError("invalid Bool representation: $(repr(sbuff))"))
@@ -216,7 +216,7 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
             throw(ArgumentError("invalid Bool representation: $(repr(substr))"))
         end
     end
-    return nothing
+    return default
 end
 
 @inline function check_valid_base(base)
@@ -235,78 +235,77 @@ Optionally you can specify a fallback value to return instead of [`nothing`](@re
 """
 function tryparse(::Type{T}, s::AbstractString, default = nothing; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
     # Zero base means, "figure it out"
-    val = tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
-    isnothing(default) ? val : something(val, default)
+    tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false, default)
 end
 
 function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
-                                 base===nothing ? 0 : check_valid_base(base), true))
+                                 base===nothing ? 0 : check_valid_base(base), true, nothing))
 end
 
 ## string to float functions ##
 
-function tryparse(::Type{Float64}, s::String)
+function tryparse(::Type{Float64}, s::String, default = nothing)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
-    hasvalue ? val : nothing
+    hasvalue ? val : default
 end
-function tryparse(::Type{Float64}, s::SubString{String})
+function tryparse(::Type{Float64}, s::SubString{String}, default = nothing)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
-    hasvalue ? val : nothing
+    hasvalue ? val : default
 end
-function tryparse_internal(::Type{Float64}, s::String, startpos::Int, endpos::Int)
+function tryparse_internal(::Type{Float64}, s::String, startpos::Int, endpos::Int, default)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
+    hasvalue ? val : default
 end
-function tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int, endpos::Int)
+function tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int, endpos::Int, default)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
+    hasvalue ? val : default
 end
-function tryparse(::Type{Float32}, s::String)
+function tryparse(::Type{Float32}, s::String, default = nothing)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
-    hasvalue ? val : nothing
+    hasvalue ? val : default
 end
-function tryparse(::Type{Float32}, s::SubString{String})
+function tryparse(::Type{Float32}, s::SubString{String}, default = nothing)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
-    hasvalue ? val : nothing
+    hasvalue ? val : default
 end
-function tryparse_internal(::Type{Float32}, s::String, startpos::Int, endpos::Int)
+function tryparse_internal(::Type{Float32}, s::String, startpos::Int, endpos::Int, default)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
+    hasvalue ? val : default
 end
-function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int, endpos::Int)
+function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int, endpos::Int, default)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
+    hasvalue ? val : default
 end
-function tryparse(::Type{T}, s::AbstractString, default = nothing) where {T<:Union{Float32,Float64}}
-    val = tryparse(T, String(s))
-    isnothing(default) ? val : something(val, default)
-end
+tryparse(::Type{T}, s::AbstractString, default = nothing) where {T<:Union{Float32,Float64}} =
+    tryparse(T, String(s), default)
 function tryparse(::Type{Float16}, s::AbstractString, default = nothing)
-    val = convert(Union{Float16, Nothing}, tryparse(Float32, s))
-    isnothing(default) ? val : something(val, default)
+    val = tryparse(Float32, s)
+    val === nothing ? default : convert(Float16, val)
 end
-tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
-    convert(Union{Float16, Nothing}, tryparse_internal(Float32, s, startpos, endpos))
+function tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int, default)
+    val = tryparse_internal(Float32, s, startpos, endpos)
+    val === nothing ? default : convert(Float16, val)
+end
 
 ## string to complex functions ##
 
-function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, raise::Bool) where {T<:Real}
+function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, raise::Bool, default) where {T<:Real}
     # skip initial whitespace
     while i ≤ e && isspace(s[i])
         i = nextind(s, i)
     end
     if i > e
         raise && throw(ArgumentError("input string is empty or only contains whitespace"))
-        return nothing
+        return default
     end
 
     # find index of ± separating real/imaginary parts (if any)
@@ -324,71 +323,69 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
         iᵢ -= 1
         if s[iᵢ] != 'i'
             raise && throw(ArgumentError("expected trailing \"im\", found only \"m\""))
-            return nothing
+            return default
         end
     end
 
     if i₊ == 0 # purely real or imaginary value
         if iᵢ > i && !(iᵢ == i+1 && s[i] in ('+','-')) # purely imaginary (not "±inf")
-            x = tryparse_internal(T, s, i, iᵢ-1, raise)
-            x === nothing && return nothing
+            x = tryparse_internal(T, s, i, iᵢ-1, raise, nothing)
+            x === nothing && return default
             return Complex{T}(zero(x),x)
         else # purely real
-            x = tryparse_internal(T, s, i, e, raise)
-            x === nothing && return nothing
+            x = tryparse_internal(T, s, i, e, raise, nothing)
+            x === nothing && return default
             return Complex{T}(x)
         end
     end
 
     if iᵢ < i₊
         raise && throw(ArgumentError("missing imaginary unit"))
-        return nothing # no imaginary part
+        return default # no imaginary part
     end
 
     # parse real part
-    re = tryparse_internal(T, s, i, i₊-1, raise)
-    re === nothing && return nothing
+    re = tryparse_internal(T, s, i, i₊-1, raise, nothing)
+    re === nothing && return default
 
     # parse imaginary part
-    im = tryparse_internal(T, s, i₊+1, iᵢ-1, raise)
-    im === nothing && return nothing
+    im = tryparse_internal(T, s, i₊+1, iᵢ-1, raise, nothing)
+    im === nothing && return default
 
     return Complex{T}(re, s[i₊]=='-' ? -im : im)
 end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
-tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Bool) where S<:Real =
-    tryparse_internal(T, String(s), i, e, raise)
+tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Bool, default = nothing) where S<:Real =
+    tryparse_internal(T, String(s), i, e, raise, nothing)
 
 # fallback methods for tryparse_internal
-tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
-    startpos == firstindex(s) && endpos == lastindex(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
-function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
-    result = tryparse_internal(T, s, startpos, endpos)
+tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, default = nothing) where T<:Real =
+    startpos == firstindex(s) && endpos == lastindex(s) ? tryparse(T, s, default) : tryparse(T, SubString(s, startpos, endpos), default)
+function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool, default = nothing) where T<:Real
+    result = tryparse_internal(T, s, startpos, endpos, nothing)
     if raise && result === nothing
         _parse_failure(T, s, startpos, endpos)
     end
-    return result
+    return result === nothing ? default : result
 end
-function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool; kwargs...) where T<:Real
-    result = tryparse(T, s; kwargs...)
+function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool, default = nothing; kwargs...) where T<:Real
+    result = tryparse(T, s, nothing; kwargs...)
     if raise && result === nothing
         _parse_failure(T, s)
     end
-    return result
+    return result === nothing ? default : result
 end
 @noinline _parse_failure(T, s::AbstractString, startpos = firstindex(s), endpos = lastindex(s)) =
     throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
 
-tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
-    tryparse_internal(T, s, startpos, endpos, 10, raise)
+tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool, default = nothing) where T<:Integer =
+    tryparse_internal(T, s, startpos, endpos, 10, raise, default)
 
 parse(::Type{T}, s::AbstractString; kwargs...) where T<:Real =
-    convert(T, tryparse_internal(T, s, true; kwargs...))
+    convert(T, tryparse_internal(T, s, true, nothing; kwargs...))
 parse(::Type{T}, s::AbstractString) where T<:Complex =
-    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true, nothing))
 
-function tryparse(T::Type{Complex{S}}, s::AbstractString, default = nothing) where S<:Real
-    val = tryparse_internal(T, s, firstindex(s), lastindex(s), false)
-    isnothing(default) ? val : something(val, default)
-end
+tryparse(T::Type{Complex{S}}, s::AbstractString, default = nothing) where S<:Real =
+    tryparse_internal(T, s, firstindex(s), lastindex(s), false, default)
