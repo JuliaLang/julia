@@ -187,7 +187,10 @@ end
 
 Combined multiply-add, `A*y .+ z`, for either matrix-matrix multiplication or
 matrix-vector multiplication. The result is always the size of `A*y`, although
-`z` have fewer dimensions.
+`z` may have fewer dimensions.
+
+!!! compat "Julia 1.6"
+     These methods require Julia 1.6 or later.
 
 # Examples
 ```jldoctest
