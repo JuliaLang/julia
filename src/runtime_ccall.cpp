@@ -113,8 +113,6 @@ jl_value_t *jl_get_JIT(void)
 # define MAXHOSTNAMELEN 256
 #endif
 
-extern "C" int jl_getpid();
-
 // Form a file name from a pattern made by replacing tokens,
 // similar to many of those provided by ssh_config TOKENS:
 //

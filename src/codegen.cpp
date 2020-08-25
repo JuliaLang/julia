@@ -1832,8 +1832,6 @@ extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
     jl_gc_sync_total_bytes(0);
 }
 
-extern "C" int isabspath(const char *in);
-
 static void write_log_data(logdata_t &logData, const char *extension)
 {
     std::string base = std::string(jl_options.julia_bindir);
@@ -1888,8 +1886,6 @@ static void write_log_data(logdata_t &logData, const char *extension)
         }
     }
 }
-
-extern "C" int jl_getpid();
 
 static void write_lcov_data(logdata_t &logData, const std::string &outfile)
 {
@@ -1958,8 +1954,6 @@ static void show_source_loc(jl_codectx_t &ctx, JL_STREAM *out)
 {
     jl_printf(out, "in %s at %s", ctx.name, ctx.file.str().c_str());
 }
-
-extern "C" void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 
 static void cg_bdw(jl_codectx_t &ctx, jl_binding_t *b)
 {

@@ -315,8 +315,6 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
     return jl_get_binding_(m, var, NULL);
 }
 
-void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
-
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
@@ -612,9 +610,9 @@ JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 extern const char *jl_filename;
 extern int jl_lineno;
 
-char dep_message_prefix[] = "_dep_message_";
+static char const dep_message_prefix[] = "_dep_message_";
 
-jl_binding_t *jl_get_dep_message_binding(jl_module_t *m, jl_binding_t *deprecated_binding)
+static jl_binding_t *jl_get_dep_message_binding(jl_module_t *m, jl_binding_t *deprecated_binding)
 {
     size_t prefix_len = strlen(dep_message_prefix);
     size_t name_len = strlen(jl_symbol_name(deprecated_binding->name));

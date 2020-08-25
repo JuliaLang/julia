@@ -247,7 +247,7 @@ static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n
 // be careful not to put non-leaf types or DataType/UnionAll/Union in the
 // argument cache, since they should have a lower priority and so will go in some
 // later list
-int is_cache_leaf(jl_value_t *ty, int tparam)
+static int is_cache_leaf(jl_value_t *ty, int tparam)
 {
     if (ty == jl_bottom_type)
         return 1;
@@ -680,8 +680,6 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
     }
     return NULL;
 }
-
-int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
 
 static jl_typemap_entry_t *jl_typemap_entry_lookup_by_type(
         jl_typemap_entry_t *ml, struct jl_typemap_assoc *search)

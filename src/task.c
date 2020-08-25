@@ -275,8 +275,6 @@ JL_DLLEXPORT jl_task_t *jl_get_next_task(void)
 const char tsan_state_corruption[] = "TSAN state corrupted. Exiting HARD!\n";
 #endif
 
-void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
-
 static void ctx_switch(jl_ptls_t ptls)
 {
     jl_task_t **pt = &ptls->next_task;
@@ -515,10 +513,8 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
     jl_exit(1);
 }
 
-jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
-
 // yield to exception handler
-void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
+static void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->io_wait = 0;
@@ -692,7 +688,7 @@ JL_DLLEXPORT jl_value_t *jl_get_root_task(void)
     return (jl_value_t*)ptls->root_task;
 }
 
-void JL_DLLEXPORT jl_task_wait()
+JL_DLLEXPORT void jl_task_wait()
 {
     static jl_function_t *wait_func = NULL;
     if (!wait_func) {
@@ -704,7 +700,7 @@ void JL_DLLEXPORT jl_task_wait()
     jl_get_ptls_states()->world_age = last_age;
 }
 
-void JL_DLLEXPORT jl_schedule_task(jl_task_t *task)
+JL_DLLEXPORT void jl_schedule_task(jl_task_t *task)
 {
     static jl_function_t *sched_func = NULL;
     if (!sched_func) {

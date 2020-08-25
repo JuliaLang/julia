@@ -69,10 +69,10 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
 
 /// ----- Definitions for various internal TypeMaps ----- ///
 
-const struct jl_typemap_info method_defs = {
+static const struct jl_typemap_info method_defs = {
     1, &jl_method_type
 };
-const struct jl_typemap_info lambda_cache = {
+static const struct jl_typemap_info lambda_cache = {
     0, &jl_method_instance_type
 };
 
@@ -1764,7 +1764,7 @@ jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs
     return jl_inst_arg_tuple_type(arg1, args, nargs, 1);
 }
 
-jl_tupletype_t *lookup_arg_type_tuple(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs)
+static jl_tupletype_t *lookup_arg_type_tuple(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs)
 {
     return jl_lookup_arg_tuple_type(arg1, args, nargs, 1);
 }
@@ -2031,7 +2031,7 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
     }
 }
 
-void jl_compile_now(jl_method_instance_t *mi)
+static void jl_compile_now(jl_method_instance_t *mi)
 {
     size_t world = jl_world_counter;
     size_t tworld = jl_typeinf_world;
@@ -2083,7 +2083,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 }
 
 // add type of `f` to front of argument tuple type
-jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types0)
+static jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types0)
 {
     jl_value_t *types = jl_unwrap_unionall(types0);
     size_t l = jl_nparams(types);
@@ -2316,12 +2316,6 @@ have_entry:
         jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def.method->file), mfunc->def.method->line);
 #endif
     return mfunc;
-}
-
-jl_method_instance_t *jl_lookup_generic(jl_value_t **args, uint32_t nargs, uint32_t callsite,
-                                        size_t world)
-{
-    return jl_lookup_generic_(args[0], &args[1], nargs - 1, callsite, world);
 }
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)

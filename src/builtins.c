@@ -240,8 +240,6 @@ typedef struct _varidx {
     struct _varidx *prev;
 } jl_varidx_t;
 
-JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
-
 static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOINT
 {
     if (v == NULL)
@@ -1025,8 +1023,6 @@ JL_CALLABLE(jl_f_invoke)
     return res;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f);
-
 JL_CALLABLE(jl_f_invoke_kwsorter)
 {
     JL_NARGSV(invoke, 3);
@@ -1239,7 +1235,7 @@ JL_CALLABLE(jl_f__primitivetype)
     return dt->name->wrapper;
 }
 
-void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
+static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
         tt->super != NULL ||
@@ -1264,8 +1260,6 @@ JL_CALLABLE(jl_f__setsuper)
     jl_set_datatype_super(dt, args[1]);
     return jl_nothing;
 }
-
-void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {

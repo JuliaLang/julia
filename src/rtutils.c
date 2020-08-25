@@ -291,15 +291,15 @@ JL_DLLEXPORT void jl_restore_excstack(size_t state)
     }
 }
 
-void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT
+static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT
 {
     assert(dest->reserved_size >= src->top);
     memcpy(jl_excstack_raw(dest), jl_excstack_raw(src), sizeof(jl_bt_element_t)*src->top);
     dest->top = src->top;
 }
 
-void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
-                          size_t reserved_size)
+static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                                size_t reserved_size)
 {
     jl_excstack_t *s = *stack;
     if (s && s->reserved_size >= reserved_size)
@@ -361,20 +361,9 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
 
 // parsing --------------------------------------------------------------------
 
-int substr_isspace(char *p, char *pend)
+static int substr_isspace(char *p, char *pend)
 {
     while (p != pend) {
-        if (!isspace((unsigned char)*p)) {
-            return 0;
-        }
-        p++;
-    }
-    return 1;
-}
-
-int str_isspace(char *p)
-{
-    while (*p != '\0') {
         if (!isspace((unsigned char)*p)) {
             return 0;
         }
@@ -1245,6 +1234,7 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
     JL_GC_POP();
 }
 
+#if 0
 void jl_depwarn(const char *msg, jl_value_t *sym)
 {
     static jl_value_t *depwarn_func = NULL;
@@ -1263,6 +1253,7 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     jl_apply(depwarn_args, 3);
     JL_GC_POP();
 }
+#endif
 
 #ifdef __cplusplus
 }

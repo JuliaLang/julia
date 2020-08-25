@@ -20,7 +20,7 @@ JL_DLLEXPORT int jl_generating_output(void)
     return jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputji || jl_options.outputasm;
 }
 
-void *jl_precompile(int all);
+static void *jl_precompile(int all);
 
 void jl_write_compiler_output(void)
 {
@@ -295,8 +295,6 @@ static void compile_all_enq_(jl_methtable_t *mt, void *env)
     jl_typemap_visitor(mt->defs, compile_all_enq__, env);
 }
 
-void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), void *env);
-
 static void jl_compile_all_defs(void)
 {
     // this "found" array will contain
@@ -366,9 +364,7 @@ static void precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
     jl_typemap_visitor(mt->defs, precompile_enq_all_specializations__, env);
 }
 
-void jl_compile_now(jl_method_instance_t *mi);
-
-void *jl_precompile(int all)
+static void *jl_precompile(int all)
 {
     if (all)
         jl_compile_all_defs();

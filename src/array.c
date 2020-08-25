@@ -25,7 +25,7 @@ extern "C" {
 // without risk of creating pointers out of thin air
 // TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
 //       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
-void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOTSAFEPOINT
+static void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOTSAFEPOINT
 {
     size_t i;
     if (dstp < srcp || dstp > srcp + n) {
@@ -40,7 +40,7 @@ void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOTSAFEPOINT
     }
 }
 
-void memmove_safe(int hasptr, char *dst, const char *src, size_t nb) JL_NOTSAFEPOINT
+static void memmove_safe(int hasptr, char *dst, const char *src, size_t nb) JL_NOTSAFEPOINT
 {
     if (hasptr)
         memmove_refs((void**)dst, (void**)src, nb / sizeof(void*));
@@ -49,7 +49,7 @@ void memmove_safe(int hasptr, char *dst, const char *src, size_t nb) JL_NOTSAFEP
 }
 
 // array constructors ---------------------------------------------------------
-char *jl_array_typetagdata(jl_array_t *a) JL_NOTSAFEPOINT
+JL_DLLEXPORT char *jl_array_typetagdata(jl_array_t *a) JL_NOTSAFEPOINT
 {
     assert(jl_array_isbitsunion(a));
     return ((char*)jl_array_data(a)) + ((jl_array_ndims(a) == 1 ? (a->maxsize - a->offset) : jl_array_len(a)) * a->elsize) + a->offset;

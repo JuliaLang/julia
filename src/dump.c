@@ -1805,8 +1805,6 @@ static void jl_insert_methods(jl_array_t *list)
     }
 }
 
-extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
-
 // verify that these edges intersect with the same methods as before
 static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
 {
@@ -2404,7 +2402,6 @@ static void jl_recache_other(void)
     flagref_list.len = 0;
 }
 
-extern tracer_cb jl_newmeth_tracer;
 static int trace_method(jl_typemap_entry_t *entry, void *closure)
 {
     jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)entry->func.method);

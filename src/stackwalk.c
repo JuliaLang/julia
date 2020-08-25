@@ -66,9 +66,9 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 //
 // jl_unw_stepn will return 1 if there are more frames to come. The number of
 // elements written to bt_data (and sp if non-NULL) are returned in bt_size.
-int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
-                 uintptr_t *sp, size_t maxsize, int skip, jl_gcframe_t **ppgcstack,
-                 int from_signal_handler) JL_NOTSAFEPOINT
+static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
+                        uintptr_t *sp, size_t maxsize, int skip, jl_gcframe_t **ppgcstack,
+                        int from_signal_handler) JL_NOTSAFEPOINT
 {
     volatile size_t n = 0;
     volatile int need_more_space = 0;
@@ -277,9 +277,9 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     return bt;
 }
 
-void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
-                      jl_array_t **btout JL_REQUIRE_ROOTED_SLOT,
-                      jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
+static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
+                             jl_array_t **btout JL_REQUIRE_ROOTED_SLOT,
+                             jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
 {
     jl_array_t *bt, *bt2;
     if (array_ptr_void_type == NULL) {
@@ -600,8 +600,8 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     return rs;
 }
 
-void jl_safe_print_codeloc(const char* func_name, const char* file_name,
-                           int line, int inlined) JL_NOTSAFEPOINT
+static void jl_safe_print_codeloc(const char* func_name, const char* file_name,
+                                  int line, int inlined) JL_NOTSAFEPOINT
 {
     const char *inlined_str = inlined ? " [inlined]" : "";
     if (line != -1) {
