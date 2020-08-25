@@ -344,8 +344,8 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
 
 
-JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void);
-JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset);
+JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT;
 void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_ptls_t ptls);
@@ -722,7 +722,7 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *t
 uint32_t jl_module_next_counter(jl_module_t *m);
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs);
 
-int jl_has_meta(jl_array_t *body, jl_sym_t *sym);
+int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;
 
 jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
                      size_t offset, jl_value_t *options);
@@ -985,10 +985,10 @@ extern void *jl_crtdll_handle;
 extern void *jl_winsock_handle;
 #endif
 
-void *jl_get_library_(const char *f_lib, int throw_err);
+void *jl_get_library_(const char *f_lib, int throw_err) JL_NOTSAFEPOINT;
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
-                                      void **hnd);
+                                      void **hnd) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
     void *(*init_trampoline)(void *tramp, void **nval),
@@ -1002,7 +1002,7 @@ const char *jl_dlfind_win32(const char *name);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
-int jl_getpid(void);
+int jl_getpid(void) JL_NOTSAFEPOINT;
 
 #ifdef SEGV_EXCEPTION
 extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
@@ -1103,7 +1103,7 @@ JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
 
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_set_next_task(jl_task_t *task);
+JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 
 // -- synchronization utilities -- //
 
@@ -1214,7 +1214,7 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
             jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
             jl_value_t *msg);
 
-int isabspath(const char *in);
+int isabspath(const char *in) JL_NOTSAFEPOINT;
 
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
 extern jl_sym_t *empty_sym;   extern jl_sym_t *top_sym;

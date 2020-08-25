@@ -25,12 +25,12 @@ extern "C" {
 #endif
 
 JL_DLLEXPORT size_t jl_world_counter = 1; // TODO: should this be atomic release/consume?
-JL_DLLEXPORT size_t jl_get_world_counter(void)
+JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT
 {
     return jl_world_counter;
 }
 
-JL_DLLEXPORT size_t jl_get_tls_world_age(void)
+JL_DLLEXPORT size_t jl_get_tls_world_age(void) JL_NOTSAFEPOINT
 {
     return jl_get_ptls_states()->world_age;
 }
@@ -526,7 +526,7 @@ static int very_general_type(jl_value_t *t)
     return (t == (jl_value_t*)jl_any_type || jl_types_equal(t, (jl_value_t*)jl_type_type));
 }
 
-jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i)
+jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i) JL_NOTSAFEPOINT
 {
     sig = jl_unwrap_unionall(sig);
     size_t len = jl_nparams(sig);

@@ -260,12 +260,12 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     _julia_init(rel);
 }
 
-JL_DLLEXPORT void jl_set_next_task(jl_task_t *task)
+JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT
 {
     jl_get_ptls_states()->next_task = task;
 }
 
-JL_DLLEXPORT jl_task_t *jl_get_next_task(void)
+JL_DLLEXPORT jl_task_t *jl_get_next_task(void) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ptls->next_task)
@@ -1226,12 +1226,12 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     jl_init_basefiber(JL_STACK_SIZE);
 }
 
-JL_DLLEXPORT int jl_is_task_started(jl_task_t *t)
+JL_DLLEXPORT int jl_is_task_started(jl_task_t *t) JL_NOTSAFEPOINT
 {
     return t->started;
 }
 
-JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t)
+JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t) JL_NOTSAFEPOINT
 {
     return t->tid;
 }
