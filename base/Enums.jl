@@ -131,7 +131,7 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    values = basetype[]::Vector
+    values = Vector{basetype}()
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
     lo = hi = 0
