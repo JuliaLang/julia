@@ -2317,6 +2317,9 @@ end
 map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))
 
+# since map(f, itr) is defined here:
+filter(f, itr) = collect(Iterators.filter(f, itr))
+
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A, a, b) = push!(push!(A, a), b)

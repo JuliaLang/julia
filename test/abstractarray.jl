@@ -646,6 +646,11 @@ end
     @test map(()->1234) === 1234
 end
 
+@testset "issue 37146, map & filter on iterators" begin
+    @test map(isodd, i for i in 1:4) == [true, false, true, false]
+    @test filter(isodd, i for i in 0:9) == [1, 3, 5, 7, 9]
+end
+
 function test_UInt_indexing(::Type{TestAbstractArray})
     A = [1:100...]
     _A = Expr(:quote, A)
