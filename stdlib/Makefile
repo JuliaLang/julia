@@ -17,14 +17,12 @@ $(build_datarootdir)/julia/stdlib/$(VERSDIR):
 STDLIBS = Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
           Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization SHA \
-          SharedArrays Sockets SparseArrays SuiteSparse Test Unicode UUIDs
-STDLIBS_EXT = Pkg Statistics TOML
+          SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs
+STDLIBS_EXT = Pkg Statistics
 PKG_GIT_URL := git://github.com/JuliaLang/Pkg.jl.git
 PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
 STATISTICS_GIT_URL := git://github.com/JuliaLang/Statistics.jl.git
 STATISTICS_TAR_URL = https://api.github.com/repos/JuliaLang/Statistics.jl/tarball/$1
-TOML_GIT_URL := git://github.com/KristofferC/TOML.jl.git
-TOML_TAR_URL = https://api.github.com/repos/KristofferC/TOML.jl/tarball/$1
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 

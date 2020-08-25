@@ -1,0 +1,12 @@
+name = "TOML"
+uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "0.1.0"
+
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
