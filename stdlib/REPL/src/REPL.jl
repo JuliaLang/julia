@@ -194,7 +194,7 @@ function repl_backend_loop(backend::REPLBackend)
         end
         eval_user_input(ast, backend)
     end
-    nothing
+    return nothing
 end
 
 struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
@@ -204,17 +204,15 @@ end
 ==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
-    linfos = Tuple{String,Int}[]
-    io = IOContext(outstream(d.repl), :limit => true, :module => Main, :last_shown_line_infos => linfos)
-    get(io, :color, false) && write(io, answer_color(d.repl))
-    if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
-        # this can override the :limit property set initially
-        io = foldl(IOContext, d.repl.options.iocontext, init=io)
-    end
-    show(io, mime, x)
-    println(io)
-    if !isempty(linfos)
-        repl.last_shown_line_infos = linfos
+    with_repl_linfo(d.repl) do io
+        io = IOContext(io, :limit => true, :module => Main)
+        get(io, :color, false) && write(io, answer_color(d.repl))
+        if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
+            # this can override the :limit property set initially
+            io = foldl(IOContext, d.repl.options.iocontext, init=io)
+        end
+        show(io, mime, x)
+        println(io)
     end
     return nothing
 end
@@ -222,11 +220,9 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
-    linfos = Tuple{String,Int}[]
-    io = IOContext(outstream(repl), :module => Main, :last_shown_line_infos => linfos)
-    print_response(io, response, show_value, have_color, specialdisplay(repl))
-    if !isempty(linfos)
-        repl.last_shown_line_infos = linfos
+    with_repl_linfo(repl) do io
+        io = IOContext(io, :module => Main)
+        print_response(io, response, show_value, have_color, specialdisplay(repl))
     end
     return nothing
 end
@@ -509,6 +505,17 @@ function complete_line(c::LatexCompletions, s)
     full = LineEdit.input_string(s)
     ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
     return unique!(map(completion_text, ret)), partial[range], should_complete
+end
+
+with_repl_linfo(f, repl) = f(outstream(repl))
+function with_repl_linfo(f, repl::LineEditREPL)
+    linfos = Tuple{String,Int}[]
+    io = IOContext(outstream(repl), :last_shown_line_infos => linfos)
+    f(io)
+    if !isempty(linfos)
+        repl.last_shown_line_infos = linfos
+    end
+    nothing
 end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
