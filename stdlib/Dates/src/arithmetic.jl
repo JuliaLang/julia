@@ -85,10 +85,10 @@ end
 (+)(y::Period, x::TimeType) = x + y
 
 # Missing support
-(+)(x::T, y::Missing) where {T<:AbstractTime} = missing
-(+)(x::Missing, y::T) where {T<:AbstractTime} = missing
-(-)(x::T, y::Missing) where {T<:AbstractTime} = missing
-(-)(x::Missing, y::T) where {T<:AbstractTime} = missing
+(+)(x::AbstractTime, y::Missing) = missing
+(+)(x::Missing, y::AbstractTime) = missing
+(-)(x::AbstractTime, y::Missing) = missing
+(-)(x::Missing, y::AbstractTime) = missing
     
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-)(x::OrdinalRange{T}, y::OrdinalRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
