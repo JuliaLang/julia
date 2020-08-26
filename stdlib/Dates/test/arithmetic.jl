@@ -499,4 +499,13 @@ end
     end
 end
 
+@testset "Missing arithmetic" begin
+    for t ∈ [Date; Time; subtypes(DatePeriod); subtypes(TimePeriod)]
+        @test ismissing(t(1) + missing)
+        @test ismissing(missing + t(1))
+        @test ismissing(t(1) - missing)
+        @test ismissing(missing - t(1))
+    end
+end
+
 end
