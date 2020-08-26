@@ -19,7 +19,7 @@ call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods::Int = InferenceParams(interp).MAX_METHODS)
-    if sv.currpc in sv.throw_blocks
+    if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
         return CallMeta(Any, false)
     end
     valid_worlds = WorldRange()

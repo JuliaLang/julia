@@ -365,11 +365,14 @@ end
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any},
                        params::OptimizationParams, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
-    throw_blocks = find_throw_blocks(body)
+    if params.unoptimize_throw_blocks
+        throw_blocks = find_throw_blocks(body)
+    end
     for line = 1:length(body)
         stmt = body[line]
         if stmt isa Expr
-            thiscost = statement_cost(stmt, line, src, sptypes, slottypes, params, line in throw_blocks)::Int
+            thiscost = statement_cost(stmt, line, src, sptypes, slottypes, params,
+                                      params.unoptimize_throw_blocks && line in throw_blocks)::Int
         elseif stmt isa GotoNode
             # loops are generally always expensive
             # but assume that forward jumps are already counted for from
