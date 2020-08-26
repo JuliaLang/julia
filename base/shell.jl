@@ -28,42 +28,43 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     in_single_quotes = false
     in_double_quotes = false
 
-    args::Vector{Any} = []
-    arg::Vector{Any} = []
+    args = []
+    arg = []
     i = firstindex(s)
     st = Iterators.Stateful(pairs(s))
 
-    function update_arg(x)
+    function push_nonempty!(list, x)
         if !isa(x,AbstractString) || !isempty(x)
-            push!(arg, x)
+            push!(list, x)
         end
+        return nothing
     end
-    function consume_upto(s, i, j)
-        update_arg(s[i:prevind(s, j)::Int])
-        something(peek(st), (lastindex(s)::Int+1,'\0'))[1]
+    function consume_upto!(list, s, i, j)
+        push_nonempty!(list, s[i:prevind(s, j)::Int])
+        something(peek(st), lastindex(s)::Int+1 => '\0').first::Int
     end
-    function append_arg()
-        if isempty(arg); arg = Any["",]; end
-        push!(args, arg)
-        arg = []
+    function append_2to1!(list, innerlist)
+        if isempty(innerlist); push!(innerlist, ""); end
+        push!(list, copy(innerlist))
+        empty!(innerlist)
     end
 
     for (j, c) in st
-        j::Int; c::AbstractChar
+        j, c = j::Int, c::eltype(str)
         if !in_single_quotes && !in_double_quotes && isspace(c)
-            i = consume_upto(s, i, j)
-            append_arg()
+            i = consume_upto!(arg, s, i, j)
+            append_2to1!(args, arg)
             while !isempty(st)
                 # We've made sure above that we don't end in whitespace,
                 # so updating `i` here is ok
-                (i, c) = peek(st)
+                (i, c) = peek(st)::Pair{Int,eltype(str)}
                 isspace(c) || break
                 popfirst!(st)
             end
         elseif interpolate && !in_single_quotes && c == '$'
-            i = consume_upto(s, i, j)
+            i = consume_upto!(arg, s, i, j)
             isempty(st) && error("\$ right before end of command")
-            stpos, c = popfirst!(st)
+            stpos, c = popfirst!(st)::Pair{Int,eltype(str)}
             isspace(c) && error("space not allowed right after \$")
             if startswith(SubString(s, stpos), "var\"")
                 # Disallow var"#" syntax in cmd interpolations.
@@ -75,28 +76,28 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 ex, j = Meta.parseatom(s, stpos, filename=filename)
             end
             last_parse = (stpos:prevind(s, j)) .+ s.offset
-            update_arg(ex);
+            push_nonempty!(arg, ex)
             s = SubString(s, j)
             Iterators.reset!(st, pairs(s))
             i = firstindex(s)
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
-                i = consume_upto(s, i, j)
+                i = consume_upto!(arg, s, i, j)
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
-                i = consume_upto(s, i, j)
+                i = consume_upto!(arg, s, i, j)
             elseif c == '\\'
                 if in_double_quotes
                     isempty(st) && error("unterminated double quote")
                     k, c′ = peek(st)
                     if c′ == '"' || c′ == '$' || c′ == '\\'
-                        i = consume_upto(s, i, j)
+                        i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)
                     end
                 elseif !in_single_quotes
                     isempty(st) && error("dangling backslash")
-                    i = consume_upto(s, i, j)
+                    i = consume_upto!(arg, s, i, j)
                     _ = popfirst!(st)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special
@@ -108,8 +109,8 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
 
-    update_arg(s[i:end])
-    append_arg()
+    push_nonempty!(arg, s[i:end])
+    append_2to1!(args, arg)
 
     interpolate || return args, last_parse
 
