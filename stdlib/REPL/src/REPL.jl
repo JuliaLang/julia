@@ -194,7 +194,7 @@ function repl_backend_loop(backend::REPLBackend)
         end
         eval_user_input(ast, backend)
     end
-    nothing
+    return nothing
 end
 
 struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
@@ -204,7 +204,7 @@ end
 ==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
-    with_methodtable_hint(d.repl) do io
+    with_repl_linfo(d.repl) do io
         io = IOContext(io, :limit => true, :module => Main)
         get(io, :color, false) && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
@@ -214,17 +214,17 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
         show(io, mime, x)
         println(io)
     end
-    nothing
+    return nothing
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
-    with_methodtable_hint(repl) do io
+    with_repl_linfo(repl) do io
         io = IOContext(io, :module => Main)
         print_response(io, response, show_value, have_color, specialdisplay(repl))
     end
-    nothing
+    return nothing
 end
 function print_response(errio::IO, @nospecialize(response), show_value::Bool, have_color::Bool, specialdisplay=nothing)
     Base.sigatomic_begin()
@@ -507,18 +507,13 @@ function complete_line(c::LatexCompletions, s)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
-with_methodtable_hint(f, repl) = f(outstream(repl))
-function with_methodtable_hint(f, repl::LineEditREPL)
+with_repl_linfo(f, repl) = f(outstream(repl))
+function with_repl_linfo(f, repl::LineEditREPL)
     linfos = Tuple{String,Int}[]
     io = IOContext(outstream(repl), :last_shown_line_infos => linfos)
     f(io)
     if !isempty(linfos)
         repl.last_shown_line_infos = linfos
-        println(
-            io,
-            "\nTo edit a specific method, type the corresponding number into the " *
-            "REPL and press Ctrl+Q",
-        )
     end
     nothing
 end
@@ -1146,7 +1141,7 @@ function setup_interface(
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)
             n === nothing && @goto writeback
-            if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
+            if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
                 @goto writeback
             end
             InteractiveUtils.edit(linfos[n][1], linfos[n][2])
