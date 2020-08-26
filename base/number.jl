@@ -223,7 +223,7 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
 
 """
     zero(x)
-    zero(T::type)
+    zero(::Type)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
 
@@ -246,7 +246,7 @@ zero(::Type{T}) where {T<:Number} = convert(T,0)
 
 """
     one(x)
-    one(::Type)
+    one(T::type)
 
 Return a multiplicative identity for `x`: a value such that
 `one(x)*x == x*one(x) == x`.  Alternatively `one(T)` can
