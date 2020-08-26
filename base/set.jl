@@ -383,14 +383,11 @@ false
 """
 function allunique(C)
     seen = Set{eltype(C)}()
-    for x in C
-        if in(x, seen)
-            return false
-        else
-            push!(seen, x)
-        end
+    for (i, x) in enumerate(C)
+        push!(seen, x)
+        i > length(seen) && return false
     end
-    true
+    return true
 end
 
 allunique(::Union{AbstractSet,AbstractDict}) = true
