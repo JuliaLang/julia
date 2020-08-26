@@ -449,8 +449,8 @@ void jl_start_threads(void)
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive) {
         if (jl_n_threads > jl_cpu_threads()) {
-            jl_n_threads = 1;
-            jl_error("Too many threads running for " MACHINE_EXCLUSIVE_NAME " option.");
+            jl_printf(JL_STDERR, "ERROR: Too many threads requested for %s option.\n", MACHINE_EXCLUSIVE_NAME);
+            exit(1);
         }
         memset(mask, 0, cpumasksize);
         mask[0] = 1;
