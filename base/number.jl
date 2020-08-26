@@ -246,7 +246,7 @@ zero(::Type{T}) where {T<:Number} = convert(T,0)
 
 """
     one(x)
-    one(T::type)
+    one(::Type)
 
 Return a multiplicative identity for `x`: a value such that
 `one(x)*x == x*one(x) == x`.  Alternatively `one(T)` can
