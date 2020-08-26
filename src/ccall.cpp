@@ -486,7 +486,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
     const char *&f_name = out.f_name;
     const char *&f_lib = out.f_lib;
 
-    jl_value_t *ptr = static_eval(ctx, arg, true);
+    jl_value_t *ptr = static_eval(ctx, arg);
     if (ptr == NULL) {
         jl_cgval_t arg1 = emit_expr(ctx, arg);
         jl_value_t *ptr_ty = arg1.typ;
@@ -557,7 +557,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     JL_GC_PUSH2(&rt, &sym.gcroot);
 
     if (nargs == 2) {
-        rt = static_eval(ctx, args[2], true, true);
+        rt = static_eval(ctx, args[2]);
         if (rt == NULL) {
             JL_GC_POP();
             jl_cgval_t argv[2];
@@ -629,7 +629,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     JL_GC_PUSH4(&ir, &rt, &at, &entry);
     if (jl_is_ssavalue(ir_arg))
         ir_arg = jl_arrayref((jl_array_t*)ctx.source->code, ((jl_ssavalue_t*)ir_arg)->id - 1);
-    ir = static_eval(ctx, ir_arg, true, true);
+    ir = static_eval(ctx, ir_arg);
     if (!ir) {
         emit_error(ctx, "error statically evaluating llvm IR argument");
         return jl_cgval_t();
@@ -640,7 +640,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             rt = jl_tparam0(rtt);
     }
     if (!rt) {
-        rt = static_eval(ctx, args[2], true, true);
+        rt = static_eval(ctx, args[2]);
         if (!rt) {
             emit_error(ctx, "error statically evaluating llvmcall return type");
             return jl_cgval_t();
@@ -652,7 +652,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             at = jl_tparam0(att);
     }
     if (!at) {
-        at = static_eval(ctx, args[3], true, true);
+        at = static_eval(ctx, args[3]);
         if (!at) {
             emit_error(ctx, "error statically evaluating llvmcall argument tuple");
             return jl_cgval_t();

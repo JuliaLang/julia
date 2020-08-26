@@ -1993,10 +1993,10 @@ static jl_value_t *static_apply_type(jl_codectx_t &ctx, const jl_cgval_t *args, 
     return result;
 }
 
-// try to statically evaluate, NULL if not possible
-static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex, int sparams=true, int allow_alloc=true)
+// try to statically evaluate, NULL if not possible. note that this may allocate, and as
+// such the resulting value should not be embedded directly in the generated code.
+static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
 {
-    if (!JL_FEAT_TEST(ctx, static_alloc)) allow_alloc = 0;
     if (jl_is_symbol(ex)) {
         jl_sym_t *sym = (jl_sym_t*)ex;
         if (jl_is_const(ctx.module, sym))
@@ -2032,16 +2032,16 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex, int sparams=tr
     if (jl_is_expr(ex)) {
         jl_expr_t *e = (jl_expr_t*)ex;
         if (e->head == call_sym) {
-            jl_value_t *f = static_eval(ctx, jl_exprarg(e, 0), sparams, allow_alloc);
+            jl_value_t *f = static_eval(ctx, jl_exprarg(e, 0));
             if (f) {
                 if (jl_array_dim0(e->args) == 3 && f == jl_builtin_getfield) {
-                    m = (jl_module_t*)static_eval(ctx, jl_exprarg(e, 1), sparams, allow_alloc);
+                    m = (jl_module_t*)static_eval(ctx, jl_exprarg(e, 1));
                     // Check the tag before evaluating `s` so that a value of random
                     // type won't be corrupted.
                     if (!m || !jl_is_module(m))
                         return NULL;
                     // Assumes that the module is rooted somewhere.
-                    s = (jl_sym_t*)static_eval(ctx, jl_exprarg(e, 2), sparams, allow_alloc);
+                    s = (jl_sym_t*)static_eval(ctx, jl_exprarg(e, 2));
                     if (s && jl_is_symbol(s)) {
                         jl_binding_t *b = jl_get_binding(m, s);
                         if (b && b->constp) {
@@ -2055,13 +2055,11 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex, int sparams=tr
                     size_t i;
                     size_t n = jl_array_dim0(e->args)-1;
                     if (n==0 && f==jl_builtin_tuple) return (jl_value_t*)jl_emptytuple;
-                    if (!allow_alloc)
-                        return NULL;
                     jl_value_t **v;
                     JL_GC_PUSHARGS(v, n+1);
                     v[0] = f;
                     for (i = 0; i < n; i++) {
-                        v[i+1] = static_eval(ctx, jl_exprarg(e, i+1), sparams, allow_alloc);
+                        v[i+1] = static_eval(ctx, jl_exprarg(e, i+1));
                         if (v[i+1] == NULL) {
                             JL_GC_POP();
                             return NULL;
