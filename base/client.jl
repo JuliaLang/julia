@@ -102,6 +102,7 @@ function display_error(io::IO, stack::Vector)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
     show_exception_stack(IOContext(io, :limit => true), bt)
+    println(io)
 end
 display_error(stack::Vector) = display_error(stderr, stack)
 display_error(er, bt=nothing) = display_error(stderr, er, bt)

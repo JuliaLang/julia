@@ -110,13 +110,6 @@ function serialize(s::ClusterSerializer, t::Task)
     writetag(s.io, TASK_TAG)
     serialize(s, t.code)
     serialize(s, t.storage)
-    bt = t.backtrace
-    if bt !== nothing
-        if !isa(bt, Vector{Any})
-            bt = Base.process_backtrace(bt, 100)
-        end
-        serialize(s, bt)
-    end
     serialize(s, t._state)
     serialize(s, t.result)
     serialize(s, t.exception)
@@ -256,13 +249,7 @@ function deserialize(s::ClusterSerializer, ::Type{Task})
     deserialize_cycle(s, t)
     t.code = deserialize(s)
     t.storage = deserialize(s)
-    state_or_bt = deserialize(s)
-    if state_or_bt isa UInt8
-        t._state = state_or_bt
-    else
-        t.backtrace = state_or_bt
-        t._state = deserialize(s)
-    end
+    t._state = deserialize(s)::UInt8
     t.result = deserialize(s)
     t.exception = deserialize(s)
     t

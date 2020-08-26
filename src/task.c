@@ -632,7 +632,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->result = jl_nothing;
     t->donenotify = completion_future;
     t->exception = jl_nothing;
-    t->backtrace = jl_nothing;
     // Inherit logger state from parent task
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
@@ -1203,7 +1202,6 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->result = jl_nothing;
     ptls->current_task->donenotify = jl_nothing;
     ptls->current_task->exception = jl_nothing;
-    ptls->current_task->backtrace = jl_nothing;
     ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
