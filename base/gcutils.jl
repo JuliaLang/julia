@@ -132,9 +132,9 @@ directly to `ccall` which counts as an explicit use.)
 julia> let
            x = "Hello"
            p = pointer(x)
-           GC.@preserve x @ccall strlen(p::Cstring)::Cint
+           Int(GC.@preserve x @ccall strlen(p::Cstring)::Csize_t)
            # Preferred alternative
-           @ccall strlen(x::Cstring)::Cint
+           Int(@ccall strlen(x::Cstring)::Csize_t)
        end
 5
 ```
