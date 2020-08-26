@@ -383,6 +383,7 @@ false
 """
 function allunique(C)
     seen = Set{eltype(C)}()
+    haslength(C) && sizehint!(seen, length(C))
     for (i, x) in enumerate(C)
         push!(seen, x)
         i > length(seen) && return false
