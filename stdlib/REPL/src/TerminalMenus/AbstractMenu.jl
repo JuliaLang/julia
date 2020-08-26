@@ -51,6 +51,16 @@ subtypes.
 """
 abstract type AbstractMenu end
 
+function getproperty(m::AbstractMenu, name::Symbol)
+    if name === :pagesize
+        return getfield(m, :pagesize)::Int
+    elseif name === :pageoffset
+        return getfield(m, :pageoffset)::Int
+    end
+    return getfield(m, name)
+end
+
+
 # TODO Julia2.0: get rid of parametric intermediate, making it just
 #   abstract type ConfiguredMenu <: AbstractMenu end
 # Or perhaps just make all menus ConfiguredMenus
@@ -297,10 +307,10 @@ overwriting of the previous display.
     On older versions of Julia, this was called `printMenu` and it lacked the `state` argument/return value.
     This older function is supported on all Julia 1.x versions but will be dropped in Julia 2.0.
 """
-function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init::Bool=false)
+function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init::Bool=false)
     # TODO Julia 2.0?: get rid of `init` and just use `oldstate`
     buf = IOBuffer()
-    lastoption = numoptions(m)
+    lastoption = numoptions(m)::Int
     ncleared = oldstate === nothing ? m.pagesize-1 : oldstate
 
     if init
@@ -320,11 +330,11 @@ function printmenu(out, m::AbstractMenu, cursoridx::Int; oldstate=nothing, init:
         downscrollable = i == lastline && i != lastoption
 
         if upscrollable && downscrollable
-            print(buf, updown_arrow(m))
+            print(buf, updown_arrow(m)::Union{Char,String})
         elseif upscrollable
-            print(buf, up_arrow(m))
+            print(buf, up_arrow(m)::Union{Char,String})
         elseif downscrollable
-            print(buf, down_arrow(m))
+            print(buf, down_arrow(m)::Union{Char,String})
         else
             print(buf, ' ')
         end

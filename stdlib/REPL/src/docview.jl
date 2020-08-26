@@ -51,7 +51,7 @@ function _helpmode(io::IO, line::AbstractString)
             # keyword such as `function` would throw a parse error due to the missing `end`.
             assym
         elseif isexpr(x, (:using, :import))
-            x.head
+            (x::Expr).head
         else
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
@@ -67,7 +67,7 @@ end
 _helpmode(line::AbstractString) = _helpmode(stdout, line)
 
 # Print vertical lines along each docstring if there are multiple docs
-function insert_hlines(io::IO, docs)
+function insert_hlines(io::IO, docs::Markdown.MD)
     if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
         return docs
     end
@@ -250,13 +250,13 @@ function summarize(binding::Binding, sig)
     return md
 end
 
-function summarize(io::IO, λ::Function, binding)
+function summarize(io::IO, λ::Function, binding::Binding)
     kind = startswith(string(binding.var), '@') ? "macro" : "`Function`"
     println(io, "`", binding, "` is a ", kind, ".")
     println(io, "```\n", methods(λ), "\n```")
 end
 
-function summarize(io::IO, T::DataType, binding)
+function summarize(io::IO, T::DataType, binding::Binding)
     println(io, "# Summary")
     println(io, "```")
     println(io,
@@ -292,11 +292,11 @@ function summarize(io::IO, T::DataType, binding)
     end
 end
 
-function summarize(io::IO, m::Module, binding)
+function summarize(io::IO, m::Module, binding::Binding)
     println(io, "No docstring found for module `", m, "`.\n")
 end
 
-function summarize(io::IO, @nospecialize(T), binding)
+function summarize(io::IO, @nospecialize(T), binding::Binding)
     T = typeof(T)
     println(io, "`", binding, "` is of type `", T, "`.\n")
     summarize(io, T, binding)
@@ -304,10 +304,10 @@ end
 
 # repl search and completions for help
 
-function repl_search(io::IO, s)
+function repl_search(io::IO, s::Union{Symbol,String})
     pre = "search:"
     print(io, pre)
-    printmatches(io, s, doc_completions(s), cols = displaysize(io)[2] - length(pre))
+    printmatches(io, s, doc_completions(s), cols = _displaysize(io)[2] - length(pre))
     println(io, "\n")
 end
 repl_search(s) = repl_search(stdout, s)
@@ -358,7 +358,7 @@ function repl_latex(io::IO, s::String)
 end
 repl_latex(s::String) = repl_latex(stdout, s)
 
-macro repl(ex, brief=false) repl(ex; brief=brief) end
+macro repl(ex, brief::Bool=false) repl(ex; brief=brief) end
 macro repl(io, ex, brief) repl(io, ex; brief=brief) end
 
 function repl(io::IO, s::Symbol; brief::Bool=true)
@@ -378,10 +378,11 @@ repl(io::IO, str::AbstractString; brief::Bool=true) = :(apropos($io, $str))
 repl(io::IO, other; brief::Bool=true) = esc(:(@doc $other))
 #repl(io::IO, other) = lookup_doc(other) # TODO
 
-repl(x; brief=true) = repl(stdout, x; brief=brief)
+repl(x; brief::Bool=true) = repl(stdout, x; brief=brief)
 
-function _repl(x, brief=true)
+function _repl(x, brief::Bool=true)
     if isexpr(x, :call)
+        x = x::Expr
         # determine the types of the values
         kwargs = nothing
         pargs = Any[]
@@ -482,7 +483,7 @@ fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), fiel
 
 # Fuzzy Search Algorithm
 
-function matchinds(needle, haystack; acronym = false)
+function matchinds(needle, haystack; acronym::Bool = false)
     chars = collect(needle)
     is = Int[]
     lastc = '\0'
@@ -519,8 +520,8 @@ function fuzzyscore(needle, haystack)
     return score
 end
 
-function fuzzysort(search, candidates)
-    scores = map(cand -> (fuzzyscore(search, cand), -levenshtein(search, cand)), candidates)
+function fuzzysort(search::String, candidates::Vector{String})
+    scores = map(cand -> (fuzzyscore(search, cand), -Float64(levenshtein(search, cand))), candidates)
     candidates[sortperm(scores)] |> reverse
 end
 
@@ -544,8 +545,8 @@ function levenshtein(s1, s2)
     return d[m+1, n+1]
 end
 
-function levsort(search, candidates)
-    scores = map(cand -> (levenshtein(search, cand), -fuzzyscore(search, cand)), candidates)
+function levsort(search::String, candidates::Vector{String})
+    scores = map(cand -> (Float64(levenshtein(search, cand)), -fuzzyscore(search, cand)), candidates)
     candidates = candidates[sortperm(scores)]
     i = 0
     for outer i = 1:length(candidates)
@@ -569,7 +570,7 @@ end
 
 printmatch(args...) = printfuzzy(stdout, args...)
 
-function printmatches(io::IO, word, matches; cols = displaysize(io)[2])
+function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
         total + length(match) + 1 > cols && break
@@ -580,9 +581,9 @@ function printmatches(io::IO, word, matches; cols = displaysize(io)[2])
     end
 end
 
-printmatches(args...; cols = displaysize(stdout)[2]) = printmatches(stdout, args..., cols = cols)
+printmatches(args...; cols::Int = _displaysize(stdout)[2]) = printmatches(stdout, args..., cols = cols)
 
-function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displaysize(io)[2])
+function print_joined_cols(io::IO, ss::Vector{String}, delim = "", last = delim; cols::Int = _displaysize(io)[2])
     i = 0
     total = 0
     for outer i = 1:length(ss)
@@ -592,13 +593,13 @@ function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displays
     join(io, ss[1:i], delim, last)
 end
 
-print_joined_cols(args...; cols = displaysize(stdout)[2]) = print_joined_cols(stdout, args...; cols=cols)
+print_joined_cols(args...; cols::Int = _displaysize(stdout)[2]) = print_joined_cols(stdout, args...; cols=cols)
 
-function print_correction(io, word)
+function print_correction(io::IO, word::String)
     cors = levsort(word, accessible(Main))
     pre = "Perhaps you meant "
     print(io, pre)
-    print_joined_cols(io, cors, ", ", " or "; cols = displaysize(io)[2] - length(pre))
+    print_joined_cols(io, cors, ", ", " or "; cols = _displaysize(io)[2] - length(pre))
     println(io)
     return
 end

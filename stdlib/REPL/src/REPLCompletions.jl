@@ -55,18 +55,48 @@ struct DictCompletion <: Completion
     key::String
 end
 
-completion_text(c::KeywordCompletion) = c.keyword
-completion_text(c::PathCompletion) = c.path
-completion_text(c::ModuleCompletion) = c.mod
-completion_text(c::PackageCompletion) = c.package
-completion_text(c::PropertyCompletion) = string(c.property)
-completion_text(c::FieldCompletion) = string(c.field)
-completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method))
-completion_text(c::BslashCompletion) = c.bslash
-completion_text(c::ShellCompletion) = c.text
-completion_text(c::DictCompletion) = c.key
+# interface definition
+function Base.getproperty(c::Completion, name::Symbol)
+    if name === :keyword
+        return getfield(c, :keyword)::String
+    elseif name === :path
+        return getfield(c, :path)::String
+    elseif name === :parent
+        return getfield(c, :parent)::Module
+    elseif name === :mod
+        return getfield(c, :mod)::String
+    elseif name === :package
+        return getfield(c, :package)::String
+    elseif name === :property
+        return getfield(c, :property)::Symbol
+    elseif name === :field
+        return getfield(c, :field)::Symbol
+    elseif name === :method
+        return getfield(c, :method)::Method
+    elseif name === :bslash
+        return getfield(c, :bslash)::String
+    elseif name === :text
+        return getfield(c, :text)::String
+    elseif name === :key
+        return getfield(c, :key)::String
+    end
+    return getfield(c, name)
+end
 
-const Completions = Tuple{Vector{Completion}, UnitRange{Int64}, Bool}
+_completion_text(c::KeywordCompletion) = c.keyword
+_completion_text(c::PathCompletion) = c.path
+_completion_text(c::ModuleCompletion) = c.mod
+_completion_text(c::PackageCompletion) = c.package
+_completion_text(c::PropertyCompletion) = string(c.property)
+_completion_text(c::FieldCompletion) = string(c.field)
+_completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method))
+_completion_text(c::BslashCompletion) = c.bslash
+_completion_text(c::ShellCompletion) = c.text
+_completion_text(c::DictCompletion) = c.key
+
+completion_text(c) = _completion_text(c)::String
+
+const Completions = Tuple{Vector{Completion}, UnitRange{Int}, Bool}
 
 function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
@@ -94,7 +124,7 @@ function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, 
 end
 
 # REPL Symbol Completions
-function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
+function complete_symbol(sym::String, ffunc, context_module::Module=Main)
     mod = context_module
     name = sym
 
@@ -132,14 +162,14 @@ function complete_symbol(sym, ffunc, context_module=Main)::Vector{Completion}
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
         p = let mod=mod, modname=nameof(mod)
-            s->(!Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s))
+            s->(!Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool)
         end
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
-            mods = ccall(:jl_module_usings, Any, (Any,), context_module)
+            mods = ccall(:jl_module_usings, Any, (Any,), context_module)::Vector
             for m in mods
-                append!(suggestions, filtered_mod_names(p, m, name))
+                append!(suggestions, filtered_mod_names(p, m::Module, name))
             end
             append!(suggestions, filtered_mod_names(p, mod, name, true, true))
         else
@@ -182,7 +212,7 @@ const sorted_keywords = [
     "primitive type", "quote", "return", "struct",
     "true", "try", "using", "while"]
 
-function complete_keyword(s::Union{String,SubString{String}})::Vector{Completion}
+function complete_keyword(s::Union{String,SubString{String}})
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
@@ -190,10 +220,10 @@ function complete_keyword(s::Union{String,SubString{String}})::Vector{Completion
         r = first(r):i
         i += 1
     end
-    map(KeywordCompletion, sorted_keywords[r])
+    Completion[KeywordCompletion(kw) for kw in sorted_keywords[r]]
 end
 
-function complete_path(path::AbstractString, pos; use_envpath=false, shell_escape=false)::Completions
+function complete_path(path::AbstractString, pos::Int; use_envpath=false, shell_escape=false)
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
@@ -211,10 +241,10 @@ function complete_path(path::AbstractString, pos; use_envpath=false, shell_escap
         elseif isdir(dir)
             files = readdir(dir)
         else
-            return PathCompletion[], 0:-1, false
+            return Completion[], 0:-1, false
         end
     catch
-        return PathCompletion[], 0:-1, false
+        return Completion[], 0:-1, false
     end
 
     matches = Set{String}()
@@ -268,7 +298,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false, shell_escap
         end
     end
 
-    matchList = PathCompletion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
+    matchList = Completion[PathCompletion(shell_escape ? replace(s, r"\s" => s"\\\0") : s) for s in matches]
     startpos = pos - lastindex(prefix) + 1 - count(isequal(' '), prefix)
     # The pos - lastindex(prefix) + 1 is correct due to `lastindex(prefix)-lastindex(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
@@ -276,9 +306,9 @@ function complete_path(path::AbstractString, pos; use_envpath=false, shell_escap
     return matchList, startpos:pos, !isempty(matchList)
 end
 
-function complete_expanduser(path::AbstractString, r)::Completions
+function complete_expanduser(path::AbstractString, r)
     expanded = expanduser(path)
-    return [PathCompletion(expanded)], r, path != expanded
+    return Completion[PathCompletion(expanded)], r, path != expanded
 end
 
 # Determines whether method_complete should be tried. It should only be done if
@@ -336,7 +366,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     end
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(s, i)
-    startind = nextind(s, something(findprev(in(non_identifier_chars), s, method_name_end), 0))
+    startind = nextind(s, something(findprev(in(non_identifier_chars), s, method_name_end), 0))::Int
     return (startind:lastindex(s), method_name_end)
 end
 
@@ -436,16 +466,16 @@ function get_type(sym, fn::Module)
 end
 
 # Method completion on function call expression that look like :(max(1))
-function complete_methods(ex_org::Expr, context_module=Main)::Vector{Completion}
+function complete_methods(ex_org::Expr, context_module::Module=Main)
     args_ex = Any[]
-    func, found = get_value(ex_org.args[1], context_module)
+    func, found = get_value(ex_org.args[1], context_module)::Tuple{Any,Bool}
     !found && return Completion[]
 
     funargs = ex_org.args[2:end]
     # handle broadcasting, but only handle number of arguments instead of
     # argument types
     if ex_org.head === :. && ex_org.args[2] isa Expr
-        for _ in ex_org.args[2].args
+        for _ in (ex_org.args[2]::Expr).args
             push!(args_ex, Any)
         end
     else
@@ -463,7 +493,7 @@ function complete_methods(ex_org::Expr, context_module=Main)::Vector{Completion}
         ms = method.sig
 
         # Check if the method's type signature intersects the input types
-        if typeintersect(Base.rewrap_unionall(Tuple{Base.unwrap_unionall(ms).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
+        if typeintersect(Base.rewrap_unionall(Tuple{(Base.unwrap_unionall(ms)::DataType).parameters[1 : min(na, end)]...}, ms), t_in) !== Union{}
             push!(out, MethodCompletion(func, t_in, method))
         end
     end
@@ -493,7 +523,7 @@ function afterusing(string::String, startpos::Int)
     return occursin(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
-function bslash_completions(string, pos)::Tuple{Bool, Completions}
+function bslash_completions(string::String, pos::Int)
     slashpos = something(findprev(isequal('\\'), string, pos), 0)
     if (something(findprev(in(bslash_separators), string, pos), 0) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
@@ -501,26 +531,25 @@ function bslash_completions(string, pos)::Tuple{Bool, Completions}
         s = string[slashpos:pos]
         latex = get(latex_symbols, s, "")
         if !isempty(latex) # complete an exact match
-            return (true, ([BslashCompletion(latex)], slashpos:pos, true))
+            return (true, (Completion[BslashCompletion(latex)], slashpos:pos, true))
         end
         emoji = get(emoji_symbols, s, "")
         if !isempty(emoji)
-            return (true, ([BslashCompletion(emoji)], slashpos:pos, true))
+            return (true, (Completion[BslashCompletion(emoji)], slashpos:pos, true))
         end
         # return possible matches; these cannot be mixed with regular
         # Julian completions as only latex / emoji symbols contain the leading \
         if startswith(s, "\\:") # emoji
-            emoji_names = Iterators.filter(k -> startswith(k, s), keys(emoji_symbols))
-            return (true, (map(BslashCompletion, sort!(collect(emoji_names))), slashpos:pos, true))
+            namelist = Iterators.filter(k -> startswith(k, s), keys(emoji_symbols))
         else # latex
-            latex_names = Iterators.filter(k -> startswith(k, s), keys(latex_symbols))
-            return (true, (map(BslashCompletion, sort!(collect(latex_names))), slashpos:pos, true))
+            namelist = Iterators.filter(k -> startswith(k, s), keys(latex_symbols))
         end
+        return (true, (Completion[BslashCompletion(name) for name in sort!(collect(namelist))], slashpos:pos, true))
     end
     return (false, (Completion[], 0:-1, false))
 end
 
-function dict_identifier_key(str, tag, context_module = Main)
+function dict_identifier_key(str::String, tag::Symbol, context_module::Module = Main)
     if tag === :string
         str_close = str*"\""
     elseif tag === :cmd
@@ -538,14 +567,14 @@ function dict_identifier_key(str, tag, context_module = Main)
         isdefined(obj, sym) || return (nothing, nothing, nothing)
         obj = getfield(obj, sym)
     end
-    (isa(obj, AbstractDict) && length(obj) < 1_000_000) || return (nothing, nothing, nothing)
+    (isa(obj, AbstractDict) && length(obj)::Int < 1_000_000) || return (nothing, nothing, nothing)
     begin_of_key = something(findnext(!isspace, str, nextind(str, end_of_identifier) + 1), # +1 for [
                              lastindex(str)+1)
-    return (obj, str[begin_of_key:end], begin_of_key)
+    return (obj::AbstractDict, str[begin_of_key:end], begin_of_key)
 end
 
 # This needs to be a separate non-inlined function, see #19441
-@noinline function find_dict_matches(identifier, partial_key)
+@noinline function find_dict_matches(identifier::AbstractDict, partial_key)
     matches = String[]
     for key in keys(identifier)
         rkey = repr(key)
@@ -554,7 +583,7 @@ end
     return matches
 end
 
-function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)::Vector{Completion}
+function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)
     loading_candidates = String[]
     open(project_file) do io
         state = :top
@@ -577,7 +606,7 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
     return Completion[PackageCompletion(name) for name in loading_candidates]
 end
 
-function completions(string, pos, context_module=Main)::Completions
+function completions(string::String, pos::Int, context_module::Module=Main)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
@@ -587,7 +616,7 @@ function completions(string, pos, context_module=Main)::Completions
     if identifier !== nothing
         matches = find_dict_matches(identifier, partial_key)
         length(matches)==1 && (lastindex(string) <= pos || string[nextind(string,pos)] != ']') && (matches[1]*=']')
-        length(matches)>0 && return [DictCompletion(identifier, match) for match in sort!(matches)], loc:pos, true
+        length(matches)>0 && return Completion[DictCompletion(identifier, match) for match in sort!(matches)], loc::Int:pos, true
     end
 
     # otherwise...
@@ -618,7 +647,7 @@ function completions(string, pos, context_module=Main)::Completions
     ok && return ret
 
     # Make sure that only bslash_completions is working on strings
-    inc_tag==:string && return String[], 0:-1, false
+    inc_tag==:string && return Completion[], 0:-1, false
     if inc_tag === :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         # strip preceding ! operator
@@ -706,7 +735,7 @@ function completions(string, pos, context_module=Main)::Completions
                 frange, end_of_identifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
                 startpos = first(frange)
                 i = prevind(string, startpos)
-            elseif c in ["\'\"\`"...]
+            elseif c in ('\'', '\"', '\`')
                 s = "$c$c"*string[startpos:pos]
                 break
             else
@@ -719,26 +748,28 @@ function completions(string, pos, context_module=Main)::Completions
     return sort!(unique(suggestions), by=completion_text), (dotpos+1):pos, true
 end
 
-function shell_completions(string, pos)::Completions
+function shell_completions(string, pos)
     # First parse everything up to the current position
     scs = string[1:pos]
     local args, last_parse
     try
-        args, last_parse = Base.shell_parse(scs, true)
+        args, last_parse = Base.shell_parse(scs, true)::Tuple{Expr,UnitRange{Int}}
     catch
         return Completion[], 0:-1, false
     end
+    ex = args.args[end]::Expr
     # Now look at the last thing we parsed
-    isempty(args.args[end].args) && return Completion[], 0:-1, false
-    arg = args.args[end].args[end]
-    if all(s -> isa(s, AbstractString), args.args[end].args)
+    isempty(ex.args) && return Completion[], 0:-1, false
+    arg = ex.args[end]
+    if all(s -> isa(s, AbstractString), ex.args)
+        arg = arg::AbstractString
         # Treat this as a path
 
         # As Base.shell_parse throws away trailing spaces (unless they are escaped),
         # we need to special case here.
         # If the last char was a space, but shell_parse ignored it search on "".
         ignore_last_word = arg != " " && scs[end] == ' '
-        prefix = ignore_last_word ? "" : join(args.args[end].args)
+        prefix = ignore_last_word ? "" : join(ex.args)
 
         # Also try looking into the env path if the user wants to complete the first argument
         use_envpath = !ignore_last_word && length(args.args) < 2

@@ -10,7 +10,7 @@ using Random
 
     # Check that resizing empty source vector does not corrupt string
     b = IOBuffer()
-    write(b, "ab")
+    @inferred write(b, "ab")
     x = take!(b)
     s = String(x)
     resize!(x, 0)
@@ -263,8 +263,10 @@ end
     for c in x
         nb += write(f, c)
     end
-    @test nb == 3
+    @test nb === 3
     @test String(take!(f)) == "123"
+
+    @test all(T -> T <: Union{Union{}, Int}, Base.return_types(write, (IO, AbstractString)))
 end
 
 @testset "issue #7248" begin

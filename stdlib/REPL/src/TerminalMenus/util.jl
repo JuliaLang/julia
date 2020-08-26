@@ -12,13 +12,13 @@
     PAGE_UP,
     PAGE_DOWN)
 
-readbyte(stream::IO=stdin) = Char(read(stream,1)[1])
+readbyte(stream::IO=stdin) = read(stream, Char)
 
 # Read the next key from stdin. It is also able to read several bytes for
 #   escaped keys such as the arrow keys, home/end keys, etc.
 # Escaped keys are returned using the `Key` enum.
-readkey(stream::IO=stdin) = UInt32(_readkey(stream))
-function _readkey(stream::IO=stdin)
+readkey(stream::Base.LibuvStream=stdin) = UInt32(_readkey(stream))
+function _readkey(stream::Base.LibuvStream=stdin)
     c = readbyte(stream)
 
     # Escape characters
