@@ -7230,7 +7230,6 @@ static void init_julia_llvm_env(Module *m)
     jl_newbits_func = Function::Create(FunctionType::get(T_prjlvalue, newbits_args, false),
                                          Function::ExternalLinkage,
                                          "jl_new_bits");
-    add_return_attr(jl_newbits_func, Attribute::NoAlias);
     add_return_attr(jl_newbits_func, Attribute::NonNull);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
 
