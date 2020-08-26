@@ -984,7 +984,7 @@ push!(a::AbstractVector, iter...) = append!(a, iter)
 function _append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
     i = lastindex(a)
-    resize!(a, n+length(iter))
+    resize!(a, n+Int(length(iter))::Int)
     @inbounds for (i, item) in zip(i+1:lastindex(a), iter)
         a[i] = item
     end
