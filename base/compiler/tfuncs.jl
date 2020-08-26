@@ -1443,9 +1443,6 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         end
         return Any
     end
-    if isva
-        return Any
-    end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(a::Const -> a.val, argtypes)
@@ -1469,7 +1466,22 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         tf = T_FFUNC_VAL[fidx]
     end
     tf = tf::Tuple{Int, Int, Any}
-    if !(tf[1] <= length(argtypes) <= tf[2])
+    if isva
+        if length(argtypes) - 1 > tf[2]
+            # definitely too many arguments
+            return Bottom
+        end
+        if tf[1] == tf[2] || length(argtypes) - 1 == tf[2]
+            # expand Vararg to required number of arguments
+            vatype = unwrapva(argtypes[end])
+            argtypes = argtypes[1:end-1]
+            while length(argtypes) < tf[2]
+                push!(argtypes, vatype)
+            end
+        else
+            return Any
+        end
+    elseif !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
         return Bottom
     end

@@ -2776,3 +2776,16 @@ for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     @test code[end] === Core.ReturnNode()
     @test_throws TypeError badf()
 end
+
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), Vararg{DataType}}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), DataType, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), DataType, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Symbol
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Union{}
