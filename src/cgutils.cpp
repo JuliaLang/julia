@@ -58,24 +58,6 @@ static Value *mark_callee_rooted(jl_codectx_t &ctx, Value *V)
 #define JL_FEAT_TEST(ctx, feature) ((ctx).params->feature)
 
 
-// --- hook checks ---
-
-#define JL_HOOK_TEST(params,hook) ((params)->hook != jl_nothing)
-
-#define JL_HOOK_CALL(params,hook,argc,...) \
-    _hook_call<argc>((params)->hook, {{__VA_ARGS__}});
-template<int N>
-static inline void _hook_call(jl_value_t *hook, std::array<jl_value_t*,N> args) {
-    jl_value_t **argv;
-    JL_GC_PUSHARGS(argv, N+1);
-    argv[0] = hook;
-    for (int i = 0; i < N; i++)
-        argv[i+1] = args[i];
-    jl_apply(argv, N+1);
-    JL_GC_POP();
-}
-
-
 // --- string constants ---
 static Value *stringConstPtr(
         jl_codegen_params_t &emission_context,
@@ -1061,13 +1043,7 @@ static void error_unless(jl_codectx_t &ctx, Value *cond, const std::string &msg)
 static void raise_exception(jl_codectx_t &ctx, Value *exc,
                             BasicBlock *contBB=nullptr)
 {
-    if (JL_HOOK_TEST(ctx.params, raise_exception)) {
-        JL_HOOK_CALL(ctx.params, raise_exception, 2,
-                     jl_box_voidpointer(wrap(ctx.builder.GetInsertBlock())),
-                     jl_box_voidpointer(wrap(exc)));
-    } else {
-        ctx.builder.CreateCall(prepare_call(jlthrow_func), { mark_callee_rooted(ctx, exc) });
-    }
+    ctx.builder.CreateCall(prepare_call(jlthrow_func), { mark_callee_rooted(ctx, exc) });
     ctx.builder.CreateUnreachable();
     if (!contBB) {
         contBB = BasicBlock::Create(jl_LLVMContext, "after_throw", ctx.f);
@@ -2962,14 +2938,12 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
 static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 {
     return
-           // language features
            (a->track_allocations == b->track_allocations) &&
            (a->code_coverage == b->code_coverage) &&
            (a->prefer_specsig == b->prefer_specsig) &&
-           // hooks
-           (a->module_setup == b->module_setup) &&
-           (a->module_activation == b->module_activation) &&
-           (a->raise_exception == b->raise_exception) &&
+           (a->gnu_pubnames == b->gnu_pubnames) &&
+           (a->debug_info_kind == b->debug_info_kind) &&
+           (a->lookup == b->lookup) &&
            (a->generic_context == b->generic_context);
 }
 #endif

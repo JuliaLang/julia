@@ -2120,33 +2120,6 @@ typedef struct {
     int debug_info_kind; // Enum for line-table-only, line-directives-only,
                             // limited, standalone
 
-    // hooks
-
-    // module setup: prepare a module for code emission (data layout, DWARF version, ...)
-    // parameters: LLVMModuleRef as Ptr{Cvoid}
-    // return value: none
-    jl_value_t *module_setup;
-
-    // module activation: registers debug info, adds module to JIT
-    // parameters: LLVMModuleRef as Ptr{Cvoid}
-    // return value: none
-    jl_value_t *module_activation;
-
-    // exception raising: emit LLVM instructions to raise an exception
-    // parameters: LLVMBasicBlockRef as Ptr{Cvoid}, LLVMValueRef as Ptr{Cvoid}
-    // return value: none
-    jl_value_t *raise_exception;
-
-    // emit function: start emission of a new function
-    // parameters: MethodInstance, CodeInfo, world age as UInt
-    // return value: none
-    jl_value_t *emit_function;
-
-    // emitted function: end emission of a new function
-    // parameters: MethodInstance, CodeInfo, world age as UInt
-    // return value: none
-    jl_value_t *emitted_function;
-
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;
 

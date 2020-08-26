@@ -855,7 +855,7 @@ extern "C" {
 #else
         1,
 #endif
-        jl_default_debug_info_kind, NULL, NULL, NULL, NULL, NULL,
+        jl_default_debug_info_kind,
         jl_rettype_inferred, NULL };
 }
 
@@ -1633,11 +1633,6 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
 
 static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default_cgparams)
 {
-    if (JL_HOOK_TEST(params, module_setup)) {
-        JL_HOOK_CALL(params, module_setup, 1, jl_box_voidpointer(wrap(m)));
-        return;
-    }
-
     // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
     // imaging mode. The structure of v4 is slightly nicer for debugging JIT
     // code.
@@ -5640,11 +5635,6 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     jl_array_t *stmts = ctx.code;
     size_t stmtslen = jl_array_dim0(stmts);
 
-    if (JL_HOOK_TEST(ctx.params, emit_function)) {
-        JL_HOOK_CALL(ctx.params, emit_function, 2, (jl_value_t*)ctx.linfo,
-                     (jl_value_t*)ctx.source);
-    }
-
     // step 1b. unpack debug information
     int coverage_mode = jl_options.code_coverage;
     int malloc_log_mode = jl_options.malloc_log;
@@ -7046,11 +7036,6 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             jl_Module->getFunction(FN)->setLinkage(GlobalVariable::PrivateLinkage);
     }
 
-    if (JL_HOOK_TEST(ctx.params, emitted_function)) {
-        JL_HOOK_CALL(ctx.params, emitted_function, 2, (jl_value_t*)ctx.linfo,
-                     (jl_value_t*)ctx.source);
-    }
-
     JL_GC_POP();
     return std::make_pair(std::unique_ptr<Module>(M), declarations);
 }
@@ -7117,18 +7102,16 @@ jl_compile_result_t jl_emit_codeinst(
         // Prepare debug info to receive this function
         // record that this function name came from this linfo,
         // so we can build a reverse mapping for debug-info.
-        if (!JL_HOOK_TEST(params.params, module_activation)) {
-            bool toplevel = !jl_is_method(codeinst->def->def.method);
-            if (!toplevel) {
-                const DataLayout &DL = m->getDataLayout();
-                // but don't remember toplevel thunks because
-                // they may not be rooted in the gc for the life of the program,
-                // and the runtime doesn't notify us when the code becomes unreachable :(
-                if (!specf.empty())
-                    jl_add_code_in_flight(specf, codeinst, DL);
-                if (!f.empty() && f != "jl_fptr_args" && f != "jl_fptr_sparam")
-                    jl_add_code_in_flight(f, codeinst, DL);
-            }
+        bool toplevel = !jl_is_method(codeinst->def->def.method);
+        if (!toplevel) {
+            const DataLayout &DL = m->getDataLayout();
+            // but don't remember toplevel thunks because
+            // they may not be rooted in the gc for the life of the program,
+            // and the runtime doesn't notify us when the code becomes unreachable :(
+            if (!specf.empty())
+                jl_add_code_in_flight(specf, codeinst, DL);
+            if (!f.empty() && f != "jl_fptr_args" && f != "jl_fptr_sparam")
+                jl_add_code_in_flight(f, codeinst, DL);
         }
 
         if (// don't alter `inferred` when the code is not directly being used
@@ -7530,11 +7513,6 @@ extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
     imaging_mode = jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
-    jl_default_cgparams.module_setup = jl_nothing;
-    jl_default_cgparams.module_activation = jl_nothing;
-    jl_default_cgparams.raise_exception = jl_nothing;
-    jl_default_cgparams.emit_function = jl_nothing;
-    jl_default_cgparams.emitted_function = jl_nothing;
     jl_default_cgparams.generic_context = jl_nothing;
     jl_init_debuginfo();
 
