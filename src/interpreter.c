@@ -335,7 +335,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
             //   %3 = phi (1)[1 => %a], (2)[2 => %b]
             // from = 1, to = closest = 2, i = 1 --> edge = 2, edge_from = 2, from = 2
             for (unsigned j = 0; j < jl_array_len(edges); ++j) {
-                size_t edge_from = jl_unbox_long(jl_arrayref(edges, j)); // 1-indexed
+                size_t edge_from = ((int32_t*)jl_array_data(edges))[j]; // 1-indexed
                 if (edge_from == from + 1) {
                     if (edge == -1)
                         edge = j;

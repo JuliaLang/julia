@@ -174,7 +174,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
                     error()
                 end
-                check_op(ir, domtree, val, edge, last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print)
+                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print)
             end
         elseif isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)

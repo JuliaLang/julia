@@ -716,7 +716,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
         stmt = GotoNode(block_for_inst(cfg, stmt.label))
     elseif stmt isa PhiNode
         e = stmt.edges
-        stmt = PhiNode(Any[block_for_inst(cfg, e[i]) for i in 1:length(e)], stmt.values)
+        stmt = PhiNode(Int32[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)
     end
     show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
     print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
