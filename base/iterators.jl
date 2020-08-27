@@ -15,7 +15,6 @@ using .Base:
     LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple
 
 import .Base:
-    first, last,
     isempty, length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype,
     haskey, keys, values, pairs,
@@ -102,8 +101,8 @@ length(r::Reverse) = length(r.itr)
 size(r::Reverse) = size(r.itr)
 IteratorSize(::Type{Reverse{T}}) where {T} = IteratorSize(T)
 IteratorEltype(::Type{Reverse{T}}) where {T} = IteratorEltype(T)
-last(r::Reverse) = first(r.itr) # the first shall be last
-first(r::Reverse) = last(r.itr) # and the last shall be first
+Base.last(r::Reverse) = Base.first(r.itr) # the first shall be last
+Base.first(r::Reverse) = Base.last(r.itr) # and the last shall be first
 
 # reverse-order array iterators: assumes more-specialized Reverse for eachindex
 @propagate_inbounds function iterate(A::Reverse{<:AbstractArray}, state=(reverse(eachindex(A.itr)),))
@@ -986,8 +985,8 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
 
 @inline isdone(P::ProductIterator) = any(isdone, P.iterators)
 @inline function _pisdone(iters, states)
-    iter1 = first(iters)
-    done1 = isdone(iter1, first(states)[2]) # check step
+    iter1 = Base.first(iters)
+    done1 = isdone(iter1, Base.first(states)[2]) # check step
     done1 === true || return done1 # false or missing
     done1 = isdone(iter1) # check restart
     done1 === true || return done1 # false or missing
@@ -1012,8 +1011,8 @@ end
 
 @inline _piterate1(::Tuple{}, ::Tuple{}) = nothing
 @inline function _piterate1(iters, states)
-    iter1 = first(iters)
-    next = iterate(iter1, first(states)[2])
+    iter1 = Base.first(iters)
+    next = iterate(iter1, Base.first(states)[2])
     restnext = tail(states)
     if next === nothing
         isdone(iter1) === true && return nothing
@@ -1335,9 +1334,89 @@ only(x::Tuple) = throw(
     ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
 )
 only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
-only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
+only(x::NamedTuple{<:Any, <:Tuple{Any}}) = Base.first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
+
+"""
+    Iterators.first(coll)
+
+Return the first element of iterable `coll` wrapped in [`Some`](@ref).
+
+If `coll` is empty, return `nothing`.
+
+See also [`something`](@ref), [`Iterators.last`](@ref).
+
+!!! compat "Julia 1.6"
+    This function was added in Julia 1.6.
+
+# Extended help
+
+This differs from [`first`](@ref) by not throwing an error for empty
+iterables. It can be used with [`Iterators.filter`](@ref) to safely
+get the first element of an iterable which matches a condition. With
+[`first`](@ref), this use requires handling collections with no
+elements matching the condition by catching the thrown
+[`BoundsError`](@ref).
+
+# Examples
+```jldoctest
+julia> Iterators.first(Iterators.filter(>(5), 1:10))
+Some(6)
+
+julia> isnothing(Iterators.first(Iterators.filter(isodd, 2:2:10)))
+true
+
+julia> something(Iterators.first(Iterators.filter(iseven, [5, 3, 4, 2, 6, 8])))
+4
+
+julia> something(Iterators.first(Iterators.filter(>(10), 1:10)), 0)
+0
+```
+"""
+function first(itr)
+    x = iterate(itr)
+    x === nothing && return
+    return Some(x[1])
+end
+
+"""
+    Iterators.last(coll)
+
+Return the last element of iterable `coll` wrapped in [`Some`](@ref).
+
+If `coll` is empty, return `nothing`.
+
+See also [`something`](@ref), [`Iterators.first`](@ref).
+
+!!! compat "Julia 1.6"
+    This function was added in Julia 1.6.
+
+# Extended help
+
+This differs from [`last`](@ref) by not throwing an error for empty
+iterables. It can be used with [`Iterators.filter`](@ref) to safely
+get the last element of an iterable which matches a condition. With
+[`last`](@ref), this use requires handling collections with no
+elements matching the condition by catching the thrown
+[`BoundsError`](@ref).
+
+# Examples
+```jldoctest
+julia> Iterators.last(Iterators.filter(<(5), 1:10))
+Some(4)
+
+julia> isnothing(Iterators.last(Iterators.filter(isodd, 2:2:10)))
+true
+
+julia> something(Iterators.last(Iterators.filter(iseven, [5, 3, 4, 2, 6, 9])))
+6
+
+julia> something(Iterators.last(Iterators.filter(>(10), 1:10)), 0)
+0
+```
+"""
+last(itr) = first(reverse(itr))
 
 end

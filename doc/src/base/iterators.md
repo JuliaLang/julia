@@ -19,6 +19,8 @@ Base.Iterators.map
 Base.Iterators.filter
 Base.Iterators.accumulate
 Base.Iterators.reverse
+Base.Iterators.first
+Base.Iterators.last
 Base.Iterators.only
 Base.Iterators.peel
 ```

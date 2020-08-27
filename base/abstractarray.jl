@@ -344,38 +344,6 @@ function first(itr)
 end
 
 """
-    first(predicate, coll)
-
-Get the first element of `coll` satisfying `predicate` wrapped in [`Some`](@ref).
-
-If no element of `coll` satisfies `predicate`, return `nothing`.
-
-!!! compat "Julia 1.6"
-    This method was added in Julia 1.6.
-
-# Examples
-```jldoctest
-julia> first(>(5), 1:10)
-Some(6)
-
-julia> isnothing(first(isodd, 2:2:10))
-true
-
-julia> something(first(iseven, [5, 3, 4, 2, 6, 8]))
-4
-
-julia> something(first(>(10), 1:10), 0)
-0
-```
-"""
-function first(predicate, itr)
-    for x in itr
-        predicate(x) && return Some(x)
-    end
-    return nothing
-end
-
-"""
     first(itr, n::Integer)
 
 Get the first `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
@@ -419,47 +387,6 @@ julia> last([1; 2; 3; 4])
 ```
 """
 last(a) = a[end]
-
-"""
-    last(predicate, coll)
-
-Get the last element of `coll` satisfying `predicate` wrapped in [`Some`](@ref).
-
-If no element of `coll` satisfies `predicate`, return `nothing`.
-
-!!! compat "Julia 1.6"
-    This method was added in Julia 1.6.
-    
-# Examples
-```jldoctest
-julia> last(<(5), 1:10)
-Some(4)
-
-julia> isnothing(last(isodd, 2:2:10))
-true
-
-julia> something(last(iseven, [5; 3; 4; 2; 6; 9]))
-6
-
-julia> something(last(>(10), 1:10), 0)
-0
-```
-"""
-function last(predicate, itr)
-    out = nothing
-    for x in itr
-        out = ifelse(predicate(x), Some(x), out)
-    end
-    return out
-end
-
-# faster version for arrays
-function last(predicate, a::AbstractArray)
-    @inbounds for i in reverse(eachindex(a))
-        predicate(a[i]) && return Some(a[i])
-    end
-    return nothing
-end
 
 """
     last(itr, n::Integer)

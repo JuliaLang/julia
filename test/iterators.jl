@@ -848,3 +848,15 @@ end
     @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
+
+@testset "Iterators.first and Iterators.last" for itr in (1:9,
+                                                          collect(1:9),
+                                                          reshape(1:9, (3, 3)),
+                                                          ntuple(identity, 9))
+    @test @inferred(Nothing, Iterators.first(itr)) == Some(1)
+    @test @inferred(Nothing, Iterators.last(itr)) == Some(9)
+    @test @inferred(Nothing, Iterators.first(Iterators.filter(>(5), itr))) == Some(6)
+    @test @inferred(Nothing, Iterators.last(Iterators.filter(<(5), itr))) == Some(4)
+    @test @inferred(Nothing, Iterators.first(Iterators.filter(>(9), itr))) === nothing
+    @test @inferred(Nothing, Iterators.last(Iterators.filter(>(9), itr))) === nothing
+end

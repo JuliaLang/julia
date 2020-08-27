@@ -1141,13 +1141,3 @@ end
     @test last(itr, 1) == [itr[end]]
     @test_throws ArgumentError last(itr, -6)
 end
-
-@testset "first/last element satisfying predicate of $(typeof(itr))" for itr in (1:9,
-                                                                                 collect(1:9),
-                                                                                 reshape(1:9, (3, 3)),
-                                                                                 ntuple(identity, 9))
-    @test first(>(5), itr) |> something == 6
-    @test last(<(5), itr) |> something == 4
-    @test first(>(9), itr) == nothing
-    @test last(>(9), itr) == nothing
-end
