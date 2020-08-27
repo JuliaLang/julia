@@ -11,22 +11,22 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N},IsScalar} <: AbstractArray{
     writable::Bool
     global reinterpret
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
-        function throwbits(::Type{S}, ::Type{T}, ::Type{U}) where {S,T,U}
+        function throwbits(S::Type, T::Type, U::Type)
             @_noinline_meta
             throw(ArgumentError("cannot reinterpret `$(S)` `$(T)`, type `$(U)` is not a bits type"))
         end
-        function throwsize0(::Type{S}, ::Type{T})
+        function throwsize0(S::Type, T::Type)
             @_noinline_meta
             throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a different size"))
         end
-        function thrownonint(::Type{S}, ::Type{T}, dim)
+        function thrownonint(S::Type, T::Type, dim)
             @_noinline_meta
             throw(ArgumentError("""
                 cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
                 The resulting array would have non-integral first dimension.
                 """))
         end
-        function throwaxes1(::Type{S}, ::Type{T}, ax1)
+        function throwaxes1(S::Type, T::Type, ax1)
             @_noinline_meta
             throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` when the first axis is $ax1. Try reshaping first."))
         end
