@@ -278,6 +278,7 @@ default_group(file) = Symbol(splitext(basename(file))[1])
 function logmsg_code(_module, file, line, level, message, exs...)
     log_data = process_logmsg_exs(_module, file, line, level, message, exs...)
     quote
+    let
         level = $level
         std_level = convert(LogLevel, level)
         if std_level >= getindex(_min_enabled_level)
@@ -304,6 +305,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
             end
         end
         nothing
+    end
     end
 end
 

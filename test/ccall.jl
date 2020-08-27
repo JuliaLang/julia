@@ -1605,12 +1605,12 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        arg1root = Base.cconvert($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
-        arg1 = Base.unsafe_convert($(Expr(:escape, :Cstring)), arg1root)
-        arg2root = Base.cconvert($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
-        arg2 = Base.unsafe_convert($(Expr(:escape, :Cint)), arg2root)
-        arg3root = Base.cconvert($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
-        arg3 = Base.unsafe_convert($(Expr(:escape, :Cint)), arg3root)
+        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
+        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
+        local arg2root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
+        local arg2 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg2root)
+        local arg3root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
+        local arg3 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg3root)
         $(Expr(:foreigncall,
                :($(Expr(:escape, :((:func, libstring))))),
                :($(Expr(:escape, :Cstring))),
@@ -1631,8 +1631,8 @@ end
                 throw(ArgumentError("interpolated function `$(name)` was not a Ptr{Cvoid}, but $(typeof(func))"))
             end
         end
-        arg1root = Base.cconvert($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
-        arg1 = Base.unsafe_convert($(Expr(:escape, :Cstring)), arg1root)
+        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
+        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
         $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
     end)
 
