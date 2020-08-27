@@ -124,6 +124,7 @@ module IteratorsMD
 
     # comparison
     @inline isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = _isless(0, I1.I, I2.I)
+    Base.OrderStyle(::Type{<:Union{Missing,CartesianIndex}}) = Base.Ordered()
     @inline function _isless(ret, I1::NTuple{N,Int}, I2::NTuple{N,Int}) where N
         newret = ifelse(ret==0, icmp(I1[N], I2[N]), ret)
         _isless(newret, Base.front(I1), Base.front(I2))
