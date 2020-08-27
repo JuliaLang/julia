@@ -72,6 +72,7 @@ default(p::Union{T,Type{T}}) where {T<:TimePeriod} = T(0)
 ==(x::Period, y::Period) = (==)(promote(x, y)...)
 Base.isless(x::P, y::P) where {P<:Period} = isless(value(x), value(y))
 Base.isless(x::Period, y::Period) = isless(promote(x, y)...)
+Base.OrderStyle(::Type{<:Union{Missing,Period}}) = Base.Ordered()
 
 # Period Arithmetic, grouped by dimensionality:
 for op in (:+, :-, :lcm, :gcd)
