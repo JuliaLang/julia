@@ -1093,6 +1093,9 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     else
         return Type
     end
+    if !isempty(args) && isvarargtype(args[end])
+        return Type
+    end
     largs = length(args)
     if headtype === Union
         largs == 0 && return Const(Bottom)
@@ -1417,11 +1420,6 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             end
         end
         return Any
-    elseif f === Core._expr
-        if length(argtypes) < 1 && !isva
-            return Bottom
-        end
-        return Expr
     elseif f === invoke
         if length(argtypes) > 1 && sv !== nothing && (isa(argtypes[1], Const) || isa(argtypes[1], Type))
             if isa(argtypes[1], Const)
@@ -1471,15 +1469,17 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             # definitely too many arguments
             return Bottom
         end
-        if tf[1] == tf[2] || length(argtypes) - 1 == tf[2]
-            # expand Vararg to required number of arguments
-            vatype = unwrapva(argtypes[end])
+        if length(argtypes) - 1 == tf[2]
             argtypes = argtypes[1:end-1]
-            while length(argtypes) < tf[2]
-                push!(argtypes, vatype)
-            end
         else
-            return Any
+            vatype = argtypes[end]
+            argtypes = argtypes[1:end-1]
+            while length(argtypes) < tf[1]
+                push!(argtypes, unwrapva(vatype))
+            end
+            if length(argtypes) < tf[2]
+                push!(argtypes, unconstrain_vararg_length(vatype))
+            end
         end
     elseif !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
