@@ -589,7 +589,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.slotflags = fill(0x00, nargs)
                 tree.ssavaluetypes = 1
                 tree.codelocs = Int32[1]
-                tree.linetable = [LineInfoNode(method, method.file, Int(method.line), 0)]
+                tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
                 tree.inferred = true
                 tree.ssaflags = UInt8[0]
                 tree.pure = true

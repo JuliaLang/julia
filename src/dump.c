@@ -1656,7 +1656,7 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
 {
     assert(!ios_eof(s->s));
     jl_value_t *v;
-    size_t i, n;
+    size_t n;
     uintptr_t pos;
     uint8_t tag = read_uint8(s->s);
     if (tag > LAST_TAG)
@@ -1773,14 +1773,6 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
         v = jl_alloc_string(n);
         arraylist_push(&backref_list, v);
         ios_readall(s->s, jl_string_data(v), n);
-        return v;
-    case TAG_LINEINFO:
-        v = jl_new_struct_uninit(jl_lineinfonode_type);
-        arraylist_push(&backref_list, v);
-        for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++) {
-            size_t offs = jl_field_offset(jl_lineinfonode_type, i);
-            set_nth_field(jl_lineinfonode_type, (void*)v, i, jl_deserialize_value(s, (jl_value_t**)((char*)v + offs)));
-        }
         return v;
     case TAG_DATATYPE:
         pos = backref_list.len;

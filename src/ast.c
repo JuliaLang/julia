@@ -596,7 +596,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (sym == thunk_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             assert(jl_is_code_info(ex));
-            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, (jl_value_t*)jl_symbol("top-level scope"));
+            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, mod, (jl_value_t*)jl_symbol("top-level scope"));
             temp = (jl_value_t*)jl_exprn(sym, 1);
             jl_exprargset(temp, 0, ex);
         }

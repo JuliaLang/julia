@@ -356,7 +356,7 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     return src;
 }
 
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
+void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_value_t *name)
 {
     jl_array_t *li = (jl_array_t*)ci->linetable;
     size_t i, n = jl_array_len(li);
@@ -366,11 +366,11 @@ void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
         jl_value_t *ln = jl_array_ptr_ref(li, i);
         if (jl_is_linenode(ln)) {
             rt = jl_box_long(jl_linenode_line(ln));
-            rt = jl_new_struct(jl_lineinfonode_type, name, jl_linenode_file(ln), rt, jl_box_long(0));
+            rt = jl_new_struct(jl_lineinfonode_type, mod, name, jl_linenode_file(ln), rt, jl_box_long(0));
             jl_array_ptr_set(li, i, rt);
         }
         else if (jl_is_expr(ln) && ((jl_expr_t*)ln)->head == line_sym && jl_expr_nargs(ln) == 3) {
-            rt = jl_new_struct(jl_lineinfonode_type, jl_symbol("macro expansion"),
+            rt = jl_new_struct(jl_lineinfonode_type, mod, jl_symbol("macro expansion"),
                                jl_exprarg(ln, 1), jl_exprarg(ln, 0), jl_exprarg(ln, 2));
             jl_array_ptr_set(li, i, rt);
         }
@@ -461,7 +461,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ptls->world_age = last_age;
-        jl_linenumber_to_lineinfo(func, (jl_value_t*)def->name);
+        jl_linenumber_to_lineinfo(func, def->module, (jl_value_t*)def->name);
     }
     JL_CATCH {
         ptls->in_pure_callback = last_in;
@@ -514,7 +514,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     }
     m->called = called;
     m->pure = src->pure;
-    jl_linenumber_to_lineinfo(src, (jl_value_t*)m->name);
+    jl_linenumber_to_lineinfo(src, m->module, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);

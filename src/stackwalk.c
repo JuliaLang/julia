@@ -660,14 +660,14 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
                 jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
                     jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
                 assert(jl_typeis(locinfo, jl_lineinfonode_type));
+                const char *func_name = "Unknown";
                 jl_value_t *method = locinfo->method;
-                if (jl_is_method_instance(method)) {
+                if (jl_is_method_instance(method))
                     method = ((jl_method_instance_t*)method)->def.value;
-                    if (jl_is_method(method))
-                        method = (jl_value_t*)((jl_method_t*)method)->name;
-                }
-                const char *func_name = jl_is_symbol(method) ?
-                                        jl_symbol_name((jl_sym_t*)method) : "Unknown";
+                if (jl_is_method(method))
+                    method = (jl_value_t*)((jl_method_t*)method)->name;
+                if (jl_is_symbol(method))
+                    func_name = jl_symbol_name((jl_sym_t*)method);
                 jl_safe_print_codeloc(func_name, jl_symbol_name(locinfo->file),
                                       locinfo->line, locinfo->inlined_at);
                 debuginfoloc = locinfo->inlined_at;

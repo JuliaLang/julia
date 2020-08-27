@@ -252,6 +252,7 @@ JL_EXTENSION typedef union {
 typedef struct _jl_method_instance_t jl_method_instance_t;
 
 typedef struct _jl_line_info_node_t {
+    struct _jl_module_t *module;
     jl_value_t *method;
     jl_sym_t *file;
     intptr_t line;
