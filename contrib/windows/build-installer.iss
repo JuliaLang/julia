@@ -45,9 +45,7 @@ SelectTasksDesc=
 
 
 [Setup]
-#ifndef AppId
 AppId={{054B4BC6-BD30-45C8-A623-8F5BA6EBD55D}
-#endif
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=Julia Language
