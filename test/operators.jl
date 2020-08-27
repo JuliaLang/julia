@@ -251,4 +251,6 @@ end
     ismatrix = isa(Matrix)
     @test ismatrix([1 2; 3 4])
     @test !ismatrix("hi")
+
+    @test_throws ErrorException Base.:(isa)(x, T) = "boo!"
 end

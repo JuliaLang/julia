@@ -1206,3 +1206,4 @@ The returned function is of type `Base.Fix2{typeof(isa)}`, which can be
 used to implement specialized methods.
 """
 isa(T) = Fix2(isa, T)
+setfield!(typeof(isa).name.mt, fieldcount(Core.MethodTable), 0x01) # Stop people from being able to add methods to isa
