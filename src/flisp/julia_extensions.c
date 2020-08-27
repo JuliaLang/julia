@@ -152,7 +152,7 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
 #include "julia_opsuffs.h"
 
 // chars that can follow an operator (e.g. +) and be parsed as part of the operator
-int jl_op_suffix_char(uint32_t wc)
+JL_DLLEXPORT int jl_op_suffix_char(uint32_t wc)
 {
     static htable_t jl_opsuffs; // XXX: requires uv_once
     if (!jl_opsuffs.size) { // initialize hash table of suffixes
