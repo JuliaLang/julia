@@ -1647,6 +1647,7 @@ struct GenericOrder{T}
     val::T
 end
 Base.isless(x::GenericOrder, y::GenericOrder) = isless(x.val,y.val)
+Base.OrderStyle(::Type{<:Union{Missing,Test.GenericOrder}}) = Base.Ordered()
 
 Base.keys(a::GenericArray) = keys(a.a)
 Base.axes(a::GenericArray) = axes(a.a)
