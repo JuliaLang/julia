@@ -3,15 +3,26 @@
 ## numeric/object traits
 # trait for objects that have an ordering
 abstract type OrderStyle end
+
+"""
+    Ordered()
+
+Indicate that a type `T` guarantees that a method at most as specific as
+`isless(::T, ::T)` is defined and when called will not throw an exception.
+"""
 struct Ordered <: OrderStyle end
 struct Unordered <: OrderStyle end
 
 OrderStyle(instance) = OrderStyle(typeof(instance))
-OrderStyle(::Type{<:Real}) = Ordered()
-OrderStyle(::Type{<:AbstractString}) = Ordered()
-OrderStyle(::Type{Symbol}) = Ordered()
-OrderStyle(::Type{<:Any}) = Unordered()
 OrderStyle(::Type{Union{}}) = Ordered()
+OrderStyle(::Type{<:Union{Missing,Real}}) = Ordered()
+OrderStyle(::Type{<:Union{Missing,AbstractString}}) = Ordered()
+OrderStyle(::Type{<:Union{Missing,AbstractChar}}) = Ordered()
+OrderStyle(::Type{<:Union{Missing,Symbol}}) = Ordered()
+OrderStyle(::Type{<:Union{Missing,CartesianIndex}}) = Ordered()
+OrderStyle(::Type{Symbol}) = Ordered()
+OrderStyle(::Type{Missing}) = Ordered()
+OrderStyle(::Type{<:Any}) = Unordered()
 
 # trait for objects that support arithmetic
 abstract type ArithmeticStyle end
