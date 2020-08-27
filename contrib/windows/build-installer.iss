@@ -75,6 +75,9 @@ UninstallDisplayIcon={app}\{#AppMainExeName}
 UninstallFilesDir={app}\uninstall
 ChangesEnvironment=true
 
+#ifdef Sign
+SignTool=mysigntool
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
