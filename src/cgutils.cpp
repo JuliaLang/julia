@@ -2965,7 +2965,6 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            // language features
            (a->track_allocations == b->track_allocations) &&
            (a->code_coverage == b->code_coverage) &&
-           (a->static_alloc == b->static_alloc) &&
            (a->prefer_specsig == b->prefer_specsig) &&
            // hooks
            (a->module_setup == b->module_setup) &&
