@@ -1,8 +1,19 @@
+#ifndef AppName
 #define AppName "Julia"
+#endif
+
+#ifndef AppId
+#define AppId "{{054B4BC6-BD30-45C8-A623-8F5BA6EBD55D}"
+#endif
+
+#ifndef DirName
+#define DirName AppName + "-" + AppVersion
+#endif
+
 #define AppNameLong AppName + " " + AppVersion
 #define AppMainExeName "bin\julia.exe"
 #define CurrentYear GetDateTimeString('yyyy', '', '')
-#define DirName AppName + "-" + AppVersion
+
 
 
 [LangOptions]
@@ -45,7 +56,7 @@ SelectTasksDesc=
 
 
 [Setup]
-AppId={{054B4BC6-BD30-45C8-A623-8F5BA6EBD55D}
+AppId={#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=Julia Language
