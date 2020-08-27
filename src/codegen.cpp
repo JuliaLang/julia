@@ -6532,6 +6532,13 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     Value *sync_bytes = nullptr;
     if (do_malloc_log(true))
         sync_bytes = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
+    { // coverage for the function definition line number
+        const auto &topinfo = linetable.at(0);
+        if (topinfo == linetable.at(1))
+            current_lineinfo.push_back(1);
+        if (do_coverage(topinfo.is_user_code))
+            coverageVisitLine(ctx, topinfo.file, topinfo.line);
+    }
 
     find_next_stmt(0);
     while (cursor != -1) {
