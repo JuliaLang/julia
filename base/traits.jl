@@ -1,16 +1,37 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## numeric/object traits
-# trait for objects that have an ordering
+
+"""
+    OrderedStyle()
+ 
+An abstract type of a trait that signals if some type `T` guarantees
+that a call `isless(::T, ::T)` will return `true` or `false`.
+
+It has two concrete subtypes [`Ordered`](@ref) and
+[`Unordered`](@ref), which is the default.
+
+Types guaranteeing the support [`isless`](@ref) are recommend to support
+[`Ordered`](@ref) trait to enable optimizations.
+"""
 abstract type OrderStyle end
 
 """
     Ordered()
 
-Indicate that a type `T` guarantees that a method at most as specific as
-`isless(::T, ::T)` is defined and when called will not throw an exception.
+Indicate that a type `T` guarantees that a call `isless(::T, ::T)` will return `true` or `false`.
+It is recommended that custom types defining `isless` implement this
+trait as this information can be used to enable optimizations.
 """
 struct Ordered <: OrderStyle end
+
+"""
+    Unordered()
+
+A default `OrderStyle` for any type `T` indicating that optimizations
+cannot rely on the fact that it is guaranteed that a call `isless(::T, ::T)`
+will return `true` or `false`.
+"""
 struct Unordered <: OrderStyle end
 
 OrderStyle(instance) = OrderStyle(typeof(instance))
