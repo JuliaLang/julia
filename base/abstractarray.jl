@@ -712,7 +712,7 @@ to_shape(r::AbstractUnitRange) = r
 
 Create an uninitialized mutable array analogous to that specified by
 `storagetype`, but with `axes` specified by the last
-argument. `storagetype` might be a type or a function.
+argument.
 
 **Examples**:
 
