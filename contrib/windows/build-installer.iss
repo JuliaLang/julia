@@ -45,7 +45,9 @@ SelectTasksDesc=
 
 
 [Setup]
+#ifndef AppId
 AppId={{054B4BC6-BD30-45C8-A623-8F5BA6EBD55D}
+#endif
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=Julia Language
@@ -75,6 +77,9 @@ UninstallDisplayIcon={app}\{#AppMainExeName}
 UninstallFilesDir={app}\uninstall
 ChangesEnvironment=true
 
+#ifdef Sign
+SignTool=mysigntool
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
