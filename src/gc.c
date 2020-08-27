@@ -1027,7 +1027,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
     reset_thread_gc_counts();
 }
 
-static size_t array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
+size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
 {
     size_t sz = 0;
     int isbitsunion = jl_array_isbitsunion(a);
@@ -1049,7 +1049,7 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
             jl_free_aligned(d);
         else
             free(d);
-        gc_num.freed += array_nbytes(a);
+        gc_num.freed += jl_array_nbytes(a);
     }
 }
 
@@ -2411,17 +2411,17 @@ mark: {
                 verify_parent1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
                 (void)val_buf;
                 gc_setmark_buf_(ptls, (char*)a->data - a->offset * a->elsize,
-                                bits, array_nbytes(a));
+                                bits, jl_array_nbytes(a));
             }
             else if (flags.how == 2) {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
-                                     array_nbytes(a));
+                                     jl_array_nbytes(a));
                     if (bits == GC_OLD_MARKED) {
-                        ptls->gc_cache.perm_scanned_bytes += array_nbytes(a);
+                        ptls->gc_cache.perm_scanned_bytes += jl_array_nbytes(a);
                     }
                     else {
-                        ptls->gc_cache.scanned_bytes += array_nbytes(a);
+                        ptls->gc_cache.scanned_bytes += jl_array_nbytes(a);
                     }
                 }
             }
