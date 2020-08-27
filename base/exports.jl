@@ -914,6 +914,7 @@ export
     process_running,
     run,
     setenv,
+    addenv,
     success,
     withenv,
 

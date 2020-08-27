@@ -71,6 +71,7 @@ New library functions
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
 * New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more
   efficiently ([#35816]).
+* New function `addenv` for adding environment mappings into a `Cmd` object, returning the new `Cmd` object.
 
 New library features
 --------------------
