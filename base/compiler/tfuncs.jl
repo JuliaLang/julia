@@ -390,6 +390,7 @@ function nfields_tfunc(@nospecialize(x))
 end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, (@nospecialize args...)->Expr, 100)
+add_tfunc(svec, 0, INT_INF, (@nospecialize args...)->SimpleVector, 20)
 function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub_arg))
     lb = Union{}
     ub = Any
@@ -1300,6 +1301,26 @@ function tuple_tfunc(atypes::Vector{Any})
     return anyinfo ? PartialStruct(typ, atypes) : typ
 end
 
+function arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(a), @nospecialize i...)
+    a = widenconst(a)
+    if a <: Array
+        if isa(a, DataType) && (isa(a.parameters[1], Type) || isa(a.parameters[1], TypeVar))
+            # TODO: the TypeVar case should not be needed here
+            a = a.parameters[1]
+            return isa(a, TypeVar) ? a.ub : a
+        elseif isa(a, UnionAll) && !has_free_typevars(a)
+            unw = unwrap_unionall(a)
+            if isa(unw, DataType)
+                return rewrap_unionall(unw.parameters[1], a)
+            end
+        end
+    end
+    return Any
+end
+add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
+add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
+add_tfunc(arrayset, 4, INT_INF, (@nospecialize(boundscheck), @nospecialize(a), @nospecialize(v), @nospecialize i...)->a, 20)
+
 function array_type_undefable(@nospecialize(a))
     if isa(a, Union)
         return array_type_undefable(a.a) || array_type_undefable(a.b)
@@ -1390,36 +1411,8 @@ end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Array{Any,1},
                            sv::Union{InferenceState,Nothing})
-    isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
         return tuple_tfunc(argtypes)
-    elseif f === svec
-        return SimpleVector
-    elseif f === arrayset
-        if length(argtypes) < 4
-            isva && return Any
-            return Bottom
-        end
-        return argtypes[2]
-    elseif f === arrayref || f === const_arrayref
-        if length(argtypes) < 3
-            isva && return Any
-            return Bottom
-        end
-        a = widenconst(argtypes[2])
-        if a <: Array
-            if isa(a, DataType) && (isa(a.parameters[1], Type) || isa(a.parameters[1], TypeVar))
-                # TODO: the TypeVar case should not be needed here
-                a = a.parameters[1]
-                return isa(a, TypeVar) ? a.ub : a
-            elseif isa(a, UnionAll) && !has_free_typevars(a)
-                unw = unwrap_unionall(a)
-                if isa(unw, DataType)
-                    return rewrap_unionall(unw.parameters[1], a)
-                end
-            end
-        end
-        return Any
     elseif f === invoke
         if length(argtypes) > 1 && sv !== nothing && (isa(argtypes[1], Const) || isa(argtypes[1], Type))
             if isa(argtypes[1], Const)
@@ -1464,7 +1457,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         tf = T_FFUNC_VAL[fidx]
     end
     tf = tf::Tuple{Int, Int, Any}
-    if isva
+    if !isempty(argtypes) && isvarargtype(argtypes[end])
         if length(argtypes) - 1 > tf[2]
             # definitely too many arguments
             return Bottom
