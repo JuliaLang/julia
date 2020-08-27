@@ -74,6 +74,9 @@ UninstallDisplayName={#AppNameLong}
 UninstallDisplayIcon={app}\{#AppMainExeName}
 UninstallFilesDir={app}\uninstall
 
+#ifdef Sign
+SignTool=mysigntool
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
