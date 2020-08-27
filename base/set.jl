@@ -382,15 +382,26 @@ false
 ```
 """
 function allunique(C)
-    seen = Set{eltype(C)}()
-    for x in C
-        if in(x, seen)
-            return false
-        else
-            push!(seen, x)
+    seen = Dict{eltype(C), Nothing}()
+    x = iterate(C)
+    if haslength(C) && length(C) > 1000
+        for i in OneTo(1000)
+            v, s = x
+            idx = ht_keyindex2!(seen, v)
+            idx > 0 && return false
+            _setindex!(seen, nothing, v, -idx)
+            x = iterate(C, s)
         end
+        sizehint!(seen, length(C))
     end
-    true
+    while x !== nothing
+        v, s = x
+        idx = ht_keyindex2!(seen, v)
+        idx > 0 && return false
+        _setindex!(seen, nothing, v, -idx)
+        x = iterate(C, s)
+    end
+    return true
 end
 
 allunique(::Union{AbstractSet,AbstractDict}) = true
