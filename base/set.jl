@@ -382,23 +382,18 @@ false
 ```
 """
 function allunique(C)
-    seen = Dict{eltype(C),Nothing}()
-
+    seen = Dict{eltype(C), Nothing}()
     x = iterate(C)
-    for i in OneTo(1000)
-        if x === nothing
-            return true
-        else
+    if haslength(C) && length(C) > 1000
+        for i in OneTo(1000)
             v, s = x
             idx = ht_keyindex2!(seen, v)
             idx > 0 && return false
             _setindex!(seen, nothing, v, -idx)
             x = iterate(C, s)
         end
+        sizehint!(seen, length(C))
     end
-
-    haslength(C) && sizehint!(seen, length(C))
-
     while x !== nothing
         v, s = x
         idx = ht_keyindex2!(seen, v)
