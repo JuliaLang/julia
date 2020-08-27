@@ -433,6 +433,7 @@ Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
 Base.isless(x::T, y::T) where {T<:TimeType} = isless(value(x), value(y))
 Base.isless(x::TimeType, y::TimeType) = isless(promote(x, y)...)
+Base.OrderStyle(::Type{<:Union{Missing,TimeType}}) = Base.Ordered()
 (==)(x::T, y::T) where {T<:TimeType} = (==)(value(x), value(y))
 (==)(x::TimeType, y::TimeType) = (===)(promote(x, y)...)
 Base.min(x::AbstractTime) = x
