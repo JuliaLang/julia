@@ -1766,3 +1766,6 @@ end
 @testintersect(Tuple{Type{T}, AbstractVector{T}} where T,
                Tuple{Union, F36869{Int64, Missing}},
                Tuple{Union, F36869{Int64, Missing}})
+
+# issue #37180
+@test !(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any}).body.parameters[1] isa Union)
