@@ -243,3 +243,12 @@ end
     @test gt5(6) && !gt5(5)
     @test lt5(4) && !lt5(5)
 end
+
+@testset "generic isa" begin
+    @test 1 isa Int
+    @test "2" isa String
+
+    ismatrix = isa(Matrix)
+    @test ismatrix([1 2; 3 4])
+    @test !ismatrix("hi")
+end

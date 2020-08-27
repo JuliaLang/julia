@@ -1194,3 +1194,15 @@ julia> [1, 2] .∉ ([2, 3],)
 ```
 """
 ∉, ∌
+
+
+"""
+    isa(T)
+
+Create a function that checks whether its argument [`isa`](@ref) `T`, i.e.
+a function equivalent to `x -> x isa T`.
+
+The returned function is of type `Base.Fix2{typeof(isa)}`, which can be
+used to implement specialized methods.
+"""
+isa(T) = Fix2(isa, T)
