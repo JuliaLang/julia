@@ -397,7 +397,6 @@ function allunique(C)
         end
     end
 
-    x === nothing && return true
     haslength(C) && sizehint!(seen, length(C))
 
     while x !== nothing
@@ -406,7 +405,6 @@ function allunique(C)
         idx > 0 && return false
         _setindex!(seen, nothing, v, -idx)
         x = iterate(C, s)
-    end
     end
     return true
 end
