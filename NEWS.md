@@ -17,6 +17,9 @@ Language changes
   For backwards compatibility, `-->` still parses using its own expression head
   instead of `:call`.
 
+* `Base.isa` is now a generic function with a curried method, so that one can write
+  `isa(String)` to make the equivalent to `s -> s isa String`.
+
 Compiler/Runtime improvements
 -----------------------------
 
