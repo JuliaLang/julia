@@ -383,10 +383,30 @@ false
 """
 function allunique(C)
     seen = Set{eltype(C)}()
+
+    x = iterate(C)
+    for i in OneTo(1000)
+        if x === nothing
+            return true
+        else
+            v, s = x
+            idx = ht_keyindex2!(seen, v)
+            idx > 0 && return false
+            _setindex!(seen, nothing, v, -idx)
+            x = iterate(C, s)
+        end
+    end
+
+    x === nothing && return true
     haslength(C) && sizehint!(seen, length(C))
-    for (i, x) in enumerate(C)
-        push!(seen, x)
-        i > length(seen) && return false
+
+    while x !== nothing
+        v, s = x
+        idx = ht_keyindex2!(seen, v)
+        idx > 0 && return false
+        _setindex!(seen, nothing, v, -idx)
+        x = iterate(C, s)
+    end
     end
     return true
 end
