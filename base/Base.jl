@@ -402,6 +402,8 @@ function __init__()
     init_load_path()
     init_active_project()
     nothing
+
+    setfield!(typeof(isa).name.mt, fieldcount(Core.MethodTable), 0x01) # Stop people from being able to add methods to isa
 end
 
 end
