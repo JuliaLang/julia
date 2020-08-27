@@ -382,7 +382,7 @@ false
 ```
 """
 function allunique(C)
-    seen = Set{eltype(C)}()
+    seen = Dict{eltype(C),Nothing}()
 
     x = iterate(C)
     for i in OneTo(1000)
