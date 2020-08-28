@@ -1,4 +1,4 @@
-# ARM (Linux)
+# Building on ARM (Linux)
 
 Julia fully supports ARMv8 (AArch64) processors, and supports ARMv7 and ARMv6
 (AArch32) with some caveats. This file provides general guidelines for compilation,

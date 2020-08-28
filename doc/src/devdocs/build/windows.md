@@ -1,4 +1,4 @@
-# Julia on Windows
+# Building on Windows
 
 This file describes how to install, or build, and use Julia on Windows.
 
@@ -23,8 +23,7 @@ Instructions for adding fonts to the terminal are available at
 
 Additionally, rather than sticking with the default command prompt, you may want
 to use a different terminal emulator program, such as
-[Conemu](https://conemu.github.io/) or [Mintty](
-https://github.com/mintty/mintty) (note that running Julia on Mintty needs a
+[Conemu](https://conemu.github.io/) or [Mintty](https://github.com/mintty/mintty) (note that running Julia on Mintty needs a
 copy of `stty.exe` in your `%PATH%` to work properly).  Alternatively, you may
 prefer the features of a more full-function IDE, such as [Juno](http://junolab.org),
 [Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia), or
@@ -161,8 +160,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
 Compiling Julia from source using [MSYS2](https://msys2.github.io) has worked
 in the past but is not actively supported. Pull requests to restore support
-would be welcome. See a [past version of this file](
-https://github.com/JuliaLang/julia/blob/v0.6.0/README.windows.md)
+would be welcome. See a [past version of this file](https://github.com/JuliaLang/julia/blob/v0.6.0/README.windows.md)
 for the former instructions for compiling using MSYS2.
 
 
@@ -171,8 +169,7 @@ for the former instructions for compiling using MSYS2.
 You can also use MinGW-w64 cross compilers to build a Windows version of Julia from
 Linux, Mac, or the Windows Subsystem for Linux (WSL).
 
-For maximum compatibility with packages that use [WinRPM.jl](
-https://github.com/JuliaLang/WinRPM.jl) for binary dependencies on Windows, it
+For maximum compatibility with packages that use [WinRPM.jl](https://github.com/JuliaLang/WinRPM.jl) for binary dependencies on Windows, it
 is recommended that you use OpenSUSE 42.2 for cross-compiling a Windows build
 of Julia.  If you use a different Linux distribution or OS X, install
 [Vagrant](https://www.vagrantup.com/downloads.html) and use the following `Vagrantfile`:
@@ -228,8 +225,7 @@ apt-get install wine-stable gcc wget p7zip-full winbind mingw-w64 gfortran-mingw
 for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gfortran; do sudo update-alternatives --config $pkg; done
 ```
 
-**On Mac**: Install XCode, XCode command line tools, X11 (now [XQuartz](
-https://www.xquartz.org/)), and [MacPorts](https://www.macports.org/install.php)
+**On Mac**: Install XCode, XCode command line tools, X11 (now [XQuartz](https://www.xquartz.org/)), and [MacPorts](https://www.macports.org/install.php)
 or [Homebrew](https://brew.sh/).  Then run `port install wine wget mingw-w64`,
 or `brew install wine wget mingw-w64`, as appropriate.
 
@@ -251,8 +247,7 @@ in 32-bit mode).
 
 The most effective way to debug a cross-compiled version of julia on the
 cross-compilation host is to install a windows version of gdb and run it under wine
-as usual. The pre-built packages available [as part of the MSYS2 project](
-https://sourceforge.net/projects/msys2/files/REPOS/MINGW/) are known to work.
+as usual. The pre-built packages available [as part of the MSYS2 project](https://sourceforge.net/projects/msys2/files/REPOS/MINGW/) are known to work.
 Apart from the GDB package you may also need the python and termcap packages.
 Finally, GDB's prompt may not work when launch from the command line. This can
 be worked around by prepending `wineconsole` to the regular GDB invocation.
@@ -261,8 +256,7 @@ be worked around by prepending `wineconsole` to the regular GDB invocation.
 ## Using a Windows VM
 
 [Vagrant](https://www.vagrantup.com/downloads.html) can also be used with a Windows
-guest VM via the `Vagrantfile` in [contrib/windows](
-https://github.com/JuliaLang/julia/blob/master/contrib/windows/Vagrantfile),
+guest VM via the `Vagrantfile` in [contrib/windows](https://github.com/JuliaLang/julia/blob/master/contrib/windows/Vagrantfile),
 just run `vagrant up` from that folder.
 
 
@@ -279,8 +273,7 @@ yourself using ```make win-extras``` followed by ```make binary-dist``` and ```m
 
 ### GDB hangs with cygwin mintty
 
-- Run gdb under the windows console (cmd) instead. gdb [may not function properly](
-  https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-
+- Run gdb under the windows console (cmd) instead. gdb [may not function properly](https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-
   cygwin applications. You can use `cmd /c start` to start the windows console
   from mintty if necessary.
 
@@ -302,10 +295,8 @@ yourself using ```make win-extras``` followed by ```make binary-dist``` and ```m
 ### Build process is slow/eats memory/hangs my computer
 
  - Disable the Windows [Superfetch](https://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch)
-   and [Program Compatibility Assistant](
-   https://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx)
-   services, as they are known to have [spurious interactions](
-   https://cygwin.com/ml/cygwin/2011-12/msg00058.html) with MinGW/Cygwin.
+   and [Program Compatibility Assistant](https://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx)
+   services, as they are known to have [spurious interactions](https://cygwin.com/ml/cygwin/2011-12/msg00058.html) with MinGW/Cygwin.
 
    As mentioned in the link above: excessive memory use by `svchost` specifically
    may be investigated in the Task Manager by clicking on the high-memory

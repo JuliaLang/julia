@@ -1,4 +1,4 @@
-## FreeBSD
+# Building on FreeBSD
 
 Clang is the default compiler on FreeBSD 11.0-RELEASE and above.
 The remaining build tools are available from the Ports Collection, and can be installed using

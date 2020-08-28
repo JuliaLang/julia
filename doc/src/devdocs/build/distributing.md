@@ -1,5 +1,4 @@
-Notes for building binary distributions
-=======================================
+# Notes for building binary distributions
 
 These notes are for those wishing to compile a binary distribution of Julia
 for distribution on various platforms.  We love users spreading Julia as
@@ -15,8 +14,7 @@ the distribution created by the techniques described herein will be
 GPL licensed, as various dependent libraries such as `SuiteSparse` are
 GPL licensed. We do hope to have a non-GPL distribution of Julia in the future.
 
-Versioning and Git
-------------------
+## Versioning and Git
 The Makefile uses both the `VERSION` file and commit hashes and tags from the
 git repository to generate the `base/version_git.jl` with information we use to
 fill the splash screen and the `versioninfo()` output. If you for some reason
@@ -42,8 +40,7 @@ to create a Make.user file containing:
 
     override TAGGED_RELEASE_BANNER = "my-package-repository build"
 
-Target Architectures
---------------------
+## Target Architectures
 
 By default, Julia optimizes its system image to the native architecture of
 the build machine. This is usually not what you want when building packages,
@@ -62,8 +59,7 @@ are currently not supported (see
 The full list of CPU targets supported by LLVM can be obtained by running
 `llc -mattr=help`.
 
-Linux
------
+## Linux
 
 On Linux, `make binary-dist` creates a tarball that contains a fully
 functional Julia installation. If you wish to create a distribution
@@ -92,8 +88,7 @@ pass `sysconfdir=/etc` to `make` when building and Julia will first
 check `/etc/julia/startup.jl` before trying
 `$prefix/etc/julia/startup.jl`.
 
-OS X
-----
+## OS X
 
 To create a binary distribution on OSX, build Julia first, then cd to
 `contrib/mac/app`, and run `make` with the same makevars that were used
@@ -105,8 +100,7 @@ Alternatively, Julia may be built as a framework by invoking `make` with the
 `darwinframework` target and `DARWIN_FRAMEWORK=1` set.  For example,
 `make DARWIN_FRAMEWORK=1 darwinframework`.
 
-Windows
--------
+## Windows
 
 The best supported method of creating a Julia distribution on Windows
 is to cross-compile from a Linux distribution such as Ubuntu. In-depth
@@ -117,8 +111,7 @@ win-extras` in between `make` and `make binary-dist`.  After that process is
 completed, the `.zip` file created in the head Julia directory will
 hold a completely self-contained Julia.
 
-Notes on BLAS and LAPACK
-------------------------
+## Notes on BLAS and LAPACK
 
 Julia builds OpenBLAS by default, which includes the BLAS and LAPACK
 libraries. On 32-bit architectures, Julia builds OpenBLAS to use
@@ -157,8 +150,7 @@ set `USE_SYSTEM_BLAS=1` and `USE_SYSTEM_LAPACK=1`, you should also set
 `LIBLAPACK=-l$(YOURBLAS)` and `LIBLAPACKNAME=lib$(YOURBLAS)`. Else, the
 reference LAPACK will be used and performance will typically be much lower.
 
-Compilation scripts
-===================
+## Compilation scripts
 
 The [julia-nightly-packaging](https://github.com/staticfloat/julia-nightly-packaging)
 repository contains multiple example scripts to ease the creation of
@@ -167,11 +159,11 @@ fetching the last good commit that passed the
 [Travis](https://travis-ci.org/JuliaLang/julia/builds) tests.
 
 
-# Point releasing 101
+## Point releasing 101
 
 Creating a point/patch release consists of several distinct steps.
 
-## Backporting commits
+### Backporting commits
 
 Some pull requests are labeled "backport pending x.y", e.g. "backport pending 0.6".
 This designates that the next subsequent release tagged from the release-x.y branch
@@ -180,7 +172,7 @@ Once the pull request is merged into master, each of the commits should be [cher
 picked](https://git-scm.com/docs/git-cherry-pick) to a dedicated branch that will
 ultimately be merged into release-x.y.
 
-### Creating a backports branch
+#### Creating a backports branch
 
 First, create a new branch based on release-x.y.
 The typical convention for Julia branches is to prefix the branch name with your
@@ -197,7 +189,7 @@ git checkout -b js/backport-x.y
 This ensures that your local copy of release-x.y is up to date with origin before
 you create a new branch from it.
 
-### Cherry picking commits
+#### Cherry picking commits
 
 Now we do the actual backporting.
 Find all merged pull requests labeled "backport pending x.y" in the GitHub web UI.
@@ -223,7 +215,7 @@ request that introduced the commit in the body of the commit message.
 After all of the relevant commits are on the backports branch, push the branch to
 GitHub.
 
-## Checking for performance regressions
+### Checking for performance regressions
 
 Point releases should never introduce performance regressions.
 Luckily the Julia benchmarking bot, Nanosoldier, can run benchmarks against any
@@ -249,7 +241,7 @@ knows the code to submit a patch) to master, then backport the commit once that'
 merged.
 (Or submit a patch directly to the backport branch if appropriate.)
 
-## Building test binaries
+### Building test binaries
 
 After the backport PR has been merged into the `release-x.y` branch, update your local
 clone of Julia, then get the SHA of the branch using
@@ -268,7 +260,7 @@ When the packaging job completes, it will upload the binary to the `julialang2` 
 on AWS.
 Retrieve the URL, as it will be used for PackageEvaluator.
 
-## Checking for package breakages
+### Checking for package breakages
 
 Point releases should never break packages, with the possible exception of packages
 that are doing some seriously questionable hacks using Base internals that are
@@ -282,7 +274,7 @@ PkgEval is what populates the status badges on GitHub repos and on pkg.julialang
 It typically runs on one of the non-benchmarking nodes of Nanosoldier and uses Vagrant
 to perform its duties in separate, parallel VirtualBox virtual machines.
 
-### Setting up PackageEvaluator
+#### Setting up PackageEvaluator
 
 Clone PackageEvaluator and create a branch called `backport-x.y.z`, and check it out.
 Note that the required changes are a little hacky and confusing, and hopefully that will
@@ -300,7 +292,7 @@ built from our backport branch, otherwise (AK) use the release binaries.
 Then we're using the first argument to run a section of the package list: A-F for input
 0.4, G-N for 0.5, and O-Z for 0.6.
 
-### Running PackageEvaluator
+#### Running PackageEvaluator
 
 To run PkgEval, find a hefty enough machine (such as Nanosoldier node 1), then run
 
@@ -323,7 +315,7 @@ The folder names and their contents are decoded below:
 | 0.6AK       | Release       | O-Z           |
 | 0.6LZ       | Backport      | O-Z           |
 
-### Investigating results
+#### Investigating results
 
 Once that's done, you can use `./summary.sh` from that same directory to produce
 a summary report of the findings.
@@ -380,7 +372,7 @@ not on the other for some reason.
 If you find that your backported branch is causing breakages, use `git bisect` to
 identify the problematic commits, `git revert` those commits, and repeat the process.
 
-## Merging backports into the release branch
+### Merging backports into the release branch
 
 After you have ensured that
 
@@ -400,7 +392,7 @@ To do this, submit a PR against release-x.y that edits the VERSION file to remov
 from the version number.
 Once that's merged, we're ready to tag.
 
-## Tagging the release
+### Tagging the release
 
 It's time!
 Check out the release-x.y branch and make sure that your local copy of the branch is
@@ -421,7 +413,7 @@ release in the x.y series.
 
 Follow the remaining directions in the Makefile.
 
-## Signing binaries
+### Signing binaries
 
 Some of these steps will require secure passwords.
 To obtain the appropriate passwords, contact Elliot Saba (staticfloat) or Alex Arslan
@@ -429,7 +421,7 @@ To obtain the appropriate passwords, contact Elliot Saba (staticfloat) or Alex A
 Note that code signing for each platform must be performed on that platform (e.g. Windows
 signing must be done on Windows, etc.).
 
-### Linux
+#### Linux
 
 Code signing must be done manually on Linux, but it's quite simple.
 First obtain the file `julia.key` from the CodeSigning folder in the `juliasecure` AWS
@@ -461,7 +453,7 @@ gpg -u julia --armor --detach-sig julia-x.y.z-linux-<arch>.tar.gz
 This will produce a corresponding .asc file for each tarball.
 And that's it!
 
-### macOS
+#### macOS
 
 Code signing should happen automatically on the macOS buildbots.
 However, it's important to verify that it was successful.
@@ -530,7 +522,7 @@ Verify that the resulting .dmg is in fact fixed by double clicking it.
 If everything looks good, eject it then drop the `_fixed` suffix from the name.
 And that's it!
 
-### Windows
+#### Windows
 
 Signing must be performed manually on Windows.
 First obtain the Windows 10 SDK, which contains the necessary signing utilities, from
@@ -553,7 +545,7 @@ placeholder for the password for this certificate.
 As usual, contact Elliot or Alex for passwords.
 If there are no errors, we're all good!
 
-## Uploading binaries
+### Uploading binaries
 
 Now that everything is signed, we need to upload the binaries to AWS.
 You can use a program like Cyberduck or the `aws` command line utility.

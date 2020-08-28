@@ -1,4 +1,4 @@
-## macOS
+# Building on macOS
 
 You need to have the current Xcode command line utilities installed: run `xcode-select --install` in the terminal. You will need to rerun this terminal command after each macOS update, otherwise you may run into errors involving missing libraries or headers.
 

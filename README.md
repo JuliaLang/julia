@@ -124,7 +124,7 @@ The Julia source code is organized as follows:
 | `contrib/`        | editor support for Julia source, miscellaneous scripts             |
 | `deps/`           | external dependencies                                              |
 | `doc/src/manual/` | source for the user manual                                         |
-| `doc/build/`      | detailed notes for building Julia                                  |
+| `doc/src/devdocs/build/`      | detailed notes for building Julia                                  |
 | `src/`            | source for Julia language core                                     |
 | `test/`           | test suites                                                        |
 | `ui/`             | source for various front ends                                      |
