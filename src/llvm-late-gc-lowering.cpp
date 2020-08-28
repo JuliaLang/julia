@@ -1116,7 +1116,7 @@ static bool isLoadFromImmut(LoadInst *LI)
     if (LI->getMetadata(LLVMContext::MD_invariant_load))
         return true;
     MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const"}))
+    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"}))
         return true;
     return false;
 }
@@ -1185,7 +1185,8 @@ static bool isLoadFromConstGV(LoadInst *LI, bool &task_local)
     // but LLVM global merging can change the pointer operands to GEPs/bitcasts
     auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
     auto gv = dyn_cast<GlobalVariable>(load_base);
-    if (isTBAA(LI->getMetadata(LLVMContext::MD_tbaa), {"jtbaa_immut", "jtbaa_const"})) {
+    if (isTBAA(LI->getMetadata(LLVMContext::MD_tbaa),
+               {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"})) {
         if (gv)
             return true;
         return isLoadFromConstGV(load_base, task_local);
