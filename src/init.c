@@ -156,20 +156,12 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
     jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
-void jl_write_coverage_data(const char*);
-void jl_write_malloc_log(void);
-void jl_write_compiler_output(void);
-
 static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
 {
     struct uv_shutdown_queue_item *rv = item->next;
     free(item);
     return rv;
 }
-
-void jl_init_timing(void);
-void jl_destroy_timing(void);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 static void jl_close_item_atexit(uv_handle_t *handle)
 {
@@ -309,7 +301,7 @@ void *jl_winsock_handle;
 uv_loop_t *jl_io_loop;
 
 #ifdef _OS_WINDOWS_
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     HANDLE current_process;
 
     if (fd == UV_STDIN_FD || fd == UV_STDOUT_FD || fd == UV_STDERR_FD)
@@ -343,7 +335,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     return 0;
 }
 #else
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     if ((*dupfd = fcntl(fd, F_DUPFD_CLOEXEC, 3)) == -1)
         return -errno;
     return 0;
@@ -424,7 +416,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     return handle;
 }
 
-void init_stdio(void)
+static void init_stdio(void)
 {
     JL_STDIN  = (uv_stream_t*)init_stdio_handle("stdin", UV_STDIN_FD, 1);
     JL_STDOUT = (uv_stream_t*)init_stdio_handle("stdout", UV_STDOUT_FD, 0);
