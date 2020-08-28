@@ -35,9 +35,18 @@ julia> randn(rng, ComplexF32, (2, 3))
   0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
 ```
 """
+#=
+When defining 
+`@inline randn(rng::AbstractRNG=default_rng()) = _randn(rng, rand(rng, UInt52Raw()))`
+the function call to `_randn` is currently not inlined, resulting in slightly worse
+performance for scalar random normal numbers than repeating the code of `_randn`
+inside the following function.
+=#
 @inline function randn(rng::AbstractRNG=default_rng())
     @inbounds begin
         r = rand(rng, UInt52Raw())
+        
+        # the following code is identical to the one in `_randn(rng::AbstractRNG, r::UInt64)`
         r &= 0x000fffffffffffff
         rabs = Int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
