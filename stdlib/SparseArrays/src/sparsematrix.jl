@@ -3491,11 +3491,13 @@ function istril(A::AbstractSparseMatrixCSC)
     return true
 end
 
+_numel(vect::SparseVector) = nnz(vect)
+_numel(vect::AbstractArray) = length(vect)
 
 function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
     for p in kv
-        ncoeffs += p.second isa AbstractSparseVector ? nnz(p.second) : length(p.second)
+        ncoeffs += _numel(p.second)
     end
     I = Vector{Int}(undef, ncoeffs)
     J = Vector{Int}(undef, ncoeffs)
@@ -3507,7 +3509,7 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
         dia = p.first
         vect = p.second
         numinds = length(vect)
-        numel = vect isa AbstractSparseVector ? nnz(vect) : length(vect)
+        numel = _numel(vect)
         if dia < 0
             row = -dia
             col = 0
