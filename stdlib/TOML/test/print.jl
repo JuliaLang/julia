@@ -24,3 +24,5 @@ end
     end == """
         foo = 1
         """
+
+@test toml_str(Dict("b" => SubString("foo"))) == "b = \"foo\"\n"
