@@ -198,12 +198,14 @@ void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNR
     ptls->in_pure_callback = 0;
     jl_get_ptls_states()->world_age = jl_world_counter;
     // let the runtime know this task is dead and find a new task to run
-    if (task_done_hook_func == NULL) {
-        task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
-                                                            jl_symbol("task_done_hook"));
+    jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
+    if (done == NULL) {
+        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("task_done_hook"));
+        if (done != NULL)
+            jl_atomic_store_release(&task_done_hook_func, done);
     }
-    if (task_done_hook_func != NULL) {
-        jl_value_t *args[2] = {task_done_hook_func, (jl_value_t*)t};
+    if (done != NULL) {
+        jl_value_t *args[2] = {done, (jl_value_t*)t};
         JL_TRY {
             jl_apply(args, 2);
         }

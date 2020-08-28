@@ -21,7 +21,7 @@ extern "C" {
 static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
 {
     unsigned long self = jl_thread_self();
-    unsigned long owner = jl_atomic_load_acquire(&lock->owner);
+    unsigned long owner = jl_atomic_load_relaxed(&lock->owner);
     if (owner == self) {
         lock->count++;
         return;
@@ -37,7 +37,7 @@ static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
             jl_gc_safepoint_(ptls);
         }
         jl_cpu_pause();
-        owner = lock->owner;
+        owner = jl_atomic_load_relaxed(&lock->owner);
     }
 }
 

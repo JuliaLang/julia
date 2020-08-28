@@ -179,7 +179,7 @@ struct _jl_tls_states_t {
     int16_t tid;
     uint64_t rngseed;
     volatile size_t *safepoint;
-    volatile int8_t sleep_check_state;
+    int8_t sleep_check_state; // read/write from foreign threads
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to
@@ -187,8 +187,8 @@ struct _jl_tls_states_t {
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
-    volatile int8_t gc_state;
-    volatile int8_t in_finalizer;
+    int8_t gc_state; // read from foreign threads
+    int8_t in_finalizer;
     int8_t disable_gc;
     jl_thread_heap_t heap;
     jl_thread_gc_num_t gc_num;
@@ -296,12 +296,10 @@ void jl_sigint_safepoint(jl_ptls_t tls);
         (void)safepoint_load;                           \
     } while (0)
 #endif
-// Make sure jl_gc_state() is always a rvalue
-#define jl_gc_state(ptls) ((int8_t)ptls->gc_state)
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
                                      int8_t old_state)
 {
-    ptls->gc_state = state;
+    jl_atomic_store_release(&ptls->gc_state, state);
     // A safe point is required if we transition from GC-safe region to
     // non GC-safe region.
     if (old_state && !state)
@@ -311,7 +309,7 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
 STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
                                               int8_t state)
 {
-    return jl_gc_state_set(ptls, state, jl_gc_state(ptls));
+    return jl_gc_state_set(ptls, state, ptls->gc_state);
 }
 #ifdef __clang_analyzer__
 int8_t jl_gc_unsafe_enter(jl_ptls_t ptls); // Can be a safepoint

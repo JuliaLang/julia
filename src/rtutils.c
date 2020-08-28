@@ -253,10 +253,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
     ptls->world_age = eh->world_age;
     ptls->defer_signal = eh->defer_signal;
-    ptls->gc_state = eh->gc_state;
     ptls->finalizers_inhibited = eh->finalizers_inhibited;
-    if (old_gc_state && !eh->gc_state) {
-        jl_gc_safepoint_(ptls);
+    if (old_gc_state != eh->gc_state) {
+        jl_atomic_store_release(&ptls->gc_state, eh->gc_state);
+        if (old_gc_state) {
+            jl_gc_safepoint_(ptls);
+        }
     }
     if (old_defer_signal && !eh->defer_signal) {
         jl_sigint_safepoint(ptls);
