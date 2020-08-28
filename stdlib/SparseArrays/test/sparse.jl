@@ -1754,7 +1754,7 @@ end
     x = sprand(10, 0.2); y = ones(9)
     @test spdiagm(0 => x, 1 => y) == diagm(0 => x, 1 => y)
     @test nnz(spdiagm(0 => x, 1 => y)) == length(y) + nnz(x)
-    
+
     # non-square:
     for m=1:4, n=2:4
         if m < 2 || n < 3
