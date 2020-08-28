@@ -3780,7 +3780,9 @@ f(x) = yt(x)
         (let* ((x   (if rett
                         (compile (convert-for-type-decl x rett) '() #t #f)
                         x))
-               (tmp (if (valid-ir-return? x) #f (make-ssavalue))))
+               (tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
+                        #f
+                        (make-ssavalue))))
           (if tmp (emit `(= ,tmp ,x)))
           (let ((pexc (pop-exc-expr catch-token-stack '())))
             (if pexc (emit pexc)))
