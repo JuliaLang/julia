@@ -81,6 +81,7 @@ Standard library changes
   leading or trailing elements of any iterable ([#34868]).
 * `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
 * `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
+* A new standard library `TOML` has been added for parsing and printing [TOML files](https://toml.io/en/).
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
