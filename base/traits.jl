@@ -40,8 +40,7 @@ OrderStyle(::Type{<:Union{Missing,Real}}) = Ordered()
 OrderStyle(::Type{<:Union{Missing,AbstractString}}) = Ordered()
 OrderStyle(::Type{<:Union{Missing,AbstractChar}}) = Ordered()
 OrderStyle(::Type{<:Union{Missing,Symbol}}) = Ordered()
-OrderStyle(::Type{Symbol}) = Ordered()
-OrderStyle(::Type{Missing}) = Ordered()
+OrderStyle(::Type{<:Missing}) = Ordered()
 OrderStyle(::Type{<:Any}) = Unordered()
 
 # trait for objects that support arithmetic
