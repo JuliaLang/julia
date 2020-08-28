@@ -244,7 +244,7 @@ try
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_logs (:warn, "Replacing module `$Foo_module`") begin
-        ms = Base._require_from_serialized(cachefile)
+        ms = Base._require_from_serialized(cachefile, Base.TOMLCache())
         @test isa(ms, Array{Any,1})
     end
 
