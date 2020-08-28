@@ -30,7 +30,7 @@ Serializer(io::IO) = Serializer{typeof(io)}(io)
 ## serializing values ##
 
 const n_int_literals = 33
-const n_reserved_slots = 24
+const n_reserved_slots = 23
 const n_reserved_tags = 8
 
 const TAGS = Any[
@@ -69,6 +69,7 @@ const TAGS = Any[
     :indexed_iterate, :getfield, :meta, :eq_int, :slt_int, :sle_int, :ne_int, :push_loc, :pop_loc,
     :pop, :arrayset, :arrayref, :apply_type, :inbounds, :getindex, :setindex!, :Core, :!, :+,
     :Base, :static_parameter, :convert, :colon, Symbol("#self#"), Symbol("#temp#"), :tuple, Symbol(""),
+    :iterate_and_index,
 
     fill(:_reserved_, n_reserved_slots)...,
 

@@ -2049,17 +2049,26 @@
                                 x (make-ssavalue)))
                        (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                        (n   (length lhss))
+                       (funcs (make-ssavalue))
+                       (iterate (make-ssavalue))
+                       (index (make-ssavalue))
                        (st  (gensy)))
                   `(block
                     ,@ini
+                    ,(lower-tuple-assignment
+                      (list iterate index)
+                      `(call (top iterate_and_index) ,xx))
                     ,.(map (lambda (i lhs)
-                             (expand-forms
-                              (lower-tuple-assignment
-                               (if (= i (- n 1))
-                                   (list lhs)
-                                   (list lhs st))
-                               `(call (top indexed_iterate)
-                                      ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
+                            (expand-forms
+                              `(block
+                                (= ,st (call ,iterate
+                                    ,xx ,.(if (eq? i 0) '() `(,st))))
+                               ,(if (eventually-call? lhs)
+                                  (let ((val (gensy)))
+                                    `(block
+                                      (= ,val (call ,index ,st ,(+ i 1)))
+                                      (= ,lhs ,val)))
+                                  `(= ,lhs (call ,index ,st ,(+ i 1)))))))
                            (iota n)
                            lhss)
                     (unnecessary ,xx))))))

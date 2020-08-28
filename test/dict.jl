@@ -11,8 +11,6 @@ using Random
     @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
     @test firstindex(p) == 1
     @test lastindex(p) == length(p) == 2
-    @test Base.indexed_iterate(p, 1, nothing) == (10,2)
-    @test Base.indexed_iterate(p, 2, nothing) == (20,3)
     @test (1=>2) < (2=>3)
     @test (2=>2) < (2=>3)
     @test !((2=>3) < (2=>3))

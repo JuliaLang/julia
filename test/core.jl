@@ -557,6 +557,14 @@ let (f(), x) = (1, 2)
     @test x == 2
 end
 
+foo23091_cnt = 0
+struct Foo23091; end
+Base.iterate(::Foo23091, state...) = (global foo23091_cnt += 1; (1, nothing))
+(g23091(), h23091()) = Foo23091()
+@test foo23091_cnt == 2
+g23091(); h23091()
+@test foo23091_cnt == 2
+
 # issue #21900
 f21900_cnt = 0
 function f21900()

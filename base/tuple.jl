@@ -81,20 +81,40 @@ function _maxlength(t::Tuple, t2::Tuple, t3::Tuple...)
     max(length(t), _maxlength(t2, t3...))
 end
 
-# this allows partial evaluation of bounded sequences of next() calls on tuples,
-# while reducing to plain next() for arbitrary iterables.
-indexed_iterate(t::Tuple, i::Int, state=1) = (@_inline_meta; (getfield(t, i), i+1))
-indexed_iterate(a::Array, i::Int, state=1) = (@_inline_meta; (a[i], i+1))
-function indexed_iterate(I, i)
-    x = iterate(I)
-    x === nothing && throw(BoundsError(I, i))
-    x
+# this allows partial evaluation of bounded sequences of iterate() calls on tuples,
+# while reducing to plain iterate() for arbitrary iterables.
+
+arg1(a) = a
+arg1(a, b) = a
+iterate_and_index(t::Tuple) = (arg1, getfield)
+iterate_and_index(t::Array) = (arg1, getindex)
+
+struct BadDestructure
+    a
 end
-function indexed_iterate(I, i, state)
-    x = iterate(I, state)
-    x === nothing && throw(BoundsError(I, i))
-    x
+
+function destruct_iterate(a)
+    @_inline_meta
+    s = iterate(a)
+    s === nothing && return BadDestructure(a)
+    s
 end
+
+function destruct_iterate(a, b)
+    @_inline_meta
+    s = iterate(a, getfield(b, 2))
+    s === nothing && return BadDestructure(a)
+    s
+end
+
+select_first(a::BadDestructure, i) = throw(BoundsError(a.a, i))
+select_first(a, i) = getfield(a, 1)
+
+iterate_and_index(x) = (destruct_iterate, select_first)
+
+# Nothing is often union'ed into other things. Kill that as quickly as possible
+# to make inference's life easier.
+iterate_and_index(::Nothing) = throw(MethodError(iterate, (nothing,)))
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))

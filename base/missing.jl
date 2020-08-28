@@ -69,6 +69,8 @@ convert(::Type{T}, x::T) where {T>:Union{Missing, Nothing}} = x
 convert(::Type{T}, x) where {T>:Missing} = convert(nonmissingtype_checked(T), x)
 convert(::Type{T}, x) where {T>:Union{Missing, Nothing}} = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
 
+# Hoisting this MethodError to `iterate_and_index` makes inference's job easier
+iterate_and_index(::Missing) = throw(MethodError(iterate, (missing,)))
 
 # Comparison operators
 ==(::Missing, ::Missing) = missing

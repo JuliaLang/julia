@@ -562,10 +562,7 @@ end
 
 function g19348(x)
     a, b = x
-    g = 1
-    g = 2
-    c = Base.indexed_iterate(x, g, g)
-    return a + b + c[1]
+    return a + b
 end
 
 for (codetype, all_ssa) in Any[
