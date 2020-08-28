@@ -8,6 +8,8 @@ New language features
   `(Foo{T} where T)(x) = ...`.
 * `<--` and `<-->` are now available as infix operators, with the same precedence
   and associativity as other arrow-like operators ([#36666]).
+* Compilation and type inference can now be enabled or disabled at the module level
+  using the experimental macro `Base.Experimental.@compiler_options` ([#37041]).
 
 Language changes
 ----------------

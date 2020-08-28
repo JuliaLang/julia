@@ -1163,7 +1163,8 @@ extern jl_sym_t *colon_sym; extern jl_sym_t *hygienicscope_sym;
 extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
 extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
 extern jl_sym_t *coverageeffect_sym; extern jl_sym_t *escape_sym;
-extern jl_sym_t *optlevel_sym;
+extern jl_sym_t *optlevel_sym; extern jl_sym_t *compile_sym;
+extern jl_sym_t *infer_sym;
 extern jl_sym_t *atom_sym; extern jl_sym_t *statement_sym; extern jl_sym_t *all_sym;
 
 struct _jl_sysimg_fptrs_t;

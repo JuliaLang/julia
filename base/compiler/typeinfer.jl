@@ -513,6 +513,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             return code.rettype, mi
         end
     end
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
+        return Any, nothing
+    end
     if !caller.cached && caller.parent === nothing
         # this caller exists to return to the user
         # (if we asked resolve_call_cyle, it might instead detect that there is a cycle that it can't merge)
@@ -616,6 +619,9 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 return inf
             end
         end
+    end
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
+        return retrieve_code_info(mi)
     end
     lock_mi_inference(interp, mi)
     frame = InferenceState(InferenceResult(mi), #=cached=#true, interp)
