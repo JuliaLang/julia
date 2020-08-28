@@ -11,7 +11,7 @@ that a call `isless(::T, ::T)` will return `true` or `false`.
 It has two concrete subtypes [`Ordered`](@ref) and
 [`Unordered`](@ref), which is the default.
 
-Types guaranteeing the support [`isless`](@ref) are recommend to support
+Types supporting [`isless`](@ref) are recommended to support
 [`Ordered`](@ref) trait to enable optimizations.
 """
 abstract type OrderStyle end
