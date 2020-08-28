@@ -160,9 +160,13 @@ Standard library changes
 
 #### SparseArrays
 
-* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns, and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
+* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns,
+  and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
+* New convenient `spdiagm([m, n,] v::AbstractVector)` methods which call
+  `spdiagm([m, n,] 0 => v)`, consistently with their dense `diagm` counterparts.
 
 #### Dates
+
 * `Quarter` period is defined ([#35519]).
 * Zero-valued `FixedPeriod`s and `OtherPeriod`s now compare equal, e.g.,
   `Year(0) == Day(0)`. The behavior of non-zero `Period`s is not changed. ([#37486])
@@ -177,6 +181,7 @@ Standard library changes
 
 
 #### UUIDs
+
 * Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
 * Added `parse(::Type{UUID}, ::AbstractString)` method
 
