@@ -224,8 +224,10 @@ function BigFloat(x::BigInt, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Int
     return z
 end
 
-BigFloat(x::Integer, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(BigInt(x), r; precision=precision)
+BigFloat(x::Integer; precision::Integer=DEFAULT_PRECISION[]) =
+    BigFloat(BigInt(x)::BigInt, ROUNDING_MODE[]; precision=precision)
+BigFloat(x::Integer, r::MPFRRoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
+    BigFloat(BigInt(x)::BigInt, r; precision=precision)
 
 BigFloat(x::Union{Bool,Int8,Int16,Int32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(convert(Clong, x), r; precision=precision)
@@ -238,7 +240,7 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precisi
 function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     setprecision(BigFloat, precision) do
         setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x)) / BigFloat(denominator(x))
+            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x))::BigFloat
         end
     end
 end
@@ -259,7 +261,7 @@ AbstractFloat(x::BigInt) = BigFloat(x)
 float(::Type{BigInt}) = BigFloat
 
 BigFloat(x::Real, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
+    BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)::BigFloat
 BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
 
