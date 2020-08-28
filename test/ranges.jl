@@ -1627,3 +1627,18 @@ end
         @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
     end
 end
+
+@testset "Type-stable intersect (#32410)" begin
+    for T = (StepRange{Int,Int}, StepRange{BigInt,Int}, StepRange{BigInt,BigInt})
+        @test @inferred(intersect(T(1:2:5), 1:5)) == 1:2:5
+        @test @inferred(intersect(1:5, T(1:2:5))) == 1:2:5
+        @test @inferred(intersect(T(5:-2:1), 1:5)) == 5:-2:1
+        @test @inferred(intersect(1:5, T(5:-2:1))) == 1:2:5
+        @test isempty(@inferred(intersect(T(5:2:3), 1:5)))
+        @test isempty(@inferred(intersect(1:5, T(5:2:3))))
+    end
+    @test @inferred(intersect(1:2:5, 1//1:1:5//1)) == 1:2:5
+    @test @inferred(intersect(1//1:1:5//1, 1:2:5)) == 1:2:5
+    @test @inferred(intersect(big(1):big(5), 3)) == 3:3
+    @test @inferred(intersect(3, big(1):big(5))) == 3:3
+end

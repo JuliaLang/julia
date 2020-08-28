@@ -785,17 +785,15 @@ union(r::OneTo, s::OneTo) = OneTo(max(r.stop,s.stop))
 
 intersect(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) = max(first(r),first(s)):min(last(r),last(s))
 
-intersect(i::Integer, r::AbstractUnitRange{<:Integer}) =
+intersect(i::Integer, r::AbstractUnitRange{<:Integer})::UnitRange{promote_type(typeof(i),eltype(r))} =
     i < first(r) ? (first(r):i) :
     i > last(r)  ? (i:last(r))  : (i:i)
 
 intersect(r::AbstractUnitRange{<:Integer}, i::Integer) = intersect(i, r)
 
-function intersect(r::AbstractUnitRange{<:Integer}, s::StepRange{<:Integer})
+function intersect(r::AbstractUnitRange{T1}, s::StepRange{T2,S})::StepRange{promote_type(T1,T2),S} where {T1<:Integer,T2<:Integer,S}
     if isempty(s)
         range(first(r), length=0)
-    elseif step(s) == 0
-        intersect(first(s), r)
     elseif step(s) < 0
         intersect(r, reverse(s))
     else
@@ -818,7 +816,7 @@ function intersect(r::StepRange{<:Integer}, s::AbstractUnitRange{<:Integer})
     end
 end
 
-function intersect(r::StepRange, s::StepRange)
+function intersect(r::StepRange{T1,S1}, s::StepRange{T2,S2})::StepRange{promote_type(T1,T2),promote_type(S1,S2)} where {T1,S1,T2,S2}
     if isempty(r) || isempty(s)
         return range(first(r), step=step(r), length=0)
     elseif step(s) < zero(step(s))
