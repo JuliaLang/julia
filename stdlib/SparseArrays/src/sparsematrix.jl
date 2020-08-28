@@ -3491,8 +3491,8 @@ function istril(A::AbstractSparseMatrixCSC)
     return true
 end
 
-_numel(vect::SparseVector) = nnz(vect)
-_numel(vect::AbstractArray) = length(vect)
+_numel(vect::AbstractSparseVector) = nnz(vect)
+_numel(vect::AbstractVector) = length(vect)
 
 function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
