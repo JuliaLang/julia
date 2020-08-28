@@ -3495,16 +3495,19 @@ end
 function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
     for p in kv
-        ncoeffs += length(p.second)
+        ncoeffs += p.second isa AbstractSparseVector ? nnz(p.second) : length(p.second)
     end
     I = Vector{Int}(undef, ncoeffs)
     J = Vector{Int}(undef, ncoeffs)
     V = Vector{promote_type(map(x -> eltype(x.second), kv)...)}(undef, ncoeffs)
     i = 0
+    m = 0
+    n = 0
     for p in kv
         dia = p.first
         vect = p.second
-        numel = length(vect)
+        numinds = length(vect)
+        numel = vect isa AbstractSparseVector ? nnz(vect) : length(vect)
         if dia < 0
             row = -dia
             col = 0
@@ -3516,12 +3519,20 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
             col = 0
         end
         r = 1+i:numel+i
-        I[r] = row+1:row+numel
-        J[r] = col+1:col+numel
-        copyto!(view(V, r), vect)
+        if vect isa AbstractSparseVector
+            I[r] = row .+ nonzeroinds(vect)
+            J[r] = col .+ nonzeroinds(vect)
+            copyto!(view(V, r), nonzeros(vect))
+        else
+            I[r] = row+1:row+numinds
+            J[r] = col+1:col+numinds
+            copyto!(view(V, r), vect)
+        end
+        m = max(m, row + numinds)
+        n = max(n, col + numinds)
         i += numel
     end
-    return I, J, V
+    return I, J, V, m, n
 end
 
 """
@@ -3548,8 +3559,7 @@ julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
 spdiagm(kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm(nothing, kv...)
 spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm((Int(m),Int(n)), kv...)
 function _spdiagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
-    I, J, V = spdiagm_internal(kv...)
-    mmax, nmax = dimlub(I), dimlub(J)
+    I, J, V, mmax, nmax = spdiagm_internal(kv...)
     mnmax = max(mmax, nmax)
     m, n = something(size, (mnmax,mnmax))
     (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
