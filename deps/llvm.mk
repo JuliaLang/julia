@@ -188,11 +188,6 @@ endif # BUILD_CUSTOM_LIBCXX
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)"
-# We force some flags into other build systems, but LLVM doesn't need them,
-# and it makes it harder for it to compile some of its support libraries,
-# so let's force those to be ignored here
-LLVM_CMAKE += -DCMAKE_CXX_COMPILER_ARG1=""
-LLVM_CMAKE += -DCMAKE_C_COMPILER_ARG1=""
 ifeq ($(OS),Darwin)
 # Explicitly use the default for -mmacosx-version-min=10.9 and later
 LLVM_CMAKE += -DLLVM_ENABLE_LIBCXX=ON
