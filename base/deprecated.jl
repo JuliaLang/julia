@@ -229,6 +229,10 @@ function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
     @_pure_meta
     Tuple{S, T.parameters...}
 end
+function parameter_upper_bound(t::UnionAll, idx)
+    @_pure_meta
+    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
+end
 
 # these were internal functions, but some packages seem to be relying on them
 @deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes)
