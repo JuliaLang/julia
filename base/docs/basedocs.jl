@@ -2525,4 +2525,7 @@ A quoted piece of code, that does not support interpolation. See the [manual sec
 """
 QuoteNode
 
+# Compiler docstrings
+@doc Core.Compiler.docstring_return_type -> Core.Compiler.return_type
+
 end
