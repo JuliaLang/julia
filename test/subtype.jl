@@ -1769,3 +1769,6 @@ end
 
 # issue #37180
 @test !(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any}).body.parameters[1] isa Union)
+
+# issue #37255
+@test Type{Union{}} == Type{T} where {Union{}<:T<:Union{}}
