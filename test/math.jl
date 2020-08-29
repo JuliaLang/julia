@@ -476,7 +476,7 @@ end
     setprecision(256) do
         for R in (BigFloat, Float16, Float32, Float64)
             for T in (R, Complex{R})
-                for x in (0, 1e-20, 1e-30, 1e-40, 1e-50, 1e-60, 1e-70, 5.07138898934e-313)
+                for x in (0, 1e-5, 1e-20, 1e-30, 1e-40, 1e-50, 1e-60, 1e-70, 5.07138898934e-313)
                     if x < eps(R)
                         @test sinc(T(x)) == 1
                     end
