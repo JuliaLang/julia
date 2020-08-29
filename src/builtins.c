@@ -240,8 +240,6 @@ typedef struct _varidx {
     struct _varidx *prev;
 } jl_varidx_t;
 
-JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
-
 static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOINT
 {
     if (v == NULL)
@@ -471,7 +469,7 @@ static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_
     return newheap;
 }
 
-void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
+STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
 {
     size_t oldalloc = *n_alloc;
     if (oldalloc >= newalloc)
@@ -1025,8 +1023,6 @@ JL_CALLABLE(jl_f_invoke)
     return res;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f);
-
 JL_CALLABLE(jl_f_invoke_kwsorter)
 {
     JL_NARGSV(invoke, 3);
@@ -1239,7 +1235,7 @@ JL_CALLABLE(jl_f__primitivetype)
     return dt->name->wrapper;
 }
 
-void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
+static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
         tt->super != NULL ||
@@ -1264,8 +1260,6 @@ JL_CALLABLE(jl_f__setsuper)
     jl_set_datatype_super(dt, args[1]);
     return jl_nothing;
 }
-
-void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {
@@ -1583,6 +1577,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Argument", (jl_value_t*)jl_argument_type);
     add_builtin("Const", (jl_value_t*)jl_const_type);
     add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);
+    add_builtin("MethodMatch", (jl_value_t*)jl_method_match_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);

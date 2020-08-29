@@ -9,11 +9,10 @@ Generates a symbol which will not conflict with other variable names.
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
-gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, sizeof(s))
+gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Csize_t), s, sizeof(s))
 
 gensym(ss::String...) = map(gensym, ss)
-gensym(s::Symbol) =
-    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))
+gensym(s::Symbol) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Csize_t), s, -1 % Csize_t)
 
 """
     @gensym
@@ -58,6 +57,8 @@ function copy_exprs(x::PhiCNode)
     return PhiCNode(new_values)
 end
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
+
+exprarray(head, args::Array{Any,1}) = (ex = Expr(head); ex.args = args; ex)
 
 # create copies of the CodeInfo definition, and any mutable fields
 function copy(c::CodeInfo)
@@ -211,9 +212,10 @@ prevented. This is shown in the following example:
         Function Definition
     =#
 end
-
-If the function is trivial (for example returning a constant) it might get inlined anyway.
 ```
+
+!!! note
+    If the function is trivial (for example returning a constant) it might get inlined anyway.
 """
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)

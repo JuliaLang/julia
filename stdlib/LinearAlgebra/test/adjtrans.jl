@@ -550,4 +550,11 @@ end
     @test conj(transpose(hermitian)) === hermitian
 end
 
+@testset "empty and mismatched lengths" begin
+    # issue 36678
+    @test_throws DimensionMismatch [1, 2]' * [1,2,3]
+    @test Int[]' * Int[] == 0
+    @test transpose(Int[]) * Int[] == 0
+end
+
 end # module TestAdjointTranspose

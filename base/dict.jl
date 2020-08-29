@@ -99,7 +99,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 end
 function Dict{K,V}(kv) where V where K
     h = Dict{K,V}()
-    haslength(kv) && sizehint!(h, length(kv))
+    haslength(kv) && sizehint!(h, Int(length(kv))::Int)
     for (k,v) in kv
         h[k] = v
     end
@@ -166,7 +166,7 @@ end
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
-hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int
+hashindex(key, sz) = (((hash(key)::UInt % Int) & (sz-1)) + 1)::Int
 
 @propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 @propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
@@ -239,7 +239,7 @@ function sizehint!(d::Dict{T}, newsz) where T
     end
     # grow at least 25%
     newsz = min(max(newsz, (oldsz*5)>>2),
-                max_values(T))
+                max_values(T)::Int)
     rehash!(d, newsz)
 end
 
@@ -424,12 +424,25 @@ get!(collection, key, default)
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => f()`, and return `f()`.
 
-This is intended to be called using `do` block syntax:
-```julia
-get!(dict, key) do
-    # default value calculated here
-    time()
-end
+This is intended to be called using `do` block syntax.
+
+# Examples
+```jldoctest
+julia> squares = Dict{Int,Int}();
+
+julia> function get_square!(d, i)
+           get!(d, i) do
+               i^2
+           end
+       end
+get_square! (generic function with 1 method)
+
+julia> get_square!(squares, 2)
+4
+
+julia> squares
+Dict{Int64,Int64} with 1 entry:
+  2 => 4
 ```
 """
 get!(f::Function, collection, key)

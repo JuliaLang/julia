@@ -14,7 +14,7 @@ FunctionType *get_intr_args3(LLVMContext &C) { return FunctionType::get(T_prjlva
 FunctionType *get_intr_args4(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
 
 static JuliaFunction *runtime_func[num_intrinsics] = {
-#define ADD_I(name, nargs) new JuliaFunction{"jl_"#name, get_intr_args##nargs},
+#define ADD_I(name, nargs) new JuliaFunction{"jl_"#name, get_intr_args##nargs, nullptr},
 #define ADD_HIDDEN ADD_I
 #define ALIAS(alias, base) nullptr,
     INTRINSICS
@@ -309,7 +309,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         Type *INTT_to = INTT(to);
         if (to != INTT_to)
             unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
-        unboxed = ctx.builder.CreateIntToPtr(unboxed, to);
+        unboxed = emit_inttoptr(ctx, unboxed, to);
     }
     else if (ty != to) {
         unboxed = ctx.builder.CreateBitCast(unboxed, to);
@@ -341,7 +341,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         Type *dest_ty = unboxed->getType()->getPointerTo();
         if (dest->getType() != dest_ty)
             dest = emit_bitcast(ctx, dest, dest_ty);
-        tbaa_decorate(tbaa_dest, ctx.builder.CreateAlignedStore(unboxed, dest, julia_alignment(jt)));
+        tbaa_decorate(tbaa_dest, ctx.builder.CreateAlignedStore(unboxed, dest, Align(julia_alignment(jt))));
         return NULL;
     }
 
@@ -387,12 +387,12 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
                     (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
                     (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
                     DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
-                Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
+                Instruction *load = ctx.builder.CreateAlignedLoad(p, Align(alignment));
                 return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
             }
         }
         p = maybe_bitcast(ctx, p, ptype);
-        Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
+        Instruction *load = ctx.builder.CreateAlignedLoad(p, Align(alignment));
         return tbaa_decorate(x.tbaa, load);
     }
 }
@@ -490,7 +490,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         else if (vxt->isPointerTy() && !llvmt->isPointerTy())
             vx = ctx.builder.CreatePtrToInt(vx, llvmt);
         else if (!vxt->isPointerTy() && llvmt->isPointerTy())
-            vx = ctx.builder.CreateIntToPtr(vx, llvmt);
+            vx = emit_inttoptr(ctx, vx, llvmt);
         else
             vx = emit_bitcast(ctx, vx, llvmt);
     }
@@ -580,7 +580,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
         return mark_julia_type(
                 ctx,
-                ctx.builder.CreateAlignedLoad(ctx.builder.CreateGEP(T_prjlvalue, thePtr, im1), align_nb),
+                ctx.builder.CreateAlignedLoad(ctx.builder.CreateInBoundsGEP(T_prjlvalue, thePtr, im1), Align(align_nb)),
                 true,
                 ety);
     }
@@ -596,7 +596,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
-        thePtr = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, thePtr, T_pint8), im1);
+        thePtr = ctx.builder.CreateInBoundsGEP(T_int8, emit_bitcast(ctx, thePtr, T_pint8), im1);
         MDNode *tbaa = best_tbaa(ety);
         emit_memcpy(ctx, strct, tbaa, thePtr, nullptr, size, 1);
         return mark_julia_type(ctx, strct, true, ety);
@@ -655,7 +655,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         thePtr = emit_unbox(ctx, T_psize, e, e.typ);
         Instruction *store = ctx.builder.CreateAlignedStore(
           ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), T_size),
-            ctx.builder.CreateGEP(T_size, thePtr, im1), align_nb);
+            ctx.builder.CreateInBoundsGEP(T_size, thePtr, im1), Align(align_nb));
         tbaa_decorate(tbaa_data, store);
     }
     else if (!jl_isbits(ety)) {
@@ -667,7 +667,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
-        emit_memcpy(ctx, ctx.builder.CreateGEP(T_int8, thePtr, im1), nullptr, x, size, align_nb);
+        emit_memcpy(ctx, ctx.builder.CreateInBoundsGEP(T_int8, thePtr, im1), nullptr, x, size, align_nb);
     }
     else {
         bool isboxed;
@@ -804,8 +804,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 ifelse_tbaa = x.tbaa;
             }
             else {
-                x_ptr = decay_derived(x_ptr);
-                y_ptr = decay_derived(y_ptr);
+                x_ptr = decay_derived(ctx, x_ptr);
+                y_ptr = decay_derived(ctx, y_ptr);
                 if (x_ptr->getType() != y_ptr->getType())
                     y_ptr = ctx.builder.CreateBitCast(y_ptr, x_ptr->getType());
                 ifelse_result = ctx.builder.CreateSelect(isfalse, y_ptr, x_ptr);
@@ -861,6 +861,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 if (!y_vboxed)
                     y_vboxed = ConstantPointerNull::get(cast<PointerType>(x_vboxed->getType()));
                 ret.Vboxed = ctx.builder.CreateSelect(isfalse, y_vboxed, x_vboxed);
+                assert(ret.Vboxed->getType() == T_prjlvalue);
             }
             return ret;
         }
@@ -1028,14 +1029,14 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case add_ptr: {
         return ctx.builder.CreatePtrToInt(
             ctx.builder.CreateGEP(T_int8,
-                ctx.builder.CreateIntToPtr(x, T_pint8), y), t);
+                emit_inttoptr(ctx, x, T_pint8), y), t);
 
     }
 
     case sub_ptr: {
         return ctx.builder.CreatePtrToInt(
             ctx.builder.CreateGEP(T_int8,
-                ctx.builder.CreateIntToPtr(x, T_pint8), ctx.builder.CreateNeg(y)), t);
+                emit_inttoptr(ctx, x, T_pint8), ctx.builder.CreateNeg(y)), t);
 
     }
 

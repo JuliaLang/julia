@@ -42,8 +42,8 @@ promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float
 promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Real} = promote_type(Float64, T)
 promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number} = promote_type(promote_type(S, real(T)), T)
 
-AbstractFloat(x::AbstractIrrational) = Float64(x)
-Float16(x::AbstractIrrational) = Float16(Float32(x))
+AbstractFloat(x::AbstractIrrational) = Float64(x)::Float64
+Float16(x::AbstractIrrational) = Float16(Float32(x)::Float32)
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
 @pure function Rational{T}(x::AbstractIrrational) where T<:Integer
@@ -64,7 +64,7 @@ Rational{BigInt}(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an
 
 @pure function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
     setprecision(BigFloat, 256) do
-        T(BigFloat(x), r)
+        T(BigFloat(x)::BigFloat, r)
     end
 end
 

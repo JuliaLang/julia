@@ -189,6 +189,10 @@ julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 Assigning numbers into `a` will now convert them to `Float64` and `a` will be stored as
 a contiguous block of 64-bit floating-point values that can be manipulated efficiently.
 
+If you cannot avoid containers with abstract value types, it is sometimes better to
+parametrize with `Any` to avoid runtime type checking. E.g. `IdDict{Any, Any}` performs
+better than `IdDict{Type, Vector}`
+
 See also the discussion under [Parametric Types](@ref).
 
 ## Type declarations
@@ -453,9 +457,9 @@ annotation in this context in order to achieve type stability. This is because t
 cannot deduce the type of the return value of a function, even `convert`, unless the types of
 all the function's arguments are known.
 
-Type annotation will not enhance (and can actually hinder) performance if the type is constructed
-at run-time. This is because the compiler cannot use the annotation to specialize the subsequent
-code, and the type-check itself takes time. For example, in the code:
+Type annotation will not enhance (and can actually hinder) performance if the type is abstract,
+or constructed at run-time. This is because the compiler cannot use the annotation to specialize
+the subsequent code, and the type-check itself takes time. For example, in the code:
 
 ```julia
 function nr(a, prec)
@@ -1047,10 +1051,10 @@ julia> @views fview(x) = sum(x[2:end-1]);
 julia> x = rand(10^6);
 
 julia> @time fcopy(x);
-  0.003051 seconds (7 allocations: 7.630 MB)
+  0.003051 seconds (3 allocations: 7.629 MB)
 
 julia> @time fview(x);
-  0.001020 seconds (6 allocations: 224 bytes)
+  0.001020 seconds (1 allocation: 16 bytes)
 ```
 
 Notice both the 3× speedup and the decreased memory allocation
@@ -1579,7 +1583,7 @@ In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
 
-# Checking for equality with a singleton
+## Checking for equality with a singleton
 
 When checking if a value is equal to some singleton it can be
 better for performance to check for identicality (`===`) instead of

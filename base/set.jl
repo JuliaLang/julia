@@ -166,6 +166,8 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
     return out
 end
 
+unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
+
 """
     unique(f, itr)
 
@@ -262,7 +264,7 @@ function unique!(f, A::AbstractVector; seen::Union{Nothing,Set}=nothing)
         return A
     end
 
-    i = firstindex(A)
+    i = firstindex(A)::Int
     x = @inbounds A[i]
     y = f(x)
     if seen === nothing
@@ -289,7 +291,7 @@ function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
         end
         i += 1
     end
-    return resize!(A, current - firstindex(A) + 1)::typeof(A)
+    return resize!(A, current - firstindex(A)::Int + 1)::typeof(A)
 end
 
 
@@ -380,22 +382,31 @@ false
 ```
 """
 function allunique(C)
-    seen = Set{eltype(C)}()
-    for x in C
-        if in(x, seen)
-            return false
-        else
-            push!(seen, x)
+    seen = Dict{eltype(C), Nothing}()
+    x = iterate(C)
+    if haslength(C) && length(C) > 1000
+        for i in OneTo(1000)
+            v, s = x
+            idx = ht_keyindex2!(seen, v)
+            idx > 0 && return false
+            _setindex!(seen, nothing, v, -idx)
+            x = iterate(C, s)
         end
+        sizehint!(seen, length(C))
     end
-    true
+    while x !== nothing
+        v, s = x
+        idx = ht_keyindex2!(seen, v)
+        idx > 0 && return false
+        _setindex!(seen, nothing, v, -idx)
+        x = iterate(C, s)
+    end
+    return true
 end
 
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
-allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
-allunique(r::StepRange{T,S}) where {T,S} = (step(r) != zero(S)) || (length(r) <= 1)
-allunique(r::StepRangeLen{T,R,S}) where {T,R,S} = (step(r) != zero(S)) || (length(r) <= 1)
+allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 

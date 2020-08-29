@@ -213,7 +213,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     eh->prev = current_task->eh;
     eh->gcstack = ptls->pgcstack;
     eh->gc_state = ptls->gc_state;
-    eh->locks_len = current_task->locks.len;
+    eh->locks_len = ptls->locks.len;
     eh->defer_signal = ptls->defer_signal;
     eh->finalizers_inhibited = ptls->finalizers_inhibited;
     eh->world_age = ptls->world_age;
@@ -245,7 +245,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     int8_t old_gc_state = ptls->gc_state;
     current_task->eh = eh->prev;
     ptls->pgcstack = eh->gcstack;
-    arraylist_t *locks = &current_task->locks;
+    small_arraylist_t *locks = &ptls->locks;
     if (locks->len > eh->locks_len) {
         for (size_t i = locks->len;i > eh->locks_len;i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
@@ -253,10 +253,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
     ptls->world_age = eh->world_age;
     ptls->defer_signal = eh->defer_signal;
-    ptls->gc_state = eh->gc_state;
     ptls->finalizers_inhibited = eh->finalizers_inhibited;
-    if (old_gc_state && !eh->gc_state) {
-        jl_gc_safepoint_(ptls);
+    if (old_gc_state != eh->gc_state) {
+        jl_atomic_store_release(&ptls->gc_state, eh->gc_state);
+        if (old_gc_state) {
+            jl_gc_safepoint_(ptls);
+        }
     }
     if (old_defer_signal && !eh->defer_signal) {
         jl_sigint_safepoint(ptls);
@@ -291,15 +293,15 @@ JL_DLLEXPORT void jl_restore_excstack(size_t state)
     }
 }
 
-void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT
+static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT
 {
     assert(dest->reserved_size >= src->top);
     memcpy(jl_excstack_raw(dest), jl_excstack_raw(src), sizeof(jl_bt_element_t)*src->top);
     dest->top = src->top;
 }
 
-void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
-                          size_t reserved_size)
+static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                                size_t reserved_size)
 {
     jl_excstack_t *s = *stack;
     if (s && s->reserved_size >= reserved_size)
@@ -361,20 +363,9 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
 
 // parsing --------------------------------------------------------------------
 
-int substr_isspace(char *p, char *pend)
+static int substr_isspace(char *p, char *pend)
 {
     while (p != pend) {
-        if (!isspace((unsigned char)*p)) {
-            return 0;
-        }
-        p++;
-    }
-    return 1;
-}
-
-int str_isspace(char *p)
-{
-    while (*p != '\0') {
         if (!isspace((unsigned char)*p)) {
             return 0;
         }
@@ -1245,6 +1236,7 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
     JL_GC_POP();
 }
 
+#if 0
 void jl_depwarn(const char *msg, jl_value_t *sym)
 {
     static jl_value_t *depwarn_func = NULL;
@@ -1263,6 +1255,7 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     jl_apply(depwarn_args, 3);
     JL_GC_POP();
 }
+#endif
 
 #ifdef __cplusplus
 }

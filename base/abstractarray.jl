@@ -82,7 +82,7 @@ end
 Return `true` if the indices of `A` start with something other than 1 along any axis.
 If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
 """
-has_offset_axes(A)    = _tuple_any(x->first(x)!=1, axes(A))
+has_offset_axes(A)    = _tuple_any(x->Int(first(x))::Int != 1, axes(A))
 has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
 has_offset_axes(::Colon) = false
 
@@ -588,11 +588,11 @@ See also [`checkbounds`](@ref).
 """
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple)
     @_inline_meta
-    checkindex(Bool, IA[1], I[1]) & checkbounds_indices(Bool, tail(IA), tail(I))
+    checkindex(Bool, IA[1], I[1])::Bool & checkbounds_indices(Bool, tail(IA), tail(I))
 end
 function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple)
     @_inline_meta
-    checkindex(Bool, OneTo(1), I[1]) & checkbounds_indices(Bool, (), tail(I))
+    checkindex(Bool, OneTo(1), I[1])::Bool & checkbounds_indices(Bool, (), tail(I))
 end
 checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@_inline_meta; all(x->unsafe_length(x)==1, IA))
 checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
@@ -712,7 +712,7 @@ to_shape(r::AbstractUnitRange) = r
 
 Create an uninitialized mutable array analogous to that specified by
 `storagetype`, but with `axes` specified by the last
-argument. `storagetype` might be a type or a function.
+argument.
 
 **Examples**:
 
@@ -1065,7 +1065,7 @@ end
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
-    unsafe_convert(Ptr{T}, x) + _memory_offset(x, i)
+    unsafe_convert(Ptr{T}, x) + Int(_memory_offset(x, i))::Int
 end
 
 # The distance from pointer(x) to the element at x[I...] in bytes
@@ -1315,10 +1315,11 @@ unaliascopy(A::Array) = copy(A)
 unaliascopy(A::AbstractArray)::typeof(A) = (@_noinline_meta; _unaliascopy(A, copy(A)))
 _unaliascopy(A::T, C::T) where {T} = C
 _unaliascopy(A, C) = throw(ArgumentError("""
-    an array of type `$(typeof(A).name)` shares memory with another argument and must
-    make a preventative copy of itself in order to maintain consistent semantics,
-    but `copy(A)` returns a new array of type `$(typeof(C))`. To fix, implement:
-        `Base.unaliascopy(A::$(typeof(A).name))::typeof(A)`"""))
+    an array of type `$(typename(typeof(A)).wrapper)` shares memory with another argument
+    and must make a preventative copy of itself in order to maintain consistent semantics,
+    but `copy(::$(typeof(A)))` returns a new array of type `$(typeof(C))`.
+    To fix, implement:
+        `Base.unaliascopy(A::$(typename(typeof(A)).wrapper))::typeof(A)`"""))
 unaliascopy(A) = A
 
 """
@@ -1411,7 +1412,7 @@ promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK
-_cat(catdim::Integer) = Vector{Any}()
+_cat(catdim::Int) = Vector{Any}()
 
 typed_vcat(::Type{T}) where {T} = Vector{T}()
 typed_hcat(::Type{T}) where {T} = Vector{T}()
@@ -1535,9 +1536,14 @@ cat_indices(A::AbstractArray, d) = axes(A, d)
 cat_similar(A, T, shape) = Array{T}(undef, shape)
 cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
 
-cat_shape(dims, shape::Tuple) = shape
-@inline cat_shape(dims, shape::Tuple, nshape::Tuple, shapes::Tuple...) =
-    cat_shape(dims, _cshp(1, dims, shape, nshape), shapes...)
+cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
+function cat_shape(dims, shapes::Tuple)
+    out_shape = ()
+    for s in shapes
+        out_shape = _cshp(1, dims, out_shape, s)
+    end
+    return out_shape
+end
 
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
@@ -1581,7 +1587,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 @inline function _cat_t(dims, T::Type, X...)
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, (), map(cat_size, X)...)
+    shape = cat_shape(catdims, map(cat_size, X))
     A = cat_similar(X[1], T, shape)
     if count(!iszero, catdims) > 1
         fill!(A, zero(T))

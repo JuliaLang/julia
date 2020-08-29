@@ -210,7 +210,7 @@ function init_load_path()
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
         paths = filter!(env -> env !== nothing,
-            [env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
+            String[env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
     end
     append!(empty!(LOAD_PATH), paths)
 end
@@ -234,7 +234,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
-        env == "@stdlib" && return Sys.STDLIB
+        env == "@stdlib" && return Sys.STDLIB::String
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)

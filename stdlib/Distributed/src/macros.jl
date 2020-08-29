@@ -187,7 +187,11 @@ Instead, local variables can be broadcast using interpolation:
 The optional argument `procs` allows specifying a subset of all
 processes to have execute the expression.
 
-Equivalent to calling `remotecall_eval(Main, procs, expr)`.
+Similar to calling `remotecall_eval(Main, procs, expr)`, but with two extra features:
+
+    - `using` and `import` statements run on the calling process first, to ensure
+      packages are precompiled.
+    - The current source file path used by `include` is propagated to other processes.
 """
 macro everywhere(ex)
     procs = GlobalRef(@__MODULE__, :procs)
@@ -198,7 +202,8 @@ macro everywhere(procs, ex)
     imps = extract_imports(ex)
     return quote
         $(isempty(imps) ? nothing : Expr(:toplevel, imps...)) # run imports locally first
-        let ex = $(Expr(:quote, ex)), procs = $(esc(procs))
+        let ex = Expr(:toplevel, :(task_local_storage()[:SOURCE_PATH] = $(get(task_local_storage(), :SOURCE_PATH, nothing))), $(Expr(:quote, ex))),
+            procs = $(esc(procs))
             remotecall_eval(Main, procs, ex)
         end
     end

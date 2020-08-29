@@ -15,8 +15,8 @@ let m = Meta.@lower 1 + 1
         GlobalRef(@__MODULE__, :test29262),
         GotoIfNot(Core.SSAValue(3), 6),
         # block 2
-        Core.PhiNode(Any[4], Any[Core.SSAValue(1)]),
-        Core.PhiNode(Any[4, 5], Any[Core.SSAValue(2), Core.SSAValue(5)]),
+        Core.PhiNode(Int32[4], Any[Core.SSAValue(1)]),
+        Core.PhiNode(Int32[4, 5], Any[Core.SSAValue(2), Core.SSAValue(5)]),
         ReturnNode(Core.SSAValue(6)),
     ]
     nstmts = length(src.code)
@@ -40,18 +40,18 @@ let m = Meta.@lower 1 + 1
         QuoteNode(:c),
         GlobalRef(@__MODULE__, :test29262),
         # block 2
-        Core.PhiNode(Any[4, 16], Any[false, true]), # false, true
-        Core.PhiNode(Any[4, 16], Any[Core.SSAValue(1), Core.SSAValue(2)]), # :a, :b
-        Core.PhiNode(Any[4, 16], Any[Core.SSAValue(3), Core.SSAValue(6)]), # :c, :a
-        Core.PhiNode(Any[16], Any[Core.SSAValue(7)]), # NULL, :c
+        Core.PhiNode(Int32[4, 16], Any[false, true]), # false, true
+        Core.PhiNode(Int32[4, 16], Any[Core.SSAValue(1), Core.SSAValue(2)]), # :a, :b
+        Core.PhiNode(Int32[4, 16], Any[Core.SSAValue(3), Core.SSAValue(6)]), # :c, :a
+        Core.PhiNode(Int32[16], Any[Core.SSAValue(7)]), # NULL, :c
         # block 3
-        Core.PhiNode(Any[], Any[]), # NULL, NULL
-        Core.PhiNode(Any[17, 8], Any[true, Core.SSAValue(4)]), # test29262, test29262, [true]
-        Core.PhiNode(Any[17], Vector{Any}(undef, 1)), # NULL, NULL
-        Core.PhiNode(Any[8], Vector{Any}(undef, 1)), # NULL, NULL
-        Core.PhiNode(Any[], Any[]), # NULL, NULL
-        Core.PhiNode(Any[17, 8], Any[Core.SSAValue(2), Core.SSAValue(8)]), # NULL, :c, [:b]
-        Core.PhiNode(Any[], Any[]), # NULL, NULL
+        Core.PhiNode(Int32[], Any[]), # NULL, NULL
+        Core.PhiNode(Int32[17, 8], Any[true, Core.SSAValue(4)]), # test29262, test29262, [true]
+        Core.PhiNode(Int32[17], Vector{Any}(undef, 1)), # NULL, NULL
+        Core.PhiNode(Int32[8], Vector{Any}(undef, 1)), # NULL, NULL
+        Core.PhiNode(Int32[], Any[]), # NULL, NULL
+        Core.PhiNode(Int32[17, 8], Any[Core.SSAValue(2), Core.SSAValue(8)]), # NULL, :c, [:b]
+        Core.PhiNode(Int32[], Any[]), # NULL, NULL
         GotoIfNot(Core.SSAValue(5), 5),
         # block 4
         GotoIfNot(Core.SSAValue(10), 9),

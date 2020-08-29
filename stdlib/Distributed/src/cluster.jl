@@ -46,12 +46,12 @@ Some fields are used by both `LocalManager`s and `SSHManager`s:
 mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
     io::Union{IO, Nothing}
-    host::Union{AbstractString, Nothing}
+    host::Union{String, Nothing}
     port::Union{Int, Nothing}
 
     # Used when launching additional workers at a host
     count::Union{Int, Symbol, Nothing}
-    exename::Union{AbstractString, Cmd, Nothing}
+    exename::Union{String, Cmd, Nothing}
     exeflags::Union{Cmd, Nothing}
 
     # External cluster managers can use this to store information at a per-worker level
@@ -61,8 +61,8 @@ mutable struct WorkerConfig
     # SSHManager / SSH tunnel connections to workers
     tunnel::Union{Bool, Nothing}
     multiplex::Union{Bool, Nothing}
-    forward::Union{AbstractString, Nothing}
-    bind_addr::Union{AbstractString, Nothing}
+    forward::Union{String, Nothing}
+    bind_addr::Union{String, Nothing}
     sshflags::Union{Cmd, Nothing}
     max_parallel::Union{Int, Nothing}
 
@@ -200,9 +200,9 @@ end
 
 mutable struct LocalProcess
     id::Int
-    bind_addr::AbstractString
+    bind_addr::String
     bind_port::UInt16
-    cookie::AbstractString
+    cookie::String
     LocalProcess() = new(1)
 end
 

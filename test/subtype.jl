@@ -1247,7 +1247,6 @@ let ints = (Int, Int32, UInt, UInt32)
     T = Type{Tuple{V, I}} where V <: Vecs where I <: Ints
     @testintersect(T, T, T)
     test(a::Type{Tuple{V, I}}) where {V <: Vecs, I <: Ints} = I
-    test(a::Type{Tuple{V, I}}) where {V <: Vecs, I <: Ints} = I
 end
 
 # issue #21191
@@ -1760,3 +1759,16 @@ s26065 = Ref{Tuple{T,Ref{Union{Ref{Tuple{Ref{Union{Ref{Ref{Tuple{Ref{Tuple{Union
 # issue 36100
 @test NamedTuple{(:a, :b), Tuple{Missing, Union{}}} == NamedTuple{(:a, :b), Tuple{Missing, Union{}}}
 @test Val{Tuple{Missing, Union{}}} === Val{Tuple{Missing, Union{}}}
+
+# issue #36869
+struct F36869{T, V} <: AbstractArray{Union{T, V}, 1}
+end
+@testintersect(Tuple{Type{T}, AbstractVector{T}} where T,
+               Tuple{Union, F36869{Int64, Missing}},
+               Tuple{Union, F36869{Int64, Missing}})
+
+# issue #37180
+@test !(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any}).body.parameters[1] isa Union)
+
+# issue #37255
+@test Type{Union{}} == Type{T} where {Union{}<:T<:Union{}}

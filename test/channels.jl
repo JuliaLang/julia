@@ -360,7 +360,7 @@ end
         """
     # test for invalid state in Workqueue during yield
     t = @async nothing
-    t.state = :invalid
+    t._state = 66
     newstderr = redirect_stderr()
     try
         errstream = @async read(newstderr[1], String)

@@ -1026,7 +1026,9 @@ See also [`circshift`](@ref).
     axes(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(axes(dest)))"))
     _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val(N)))
 end
-circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt...,))
+
+circshift!(dest::AbstractArray, src, shiftamt) =
+    circshift!(dest, src, map(Integer, (shiftamt...,)))
 
 # For each dimension, we copy the first half of src to the second half
 # of dest, and the second half of src to the first half of dest. This
@@ -1417,7 +1419,7 @@ function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) wh
     nothing
 end
 
-for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
+for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @generated function permutedims!(P::$PT{$(V...)}, B::$BT{$(V...)}, perm) where $(V...)
         quote
             checkdims_perm(P, B, perm)

@@ -267,10 +267,23 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 
 ## multiplication *
 
+function _dot_nonrecursive(u, v)
+    lu = length(u)
+    if lu != length(v)
+        throw(DimensionMismatch("first array has length $(lu) which does not match the length of the second, $(length(v))."))
+    end
+    if lu == 0
+        zero(eltype(u)) * zero(eltype(v))
+    else
+        sum(uu*vv for (uu, vv) in zip(u, v))
+    end
+end
+
 # Adjoint/Transpose-vector * vector
-*(u::AdjointAbsVec{T}, v::AbstractVector{T}) where {T<:Number} = dot(u.parent, v)
+*(u::AdjointAbsVec{<:Number}, v::AbstractVector{<:Number}) = dot(u.parent, v)
 *(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
-*(u::AdjOrTransAbsVec, v::AbstractVector) = sum(uu*vv for (uu, vv) in zip(u, v))
+*(u::AdjOrTransAbsVec, v::AbstractVector) = _dot_nonrecursive(u, v)
+
 
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
@@ -281,14 +294,10 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 
 # AdjOrTransAbsVec{<:Any,<:AdjOrTransAbsVec} is a lazy conj vectors
 # We need to expand the combinations to avoid ambiguities
-(*)(u::TransposeAbsVec, v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) =
-    sum(uu*vv for (uu, vv) in zip(u, v))
-(*)(u::AdjointAbsVec,   v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) =
-    sum(uu*vv for (uu, vv) in zip(u, v))
-(*)(u::TransposeAbsVec, v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) =
-    sum(uu*vv for (uu, vv) in zip(u, v))
-(*)(u::AdjointAbsVec,   v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) =
-    sum(uu*vv for (uu, vv) in zip(u, v))
+(*)(u::TransposeAbsVec, v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) = _dot_nonrecursive(u, v)
+(*)(u::AdjointAbsVec,   v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) = _dot_nonrecursive(u, v)
+(*)(u::TransposeAbsVec, v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) = _dot_nonrecursive(u, v)
+(*)(u::AdjointAbsVec,   v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) = _dot_nonrecursive(u, v)
 
 ## pseudoinversion
 pinv(v::AdjointAbsVec, tol::Real = 0) = pinv(v.parent, tol).parent

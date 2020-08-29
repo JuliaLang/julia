@@ -24,7 +24,7 @@ static int is10digit(char c) JL_NOTSAFEPOINT
     return (c >= '0' && c <= '9');
 }
 
-jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
+static jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
 {
     char *n = jl_symbol_name(s);
     if (n[0] != '#')
@@ -36,8 +36,8 @@ jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
     else
         len = (end-n) - 1;  // extract `f` from `#f#...`
     if (is10digit(n[1]))
-        return jl_symbol_n(n, len+1);
-    return jl_symbol_n(&n[1], len);
+        return _jl_symbol(n, len+1);
+    return _jl_symbol(&n[1], len);
 }
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
@@ -730,7 +730,7 @@ PERMBOXN_FUNC(64, 2)
 #define UNBOX_FUNC(j_type,c_type)                                       \
     JL_DLLEXPORT c_type jl_unbox_##j_type(jl_value_t *v)                \
     {                                                                   \
-        assert(jl_is_primitivetype(jl_typeof(v)));                           \
+        assert(jl_is_primitivetype(jl_typeof(v)));                      \
         assert(jl_datatype_size(jl_typeof(v)) == sizeof(c_type));       \
         return *(c_type*)jl_data_ptr(v);                                \
     }
@@ -819,15 +819,15 @@ JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
     return v;
 }
 
-static jl_value_t *boxed_int8_cache[256];
+JL_DLLEXPORT jl_value_t *jl_boxed_int8_cache[256];
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x)
 {
-    return boxed_int8_cache[(uint8_t)x];
+    return jl_boxed_int8_cache[(uint8_t)x];
 }
-static jl_value_t *boxed_uint8_cache[256];
+JL_DLLEXPORT jl_value_t *jl_boxed_uint8_cache[256];
 JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x)
 {
-    return boxed_uint8_cache[x];
+    return jl_boxed_uint8_cache[x];
 }
 
 void jl_init_int32_int64_cache(void)
@@ -845,7 +845,7 @@ void jl_init_int32_int64_cache(void)
 #endif
     }
     for(i=0; i < 256; i++) {
-        boxed_uint8_cache[i] = jl_permbox8(jl_uint8_type, i);
+        jl_boxed_uint8_cache[i] = jl_permbox8(jl_uint8_type, i);
     }
 }
 
@@ -856,7 +856,7 @@ void jl_init_box_caches(void)
         boxed_char_cache[i] = jl_permbox32(jl_char_type, i << 24);
     }
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i] = jl_permbox8(jl_int8_type, i);
+        jl_boxed_int8_cache[i] = jl_permbox8(jl_int8_type, i);
     }
     for(i=0; i < NBOX_C; i++) {
         boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, i-NBOX_C/2);

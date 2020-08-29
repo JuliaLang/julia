@@ -161,7 +161,9 @@ function show(io::IO, t::NamedTuple)
     end
 end
 
-eltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
+eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
+nteltype(::Type) = Any
+nteltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
 
 ==(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) == Tuple(b)
 ==(a::NamedTuple, b::NamedTuple) = false

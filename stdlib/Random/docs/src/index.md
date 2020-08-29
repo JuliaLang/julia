@@ -26,7 +26,7 @@ unbounded integers, the interval must be specified (e.g. `rand(big.(1:6))`).
 Additionally, normal and exponential distributions are implemented for some `AbstractFloat` and
 `Complex` types, see [`randn`](@ref) and [`randexp`](@ref) for details.
 
-!!! warn
+!!! warning
     Because the precise way in which random numbers are generated is considered an implementation detail, bug fixes and speed improvements may change the stream of numbers that are generated after a version change. Relying on a specific seed or generated stream of numbers during unit testing is thus discouraged - consider testing properties of the methods in question instead.
 
 ## Random numbers module

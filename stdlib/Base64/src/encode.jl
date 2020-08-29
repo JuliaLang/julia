@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Generate encode table.
-const BASE64_ENCODE = [UInt8(x) for x in ['A':'Z'; 'a':'z'; '0':'9'; '+'; '/']]
+const BASE64_ENCODE = [UInt8(x) for x in Char['A':'Z'; 'a':'z'; '0':'9'; '+'; '/']]
 encode(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
 encodepadding()  = UInt8('=')
 

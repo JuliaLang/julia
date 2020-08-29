@@ -19,7 +19,9 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/InstVisitor.h>
+#if JL_LLVM_VERSION < 110000
 #include <llvm/IR/CallSite.h>
+#endif
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>

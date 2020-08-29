@@ -1,6 +1,7 @@
 # C Interface
 
 ```@docs
+@ccall
 ccall
 Core.Intrinsics.cglobal
 Base.@cfunction

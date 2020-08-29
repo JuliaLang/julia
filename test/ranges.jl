@@ -1008,8 +1008,10 @@ end
     @test LinRange(0,3,4)/3 == LinRange(0,1,4)
     @test broadcast(-, 2, LinRange(0,3,4)) == LinRange(2,-1,4)
     @test broadcast(+, 2, LinRange(0,3,4)) == LinRange(2,5,4)
-    @test -LinRange(0,3,4) == LinRange(0,-3,4)
-    @test reverse(LinRange(0,3,4)) == LinRange(3,0,4)
+    @test -LinRange{Int}(0,3,4) === LinRange{Int}(0,-3,4)
+    @test -LinRange{Float64}(0.,3.,4) === LinRange{Float64}(-0.,-3.,4)
+    @test reverse(LinRange{Int}(0,3,4)) === LinRange{Int}(3,0,4)
+    @test reverse(LinRange{Float64}(0.,3.,4)) === LinRange{Float64}(3.,0.,4)
 end
 @testset "Issue #11245" begin
     io = IOBuffer()

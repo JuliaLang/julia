@@ -1743,7 +1743,7 @@ h_line() = f_line()
 @test repr(Core.Compiler.ReturnNode(23)) == ":(return 23)"
 @test repr(Core.Compiler.ReturnNode()) == ":(unreachable)"
 @test repr(Core.Compiler.GotoIfNot(true, 4)) == ":(goto %4 if not true)"
-@test repr(Core.Compiler.PhiNode(Any[2, 3], Any[1, Core.SlotNumber(3)])) == ":(φ (%2 => 1, %3 => _3))"
+@test repr(Core.Compiler.PhiNode(Int32[2, 3], Any[1, Core.SlotNumber(3)])) == ":(φ (%2 => 1, %3 => _3))"
 @test repr(Core.Compiler.UpsilonNode(Core.SlotNumber(3))) == ":(ϒ (_3))"
 @test repr(Core.Compiler.PhiCNode(Any[1, Core.SlotNumber(3)])) == ":(φᶜ (1, _3))"
 @test sprint(Base.show_unquoted, Core.Compiler.Argument(23)) == "_23"
@@ -1994,3 +1994,12 @@ end
     @test contains(string(methods(foo)), "foo(α)")
     @test contains(string(methods(bar)), "bar(ℓ)")
 end
+
+module M37012
+struct AnInteger{S<:Integer} end
+struct AStruct{N} end
+const AValue{S} = Union{AStruct{S}, AnInteger{S}}
+end
+@test Base.make_typealias(M37012.AStruct{1}) === nothing
+@test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
+@test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"

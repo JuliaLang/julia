@@ -211,11 +211,9 @@ julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
 ```
 """
 function bitsunionsize(u::Union)
-    sz = Ref{Csize_t}(0)
-    algn = Ref{Csize_t}(0)
-    isunboxed = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), u, sz, algn)
-    @assert isunboxed != Cint(0)
-    return sz[]
+    isinline, sz, _ = uniontype_layout(u)
+    @assert isinline
+    return sz
 end
 
 length(a::Array) = arraylen(a)
@@ -986,7 +984,7 @@ push!(a::AbstractVector, iter...) = append!(a, iter)
 function _append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
     i = lastindex(a)
-    resize!(a, n+length(iter))
+    resize!(a, n+Int(length(iter))::Int)
     @inbounds for (i, item) in zip(i+1:lastindex(a), iter)
         a[i] = item
     end

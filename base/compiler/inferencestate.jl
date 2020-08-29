@@ -14,8 +14,7 @@ mutable struct InferenceState
     # info on the state of inference and the linfo
     src::CodeInfo
     world::UInt
-    min_valid::UInt
-    max_valid::UInt
+    valid_worlds::WorldRange
     nargs::Int
     stmt_types::Vector{Any}
     stmt_edges::Vector{Any}
@@ -44,9 +43,10 @@ mutable struct InferenceState
     inferred::Bool
     dont_work_on_me::Bool
 
-    # cached results of calling `_methods_by_ftype`, including `min_valid` and
-    # `max_valid`, to be used in inlining
-    matching_methods_cache::IdDict{Any, Tuple{Any, UInt, UInt, Bool}}
+    # The place to look up methods while working on this function.
+    # In particular, we cache method lookup results for the same function to
+    # fast path repeated queries.
+    method_table::CachedMethodTable{InternalMethodTable}
 
     # The interpreter that created this inference state. Not looked at by
     # NativeInterpreter. But other interpreters may use this to detect cycles
@@ -100,13 +100,12 @@ mutable struct InferenceState
             inmodule = linfo.def::Module
         end
 
-        min_valid = src.min_world
-        max_valid = src.max_world == typemax(UInt) ?
-            get_world_counter() : src.max_world
+        valid_worlds = WorldRange(src.min_world,
+            src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         frame = new(
             InferenceParams(interp), result, linfo,
             sp, slottypes, inmodule, 0,
-            src, get_world_counter(interp), min_valid, max_valid,
+            src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
@@ -115,13 +114,15 @@ mutable struct InferenceState
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
             cached, false, false, false,
-            IdDict{Any, Tuple{Any, UInt, UInt, Bool}}(),
+            CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame
         cached && push!(get_inference_cache(interp), result)
         return frame
     end
 end
+
+method_table(interp::AbstractInterpreter, sv::InferenceState) = sv.method_table
 
 function InferenceState(result::InferenceResult, cached::Bool, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
@@ -202,14 +203,13 @@ end
 _topmod(sv::InferenceState) = _topmod(sv.mod)
 
 # work towards converging the valid age range for sv
-function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::InferenceState)
-    sv.min_valid = max(sv.min_valid, min_valid)
-    sv.max_valid = min(sv.max_valid, max_valid)
-    @assert(sv.min_valid <= sv.world <= sv.max_valid, "invalid age range update")
+function update_valid_age!(sv::InferenceState, worlds::WorldRange)
+    sv.valid_worlds = intersect(worlds, sv.valid_worlds)
+    @assert(sv.world in sv.valid_worlds, "invalid age range update")
     nothing
 end
 
-update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(edge.min_valid, edge.max_valid, sv)
+update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
     old = frame.src.ssavaluetypes[ssa_id]

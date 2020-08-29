@@ -12,20 +12,21 @@ eligible to be the scope of some set of variables. The scope of a variable canno
 set of source lines; instead, it will always line up with one of these blocks. There are two main
 types of scopes in Julia, *global scope* and *local scope*. The latter can be nested. There is also
 a distinction in Julia between constructs which introduce a "hard scope" and those which only
-introduce a "soft scope", which affects whether shadowing a global variable by the same name is
-allowed or not.
+introduce a "soft scope", which affects whether
+[shadowing](https://en.wikipedia.org/wiki/Variable_shadowing)
+a global variable by the same name is allowed or not.
 
 ### [Scope constructs](@id man-scope-table)
 
 The constructs introducing scope blocks are:
 
-Construct | Scope type | Allowed within
-----------|------------|---------------
-[`module`](@ref), [`baremodule`](@ref) | global | global
-[`struct`](@ref) | local (soft) | global
-[`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global or local
-[`macro`](@ref) | local (hard) | global
-[`let`](@ref), functions, comprehensions, generators | local (hard) | global or local
+| Construct | Scope type | Allowed within |
+|:----------|:-----------|:---------------|
+| [`module`](@ref), [`baremodule`](@ref) | global | global |
+| [`struct`](@ref) | local (soft) | global |
+| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
+| [`macro`](@ref) | local (hard) | global |
+| functions, [`do`](@ref) blocks, [`let`](@ref) blocks, comprehensions, generators | local (hard) | global, local |
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)

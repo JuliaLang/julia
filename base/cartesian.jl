@@ -313,10 +313,10 @@ end
 
 function lreplace!(ex::Expr, r::LReplace)
     # Curly-brace notation, which acts like parentheses
-    if ex.head === :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
+    if ex.head === :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]::Symbol), "_")
         excurly = exprresolve(lreplace!(ex.args[2], r))
-        if isa(excurly, Number)
-            return Symbol(ex.args[1],excurly)
+        if isa(excurly, Int)
+            return Symbol(ex.args[1]::Symbol, excurly)
         else
             ex.args[2] = excurly
             return ex

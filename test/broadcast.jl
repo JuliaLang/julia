@@ -152,15 +152,16 @@ for arr in (identity, as_sub)
     end
 end
 
-r1 = 1:1
-r2 = 1:5
-ratio = [1,1/2,1/3,1/4,1/5]
-@test r1.*r2 == [1:5;]
-@test r1./r2 == ratio
-m = [1:2;]'
-@test m.*r2 == [1:5 2:2:10]
-@test m./r2 ≈ [ratio 2ratio]
-@test m./[r2;] ≈ [ratio 2ratio]
+let r1 = 1:1,
+    r2 = 1:5,
+    ratio = [1,1/2,1/3,1/4,1/5],
+    m = [1:2;]'
+    @test r1.*r2 == [1:5;]
+    @test r1./r2 == ratio
+    @test m.*r2 == [1:5 2:2:10]
+    @test m./r2 ≈ [ratio 2ratio]
+    @test m./[r2;] ≈ [ratio 2ratio]
+end
 
 @test @inferred(broadcast(+,[0,1.2],reshape([0,-2],1,1,2))) == reshape([0 -2; 1.2 -0.8],2,1,2)
 rt = Base.return_types(broadcast, Tuple{typeof(+), Array{Float64, 3}, Array{Int, 1}})
@@ -509,13 +510,17 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
     aa = Array19745(a)
     fadd(aa) = aa .+ 1
     fadd2(aa) = aa .+ 1 .* 2
+    fadd3(aa) = aa .+ [missing; 1:9]
     fprod(aa) = aa .* aa'
     @test a .+ 1  == @inferred(fadd(aa))
     @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
+    @test isequal(a .+ [missing; 1:9], fadd3(aa))
+    @test_broken Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
+    @test isa(aa .* [missing; 1:9], Array19745)
     a1 = AD1(rand(2,3))
     a2 = AD2(rand(2))
     @test a1 .+ 1 isa AD1
