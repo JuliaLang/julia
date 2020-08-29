@@ -1093,7 +1093,7 @@ function _cosc(x::Number)
     # cancellation error near x=0, so we use the Taylor series
     # for small enough |x|.
     if fastabs(x) < 0.5
-        # generic Taylor series: π ∑ (-πx)^{2n-1}/a(n) where
+        # generic Taylor series: π ∑ (-1)^n (πx)^{2n-1}/a(n) where
         # a(n) = (1+2n)*(2n-1)! (= OEIS A174549)
         s = (term = -(π*x))/3
         π²x² = term^2
