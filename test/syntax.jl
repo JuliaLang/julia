@@ -2325,3 +2325,11 @@ end
 @test_throws ParseError("invalid operator \".<---\"") Meta.parse("1 .<--- 2")
 @test_throws ParseError("invalid operator \"--\"") Meta.parse("a---b")
 @test_throws ParseError("invalid operator \".--\"") Meta.parse("a.---b")
+
+# issue #37228
+# NOTE: the `if` needs to be at the top level
+if isodd(1) && all(iseven(2) for c in ())
+    @test true
+else
+    @test false
+end
