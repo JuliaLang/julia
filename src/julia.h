@@ -1723,7 +1723,6 @@ typedef struct _jl_task_t {
     jl_value_t *donenotify;
     jl_value_t *result;
     jl_value_t *exception;
-    jl_value_t *backtrace;
     jl_value_t *logstate;
     jl_function_t *start;
     uint8_t _state;
@@ -1736,6 +1735,8 @@ typedef struct _jl_task_t {
     int16_t prio;
     // current world age
     size_t world_age;
+    // saved exception stack
+    jl_excstack_t *excstack;
 
     jl_ucontext_t ctx; // saved thread state
     void *stkbuf; // malloc'd memory (either copybuf or stack)
@@ -1747,8 +1748,6 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
-    // saved exception stack
-    jl_excstack_t *excstack;
 
     jl_timing_block_t *timing_stack;
 } jl_task_t;
