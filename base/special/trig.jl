@@ -1064,6 +1064,11 @@ than requiring `hypot`.
 fastabs(x::Number) = abs(x)
 fastabs(z::Complex) = abs(real(z)) + abs(imag(z))
 
+# sinc and cosc are zero if the real part is Inf and imag is finite
+isinf_real(x::Real) = isinf(x)
+isinf_real(x::Complex) = isinf(real(x)) && isfinite(imag(x))
+isinf_real(x::Number) = false
+
 """
     sinc(x)
 
@@ -1071,12 +1076,12 @@ Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 """
 sinc(x::Number) = _sinc(float(x))
 sinc(x::Integer) = iszero(x) ? one(x) : zero(x)
-_sinc(x::Number) = iszero(x) ? one(x) : x isa Real && isinf(x) ? zero(x) : sinpi(x)/(pi*x)
+_sinc(x::Number) = iszero(x) ? one(x) : isinf_real(x) ? zero(x) : sinpi(x)/(pi*x)
 _sinc_threshold(::Type{Float64}) = 0.001
 _sinc_threshold(::Type{Float32}) = 0.05f0
 @inline function _sinc(x::Union{T,Complex{T}}) where {T<:Union{Float32,Float64}}
     a = fastabs(x)
-    return a < _sinc_threshold(T) ? @evalpoly(x^2, T(1), -T(pi)^2/6, T(pi)^4/120) : x isa Real && isinf(a) ? zero(x) : sinpi(x)/(pi*x)
+    return a < _sinc_threshold(T) ? @evalpoly(x^2, T(1), -T(pi)^2/6, T(pi)^4/120) : isinf_real(a) ? zero(x) : sinpi(x)/(pi*x)
 end
 _sinc(x::Float16) = Float16(_sinc(Float32(x)))
 _sinc(x::ComplexF16) = ComplexF16(_sinc(ComplexF32(x)))
@@ -1107,17 +1112,17 @@ function _cosc(x::Number)
         end
         return π*s
     else
-        return x isa Real && isinf(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+        return isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
     end
 end
 # hard-code Float64/Float32 Taylor series, with coefficients
 #  Float64.([(-1)^n*big(pi)^(2n)/((2n+1)*factorial(2n-1)) for n = 1:6])
 _cosc(x::Union{Float64,ComplexF64}) =
     fastabs(x) < 0.14 ? x*evalpoly(x^2, (-3.289868133696453, 3.2469697011334144, -1.1445109447325053, 0.2091827825412384, -0.023460810354558236, 0.001781145516372852)) :
-    x isa Real && isinf(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+    isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
 _cosc(x::Union{Float32,ComplexF32}) =
     fastabs(x) < 0.26f0 ? x*evalpoly(x^2, (-3.289868f0, 3.2469697f0, -1.144511f0, 0.20918278f0)) :
-    x isa Real && isinf(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+    isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
 _cosc(x::Float16) = Float16(_cosc(Float32(x)))
 _cosc(x::ComplexF16) = ComplexF16(_cosc(ComplexF32(x)))
 

@@ -450,7 +450,7 @@ end
     @test ismissing(scdm[2])
 end
 
-@testset "Integer args to sinpi/cospi/sinc/cosc" begin
+@testset "Integer and Inf args for sinpi/cospi/sinc/cosc" begin
     for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
         @test sinpi(1) == 0
         @test sinpi(-1) == -0
@@ -466,6 +466,9 @@ end
     @test cosc(0) == 0
     @test cosc(complex(1,0)) == -1
     @test cosc(Inf) == 0
+
+    @test sinc(Inf + 3im) == 0
+    @test cosc(Inf + 3im) == 0
 end
 
 # issue #37227
