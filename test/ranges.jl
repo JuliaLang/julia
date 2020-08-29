@@ -1326,6 +1326,15 @@ end
     @test r[4] === 3.0+im
 end
 
+@testset "issue #37276" begin
+    r = range(Complex{BigFloat}(0), stop=Complex{BigFloat}(1), length=4)
+    @test isa(@inferred(r[2]), Complex{BigFloat})
+    @test r[1] == 0.
+    @test r[2] ≈ big"1"/3   rtol=10eps(BigFloat)
+    @test r[3] ≈ big"2"/3   rtol=10eps(BigFloat)
+    @test r[4] == 1.
+end
+
 # ambiguity between (:) methods (#20988)
 struct NotReal; val; end
 Base.:+(x, y::NotReal) = x + y.val

@@ -685,7 +685,7 @@ end
 
 function lerpi(j::Integer, d::Integer, a::T, b::T) where T
     @_inline_meta
-    t = j/d
+    t = eltype(T)(j)/d
     T((1-t)*a + t*b)
 end
 
