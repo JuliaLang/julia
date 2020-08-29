@@ -43,7 +43,7 @@ julia> ev = [7, 8, 9]
  9
 
 julia> SymTridiagonal(dv, ev)
-4×4 SymTridiagonal{Int64,Vector{Int64}}:
+4×4 SymTridiagonal{Int64, Vector{Int64}}:
  1  7  ⋅  ⋅
  7  2  8  ⋅
  ⋅  8  3  9
@@ -52,7 +52,7 @@ julia> SymTridiagonal(dv, ev)
 julia> A = SymTridiagonal(fill([1 2; 3 4], 3), fill([1 2; 3 4], 2));
 
 julia> A[1,1]
-2×2 Symmetric{Int64,Matrix{Int64}}:
+2×2 Symmetric{Int64, Matrix{Int64}}:
  1  2
  2  4
 
@@ -89,7 +89,7 @@ julia> A = [1 2 3; 2 4 5; 3 5 6]
  3  5  6
 
 julia> SymTridiagonal(A)
-3×3 SymTridiagonal{Int64,Vector{Int64}}:
+3×3 SymTridiagonal{Int64, Vector{Int64}}:
  1  2  ⋅
  2  4  5
  ⋅  5  6
@@ -97,7 +97,7 @@ julia> SymTridiagonal(A)
 julia> B = reshape([[1 2; 2 3], [1 2; 3 4], [1 3; 2 4], [1 2; 2 3]], 2, 2);
 
 julia> SymTridiagonal(B)
-2×2 SymTridiagonal{Matrix{Int64},Vector{Matrix{Int64}}}:
+2×2 SymTridiagonal{Matrix{Int64}, Vector{Matrix{Int64}}}:
  [1 2; 2 3]  [1 3; 2 4]
  [1 2; 3 4]  [1 2; 2 3]
 ```
@@ -322,7 +322,7 @@ returns the specific corresponding eigenvectors.
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64,Vector{Float64}}:
+3×3 SymTridiagonal{Float64, Vector{Float64}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
@@ -508,7 +508,7 @@ julia> du = [4, 5, 6];
 julia> d = [7, 8, 9, 0];
 
 julia> Tridiagonal(dl, d, du)
-4×4 Tridiagonal{Int64,Vector{Int64}}:
+4×4 Tridiagonal{Int64, Vector{Int64}}:
  7  4  ⋅  ⋅
  1  8  5  ⋅
  ⋅  2  9  6
@@ -537,7 +537,7 @@ julia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]
  1  2  3  4
 
 julia> Tridiagonal(A)
-4×4 Tridiagonal{Int64,Vector{Int64}}:
+4×4 Tridiagonal{Int64, Vector{Int64}}:
  1  2  ⋅  ⋅
  1  2  3  ⋅
  ⋅  2  3  4

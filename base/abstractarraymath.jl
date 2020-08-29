@@ -55,13 +55,13 @@ Elements of `dims` must be unique and within the range `1:ndims(A)`.
 # Examples
 ```jldoctest
 julia> a = reshape(Vector(1:4),(2,2,1,1))
-2×2×1×1 Array{Int64,4}:
+2×2×1×1 Array{Int64, 4}:
 [:, :, 1, 1] =
  1  3
  2  4
 
 julia> dropdims(a; dims=3)
-2×2×1 Array{Int64,3}:
+2×2×1 Array{Int64, 3}:
 [:, :, 1] =
  1  3
  2  4
@@ -461,7 +461,7 @@ julia> first(eachrow(a))
  2
 
 julia> collect(eachrow(a))
-2-element Vector{SubArray{Int64,1,Matrix{Int64},Tuple{Int64,Base.Slice{Base.OneTo{Int64}}},true}}:
+2-element Vector{SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2]
  [3, 4]
 ```
@@ -494,7 +494,7 @@ julia> first(eachcol(a))
  3
 
 julia> collect(eachcol(a))
-2-element Vector{SubArray{Int64,1,Matrix{Int64},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}}:
+2-element Vector{SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
  [1, 3]
  [2, 4]
 ```
@@ -531,7 +531,7 @@ julia> first(eachslice(M, dims=1))
  3
 
 julia> collect(eachslice(M, dims=2))
-3-element Vector{SubArray{Int64,1,Matrix{Int64},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}}:
+3-element Vector{SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
  [1, 4, 7]
  [2, 5, 8]
  [3, 6, 9]

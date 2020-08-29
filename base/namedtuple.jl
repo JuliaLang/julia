@@ -42,7 +42,7 @@ julia> collect(x)
  2
 
 julia> collect(pairs(x))
-2-element Vector{Pair{Symbol,Int64}}:
+2-element Vector{Pair{Symbol, Int64}}:
  :a => 1
  :b => 2
 ```
@@ -362,13 +362,13 @@ can also be declared via `@NamedTuple` as:
 
 ```jldoctest
 julia> @NamedTuple{a::Float64, b::String}
-NamedTuple{(:a, :b),Tuple{Float64,String}}
+NamedTuple{(:a, :b), Tuple{Float64, String}}
 
 julia> @NamedTuple begin
            a::Float64
            b::String
        end
-NamedTuple{(:a, :b),Tuple{Float64,String}}
+NamedTuple{(:a, :b), Tuple{Float64, String}}
 ```
 
 !!! compat "Julia 1.5"
