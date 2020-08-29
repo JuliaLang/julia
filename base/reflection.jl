@@ -1133,6 +1133,45 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.
 end
 
 """
+    print_statement_costs(io::IO, f, types)
+
+Print type-inferred and optimized code for `f` given argument types `types`,
+prepending each line with its cost as estimated by the compiler's inlining engine.
+"""
+function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwargs...)
+    if isa(f, Core.Builtin)
+        throw(ArgumentError("argument is not a generic function"))
+    end
+    tt = signature_type(f, t)
+    print_statement_costs(io, tt; kwargs...)
+end
+
+function print_statement_costs(io::IO, @nospecialize(tt::Type);
+                               world = get_world_counter(),
+                               interp = Core.Compiler.NativeInterpreter(world))
+    matches = _methods_by_ftype(tt, -1, world)
+    if matches === false
+        error("signature does not correspond to a generic function")
+    end
+    params = Core.Compiler.OptimizationParams(interp)
+    cst = Int[]
+    for match in matches
+        meth = func_for_method_checked(match.method, tt, match.sparams)
+        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
+        code === nothing && error("inference not successful") # inference disabled?
+        empty!(cst)
+        resize!(cst, length(code.code))
+        maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], params)
+        nd = ndigits(maxcost)
+        println(io, meth)
+        IRShow.show_ir(io, code, (io, linestart, idx) -> (print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " "); return ""))
+        println()
+    end
+end
+
+print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
+
+"""
     which(f, types)
 
 Returns the method of `f` (a `Method` object) that would be called for arguments of the given `types`.

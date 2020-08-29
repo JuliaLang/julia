@@ -362,31 +362,47 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
     return 0
 end
 
+function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::OptimizationParams, throw_blocks::Union{Nothing,BitSet})
+    thiscost = 0
+    if stmt isa Expr
+        thiscost = statement_cost(stmt, line, src, sptypes, slottypes, params,
+                                  params.unoptimize_throw_blocks && line in throw_blocks)::Int
+    elseif stmt isa GotoNode
+        # loops are generally always expensive
+        # but assume that forward jumps are already counted for from
+        # summing the cost of the not-taken branch
+        thiscost = stmt.label < line ? 40 : 0
+    elseif stmt isa GotoIfNot
+        thiscost = stmt.dest < line ? 40 : 0
+    end
+    return thiscost
+end
+
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any},
                        params::OptimizationParams, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
-    if params.unoptimize_throw_blocks
-        throw_blocks = find_throw_blocks(body)
-    end
+    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
     for line = 1:length(body)
         stmt = body[line]
-        if stmt isa Expr
-            thiscost = statement_cost(stmt, line, src, sptypes, slottypes, params,
-                                      params.unoptimize_throw_blocks && line in throw_blocks)::Int
-        elseif stmt isa GotoNode
-            # loops are generally always expensive
-            # but assume that forward jumps are already counted for from
-            # summing the cost of the not-taken branch
-            thiscost = stmt.label < line ? 40 : 0
-        elseif stmt isa GotoIfNot
-            thiscost = stmt.dest < line ? 40 : 0
-        else
-            continue
-        end
+        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, slottypes, params, throw_blocks)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return false
     end
     return true
+end
+
+function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::CodeInfo, sptypes::Vector{Any}, params::OptimizationParams)
+    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
+    maxcost = 0
+    for line = 1:length(body)
+        stmt = body[line]
+        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, src.slottypes, params, throw_blocks)
+        cost[line] = thiscost
+        if thiscost > maxcost
+            maxcost = thiscost
+        end
+    end
+    return maxcost
 end
 
 function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
