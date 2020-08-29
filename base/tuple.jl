@@ -96,6 +96,11 @@ function indexed_iterate(I, i, state)
     x
 end
 
+rest(t::Tuple) = t
+rest(t::NTuple{N}, i::Int) where {N} = ntuple(x -> getfield(t, x+i-1), N-i+1)
+rest(a::Array, i::Int=1) = a[i:end]
+rest(itr, state...) = Iterators.rest(itr, state...)
+
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
 first(t::Tuple) = t[1]

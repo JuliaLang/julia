@@ -1430,7 +1430,8 @@
                 ,@(reverse after)
                 (unnecessary (tuple ,@(reverse elts))))
         (let ((L (car lhss))
-              (R (car rhss)))
+              ;; rhss can be null iff L is a vararg
+              (R (if (null? rhss) '() (car rhss))))
           (cond ((and (symbol-like? L)
                       (or (not (pair? R)) (quoted? R) (equal? R '(null)))
                       ;; overwrite var immediately if it doesn't occur elsewhere
@@ -1442,6 +1443,16 @@
                        (cons (make-assignment L R) stmts)
                        after
                        (cons R elts)))
+                ((vararg? L)
+                 (if (null? (cdr lhss))
+                     (let ((temp (make-ssavalue)))
+                       `(block ,@(reverse stmts)
+                               (= ,temp (tuple ,@rhss))
+                               ,@(reverse after)
+                               (= ,(cadr L) ,temp)
+                               (unnecessary (tuple ,@(reverse elts) (... ,temp)))))
+                     (error (string "invalid \"...\" on non-final assignment location \""
+                                    (cadr L) "\""))))
                 ((vararg? R)
                  (let ((temp (make-ssavalue)))
                    `(block ,@(reverse stmts)
@@ -2066,6 +2077,7 @@
             (define (sides-match? l r)
               ;; l and r either have equal lengths, or r has a trailing ...
               (cond ((null? l)          (null? r))
+                    ((vararg? (car l))  #t)
                     ((null? r)          #f)
                     ((vararg? (car r))  (null? (cdr r)))
                     (else               (sides-match? (cdr l) (cdr r)))))
@@ -2075,26 +2087,43 @@
                 (expand-forms
                  (tuple-to-assignments lhss x))
                 ;; (a, b, ...) = other
-                (let* ((xx  (if (or (and (symbol? x) (not (memq x lhss)))
-                                    (ssavalue? x))
-                                x (make-ssavalue)))
-                       (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
-                       (n   (length lhss))
-                       (st  (gensy)))
-                  `(block
-                    (local ,st)
-                    ,@ini
-                    ,.(map (lambda (i lhs)
-                             (expand-forms
-                              (lower-tuple-assignment
-                               (if (= i (- n 1))
-                                   (list lhs)
-                                   (list lhs st))
-                               `(call (top indexed_iterate)
-                                      ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
-                           (iota n)
-                           lhss)
-                    (unnecessary ,xx))))))
+                (begin
+                  ;; like memq, but if last element of lhss is (... sym),
+                  ;; check against sym instead
+                  (define (in-lhs? x lhss)
+                    (if (null? lhss)
+                        #f
+                        (let ((l (car lhss)))
+                          (cond ((and (pair? l) (eq? (car l) '|...|))
+                                 (if (null? (cdr lhss))
+                                     (eq? (cadr l) x)
+                                     (error (string "invalid \"...\" on non-final assignment location \""
+                                                    (cadr l) "\""))))
+                                ((eq? l x) #t)
+                                (else (in-lhs? x (cdr lhss)))))))
+                  ;; in-lhs? also checks for invalid syntax, so always call it first
+                  (let* ((xx  (if (or (and (not (in-lhs? x lhss)) (symbol? x))
+                                      (ssavalue? x))
+                                  x (make-ssavalue)))
+                         (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
+                         (n   (length lhss))
+                         (st  (gensy)))
+                    `(block
+                      (local ,st)
+                      ,@ini
+                      ,.(map (lambda (i lhs)
+                               (expand-forms
+                                 (if (and (pair? lhs) (eq? (car lhs) '|...|))
+                                     `(= ,(cadr lhs) (call (top rest) ,xx ,.(if (eq? i 0) '() `(,st))))
+                                     (lower-tuple-assignment
+                                      (if (= i (- n 1))
+                                          (list lhs)
+                                          (list lhs st))
+                                      `(call (top indexed_iterate)
+                                             ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st)))))))
+                             (iota n)
+                             lhss)
+                      (unnecessary ,xx)))))))
          ((typed_hcat)
           (error "invalid spacing in left side of indexed assignment"))
          ((typed_vcat)
