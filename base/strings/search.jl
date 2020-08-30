@@ -126,7 +126,7 @@ findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
 """
     findfirst(pattern::AbstractVector{T}, A::AbstractVector{T}) where {T<:Union{Int8,UInt8}}
 
-Find the first occurrence of `pattern` in `ary`.
+Find the first occurrence of sequence `pattern` in vector `A`.
 
 !!! compat "Julia 1.6"
     This method requires at least Julia 1.6.
