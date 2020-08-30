@@ -320,7 +320,7 @@ findnext(ch::AbstractChar, string::AbstractString, ind::Integer) =
     findnext(==(ch), string, ind)
 
 """
-findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, start::Integer) where T<:Union{Int8,UInt8}
+    findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, start::Integer) where T<:Union{Int8,UInt8}
 
 Find the next occurrence of `pattern` in `A` starting at position `start`.
 
