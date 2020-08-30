@@ -394,15 +394,27 @@ end
 @testset "UInt8, Int8 vector" begin
     for VT in [Int8, UInt8]
         A = VT[0x40, 0x52, 0x62, 0x52, 0x62]
+
         @test findfirst(VT[0x30], A) === nothing
         @test findfirst(VT[0x52], A) === 2:2
+        @test findlast(VT[0x30], A) === nothing
+        @test findlast(VT[0x52], A) === 4:4
+
         pattern = VT[0x52, 0x62]
+
         @test findfirst(pattern, A) === 2:3
         @test findnext(pattern, A, 2) === 2:3
         @test findnext(pattern, A, 3) === 4:5
         @test findnext(pattern, A, 5) === nothing
         @test findnext(pattern, A, 99) === nothing
         @test_throws BoundsError findnext(pattern, A, -3)
+
+        @test findlast(pattern, A) === 4:5
+        @test findprev(pattern, A, 3) === 2:3
+        @test findprev(pattern, A, 5) === 4:5
+        @test findprev(pattern, A, 2) === nothing
+        @test findprev(pattern, A, 99) === findlast(pattern, A)
+        @test_throws BoundsError findprev(pattern, A, -2)
     end
 end
 

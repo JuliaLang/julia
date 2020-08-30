@@ -641,7 +641,18 @@ end
             @test findnext(pattern, OA, 4) === 5:6
             @test findnext(pattern, OA, 6) === nothing
             @test findnext(pattern, OA, 7) === nothing
+            @test findnext(pattern, OA, 2) === 3:4
+            @test findnext(pattern, OA, 4) === 5:6
+            @test findnext(pattern, OA, 6) === nothing
+            @test findnext(pattern, OA, 99) === nothing
             @test_throws BoundsError findnext(pattern, OA, 1)
+
+            @test findlast(pattern, OA) === 5:6
+            @test findprev(pattern, OA, 2) === nothing
+            @test findprev(pattern, OA, 4) === 3:4
+            @test findprev(pattern, OA, 6) === 5:6
+            @test findprev(pattern, OA, 99) === findlast(pattern, OA)
+            @test_throws BoundsError findprev(pattern, OA, 1)
         end
     end
 end

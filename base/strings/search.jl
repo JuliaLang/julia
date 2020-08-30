@@ -125,7 +125,7 @@ findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
 
 """
     findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
-    A::AbstractVector{<:Union{Int8,UInt8}}) where {T<:Union{Int8,UInt8}}
+    A::AbstractVector{<:Union{Int8,UInt8}})
 
 Find the first occurrence of sequence `pattern` in vector `A`.
 
@@ -199,7 +199,7 @@ end
 
 function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
                       t::AbstractVector{<:Union{Int8,UInt8}},
-                      i::Integer) where T <:Union{Int8,UInt8}
+                      i::Integer)
     n = length(t)
     m = length(s)
     f_s = firstindex(s)
@@ -342,7 +342,7 @@ julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 """
 findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
          A::AbstractVector{<:Union{Int8,UInt8}},
-         start::Integer) where T<:Union{Int8,UInt8} =
+         start::Integer) =
     _search(A, pattern, start)
 
 """
@@ -363,6 +363,22 @@ julia> findfirst("Julia", "JuliaLang")
 findlast(pattern::AbstractString, string::AbstractString) =
     findprev(pattern, string, lastindex(string))
 
+"""
+    findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
+    A::AbstractVector{<:Union{Int8,UInt8}})
+
+Find the last occurrence of `pattern` in array `A`. Equivalent to
+[`findprev(pattern, A, lastindex(A))`](@ref).
+
+# Examples
+```jldoctest
+julia> findlast([0x52, 0x62], [0x52, 0x62, 0x52, 0x62])
+3:4
+```
+"""
+findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
+A::AbstractVector{<:Union{Int8,UInt8}}) =
+    findprev(pattern, A, lastindex(A))
 """
     findlast(ch::AbstractChar, string::AbstractString)
 
@@ -436,12 +452,14 @@ function _rsearchindex(s::String, t::String, i::Integer)
     end
 end
 
-function _rsearchindex(s::ByteArray, t::ByteArray, k::Integer)
-    n = sizeof(t)
-    m = sizeof(s)
+function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector{<:Union{Int8,UInt8}}, k::Integer)
+    n = length(t)
+    m = length(s)
+    f_s = firstindex(s)
+    k < f_s && throw(BoundsError(s, k))
 
     if n == 0
-        return 0 <= k <= m ? max(k, 1) : 0
+        return 0 <= k <= m ? max(f_s, k) : 0
     elseif m == 0
         return 0
     elseif n == 1
@@ -449,14 +467,14 @@ function _rsearchindex(s::ByteArray, t::ByteArray, k::Integer)
     end
 
     w = m - n
-    if w < 0 || k <= 0
+    if w < 0 || k <= f_s
         return 0
     end
 
     bloom_mask = UInt64(0)
     skip = n - 1
     tfirst = _nthbyte(t,1)
-    for j in n:-1:1
+    for j in reverse(eachindex(t))
         bloom_mask |= _search_bloom_mask(_nthbyte(t,j))
         if _nthbyte(t,j) == tfirst && j > 1
             skip = j - 2
@@ -477,7 +495,7 @@ function _rsearchindex(s::ByteArray, t::ByteArray, k::Integer)
 
             # match found
             if j == n
-                return i
+                return i + f_s - 1
             end
 
             # no match, try to rule out the next character
@@ -497,9 +515,9 @@ function _rsearchindex(s::ByteArray, t::ByteArray, k::Integer)
     0
 end
 
-function _rsearch(s::Union{AbstractString,ByteArray},
-                  t::Union{AbstractString,AbstractChar,Int8,UInt8},
-                  i::Integer)
+function _rsearch(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
+                 t::Union{AbstractString,AbstractChar,AbstractVector{<:Union{Int8,UInt8}}},
+                 i::Integer)
     idx = _rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -552,9 +570,27 @@ julia> findprev('o', "Hello to the world", 18)
 15
 ```
 """
-findprev(ch::AbstractChar, string::AbstractString, ind::Integer) =
-    findprev(==(ch), string, ind)
+findprev(ch::AbstractChar, string::AbstractString, start::Integer) =
+    findprev(==(ch), string, start)
 
+"""
+    findprev(pattern::AbstractVector{<:Union{Int8,UInt8}}, A::AbstractVector{<:Union{Int8,UInt8}}, start::Integer)
+
+Find the previous occurrence of the sequence `pattern` in vector `A` starting at position `start`.
+
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> findprev([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
+2:3
+```
+"""
+findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
+         A::AbstractVector{<:Union{Int8,UInt8}},
+         start::Integer) =
+    _rsearch(A, pattern, start)
 """
     occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
 
