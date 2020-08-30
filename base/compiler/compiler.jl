@@ -8,7 +8,7 @@ import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply, _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
              MethodInstance, CodeInstance, MethodMatch
 
-const getproperty = Core.getfield
+getproperty(x) = Core.getfield
 const setproperty! = Core.setfield!
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)

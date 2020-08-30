@@ -66,7 +66,8 @@ end
 
 ### complex randn
 
-Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
+#Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
+const SQRT_HALF = 0.7071067811865475244008
 
 randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
     Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))

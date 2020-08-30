@@ -26,7 +26,7 @@ If `server isa LibuvServer`, it must obey the following interface:
 """
 abstract type LibuvServer <: IOServer end
 
-function getproperty(server::LibuvServer, name::Symbol)
+getproperty(server::LibuvServer) = (server::LibuvServer, name::Symbol)->begin
     if name === :handle
         return getfield(server, :handle)::Ptr{Cvoid}
     elseif name === :status
@@ -55,7 +55,7 @@ If`stream isa LibuvStream`, it must obey the following interface:
 """
 abstract type LibuvStream <: IO end
 
-function getproperty(stream::LibuvStream, name::Symbol)
+getproperty(server::LibuvStream) = (stream::LibuvStream, name::Symbol)->begin
     if name === :handle
         return getfield(stream, :handle)::Ptr{Cvoid}
     elseif name === :status

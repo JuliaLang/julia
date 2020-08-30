@@ -346,7 +346,7 @@ If `pipe isa AbstractPipe`, it must obey the following interface:
 """
 abstract type AbstractPipe <: IO end
 
-function getproperty(pipe::AbstractPipe, name::Symbol)
+getproperty(pipe::AbstractPipe) = (pipe::AbstractPipe, name::Symbol)->begin
     if name === :in || name === :in_stream || name === :out || name === :out_stream ||
        name === :err || name === :err_stream
         return getfield(pipe, name)::IO

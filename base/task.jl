@@ -127,7 +127,8 @@ const task_state_runnable = UInt8(0)
 const task_state_done     = UInt8(1)
 const task_state_failed   = UInt8(2)
 
-@inline function getproperty(t::Task, field::Symbol)
+getproperty(t::Task) = (t::Task, field::Symbol)->begin
+    @_inline_meta
     if field === :state
         # TODO: this field name should be deprecated in 2.0
         st = getfield(t, :_state)

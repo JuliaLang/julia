@@ -184,7 +184,6 @@ export
     # constants
     nothing, Main
 
-const getproperty = getfield
 const setproperty! = setfield!
 
 abstract type Number end
@@ -225,6 +224,8 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
+
+getproperty(x) = getfield
 
 # let the compiler assume that calling Union{} as a constructor does not need
 # to be considered ever (which comes up often as Type{<:T})

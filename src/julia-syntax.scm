@@ -1765,7 +1765,12 @@
     (if (and (pair? e) (eq? (car e) '|.|))
         (let ((f (cadr e)) (x (caddr e)))
           (cond ((or (atom? x) (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
-                 `(call (top getproperty) ,f ,x))
+                 (if (symbol-like? f)
+                    `(call (call (top getproperty) ,f) ,f ,x)
+                      (let ((ff (make-ssavalue)))
+                          `(block
+                              (= ,ff ,f)
+                              (call (call (top getproperty) ,ff) ,ff ,x)))))
                 ((eq? (car x) 'tuple)
                  (if (and (eq? (identifier-name f) '^) (length= x 3) (integer? (caddr x)))
                      (make-fuse '(top literal_pow)

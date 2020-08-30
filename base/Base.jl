@@ -20,6 +20,8 @@ include(path::String) = include(Base, path)
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 
+getproperty(x) = getfield
+
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
@@ -317,8 +319,8 @@ include("hashing2.jl")
 
 # irrational mathematical constants
 include("irrationals.jl")
-include("mathconstants.jl")
-using .MathConstants: ℯ, π, pi
+#include("mathconstants.jl")
+#using .MathConstants: ℯ, π, pi
 
 # metaprogramming
 include("meta.jl")
