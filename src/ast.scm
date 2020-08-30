@@ -361,6 +361,9 @@
 (define (outerref? e)
   (and (pair? e) (eq? (car e) 'outerref)))
 
+(define (nothing? e)
+  (and (pair? e) (eq? (car e) 'null)))
+
 (define (symbol-like? e)
   (or (symbol? e) (ssavalue? e)))
 

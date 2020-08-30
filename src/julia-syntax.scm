@@ -239,15 +239,18 @@
                        (cdr type-ex))))
         '())))
 
-;; expressions of the form a.b.c... where everything is a symbol
-(define (sym-ref? e)
+(define (nodot-sym-ref? e)
   (or (symbol? e)
       (and (length= e 3) (eq? (car e) 'globalref))
-      (and (length= e 2) (eq? (car e) 'outerref))
+      (and (length= e 2) (eq? (car e) 'outerref))))
+
+;; expressions of the form a.b.c... where everything is a symbol
+(define (sym-ref? e)
+  (or (nodot-sym-ref? e)
       (and (length= e 3) (eq? (car e) '|.|)
-           (or (atom? (cadr e)) (sym-ref? (cadr e)))
-           (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
-           (symbol? (cadr (caddr e))))))
+            (or (atom? (cadr e)) (sym-ref? (cadr e)))
+            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
+            (symbol? (cadr (caddr e))))))
 
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
@@ -344,7 +347,7 @@
          (error "function static parameter names not unique"))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
          (error "function argument and static parameter names must be distinct"))
-     (if (or (and name (not (sym-ref? name))) (not (valid-name? name)))
+     (if (and (not (nothing? name)) (or (and name (not (sym-ref? name))) (not (valid-name? name))))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((loc (maybe-remove-functionloc! body))
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
@@ -496,7 +499,7 @@
 
         ;; call with no keyword args
         ,(method-def-expr-
-          name positional-sparams pargl-all
+          (if (nodot-sym-ref? name) name `(null)) positional-sparams pargl-all
           `(block
             ,@(without-generated prologue)
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
@@ -682,7 +685,7 @@
         (begin (check-kw-args (cdar argl))
                (keywords-method-def-expr name sparams argl body rett))
         ;; no keywords
-        (method-def-expr- name sparams argl body rett))))
+        (method-def-expr- (if (nodot-sym-ref? name) name `(null)) sparams argl body rett))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
