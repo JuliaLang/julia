@@ -335,10 +335,8 @@ julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 4:5
 ```
 """
-function findnext(pattern::AbstractVector{T},
-                  A::AbstractVector{T}, ind::Integer) where T<:Union{Int8,UInt8}
+findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, ind::Integer) where T<:Union{Int8,UInt8} =
     _search(A, pattern, ind)
-end
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
