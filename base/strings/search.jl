@@ -188,8 +188,7 @@ function _search_bloom_mask(c)
 end
 
 _nthbyte(s::String, i) = codeunit(s, i)
-_nthbyte(a::Union{Vector{UInt8},Vector{Int8}}, i) = a[i]
-_nthbyte(t::AbstractVector, index) = t[firstindex(t) + (index-1)]
+_nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
@@ -199,14 +198,14 @@ end
 
 function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
                       t::AbstractVector{<:Union{Int8,UInt8}},
-                      i::Integer)
+                      _i::Integer)
     n = length(t)
     m = length(s)
-    f_s = firstindex(s)
-    i < f_s && throw(BoundsError(s, i))
+    i = Int(_i) - (firstindex(s) - 1)
+    i < 1 && throw(BoundsError(s, _i))
 
     if n == 0
-        return f_s <= i <= m+1 ? max(f_s, i) : 0
+        return 1 <= i <= m+1 ? max(1, i) : 0
     elseif m == 0
         return 0
     elseif n == 1
@@ -214,14 +213,14 @@ function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
     end
 
     w = m - n
-    if w < 0 || i - f_s > w
+    if w < 0 || i - 1 > w
         return 0
     end
 
     bloom_mask = UInt64(0)
-    skip = n - f_s
+    skip = n - 1
     tlast = _nthbyte(t,n)
-    for j in eachindex(t)
+    for j in 1:n
         bloom_mask |= _search_bloom_mask(_nthbyte(t,j))
         if _nthbyte(t,j) == tlast && j < n
             skip = n - j - 1
@@ -242,7 +241,8 @@ function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
 
             # match found
             if j == n - 1
-                return i+f_s
+                # restore in case `s` is an OffSetArray
+                return i+firstindex(s)
             end
 
             # no match, try to rule out the next character
@@ -333,17 +333,20 @@ Find the next occurrence of the sequence `pattern` in vector `A` starting at pos
 
 # Examples
 ```jldoctest
-julia> findnext([0x52, 0x62], [0x52, 0x62, 0x72], 5) === nothing
+julia> findnext([0x52, 0x62], [0x52, 0x62, 0x72], 3) === nothing
 true
 
 julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 4:5
 ```
 """
-findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
-         A::AbstractVector{<:Union{Int8,UInt8}},
-         start::Integer) =
+function findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
+                  A::AbstractVector{<:Union{Int8,UInt8}},
+                  start::Integer)
+    (start == (lastindex(A)+1)) && return nothing
+    (start > (lastindex(A)+1)) && throw(BoundsError(A, start))
     _search(A, pattern, start)
+end
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
@@ -376,9 +379,10 @@ julia> findlast([0x52, 0x62], [0x52, 0x62, 0x52, 0x62])
 3:4
 ```
 """
-findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
-A::AbstractVector{<:Union{Int8,UInt8}}) =
+function findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
+A::AbstractVector{<:Union{Int8,UInt8}})
     findprev(pattern, A, lastindex(A))
+end
 """
     findlast(ch::AbstractChar, string::AbstractString)
 
@@ -452,14 +456,14 @@ function _rsearchindex(s::String, t::String, i::Integer)
     end
 end
 
-function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector{<:Union{Int8,UInt8}}, k::Integer)
+function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector{<:Union{Int8,UInt8}}, _k::Integer)
     n = length(t)
     m = length(s)
-    f_s = firstindex(s)
-    k < f_s && throw(BoundsError(s, k))
+    k = Int(_k) - (firstindex(s) - 1)
+    k < 1 && throw(BoundsError(s, _k))
 
     if n == 0
-        return 0 <= k <= m ? max(f_s, k) : 0
+        return 0 <= k <= m ? max(k, 1) : 0
     elseif m == 0
         return 0
     elseif n == 1
@@ -467,14 +471,14 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     end
 
     w = m - n
-    if w < 0 || k <= f_s
+    if w < 0 || k <= 0
         return 0
     end
 
     bloom_mask = UInt64(0)
     skip = n - 1
     tfirst = _nthbyte(t,1)
-    for j in reverse(eachindex(t))
+    for j in n:-1:1
         bloom_mask |= _search_bloom_mask(_nthbyte(t,j))
         if _nthbyte(t,j) == tfirst && j > 1
             skip = j - 2
@@ -495,7 +499,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
 
             # match found
             if j == n
-                return i + f_s - 1
+                return i - 1 + firstindex(s)
             end
 
             # no match, try to rule out the next character
@@ -587,10 +591,13 @@ julia> findprev([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 2:3
 ```
 """
-findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
-         A::AbstractVector{<:Union{Int8,UInt8}},
-         start::Integer) =
+function findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
+                  A::AbstractVector{<:Union{Int8,UInt8}},
+                  start::Integer)
+    (start == (lastindex(A)+1)) && return nothing
+    (start > (lastindex(A)+1)) && throw(BoundsError(A, start))
     _rsearch(A, pattern, start)
+end
 """
     occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
 

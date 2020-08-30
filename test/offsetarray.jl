@@ -636,6 +636,7 @@ end
         OA = OffsetArray(VT[0x40,0x52,0x62,0x52,0x62], 1)
         for PT in [Int8, UInt8]
             pattern = PT[0x52, 0x62]
+            l_OA = lastindex(OA)
             @test findfirst(pattern, OA) === 3:4
             @test findnext(pattern, OA, 2) === 3:4
             @test findnext(pattern, OA, 4) === 5:6
@@ -643,17 +644,18 @@ end
             @test findnext(pattern, OA, 7) === nothing
             @test findnext(pattern, OA, 2) === 3:4
             @test findnext(pattern, OA, 4) === 5:6
-            @test findnext(pattern, OA, 6) === nothing
-            @test findnext(pattern, OA, 99) === nothing
+            # 1 idx too far is allowed
+            @test findnext(pattern, OA, l_OA+1) === nothing
+            @test_throws BoundsError findnext(pattern, OA, l_OA+2)
             @test_throws BoundsError findnext(pattern, OA, 1)
 
             @test findlast(pattern, OA) === 5:6
             @test findprev(pattern, OA, 2) === nothing
             @test findprev(pattern, OA, 4) === 3:4
             @test findprev(pattern, OA, 6) === 5:6
-            @test findprev(pattern, OA, 99) === findlast(pattern, OA)
+            @test findnext(pattern, OA, l_OA+1) === nothing
+            @test_throws BoundsError findnext(pattern, OA, l_OA+2)
             @test_throws BoundsError findprev(pattern, OA, 1)
         end
     end
 end
-

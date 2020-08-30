@@ -405,16 +405,18 @@ end
         @test findfirst(pattern, A) === 2:3
         @test findnext(pattern, A, 2) === 2:3
         @test findnext(pattern, A, 3) === 4:5
-        @test findnext(pattern, A, 5) === nothing
-        @test findnext(pattern, A, 99) === nothing
+        # 1 idx too long is allowed
+        @test findnext(pattern, A, length(A)+1) === nothing
         @test_throws BoundsError findnext(pattern, A, -3)
+        @test_throws BoundsError findnext(pattern, A, length(A)+2)
 
         @test findlast(pattern, A) === 4:5
         @test findprev(pattern, A, 3) === 2:3
         @test findprev(pattern, A, 5) === 4:5
         @test findprev(pattern, A, 2) === nothing
-        @test findprev(pattern, A, 99) === findlast(pattern, A)
-        @test_throws BoundsError findprev(pattern, A, -2)
+        @test findprev(pattern, A, length(A)+1) === nothing
+        @test_throws BoundsError findprev(pattern, A, -3)
+        @test_throws BoundsError findprev(pattern, A, length(A)+2)
     end
 end
 
