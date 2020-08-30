@@ -2,12 +2,12 @@
 
 // utility procedures used in code generation
 
-static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
+static Instruction *tbaa_decorate(MDNode *md, Instruction *inst)
 {
-    load_or_store->setMetadata(llvm::LLVMContext::MD_tbaa, md);
-    if (isa<LoadInst>(load_or_store) && md == tbaa_const)
-        load_or_store->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(md->getContext(), None));
-    return load_or_store;
+    inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
+    if (isa<LoadInst>(inst) && md == tbaa_const)
+        inst->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(md->getContext(), None));
+    return inst;
 }
 
 static Value *track_pjlvalue(jl_codectx_t &ctx, Value *V)

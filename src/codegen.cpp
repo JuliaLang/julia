@@ -618,12 +618,15 @@ static const auto jl_newbits_func = new JuliaFunction{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
+// `julia.typeof` does read memory, but it is effectively readnone before we lower
+// the allocation function. This is OK as long as we lower `julia.typeof` no later than
+// `julia.gc_alloc_obj`.
 static const auto jl_typeof_func = new JuliaFunction{
     "julia.typeof",
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
                 {T_prjlvalue}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind, Attribute::ArgMemOnly, Attribute::NoRecurse}),
+            Attributes(C, {Attribute::ReadNone, Attribute::NoUnwind, Attribute::NoRecurse}),
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
@@ -1112,7 +1115,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *t
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
-static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store);
+static Instruction *tbaa_decorate(MDNode *md, Instruction *inst);
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
@@ -2418,11 +2421,23 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
             if ((gc_uses[nroots] = get_gc_root_for(arg2)))
                 nroots++;
             OperandBundleDef OpBundle("jl_roots", makeArrayRef(gc_uses, nroots));
-            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
+            auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         ctx.builder.CreateBitCast(varg1, T_pint8),
                         ctx.builder.CreateBitCast(varg2, T_pint8),
                         ConstantInt::get(T_size, sz) },
                     ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
+            MDNode *tbaa = nullptr;
+            if (!arg1.tbaa) {
+                tbaa = arg2.tbaa;
+            }
+            else if (!arg2.tbaa) {
+                tbaa = arg1.tbaa;
+            }
+            else {
+                tbaa = MDNode::getMostGenericTBAA(arg1.tbaa, arg2.tbaa);
+            }
+            if (tbaa)
+                tbaa_decorate(tbaa, answer);
             return ctx.builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
         }
         else {
