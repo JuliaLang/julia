@@ -1627,3 +1627,26 @@ end
         @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
     end
 end
+
+@testset "SDivRemUnitRanges" begin
+    r = Base.SDivRemUnitRange{3}(1:15)
+    @test first(r) == 1
+    @test last(r) == 15
+    @test step(r) == 1
+    @test length(r) == 15
+    @test !isempty(r)
+    j = 0
+    for i in r
+        @test i == (j += 1)
+    end
+    @test j == 15
+    @test_throws ArgumentError Base.SDivRemUnitRange{3}(2:15)
+    @test_throws ArgumentError Base.SDivRemUnitRange{3}(1:14)
+    r = Base.SDivRemUnitRange{3}(1:0)
+    @test isempty(r)
+    j = 0
+    for i in r
+        @test i == (j += 1)
+    end
+    @test j == 0
+end

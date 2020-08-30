@@ -16,6 +16,9 @@ ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
 
     # can't convert higher-dimensional indices to Int
     @test_throws MethodError convert(Int, CartesianIndex(42, 1))
+
+    @test Base.AbstractCartesianIndex((1, 2)) === Base.AbstractCartesianIndex((1, Int16(2))) ===
+          Base.AbstractCartesianIndex(1, 2)   === Base.AbstractCartesianIndex(1, Int16(2))   === CartesianIndex(1, 2)
 end
 
 @testset "CartesianIndices overflow" begin
@@ -65,6 +68,19 @@ end
 
     @test iterate(I, CartesianIndex(3, typemax(Int)))[1] == CartesianIndex(4,typemax(Int))
     @test iterate(I, CartesianIndex(4, typemax(Int)))    === nothing
+end
+
+@testset "GenericCartesianIndices iteration" begin
+    iter = CartesianIndices((Base.SDivRemUnitRange{3}(1:15), Base.OneTo(2)))
+    @test first(iter) === Base.IteratorsMD.GenericCartesianIndex(Base.SDivRemInt{3}(0, 1), 1)
+    @test last(iter)  === Base.IteratorsMD.GenericCartesianIndex(Base.SDivRemInt{3}(4, 3), 2)
+    iterref = CartesianIndices((1:15, 1:2))
+    ret, retref = iterate(iter), iterate(iterref)
+    while ret !== nothing
+        @test CartesianIndex{2}(ret[1]) === retref[1]
+        ret, retref = iterate(iter, ret[2]), iterate(iterref, retref[2])
+    end
+    @test retref === nothing
 end
 
 @testset "CartesianIndices operations" begin

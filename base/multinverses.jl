@@ -2,9 +2,10 @@
 
 module MultiplicativeInverses
 
-import Base: div, divrem, rem, unsigned
+import Base: Int, -, <, div, divrem, rem, unsigned, promote_rule, show
+import Base: first, last, step, to_index, iterate
 using  Base: IndexLinear, IndexCartesian, tail
-export multiplicativeinverse
+export multiplicativeinverse, SDivRemInt, SDivRemUnitRange
 
 unsigned(::Type{Bool}) = UInt
 unsigned(::Type{Int8}) = UInt8
@@ -156,5 +157,74 @@ end
 
 multiplicativeinverse(x::Signed) = SignedMultiplicativeInverse(x)
 multiplicativeinverse(x::Unsigned) = UnsignedMultiplicativeInverse(x)
+
+
+"""
+    SDivRemInt{K}(i::Int)
+    SDivRemInt{K}(div::Int, rem::Int)
+
+Represent `i::Int` in the form `i = div*K + rem`.
+"""
+struct SDivRemInt{K} <: Integer
+    div::Int
+    rem::Int
+end
+SDivRemInt{K}(i::Integer) where K = SDivRemInt{K}(divrem(i, K)...)
+
+Int(i::SDivRemInt{K}) where K = i.div*(K::Int) + i.rem
+
+show(io::IO, i::SDivRemInt{K}) where K = print(io, '(', i.div, '*', K, " + ", i.rem, ')')
+
+to_index(i::SDivRemInt) = i
+
+promote_rule(::Type{SDivRemInt{K}}, ::Type{SDivRemInt{K}}) where K = SDivRemInt{K}
+promote_rule(::Type{<:SDivRemInt}, ::Type{T}) where T<:Integer = promote_type(Int, T)
+
+(-)(i::SDivRemInt, j::SDivRemInt) = Int(i) - Int(j)
+(<)(i::SDivRemInt, j::SDivRemInt) = Int(i) < Int(j)
+
+struct SDivRemUnitRange{K,R<:AbstractUnitRange{Int}} <: AbstractUnitRange{SDivRemInt{K}}
+    total::R                    # total is to allow inference of, e.g., starting with 1 via OneTo. Is it worth it?
+    divrange::UnitRange{Int}
+
+    function SDivRemUnitRange{K,R}(total::AbstractUnitRange) where {K,R<:AbstractUnitRange{Int}}
+        (isa(K, Int) && K > 0) || throw(ArgumentError("K must be a positive Int, got $K"))
+        d1, r1 = divrem(first(total), K)
+        r1 == 1 || throw(ArgumentError("range must start with rem = 1, got $r1"))
+        d2, r2 = divrem(last(total), K)
+        r2 == 0 || throw(ArgumentError("range must end with even divior of $K, got remainder $r2"))
+        return new{K,R}(total, d1:d2-1)
+    end
+    function SDivRemUnitRange{K,R}(total::AbstractUnitRange, divrange::AbstractUnitRange) where {K,R<:AbstractUnitRange{Int}}
+        f, l = first(divrange)*K + 1, (last(divrange) + 1)*K
+        first(total) == f || throw(ArgumentError("total range and divrange must start at same value, got $(first(total)) and $f"))
+        last(total) == l  || throw(ArgumentError("total range and divrange must end at same value, got $(last(total)) and $l"))
+        return new{K,R}(total, divrange)
+    end
+end
+SDivRemUnitRange{K}(r::AbstractUnitRange) where K = SDivRemUnitRange{K,typeof(r)}(r)
+SDivRemUnitRange{K}(r::AbstractUnitRange, divrange::AbstractUnitRange) where K = SDivRemUnitRange{K,typeof(r)}(r, divrange)
+
+show(io::IO, r::SDivRemUnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
+
+first(r::SDivRemUnitRange{K}) where K = SDivRemInt{K}(first(r.divrange), 1)
+last(r::SDivRemUnitRange{K}) where K  = SDivRemInt{K}(last(r.divrange), K)
+step(r::SDivRemUnitRange) = 1
+
+function iterate(iter::SDivRemUnitRange{K}) where K
+    ret = iterate(iter.divrange)
+    ret === nothing && return nothing
+    return SDivRemInt{K}(ret[1], 1), (1, ret...)
+end
+
+function iterate(iter::SDivRemUnitRange{K}, state) where K
+    i = state[1]
+    if i == K
+        ret = iterate(iter.divrange, state[end])
+        ret === nothing && return nothing
+        return SDivRemInt{K}(ret[1], 1), (1, ret...)
+    end
+    return SDivRemInt{K}(state[2], i + 1), (i + 1, state[2], state[3])
+end
 
 end

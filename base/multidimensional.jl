@@ -9,7 +9,7 @@ module IteratorsMD
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail,
-        ReshapedArray, ReshapedArrayLF, OneTo
+        ReshapedArray, ReshapedArrayLF, OneTo, SDivRemInt, SDivRemUnitRange
     using .Base.Iterators: Reverse, PartitionIterator
 
     export CartesianIndex, CartesianIndices
@@ -84,9 +84,13 @@ module IteratorsMD
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
     show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); show(io, i.I))
 
+    # CartesianIndex is the default AbstractCartesianIndex
+    AbstractCartesianIndex(index::NTuple{N,Integer}) where N = CartesianIndex{N}(index)
+    AbstractCartesianIndex(index::Vararg{Integer,N}) where N = CartesianIndex{N}(index)
+
     # length
-    length(::CartesianIndex{N}) where {N} = N
-    length(::Type{CartesianIndex{N}}) where {N} = N
+    length(::AbstractCartesianIndex{N}) where {N} = N
+    length(::Type{<:AbstractCartesianIndex{N}}) where {N} = N
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
@@ -94,7 +98,7 @@ module IteratorsMD
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
     # access to index tuple
-    Tuple(index::CartesianIndex) = index.I
+    Tuple(index::AbstractCartesianIndex) = index.I
 
     Base.setindex(x::CartesianIndex,i,j) = CartesianIndex(Base.setindex(Tuple(x),i,j))
 
@@ -248,18 +252,25 @@ module IteratorsMD
 
     For cartesian to linear index conversion, see [`LinearIndices`](@ref).
     """
-    struct CartesianIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N},N}
+    struct CartesianIndices{N,R<:NTuple{N,AbstractUnitRange{<:Integer}},T<:AbstractCartesianIndex{N}} <: AbstractArray{T,N}
         indices::R
     end
+    CartesianIndices{N,R}(inds) where {N,R<:NTuple{N,AbstractUnitRange{Int}}} =
+        CartesianIndices{N,R,CartesianIndex{N}}(inds)
+    CartesianIndices{N}(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} =
+        CartesianIndices{N,typeof(inds)}(inds)
+    CartesianIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} =
+        CartesianIndices{N}(inds)
 
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
-    CartesianIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
+    # The default is to standardize to AbstractUnitRange{Int}. Specialize if you require different Integer types.
+    CartesianIndices(inds::Tuple{AbstractUnitRange{<:Integer}}) =
         CartesianIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
 
     CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
-    CartesianIndices(sz::NTuple{N,<:Integer}) where {N} = CartesianIndices(map(Base.OneTo, sz))
+    CartesianIndices(sz::NTuple{N,<:Integer}) where {N} = CartesianIndices(map(Base.OneTo{Int}, sz))
     CartesianIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
-        CartesianIndices(map(i->first(i):last(i), inds))
+        CartesianIndices(map(i->Int(first(i)):Int(last(i)), inds))
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
@@ -286,8 +297,8 @@ module IteratorsMD
     (:)(I::CartesianIndex{N}, J::CartesianIndex{N}) where N =
         CartesianIndices(map((i,j) -> i:j, Tuple(I), Tuple(J)))
 
-    promote_rule(::Type{CartesianIndices{N,R1}}, ::Type{CartesianIndices{N,R2}}) where {N,R1,R2} =
-        CartesianIndices{N,Base.indices_promote_type(R1,R2)}
+    promote_rule(::Type{CartesianIndices{N,R1,T1}}, ::Type{CartesianIndices{N,R2,T2}}) where {N,R1,R2,T1,T2} =
+        CartesianIndices{N,Base.indices_promote_type(R1,R2),promote_type(T1,T2)}
 
     convert(::Type{Tuple{}}, R::CartesianIndices{0}) = ()
     convert(::Type{NTuple{N,AbstractUnitRange{Int}}}, R::CartesianIndices{N}) where {N} =
@@ -307,8 +318,8 @@ module IteratorsMD
     convert(::Type{Tuple{Vararg{UnitRange}}}, R::CartesianIndices) =
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
-    convert(::Type{CartesianIndices{N,R}}, inds::CartesianIndices{N}) where {N,R} =
-        CartesianIndices(convert(R, inds.indices))
+    convert(::Type{CartesianIndices{N,R,T}}, inds::CartesianIndices{N}) where {N,R,T} =
+        CartesianIndices{N,R,T}(convert(R, inds.indices))
 
     # equality
     Base.:(==)(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
@@ -353,7 +364,7 @@ module IteratorsMD
     @inline function iterate(iter::CartesianIndices, state)
         valid, I = __inc(state.I, first(iter).I, last(iter).I)
         valid || return nothing
-        return CartesianIndex(I...), CartesianIndex(I...)
+        return AbstractCartesianIndex(I...), AbstractCartesianIndex(I...)
     end
 
     # increment & carry
@@ -369,7 +380,7 @@ module IteratorsMD
         return valid, (state[1]+1,)
     end
 
-    @inline function __inc(state, start, stop)
+    @inline function __inc(state::Tuple{Int,Vararg{Integer}}, start::Tuple{Int,Vararg{Integer}}, stop::Tuple{Int,Vararg{Integer}}) where N
         if state[1] < stop[1]
             return true, (state[1]+1, tail(state)...)
         end
@@ -385,8 +396,8 @@ module IteratorsMD
 
     length(iter::CartesianIndices) = prod(size(iter))
 
-    first(iter::CartesianIndices) = CartesianIndex(map(first, iter.indices))
-    last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
+    first(iter::CartesianIndices) = AbstractCartesianIndex(map(first, iter.indices))
+    last(iter::CartesianIndices)  = AbstractCartesianIndex(map(last, iter.indices))
 
     # When used as indices themselves, CartesianIndices can simply become its tuple of ranges
     @inline to_indices(A, inds, I::Tuple{CartesianIndices, Vararg{Any}}) =
@@ -536,6 +547,44 @@ module IteratorsMD
         startoffset = (Ilast.I == tail(f.I))*(f[1] - 1)
         CartesianIndex((I1 + offset + startoffset, Ilast.I...))
     end
+
+    # @simd wasn't defined at the time of multinverses.jl, so implement the missing methods now
+    simd_inner_length(::SDivRemUnitRange{K}, ::Int) where K = K
+    simd_outer_range(iter::SDivRemUnitRange) = iter.outer
+    simd_index(::SDivRemUnitRange{K}, outer::Int, inner::Int) where K = SDivRemInt{K}(outer, inner+1)
+
+    struct GenericCartesianIndex{N,IT<:Tuple{Vararg{<:Integer,N}}} <: AbstractCartesianIndex{N}
+        I::IT
+    end
+    @inline GenericCartesianIndex(i::Vararg{Integer,N}) where N = GenericCartesianIndex{N,typeof(i)}(i)
+
+    function CartesianIndices(inds::Tuple{SDivRemUnitRange,Vararg{AbstractUnitRange{<:Integer}}})
+        indices = (inds[1], map(r->convert(AbstractUnitRange{Int}, r), tail(inds))...)
+        T = GenericCartesianIndex{length(indices),typeof(map(first, indices))}
+        return CartesianIndices{length(indices),typeof(indices),T}(indices)
+    end
+
+    AbstractCartesianIndex(index::Tuple{SDivRemInt,Vararg{Int}}) = GenericCartesianIndex(index)
+    @inline AbstractCartesianIndex(index1::SDivRemInt, indexrest::Vararg{Int}) = GenericCartesianIndex((index1, indexrest...))
+
+    @inline function __inc(state::Tuple{SDivRemInt{K}}, start::Tuple{SDivRemInt{K}}, stop::Tuple{SDivRemInt{K}}) where K
+        s1 = state[1]
+        d, r = s1.div, s1.rem
+        r < K && return true, (SDivRemInt{K}(d, r+1),)
+        return d < stop[1].div, (SDivRemInt{K}(d+1, 1),)
+    end
+
+    @inline function __inc(state::Tuple{SDivRemInt{K},Vararg{Integer}}, start::Tuple{SDivRemInt{K},Vararg{Integer}}, stop::Tuple{SDivRemInt{K},Vararg{Integer}}) where K
+        s1 = state[1]
+        d, r = s1.div, s1.rem
+        r < K && return true, (SDivRemInt{K}(d, r+1), tail(state)...)
+        d < stop[1].div && return true, (SDivRemInt{K}(d+1, 1), tail(state)...)
+        valid, I = __inc(tail(state), tail(start), tail(stop))
+        return valid, (start[1], I...)
+    end
+
+    CartesianIndex{N}(i::AbstractCartesianIndex{N}) where N = CartesianIndex{N}(map(Int, Tuple(i)))
+
 end  # IteratorsMD
 
 
