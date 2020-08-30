@@ -196,7 +196,6 @@ end
 function _searchindex(s::AbstractVector{T},
                       t::AbstractVector{T},
                       i::Integer) where T <:Union{Int8,UInt8}
-
     n = length(t)
     m = length(s)
 
