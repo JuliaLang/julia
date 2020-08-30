@@ -11,6 +11,8 @@ import Base.Docs: doc, formatdoc, parsedoc, apropos
 
 using Base: with_output_color
 
+import REPL
+
 using InteractiveUtils: subtypes
 
 using Unicode: normalize
@@ -323,7 +325,8 @@ repl_corrections(s) = repl_corrections(stdout, s)
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
     if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
-        for (k,v) in Base.REPL_MODULE_REF[].REPLCompletions.latex_symbols
+        for (k,v) in Iterators.flatten((REPLCompletions.latex_symbols,
+                                        REPLCompletions.emoji_symbols))
             symbols_latex[v] = k
         end
     end
