@@ -123,6 +123,26 @@ true
 """
 findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
 
+"""
+    findfirst(pattern::AbstractVector{T}, A::AbstractVector{T}) where {T<:Union{Int8,UInt8}}
+
+Find the first occurrence of `pattern` in `ary`.
+
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> findfirst([0x52, 0x62], [0x40, 0x52, 0x62, 0x63])
+2:3
+```
+"""
+function findfirst(pattern::AbstractVector{T}, A::AbstractVector{T}) where {T<:Union{Int8,UInt8}}
+    _search(A, pattern, firstindex(A))
+end
+
+
+
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
     i = Int(i)
@@ -174,9 +194,12 @@ function _searchindex(s::String, t::String, i::Integer)
     _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
 end
 
-function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
-    n = sizeof(t)
-    m = sizeof(s)
+function _searchindex(s::AbstractVector{T},
+                      t::AbstractVector{T},
+                      i::Integer) where T <:Union{Int8,UInt8}
+
+    n = length(t)
+    m = length(s)
 
     if n == 0
         return 1 <= i <= m+1 ? max(1, i) : 0
@@ -194,7 +217,7 @@ function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
     bloom_mask = UInt64(0)
     skip = n - 1
     tlast = _nthbyte(t,n)
-    for j in 1:n
+    for j in firstindex(s):n
         bloom_mask |= _search_bloom_mask(_nthbyte(t,j))
         if _nthbyte(t,j) == tlast && j < n
             skip = n - j - 1
@@ -235,8 +258,8 @@ function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
     0
 end
 
-function _search(s::Union{AbstractString,ByteArray},
-                 t::Union{AbstractString,AbstractChar,Int8,UInt8},
+function _search(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
+                 t::Union{AbstractString,AbstractChar,AbstractVector{<:Union{Int8,UInt8}}},
                  i::Integer)
     idx = _searchindex(s,t,i)
     if isempty(t)
@@ -295,6 +318,28 @@ julia> findnext('o', "Hello to the world", 6)
 """
 findnext(ch::AbstractChar, string::AbstractString, ind::Integer) =
     findnext(==(ch), string, ind)
+
+"""
+findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, start::Integer) where T<:Union{Int8,UInt8}
+
+Find the next occurrence of `pattern` in `A` starting at position `start`.
+
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> findnext([0x52, 0x62], [0x52, 0x62, 0x72], 5) === nothing
+true
+
+julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
+4:5
+```
+"""
+function findnext(pattern::AbstractVector{T},
+                  A::AbstractVector{T}, ind::Integer) where T<:Union{Int8,UInt8}
+    _search(A, pattern, ind)
+end
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
