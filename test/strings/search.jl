@@ -412,9 +412,9 @@ end
 # issue 37280
 let A = [0x40, 0x52, 0x62, 0x52, 0x62]
     @test findfirst([0x99], A) === nothing
-    @test findfirst([0x52], A) == 2:2
-    @test findfirst([0x52, 0x62], A) == 2:3
-    @test findnext([0x52, 0x62], A, 2) == 2:3
-    @test findnext([0x52, 0x62], A, 3) == 4:5
+    @test findfirst([0x52], A) === 2:2
+    @test findfirst([0x52, 0x62], A) === 2:3
+    @test findnext([0x52, 0x62], A, 2) === 2:3
+    @test findnext([0x52, 0x62], A, 3) === 4:5
     @test findnext([0x52, 0x62], A, 5) === nothing
 end
