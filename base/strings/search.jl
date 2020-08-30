@@ -193,18 +193,18 @@ function _searchindex(s::String, t::String, i::Integer)
     _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
 end
 
-function _searchindex(s::AbstractVector{T},
-                      t::AbstractVector{T},
-                      i::Integer) where T <:Union{Int8,UInt8}
+function _searchindex(s::T,
+                      t::T,
+                      i::Integer) where T<:AbstractVector{<:Union{Int8,UInt8}}
+
     n = length(t)
     m = length(s)
-
     if n == 0
         return 1 <= i <= m+1 ? max(1, i) : 0
     elseif m == 0
         return 0
     elseif n == 1
-        return something(findnext(isequal(_nthbyte(t,1)), s, i), 0)
+        return something(findnext(isequal(t[1]), s, i), 0)
     end
 
     w = m - n
@@ -214,21 +214,21 @@ function _searchindex(s::AbstractVector{T},
 
     bloom_mask = UInt64(0)
     skip = n - 1
-    tlast = _nthbyte(t,n)
+    tlast = t[n]
     for j in firstindex(s):n
-        bloom_mask |= _search_bloom_mask(_nthbyte(t,j))
-        if _nthbyte(t,j) == tlast && j < n
+        bloom_mask |= _search_bloom_mask(t[j])
+        if t[j]== tlast && j < n
             skip = n - j - 1
         end
     end
 
     i -= 1
     while i <= w
-        if _nthbyte(s,i+n) == tlast
+        if s[i+n]== tlast
             # check candidate
             j = 0
             while j < n - 1
-                if _nthbyte(s,i+j+1) != _nthbyte(t,j+1)
+                if s[i+j+1] != t[j+1]
                     break
                 end
                 j += 1
@@ -240,13 +240,13 @@ function _searchindex(s::AbstractVector{T},
             end
 
             # no match, try to rule out the next character
-            if i < w && bloom_mask & _search_bloom_mask(_nthbyte(s,i+n+1)) == 0
+            if i < w && bloom_mask & _search_bloom_mask(s[i+n+1]) == 0
                 i += n
             else
                 i += skip
             end
         elseif i < w
-            if bloom_mask & _search_bloom_mask(_nthbyte(s,i+n+1)) == 0
+            if bloom_mask & _search_bloom_mask(s[i+n+1]) == 0
                 i += n
             end
         end
@@ -295,7 +295,7 @@ julia> findnext("Lang", "JuliaLang", 2)
 6:9
 ```
 """
-findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, Int(i))
+findnext(t::AbstractString, s::AbstractString, start::Integer) = _search(s, t, Int(start))
 
 """
     findnext(ch::AbstractChar, string::AbstractString, start::Integer)
@@ -314,8 +314,8 @@ julia> findnext('o', "Hello to the world", 6)
 8
 ```
 """
-findnext(ch::AbstractChar, string::AbstractString, ind::Integer) =
-    findnext(==(ch), string, ind)
+findnext(ch::AbstractChar, string::AbstractString, start::Integer) =
+    findnext(==(ch), string, start)
 
 """
     findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, start::Integer) where T<:Union{Int8,UInt8}
@@ -334,8 +334,8 @@ julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 4:5
 ```
 """
-findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, ind::Integer) where T<:Union{Int8,UInt8} =
-    _search(A, pattern, ind)
+findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, start::Integer) where T<:Union{Int8,UInt8} =
+    _search(A, pattern, start)
 
 """
     findlast(pattern::AbstractString, string::AbstractString)

@@ -390,6 +390,21 @@ s_18109 = "fooα🐨βcd3"
     @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
 end
 
+# issue 37280
+@testset "UInt8, Int8 vector" begin
+    for VT in [Int8, UInt8]
+        A = VT[0x40, 0x52, 0x62, 0x52, 0x62]
+        @test findfirst(VT[0x30], A) === nothing
+        @test findfirst(VT[0x52], A) === 2:2
+        pattern = VT[0x52, 0x62]
+        @test findfirst(pattern, A) === 2:3
+        @test findnext(pattern, A, 2) === 2:3
+        @test findnext(pattern, A, 3) === 4:5
+        @test findnext(pattern, A, 5) === nothing
+        @test findnext(pattern, A, 99) === nothing
+    end
+end
+
 # issue 32568
 for T = (UInt, BigInt)
     for x = (4, 5)
@@ -407,14 +422,4 @@ for T = (UInt, BigInt)
         @test findnext(isletter, astr, T(x)) isa Int
         @test findprev(isletter, astr, T(x)) isa Int
     end
-end
-
-# issue 37280
-let A = [0x40, 0x52, 0x62, 0x52, 0x62]
-    @test findfirst([0x99], A) === nothing
-    @test findfirst([0x52], A) === 2:2
-    @test findfirst([0x52, 0x62], A) === 2:3
-    @test findnext([0x52, 0x62], A, 2) === 2:3
-    @test findnext([0x52, 0x62], A, 3) === 4:5
-    @test findnext([0x52, 0x62], A, 5) === nothing
 end
