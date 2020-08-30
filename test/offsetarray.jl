@@ -630,3 +630,19 @@ end
     @test last(v, 100) !== v
     @test last(v, 1) == [v[end]]
 end
+
+@testset "findfirst findnext of U/Int8 Offset Array" begin
+    for VT in [Int8, UInt8]
+        OA = OffsetArray(VT[0x40,0x52,0x62,0x52,0x62], 1)
+        for PT in [Int8, UInt8]
+            pattern = PT[0x52, 0x62]
+            @test findfirst(pattern, OA) === 3:4
+            @test findnext(pattern, OA, 2) === 3:4
+            @test findnext(pattern, OA, 4) === 5:6
+            @test findnext(pattern, OA, 6) === nothing
+            @test findnext(pattern, OA, 7) === nothing
+            @test_throws BoundsError findnext(pattern, OA, 1)
+        end
+    end
+end
+

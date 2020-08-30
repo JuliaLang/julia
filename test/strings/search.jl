@@ -402,6 +402,7 @@ end
         @test findnext(pattern, A, 3) === 4:5
         @test findnext(pattern, A, 5) === nothing
         @test findnext(pattern, A, 99) === nothing
+        @test_throws BoundsError findnext(pattern, A, -3)
     end
 end
 

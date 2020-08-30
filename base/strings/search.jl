@@ -124,7 +124,8 @@ true
 findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
 
 """
-    findfirst(pattern::AbstractVector{T}, A::AbstractVector{T}) where {T<:Union{Int8,UInt8}}
+    findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
+    A::AbstractVector{<:Union{Int8,UInt8}}) where {T<:Union{Int8,UInt8}}
 
 Find the first occurrence of sequence `pattern` in vector `A`.
 
@@ -137,8 +138,10 @@ julia> findfirst([0x52, 0x62], [0x40, 0x52, 0x62, 0x63])
 2:3
 ```
 """
-findfirst(pattern::AbstractVector{T}, A::AbstractVector{T}) where {T<:Union{Int8,UInt8}} =
+function findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
+                   A::AbstractVector{<:Union{Int8,UInt8}})
     _search(A, pattern, firstindex(A))
+end
 
 
 
@@ -185,7 +188,8 @@ function _search_bloom_mask(c)
 end
 
 _nthbyte(s::String, i) = codeunit(s, i)
-_nthbyte(a::Union{AbstractVector{UInt8},AbstractVector{Int8}}, i) = a[i]
+_nthbyte(a::Union{Vector{UInt8},Vector{Int8}}, i) = a[i]
+_nthbyte(t::AbstractVector, index) = t[firstindex(t) + (index-1)]
 
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
@@ -193,42 +197,44 @@ function _searchindex(s::String, t::String, i::Integer)
     _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
 end
 
-function _searchindex(s::T,
-                      t::T,
-                      i::Integer) where T<:AbstractVector{<:Union{Int8,UInt8}}
-
+function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
+                      t::AbstractVector{<:Union{Int8,UInt8}},
+                      i::Integer) where T <:Union{Int8,UInt8}
     n = length(t)
     m = length(s)
+    f_s = firstindex(s)
+    i < f_s && throw(BoundsError(s, i))
+
     if n == 0
-        return 1 <= i <= m+1 ? max(1, i) : 0
+        return f_s <= i <= m+1 ? max(f_s, i) : 0
     elseif m == 0
         return 0
     elseif n == 1
-        return something(findnext(isequal(t[1]), s, i), 0)
+        return something(findnext(isequal(_nthbyte(t,1)), s, i), 0)
     end
 
     w = m - n
-    if w < 0 || i - 1 > w
+    if w < 0 || i - f_s > w
         return 0
     end
 
     bloom_mask = UInt64(0)
-    skip = n - 1
-    tlast = t[n]
-    for j in firstindex(s):n
-        bloom_mask |= _search_bloom_mask(t[j])
-        if t[j]== tlast && j < n
+    skip = n - f_s
+    tlast = _nthbyte(t,n)
+    for j in eachindex(t)
+        bloom_mask |= _search_bloom_mask(_nthbyte(t,j))
+        if _nthbyte(t,j) == tlast && j < n
             skip = n - j - 1
         end
     end
 
     i -= 1
     while i <= w
-        if s[i+n]== tlast
+        if _nthbyte(s,i+n) == tlast
             # check candidate
             j = 0
             while j < n - 1
-                if s[i+j+1] != t[j+1]
+                if _nthbyte(s,i+j+1) != _nthbyte(t,j+1)
                     break
                 end
                 j += 1
@@ -236,17 +242,17 @@ function _searchindex(s::T,
 
             # match found
             if j == n - 1
-                return i+1
+                return i+f_s
             end
 
             # no match, try to rule out the next character
-            if i < w && bloom_mask & _search_bloom_mask(s[i+n+1]) == 0
+            if i < w && bloom_mask & _search_bloom_mask(_nthbyte(s,i+n+1)) == 0
                 i += n
             else
                 i += skip
             end
         elseif i < w
-            if bloom_mask & _search_bloom_mask(s[i+n+1]) == 0
+            if bloom_mask & _search_bloom_mask(_nthbyte(s,i+n+1)) == 0
                 i += n
             end
         end
@@ -318,7 +324,7 @@ findnext(ch::AbstractChar, string::AbstractString, start::Integer) =
     findnext(==(ch), string, start)
 
 """
-    findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, start::Integer) where T<:Union{Int8,UInt8}
+    findnext(pattern::AbstractVector{<:Union{Int8,UInt8}}, A::AbstractVector{<:Union{Int8,UInt8}}, start::Integer)
 
 Find the next occurrence of the sequence `pattern` in vector `A` starting at position `start`.
 
@@ -334,7 +340,9 @@ julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 4:5
 ```
 """
-findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, start::Integer) where T<:Union{Int8,UInt8} =
+findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
+         A::AbstractVector{<:Union{Int8,UInt8}},
+         start::Integer) where T<:Union{Int8,UInt8} =
     _search(A, pattern, start)
 
 """
