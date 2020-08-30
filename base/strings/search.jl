@@ -322,7 +322,7 @@ findnext(ch::AbstractChar, string::AbstractString, ind::Integer) =
 """
     findnext(pattern::AbstractVector{T}, A::AbstractVector{T}, start::Integer) where T<:Union{Int8,UInt8}
 
-Find the next occurrence of `pattern` in `A` starting at position `start`.
+Find the next occurrence of the sequence `pattern` in vector `A` starting at position `start`.
 
 !!! compat "Julia 1.6"
     This method requires at least Julia 1.6.
