@@ -137,9 +137,8 @@ julia> findfirst([0x52, 0x62], [0x40, 0x52, 0x62, 0x63])
 2:3
 ```
 """
-function findfirst(pattern::AbstractVector{T}, A::AbstractVector{T}) where {T<:Union{Int8,UInt8}}
+findfirst(pattern::AbstractVector{T}, A::AbstractVector{T}) where {T<:Union{Int8,UInt8}} =
     _search(A, pattern, firstindex(A))
-end
 
 
 
