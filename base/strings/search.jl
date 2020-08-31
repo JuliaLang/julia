@@ -142,8 +142,6 @@ findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
           A::AbstractVector{<:Union{Int8,UInt8}})=
     _search(A, pattern, firstindex(A))
 
-
-
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
     i = Int(i)
