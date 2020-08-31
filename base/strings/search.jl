@@ -202,7 +202,7 @@ function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
     n = length(t)
     m = length(s)
     i = Int(_i) - (firstindex(s) - 1)
-    i < 1 && throw(BoundsError(s, _i))
+    (i < 1 || i > m+1) && throw(BoundsError(s, _i))
 
     if n == 0
         return 1 <= i <= m+1 ? max(1, i) : 0
@@ -344,7 +344,6 @@ function findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
                   A::AbstractVector{<:Union{Int8,UInt8}},
                   start::Integer)
     (start == (lastindex(A)+1)) && return nothing
-    (start > (lastindex(A)+1)) && throw(BoundsError(A, start))
     _search(A, pattern, start)
 end
 
@@ -460,7 +459,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     n = length(t)
     m = length(s)
     k = Int(_k) - (firstindex(s) - 1)
-    k < 1 && throw(BoundsError(s, _k))
+    (k < 1 || k > m+1) && throw(BoundsError(s, _k))
 
     if n == 0
         return 0 <= k <= m ? max(k, 1) : 0
@@ -497,9 +496,9 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
                 j += 1
             end
 
-            # match found
+            # match found, restore in case `s` is an OffsetArray
             if j == n
-                return i - 1 + firstindex(s)
+                return i + (firstindex(s) - 1)
             end
 
             # no match, try to rule out the next character
@@ -595,7 +594,6 @@ function findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
                   A::AbstractVector{<:Union{Int8,UInt8}},
                   start::Integer)
     (start == (lastindex(A)+1)) && return nothing
-    (start > (lastindex(A)+1)) && throw(BoundsError(A, start))
     _rsearch(A, pattern, start)
 end
 """
