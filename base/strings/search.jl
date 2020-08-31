@@ -576,7 +576,9 @@ findprev(ch::AbstractChar, string::AbstractString, start::Integer) =
     findprev(==(ch), string, start)
 
 """
-    findprev(pattern::AbstractVector{<:Union{Int8,UInt8}}, A::AbstractVector{<:Union{Int8,UInt8}}, start::Integer)
+    findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
+             A::AbstractVector{<:Union{Int8,UInt8}},
+             start::Integer)
 
 Find the previous occurrence of the sequence `pattern` in vector `A` starting at position `start`.
 
