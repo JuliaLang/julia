@@ -653,8 +653,8 @@ end
             @test findprev(pattern, OA, 2) === nothing
             @test findprev(pattern, OA, 4) === 3:4
             @test findprev(pattern, OA, 6) === 5:6
-            @test findnext(pattern, OA, l_OA+1) === nothing
-            @test_throws BoundsError findnext(pattern, OA, l_OA+2)
+            @test findprev(pattern, OA, l_OA+1) == findlast(pattern, OA)
+            @test findprev(pattern, OA, l_OA+2) == findlast(pattern, OA)
             @test_throws BoundsError findprev(pattern, OA, 1)
         end
     end

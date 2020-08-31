@@ -340,12 +340,10 @@ julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 4:5
 ```
 """
-function findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
+findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
                   A::AbstractVector{<:Union{Int8,UInt8}},
-                  start::Integer)
-    (start == (lastindex(A)+1)) && return nothing
+                  start::Integer)=
     _search(A, pattern, start)
-end
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
@@ -459,7 +457,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     n = length(t)
     m = length(s)
     k = Int(_k) - (firstindex(s) - 1)
-    (k < 1 || k > m+1) && throw(BoundsError(s, _k))
+    k < 1 && throw(BoundsError(s, _k))
 
     if n == 0
         return 0 <= k <= m ? max(k, 1) : 0
@@ -590,12 +588,10 @@ julia> findprev([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 2:3
 ```
 """
-function findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
+findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
                   A::AbstractVector{<:Union{Int8,UInt8}},
-                  start::Integer)
-    (start == (lastindex(A)+1)) && return nothing
+                  start::Integer) =
     _rsearch(A, pattern, start)
-end
 """
     occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
 

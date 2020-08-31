@@ -414,9 +414,9 @@ end
         @test findprev(pattern, A, 3) === 2:3
         @test findprev(pattern, A, 5) === 4:5
         @test findprev(pattern, A, 2) === nothing
-        @test findprev(pattern, A, length(A)+1) === nothing
+        @test findprev(pattern, A, length(A)+1) == findlast(pattern, A)
+        @test findprev(pattern, A, length(A)+2) == findlast(pattern, A)
         @test_throws BoundsError findprev(pattern, A, -3)
-        @test_throws BoundsError findprev(pattern, A, length(A)+2)
     end
 end
 
