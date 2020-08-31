@@ -83,6 +83,7 @@ Standard library changes
 * `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
 * `push!(c::Channel, v)` now returns channel `c`. Previously, it returned the pushed value `v` ([#34202]).
 * `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
+* For consistency `RegexMatch` objects can also probed by `haskey` with an integer index for if a capture group exists within it ([#37300]).
 * A new standard library `TOML` has been added for parsing and printing [TOML files](https://toml.io) ([#37034]).
 
 #### LinearAlgebra
