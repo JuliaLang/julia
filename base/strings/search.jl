@@ -125,7 +125,7 @@ findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
 
 """
     findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
-    A::AbstractVector{<:Union{Int8,UInt8}})
+              A::AbstractVector{<:Union{Int8,UInt8}})
 
 Find the first occurrence of sequence `pattern` in vector `A`.
 
@@ -139,7 +139,7 @@ julia> findfirst([0x52, 0x62], [0x40, 0x52, 0x62, 0x63])
 ```
 """
 findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
-          A::AbstractVector{<:Union{Int8,UInt8}})=
+          A::AbstractVector{<:Union{Int8,UInt8}}) =
     _search(A, pattern, firstindex(A))
 
 # AbstractString implementation of the generic findnext interface
@@ -341,8 +341,8 @@ julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 ```
 """
 findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
-                  A::AbstractVector{<:Union{Int8,UInt8}},
-                  start::Integer)=
+         A::AbstractVector{<:Union{Int8,UInt8}},
+         start::Integer) =
     _search(A, pattern, start)
 
 """
@@ -365,7 +365,7 @@ findlast(pattern::AbstractString, string::AbstractString) =
 
 """
     findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
-    A::AbstractVector{<:Union{Int8,UInt8}})
+             A::AbstractVector{<:Union{Int8,UInt8}})
 
 Find the last occurrence of `pattern` in array `A`. Equivalent to
 [`findprev(pattern, A, lastindex(A))`](@ref).
@@ -518,8 +518,8 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
 end
 
 function _rsearch(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
-                 t::Union{AbstractString,AbstractChar,AbstractVector{<:Union{Int8,UInt8}}},
-                 i::Integer)
+                  t::Union{AbstractString,AbstractChar,AbstractVector{<:Union{Int8,UInt8}}},
+                  i::Integer)
     idx = _rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -592,8 +592,8 @@ julia> findprev([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 ```
 """
 findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
-                  A::AbstractVector{<:Union{Int8,UInt8}},
-                  start::Integer) =
+         A::AbstractVector{<:Union{Int8,UInt8}},
+         start::Integer) =
     _rsearch(A, pattern, start)
 """
     occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
