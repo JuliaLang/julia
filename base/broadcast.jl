@@ -227,7 +227,7 @@ Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
 Base.IndexStyle(::Type{<:Broadcasted{<:Any,<:Tuple{Any}}}) = IndexLinear()
 Base.IndexStyle(::Type{<:Broadcasted{<:Any}}) = IndexCartesian()
 
-Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = axes(bc)[1]
+Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = LinearIndices(axes(bc))::LinearIndices{1}
 
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
@@ -1029,7 +1029,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
         else
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
-            newdest = Base.similar(dest, promote_typejoin(T, typeof(val)))
+            newdest = Base.similar(bc, promote_typejoin(T, typeof(val)))
             return restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
         end
         count += 1
@@ -1180,7 +1180,7 @@ function undot(x::Expr)
 end
 __dot__(x) = x
 function __dot__(x::Expr)
-    dotargs = map(__dot__, x.args)
+    dotargs = Base.mapany(__dot__, x.args)
     if x.head === :call && dottable(x.args[1])
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
     elseif x.head === :comparison

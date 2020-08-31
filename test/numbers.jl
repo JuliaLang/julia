@@ -415,14 +415,16 @@ end
     @test repr(-NaN) == "NaN"
     @test repr(Float64(pi)) == "3.141592653589793"
     # issue 6608
-    @test sprint(show, 666666.6, context=:compact => true) == "666667.0"
+    @test sprint(show, 666666.6, context=:compact => true) == "6.66667e5"
     @test sprint(show, 666666.049, context=:compact => true) == "666666.0"
     @test sprint(show, 666665.951, context=:compact => true) == "666666.0"
     @test sprint(show, 66.66666, context=:compact => true) == "66.6667"
-    @test sprint(show, -666666.6, context=:compact => true) == "-666667.0"
+    @test sprint(show, -666666.6, context=:compact => true) == "-6.66667e5"
     @test sprint(show, -666666.049, context=:compact => true) == "-666666.0"
     @test sprint(show, -666665.951, context=:compact => true) == "-666666.0"
     @test sprint(show, -66.66666, context=:compact => true) == "-66.6667"
+    @test sprint(show, -498796.2749933266, context=:compact => true) == "-4.98796e5"
+    @test sprint(show, 123456.78, context=:compact=>true) == "1.23457e5"
 
     @test repr(1.0f0) == "1.0f0"
     @test repr(-1.0f0) == "-1.0f0"
@@ -2689,4 +2691,16 @@ end
             end
         end
     end
+end
+
+@testset "constructor inferability for $T" for T in [AbstractFloat, #=BigFloat,=# Float16,
+        Float32, Float64, Integer, Bool, Signed, BigInt, Int128, Int16, Int32, Int64, Int8,
+        Unsigned, UInt128, UInt16, UInt32, UInt64, UInt8]
+    @test all(R -> R<:T, Base.return_types(T))
+end
+@testset "constructor inferability for BigFloat" begin
+    T = BigFloat
+    @test_broken all(R -> R<:T, Base.return_types(T))
+    @test all(m -> m.file == Symbol("deprecated.jl"),
+        collect(methods(T))[findall(R -> !(R<:T), Base.return_types(T))])
 end

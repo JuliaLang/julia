@@ -190,10 +190,10 @@ julia> collect(StepRange(1, Int8(2), 10))
  9
 
 julia> typeof(StepRange(1, Int8(2), 10))
-StepRange{Int64,Int8}
+StepRange{Int64, Int8}
 
 julia> typeof(1:3:6)
-StepRange{Int64,Int64}
+StepRange{Int64, Int64}
 ```
 """
 struct StepRange{T,S} <: OrdinalRange{T,S}
@@ -903,7 +903,10 @@ issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
 -(r::OrdinalRange) = range(-first(r), step=-step(r), length=length(r))
 -(r::StepRangeLen{T,R,S}) where {T,R,S} =
     StepRangeLen{T,R,S}(-r.ref, -r.step, length(r), r.offset)
--(r::LinRange) = LinRange(-r.start, -r.stop, length(r))
+function -(r::LinRange)
+    start = -r.start
+    LinRange{typeof(start)}(start, -r.stop, length(r))
+end
 
 
 # promote eltype if at least one container wouldn't change, otherwise join container types.
@@ -1003,7 +1006,7 @@ function reverse(r::StepRangeLen)
     offset = isempty(r) ? r.offset : length(r)-r.offset+1
     StepRangeLen(r.ref, -r.step, length(r), offset)
 end
-reverse(r::LinRange)     = LinRange(r.stop, r.start, length(r))
+reverse(r::LinRange{T}) where {T} = LinRange{T}(r.stop, r.start, length(r))
 
 ## sorting ##
 

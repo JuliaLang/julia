@@ -193,17 +193,16 @@ static void jl_gc_wait_for_the_world(void)
 {
     if (jl_n_threads > 1)
         jl_wake_libuv();
-    for (int i = 0;i < jl_n_threads;i++) {
+    for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        // FIXME: The acquire load pairs with the release stores
+        // This acquire load pairs with the release stores
         // in the signal handler of safepoint so we are sure that
-        // all the stores on those threads are visible. However,
-        // we're currently not using atomic stores in mutator threads.
-        // We should either use atomic store release there too or use signals
-        // to flush the memory operations on those threads.
-        while (!ptls2->gc_state || !jl_atomic_load_acquire(&ptls2->gc_state)) {
+        // all the stores on those threads are visible.
+        // We're currently also using atomic store release in mutator threads
+        // (in jl_gc_state_set), but we may want to use signals to flush the
+        // memory operations on those threads lazily instead.
+        while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state))
             jl_cpu_pause(); // yield?
-        }
     }
 }
 
@@ -482,7 +481,7 @@ JL_DLLEXPORT void jl_finalize_th(jl_ptls_t ptls, jl_value_t *o)
     arraylist_new(&copied_list, 0);
     // No need to check the to_finalize list since the user is apparently
     // still holding a reference to the object
-    for (int i = 0;i < jl_n_threads;i++) {
+    for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         finalize_object(&ptls2->finalizers, o, &copied_list, ptls != ptls2);
     }
@@ -1027,7 +1026,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
     reset_thread_gc_counts();
 }
 
-static size_t array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
+size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
 {
     size_t sz = 0;
     int isbitsunion = jl_array_isbitsunion(a);
@@ -1049,7 +1048,7 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
             jl_free_aligned(d);
         else
             free(d);
-        gc_num.freed += array_nbytes(a);
+        gc_num.freed += jl_array_nbytes(a);
     }
 }
 
@@ -2411,17 +2410,17 @@ mark: {
                 verify_parent1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
                 (void)val_buf;
                 gc_setmark_buf_(ptls, (char*)a->data - a->offset * a->elsize,
-                                bits, array_nbytes(a));
+                                bits, jl_array_nbytes(a));
             }
             else if (flags.how == 2) {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
-                                     array_nbytes(a));
+                                     jl_array_nbytes(a));
                     if (bits == GC_OLD_MARKED) {
-                        ptls->gc_cache.perm_scanned_bytes += array_nbytes(a);
+                        ptls->gc_cache.perm_scanned_bytes += jl_array_nbytes(a);
                     }
                     else {
-                        ptls->gc_cache.scanned_bytes += array_nbytes(a);
+                        ptls->gc_cache.scanned_bytes += jl_array_nbytes(a);
                     }
                 }
             }
@@ -2639,9 +2638,6 @@ mark: {
     }
 }
 
-extern jl_typemap_entry_t *call_cache[N_CALL_CACHE];
-extern jl_array_t *jl_all_methods;
-
 static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                                      jl_ptls_t ptls2)
 {
@@ -2680,9 +2676,10 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
             gc_mark_queue_obj(gc_cache, sp, call_cache[i]);
     if (jl_all_methods != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_all_methods);
+    if (_jl_debug_method_invalidation != NULL)
+        gc_mark_queue_obj(gc_cache, sp, _jl_debug_method_invalidation);
 
     // constants
-    gc_mark_queue_obj(gc_cache, sp, jl_typetype_type);
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
 }
 
@@ -3082,8 +3079,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     }
     gc_debug_print();
 
-    int8_t old_state = jl_gc_state(ptls);
-    ptls->gc_state = JL_GC_STATE_WAITING;
+    int8_t old_state = ptls->gc_state;
+    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
     // `jl_safepoint_start_gc()` makes sure only one thread can
     // run the GC.
     if (!jl_safepoint_start_gc()) {

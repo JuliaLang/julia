@@ -387,7 +387,10 @@ julia> count(<=(2), A, dims=2)
 ```
 """
 count(A::AbstractArrayOrBroadcasted; dims=:) = count(identity, A, dims=dims)
-count(f, A::AbstractArrayOrBroadcasted; dims=:) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
+count(f, A::AbstractArrayOrBroadcasted; dims=:) = _count(f, A, dims)
+
+_count(f, A::AbstractArrayOrBroadcasted, dims::Colon) = _simple_count(f, A)
+_count(f, A::AbstractArrayOrBroadcasted, dims) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
 
 """
     count!([f=identity,] r, A)

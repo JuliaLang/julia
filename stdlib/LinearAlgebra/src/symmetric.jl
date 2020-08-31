@@ -27,7 +27,7 @@ julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
  2  0  3  0  4
 
 julia> Supper = Symmetric(A)
-5×5 Symmetric{Int64,Matrix{Int64}}:
+5×5 Symmetric{Int64, Matrix{Int64}}:
  1  0  2  0  3
  0  4  0  5  0
  2  0  7  0  8
@@ -35,7 +35,7 @@ julia> Supper = Symmetric(A)
  3  0  8  0  4
 
 julia> Slower = Symmetric(A, :L)
-5×5 Symmetric{Int64,Matrix{Int64}}:
+5×5 Symmetric{Int64, Matrix{Int64}}:
  1  0  6  0  2
  0  4  0  9  0
  6  0  7  0  3
@@ -102,7 +102,7 @@ triangle of the matrix `A`.
 julia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];
 
 julia> Hupper = Hermitian(A)
-5×5 Hermitian{Complex{Int64},Matrix{Complex{Int64}}}:
+5×5 Hermitian{Complex{Int64}, Matrix{Complex{Int64}}}:
  1+0im  0+0im  2+2im  0+0im  3-3im
  0+0im  4+0im  0+0im  5+0im  0+0im
  2-2im  0+0im  7+0im  0+0im  8+8im
@@ -110,7 +110,7 @@ julia> Hupper = Hermitian(A)
  3+3im  0+0im  8-8im  0+0im  4+0im
 
 julia> Hlower = Hermitian(A, :L)
-5×5 Hermitian{Complex{Int64},Matrix{Complex{Int64}}}:
+5×5 Hermitian{Complex{Int64}, Matrix{Complex{Int64}}}:
  1+0im  0+0im  6+6im  0+0im  2-2im
  0+0im  4+0im  0+0im  9+0im  0+0im
  6-6im  0+0im  7+0im  0+0im  3+3im
@@ -756,7 +756,7 @@ e.g. the 2nd to 8th eigenvalues.
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64,Vector{Float64}}:
+3×3 SymTridiagonal{Float64, Vector{Float64}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
@@ -796,7 +796,7 @@ by specifying a pair `vl` and `vu` for the lower and upper boundaries of the eig
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64,Vector{Float64}}:
+3×3 SymTridiagonal{Float64, Vector{Float64}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0

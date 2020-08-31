@@ -20,8 +20,8 @@ end
 
 msig = Tuple{typeof(f22938),Int,Int,Int,Int}
 world = typemax(UInt)
-_, msp, m = Base._methods_by_ftype(msig, -1, world)[]
-mi = Core.Compiler.specialize_method(m, msig, msp, false)
+match = Base._methods_by_ftype(msig, -1, world)[]
+mi = Core.Compiler.specialize_method(match, false)
 c0 = Core.Compiler.retrieve_code_info(mi)
 
 @test isempty(Core.Compiler.validate_code(mi))

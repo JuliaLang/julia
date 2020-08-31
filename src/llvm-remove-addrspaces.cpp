@@ -75,10 +75,14 @@ public:
             DstTy = ArrayType::get(
                     remapType(Ty->getElementType()), Ty->getNumElements());
         else if (auto Ty = dyn_cast<VectorType>(SrcTy))
-            DstTy = VectorType::get(
-                    remapType(Ty->getElementType()),
-                    Ty->getNumElements(),
-                    Ty->isScalable());
+            DstTy = VectorType::get(remapType(Ty->getElementType()),
+#if JL_LLVM_VERSION >= 110000
+                     Ty
+#else
+                     Ty->getNumElements(),
+                     Ty->isScalable()
+#endif
+                    );
 
         if (DstTy != SrcTy)
             LLVM_DEBUG(

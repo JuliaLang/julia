@@ -8,6 +8,7 @@
 struct UUID
     value::UInt128
 end
+UUID(u::UUID) = u
 UUID(u::NTuple{2, UInt64}) = UUID((UInt128(u[1]) << 64) | UInt128(u[2]))
 UUID(u::NTuple{4, UInt32}) = UUID((UInt128(u[1]) << 96) | (UInt128(u[2]) << 64) |
                                   (UInt128(u[3]) << 32) | UInt128(u[4]))

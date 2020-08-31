@@ -24,7 +24,7 @@ static arraylist_t suspended_threads;
 void jl_mach_gc_end(void)
 {
     // Requires the safepoint lock to be held
-    for (size_t i = 0;i < suspended_threads.len;i++) {
+    for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
@@ -41,9 +41,10 @@ static int jl_mach_gc_wait(jl_ptls_t ptls2,
                            mach_port_t thread, int16_t tid)
 {
     jl_mutex_lock_nogc(&safepoint_lock);
-    if (!jl_gc_running) {
-        // GC is done before we get the message or the safepoint is enabled
-        // for SIGINT.
+    if (!jl_atomic_load_relaxed(&jl_gc_running)) {
+        // relaxed, since gets set to zero only while the safepoint_lock was held
+        // this means we can tell if GC is done before we got the message or
+        // the safepoint was enabled for SIGINT.
         jl_mutex_unlock_nogc(&safepoint_lock);
         return 0;
     }
@@ -164,7 +165,7 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     if (!ptls2->safe_restore) {
         assert(exception);
         ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
-                                           (bt_context_t*)&state, ptls2->pgcstack, 0);
+                                           (bt_context_t*)&state, ptls2->pgcstack);
         ptls2->sig_exception = exception;
     }
     jl_call_in_state(ptls2, &state, &jl_sig_throw);
@@ -490,7 +491,7 @@ void *mach_profile_listener(void *arg)
 
                 if (forceDwarf == 0) {
                     // Save the backtrace
-                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL, 1);
+                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
                 }
                 else if (forceDwarf == 1) {
                     bt_size_cur += rec_backtrace_ctx_dwarf((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);

@@ -14,6 +14,23 @@ end
 
 const GLOBAL_CI_CACHE = InternalCodeCache()
 
+struct WorldRange
+    min_world::UInt
+    max_world::UInt
+end
+WorldRange() = WorldRange(typemin(UInt), typemax(UInt))
+WorldRange(w::UInt) = WorldRange(w, w)
+WorldRange(r::UnitRange) = WorldRange(first(r), last(r))
+first(wr::WorldRange) = wr.min_world
+last(wr::WorldRange) = wr.max_world
+in(world::UInt, wr::WorldRange) = wr.min_world <= world <= wr.max_world
+
+function intersect(a::WorldRange, b::WorldRange)
+    ret = WorldRange(max(a.min_world, b.min_world), min(a.max_world, b.max_world))
+    @assert ret.min_world <= ret.max_world
+    return ret
+end
+
 """
     struct WorldView
 
@@ -22,20 +39,19 @@ range of world ages, rather than defaulting to the current active world age.
 """
 struct WorldView{Cache}
     cache::Cache
-    min_world::UInt
-    max_world::UInt
+    worlds::WorldRange
+    WorldView(cache::Cache, range::WorldRange) where Cache = new{Cache}(cache, range)
 end
-WorldView(cache, r::UnitRange) = WorldView(cache, first(r), last(r))
-WorldView(cache, world::UInt) = WorldView(cache, world, world)
-WorldView(wvc::WorldView, min_world::UInt, max_world::UInt) =
-    WorldView(wvc.cache, min_world, max_world)
+WorldView(cache, args...) = WorldView(cache, WorldRange(args...))
+WorldView(wvc::WorldView, wr::WorldRange) = WorldView(wvc.cache, wr)
+WorldView(wvc::WorldView, args...) = WorldView(wvc.cache, args...)
 
 function haskey(wvc::WorldView{InternalCodeCache}, mi::MethodInstance)
-    ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, wvc.min_world, wvc.max_world)::Union{Nothing, CodeInstance} !== nothing
+    ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, first(wvc.worlds), last(wvc.worlds))::Union{Nothing, CodeInstance} !== nothing
 end
 
 function get(wvc::WorldView{InternalCodeCache}, mi::MethodInstance, default)
-    r = ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, wvc.min_world, wvc.max_world)::Union{Nothing, CodeInstance}
+    r = ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, first(wvc.worlds), last(wvc.worlds))::Union{Nothing, CodeInstance}
     if r === nothing
         return default
     end

@@ -336,19 +336,19 @@ and so we can mutate the array:
 
 ```jldoctest squarevectype
 julia> A = SparseArray(Float64, 3, 3)
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
  0.0  0.0  0.0
 
 julia> fill!(A, 2)
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  2.0  2.0  2.0
  2.0  2.0  2.0
  2.0  2.0  2.0
 
 julia> A[:] = 1:length(A); A
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  1.0  4.0  7.0
  2.0  5.0  8.0
  3.0  6.0  9.0
@@ -362,7 +362,7 @@ well:
 
 ```jldoctest squarevectype
 julia> A[1:2,:]
-2×3 SparseArray{Float64,2}:
+2×3 SparseArray{Float64, 2}:
  1.0  4.0  7.0
  2.0  5.0  8.0
 ```
@@ -375,7 +375,7 @@ that `SparseArray` is mutable (supports `setindex!`). Defining `similar`, `getin
 
 ```jldoctest squarevectype
 julia> copy(A)
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  1.0  4.0  7.0
  2.0  5.0  8.0
  3.0  6.0  9.0
@@ -386,7 +386,7 @@ with each other and use most of the methods defined in Julia Base for `AbstractA
 
 ```jldoctest squarevectype
 julia> A[SquaresVector(3)]
-3-element SparseArray{Float64,1}:
+3-element SparseArray{Float64, 1}:
  1.0
  4.0
  9.0
@@ -575,17 +575,17 @@ find_aac (generic function with 6 methods)
 From these definitions, one obtains the following behavior:
 ```jldoctest ArrayAndChar
 julia> a = ArrayAndChar([1 2; 3 4], 'x')
-2×2 ArrayAndChar{Int64,2} with char 'x':
+2×2 ArrayAndChar{Int64, 2} with char 'x':
  1  2
  3  4
 
 julia> a .+ 1
-2×2 ArrayAndChar{Int64,2} with char 'x':
+2×2 ArrayAndChar{Int64, 2} with char 'x':
  2  3
  4  5
 
 julia> a .+ [5,10]
-2×2 ArrayAndChar{Int64,2} with char 'x':
+2×2 ArrayAndChar{Int64, 2} with char 'x':
   6   7
  13  14
 ```

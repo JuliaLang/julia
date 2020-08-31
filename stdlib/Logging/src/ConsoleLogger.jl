@@ -106,7 +106,7 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
     # Generate a text representation of the message and all key value pairs,
     # split into lines.
     msglines = [(indent=0,msg=l) for l in split(chomp(string(message)), '\n')]
-    dsize = displaysize(logger.stream)
+    dsize = displaysize(logger.stream)::Tuple{Int,Int}
     if !isempty(kwargs)
         valbuf = IOBuffer()
         rows_per_value = max(1, dsize[1]÷(length(kwargs)+1))
@@ -127,9 +127,7 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
 
     # Format lines as text with appropriate indentation and with a box
     # decoration on the left.
-    color,prefix,suffix = logger.meta_formatter(level, _module, group, id, filepath, line)
-    color = convert(Symbol, color)::Symbol
-    prefix, suffix = convert(String, prefix)::String, convert(String, suffix)::String
+    color,prefix,suffix = logger.meta_formatter(level, _module, group, id, filepath, line)::Tuple{Union{Symbol,Int},String,String}
     minsuffixpad = 2
     buf = IOBuffer()
     iob = IOContext(buf, logger.stream)

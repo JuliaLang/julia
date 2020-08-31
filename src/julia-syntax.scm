@@ -1960,6 +1960,8 @@
    (lambda (e) (expand-forms `(call |<:| ,@(cdr e))))
    '|>:|
    (lambda (e) (expand-forms `(call |>:| ,@(cdr e))))
+   '-->
+   (lambda (e) (expand-forms `(call --> ,@(cdr e))))
 
    'where
    (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
@@ -2049,6 +2051,7 @@
                        (n   (length lhss))
                        (st  (gensy)))
                   `(block
+                    (local ,st)
                     ,@ini
                     ,.(map (lambda (i lhs)
                              (expand-forms
@@ -3989,11 +3992,16 @@ f(x) = yt(x)
                  (compile (cadr e) break-labels value tail)
                  #f))
             ((if elseif)
-             (let ((tests (map (lambda (clause)
-                                 (emit `(gotoifnot ,(compile-cond clause break-labels) _)))
-                               (if (and (pair? (cadr e)) (eq? (car (cadr e)) '&&))
-                                   (cdadr e)
-                                   (list (cadr e)))))
+             (let ((tests (let* ((cond (cadr e))
+                                 (cond (if (and (pair? cond) (eq? (car cond) 'block))
+                                           (begin (compile (butlast cond) break-labels #f #f)
+                                                  (last cond))
+                                           cond)))
+                            (map (lambda (clause)
+                                   (emit `(gotoifnot ,(compile-cond clause break-labels) _)))
+                                 (if (and (pair? cond) (eq? (car cond) '&&))
+                                     (cdr cond)
+                                     (list cond)))))
                    (end-jump `(goto _))
                    (val (if (and value (not tail)) (new-mutable-var) #f)))
                (let ((v1 (compile (caddr e) break-labels value tail)))

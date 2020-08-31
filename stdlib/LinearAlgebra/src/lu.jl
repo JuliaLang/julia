@@ -28,7 +28,7 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lu(A)
-LU{Float64,Matrix{Float64}}
+LU{Float64, Matrix{Float64}}
 L factor:
 2×2 Matrix{Float64}:
  1.0       0.0
@@ -106,7 +106,7 @@ julia> A = [4. 3.; 6. 3.]
  6.0  3.0
 
 julia> F = lu!(A)
-LU{Float64,Matrix{Float64}}
+LU{Float64, Matrix{Float64}}
 L factor:
 2×2 Matrix{Float64}:
  1.0       0.0
@@ -248,7 +248,7 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lu(A)
-LU{Float64,Matrix{Float64}}
+LU{Float64, Matrix{Float64}}
 L factor:
 2×2 Matrix{Float64}:
  1.0       0.0

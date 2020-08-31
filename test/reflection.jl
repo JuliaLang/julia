@@ -214,7 +214,7 @@ let ex = :(a + b)
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825(::Array{T,N}, ::Array, ::Vector{T} where T)")
+                 "foo13825(::Array{T, N}, ::Array, ::Vector{T} where T)")
 
 mutable struct TLayout
     x::Int8
@@ -225,6 +225,8 @@ tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test hasfield(TLayout, :y)
 @test !hasfield(TLayout, :a)
+@test hasfield(Complex, :re)
+@test !hasfield(Complex, :qxq)
 @test hasproperty(tlayout, :x)
 @test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
@@ -449,6 +451,11 @@ fLargeTable() = 4
 @test_throws MethodError fLargeTable(Val(1), Val(1))
 @test fLargeTable(Val(1), 1) == 1
 @test fLargeTable(1, Val(1)) == 2
+fLargeTable(::Union, ::Union) = "a"
+@test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
+fLargeTable(::Union, ::Union) = "b"
+@test length(methods(fLargeTable)) == 205
+@test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
 # issue #15280
 function f15280(x) end
@@ -559,10 +566,6 @@ end
 @test !isstructtype(Int)
 @test isstructtype(TLayout)
 
-@test Base.parameter_upper_bound(ReflectionExample, 1) === AbstractFloat
-@test Base.parameter_upper_bound(ReflectionExample, 2) === Any
-@test Base.parameter_upper_bound(ReflectionExample{T, N} where T where N <: Real, 2) === Real
-
 let
     wrapperT(T) = Base.typename(T).wrapper
     @test @inferred wrapperT(ReflectionExample{Float64, Int64}) == ReflectionExample
@@ -629,10 +632,10 @@ let
     x22979 = (1, 2.0, 3.0 + im)
     T22979 = Tuple{typeof(f22979), typeof.(x22979)...}
     world = Core.Compiler.get_world_counter()
-    mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[1]
-    instance = Core.Compiler.specialize_method(m, mtypes, msp)
+    match = Base._methods_by_ftype(T22979, -1, world)[1]
+    instance = Core.Compiler.specialize_method(match)
     cinfo_generated = Core.Compiler.get_staged(instance)
-    @test_throws ErrorException Base.uncompressed_ir(m)
+    @test_throws ErrorException Base.uncompressed_ir(match.method)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
 
@@ -905,4 +908,20 @@ end
     @test length(methods(f, (Int,), TestMod33403.Sub)) == 0
 
     @test length(methods(g, ())) == 1
+end
+
+module BodyFunctionLookup
+f1(x, y; a=1) = error("oops")
+f2(f::Function, args...; kwargs...) = f1(args...; kwargs...)
+end
+
+@testset "bodyfunction" begin
+    m = first(methods(BodyFunctionLookup.f1))
+    f = Base.bodyfunction(m)
+    @test occursin("f1#", String(nameof(f)))
+    m = first(methods(BodyFunctionLookup.f2))
+    f = Base.bodyfunction(m)
+    @test f !== Core._apply_iterate
+    @test f !== Core._apply
+    @test occursin("f2#", String(nameof(f)))
 end

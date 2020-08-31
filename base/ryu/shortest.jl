@@ -330,7 +330,8 @@ end
     olength = decimallength(output)
     exp_form = true
     pt = nexp + olength
-    if -4 < pt <= (precision == -1 ? (T == Float16 ? 3 : 6) : precision)
+    if -4 < pt <= (precision == -1 ? (T == Float16 ? 3 : 6) : precision) &&
+        !(pt >= olength && abs(mod(x + 0.05, 10^(pt - olength)) - 0.05) > 0.05)
         exp_form = false
         if pt <= 0
             buf[pos] = UInt8('0')

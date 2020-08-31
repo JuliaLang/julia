@@ -6,7 +6,7 @@
 The `Docs` module provides the `@doc` macro which can be used to set and retrieve
 documentation metadata for Julia objects.
 
-Please see the manual section on documentation for more
+Please see the manual section on [documentation](@ref man-documentation) for more
 information.
 """
 module Docs
@@ -83,7 +83,7 @@ function initmeta(m::Module)
     nothing
 end
 
-function signature!(tv, expr::Expr)
+function signature!(tv::Vector{Any}, expr::Expr)
     is_macrocall = isexpr(expr, :macrocall)
     if is_macrocall || isexpr(expr, :call)
         sig = :(Union{Tuple{}})
@@ -91,15 +91,15 @@ function signature!(tv, expr::Expr)
         for arg in expr.args[first_arg:end]
             isexpr(arg, :parameters) && continue
             if isexpr(arg, :kw) # optional arg
-                push!(sig.args, :(Tuple{$(sig.args[end].args[2:end]...)}))
+                push!(sig.args, :(Tuple{$((sig.args[end]::Expr).args[2:end]...)}))
             end
-            push!(sig.args[end].args, argtype(arg))
+            push!((sig.args[end]::Expr).args, argtype(arg))
         end
         if isexpr(expr.args[1], :curly) && isempty(tv)
             append!(tv, mapany(tvar, (expr.args[1]::Expr).args[2:end]))
         end
         for i = length(tv):-1:1
-            push!(sig.args, :(Tuple{$(tv[i].args[1])}))
+            push!(sig.args, :(Tuple{$((tv[i]::Expr).args[1])}))
         end
         for i = length(tv):-1:1
             sig = Expr(:where, sig, tv[i])
@@ -112,7 +112,7 @@ function signature!(tv, expr::Expr)
         return signature!(tv, expr.args[1])
     end
 end
-signature!(tv, @nospecialize(other)) = :(Union{})
+signature!(tv::Vector{Any}, @nospecialize(other)) = :(Union{})
 signature(expr::Expr) = signature!([], expr)
 signature(@nospecialize other) = signature!([], other)
 
@@ -166,13 +166,13 @@ function docstr(binding::Binding, typesig = Union{})
     end
     error("could not find matching docstring for '$binding :: $typesig'.")
 end
-docstr(object, data = Dict()) = _docstr(object, data)
+docstr(object, data = Dict{Symbol,Any}()) = _docstr(object, data)
 
-_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            nothing, data)
-_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), nothing, data)
-_docstr(object,                 data) = DocStr(Core.svec(),     object, data)
+_docstr(vec::Core.SimpleVector, data::Dict{Symbol,Any}) = DocStr(vec,            nothing, data)
+_docstr(str::AbstractString,    data::Dict{Symbol,Any}) = DocStr(Core.svec(str), nothing, data)
+_docstr(object,                 data::Dict{Symbol,Any}) = DocStr(Core.svec(),     object, data)
 
-_docstr(doc::DocStr, data) = (doc.data = merge(data, doc.data); doc)
+_docstr(doc::DocStr, data::Dict{Symbol,Any}) = (doc.data = merge(data, doc.data); doc)
 
 macro ref(x)
     binding = bindingexpr(namify(x))
@@ -332,7 +332,7 @@ function metadata(__source__, __module__, expr, ismodule)
     end
     if isexpr(expr, :struct)
         # Field docs for concrete types.
-        P = Pair{Any,Any}
+        P = Pair{Symbol,Any}
         fields = P[]
         last_docstr = nothing
         for each in expr.args[3].args
@@ -350,10 +350,10 @@ function metadata(__source__, __module__, expr, ismodule)
                 last_docstr = each
             end
         end
-        dict = :($(Dict)($([(:($(P)($(quot(f)), $d)))::Expr for (f, d) in fields]...)))
+        dict = :($(Dict{Symbol,Any})($([(:($(P)($(quot(f)), $d)))::Expr for (f, d) in fields]...)))
         push!(args, :($(Pair)(:fields, $dict)))
     end
-    return :($(Dict)($(args...)))
+    return :($(Dict{Symbol,Any})($(args...)))
 end
 
 function keyworddoc(__source__, __module__, str, def::Base.BaseDocs.Keyword)
@@ -443,22 +443,22 @@ more than one expression is marked then the same docstring is applied to each ex
 """
 :(Core.@__doc__)
 
-function __doc__!(meta, def, define::Bool)
-    @nospecialize meta def
+function __doc__!(source, mod, meta, def, define::Bool)
+    @nospecialize source mod meta def
     # Two cases must be handled here to avoid redefining all definitions contained in `def`:
     if define
         # `def` has not been defined yet (this is the common case, i.e. when not generating
         # the Base image). We just need to convert each `@__doc__` marker to an `@doc`.
         finddoc(def) do each
             each.head = :macrocall
-            each.args = [Symbol("@doc"), nothing, meta, each.args[end], define] # TODO: forward line number info
+            each.args = Any[Symbol("@doc"), source, mod, nothing, meta, each.args[end], define]
         end
     else
         # `def` has already been defined during Base image gen so we just need to find and
         # document any subexpressions marked with `@__doc__`.
         docs  = []
         found = finddoc(def) do each
-            push!(docs, :(@doc($meta, $(each.args[end]), $define)))
+            push!(docs, :(@doc($source, $mod, $meta, $(each.args[end]), $define)))
         end
         # If any subexpressions have been documented then replace the entire expression with
         # just those documented subexpressions to avoid redefining any definitions.
@@ -472,7 +472,7 @@ end
 # Walk expression tree `def` and call `λ` when any `@__doc__` markers are found. Returns
 # `true` to signify that at least one `@__doc__` has been found, and `false` otherwise.
 function finddoc(λ, def::Expr)
-    if isexpr(def, :block, 2) && isexpr(def.args[1], :meta, 1) && def.args[1].args[1] === :doc
+    if isexpr(def, :block, 2) && isexpr(def.args[1], :meta, 1) && (def.args[1]::Expr).args[1] === :doc
         # Found the macroexpansion of an `@__doc__` expression.
         λ(def)
         true
@@ -509,6 +509,8 @@ function docm(source::LineNumberNode, mod::Module, ex)
         return REPL.lookup_doc(ex)
     end
 end
+# Drop incorrect line numbers produced by nested macro calls.
+docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)
 
 # iscallexpr checks if an expression is a :call expression. The call expression may be
 # also part of a :where expression, so it unwraps the :where layers until it reaches the
@@ -549,9 +551,9 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true
     #   f(::T) where T
     #   f(::T, ::U) where T where U
     #
-    isexpr(x, FUNC_HEADS) && is_signature(x.args[1]) ? objectdoc(source, mod, meta, def, x, signature(x)) :
-    isexpr(x, [:function, :macro])  && !isexpr(x.args[1], :call) ? objectdoc(source, mod, meta, def, x) :
-    iscallexpr(x) ? calldoc(source, mod, meta, x) :
+    isexpr(x, FUNC_HEADS) && is_signature((x::Expr).args[1]) ? objectdoc(source, mod, meta, def, x::Expr, signature(x::Expr)) :
+    isexpr(x, [:function, :macro])  && !isexpr((x::Expr).args[1], :call) ? objectdoc(source, mod, meta, def, x::Expr) :
+    iscallexpr(x) ? calldoc(source, mod, meta, x::Expr) :
 
     # Type definitions.
     #
@@ -559,7 +561,7 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true
     #   abstract type T end
     #   primitive type T N end
     #
-    isexpr(x, [:struct, :abstract, :primitive]) ? objectdoc(source, mod, meta, def, x) :
+    isexpr(x, [:struct, :abstract, :primitive]) ? objectdoc(source, mod, meta, def, x::Expr) :
 
     # "Bindings". Names that resolve to objects with different names, ie.
     #
@@ -567,18 +569,18 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true
     #   T = S
     #   global T = S
     #
-    isexpr(x, BINDING_HEADS) && !isexpr(x.args[1], :call) ? objectdoc(source, mod, meta, def, x) :
+    isexpr(x, BINDING_HEADS) && !isexpr((x::Expr).args[1], :call) ? objectdoc(source, mod, meta, def, x::Expr) :
 
     # Quoted macrocall syntax. `:@time` / `:(Base.@time)`.
     isquotedmacrocall(x) ? objectdoc(source, mod, meta, def, x) :
     # Modules and baremodules.
-    isexpr(x, :module) ? moduledoc(source, mod, meta, def, x) :
+    isexpr(x, :module) ? moduledoc(source, mod, meta, def, x::Expr) :
     # Document several expressions with the same docstring. `a, b, c`.
-    isexpr(x, :tuple) ? multidoc(source, mod, meta, x, define) :
+    isexpr(x, :tuple) ? multidoc(source, mod, meta, x::Expr, define) :
     # Errors generated by calling `macroexpand` are passed back to the call site.
     isexpr(x, :error) ? esc(x) :
     # When documenting macro-generated code we look for embedded `@__doc__` calls.
-    __doc__!(meta, x, define) ? esc(x) :
+    __doc__!(source, mod, meta, x, define) ? esc(x) :
     # Any "basic" expression such as a bare function or module name or numeric literal.
     isbasicdoc(x) ? objectdoc(source, mod, meta, nothing, x) :
 
@@ -606,9 +608,9 @@ include("utils.jl")
 # Swap out the bootstrap macro with the real one.
 Core.atdoc!(docm)
 
-function loaddocs(docs)
+function loaddocs(docs::Vector{Core.SimpleVector})
     for (mod, ex, str, file, line) in docs
-        data = Dict(:path => string(file), :linenumber => line)
+        data = Dict{Symbol,Any}(:path => string(file), :linenumber => line)
         doc = docstr(str, data)
         docstring = docm(LineNumberNode(line, file), mod, doc, ex, false) # expand the real @doc macro now
         Core.eval(mod, Expr(Core.unescape, docstring, Docs))

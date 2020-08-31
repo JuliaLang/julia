@@ -375,7 +375,9 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint64(s->s, m->build_id);
     write_int32(s->s, m->counter);
     write_int32(s->s, m->nospecialize);
-    write_int32(s->s, m->optlevel);
+    write_uint8(s->s, m->optlevel);
+    write_uint8(s->s, m->compile);
+    write_uint8(s->s, m->infer);
 }
 
 static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
@@ -976,7 +978,8 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
                         }
                         size_t k;
                         for (k = 0; k < jl_array_len(matches); k++) {
-                            jl_array_ptr_set(matches, k, jl_svecref(jl_array_ptr_ref(matches, k), 2));
+                            jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
+                            jl_array_ptr_set(matches, k, match->method);
                         }
                         jl_array_ptr_1d_push(t, callee);
                         jl_array_ptr_1d_push(t, matches);
@@ -1527,7 +1530,9 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     m->build_id = read_uint64(s->s);
     m->counter = read_int32(s->s);
     m->nospecialize = read_int32(s->s);
-    m->optlevel = read_int32(s->s);
+    m->optlevel = read_int8(s->s);
+    m->compile = read_int8(s->s);
+    m->infer = read_int8(s->s);
     m->primary_world = jl_world_counter;
     return (jl_value_t*)m;
 }
@@ -1804,8 +1809,6 @@ static void jl_insert_methods(jl_array_t *list)
     }
 }
 
-extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
-
 // verify that these edges intersect with the same methods as before
 static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
 {
@@ -1837,7 +1840,8 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         else {
             size_t j, k, l = jl_array_len(expected);
             for (k = 0; k < jl_array_len(matches); k++) {
-                jl_method_t *m = (jl_method_t*)jl_svecref(jl_array_ptr_ref(matches, k), 2);
+                jl_method_match_t *match = (jl_method_match_t*)jl_array_ptr_ref(matches, k);
+                jl_method_t *m = match->method;
                 for (j = 0; j < l; j++) {
                     if (m == (jl_method_t*)jl_array_ptr_ref(expected, j))
                         break;
@@ -1930,7 +1934,7 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *mod_list)
         uuid.hi = read_uint64(s);
         uuid.lo = read_uint64(s);
         uint64_t build_id = read_uint64(s);
-        jl_sym_t *sym = jl_symbol_n(name, len);
+        jl_sym_t *sym = _jl_symbol(name, len);
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_list, i);
         if (!m || !jl_is_module(m) || m->uuid.hi != uuid.hi || m->uuid.lo != uuid.lo || m->name != sym || m->build_id != build_id) {
             return jl_get_exceptionf(jl_errorexception_type,
@@ -2402,7 +2406,6 @@ static void jl_recache_other(void)
     flagref_list.len = 0;
 }
 
-extern tracer_cb jl_newmeth_tracer;
 static int trace_method(jl_typemap_entry_t *entry, void *closure)
 {
     jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)entry->func.method);
@@ -2565,7 +2568,7 @@ void jl_init_serializer(void)
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
                      jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_nothing_type,
                      jl_densearray_type, jl_function_type, jl_typename_type,
-                     jl_builtin_type, jl_task_type, jl_uniontype_type, jl_typetype_type,
+                     jl_builtin_type, jl_task_type, jl_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,
                      jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,

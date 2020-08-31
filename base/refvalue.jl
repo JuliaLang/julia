@@ -22,12 +22,12 @@ function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
         # which also ensures this returns same pointer as the one rooted in the `RefValue` object.
         p = pointerref(Ptr{Ptr{Cvoid}}(pointer_from_objref(b)), 1, Core.sizeof(Ptr{Cvoid}))
     end
-    return convert(P, p)
+    return convert(P, p)::Ptr{T}
 end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
-    return convert(P, pointer_from_objref(b))
+    return convert(P, pointer_from_objref(b))::Ptr{Any}
 end
-unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
+unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))::Ptr{Cvoid}
 
 getindex(b::RefValue) = b.x
 setindex!(b::RefValue, x) = (b.x = x; b)

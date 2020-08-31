@@ -301,8 +301,8 @@ constexpr auto arm_cortex_a73 = armv8a_crc;
 constexpr auto arm_cortex_a75 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16);
 constexpr auto arm_cortex_a76 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
 constexpr auto arm_cortex_a77 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
-constexpr auto arm_cortex_a78 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
-constexpr auto arm_cortex_x1 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
+constexpr auto arm_cortex_a78 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs); // spe
+constexpr auto arm_cortex_x1 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs); // spe
 constexpr auto arm_neoverse_e1 = armv8_2a | get_feature_masks(rcpc, fullfp16, ssbs);
 constexpr auto arm_neoverse_n1 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
 constexpr auto arm_zeus = armv8_4a | get_feature_masks(sve, i8mm, bf16, fullfp16, ssbs, rand);
@@ -336,7 +336,7 @@ constexpr auto apple_a7 = armv8a_crc_crypto;
 constexpr auto apple_a10 = armv8a_crc_crypto | get_feature_masks(rdm);
 constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
-constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fullfp16, sha3);
+constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16, sha3);
 constexpr auto apple_s4 = apple_a12;
 constexpr auto apple_s5 = apple_a12;
 
@@ -363,8 +363,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"cortex-a76", CPU::arm_cortex_a76, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
     {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
     {"cortex-a77", CPU::arm_cortex_a77, CPU::arm_cortex_a76, 110000, Feature::arm_cortex_a77},
-    {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, UINT32_MAX, Feature::arm_cortex_a78},
-    {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, UINT32_MAX, Feature::arm_cortex_x1},
+    {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, 110000, Feature::arm_cortex_a78},
+    {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, 110000, Feature::arm_cortex_x1},
     {"neoverse-e1", CPU::arm_neoverse_e1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_e1},
     {"neoverse-n1", CPU::arm_neoverse_n1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_n1},
     {"zeus", CPU::arm_zeus, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_zeus},
@@ -637,8 +637,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"cortex-a76", CPU::arm_cortex_a76, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
     {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
     {"cortex-a77", CPU::arm_cortex_a77, CPU::arm_cortex_a76, 110000, Feature::arm_cortex_a77},
-    {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, UINT32_MAX, Feature::arm_cortex_a78},
-    {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, UINT32_MAX, Feature::arm_cortex_x1},
+    {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, 110000, Feature::arm_cortex_a78},
+    {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, 110000, Feature::arm_cortex_x1},
     {"neoverse-n1", CPU::arm_neoverse_n1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_n1},
     {"denver1", CPU::nvidia_denver1, CPU::arm_cortex_a53, UINT32_MAX, Feature::nvidia_denver1},
     {"denver2", CPU::nvidia_denver2, CPU::arm_cortex_a57, UINT32_MAX, Feature::nvidia_denver2},

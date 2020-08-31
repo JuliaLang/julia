@@ -157,7 +157,7 @@ end
 """
     string(xs...)
 
-Create a string from any values, except `nothing`, using the [`print`](@ref) function.
+Create a string from any values using the [`print`](@ref) function.
 
 `string` should usually not be defined directly. Instead, define a method
 `print(io::IO, x::MyType)`. If `string(x)` for a certain type needs to be
@@ -178,12 +178,12 @@ string(a::Symbol) = String(a)
 # note: print uses an encoding determined by `io` (defaults to UTF-8), whereas
 #       write uses an encoding determined by `s` (UTF-8 for `String`)
 print(io::IO, s::AbstractString) = for c in s; print(io, c); end
-write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
+write(io::IO, s::AbstractString) = (len = 0; for c in s; len += Int(write(io, c))::Int; end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 # optimized methods to avoid iterating over chars
 write(io::IO, s::Union{String,SubString{String}}) =
-    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+    GC.@preserve s Int(unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))))::Int
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 ## printing literal quoted string data ##
@@ -343,11 +343,11 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 """
 function escape_string(io::IO, s::AbstractString, esc="")
     a = Iterators.Stateful(s)
-    for c in a
+    for c::AbstractChar in a
         if c in esc
             print(io, '\\', c)
         elseif isascii(c)
-            c == '\0'          ? print(io, escape_nul(peek(a))) :
+            c == '\0'          ? print(io, escape_nul(peek(a)::Union{AbstractChar,Nothing})) :
             c == '\e'          ? print(io, "\\e") :
             c == '\\'          ? print(io, "\\\\") :
             '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
@@ -356,10 +356,10 @@ function escape_string(io::IO, s::AbstractString, esc="")
         elseif !isoverlong(c) && !ismalformed(c)
             isprint(c)         ? print(io, c) :
             c <= '\x7f'        ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
-            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 4 : 2)) :
-                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 8 : 4))
+            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
+                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
         else # malformed or overlong
-            u = bswap(reinterpret(UInt32, c))
+            u = bswap(reinterpret(UInt32, c)::UInt32)
             while true
                 print(io, "\\x", string(u % UInt8, base = 16, pad = 2))
                 (u >>= 8) == 0 && break
@@ -483,7 +483,7 @@ Create an immutable byte (`UInt8`) vector using string syntax.
 # Examples
 ```jldoctest
 julia> v = b"12\\x01\\x02"
-4-element Base.CodeUnits{UInt8,String}:
+4-element Base.CodeUnits{UInt8, String}:
  0x31
  0x32
  0x01

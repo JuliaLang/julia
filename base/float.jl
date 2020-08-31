@@ -48,7 +48,7 @@ A not-a-number value of type [`Float64`](@ref).
 NaN, NaN64
 
 ## conversions to floating-point ##
-Float16(x::Integer) = convert(Float16, convert(Float32, x))
+Float16(x::Integer) = convert(Float16, convert(Float32, x)::Float32)
 for t in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float16
 end
@@ -533,7 +533,7 @@ abs(x::Float64) = abs_float(x)
 Test whether a number value is a NaN, an indeterminate value which is neither an infinity
 nor a finite number ("not a number").
 """
-isnan(x::AbstractFloat) = x != x
+isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
 isnan(x::Real) = false
 

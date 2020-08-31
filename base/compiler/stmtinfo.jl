@@ -7,12 +7,11 @@ to re-consult the method table. This info is illegal on any statement that is
 not a call to a generic function.
 """
 struct MethodMatchInfo
-    applicable::Any
-    ambig::Bool
+    results::Union{Missing, MethodLookupResult}
 end
 
 """
-    struct MethodMatchInfo
+    struct UnionSplitInfo
 
 If inference decides to partition the method search space by splitting unions,
 it will issue a method lookup query for each such partition. This info indicates

@@ -1554,15 +1554,15 @@ let
 end
 
 # issue #34061
-o_file = tempname()
-output = read(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
-    f() = ccall((:dne, :does_not_exist), Cvoid, ());
-    f()'`; ignorestatus=true), String)
-@test occursin(output, """
-ERROR: could not load library "does_not_exist"
-does_not_exist.so: cannot open shared object file: No such file or directory
-""")
-@test !isfile(o_file)
+let o_file = tempname(), err = Base.PipeEndpoint()
+    run(pipeline(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
+        f() = ccall((:dne, :does_not_exist), Cvoid, ());
+        f()'`; ignorestatus=true), stderr=err), wait=false)
+    output = read(err, String)
+    @test occursin("""ERROR: could not load library "does_not_exist"
+    """, output)
+    @test !isfile(o_file)
+end
 
 # pass NTuple{N,T} as Ptr{T}/Ref{T}
 let
@@ -1605,12 +1605,12 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        arg1root = Base.cconvert($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
-        arg1 = Base.unsafe_convert($(Expr(:escape, :Cstring)), arg1root)
-        arg2root = Base.cconvert($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
-        arg2 = Base.unsafe_convert($(Expr(:escape, :Cint)), arg2root)
-        arg3root = Base.cconvert($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
-        arg3 = Base.unsafe_convert($(Expr(:escape, :Cint)), arg3root)
+        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
+        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
+        local arg2root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
+        local arg2 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg2root)
+        local arg3root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
+        local arg3 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg3root)
         $(Expr(:foreigncall,
                :($(Expr(:escape, :((:func, libstring))))),
                :($(Expr(:escape, :Cstring))),
@@ -1631,8 +1631,8 @@ end
                 throw(ArgumentError("interpolated function `$(name)` was not a Ptr{Cvoid}, but $(typeof(func))"))
             end
         end
-        arg1root = Base.cconvert($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
-        arg1 = Base.unsafe_convert($(Expr(:escape, :Cstring)), arg1root)
+        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
+        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
         $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
     end)
 
@@ -1685,4 +1685,19 @@ end
     str = unsafe_string(strp[], len)
     @ccall free(strp[]::Cstring)::Cvoid
     @test str == "hi+1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-1.1-2.2-3.3-4.4-5.5-6.6-7.7-8.8-9.9\n"
+end
+
+@testset "Cwstring" begin
+    n = 100
+    buffer = Array{Cwchar_t}(undef, n)
+    if Sys.iswindows()
+        # sprintf throws an error on Windows, see https://github.com/JuliaLang/julia/pull/36040#issuecomment-634774055
+        len = @ccall swprintf_s(buffer::Ptr{Cwchar_t}, n::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
+    else
+        len = @ccall swprintf(buffer::Ptr{Cwchar_t}, n::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
+    end
+    str = GC.@preserve buffer unsafe_string(pointer(buffer), len)
+    @test str == "α+β=15"
+    str = GC.@preserve buffer unsafe_string(Cwstring(pointer(buffer)))
+    @test str == "α+β=15"
 end

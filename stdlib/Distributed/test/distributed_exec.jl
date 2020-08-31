@@ -1399,6 +1399,13 @@ let thrown = false
     @test thrown
 end
 
+# issue #34333
+let
+    @test fetch(remotecall(Float64, id_other, 1)) == Float64(1)
+    @test fetch(remotecall_wait(Float64, id_other, 1)) == Float64(1)
+    @test remotecall_fetch(Float64, id_other, 1) == Float64(1)
+end
+
 #19463
 function foo19463()
     w1 = workers()[1]
@@ -1693,6 +1700,12 @@ let e
     end
     # check that the inner TaskFailedException is correctly formed & can be printed
     @test sprint(showerror, e) isa String
+end
+
+# issue #27429, propagate relative `include` path to workers
+@everywhere include("includefile.jl")
+for p in procs()
+    @test @fetchfrom(p, i27429) == 27429
 end
 
 include("splitrange.jl")

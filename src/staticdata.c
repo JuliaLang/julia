@@ -40,13 +40,13 @@ static void *const _tags[] = {
          &jl_module_type, &jl_tvar_type, &jl_method_instance_type, &jl_method_type, &jl_code_instance_type,
          &jl_linenumbernode_type, &jl_lineinfonode_type,
          &jl_gotonode_type, &jl_quotenode_type, &jl_gotoifnot_type, &jl_argument_type, &jl_returnnode_type,
-         &jl_const_type, &jl_partial_struct_type,
+         &jl_const_type, &jl_partial_struct_type, &jl_method_match_type,
          &jl_pinode_type, &jl_phinode_type, &jl_phicnode_type, &jl_upsilonnode_type,
          &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type, &jl_llvmpointer_type,
          &jl_vararg_type, &jl_abstractarray_type,
          &jl_densearray_type, &jl_nothing_type, &jl_function_type, &jl_typeofbottom_type,
          &jl_unionall_type, &jl_typename_type, &jl_builtin_type, &jl_code_info_type,
-         &jl_task_type, &jl_uniontype_type, &jl_typetype_type, &jl_abstractstring_type,
+         &jl_task_type, &jl_uniontype_type, &jl_abstractstring_type,
          &jl_array_any_type, &jl_intrinsic_type, &jl_abstractslot_type,
          &jl_methtable_type, &jl_typemap_level_type, &jl_typemap_entry_type,
          &jl_voidpointer_type, &jl_uint8pointer_type, &jl_newvarnode_type,
@@ -949,7 +949,7 @@ static void jl_read_symbols(jl_serializer_state *s)
         const char *str = (const char*)base;
         base += len + 1;
         //printf("symbol %3d: %s\n", len, str);
-        jl_sym_t *sym = jl_symbol_n(str, len);
+        jl_sym_t *sym = _jl_symbol(str, len);
         arraylist_push(&deser_sym, (void*)sym);
     }
 }
@@ -1029,6 +1029,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
             return (uintptr_t)jl_box_uint8(offset);
         // offset -= 256;
         assert(0 && "corrupt relocation item id");
+        jl_unreachable(); // terminate control flow if assertion is disabled.
     case BuiltinFunctionRef:
         assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer ID");
         return (uintptr_t)id_to_fptrs[offset];
@@ -1474,9 +1475,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     ios_close(&f);
     JL_SIGATOMIC_END();
 }
-
-extern void jl_init_int32_int64_cache(void);
-extern void jl_gc_set_permalloc_region(void *start, void *end);
 
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)

@@ -121,7 +121,7 @@ julia> evalpoly(2, (1, 2, 3))
 """
 function evalpoly(x, p::Tuple)
     if @generated
-        N = length(p.parameters)
+        N = length(p.parameters::Core.SimpleVector)
         ex = :(p[end])
         for i in N-1:-1:1
             ex = :(muladd(x, $ex, p[$i]))
@@ -659,7 +659,7 @@ function hypot(x::T, y::T) where T<:AbstractFloat
     end
 
     # Operands do not vary widely
-    scale = eps(sqrt(floatmin(T)))  #Rescaling constant
+    scale = eps(T)*sqrt(floatmin(T))  #Rescaling constant
     if ax > sqrt(floatmax(T)/2)
         ax = ax*scale
         ay = ay*scale
