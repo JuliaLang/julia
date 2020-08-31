@@ -220,7 +220,7 @@ function mmap(io::IO,
                                 readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
         Base.windowserror(:mmap, handle == C_NULL)
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
-                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
+                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
         Base.windowserror(:mmap, ptr == C_NULL)
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
@@ -338,12 +338,13 @@ Forces synchronization between the in-memory version of a memory-mapped `Array` 
 function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset
+    mmaplen = length(m) * sizeof(T) + offset
     GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
-                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
+                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flags) != 0)
     else
         Base.windowserror(:FlushViewOfFile,
-            ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, length(m)) == 0)
+            ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, mmaplen) == 0)
     end
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)
