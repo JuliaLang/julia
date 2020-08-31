@@ -2773,3 +2773,7 @@ for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     @test code[end] === Core.ReturnNode()
     @test_throws TypeError badf()
 end
+
+# getfield on DataType should const propagate
+f37293() = Number.abstract ? true : "no"
+@test @inferred f37293()
