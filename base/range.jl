@@ -201,8 +201,8 @@ struct StepRange{T,S} <: OrdinalRange{T,S}
     step::S
     stop::T
 
-    function StepRange{T,S}(start::T, step::S, stop::T) where {T,S}
-        new(start, step, steprange_last(start,step,stop))
+    function StepRange{T,S}(start, step, stop) where {T,S}
+        new(start, step, steprange_last(T(start),S(step),T(stop)))
     end
 end
 
@@ -253,7 +253,6 @@ end
 # For types where x+oneunit(x) may not be well-defined
 steprange_last_empty(start, step, stop) = start - step
 
-StepRange{T,S}(start, step, stop) where {T,S} = StepRange{T,S}(T(start), S(step), T(stop))
 StepRange{T}(start, step::S, stop) where {T,S} = StepRange{T,S}(start, step, stop)
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
