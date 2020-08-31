@@ -747,8 +747,8 @@ for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
                 throw(ArgumentError("output matrix must not be aliased with input matrix"))
             end
 
-            for i in 1:n
-                C[:,i] = A*view(B, :, i)
+            @views for i in 1:n
+                C[:, i] = A*B[:, i]
             end
             return C
         end
