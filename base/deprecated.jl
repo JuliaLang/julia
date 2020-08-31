@@ -76,12 +76,12 @@ macro deprecate(old, new, ex=true)
     end
 end
 
-function depwarn(msg, funcsym)
+function depwarn(msg, funcsym; force::Bool=false)
     opts = JLOptions()
     if opts.depwarn == 2
         throw(ErrorException(msg))
     end
-    deplevel = opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
+    deplevel = force || opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
     @logmsg(
         deplevel,
         msg,
