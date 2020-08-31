@@ -83,9 +83,6 @@ USE_OPROFILE_JITEVENTS ?= 0
 # Set to 1 to enable profiling with perf
 USE_PERF_JITEVENTS ?= 0
 
-# libc++ is standard on OS X 10.9, but not for earlier releases
-USE_LIBCPP := 0
-
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP := 0
 
@@ -463,8 +460,6 @@ else
 FC := $(CROSS_COMPILE)gfortran
 endif
 
-STDLIBCPP_FLAG :=
-
 ifeq ($(OS), FreeBSD)
 USEGCC := 0
 USECLANG := 1
@@ -472,29 +467,28 @@ endif
 
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
-DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
-ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
+DARWINVER_GTE11 := $(shell expr $(DARWINVER) \>= 11)
+DARWINVER_GTE13 := $(shell expr $(DARWINVER) \>= 13)
+ifeq ($(DARWINVER_GTE11),0) # Snow Leopard specific configuration
 USEGCC := 1
 USECLANG := 0
+MACOSX_VERSION_MIN := 10.6
 OPENBLAS_TARGET_ARCH:=NEHALEM
 OPENBLAS_DYNAMIC_ARCH:=0
 USE_SYSTEM_LIBUNWIND:=1
 else
-ifeq ($(DARWINVER_GTE13),1)
-USE_LIBCPP := 1
-STDLIBCPP_FLAG := -stdlib=libstdc++
-else
-USE_LIBCPP := 0
-endif
+ifeq ($(DARWINVER_GTE13),0) # Lion / Mountain Lion specific configuration
+USEGCC := 0
+USECLANG := 1
+MACOSX_VERSION_MIN := 10.6
+else # Newer versions
 USEGCC := 0
 USECLANG := 1
 endif
 endif
+endif
 
 ifeq ($(USEGCC),1)
-ifeq ($(USE_LIBCPP),1)
-$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
-endif
 ifeq ($(SANITIZE),1)
 $(error Sanitizers are only supported with clang. Try setting SANITIZE=0)
 endif
@@ -522,16 +516,12 @@ JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
 DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
-ifeq ($(USE_LIBCPP), 1)
-MACOSX_VERSION_MIN := 10.8
-CC += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-CXX += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-else
-MACOSX_VERSION_MIN := 10.6
-CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+ifeq ($(MACOSX_VERSION_MIN),)
+MACOSX_VERSION_MIN := 10.9
 endif
+CC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+CXX += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 # export MACOSX_DEPLOYMENT_TARGET so that ld picks it up, especially for deps
 export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
@@ -539,9 +529,6 @@ endif
 endif
 
 ifeq ($(USEICC),1)
-ifeq ($(USE_LIBCPP),1)
-$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
-endif
 ifeq ($(SANITIZE),1)
 $(error Sanitizers only supported with clang. Try setting SANITIZE=0)
 endif

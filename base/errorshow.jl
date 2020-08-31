@@ -287,7 +287,8 @@ function showerror(io::IO, ex::MethodError)
             )
             varnames = ("scalar", "array")
             first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
-            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$f $second")
+            fstring = f === Base.:+ ? "+" : "-"  # avoid depending on show_default for functions (invalidation)
+            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$fstring $second")
         end
     end
     if ft <: AbstractArray
@@ -878,11 +879,11 @@ function show_exception_stack(io::IO, stack::Vector)
     nexc = length(stack)
     for i = nexc:-1:1
         if nexc != i
-            printstyled(io, "\ncaused by:\n", color=error_color())
+            printstyled(io, "\ncaused by: ", color=error_color())
         end
         exc, bt = stack[i]
         showerror(io, exc, bt, backtrace = bt!==nothing)
-        println(io)
+        i == 1 || println(io)
     end
 end
 

@@ -66,21 +66,25 @@ struct TaskFailedException <: Exception
     task::Task
 end
 
-function showerror(io::IO, ex::TaskFailedException)
-    println(io, "TaskFailedException:")
+function showerror(io::IO, ex::TaskFailedException, bt = nothing; backtrace=true)
+    print(io, "TaskFailedException")
+    if bt !== nothing && backtrace
+        show_backtrace(io, bt)
+    end
+    println(io)
+    printstyled(io, "\n    nested task error: ", color=error_color())
     show_task_exception(io, ex.task)
 end
 
-function show_task_exception(io::IO, t::Task)
-    stacks = []
-    while isa(t.exception, TaskFailedException)
-        pushfirst!(stacks, t.backtrace)
-        t = t.exception.task
+function show_task_exception(io::IO, t::Task; indent = true)
+    stack = catch_stack(t)
+    b = IOBuffer()
+    show_exception_stack(IOContext(b, io), stack)
+    str = String(take!(b))
+    if indent
+        str = replace(str, "\n" => "\n    ")
     end
-    showerror(io, t.exception, t.backtrace)
-    for bt in stacks
-        show_backtrace(io, bt)
-    end
+    print(io, str)
 end
 
 function show(io::IO, t::Task)
@@ -140,6 +144,9 @@ const task_state_failed   = UInt8(2)
         else
             @assert false
         end
+    elseif field === :backtrace
+        # TODO: this field name should be deprecated in 2.0
+        return catch_stack(t)[end][2]
     else
         return getfield(t, field)
     end
@@ -371,7 +378,7 @@ Wrap an expression in a [`Task`](@ref) and add it to the local machine's schedul
 
 Values can be interpolated into `@async` via `\$`, which copies the value directly into the
 constructed underlying closure. This allows you to insert the _value_ of a variable,
-isolating the aysnchronous code from changes to the variable's value in the current task.
+isolating the asynchronous code from changes to the variable's value in the current task.
 
 !!! compat "Julia 1.4"
     Interpolating values via `\$` is available as of Julia 1.4.
@@ -438,9 +445,6 @@ function task_done_hook(t::Task)
     err = istaskfailed(t)
     result = task_result(t)
     handled = false
-    if err
-        t.backtrace = catch_backtrace()
-    end
 
     donenotify = t.donenotify
     if isa(donenotify, ThreadSynchronizer)

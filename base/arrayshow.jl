@@ -450,7 +450,7 @@ function show_zero_dim(io::IO, X::AbstractArray{T, 0}) where T
         print(io, "fill(")
         show(io, X[])
     else
-        print(io, "Array{", T, ",0}(")
+        print(io, "Array{", T, ", 0}(")
         show(io, undef)
     end
     print(io, ")")

@@ -24,7 +24,7 @@ static arraylist_t suspended_threads;
 void jl_mach_gc_end(void)
 {
     // Requires the safepoint lock to be held
-    for (size_t i = 0;i < suspended_threads.len;i++) {
+    for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
@@ -41,9 +41,10 @@ static int jl_mach_gc_wait(jl_ptls_t ptls2,
                            mach_port_t thread, int16_t tid)
 {
     jl_mutex_lock_nogc(&safepoint_lock);
-    if (!jl_gc_running) {
-        // GC is done before we get the message or the safepoint is enabled
-        // for SIGINT.
+    if (!jl_atomic_load_relaxed(&jl_gc_running)) {
+        // relaxed, since gets set to zero only while the safepoint_lock was held
+        // this means we can tell if GC is done before we got the message or
+        // the safepoint was enabled for SIGINT.
         jl_mutex_unlock_nogc(&safepoint_lock);
         return 0;
     }

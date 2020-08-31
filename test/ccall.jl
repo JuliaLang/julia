@@ -1554,15 +1554,15 @@ let
 end
 
 # issue #34061
-o_file = tempname()
-output = read(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
-    f() = ccall((:dne, :does_not_exist), Cvoid, ());
-    f()'`; ignorestatus=true), String)
-@test occursin(output, """
-ERROR: could not load library "does_not_exist"
-does_not_exist.so: cannot open shared object file: No such file or directory
-""")
-@test !isfile(o_file)
+let o_file = tempname(), err = Base.PipeEndpoint()
+    run(pipeline(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
+        f() = ccall((:dne, :does_not_exist), Cvoid, ());
+        f()'`; ignorestatus=true), stderr=err), wait=false)
+    output = read(err, String)
+    @test occursin("""ERROR: could not load library "does_not_exist"
+    """, output)
+    @test !isfile(o_file)
+end
 
 # pass NTuple{N,T} as Ptr{T}/Ref{T}
 let
@@ -1605,12 +1605,12 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        arg1root = Base.cconvert($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
-        arg1 = Base.unsafe_convert($(Expr(:escape, :Cstring)), arg1root)
-        arg2root = Base.cconvert($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
-        arg2 = Base.unsafe_convert($(Expr(:escape, :Cint)), arg2root)
-        arg3root = Base.cconvert($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
-        arg3 = Base.unsafe_convert($(Expr(:escape, :Cint)), arg3root)
+        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
+        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
+        local arg2root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
+        local arg2 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg2root)
+        local arg3root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
+        local arg3 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg3root)
         $(Expr(:foreigncall,
                :($(Expr(:escape, :((:func, libstring))))),
                :($(Expr(:escape, :Cstring))),
@@ -1631,8 +1631,8 @@ end
                 throw(ArgumentError("interpolated function `$(name)` was not a Ptr{Cvoid}, but $(typeof(func))"))
             end
         end
-        arg1root = Base.cconvert($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
-        arg1 = Base.unsafe_convert($(Expr(:escape, :Cstring)), arg1root)
+        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
+        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
         $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
     end)
 

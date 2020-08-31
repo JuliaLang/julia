@@ -22,7 +22,7 @@ end
 #        GotoIfNot(SlotNumber(2), 4),
 #        Expr(:(=), SlotNumber(3), 2),
 #        # Test a SlotNumber as a value of a PhiNode
-#        PhiNode(Any[2,3], Any[1, SlotNumber(3)]),
+#        PhiNode(Int32[2,3], Any[1, SlotNumber(3)]),
 #        ReturnNode(SSAValue(3))
 #    ]
 #
@@ -196,7 +196,7 @@ let ci = make_ci([
         # even though this value is defined after it. We don't want this to
         # happen even though this block is dead because subsequent optimization
         # passes may look at all code, dead or not.
-        Core.PhiNode(Any[2], Any[Core.SSAValue(4)]),
+        Core.PhiNode(Int32[2], Any[Core.SSAValue(4)]),
         Expr(:call, :something, Core.SSAValue(2)),
         Expr(:call, :something2),
         Core.Compiler.GotoNode(2),
@@ -226,7 +226,7 @@ let ci = make_ci([
         # Block 2 (no predecessors)
         Core.Compiler.ReturnNode(3),
         # Block 3
-        Core.PhiNode(Any[1, 2], Any[100, 200]),
+        Core.PhiNode(Int32[1, 2], Any[100, 200]),
         Core.Compiler.ReturnNode(Core.SSAValue(3))
     ])
     ir = Core.Compiler.inflate_ir(ci)

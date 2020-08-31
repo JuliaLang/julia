@@ -190,10 +190,10 @@ julia> collect(StepRange(1, Int8(2), 10))
  9
 
 julia> typeof(StepRange(1, Int8(2), 10))
-StepRange{Int64,Int8}
+StepRange{Int64, Int8}
 
 julia> typeof(1:3:6)
-StepRange{Int64,Int64}
+StepRange{Int64, Int64}
 ```
 """
 struct StepRange{T,S} <: OrdinalRange{T,S}

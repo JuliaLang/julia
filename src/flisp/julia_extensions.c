@@ -153,7 +153,7 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
 // chars that can follow an operator (e.g. +) and be parsed as part of the operator
 int jl_op_suffix_char(uint32_t wc)
 {
-    static htable_t jl_opsuffs;
+    static htable_t jl_opsuffs; // XXX: requires uv_once
     if (!jl_opsuffs.size) { // initialize hash table of suffixes
         size_t i, opsuffs_len = sizeof(opsuffs) / (sizeof(uint32_t));
         htable_t *h = htable_new(&jl_opsuffs, opsuffs_len);
@@ -271,7 +271,7 @@ value_t fl_julia_underscore_symbolp(fl_context_t *fl_ctx, value_t *args, uint32_
 
 utf8proc_int32_t jl_charmap_map(utf8proc_int32_t c, void *ctx)
 {
-    static htable_t jl_charmap;
+    static htable_t jl_charmap; // XXX: requires uv_once
     if (!jl_charmap.size) { // initialize hash table
         size_t i, charmap_len = sizeof(charmap) / (2*sizeof(uint32_t));
         htable_t *h = htable_new(&jl_charmap, charmap_len);

@@ -46,6 +46,7 @@ let
             :SuiteSparse,
             :Distributed,
             :SharedArrays,
+            :TOML,
             :Pkg,
             :Test,
             :REPL,

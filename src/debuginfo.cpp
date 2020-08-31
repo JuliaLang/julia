@@ -1051,8 +1051,6 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
 }
 
 
-extern "C" void jl_refresh_dbg_module_list(void);
-
 bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *slide, llvm::DIContext **context,
     bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
 {

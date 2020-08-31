@@ -280,6 +280,13 @@
                             (cdr e))))
     (else (other e))))
 
+;; given the LHS of e.g. `x::Int -> y`, wrap the signature in `tuple` to normalize
+(define (tuple-wrap-arrow-sig e)
+  (cond ((atom? e)             `(tuple ,e))
+        ((eq? (car e) 'where)  `(where ,(tuple-wrap-arrow-arglist (cadr e)) ,@(cddr e)))
+        ((eq? (car e) 'tuple)  e)
+        (else                  `(tuple ,e))))
+
 (define (new-expansion-env-for x env (outermost #f))
   (let ((introduced (pattern-expand1 vars-introduced-by-patterns x)))
     (if (or (atom? x)
@@ -370,7 +377,11 @@
                            (resolve-expansion-vars- x env m parent-scope #f)))
                        (cdr e))))
 
-           ((= function ->)
+           ((->)
+            `(-> ,(resolve-in-function-lhs (tuple-wrap-arrow-sig (cadr e)) env m parent-scope inarg)
+                 ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
+
+           ((= function)
             (if (and (pair? (cadr e)) (function-def? e))
                 ;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
                 `(,(car e) ,(resolve-in-function-lhs (cadr e) env m parent-scope inarg)

@@ -354,7 +354,7 @@ end
 function cmd_gen(parsed)
     args = String[]
     if length(parsed) >= 1 && isa(parsed[1], Tuple{Cmd})
-        cmd = parsed[1][1]
+        cmd = (parsed[1]::Tuple{Cmd})[1]
         (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
         append!(args, cmd.exec)
         for arg in tail(parsed)

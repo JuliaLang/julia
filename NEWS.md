@@ -8,6 +8,8 @@ New language features
   `(Foo{T} where T)(x) = ...`.
 * `<--` and `<-->` are now available as infix operators, with the same precedence
   and associativity as other arrow-like operators ([#36666]).
+* Compilation and type inference can now be enabled or disabled at the module level
+  using the experimental macro `Base.Experimental.@compiler_options` ([#37041]).
 
 Language changes
 ----------------
@@ -68,7 +70,6 @@ New library features
 
 Standard library changes
 ------------------------
-
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
 * The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array) arguments `x` and `y` ([#35883]).
 * `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
@@ -80,7 +81,9 @@ Standard library changes
 * `first` and `last` functions now accept an integer as second argument to get that many
   leading or trailing elements of any iterable ([#34868]).
 * `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
+* `push!(c::Channel, v)` now returns channel `c`. Previously, it returned the pushed value `v` ([#34202]).
 * `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
+* A new standard library `TOML` has been added for parsing and printing [TOML files](https://toml.io) ([#37034]).
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).

@@ -244,6 +244,10 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
         if (jl_is_datatype(b)) {
             jl_datatype_t *ad = (jl_datatype_t*)a;
             jl_datatype_t *bd = (jl_datatype_t*)b;
+            if (a == (jl_value_t*)jl_typeofbottom_type && bd->name == jl_type_typename)
+                return obviously_unequal(jl_bottom_type, jl_tparam(bd, 0));
+            if (ad->name == jl_type_typename && b == (jl_value_t*)jl_typeofbottom_type)
+                return obviously_unequal(jl_tparam(ad, 0), jl_bottom_type);
             if (ad->name != bd->name)
                 return 1;
             int istuple = (ad->name == jl_tuple_typename);
@@ -663,8 +667,6 @@ static jl_value_t *widen_Type(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
     }
     return t;
 }
-
-JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v);
 
 // convert a type with free variables to a typevar bounded by a UnionAll-wrapped
 // version of that type.
@@ -3209,7 +3211,7 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 // pointwise unions. Note that this may in general be wider than `Union{a,b}`.
 // If `a` and `b` are not (non va-)tuples of equal length (or unions or unionalls
 // of such), return NULL.
-jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
+static jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
 {
     if (jl_is_unionall(a)) {
         jl_value_t *ans = switch_union_tuple(((jl_unionall_t*)a)->body, b);
@@ -3269,7 +3271,7 @@ jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
 
 // `a` might have a non-empty intersection with some concrete type b even if !(a<:b) and !(b<:a)
 // For example a=`Tuple{Type{<:Vector}}` and b=`Tuple{DataType}`
-int might_intersect_concrete(jl_value_t *a)
+static int might_intersect_concrete(jl_value_t *a)
 {
     if (jl_is_unionall(a))
         a = jl_unwrap_unionall(a);

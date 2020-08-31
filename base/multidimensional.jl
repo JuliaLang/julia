@@ -33,7 +33,7 @@ module IteratorsMD
     # Examples
     ```jldoctest
     julia> A = reshape(Vector(1:16), (2, 2, 2, 2))
-    2×2×2×2 Array{Int64,4}:
+    2×2×2×2 Array{Int64, 4}:
     [:, :, 1, 1] =
      1  3
      2  4
@@ -203,7 +203,7 @@ module IteratorsMD
     CartesianIndex(2, 2, 2)
 
     julia> CartesianIndices(fill(1, (2,3)))
-    2×3 CartesianIndices{2,Tuple{Base.OneTo{Int64},Base.OneTo{Int64}}}:
+    2×3 CartesianIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}:
      CartesianIndex(1, 1)  CartesianIndex(1, 2)  CartesianIndex(1, 3)
      CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
     ```
@@ -215,7 +215,7 @@ module IteratorsMD
 
     ```jldoctest
     julia> cartesian = CartesianIndices((1:3, 1:2))
-    3×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+    3×2 CartesianIndices{2, Tuple{UnitRange{Int64}, UnitRange{Int64}}}:
      CartesianIndex(1, 1)  CartesianIndex(1, 2)
      CartesianIndex(2, 1)  CartesianIndex(2, 2)
      CartesianIndex(3, 1)  CartesianIndex(3, 2)
@@ -233,7 +233,7 @@ module IteratorsMD
 
     ```jldoctest
     julia> CIs = CartesianIndices((2:3, 5:6))
-    2×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+    2×2 CartesianIndices{2, Tuple{UnitRange{Int64}, UnitRange{Int64}}}:
      CartesianIndex(2, 5)  CartesianIndex(2, 6)
      CartesianIndex(3, 5)  CartesianIndex(3, 6)
 
@@ -241,7 +241,7 @@ module IteratorsMD
     CartesianIndex(3, 4)
 
     julia> CIs .+ CI
-    2×2 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+    2×2 CartesianIndices{2, Tuple{UnitRange{Int64}, UnitRange{Int64}}}:
      CartesianIndex(5, 9)  CartesianIndex(5, 10)
      CartesianIndex(6, 9)  CartesianIndex(6, 10)
     ```
@@ -278,7 +278,7 @@ module IteratorsMD
     julia> J = CartesianIndex(3,3);
 
     julia> I:J
-    2×3 CartesianIndices{2,Tuple{UnitRange{Int64},UnitRange{Int64}}}:
+    2×3 CartesianIndices{2, Tuple{UnitRange{Int64}, UnitRange{Int64}}}:
      CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
      CartesianIndex(3, 1)  CartesianIndex(3, 2)  CartesianIndex(3, 3)
     ```
@@ -1465,7 +1465,7 @@ Return unique regions of `A` along dimension `dims`.
 # Examples
 ```jldoctest
 julia> A = map(isodd, reshape(Vector(1:8), (2,2,2)))
-2×2×2 Array{Bool,3}:
+2×2×2 Array{Bool, 3}:
 [:, :, 1] =
  1  1
  0  0
@@ -1480,7 +1480,7 @@ julia> unique(A)
  0
 
 julia> unique(A, dims=2)
-2×1×2 Array{Bool,3}:
+2×1×2 Array{Bool, 3}:
 [:, :, 1] =
  1
  0
@@ -1490,7 +1490,7 @@ julia> unique(A, dims=2)
  0
 
 julia> unique(A, dims=3)
-2×2×1 Array{Bool,3}:
+2×2×1 Array{Bool, 3}:
 [:, :, 1] =
  1  1
  0  0
@@ -1578,7 +1578,7 @@ Compute the minimum and maximum elements of an array over the given dimensions.
 # Examples
 ```jldoctest
 julia> A = reshape(Vector(1:2:16), (2,2,2))
-2×2×2 Array{Int64,3}:
+2×2×2 Array{Int64, 3}:
 [:, :, 1] =
  1  5
  3  7
@@ -1588,7 +1588,7 @@ julia> A = reshape(Vector(1:2:16), (2,2,2))
  11  15
 
 julia> extrema(A, dims = (1,2))
-1×1×2 Array{Tuple{Int64,Int64},3}:
+1×1×2 Array{Tuple{Int64, Int64}, 3}:
 [:, :, 1] =
  (1, 7)
 
@@ -1728,7 +1728,7 @@ but the result order will be row-major instead.
 # Higher dimensional examples
 ```
 julia> A = permutedims(reshape([4 3; 2 1; 'A' 'B'; 'C' 'D'], (2, 2, 2)), (1, 3, 2))
-2×2×2 Array{Any,3}:
+2×2×2 Array{Any, 3}:
 [:, :, 1] =
  4  3
  2  1
@@ -1738,7 +1738,7 @@ julia> A = permutedims(reshape([4 3; 2 1; 'A' 'B'; 'C' 'D'], (2, 2, 2)), (1, 3, 
  'C'  'D'
 
 julia> sortslices(A, dims=(1,2))
-2×2×2 Array{Any,3}:
+2×2×2 Array{Any, 3}:
 [:, :, 1] =
  1  3
  2  4
@@ -1748,7 +1748,7 @@ julia> sortslices(A, dims=(1,2))
  'C'  'A'
 
 julia> sortslices(A, dims=(2,1))
-2×2×2 Array{Any,3}:
+2×2×2 Array{Any, 3}:
 [:, :, 1] =
  1  2
  3  4
@@ -1758,7 +1758,7 @@ julia> sortslices(A, dims=(2,1))
  'B'  'A'
 
 julia> sortslices(reshape([5; 4; 3; 2; 1], (1,1,5)), dims=3, by=x->x[1,1])
-1×1×5 Array{Int64,3}:
+1×1×5 Array{Int64, 3}:
 [:, :, 1] =
  1
 

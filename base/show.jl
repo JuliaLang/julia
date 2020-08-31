@@ -204,7 +204,7 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
     if istaskfailed(t)
         println(io)
-        show_task_exception(io, t)
+        show_task_exception(io, t, indent = false)
     end
 end
 
@@ -850,7 +850,7 @@ function show_datatype(io::IO, x::DataType)
 
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
     if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
-        print(io, "NTuple{", n, ',', x.parameters[1], "}")
+        print(io, "NTuple{", n, ", ", x.parameters[1], "}")
     else
         show_type_name(io, x.name)
         if (n > 0 || istuple) && x !== Tuple
@@ -862,7 +862,7 @@ function show_datatype(io::IO, x::DataType)
             for i = 1:n
                 p = x.parameters[i]
                 show(io, p)
-                i < n && print(io, ',')
+                i < n && print(io, ", ")
             end
             print(io, '}')
         end
@@ -888,7 +888,7 @@ macro show(exs...)
     blk = Expr(:block)
     for ex in exs
         push!(blk.args, :(println($(sprint(show_unquoted,ex)*" = "),
-                                  repr(begin value=$(esc(ex)) end))))
+                                  repr(begin local value = $(esc(ex)) end))))
     end
     isempty(exs) || push!(blk.args, :value)
     return blk
@@ -927,7 +927,7 @@ function gettypeinfos(io::IO, p::Pair)
 end
 
 function show(io::IO, p::Pair)
-    isdelimited(io, p) && return show_default(io, p)
+    isdelimited(io, p) && return show_pairtyped(io, p)
     typeinfos = gettypeinfos(io, p)
     for i = (1, 2)
         io_i = IOContext(io, :typeinfo => typeinfos[i])
@@ -936,6 +936,11 @@ function show(io::IO, p::Pair)
         isdelimited(io_i, p[i]) || print(io, ")")
         i == 1 && print(io, get(io, :compact, false) ? "=>" : " => ")
     end
+end
+
+function show_pairtyped(io::IO, p::Pair{K,V}) where {K,V}
+    show(io, typeof(p))
+    show(io, (p.first, p.second))
 end
 
 function show(io::IO, m::Module)
@@ -1920,7 +1925,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                 end
                 print(io, ")")
             else
-                escape_string(io, x, "\"\$")
+                escape_string(io, String(x)::String, "\"\$")
             end
         end
         print(io, '"')
@@ -2357,14 +2362,14 @@ julia> x = MyStruct(1, (2,3));
 julia> dump(x)
 MyStruct
   x: Int64 1
-  y: Tuple{Int64,Int64}
+  y: Tuple{Int64, Int64}
     1: Int64 2
     2: Int64 3
 
 julia> dump(x; maxdepth = 1)
 MyStruct
   x: Int64 1
-  y: Tuple{Int64,Int64}
+  y: Tuple{Int64, Int64}
 ```
 """
 function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
@@ -2424,6 +2429,7 @@ end
 
 const undef_ref_str = "#undef"
 
+show(io::IO, ::UndefInitializer) = print(io, "UndefInitializer()")
 
 """
     summary(io::IO, x)
@@ -2492,12 +2498,12 @@ specialize this function for specific types to customize printing.
 A SubArray created as `view(a, :, 3, 2:5)`, where `a` is a
 3-dimensional Float64 array, has type
 
-    SubArray{Float64,2,Array{Float64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}
+    SubArray{Float64, 2, Array{Float64, 3}, Tuple{Colon, Int64, UnitRange{Int64}}, false}
 
 The default `show` printing would display this full type.
 However, the summary for SubArrays actually prints as
 
-    2×4 view(::Array{Float64,3}, :, 3, 2:5) with eltype Float64
+    2×4 view(::Array{Float64, 3}, :, 3, 2:5) with eltype Float64
 
 because of a definition similar to
 

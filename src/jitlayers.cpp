@@ -156,7 +156,7 @@ static jl_callptr_t _jl_compile_codeinst(
                 this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
                 this_code->isspecsig = isspecsig;
             }
-            this_code->invoke = addr;
+            jl_atomic_store_release(&this_code->invoke, addr);
         }
         else if (this_code->invoke == jl_fptr_const_return && !decls.specFunctionObject.empty()) {
             // hack to export this pointer value to jl_dump_method_asm
@@ -325,8 +325,9 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
 extern "C"
 void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
 {
-    if (unspec->invoke != NULL)
+    if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
         return;
+    }
     JL_LOCK(&codegen_lock);
     if (unspec->invoke == NULL) {
         jl_code_info_t *src = NULL;
@@ -348,9 +349,10 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         }
         assert(src && jl_is_code_info(src));
         _jl_compile_codeinst(unspec, src, unspec->min_world);
-        if (unspec->invoke == NULL)
+        if (unspec->invoke == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
-            unspec->invoke = &jl_fptr_interpret_call;
+            jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
+        }
         JL_GC_POP();
     }
     JL_UNLOCK(&codegen_lock); // Might GC
@@ -371,7 +373,8 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
         uintptr_t specfptr = (uintptr_t)codeinst->specptr.fptr;
         if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
-            // so create an exception here so we can print pretty lies
+            // (using sentinel value `1` instead)
+            // so create an exception here so we can print pretty our lies
             JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             specfptr = (uintptr_t)codeinst->specptr.fptr;
             if (specfptr == 0) {
@@ -398,7 +401,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
             }
             JL_UNLOCK(&codegen_lock);
         }
-        if (specfptr)
+        if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo);
     }
 

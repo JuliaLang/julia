@@ -152,7 +152,7 @@ to wait and then obtain its return value.
 
 Values can be interpolated into `@spawn` via `\$`, which copies the value directly into the
 constructed underlying closure. This allows you to insert the _value_ of a variable,
-isolating the aysnchronous code from changes to the variable's value in the current task.
+isolating the asynchronous code from changes to the variable's value in the current task.
 
 !!! note
     See the manual chapter on threading for important caveats.

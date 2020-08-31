@@ -2741,3 +2741,5 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test (sizeof(Ptr),) == sizeof.((Ptr,)) == sizeof.((Ptr{Cvoid},))
 @test Core.Compiler.sizeof_tfunc(UnionAll) === Int
 @test !Core.Compiler.sizeof_nothrow(UnionAll)
+
+@test Base.return_types(Expr) == Any[Expr]

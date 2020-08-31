@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
-Core.PhiNode() = Core.PhiNode(Any[], Any[])
+Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
 """
 Like UnitRange{Int}, but can handle the `last` field, being temporarily
@@ -71,7 +71,7 @@ function basic_blocks_starts(stmts::Vector{Any})
         end
         if isa(stmt, PhiNode)
             for edge in stmt.edges
-                if edge === idx - 1
+                if edge == idx - 1
                     push!(jump_dests, idx)
                 end
             end
@@ -905,7 +905,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
                 stmt = compact.result[idx][:inst]
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
-                i = findfirst(x-> x === compact.bb_rename_pred[from], stmt.edges)
+                i = findfirst(x-> x == compact.bb_rename_pred[from], stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
                     deleteat!(stmt.values, i)
@@ -917,7 +917,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
             for stmt in CompactPeekIterator(compact, first(stmts), last(stmts))
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
-                i = findfirst(x-> x === from, stmt.edges)
+                i = findfirst(x-> x == from, stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
                     deleteat!(stmt.values, i)
@@ -1009,7 +1009,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             # not a value we can copy), we copy only the edges and (defined)
             # values we want to keep to new arrays initialized with undefined
             # elements.
-            edges = Vector{Any}(undef, length(stmt.edges))
+            edges = Vector{Int32}(undef, length(stmt.edges))
             values = Vector{Any}(undef, length(stmt.values))
             new_index = 1
             for old_index in 1:length(stmt.edges)

@@ -76,8 +76,8 @@ cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
 hascolor(::TextTerminal) = false
 
 # Utility Functions
-width(t::TextTerminal) = displaysize(t)[2]
-height(t::TextTerminal) = displaysize(t)[1]
+width(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[2]
+height(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[1]
 
 # For terminals with buffers
 flush(t::TextTerminal) = nothing
@@ -160,6 +160,6 @@ Base.haskey(t::TTYTerminal, key) = haskey(pipe_writer(t), key)
 Base.getindex(t::TTYTerminal, key) = getindex(pipe_writer(t), key)
 Base.get(t::TTYTerminal, key, default) = get(pipe_writer(t), key, default)
 
-Base.peek(t::TTYTerminal, ::Type{T}) where {T} = peek(t.in_stream, T)
+Base.peek(t::TTYTerminal, ::Type{T}) where {T} = peek(t.in_stream, T)::T
 
 end # module

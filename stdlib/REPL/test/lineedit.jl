@@ -242,21 +242,22 @@ end
 buf = IOBuffer("a\na\na\n")
 seek(buf, 0)
 for i = 1:6
-    LineEdit.edit_move_right(buf)
+    @test LineEdit.edit_move_right(buf)
     @test position(buf) == i
 end
 @test eof(buf)
+@test !LineEdit.edit_move_right(buf)
 for i = 5:-1:0
-    LineEdit.edit_move_left(buf)
+    @test @inferred LineEdit.edit_move_left(buf)
     @test position(buf) == i
 end
 
 # skip unicode combining characters
 buf = IOBuffer("ŷ")
 seek(buf, 0)
-LineEdit.edit_move_right(buf)
+@test LineEdit.edit_move_right(buf)
 @test eof(buf)
-LineEdit.edit_move_left(buf)
+@test LineEdit.edit_move_left(buf)
 @test position(buf) == 0
 
 ## edit_move_{up,down} ##
@@ -307,7 +308,7 @@ seek(buf,0)
 
 buf = IOBuffer("type X\n ")
 seekend(buf)
-@test !isempty(LineEdit.edit_delete_prev_word(buf))
+@test !isempty(@inferred(LineEdit.edit_delete_prev_word(buf)))
 @test position(buf) == 5
 @test buf.size == 5
 @test content(buf) == "type "
@@ -323,7 +324,7 @@ buf = IOBuffer("x = func(arg1,arg2 , arg3)")
 seekend(buf)
 LineEdit.char_move_word_left(buf)
 @test position(buf) == 21
-@test !isempty(LineEdit.edit_delete_prev_word(buf))
+@test !isempty(@inferred(LineEdit.edit_delete_prev_word(buf)))
 @test content(buf) == "x = func(arg1,arg3)"
 @test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test content(buf) == "x = func(arg3)"
@@ -336,18 +337,18 @@ let buf = IOBuffer()
     LineEdit.edit_move_left(buf)
     @test position(buf) == 0
     LineEdit.edit_move_right(buf)
-    @test bytesavailable(buf) == 0
-    LineEdit.edit_backspace(buf, false, false)
+    @test @inferred(bytesavailable(buf)) == 0
+    @inferred(LineEdit.edit_backspace(buf, false, false))
     @test content(buf) == "a"
 end
 
 ## edit_transpose_chars ##
 let buf = IOBuffer()
-    edit_insert(buf, "abcde")
+    @inferred(edit_insert(buf, "abcde"))
     seek(buf,0)
-    LineEdit.edit_transpose_chars(buf)
+    @inferred(LineEdit.edit_transpose_chars(buf))
     @test content(buf) == "abcde"
-    LineEdit.char_move_right(buf)
+    @inferred Union{Char,Bool} LineEdit.char_move_right(buf)
     LineEdit.edit_transpose_chars(buf)
     @test content(buf) == "bacde"
     LineEdit.edit_transpose_chars(buf)
@@ -359,7 +360,7 @@ let buf = IOBuffer()
     @test content(buf) == "bcade"
 
     seek(buf, 0)
-    LineEdit.edit_clear(buf)
+    @inferred(LineEdit.edit_clear(buf))
     edit_insert(buf, "αβγδε")
     seek(buf,0)
     LineEdit.edit_transpose_chars(buf)
@@ -385,7 +386,7 @@ end
 
     mode[] = :readline
     edit_insert(buf, "àbç def  gh ")
-    @test transpose!(0) == ("àbç def  gh ", 0)
+    @test @inferred(transpose!(0)) == ("àbç def  gh ", 0)
     @test transpose!(1) == ("àbç def  gh ", 1)
     @test transpose!(2) == ("àbç def  gh ", 2)
     @test transpose!(3) == ("def àbç  gh ", 7)
@@ -395,7 +396,7 @@ end
     @test transpose!(7) == ("àbç gh  def ", 11)
     @test transpose!(10) == ("àbç def  gh ", 11)
     @test transpose!(11) == ("àbç gh   def", 12)
-    edit_insert(buf, " ")
+    @inferred(edit_insert(buf, " "))
     @test transpose!(13) == ("àbç def    gh", 13)
 
     take!(buf)
@@ -412,7 +413,7 @@ end
 let s = new_state(),
     buf = buffer(s)
 
-    edit_insert(s,"first line\nsecond line\nthird line")
+    @inferred Union{Int,LineEdit.InputAreaState} edit_insert(s,"first line\nsecond line\nthird line")
     @test content(buf) == "first line\nsecond line\nthird line"
 
     ## edit_move_line_start/end ##
@@ -438,14 +439,14 @@ let s = new_state(),
 
     ## edit_kill_line, edit_yank ##
     seek(buf, 0)
-    LineEdit.edit_kill_line(s)
+    @inferred Union{Symbol,LineEdit.InputAreaState} LineEdit.edit_kill_line(s)
     s.key_repeats = 1 # Manually flag a repeated keypress
     LineEdit.edit_kill_line(s)
     s.key_repeats = 0
     @test content(buf) == "second line\nthird line"
     LineEdit.move_line_end(s)
     LineEdit.edit_move_right(s)
-    LineEdit.edit_yank(s)
+    @inferred Union{Symbol,LineEdit.InputAreaState} LineEdit.edit_yank(s)
     @test content(buf) == "second line\nfirst line\nthird line"
 end
 
@@ -460,7 +461,7 @@ let buf = IOBuffer(
     outbuf = IOBuffer()
     termbuf = REPL.Terminals.TerminalBuffer(outbuf)
     term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-    s = LineEdit.refresh_multi_line(termbuf, term, buf,
+    s = @inferred LineEdit.refresh_multi_line(termbuf, term, buf,
         REPL.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
     @test s == REPL.LineEdit.InputAreaState(3,1)
 end
@@ -468,9 +469,9 @@ end
 @testset "function prompt indentation" begin
     local s, term, ps, buf, outbuf, termbuf
     s = new_state()
-    term = REPL.LineEdit.terminal(s)
+    term = @inferred REPL.AbstractTerminal REPL.LineEdit.terminal(s)
     # default prompt: PromptState.indent should not be set to a final fixed value
-    ps::LineEdit.PromptState = s.mode_state[s.current_mode]
+    ps::LineEdit.PromptState = @inferred LineEdit.ModeState s.mode_state[s.current_mode]
     @test ps.indent == -1
     # the prompt is modified afterwards to a function
     ps.p.prompt = let i = 0
@@ -480,7 +481,7 @@ end
     write(buf, "begin\n    julia = :fun\nend")
     outbuf = IOBuffer()
     termbuf = REPL.Terminals.TerminalBuffer(outbuf)
-    LineEdit.refresh_multi_line(termbuf, term, ps)
+    @inferred(LineEdit.refresh_multi_line(termbuf, term, ps))
     @test String(take!(outbuf)) ==
         "\r\e[0K\e[1mJulia is Fun! > \e[0m\r\e[16Cbegin\n" *
         "\r\e[16C    julia = :fun\n" *
@@ -496,13 +497,13 @@ end
     s = new_state()
     edit_insert(s, "αä🐨") # for issue #28183
     s.current_action = :unknown
-    LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+    @inferred Union{Bool, LineEdit.InputAreaState} LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
     @test LineEdit.region(s) == (5=>9)
     LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
     @test LineEdit.region(s) == (2=>9)
     LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
     @test LineEdit.region(s) == (0=>9)
-    LineEdit.edit_shift_move(s, LineEdit.edit_move_right)
+    @inferred Union{Bool, LineEdit.InputAreaState} LineEdit.edit_shift_move(s, LineEdit.edit_move_right)
     @test LineEdit.region(s) == (2=>9)
 end
 
@@ -513,9 +514,9 @@ end
     end
 
     edit_insert(s, "for x=1:10\n")
-    LineEdit.edit_tab(s)
+    @inferred Union{Symbol,LineEdit.InputAreaState} LineEdit.edit_tab(s)
     @test content(s) == "for x=1:10\n    "
-    LineEdit.edit_backspace(s, true, false)
+    @inferred Union{Nothing,LineEdit.InputAreaState} LineEdit.edit_backspace(s, true, false)
     @test content(s) == "for x=1:10\n"
     edit_insert(s, "  ")
     @test position(s) == 13
@@ -608,11 +609,11 @@ end
     local buf = IOBuffer()
     edit_insert(buf, "aa bB CC")
     seekstart(buf)
-    LineEdit.edit_upper_case(buf)
-    LineEdit.edit_title_case(buf)
+    @inferred LineEdit.edit_upper_case(buf)
+    @inferred LineEdit.edit_title_case(buf)
     @test String(take!(copy(buf))) == "AA Bb CC"
     @test position(buf) == 5
-    LineEdit.edit_lower_case(buf)
+    @inferred LineEdit.edit_lower_case(buf)
     @test String(take!(copy(buf))) == "AA Bb cc"
 end
 
@@ -621,18 +622,18 @@ end
     s = new_state()
     buf = buffer(s)
     edit_insert(s, "ça ≡ nothing")
-    @test transform!(LineEdit.edit_copy_region, s) == ("ça ≡ nothing", 12, 0)
+    @test @inferred transform!(LineEdit.edit_copy_region, s) == ("ça ≡ nothing", 12, 0)
     @test s.kill_ring[end] == "ça ≡ nothing"
-    @test transform!(LineEdit.edit_exchange_point_and_mark, s)[2:3] == (0, 12)
+    @test @inferred transform!(LineEdit.edit_exchange_point_and_mark, s)[2:3] == (0, 12)
     charseek(buf, 8); setmark(s)
     charseek(buf, 1)
-    @test transform!(LineEdit.edit_kill_region, s) == ("çhing", 1, 1)
+    @test @inferred transform!(LineEdit.edit_kill_region, s) == ("çhing", 1, 1)
     @test s.kill_ring[end] == "a ≡ not"
     charseek(buf, 0)
-    @test transform!(LineEdit.edit_yank, s) == ("a ≡ notçhing", 7, 0)
+    @test @inferred transform!(LineEdit.edit_yank, s) == ("a ≡ notçhing", 7, 0)
     s.last_action = :unknown
     # next action will fail, as yank-pop doesn't know a yank was just issued
-    @test transform!(LineEdit.edit_yank_pop, s) == ("a ≡ notçhing", 7, 0)
+    @test @inferred transform!(LineEdit.edit_yank_pop, s) == ("a ≡ notçhing", 7, 0)
     s.last_action = :edit_yank
     # now this should work:
     @test transform!(LineEdit.edit_yank_pop, s) == ("ça ≡ nothingçhing", 12, 0)
@@ -689,13 +690,13 @@ end
 
     edit_insert(s, "one two three")
 
-    @test edit!(LineEdit.edit_delete_prev_word) == "one two "
-    @test edit!(edit_undo!) == "one two three"
+    @test @inferred edit!(LineEdit.edit_delete_prev_word) == "one two "
+    @test @inferred edit!(edit_undo!) == "one two three"
     @test edit!(edit_redo!) == "one two "
     @test edit!(edit_undo!) == "one two three"
 
     edit_insert(s, " four")
-    @test edit!(s->edit_insert(s, " five")) == "one two three four five"
+    @test @inferred edit!(s->edit_insert(s, " five")) == "one two three four five"
     @test edit!(edit_undo!) == "one two three four"
     @test edit!(edit_undo!) == "one two three"
     @test edit!(edit_redo!) == "one two three four"
@@ -703,16 +704,16 @@ end
     @test edit!(edit_undo!) == "one two three four"
     @test edit!(edit_undo!) == "one two three"
 
-    @test edit!(LineEdit.edit_clear) == ""
+    @test @inferred edit!(LineEdit.edit_clear) == ""
     @test edit!(LineEdit.edit_clear) == "" # should not be saved twice
     @test edit!(edit_undo!) == "one two three"
 
-    @test edit!(LineEdit.edit_insert_newline) == "one two three\n"
+    @test @inferred edit!(LineEdit.edit_insert_newline) == "one two three\n"
     @test edit!(edit_undo!) == "one two three"
 
     LineEdit.edit_move_left(s)
     LineEdit.edit_move_left(s)
-    @test edit!(LineEdit.edit_transpose_chars) == "one two there"
+    @test @inferred edit!(LineEdit.edit_transpose_chars) == "one two there"
     @test edit!(edit_undo!) == "one two three"
     @test edit!(LineEdit.edit_transpose_words) == "one three two"
     @test edit!(edit_undo!) == "one two three"
@@ -808,8 +809,8 @@ end
     local buf = IOBuffer()
     write(buf, "1\n22\n333")
     seek(buf, 0)
-    @test LineEdit.edit_indent(buf, -1, false) == false
-    @test transform!(buf->LineEdit.edit_indent(buf, -1, false), buf) == ("1\n22\n333", 0, 0)
+    @test @inferred LineEdit.edit_indent(buf, -1, false) == false
+    @test @inferred transform!(buf->LineEdit.edit_indent(buf, -1, false), buf) == ("1\n22\n333", 0, 0)
     @test transform!(buf->LineEdit.edit_indent(buf, +1, false), buf) == (" 1\n22\n333", 1, 0)
     @test transform!(buf->LineEdit.edit_indent(buf, +2, false), buf) == ("   1\n22\n333", 3, 0)
     @test transform!(buf->LineEdit.edit_indent(buf, -2, false), buf) == (" 1\n22\n333", 1, 0)
@@ -842,10 +843,10 @@ end
 end
 
 @testset "edit_transpose_lines_{up,down}!" begin
-    transpose_lines_up!(buf) = LineEdit.edit_transpose_lines_up!(buf, position(buf)=>position(buf))
-    transpose_lines_up_reg!(buf) = LineEdit.edit_transpose_lines_up!(buf, region(buf))
-    transpose_lines_down!(buf) = LineEdit.edit_transpose_lines_down!(buf, position(buf)=>position(buf))
-    transpose_lines_down_reg!(buf) = LineEdit.edit_transpose_lines_down!(buf, region(buf))
+    transpose_lines_up!(buf) = @inferred LineEdit.edit_transpose_lines_up!(buf, position(buf)=>position(buf))
+    transpose_lines_up_reg!(buf) = @inferred LineEdit.edit_transpose_lines_up!(buf, region(buf))
+    transpose_lines_down!(buf) = @inferred LineEdit.edit_transpose_lines_down!(buf, position(buf)=>position(buf))
+    transpose_lines_down_reg!(buf) = @inferred LineEdit.edit_transpose_lines_down!(buf, region(buf))
 
     local buf
     buf = IOBuffer()
@@ -881,7 +882,7 @@ end
 end
 
 @testset "edit_insert_last_word" begin
-    get_last_word(str::String) = LineEdit.get_last_word(IOBuffer(str))
+    get_last_word(str::String) = @inferred LineEdit.get_last_word(IOBuffer(str))
     @test get_last_word("1+2") == "2"
     @test get_last_word("1+23") == "23"
     @test get_last_word("1+2") == "2"

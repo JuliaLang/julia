@@ -37,7 +37,7 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
                 return s, string_with_env(env, tt) * "..."
             end
         end
-        return s, string_with_env(env, "Vararg{", tt, ",", tn, "}")
+        return s, string_with_env(env, "Vararg{", tt, ", ", tn, "}")
     end
     return s, string_with_env(env, t)
 end

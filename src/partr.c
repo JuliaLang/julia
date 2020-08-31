@@ -432,13 +432,13 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
         if (sleep_check_after_threshold(&start_cycles) || (!_threadedregion && ptls->tid == 0)) {
             jl_atomic_store(&ptls->sleep_check_state, sleeping); // acquire sleep-check lock
             if (!multiq_check_empty()) {
-                if (ptls->sleep_check_state != not_sleeping)
+                if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
                     jl_atomic_store(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
                 continue;
             }
             task = get_next_task(trypoptask, q);
             if (task) {
-                if (ptls->sleep_check_state != not_sleeping)
+                if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
                     jl_atomic_store(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
                 return task;
             }

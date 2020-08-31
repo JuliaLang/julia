@@ -254,7 +254,7 @@ variables defined as of the call site.
 julia> let x = 1, y = 2
            Base.@locals
        end
-Dict{Symbol,Any} with 2 entries:
+Dict{Symbol, Any} with 2 entries:
   :y => 2
   :x => 1
 
@@ -270,9 +270,9 @@ julia> function f(x)
        end;
 
 julia> f(42)
-Dict{Symbol,Any}(:x => 42)
-Dict{Symbol,Any}(:i => 1,:x => 42)
-Dict{Symbol,Any}(:y => 2,:x => 42)
+Dict{Symbol, Any}(:x => 42)
+Dict{Symbol, Any}(:i => 1, :x => 42)
+Dict{Symbol, Any}(:y => 2, :x => 42)
 ```
 """
 macro locals()
@@ -571,7 +571,7 @@ use it in the following manner to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-12-element Vector{Tuple{UInt64,Symbol,DataType}}:
+12-element Vector{Tuple{UInt64, Symbol, DataType}}:
  (0x0000000000000000, :device, UInt64)
  (0x0000000000000008, :inode, UInt64)
  (0x0000000000000010, :mode, UInt64)
@@ -958,7 +958,6 @@ default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cin
 struct CodegenParams
     track_allocations::Cint
     code_coverage::Cint
-    static_alloc::Cint
     prefer_specsig::Cint
     gnu_pubnames::Cint
     debug_info_kind::Cint
@@ -974,7 +973,7 @@ struct CodegenParams
     generic_context::Any
 
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
-                   static_alloc::Bool=true, prefer_specsig::Bool=false,
+                   prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    module_setup=nothing, module_activation=nothing, raise_exception=nothing,
                    emit_function=nothing, emitted_function=nothing,
@@ -982,7 +981,7 @@ struct CodegenParams
                    generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
-            Cint(static_alloc), Cint(prefer_specsig),
+            Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             module_setup, module_activation, raise_exception,
             emit_function, emitted_function, lookup,
@@ -1281,6 +1280,51 @@ function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Sym
 end
 
 """
+    fbody = bodyfunction(basemethod::Method)
+
+Find the keyword "body function" (the function that contains the body of the method
+as written, called after all missing keyword-arguments have been assigned default values).
+`basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
+"""
+function bodyfunction(basemethod::Method)
+    function getsym(arg)
+        isa(arg, Symbol) && return arg
+        isa(arg, GlobalRef) && return arg.name
+        return nothing
+    end
+
+    fmod = basemethod.module
+    # The lowered code for `basemethod` should look like
+    #   %1 = mkw(kwvalues..., #self#, args...)
+    #        return %1
+    # where `mkw` is the name of the "active" keyword body-function.
+    ast = Base.uncompressed_ast(basemethod)
+    f = nothing
+    if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
+        callexpr = ast.code[end-1]
+        if isa(callexpr, Expr) && callexpr.head == :call
+            fsym = callexpr.args[1]
+            if isa(fsym, Symbol)
+                f = getfield(fmod, fsym)
+            elseif isa(fsym, GlobalRef)
+                newsym = nothing
+                if fsym.mod === Core && fsym.name === :_apply
+                    newsym = getsym(callexpr.args[2])
+                elseif fsym.mod === Core && fsym.name === :_apply_iterate
+                    newsym = getsym(callexpr.args[3])
+                end
+                if isa(newsym, Symbol)
+                    f = getfield(basemethod.module, newsym)::Function
+                else
+                    f = getfield(fsym.mod, fsym.name)::Function
+                end
+            end
+        end
+    end
+    return f
+end
+
+"""
     Base.isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
 
 Determine whether two methods `m1` and `m2` may be ambiguous for some call
@@ -1303,7 +1347,7 @@ foo (generic function with 2 methods)
 julia> m1, m2 = collect(methods(foo));
 
 julia> typeintersect(m1.sig, m2.sig)
-Tuple{typeof(foo),Complex{Union{}}}
+Tuple{typeof(foo), Complex{Union{}}}
 
 julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
 true

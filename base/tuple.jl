@@ -117,11 +117,16 @@ function _compute_eltype(t::Type{<:Tuple})
     @_pure_meta
     @nospecialize t
     t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
+    # Given t = Tuple{Vararg{S}} where S<:Real, the various
+    # unwrapping/wrapping/va-handling here will return Real
     t´ = unwrap_unionall(t)
     # TODO: handle Union/UnionAll correctly here
+    # For Tuple{T}, short-circuit promote_typejoin
+    length(t´.parameters) == 1 && return rewrap_unionall(unwrapva(t´.parameters[1]), t)
     r = Union{}
     for ti in t´.parameters
         r = promote_typejoin(r, rewrap_unionall(unwrapva(ti), t))
+        r === Any && break   # if we've already reached Any, it can't widen any more
     end
     return r
 end
