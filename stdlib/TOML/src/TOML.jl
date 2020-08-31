@@ -30,10 +30,10 @@ const Parser = Internals.Parser
     parsefile(f::AbstractString)
     parsefile(p::Parser, f::AbstractString)
 
-Parses a file `f` and returns the resulting table (dictionary). Throws a
+Parse file `f` and return the resulting table (dictionary). Throw a
 [`ParserError`](@ref) upon failure.
 
-See also [`TOML.tryparsefile`](@ref)
+See also: [`TOML.tryparsefile`](@ref)
 """
 parsefile(f::AbstractString) =
     Internals.parse(Parser(read(f, String); filepath=abspath(f)))
@@ -44,10 +44,10 @@ parsefile(p::Parser, f::AbstractString) =
     tryparsefile(f::AbstractString)
     tryparsefile(p::Parser, f::AbstractString)
 
-Parses a file `f` and returns the resulting table (dictionary). Returns a
+Parse file `f` and return the resulting table (dictionary). Return a
 [`ParserError`](@ref) upon failure.
 
-See also [`TOML.parsefile`](@ref)
+See also: [`TOML.parsefile`](@ref)
 """
 tryparsefile(f::AbstractString) =
     Internals.tryparse(Parser(read(f, String); filepath=abspath(f)))
@@ -55,32 +55,36 @@ tryparsefile(p::Parser, f::AbstractString) =
     Internals.tryparse(Internals.reinit!(p, read(f, String); filepath=abspath(f)))
 
 """
-    parse(str::AbstractString)
-    parse(p::Parser, str::AbstractString)
+    parse(x::Union{AbstractString, IO})
+    parse(p::Parser, x::Union{AbstractString, IO})
 
-Parses a string `str` and returns the resulting table (dictionary). Returns a
-[`ParserError`](@ref) upon failure.
+Parse the string  or stream `x`, and return the resulting table (dictionary).
+Throw a [`ParserError`](@ref) upon failure.
 
-See also [`TOML.tryparse`](@ref)
+See also: [`TOML.tryparse`](@ref)
 """
 parse(str::AbstractString) =
     Internals.parse(Parser(String(str)))
 parse(p::Parser, str::AbstractString) =
     Internals.parse(Internals.reinit!(p, String(str)))
+parse(io::IO) = parse(read(io, String))
+parse(p::Parser, io::IO) = parse(p, read(io, String))
 
 """
-    tryparse(str::AbstractString)
-    tryparse(p::Parser, str::AbstractString)
+    tryparse(x::Union{AbstractString, IO})
+    tryparse(p::Parser, x::Union{AbstractString, IO})
 
-Parses a string `str` and returns the resulting table (dictionary). Returns a
-[`ParserError`](@ref) upon failure.
+Parse the string or stream `x`, and return the resulting table (dictionary).
+Return a [`ParserError`](@ref) upon failure.
 
-See also [`TOML.parse`](@ref)
+See also: [`TOML.parse`](@ref)
 """
 tryparse(str::AbstractString) =
     Internals.tryparse(Parser(String(str)))
 tryparse(p::Parser, str::AbstractString) =
     Internals.tryparse(Internals.reinit!(p, String(str)))
+tryparse(io::IO) = tryparse(read(io, String))
+tryparse(p::Parser, io::IO) = tryparse(p, read(io, String))
 
 """
     ParserError
