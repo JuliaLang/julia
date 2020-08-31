@@ -748,7 +748,7 @@ for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
             end
 
             for i in 1:n
-                C[:,i] = A*B[:,i]
+                C[:,i] = A*view(B, :, i)
             end
             return C
         end
