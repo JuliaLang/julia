@@ -198,6 +198,7 @@ end
 function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
                       t::AbstractVector{<:Union{Int8,UInt8}},
                       _i::Integer)
+    require_one_based_indexing(s)
     n = length(t)
     m = length(s)
     i = Int(_i) - (firstindex(s) - 1)
@@ -453,6 +454,7 @@ function _rsearchindex(s::String, t::String, i::Integer)
 end
 
 function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector{<:Union{Int8,UInt8}}, _k::Integer)
+    require_one_based_indexing(s)
     n = length(t)
     m = length(s)
     k = Int(_k) - (firstindex(s) - 1)
