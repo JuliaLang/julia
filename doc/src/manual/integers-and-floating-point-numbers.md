@@ -680,12 +680,13 @@ and the identifier or parenthesized expression which it multiplies.
 
 ### Syntax Conflicts
 
-Juxtaposed literal coefficient syntax may conflict with two numeric literal syntaxes: hexadecimal
-integer literals and engineering notation for floating-point literals. Here are some situations
+Juxtaposed literal coefficient syntax may conflict with two numeric literal syntaxes: hexadecimal,
+octal and binary integer literals and engineering notation for floating-point literals. Here are some situations
 where syntactic conflicts arise:
 
   * The hexadecimal integer literal expression `0xff` could be interpreted as the numeric literal
-    `0` multiplied by the variable `xff`.
+    `0` multiplied by the variable `xff`. Similar ambiguities arise with octal and binary literals like
+    `0o777` or `0b01001010`.
   * The floating-point literal expression `1e10` could be interpreted as the numeric literal `1` multiplied
     by the variable `e10`, and similarly with the equivalent `E` form.
   * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
@@ -693,7 +694,7 @@ where syntactic conflicts arise:
 
 In all cases the ambiguity is resolved in favor of interpretation as numeric literals:
 
-  * Expressions starting with `0x` are always hexadecimal literals.
+  * Expressions starting with `0x`/`0o`/`0b` are always hexadecimal/octal/binary literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
   * Expressions starting with a numeric literal followed by `f` are always 32-bit floating-point literals.
 
