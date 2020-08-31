@@ -253,6 +253,8 @@ end
 # For types where x+oneunit(x) may not be well-defined
 steprange_last_empty(start, step, stop) = start - step
 
+StepRange{T,S}(start, step, stop) where {T,S} = StepRange{T,S}(T(start), S(step), T(stop))
+StepRange{T}(start, step::S, stop) where {T,S} = StepRange{T,S}(start, step, stop)
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
 """
@@ -785,26 +787,29 @@ union(r::OneTo, s::OneTo) = OneTo(max(r.stop,s.stop))
 
 intersect(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) = max(first(r),first(s)):min(last(r),last(s))
 
-intersect(i::Integer, r::AbstractUnitRange{<:Integer})::UnitRange{promote_type(typeof(i),eltype(r))} =
-    i < first(r) ? (first(r):i) :
-    i > last(r)  ? (i:last(r))  : (i:i)
+intersect(i::Integer, r::AbstractUnitRange{<:Integer}) = range(max(i, first(r)), length=in(i, r))
 
 intersect(r::AbstractUnitRange{<:Integer}, i::Integer) = intersect(i, r)
 
-function intersect(r::AbstractUnitRange{T1}, s::StepRange{T2,S})::StepRange{promote_type(T1,T2),S} where {T1<:Integer,T2<:Integer,S}
+function intersect(r::AbstractUnitRange{<:Integer}, s::StepRange{<:Integer})
+    T = promote_type(eltype(r), eltype(s))
     if isempty(s)
-        range(first(r), length=0)
-    elseif step(s) < 0
-        intersect(r, reverse(s))
+        StepRange{T}(first(r), +step(s), first(r)-step(s))
     else
-        sta = first(s)
-        ste = step(s)
-        sto = last(s)
+        sta, ste, sto = first_step_last_ascending(s)
         lo = first(r)
         hi = last(r)
         i0 = max(sta, lo + mod(sta - lo, ste))
         i1 = min(sto, hi - mod(hi - sta, ste))
-        i0:ste:i1
+        StepRange{T}(i0, ste, i1)
+    end
+end
+
+function first_step_last_ascending(r::StepRange)
+    if step(r) < zero(step(r))
+        last(r), -step(r), first(r)
+    else
+        first(r), +step(r), last(r)
     end
 end
 
@@ -816,39 +821,26 @@ function intersect(r::StepRange{<:Integer}, s::AbstractUnitRange{<:Integer})
     end
 end
 
-function intersect(r::StepRange{T1,S1}, s::StepRange{T2,S2})::StepRange{promote_type(T1,T2),promote_type(S1,S2)} where {T1,S1,T2,S2}
+function intersect(r::StepRange, s::StepRange)
+    T = promote_type(eltype(r), eltype(s))
+    S = promote_type(typeof(step(r)), typeof(step(s)))
     if isempty(r) || isempty(s)
-        return range(first(r), step=step(r), length=0)
-    elseif step(s) < zero(step(s))
-        return intersect(r, reverse(s))
-    elseif step(r) < zero(step(r))
-        return reverse(intersect(reverse(r), s))
+        return StepRange{T,S}(first(r), step(r), first(r)-step(r))
     end
 
-    start1 = first(r)
-    step1 = step(r)
-    stop1 = last(r)
-    start2 = first(s)
-    step2 = step(s)
-    stop2 = last(s)
+    start1, step1, stop1 = first_step_last_ascending(r)
+    start2, step2, stop2 = first_step_last_ascending(s)
     a = lcm(step1, step2)
-
-    # if a == 0
-    #     # One or both ranges have step 0.
-    #     if step1 == 0 && step2 == 0
-    #         return start1 == start2 ? r : AbstractRange(start1, 0, 0)
-    #     elseif step1 == 0
-    #         return start2 <= start1 <= stop2 && rem(start1 - start2, step2) == 0 ? r : AbstractRange(start1, 0, 0)
-    #     else
-    #         return start1 <= start2 <= stop1 && rem(start2 - start1, step1) == 0 ? (start2:step1:start2) : AbstractRange(start1, step1, 0)
-    #     end
-    # end
 
     g, x, y = gcdx(step1, step2)
 
     if !iszero(rem(start1 - start2, g))
         # Unaligned, no overlap possible.
-        return range(start1, step=a, length=0)
+        if  step(r) < zero(step(r))
+            return StepRange{T,S}(stop1, -a, stop1+a)
+        else
+            return StepRange{T,S}(start1, a, start1-a)
+        end
     end
 
     z = div(start1 - start2, g)
@@ -858,7 +850,7 @@ function intersect(r::StepRange{T1,S1}, s::StepRange{T2,S2})::StepRange{promote_
     # Determine where in the sequence to start and stop.
     m = max(start1 + mod(b - start1, a), start2 + mod(b - start2, a))
     n = min(stop1 - mod(stop1 - b, a), stop2 - mod(stop2 - b, a))
-    m:a:n
+    step(r) < zero(step(r)) ? StepRange{T,S}(n, -a, m) : StepRange{T,S}(m, a, n)
 end
 
 function intersect(r1::AbstractRange, r2::AbstractRange, r3::AbstractRange, r::AbstractRange...)
