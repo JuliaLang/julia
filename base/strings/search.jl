@@ -322,7 +322,9 @@ findnext(ch::AbstractChar, string::AbstractString, start::Integer) =
     findnext(==(ch), string, start)
 
 """
-    findnext(pattern::AbstractVector{<:Union{Int8,UInt8}}, A::AbstractVector{<:Union{Int8,UInt8}}, start::Integer)
+    findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
+             A::AbstractVector{<:Union{Int8,UInt8}},
+             start::Integer)
 
 Find the next occurrence of the sequence `pattern` in vector `A` starting at position `start`.
 
