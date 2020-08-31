@@ -196,23 +196,23 @@ end
 function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
                       t::AbstractVector{<:Union{Int8,UInt8}},
                       _i::Integer)
-    require_one_based_indexing(s)
+    sentinel = firstindex(s) - 1
     n = length(t)
     m = length(s)
-    i = Int(_i) - (firstindex(s) - 1)
+    i = Int(_i) - sentinel
     (i < 1 || i > m+1) && throw(BoundsError(s, _i))
 
     if n == 0
-        return 1 <= i <= m+1 ? max(1, i) : 0
+        return 1 <= i <= m+1 ? max(1, i) : sentinel
     elseif m == 0
-        return 0
+        return sentinel
     elseif n == 1
-        return something(findnext(isequal(_nthbyte(t,1)), s, i), 0)
+        return something(findnext(isequal(_nthbyte(t,1)), s, i), sentinel)
     end
 
     w = m - n
     if w < 0 || i - 1 > w
-        return 0
+        return sentinel
     end
 
     bloom_mask = UInt64(0)
@@ -257,7 +257,7 @@ function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
         i += 1
     end
 
-    0
+    sentinel
 end
 
 function _search(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
@@ -266,7 +266,7 @@ function _search(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
     idx = _searchindex(s,t,i)
     if isempty(t)
         idx:idx-1
-    elseif idx > 0
+    elseif idx > firstindex(s) - 1
         idx:(idx + lastindex(t) - 1)
     else
         nothing
@@ -454,23 +454,23 @@ function _rsearchindex(s::String, t::String, i::Integer)
 end
 
 function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector{<:Union{Int8,UInt8}}, _k::Integer)
-    require_one_based_indexing(s)
+    sentinel = firstindex(s) - 1
     n = length(t)
     m = length(s)
-    k = Int(_k) - (firstindex(s) - 1)
+    k = Int(_k) - sentinel
     k < 1 && throw(BoundsError(s, _k))
 
     if n == 0
-        return 0 <= k <= m ? max(k, 1) : 0
+        return 0 <= k <= m ? max(k, 1) : sentinel
     elseif m == 0
-        return 0
+        return sentinel
     elseif n == 1
-        return something(findprev(isequal(_nthbyte(t,1)), s, k), 0)
+        return something(findprev(isequal(_nthbyte(t,1)), s, k), sentinel)
     end
 
     w = m - n
     if w < 0 || k <= 0
-        return 0
+        return sentinel
     end
 
     bloom_mask = UInt64(0)
@@ -497,7 +497,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
 
             # match found, restore in case `s` is an OffsetArray
             if j == n
-                return i + (firstindex(s) - 1)
+                return i + sentinel
             end
 
             # no match, try to rule out the next character
@@ -514,7 +514,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
         i -= 1
     end
 
-    0
+    sentinel
 end
 
 function _rsearch(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
@@ -523,7 +523,7 @@ function _rsearch(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
     idx = _rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
-    elseif idx > 0
+    elseif idx > firstindex(s) - 1
         idx:(idx + lastindex(t) - 1)
     else
         nothing

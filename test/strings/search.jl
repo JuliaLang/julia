@@ -405,7 +405,7 @@ end
         @test findfirst(pattern, A) === 2:3
         @test findnext(pattern, A, 2) === 2:3
         @test findnext(pattern, A, 3) === 4:5
-        # 1 idx too long is allowed
+        # 1 idx too far is allowed
         @test findnext(pattern, A, length(A)+1) === nothing
         @test_throws BoundsError findnext(pattern, A, -3)
         @test_throws BoundsError findnext(pattern, A, length(A)+2)
