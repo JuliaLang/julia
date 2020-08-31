@@ -377,7 +377,7 @@ julia> findlast([0x52, 0x62], [0x52, 0x62, 0x52, 0x62])
 ```
 """
 findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
-         A::AbstractVector{<:Union{Int8,UInt8}})=
+         A::AbstractVector{<:Union{Int8,UInt8}}) =
     findprev(pattern, A, lastindex(A))
 
 """
