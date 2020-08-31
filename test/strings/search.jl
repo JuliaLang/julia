@@ -392,8 +392,8 @@ end
 
 # issue 37280
 @testset "UInt8, Int8 vector" begin
-    for VT in [Int8, UInt8]
-        A = VT[0x40, 0x52, 0x62, 0x52, 0x62]
+    for T in [Int8, UInt8], VT in [Int8, UInt8]
+        A = T[0x40, 0x52, 0x62, 0x52, 0x62]
 
         @test findfirst(VT[0x30], A) === nothing
         @test findfirst(VT[0x52], A) === 2:2
