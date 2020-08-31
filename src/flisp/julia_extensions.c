@@ -70,8 +70,9 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
             cat == UTF8PROC_CATEGORY_LT || cat == UTF8PROC_CATEGORY_LM ||
             cat == UTF8PROC_CATEGORY_LO || cat == UTF8PROC_CATEGORY_NL ||
             cat == UTF8PROC_CATEGORY_SC ||  // allow currency symbols
-            // other symbols, but not arrows
-            (cat == UTF8PROC_CATEGORY_SO && !(wc >= 0x2190 && wc <= 0x21FF)) ||
+            // other symbols, but not arrows or replacement characters
+            (cat == UTF8PROC_CATEGORY_SO && !(wc >= 0x2190 && wc <= 0x21FF) &&
+             wc != 0xfffc && wc != 0xfffd) ||
 
             // math symbol (category Sm) whitelist
             (wc >= 0x2140 && wc <= 0x2a1c &&
