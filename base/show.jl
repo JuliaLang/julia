@@ -617,7 +617,7 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector)
         for i = 1:n
             p = env[i]
             show(io, p)
-            i < n && print(io, ",")
+            i < n && print(io, ", ")
         end
     end
     print(io, "}")
