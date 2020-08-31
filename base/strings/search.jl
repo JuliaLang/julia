@@ -138,10 +138,9 @@ julia> findfirst([0x52, 0x62], [0x40, 0x52, 0x62, 0x63])
 2:3
 ```
 """
-function findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
-                   A::AbstractVector{<:Union{Int8,UInt8}})
+findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
+          A::AbstractVector{<:Union{Int8,UInt8}})=
     _search(A, pattern, firstindex(A))
-end
 
 
 
@@ -376,10 +375,10 @@ julia> findlast([0x52, 0x62], [0x52, 0x62, 0x52, 0x62])
 3:4
 ```
 """
-function findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
-A::AbstractVector{<:Union{Int8,UInt8}})
+findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
+         A::AbstractVector{<:Union{Int8,UInt8}})=
     findprev(pattern, A, lastindex(A))
-end
+
 """
     findlast(ch::AbstractChar, string::AbstractString)
 
