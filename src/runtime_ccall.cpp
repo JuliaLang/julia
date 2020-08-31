@@ -27,7 +27,7 @@ using namespace llvm;
 static std::map<std::string, void*> libMap;
 static jl_mutex_t libmap_lock;
 extern "C"
-void *jl_get_library_(const char *f_lib, int throw_err)
+void *jl_get_library_(const char *f_lib, int throw_err) JL_NOTSAFEPOINT
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
@@ -54,7 +54,7 @@ void *jl_get_library_(const char *f_lib, int throw_err)
 }
 
 extern "C" JL_DLLEXPORT
-void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
+void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd) JL_NOTSAFEPOINT
 {
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)

@@ -932,7 +932,7 @@ JL_DLLEXPORT int jl_operator_precedence(char *sym)
     return res;
 }
 
-int jl_has_meta(jl_array_t *body, jl_sym_t *sym)
+int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
 {
     size_t i, l = jl_array_len(body);
     for (i = 0; i < l; i++) {

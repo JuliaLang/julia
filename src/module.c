@@ -730,7 +730,7 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
     }
 }
 
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
     if (b->constp) {
         jl_value_t *old = jl_atomic_compare_exchange(&b->value, NULL, rhs);
@@ -741,11 +741,13 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         if (jl_egal(rhs, old))
             return;
         if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs)) {
+#ifndef __clang_analyzer__
             jl_errorf("invalid redefinition of constant %s",
                       jl_symbol_name(b->name));
+#endif
         }
-        jl_printf(JL_STDERR, "WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
-                  jl_symbol_name(b->name));
+        jl_safe_printf("WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
+                       jl_symbol_name(b->name));
     }
     jl_atomic_store_relaxed(&b->value, rhs);
     jl_gc_wb_binding(b, rhs);
