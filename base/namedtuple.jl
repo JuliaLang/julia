@@ -115,7 +115,7 @@ getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 empty(::NamedTuple) = NamedTuple()
-index_and_iterate(t::NamedTuple) = (arg1, getfield)
+iterate_and_index(t::NamedTuple) = (arg1, getfield)
 
 convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
