@@ -169,7 +169,7 @@ julia> push!(a, 1); push!(a, 2.0); push!(a, π)
  π = 3.1415926535897...
 ```
 
-Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
+Because `a` is an array of abstract type [`Real`](@ref), it must be able to hold any
 `Real` value. Since `Real` objects can be of arbitrary size and structure, `a` must be
 represented as an array of pointers to individually allocated `Real` objects. However, if we instead
 only allow numbers of the same type, e.g. [`Float64`](@ref), to be stored in `a` these can be stored more
