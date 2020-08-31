@@ -64,6 +64,16 @@
     @test count(r"\w*", "foo bar") == 4
     @test count(r"\b", "foo bar") == 4
 
+    # Unnamed subpatterns
+    let m = match(r"(.)(.)(.)", "xyz")
+        @test haskey(m, 1)
+        @test haskey(m, 2)
+        @test haskey(m, 3)
+        @test !haskey(m, 44)
+        @test (m[1], m[2], m[3]) == ("x", "y", "z")
+        @test sprint(show, m) == "RegexMatch(\"xyz\", 1=\"x\", 2=\"y\", 3=\"z\")"
+    end
+
     # Named subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
         @test haskey(m, :a)
