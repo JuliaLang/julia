@@ -95,7 +95,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
         val = pure_eval_call(f, argtypes)
         if val !== false
-            return CallMeta(val, info)
+            # TODO: add some sort of edge(s)
+            return CallMeta(val, MethodResultPure())
         end
     end
 
@@ -749,8 +750,7 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any})
     args = Any[ (a = widenconditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
     try
         value = Core._apply_pure(f, args)
-        # TODO: add some sort of edge(s)
-        return Const(value, true)
+        return Const(value)
     catch
         return false
     end
@@ -997,7 +997,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)
         val = pure_eval_call(f, argtypes)
-        return CallMeta(val === false ? Type : val, false)
+        return CallMeta(val === false ? Type : val, MethodResultPure())
     end
     atype = argtypes_to_type(argtypes)
     return abstract_call_gf_by_type(interp, f, argtypes, atype, sv, max_methods)
@@ -1330,8 +1330,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
-                elseif isa(rt, Const) && rt.actual
-                    rt = Const(rt.val)
                 end
                 if tchanged(rt, frame.bestguess)
                     # new (wider) return type for frame

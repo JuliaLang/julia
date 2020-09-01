@@ -11,6 +11,16 @@ struct MethodMatchInfo
 end
 
 """
+    struct MethodResultPure
+
+This singleton represents a method result constant was proven to be
+effect-free, including being no-throw (typically because the value was computed
+by calling an `@pure` function).
+"""
+struct MethodResultPure end
+
+
+"""
     struct UnionSplitInfo
 
 If inference decides to partition the method search space by splitting unions,

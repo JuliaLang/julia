@@ -1408,7 +1408,7 @@ using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test sizeof_nothrow(String)
 @test !sizeof_nothrow(Type{String})
 @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
-let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
+let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
     @test sizeof_tfunc(PT) === Const(16)
     @test nfields_tfunc(PT) === Const(2)
     @test sizeof_nothrow(PT)
