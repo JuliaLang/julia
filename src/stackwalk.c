@@ -358,6 +358,7 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 }
 
 #if defined(_OS_WINDOWS_)
+// XXX: these caches should be per-thread
 #ifdef _CPU_X86_64_
 static UNWIND_HISTORY_TABLE HistoryTable;
 #else
@@ -495,14 +496,9 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 
     PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
         GetCurrentProcess(), cursor->Rip);
-    if (!FunctionEntry) { // assume this is a NO_FPO RBP-based function
-        cursor->Rsp = cursor->Rbp;                 // MOV RSP, RBP
-        if (!readable_pointer((LPCVOID)cursor->Rsp))
-            return 0;
-        cursor->Rbp = *(DWORD64*)cursor->Rsp;      // POP RBP
-        cursor->Rsp += sizeof(void*);
-        cursor->Rip = *(DWORD64*)cursor->Rsp;      // POP RIP (aka RET)
-        cursor->Rsp += sizeof(void*);
+    if (!FunctionEntry) {
+        // Not code or bad unwind?
+        return 0;
     }
     else {
         PVOID HandlerData;
