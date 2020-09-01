@@ -2777,3 +2777,7 @@ end
 # getfield on DataType should const propagate
 f37293() = Number.abstract ? true : "no"
 @test @inferred f37293()
+# ... except for the types field
+g37293(::Type{T}) where T = isdefined(T, :types)
+struct T37293; x::Val{g37293(T37293)}; end # call g37293 on incomplete type with not-yet-set types
+@test g37293(T37293) == isdefined(T37293, :types)

@@ -24,6 +24,8 @@ function find_tfunc(@nospecialize f)
     end
 end
 
+const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
+
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
 const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
 const TYPENAME_WRAPPER_FIELDINDEX = fieldindex(Core.TypeName, :wrapper)
@@ -275,7 +277,11 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
                 return Const(true)
             elseif isa(arg1, Const)
                 arg1v = (arg1::Const).val
-                if !ismutable(arg1v) || isdefined(arg1v, idx) || isa(arg1v, DataType)
+                if isa(arg1v, DataType)
+                    if !is_dt_nonconst_field(idx)
+                        return Const(isdefined(arg1v, idx))
+                    end
+                elseif !ismutable(arg1v) || isdefined(arg1v, idx)
                     return Const(isdefined(arg1v, idx))
                 end
             end
@@ -599,6 +605,8 @@ function subtype_tfunc(@nospecialize(a), @nospecialize(b))
 end
 add_tfunc(<:, 2, 2, subtype_tfunc, 0)
 
+is_dt_nonconst_field(fld::Int) = fld == DATATYPE_TYPES_FIELDINDEX
+
 function fieldcount_noerror(@nospecialize t)
     if t isa UnionAll || t isa Union
         t = argument_datatype(t)
@@ -724,23 +732,23 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             if !(isa(nv,Symbol) || isa(nv,Int))
                 return Bottom
             end
-            if isa(sv, Core.TypeName)
+            if isa(sv, DataType)
+                idx = isa(nv, Symbol) ? fieldindex(DataType, nv, false) : nv
+                if !is_dt_nonconst_field(idx)
+                     return isdefined(sv, nv) ? Const(getfield(sv, nv)) : Bottom
+                end
+            elseif isa(sv, Core.TypeName)
                 fld = isa(nv, Symbol) ? fieldindex(Core.TypeName, nv, false) : nv
                 if (fld == TYPENAME_NAME_FIELDINDEX ||
                     fld == TYPENAME_MODULE_FIELDINDEX ||
                     fld == TYPENAME_WRAPPER_FIELDINDEX)
                     return Const(getfield(sv, fld))
                 end
-            end
-            if isa(sv, Module) && isa(nv, Symbol)
+            elseif isa(sv, Module) && isa(nv, Symbol)
                 return abstract_eval_global(sv, nv)
             end
-            if (!ismutable(sv) || isa(sv, DataType))
-                if isdefined(sv, nv)
-                    return Const(getfield(sv, nv))
-                else
-                    return Bottom
-                end
+            if !ismutable(sv)
+                return isdefined(sv, nv) ? Const(getfield(sv, nv)) : Bottom
             end
         end
         s = typeof(sv)

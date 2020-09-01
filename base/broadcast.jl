@@ -689,7 +689,7 @@ _broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
 eltypes(::Tuple{}) = Tuple{}
 eltypes(t::Tuple{Any}) = Tuple{_broadcast_getindex_eltype(t[1])}
 eltypes(t::Tuple{Any,Any}) = Tuple{_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2])}
-eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).types...}
+eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).parameters...}
 
 # Inferred eltype of result of broadcast(f, args...)
 combine_eltypes(f, args::Tuple) = Base._return_type(f, eltypes(args))
