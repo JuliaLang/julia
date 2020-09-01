@@ -239,15 +239,18 @@
                        (cdr type-ex))))
         '())))
 
-;; expressions of the form a.b.c... where everything is a symbol
-(define (sym-ref? e)
+(define (nodot-sym-ref? e)
   (or (symbol? e)
       (and (length= e 3) (eq? (car e) 'globalref))
-      (and (length= e 2) (eq? (car e) 'outerref))
+      (and (length= e 2) (eq? (car e) 'outerref))))
+
+;; expressions of the form a.b.c... where everything is a symbol
+(define (sym-ref? e)
+  (or (nodot-sym-ref? e)
       (and (length= e 3) (eq? (car e) '|.|)
-           (or (atom? (cadr e)) (sym-ref? (cadr e)))
-           (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
-           (symbol? (cadr (caddr e))))))
+            (or (atom? (cadr e)) (sym-ref? (cadr e)))
+            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
+            (symbol? (cadr (caddr e))))))
 
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
@@ -337,7 +340,8 @@
    ;; no optional positional args
    (let* ((names (map car sparams))
           (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
-          (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames)))
+          (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
+          (ename (if (nodot-sym-ref? name) name `(null))))
      (if (has-dups unused_anames)
          (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
@@ -374,13 +378,13 @@
             (renames (map cons names temps))
             (mdef
              (if (null? sparams)
-                 `(method ,name
+                 `(method ,ename
                           (call (core svec)
                                 (call (core svec) ,@(dots->vararg types))
                                 (call (core svec))
                                 (inert ,loc))
                           ,body)
-                 `(method ,name
+                 `(method ,ename
                           (block
                            ,@(let loop ((n       names)
                                         (t       temps)
