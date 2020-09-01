@@ -18,7 +18,7 @@ STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching 
           Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization SHA \
           SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
-          MozillaCACerts_jll
+          MozillaCACerts_jll LibCURL_jll
 
 STDLIBS_EXT = Pkg Statistics
 PKG_GIT_URL := git://github.com/JuliaLang/Pkg.jl.git

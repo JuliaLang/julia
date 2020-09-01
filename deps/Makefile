@@ -111,10 +111,8 @@ ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 DEP_LIBS += libssh2
 endif
 
-ifneq ($(OS), WINNT)
 ifeq ($(USE_SYSTEM_CURL), 0)
 DEP_LIBS += curl
-endif
 endif
 
 DEP_LIBS += libgit2
