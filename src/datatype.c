@@ -513,7 +513,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (isinlinealloc && st->layout->npointers > 0) {
         if (st->ninitialized != nfields)
             isinlinealloc = 0;
-        else if (st->layout->fielddesc_type != 0) // GC only implements support for this
+        else if (st->layout->fielddesc_type > 1) // GC only implements support for 8 and 16 (not array32)
             isinlinealloc = 0;
     }
     st->isbitstype = isbitstype;

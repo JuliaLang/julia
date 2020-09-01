@@ -1819,6 +1819,54 @@ STATIC_INLINE int gc_mark_scan_array8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
     return 0;
 }
 
+// Scan a sparse array of object references, see `gc_mark_objarray_t`
+STATIC_INLINE int gc_mark_scan_array16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
+                                      gc_mark_array16_t *ary16,
+                                      jl_value_t **begin, jl_value_t **end,
+                                      uint16_t *elem_begin, uint16_t *elem_end,
+                                      jl_value_t **pnew_obj, uintptr_t *ptag, uint8_t *pbits)
+{
+    (void)jl_assume(ary16 == (gc_mark_array16_t*)sp->data);
+    size_t elsize = ((jl_array_t*)ary16->elem.parent)->elsize / sizeof(jl_value_t*);
+    for (; begin < end; begin += elsize) {
+        for (; elem_begin < elem_end; elem_begin++) {
+            jl_value_t **slot = &begin[*elem_begin];
+            *pnew_obj = *slot;
+            if (*pnew_obj)
+                verify_parent2("array", ary16->elem.parent, slot, "elem(%d)",
+                               gc_slot_to_arrayidx(ary16->elem.parent, begin));
+            if (!gc_try_setmark(*pnew_obj, &ary16->elem.nptr, ptag, pbits))
+                continue;
+            elem_begin++;
+            // Found an object to mark
+            if (elem_begin < elem_end) {
+                // Haven't done with this one yet. Update the content and push it back
+                ary16->elem.begin = elem_begin;
+                ary16->begin = begin;
+                gc_repush_markdata(sp, gc_mark_array16_t);
+            }
+            else {
+                begin += elsize;
+                if (begin < end) {
+                    // Haven't done with this array yet. Reset the content and push it back
+                    ary16->elem.begin = ary16->rebegin;
+                    ary16->begin = begin;
+                    gc_repush_markdata(sp, gc_mark_array16_t);
+                }
+                else {
+                    // Finished scanning this one, finish up by checking the GC invariance
+                    // and let the next item replacing the current one directly.
+                    gc_mark_push_remset(ptls, ary16->elem.parent, ary16->elem.nptr);
+                }
+            }
+            return 1;
+        }
+        elem_begin = ary16->rebegin;
+    }
+    gc_mark_push_remset(ptls, ary16->elem.parent, ary16->elem.nptr);
+    return 0;
+}
+
 
 // Scan an object with 8bits field descriptors. see `gc_mark_obj8_t`
 STATIC_INLINE int gc_mark_scan_obj8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mark_obj8_t *obj8,
@@ -1936,6 +1984,8 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
             goto objarray;                      \
         case GC_MARK_L_array8:                  \
             goto array8;                        \
+        case GC_MARK_L_array16:                 \
+            goto array16;                       \
         case GC_MARK_L_obj8:                    \
             goto obj8;                          \
         case GC_MARK_L_obj16:                   \
@@ -2028,6 +2078,7 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
         gc_mark_label_addrs[GC_MARK_L_finlist] = gc_mark_laddr(finlist);
         gc_mark_label_addrs[GC_MARK_L_objarray] = gc_mark_laddr(objarray);
         gc_mark_label_addrs[GC_MARK_L_array8] = gc_mark_laddr(array8);
+        gc_mark_label_addrs[GC_MARK_L_array16] = gc_mark_laddr(array16);
         gc_mark_label_addrs[GC_MARK_L_obj8] = gc_mark_laddr(obj8);
         gc_mark_label_addrs[GC_MARK_L_obj16] = gc_mark_laddr(obj16);
         gc_mark_label_addrs[GC_MARK_L_obj32] = gc_mark_laddr(obj32);
@@ -2047,6 +2098,7 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
     jl_value_t **objary_end;
 
     gc_mark_array8_t *ary8;
+    gc_mark_array16_t *ary16;
 
     gc_mark_obj8_t *obj8;
     char *obj8_parent;
@@ -2107,6 +2159,17 @@ array8_loaded:
         goto mark;
     goto pop;
 
+array16:
+    ary16 = gc_pop_markdata(&sp, gc_mark_array16_t);
+    objary_begin = ary16->begin;
+    objary_end = ary16->end;
+    obj16_begin = ary16->elem.begin;
+    obj16_end = ary16->elem.end;
+array16_loaded:
+    if (gc_mark_scan_array16(ptls, &sp, ary16, objary_begin, objary_end, obj16_begin, obj16_end,
+                            &new_obj, &tag, &bits))
+        goto mark;
+    goto pop;
 
 obj8:
     obj8 = gc_pop_markdata(&sp, gc_mark_obj8_t);
@@ -2473,6 +2536,15 @@ mark: {
                                        &markdata, sizeof(markdata), 0);
                     ary8 = (gc_mark_array8_t*)sp.data;
                     goto array8_loaded;
+                }
+                else if (layout->fielddesc_type == 1) {
+                    obj16_begin = (uint16_t*)jl_dt_layout_ptrs(layout);
+                    obj16_end = obj16_begin + npointers;
+                    gc_mark_array16_t markdata = {objary_begin, objary_end, obj16_begin, {new_obj, obj16_begin, obj16_end, nptr}};
+                    gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(array16),
+                                       &markdata, sizeof(markdata), 0);
+                    ary16 = (gc_mark_array16_t*)sp.data;
+                    goto array16_loaded;
                 }
                 else {
                     assert(0 && "unimplemented");
