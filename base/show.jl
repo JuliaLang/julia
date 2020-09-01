@@ -1339,7 +1339,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # scalar multiplication (i.e. "100x")
         elseif (func === :* &&
             length(func_args) == 2 && isa(func_args[1], Union{Int, Int64, Float32, Float64}) &&
-            isa(func_args[2], Symbol) && !in(string(func_args[2])[1], ('e', 'E', 'f')))
+            isa(func_args[2], Symbol) &&
+            !in(string(func_args[2]::Symbol)[1], ('e', 'E', 'f', (func_args[1] == 0 && func_args[1] isa Integer ?
+                                                                  # don't juxtapose 0 with b, o, x
+                                                                  ('b', 'o', 'x') : ())...)))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec, quote_level)
             else
