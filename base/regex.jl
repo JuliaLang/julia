@@ -167,6 +167,8 @@ function getindex(m::RegexMatch, name::Symbol)
     m[idx]
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
+
+haskey(m::RegexMatch, idx::Integer) = idx in eachindex(m.captures)
 function haskey(m::RegexMatch, name::Symbol)
     idx = PCRE.substring_number_from_name(m.regex.regex, name)
     return idx > 0
