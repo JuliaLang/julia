@@ -202,7 +202,10 @@ struct StepRange{T,S} <: OrdinalRange{T,S}
     stop::T
 
     function StepRange{T,S}(start, step, stop) where {T,S}
-        new(start, step, steprange_last(T(start),S(step),T(stop)))
+        sta = convert(T, start)
+        ste = convert(S, step)
+        sto = convert(T, stop)
+        new(sta, ste, steprange_last(sta,ste,sto))
     end
 end
 
