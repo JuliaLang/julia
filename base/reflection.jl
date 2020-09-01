@@ -1417,7 +1417,9 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         # checking the reverse may allow detecting ambiguity solutions
         # correctly in more cases (and faster).
         ti2 = typeintersect(m2.sig, m1.sig)
-        if ti != ti2
+        if ti2 <: m1.sig && ti2 <: m2.sig
+            ti = ti2
+        elseif ti != ti2
             inner(ti2) || return false
         end
     end

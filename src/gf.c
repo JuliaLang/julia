@@ -1551,6 +1551,32 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_UNLOCK(&mt->writelock);
 }
 
+static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **isect, jl_value_t **isect2)
+{
+    *isect2 = NULL;
+    *isect = jl_type_intersection(t1, t2);
+    if (*isect == jl_bottom_type)
+        return 0;
+    if (!(jl_subtype(*isect, t1) && jl_subtype(*isect, t2))) {
+        // if the intersection was imprecise, see if we can do
+        // better by switching the types
+        *isect2 = jl_type_intersection(t2, t1);
+        if (*isect2 == jl_bottom_type) {
+            *isect = jl_bottom_type;
+            *isect2 = NULL;
+            return 0;
+        }
+        if (jl_subtype(*isect2, t1) && jl_subtype(*isect2, t2)) {
+            *isect = *isect2;
+            *isect2 = NULL;
+        }
+        else if (jl_types_equal(*isect2, *isect)) {
+            *isect2 = NULL;
+        }
+    }
+    return 1;
+}
+
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
     JL_TIMING(ADD_METHOD);
@@ -1564,8 +1590,10 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     size_t max_world = method->primary_world - 1;
     jl_value_t *loctag = NULL;  // debug info for invalidation
     jl_value_t *isect = NULL;
+    jl_value_t *isect2 = NULL;
+    jl_value_t *isect3 = NULL;
     jl_typemap_entry_t *newentry = NULL;
-    JL_GC_PUSH5(&oldvalue, &oldmi, &newentry, &loctag, &isect);
+    JL_GC_PUSH7(&oldvalue, &oldmi, &newentry, &loctag, &isect, &isect2, &isect3);
     JL_LOCK(&mt->writelock);
     // first find if we have an existing entry to delete
     struct jl_typemap_assoc search = {(jl_value_t*)type, method->primary_world, NULL, 0, ~(size_t)0};
@@ -1600,14 +1628,15 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
                 jl_value_t *backedgetyp = backedges[i - 1];
-                isect = jl_type_intersection(backedgetyp, (jl_value_t*)type);
-                if (isect != jl_bottom_type) {
+                if (jl_type_intersection2(backedgetyp, (jl_value_t*)type, &isect, &isect2)) {
                     // see if the intersection was actually already fully
                     // covered by anything (method or ambiguity is okay)
                     size_t j;
                     for (j = 0; j < n; j++) {
                         jl_method_t *m = d[j];
                         if (jl_subtype(isect, m->sig))
+                            break;
+                        if (isect2 && jl_subtype(isect2, m->sig))
                             break;
                     }
                     if (j != n)
@@ -1651,9 +1680,8 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                     jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
                     if (mi == NULL)
                         continue;
-                    isect = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
-                    isect = jl_type_intersection(type, isect);
-                    if (isect != jl_bottom_type) {
+                    isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
+                    if (jl_type_intersection2(type, isect3, &isect, &isect2)) {
                         if (morespec[j] == (char)morespec_unknown)
                             morespec[j] = (char)jl_type_morespecific(m->sig, type) ? morespec_is : morespec_isnot;
                         if (morespec[j] == (char)morespec_is)
@@ -1667,7 +1695,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                             size_t k;
                             for (k = 0; k < n; k++) {
                                 jl_method_t *m2 = d[k];
-                                if (m == m2 || !jl_subtype(isect, m2->sig))
+                                if (m == m2 || !(jl_subtype(isect, m2->sig) || (isect && jl_subtype(isect, m2->sig))))
                                     continue;
                                 if (morespec[k] == (char)morespec_unknown)
                                     morespec[k] = (char)jl_type_morespecific(m2->sig, type) ? morespec_is : morespec_isnot;
@@ -2617,7 +2645,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         intersections, world, lim, /* .t = */ jl_an_empty_vec_any,
         /* .min_valid = */ *min_valid, /* .max_valid = */ *max_valid, /* .matc = */ NULL};
     struct jl_typemap_assoc search = {(jl_value_t*)type, world, jl_emptysvec, 1, ~(size_t)0};
-    JL_GC_PUSH5(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti);
+    jl_value_t *isect2 = NULL;
+    JL_GC_PUSH6(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti, &isect2);
 
     // check the leaf cache if this type can be in there
     if (((jl_datatype_t*)unw)->isdispatchtuple) {
@@ -2852,12 +2881,18 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                 }
                 else {
                     jl_value_t *ti;
-                    if (subt)
+                    if (subt) {
                         ti = (jl_value_t*)matc2->spec_types;
-                    else if (subt2)
+                        isect2 = NULL;
+                    }
+                    else if (subt2) {
                         ti = (jl_value_t*)matc->spec_types;
-                    else
-                        ti = env.match.ti = jl_type_intersection((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types);
+                        isect2 = NULL;
+                    }
+                    else {
+                        jl_type_intersection2((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types, &env.match.ti, &isect2);
+                        ti = env.match.ti;
+                    }
                     if (ti != jl_bottom_type && !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
                         // m and m2 are ambiguous, but let's see if we can find another method (m3)
                         // that dominates their intersection, and means we can ignore this
@@ -2865,7 +2900,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                         for (k = j; k > 0; k--) {
                             jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(env.t, k - 1);
                             jl_method_t *m3 = matc3->method;
-                            if (jl_subtype((jl_value_t*)ti, m3->sig)
+                            if ((jl_subtype(ti, m3->sig) || (isect2 && jl_subtype(isect2, m3->sig)))
                                     && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m->sig)
                                     && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m2->sig))
                                 break;
@@ -2873,6 +2908,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                         if (k == 0)
                             ambig_groupid[i] = j - 1; // ambiguity covering range [i:j)
                     }
+                    isect2 = NULL;
                     disjoint = 0;
                 }
             }
