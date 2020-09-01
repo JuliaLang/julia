@@ -458,6 +458,32 @@ function tempdir()
     end
 end
 
+"""
+    prepare_for_deletion(path::AbstractString)
+
+Prepares the given `path` for deletion by ensuring that all directories within that
+`path` have write permissions, so that files can be removed from them.  This is
+automatically invoked by methods such as `mktempdir()` to ensure that no matter what
+weird permissions a user may have created directories with within the temporary prefix,
+it will always be deleted.
+"""
+function prepare_for_deletion(path::AbstractString)
+    # Nothing to do for non-directories
+    if !isdir(path)
+        return
+    end
+
+    try chmod(path, filemode(path) | 0o333)
+    catch; end
+    for (root, dirs, files) in walkdir(path)
+        for dir in dirs
+            dpath = joinpath(root, dir)
+            try chmod(dpath, filemode(dpath) | 0o333)
+            catch; end
+        end
+    end
+end
+
 const TEMP_CLEANUP_MIN = Ref(1024)
 const TEMP_CLEANUP_MAX = Ref(1024)
 const TEMP_CLEANUP = Dict{String,Bool}()
@@ -484,6 +510,7 @@ function temp_cleanup_purge(all::Bool=true)
             if (all || asap) && ispath(path)
                 need_gc && GC.gc(true)
                 need_gc = false
+                prepare_for_deletion(path)
                 rm(path, recursive=true, force=true)
             end
             !ispath(path) && delete!(TEMP_CLEANUP, path)
@@ -682,7 +709,10 @@ function mktempdir(fn::Function, parent::AbstractString=tempdir();
         fn(tmpdir)
     finally
         try
-            ispath(tmpdir) && rm(tmpdir, recursive=true)
+            if ispath(tmpdir)
+                prepare_for_deletion(tmpdir)
+                rm(tmpdir, recursive=true)
+            end
         catch ex
             @error "mktempdir cleanup" _group=:file exception=(ex, catch_backtrace())
             # might be possible to remove later
