@@ -680,7 +680,7 @@ and the identifier or parenthesized expression which it multiplies.
 
 ### Syntax Conflicts
 
-Juxtaposed literal coefficient syntax may conflict with two numeric literal syntaxes: hexadecimal,
+Juxtaposed literal coefficient syntax may conflict with some numeric literal syntaxes: hexadecimal,
 octal and binary integer literals and engineering notation for floating-point literals. Here are some situations
 where syntactic conflicts arise:
 
