@@ -476,7 +476,7 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     mode_mapping::Dict{Symbol,Prompt}
     modes::Vector{Symbol}
 end
-REPLHistoryProvider(mode_mapping) =
+REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
     REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 
@@ -967,7 +967,7 @@ function setup_interface(
 
     # Canonicalize user keymap input
     if isa(extra_repl_keymap, Dict)
-        extra_repl_keymap = [extra_repl_keymap]
+        extra_repl_keymap = AnyDict[extra_repl_keymap]
     end
 
     repl_keymap = AnyDict(

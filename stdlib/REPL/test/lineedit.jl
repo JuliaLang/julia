@@ -48,20 +48,20 @@ end
 
 a_foo = 0
 
-const foo_keymap = Dict(
+const foo_keymap = Dict{Char,Any}(
     'a' => (o...)->(global a_foo; a_foo += 1)
 )
 
 b_foo = 0
 
-const foo2_keymap = Dict(
+const foo2_keymap = Dict{Char,Any}(
     'b' => (o...)->(global b_foo; b_foo += 1)
 )
 
 a_bar = 0
 b_bar = 0
 
-const bar_keymap = Dict(
+const bar_keymap = Dict{Char,Any}(
     'a' => (o...)->(global a_bar; a_bar += 1),
     'b' => (o...)->(global b_bar; b_bar += 1)
 )
@@ -84,7 +84,7 @@ run_test(test3_dict,IOBuffer("aab"))
 @test b_bar == 1
 
 # Multiple spellings in the same keymap
-const test_keymap_1 = Dict(
+const test_keymap_1 = Dict{Any,Any}(
     "^C" => (o...)->1,
     "\\C-C" => (o...)->2
 )
@@ -93,11 +93,11 @@ const test_keymap_1 = Dict(
 
 a_foo = a_bar = 0
 
-const test_keymap_2 = Dict(
+const test_keymap_2 = Dict{Any,Any}(
     "abc" => (o...)->(global a_foo = 1)
 )
 
-const test_keymap_3 = Dict(
+const test_keymap_3 = Dict{Any,Any}(
     "a"  => (o...)->(global a_foo = 2),
     "bc" => (o...)->(global a_bar = 3)
 )
@@ -119,13 +119,13 @@ end
 
 a_foo = 0
 
-const test_keymap_4 = Dict(
+const test_keymap_4 = Dict{Any,Any}(
     "a" => (o...)->(global a_foo = 1),
     "b" => "a",
     "c" => (o...)->(global a_foo = 2),
 )
 
-const test_keymap_5 = Dict(
+const test_keymap_5 = Dict{Any,Any}(
     "a" => (o...)->(global a_foo = 3),
     "d" => "c"
 )
@@ -143,7 +143,7 @@ end
 
 # Eager redirection with cycles
 
-const test_cycle = Dict(
+const test_cycle = Dict{Any,Any}(
     "a" => "b",
     "b" => "a"
 )
@@ -152,15 +152,15 @@ const test_cycle = Dict(
 
 # Lazy redirection with Cycles
 
-const level1 = Dict(
+const level1 = Dict{Any,Any}(
     "a" => LineEdit.KeyAlias("b")
 )
 
-const level2a = Dict(
+const level2a = Dict{Any,Any}(
     "b" => "a"
 )
 
-const level2b = Dict(
+const level2b = Dict{Any,Any}(
     "b" => LineEdit.KeyAlias("a")
 )
 
@@ -171,13 +171,13 @@ const level2b = Dict(
 
 a_foo = 0
 
-const test_keymap_6 = Dict(
+const test_keymap_6 = Dict{Any,Any}(
     "a" => (o...)->(global a_foo = 1),
     "b" => LineEdit.KeyAlias("a"),
     "c" => (o...)->(global a_foo = 2),
 )
 
-const test_keymap_7 = Dict(
+const test_keymap_7 = Dict{Any,Any}(
     "a" => (o...)->(global a_foo = 3),
     "d" => "c"
 )
@@ -200,7 +200,7 @@ global path1 = 0
 global path2 = 0
 global path3 = 0
 
-const test_keymap_8 = Dict(
+const test_keymap_8 = Dict{Any,Any}(
     "**" => (o...)->(global path1 += 1),
     "ab" => (o...)->(global path2 += 1),
     "cd" => (o...)->(global path3 += 1),
@@ -223,7 +223,7 @@ end
 global path1 = 0
 global path2 = 0
 
-const test_keymap_9 = Dict(
+const test_keymap_9 = Dict{Any,Any}(
     "***" => (o...)->(global path1 += 1),
     "*a*" => (o...)->(global path2 += 1)
 )

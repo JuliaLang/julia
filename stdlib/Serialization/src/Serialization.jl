@@ -9,7 +9,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall, require_one_based_indexing
+using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -930,7 +930,7 @@ function deserialize_symbol(s::AbstractSerializer, len::Int)
     return sym
 end
 
-deserialize_tuple(s::AbstractSerializer, len) = ntuple(i->deserialize(s), len)
+deserialize_tuple(s::AbstractSerializer, len) = ntupleany(i->deserialize(s), len)
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)

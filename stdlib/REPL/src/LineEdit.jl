@@ -47,7 +47,7 @@ mutable struct Prompt <: TextInterface
     prompt_prefix::Union{String,Function}
     # Same as prefix except after the prompt
     prompt_suffix::Union{String,Function}
-    keymap_dict::Dict{Char}
+    keymap_dict::Dict{Char,Any}
     repl::Union{AbstractREPL,Nothing}
     complete::CompletionProvider
     on_enter::Function
@@ -1333,7 +1333,7 @@ end
 
 const wildcard = '\U10f7ff' # "Private Use" Char
 
-normalize_key(key::AbstractChar) = string(key)
+normalize_key(key::Char) = string(key)
 normalize_key(key::Union{Int,UInt8}) = normalize_key(Char(key))
 function normalize_key(key::Union{String,SubString{String}})
     wildcard in key && error("Matching '\U10f7ff' not supported.")
@@ -1367,7 +1367,7 @@ function normalize_key(key::Union{String,SubString{String}})
     return String(take!(buf))
 end
 
-function normalize_keys(keymap::Dict)
+function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
     ret = Dict{Any,Any}()
     for (k,v) in keymap
         normalized = normalize_key(k)
@@ -1482,7 +1482,7 @@ end
 #
 
 # deep merge where target has higher precedence
-function keymap_merge!(target::Dict, source::Dict)
+function keymap_merge!(target::Dict{Char,Any}, source::Union{Dict{Char,Any},AnyDict})
     for k in keys(source)
         if !haskey(target, k)
             target[k] = source[k]
@@ -1495,7 +1495,7 @@ function keymap_merge!(target::Dict, source::Dict)
 end
 
 fixup_keymaps!(d, l, s, sk) = nothing
-function fixup_keymaps!(dict::Dict, level, s, subkeymap)
+function fixup_keymaps!(dict::Dict{Char,Any}, level, s, subkeymap)
     if level > 0
         for d in values(dict)
             fixup_keymaps!(d, level-1, s, subkeymap)
@@ -1512,7 +1512,7 @@ function fixup_keymaps!(dict::Dict, level, s, subkeymap)
     nothing
 end
 
-function add_specialisations(dict, subdict, level)
+function add_specialisations(dict::Dict{Char,Any}, subdict, level)
     default_branch = subdict[wildcard]
     if isa(default_branch, Dict)
         # Go through all the keymaps in the default branch
@@ -1525,7 +1525,7 @@ function add_specialisations(dict, subdict, level)
 end
 
 postprocess!(others) = nothing
-function postprocess!(dict::Dict)
+function postprocess!(dict::Dict{Char,Any})
     # needs to be done first for every branch
     if haskey(dict, wildcard)
         add_specialisations(dict, dict, 1)
@@ -1536,7 +1536,7 @@ function postprocess!(dict::Dict)
     end
 end
 
-function getEntry(keymap,key)
+function getEntry(keymap::Dict{Char,Any},key::Union{String,Char})
     v = keymap
     for c in key
         if !haskey(v,c)
@@ -1549,7 +1549,7 @@ end
 
 # `target` is the total keymap being built up, already being a nested tree of Dicts.
 # source is the keymap specified by the user (with normalized keys)
-function keymap_merge(target,source)
+function keymap_merge(target::Dict{Char,Any}, source::Dict)
     ret = copy(target)
     direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Nothing}), source)
     # first direct entries
@@ -1561,7 +1561,7 @@ function keymap_merge(target,source)
         # We first resolve redirects in the source
         value = source[key]
         visited = Vector{Any}()
-        while isa(value, Union{AbstractChar,AbstractString})
+        while isa(value, Union{Char,String})
             value = normalize_key(value)
             if value in visited
                 error("Eager redirection cycle detected for key " * escape_string(key))
@@ -1573,7 +1573,7 @@ function keymap_merge(target,source)
             value = source[value]
         end
 
-        if isa(value, Union{AbstractChar,AbstractString})
+        if isa(value, Union{Char,String})
             value = getEntry(ret, value)
             if value === nothing
                 error("Could not find redirected value " * escape_string(source[key]))
@@ -1607,7 +1607,7 @@ function validate_keymap(keymap)
     end
 end
 
-function keymap(keymaps::Array{<:Dict})
+function keymap(keymaps::Union{Vector{AnyDict},Vector{Dict{Char,Any}}})
     # keymaps is a vector of prioritized keymaps, with highest priority first
     ret = keymap_unify(map(normalize_keys, reverse(keymaps)))
     validate_keymap(ret)

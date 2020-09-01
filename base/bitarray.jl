@@ -1810,7 +1810,12 @@ end
 
 function vcat(A::BitMatrix...)
     nargs = length(A)
-    nrows = sum(a->size(a, 1), A)::Int
+    nrows, nrowsA = 0, sizehint!(Int[], nargs)
+    for a in A
+        sz1 = size(a, 1)
+        nrows += sz1
+        push!(nrowsA, sz1)
+    end
     ncols = size(A[1], 2)
     for j = 2:nargs
         size(A[j], 2) == ncols ||
@@ -1818,12 +1823,10 @@ function vcat(A::BitMatrix...)
     end
     B = BitMatrix(undef, nrows, ncols)
     Bc = B.chunks
-    nrowsA = [size(a, 1) for a in A]
-    Ac = [a.chunks for a in A]
     pos_d = 1
     pos_s = fill(1, nargs)
     for j = 1:ncols, k = 1:nargs
-        copy_chunks!(Bc, pos_d, Ac[k], pos_s[k], nrowsA[k])
+        copy_chunks!(Bc, pos_d, A[k].chunks, pos_s[k], nrowsA[k])
         pos_s[k] += nrowsA[k]
         pos_d += nrowsA[k]
     end

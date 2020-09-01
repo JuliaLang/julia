@@ -654,10 +654,10 @@ function create_worker(manager, wconfig)
         end
     end
 
-    all_locs = map(x -> isa(x, Worker) ?
-                   (something(x.config.connect_at, ()), x.id) :
-                   ((), x.id, true),
-                   join_list)
+    all_locs = mapany(x -> isa(x, Worker) ?
+                      (something(x.config.connect_at, ()), x.id) :
+                      ((), x.id, true),
+                      join_list)
     send_connection_hdr(w, true)
     enable_threaded_blas = something(wconfig.enable_threaded_blas, false)
     join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, enable_threaded_blas, isclusterlazy())
@@ -765,7 +765,7 @@ let next_pid = 2    # 1 is reserved for the client (always)
 end
 
 mutable struct ProcessGroup
-    name::AbstractString
+    name::String
     workers::Array{Any,1}
     refs::Dict{RRID,Any}                  # global references
     topology::Symbol
@@ -1024,8 +1024,8 @@ end
 function _rmprocs(pids, waitfor)
     lock(worker_lock)
     try
-        rmprocset = []
-        for p in vcat(pids...)
+        rmprocset = Union{LocalProcess, Worker}[]
+        for p in pids
             if p == 1
                 @warn "rmprocs: process 1 not removed"
             else

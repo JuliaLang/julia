@@ -211,11 +211,12 @@ eachindex(itrs...) = keys(itrs...)
 # eachindex iterates over all indices. IndexCartesian definitions are later.
 eachindex(A::AbstractVector) = (@_inline_meta(); axes1(A))
 
-@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(eachindex.(A), ", ", " and "))"))
+
+@noinline function throw_eachindex_mismatch_indices(::IndexLinear, inds...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(inds, ", ", " and "))"))
 end
-@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
+@noinline function throw_eachindex_mismatch_indices(::IndexCartesian, inds...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(inds, ", ", " and "))"))
 end
 
 """
@@ -269,7 +270,7 @@ function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     indsA = eachindex(IndexLinear(), A)
     _all_match_first(X->eachindex(IndexLinear(), X), indsA, B...) ||
-        throw_eachindex_mismatch(IndexLinear(), A, B...)
+        throw_eachindex_mismatch_indices(IndexLinear(), eachindex(A), eachindex.(B)...)
     indsA
 end
 function _all_match_first(f::F, inds, A, B...) where F<:Function
@@ -2231,7 +2232,8 @@ end
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
-mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)::Int), itr)  # convenient for Expr.args
+mapany(f, A::AbstractArray) = map!(f, Vector{Any}(undef, length(A)), A)
+mapany(f, itr) = Any[f(x) for x in itr]
 
 # default to returning an Array for `map` on general iterators
 """

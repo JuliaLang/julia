@@ -101,10 +101,8 @@ $"ix
 
 function split_idents(s::AbstractString)
     idents = split(s, '.')
-    ntuple(length(idents)) do i
-        ident = idents[i]
-        occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
-    end
+    pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
+    return tuple(pidents...)::VerTuple
 end
 
 function VersionNumber(v::AbstractString)

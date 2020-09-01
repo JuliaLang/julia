@@ -504,7 +504,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 end
 
 function connect_w2w(pid::Int, config::WorkerConfig)
-    (rhost, rport) = notnothing(config.connect_at)::Tuple{AbstractString, Int}
+    (rhost, rport) = notnothing(config.connect_at)::Tuple{String, Int}
     config.host = rhost
     config.port = rport
     (s, bind_addr) = connect_to_worker(rhost, rport)

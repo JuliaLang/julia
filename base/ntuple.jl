@@ -31,10 +31,16 @@ julia> ntuple(i -> 2*i, 4)
     return t
 end
 
-function _ntuple(f, n)
+function _ntuple(f::F, n) where F
     @_noinline_meta
     (n >= 0) || throw(ArgumentError(string("tuple length should be ≥ 0, got ", n)))
     ([f(i) for i = 1:n]...,)
+end
+
+function ntupleany(f, n)
+    @_noinline_meta
+    (n >= 0) || throw(ArgumentError(string("tuple length should be ≥ 0, got ", n)))
+    (Any[f(i) for i = 1:n]...,)
 end
 
 # inferrable ntuple (enough for bootstrapping)
