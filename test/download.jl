@@ -40,20 +40,11 @@ mktempdir() do temp_dir
 
     # Make sure that failed downloads do not leave files around
     missing_file = joinpath(temp_dir, "missing")
-    @test_throws ProcessFailedException download("https://httpbin.julialang.org/status/404", missing_file)
+    @test_throws ErrorException download("https://httpbin.julialang.org/status/404", missing_file)
     @test !isfile(missing_file)
-
-    # Make sure we properly handle metachar ' on windows with ^ escaping
-    if Sys.iswindows()
-        metachar_file = joinpath(temp_dir, "metachar")
-        Base.download_powershell("https://httpbin.julialang.org/get?test='^'", metachar_file)
-        metachar_string = read(metachar_file, String)
-        m = match(r"\"test\"\s*:\s*\"(.*)\"", metachar_string)
-        @test m.captures[1] == "'^'"
-    end
 
     # Use a TEST-NET (192.0.2.0/24) address which shouldn't be bound
     invalid_host_file = joinpath(temp_dir, "invalid_host")
-    @test_throws ProcessFailedException download("http://192.0.2.1", invalid_host_file)
+    @test_throws ErrorException download("http://192.0.2.1", invalid_host_file)
     @test !isfile(invalid_host_file)
 end

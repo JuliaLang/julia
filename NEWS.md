@@ -58,8 +58,9 @@ Build system changes
 
 Library functions
 -----------------
-* The `Base.Grisu` code has been officially removed (float printing was switched to the ryu algorithm code in 1.4)
 
+* The `Base.download` function has been deprecated (silently, by default) in favor of the new `Downloads.download` standard library function ([#37340]).
+* The `Base.Grisu` code has been officially removed (float printing was switched to the ryu algorithm code in 1.4)
 
 New library functions
 ---------------------
@@ -81,6 +82,7 @@ New library features
 
 Standard library changes
 ------------------------
+
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
 * The `reverse(A; dims)` function for multidimensional `A` can now reverse multiple dimensions at once
   by passing a tuple for `dims`, and defaults to reversing all dimensions; there is also a multidimensional
@@ -99,6 +101,7 @@ Standard library changes
 * `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
 * For consistency `haskey(r::RegexMatch, i::Integer)` has also been added and returns if the capture group for `i` exists ([#37300]).
 * A new standard library `TOML` has been added for parsing and printing [TOML files](https://toml.io) ([#37034]).
+* A new standard library `Downloads` has been added, which replaces the old `Base.download` function with `Downloads.download`, providing cross-platform, multi-protocol, in-process download functionality implemented with [libcurl](https://curl.haxx.se/libcurl/) ([#37340]).
 * The `Pkg.BinaryPlatforms` module has been moved into `Base` as `Base.BinaryPlatforms` and heavily reworked.
   Applications that want to be compatible with the old API should continue to import `Pkg.BinaryPlatforms`,
   however new users should use `Base.BinaryPlatforms` directly. ([#37320])
@@ -107,6 +110,7 @@ Standard library changes
   all of `Pkg` alongside. ([#37320])
 
 #### LinearAlgebra
+
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
 * `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
 * New function `LinearAlgebra.BLAS.get_num_threads()` for getting the number of BLAS threads. ([#36360])

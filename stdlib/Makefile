@@ -20,13 +20,15 @@ STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching 
           SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
           MozillaCACerts_jll LibCURL_jll
 
-STDLIBS_EXT = Pkg Statistics LibCURL
+STDLIBS_EXT = Pkg Statistics LibCURL Downloads
 PKG_GIT_URL := git://github.com/JuliaLang/Pkg.jl.git
 PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
 STATISTICS_GIT_URL := git://github.com/JuliaLang/Statistics.jl.git
 STATISTICS_TAR_URL = https://api.github.com/repos/JuliaLang/Statistics.jl/tarball/$1
 LIBCURL_GIT_URL := git://github.com/JuliaWeb/LibCURL.jl.git
 LIBCURL_TAR_URL = https://api.github.com/repos/JuliaWeb/LibCURL.jl/tarball/$1
+DOWNLOADS_GIT_URL := git://github.com/JuliaLang/Downloads.jl.git
+DOWNLOADS_TAR_URL = https://api.github.com/repos/JuliaLang/Downloads.jl/tarball/$1
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 

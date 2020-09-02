@@ -111,7 +111,7 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    net_required_for = ["Sockets", "LibGit2", "LibCURL"]
+    net_required_for = ["Sockets", "LibGit2", "LibCURL", "Downloads"]
     net_on = true
     try
         ipa = getipaddr()
