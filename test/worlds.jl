@@ -305,8 +305,6 @@ src4 = code_typed(applyf35855_2, (Vector{Any},))[1]
 @test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
 
 ## ambiguities do not trigger invalidation
-using Printf
-Printf.gen("%f")
 mi = instance(+, (AbstractChar, UInt8))
 w = worlds(mi)
 
