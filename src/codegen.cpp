@@ -6206,19 +6206,25 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             }
             else {
                 Value *RTindex;
-                Value *V;
+                // The branch below is a bit too complex for GCC to realize that
+                // `V` is always initialized when it is used.
+                // Ref https://gcc.gnu.org/bugzilla/show_bug.cgi?id=96629
+                Value *V = nullptr;
                 if (val.typ == (jl_value_t*)jl_bottom_type) {
-                    V = undef_value_for_type(VN->getType());
+                    if (VN)
+                        V = undef_value_for_type(VN->getType());
                     RTindex = UndefValue::get(T_int8);
                 }
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
                     size_t tindex = get_box_tindex((jl_datatype_t*)val.typ, phiType);
                     if (tindex == 0) {
-                        V = boxed(ctx, val);
+                        if (VN)
+                            V = boxed(ctx, val);
                         RTindex = ConstantInt::get(T_int8, 0x80);
                     }
                     else {
-                        V = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                        if (VN)
+                            V = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
                         Type *lty = julia_type_to_llvm(ctx, val.typ);
                         if (dest && !type_is_ghost(lty)) // basically, if !ghost union
                             emit_unbox(ctx, lty, val, val.typ, dest);
@@ -6238,7 +6244,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                         }
                         new_union.TIndex = RTindex;
                     }
-                    V = new_union.Vboxed ? new_union.Vboxed : ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                    if (VN)
+                        V = new_union.Vboxed ? new_union.Vboxed : ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
                     if (dest) { // basically, if !ghost union
                         Value *skip = NULL;
                         if (new_union.Vboxed != nullptr)

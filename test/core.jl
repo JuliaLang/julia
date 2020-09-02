@@ -7233,3 +7233,35 @@ struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
 @test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+
+a37265() = 0
+b37265() = 0
+function c37265(d)
+    if d == 1
+        e = a37265
+    elseif d == 2
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws UndefVarError c37265(0)
+@test c37265(1) === a37265
+@test c37265(2) === b37265
+
+function c37265_2(d)
+    if 0
+        e = a37265
+    elseif 0
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws TypeError c37265_2(0)
