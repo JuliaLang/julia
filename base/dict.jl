@@ -371,7 +371,7 @@ end
 end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
-    key = convert(K, key0)
+    key = convert(K, key0)::K
     if !isequal(key, key0)
         throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
@@ -379,7 +379,7 @@ function setindex!(h::Dict{K,V}, v0, key0) where V where K
 end
 
 function setindex!(h::Dict{K,V}, v0, key::K) where V where K
-    v = convert(V, v0)
+    v = convert(V, v0)::V
     index = ht_keyindex2!(h, key)
 
     if index > 0
@@ -449,7 +449,7 @@ Dict{Int64, Int64} with 1 entry:
 get!(f::Function, collection, key)
 
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
-    key = convert(K, key0)
+    key = convert(K, key0)::K
     if !isequal(key, key0)
         throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
@@ -462,7 +462,7 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     index > 0 && return h.vals[index]
 
     age0 = h.age
-    v = convert(V, default())
+    v = convert(V, default())::V
     if h.age != age0
         index = ht_keyindex2!(h, key)
     end
