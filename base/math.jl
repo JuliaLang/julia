@@ -5,7 +5,7 @@ module Math
 export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
        sech, csch, coth, asech, acsch, acoth,
-       sinpi, cospi, sinc, cosc,
+       sinpi, cospi, sincospi, sinc, cosc,
        cosd, cotd, cscd, secd, sind, tand, sincosd,
        acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
@@ -50,13 +50,13 @@ are promoted to a common type.
 # Examples
 ```jldoctest
 julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
-3-element Array{BigFloat,1}:
+3-element Vector{BigFloat}:
  3.141592653589793238462643383279502884197169399375105820974944592307816406286198
  2.0
  9.0
 
 julia> clamp.([11,8,5],10,6) # an example where lo > hi
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   6
   6
  10
@@ -121,7 +121,7 @@ julia> evalpoly(2, (1, 2, 3))
 """
 function evalpoly(x, p::Tuple)
     if @generated
-        N = length(p.parameters)
+        N = length(p.parameters::Core.SimpleVector)
         ex = :(p[end])
         for i in N-1:-1:1
             ex = :(muladd(x, $ex, p[$i]))
@@ -344,7 +344,8 @@ For one argument, this is the angle in radians between the positive *x*-axis and
 
 For two arguments, this is the angle in radians between the positive *x*-axis and the
 point (*x*, *y*), returning a value in the interval ``[-\\pi, \\pi]``. This corresponds to a
-standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
+standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function. Note that by convention
+`atan(0.0,x)` is defined as ``\\pi`` and `atan(-0.0,x)` is defined as ``-\\pi`` when `x < 0`.
 """
 atan(x::Number)
 
@@ -658,7 +659,7 @@ function hypot(x::T, y::T) where T<:AbstractFloat
     end
 
     # Operands do not vary widely
-    scale = eps(sqrt(floatmin(T)))  #Rescaling constant
+    scale = eps(T)*sqrt(floatmin(T))  #Rescaling constant
     if ax > sqrt(floatmax(T)/2)
         ax = ax*scale
         ay = ay*scale
@@ -775,9 +776,10 @@ end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
-    exponent(x) -> Int
+    exponent(x::AbstractFloat) -> Int
 
 Get the exponent of a normalized floating-point number.
+Returns the largest integer `y` such that `2^y ≤ abs(x)`.
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
@@ -1000,7 +1002,7 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     ax = abs(x)
     ax <= 2*Float64(pi,RoundDown) && return x
 
-    n,y = rem_pio2_kernel(x)
+    n,y = rem_pio2_kernel(ax)
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi

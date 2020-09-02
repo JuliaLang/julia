@@ -61,16 +61,16 @@ julia> (3 // 5) // (2 // 1)
 //(n::Integer,  d::Integer) = Rational(n,d)
 
 function //(x::Rational, y::Integer)
-    xn, yn = divgcd(x.num,y)
+    xn, yn = divgcd(promote(x.num, y)...)
     checked_den(xn, checked_mul(x.den, yn))
 end
 function //(x::Integer,  y::Rational)
-    xn, yn = divgcd(x,y.num)
+    xn, yn = divgcd(promote(x, y.num)...)
     checked_den(checked_mul(xn, y.den), yn)
 end
 function //(x::Rational, y::Rational)
-    xn,yn = divgcd(x.num,y.num)
-    xd,yd = divgcd(x.den,y.den)
+    xn,yn = divgcd(promote(x.num, y.num)...)
+    xd,yd = divgcd(promote(x.den, y.den)...)
     checked_den(checked_mul(xn, yd), checked_mul(xd, yn))
 end
 
@@ -106,13 +106,13 @@ Rational(x::Rational) = x
 
 Bool(x::Rational) = x==0 ? false : x==1 ? true :
     throw(InexactError(:Bool, Bool, x)) # to resolve ambiguity
-(::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
+(::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num)::T :
     throw(InexactError(nameof(T), T, x)))
 
-AbstractFloat(x::Rational) = float(x.num)/float(x.den)
+AbstractFloat(x::Rational) = (float(x.num)/float(x.den))::AbstractFloat
 function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
-    convert(T, convert(P,x.num)/convert(P,x.den))
+    convert(T, convert(P,x.num)/convert(P,x.den))::T
 end
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
@@ -280,7 +280,7 @@ end
 for (op,chop) in ((:+,:checked_add), (:-,:checked_sub), (:rem,:rem), (:mod,:mod))
     @eval begin
         function ($op)(x::Rational, y::Rational)
-            xd, yd = divgcd(x.den, y.den)
+            xd, yd = divgcd(promote(x.den, y.den)...)
             Rational(($chop)(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
         end
 
@@ -305,16 +305,16 @@ for (op,chop) in ((:rem,:rem), (:mod,:mod))
 end
 
 function *(x::Rational, y::Rational)
-    xn, yd = divgcd(x.num, y.den)
-    xd, yn = divgcd(x.den, y.num)
+    xn, yd = divgcd(promote(x.num, y.den)...)
+    xd, yn = divgcd(promote(x.den, y.num)...)
     unsafe_rational(checked_mul(xn, yn), checked_mul(xd, yd))
 end
 function *(x::Rational, y::Integer)
-    xd, yn = divgcd(x.den, y)
+    xd, yn = divgcd(promote(x.den, y)...)
     unsafe_rational(checked_mul(x.num, yn), xd)
 end
 function *(y::Integer, x::Rational)
-    yn, xd = divgcd(y, x.den)
+    yn, xd = divgcd(promote(y, x.den)...)
     unsafe_rational(checked_mul(yn, x.num), xd)
 end
 /(x::Rational, y::Union{Rational, Integer, Complex{<:Union{Integer,Rational}}}) = x//y

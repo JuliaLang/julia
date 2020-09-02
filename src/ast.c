@@ -34,7 +34,7 @@ jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *toplevel_sym; jl_sym_t *quote_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
-jl_sym_t *return_sym;  jl_sym_t *unreachable_sym;
+jl_sym_t *return_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *globalref_sym; jl_sym_t *do_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
@@ -64,6 +64,7 @@ jl_sym_t *coverageeffect_sym; jl_sym_t *escape_sym;
 jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
 jl_sym_t *optlevel_sym; jl_sym_t *thismodule_sym;
 jl_sym_t *atom_sym; jl_sym_t *statement_sym; jl_sym_t *all_sym;
+jl_sym_t *compile_sym; jl_sym_t *infer_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -133,7 +134,7 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
 static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel);
 
-value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     // tells whether a var is defined in and *by* the current module
     argcount(fl_ctx, "defined-julia-global", nargs, 1);
@@ -144,19 +145,19 @@ value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t na
     return (b != NULL && b->owner == ctx->module) ? fl_ctx->T : fl_ctx->F;
 }
 
-value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     assert(ctx->module);
     return fixnum(jl_module_next_counter(ctx->module));
 }
 
-value_t fl_julia_current_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_julia_current_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     return symbol(fl_ctx, jl_filename);
 }
 
-value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     return fixnum(jl_lineno);
 }
@@ -164,7 +165,7 @@ value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32_t narg
 // Check whether v is a scalar for purposes of inlining fused-broadcast
 // arguments when lowering; should agree with broadcast.jl on what is a
 // scalar.  When in doubt, return false, since this is only an optimization.
-value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "julia-scalar?", nargs, 1);
     if (fl_isnumber(fl_ctx, args[0]) || fl_isstring(fl_ctx, args[0]))
@@ -179,7 +180,7 @@ value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 
-value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_julia_logmsg(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     int kwargs_len = (int)nargs - 6;
     if (nargs < 6 || kwargs_len % 2 != 0) {
@@ -299,7 +300,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOI
     return ctx;
 }
 
-static void jl_ast_ctx_leave(jl_ast_context_t *ctx) JL_NOTSAFEPOINT
+static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 {
     JL_SIGATOMIC_END();
     if (--ctx->ref)
@@ -344,7 +345,6 @@ void jl_init_common_symbols(void)
     goto_sym = jl_symbol("goto");
     goto_ifnot_sym = jl_symbol("gotoifnot");
     return_sym = jl_symbol("return");
-    unreachable_sym = jl_symbol("unreachable");
     lambda_sym = jl_symbol("lambda");
     module_sym = jl_symbol("module");
     export_sym = jl_symbol("export");
@@ -383,6 +383,8 @@ void jl_init_common_symbols(void)
     nospecialize_sym = jl_symbol("nospecialize");
     specialize_sym = jl_symbol("specialize");
     optlevel_sym = jl_symbol("optlevel");
+    compile_sym = jl_symbol("compile");
+    infer_sym = jl_symbol("infer");
     macrocall_sym = jl_symbol("macrocall");
     escape_sym = jl_symbol("escape");
     hygienicscope_sym = jl_symbol("hygienic-scope");
@@ -555,10 +557,15 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             JL_GC_POP();
             return temp;
         }
-        JL_GC_PUSH1(&ex);
+        JL_GC_PUSH2(&ex, &temp);
         if (sym == goto_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct(jl_gotonode_type, ex);
+        }
+        else if (sym == goto_ifnot_sym) {
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            temp = scm_to_julia(fl_ctx, car_(cdr_(e)), mod);
+            temp = jl_new_struct(jl_gotoifnot_type, ex, temp);
         }
         else if (sym == newvar_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
@@ -592,7 +599,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (sym == thunk_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             assert(jl_is_code_info(ex));
-            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, (jl_value_t*)jl_symbol("top-level scope"));
+            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, mod, (jl_value_t*)jl_symbol("top-level scope"));
             temp = (jl_value_t*)jl_exprn(sym, 1);
             jl_exprargset(temp, 0, ex);
         }
@@ -650,7 +657,7 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 
 static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv)
 {
-    if (jl_array_len(a) > 300000)
+    if (jl_array_len(a) > 650000)
         lerror(fl_ctx, symbol(fl_ctx, "error"), "expression too large");
     value_t temp;
     for(long i=jl_array_len(a)-1; i >= 0; i--) {
@@ -846,13 +853,15 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module
     value_t arg = julia_to_scm(fl_ctx, expr);
     value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, funcname)), arg);
     jl_value_t *result = scm_to_julia(fl_ctx, e, inmodule);
+    JL_GC_PUSH1(&result);
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
+    JL_GC_POP();
     return result;
 }
 
-jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr, jl_module_t *inmodule,
-                                       const char *file, int line)
+static jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
+                                              jl_module_t *inmodule, const char *file, int line)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
@@ -861,8 +870,10 @@ jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr, j
     value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, funcname)), arg,
                           symbol(fl_ctx, file), fixnum(line));
     jl_value_t *result = scm_to_julia(fl_ctx, e, inmodule);
+    JL_GC_PUSH1(&result);
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
+    JL_GC_POP();
     return result;
 }
 
@@ -921,7 +932,7 @@ JL_DLLEXPORT int jl_operator_precedence(char *sym)
     return res;
 }
 
-int jl_has_meta(jl_array_t *body, jl_sym_t *sym)
+int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
 {
     size_t i, l = jl_array_len(body);
     for (i = 0; i < l; i++) {
@@ -962,7 +973,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     jl_value_t *result;
     JL_TRY {
         margs[0] = jl_toplevel_eval(*ctx, margs[0]);
-        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, 1, world);
+        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, world);
         JL_GC_PROMISE_ROOTED(mfunc);
         if (mfunc == NULL) {
             jl_method_error(margs[0], &margs[1], nargs, world);

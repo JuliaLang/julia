@@ -17,6 +17,15 @@ endif
 endif
 endif
 
+ifeq ($(USE_MLIR),1)
+ifeq ($(USE_SYSTEM_LLVM),0)
+ifneq ($(LLVM_VER),svn)
+$(error USE_MLIR=1 requires LLVM_VER=svn)
+endif
+endif
+endif
+
+
 # for Monorepo
 LLVM_ENABLE_PROJECTS :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
@@ -27,6 +36,9 @@ LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);polly
 endif
 ifeq ($(BUILD_LLDB), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lldb
+endif
+ifeq ($(USE_MLIR), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);mlir
 endif
 
 include $(SRCDIR)/llvm-options.mk
@@ -76,6 +88,7 @@ LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
 LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
+LLVM_CMAKE += -DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF -DCOMPILER_RT_ENABLE_TVOS=OFF
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
@@ -175,6 +188,10 @@ endif # BUILD_CUSTOM_LIBCXX
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)"
+ifeq ($(OS),Darwin)
+# Explicitly use the default for -mmacosx-version-min=10.9 and later
+LLVM_CMAKE += -DLLVM_ENABLE_LIBCXX=ON
+endif
 
 ifeq ($(BUILD_LLVM_CLANG),0)
 # block default building of Clang
@@ -398,6 +415,7 @@ $(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-8.0-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-8.0-D65174-limit-merge-stores)) # remove for 10.0
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 endif # LLVM_VER 8.0
 
 ifeq ($(LLVM_VER_SHORT),9.0)
@@ -415,6 +433,10 @@ $(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-9.0-D65174-limit-merge-stores)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm9-D71443-PPC-MC-redef-symbol)) # remove for 10.0
 $(eval $(call LLVM_PATCH,llvm-9.0-D78196)) # remove for 11.0
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
+$(eval $(call LLVM_PATCH,llvm-9.0-D85499)) # landed as D85553
+$(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 endif # LLVM_VER 9.0
 
 ifeq ($(LLVM_VER_SHORT),10.0)
@@ -429,7 +451,28 @@ $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
 $(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-10.0-PPC_SELECT_CC)) # delete for LLVM 11
 $(eval $(call LLVM_PATCH,llvm-10.0-PPC-LI-Elimination)) # delete for LLVM 11
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
+$(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-r_aarch64_prel32)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-r_ppc_rel)) # remove for LLVM 12
 endif # LLVM_VER 10.0
+
+ifeq ($(LLVM_VER_SHORT),11.0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+#$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
+$(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
+endif # LLVM_VER 11.0
+
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)

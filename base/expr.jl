@@ -9,11 +9,10 @@ Generates a symbol which will not conflict with other variable names.
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
-gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, sizeof(s))
+gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Csize_t), s, sizeof(s))
 
 gensym(ss::String...) = map(gensym, ss)
-gensym(s::Symbol) =
-    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))
+gensym(s::Symbol) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Csize_t), s, -1 % Csize_t)
 
 """
     @gensym
@@ -59,6 +58,8 @@ function copy_exprs(x::PhiCNode)
 end
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
 
+exprarray(head, args::Array{Any,1}) = (ex = Expr(head); ex.args = args; ex)
+
 # create copies of the CodeInfo definition, and any mutable fields
 function copy(c::CodeInfo)
     cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
@@ -66,9 +67,9 @@ function copy(c::CodeInfo)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
     cnew.codelocs  = copy(cnew.codelocs)
-    cnew.linetable = copy(cnew.linetable)
+    cnew.linetable = copy(cnew.linetable::Union{Vector{Any},Vector{Core.LineInfoNode}})
     cnew.ssaflags  = copy(cnew.ssaflags)
-    cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges)
+    cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges::Vector)
     ssavaluetypes  = cnew.ssavaluetypes
     ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
     return cnew
@@ -77,6 +78,7 @@ end
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
+==(stmt1::Core.PhiNode, stmt2::Core.PhiNode) = stmt1.edges == stmt2.edges && stmt1.values == stmt2.values
 
 """
     macroexpand(m::Module, x; recursive=true)
@@ -210,9 +212,10 @@ prevented. This is shown in the following example:
         Function Definition
     =#
 end
-
-If the function is trivial (for example returning a constant) it might get inlined anyway.
 ```
+
+!!! note
+    If the function is trivial (for example returning a constant) it might get inlined anyway.
 """
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
@@ -346,9 +349,9 @@ function findmeta_block(exargs, argsmatch=args->true)
     for i = 1:length(exargs)
         a = exargs[i]
         if isa(a, Expr)
-            if (a::Expr).head === :meta && argsmatch((a::Expr).args)
+            if a.head === :meta && argsmatch(a.args)
                 return i, exargs
-            elseif (a::Expr).head === :block
+            elseif a.head === :block
                 idx, exa = findmeta_block(a.args, argsmatch)
                 if idx != 0
                     return idx, exa

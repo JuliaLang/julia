@@ -34,27 +34,27 @@ must be one less than the length of `dv`.
 # Examples
 ```jldoctest
 julia> dv = [1, 2, 3, 4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
  4
 
 julia> ev = [7, 8, 9]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  7
  8
  9
 
 julia> Bu = Bidiagonal(dv, ev, :U) # ev is on the first superdiagonal
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  7  ⋅  ⋅
  ⋅  2  8  ⋅
  ⋅  ⋅  3  9
  ⋅  ⋅  ⋅  4
 
 julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  7  2  ⋅  ⋅
  ⋅  8  3  ⋅
@@ -68,6 +68,13 @@ function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector
     Bidiagonal{T,V}(dv, ev, uplo)
 end
 
+#To allow Bidiagonal's where the "dv" is Vector{T} and "ev" Vector{S},
+#where T and S can be promoted
+function LinearAlgebra.Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Symbol) where {T,S}
+    TS = promote_type(T,S)
+    return Bidiagonal{TS,Vector{TS}}(dv, ev, uplo)
+end
+
 """
     Bidiagonal(A, uplo::Symbol)
 
@@ -77,21 +84,21 @@ its first super- (if `uplo=:U`) or sub-diagonal (if `uplo=:L`).
 # Examples
 ```jldoctest
 julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  1  1  1
  2  2  2  2
  3  3  3  3
  4  4  4  4
 
 julia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  1  ⋅  ⋅
  ⋅  2  2  ⋅
  ⋅  ⋅  3  3
  ⋅  ⋅  ⋅  4
 
 julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  2  2  ⋅  ⋅
  ⋅  3  3  ⋅

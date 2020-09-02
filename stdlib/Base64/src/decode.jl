@@ -196,7 +196,7 @@ See also [`base64encode`](@ref).
 # Examples
 ```jldoctest
 julia> b = base64decode("SGVsbG8h")
-6-element Array{UInt8,1}:
+6-element Vector{UInt8}:
  0x48
  0x65
  0x6c

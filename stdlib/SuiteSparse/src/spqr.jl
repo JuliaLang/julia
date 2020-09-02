@@ -164,32 +164,32 @@ solve least squares or underdetermined problems with [`\\`](@ref). The function 
 # Examples
 ```jldoctest
 julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
-4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+4×2 SparseMatrixCSC{Float64, Int64} with 4 stored entries:
  1.0   ⋅
  1.0   ⋅
   ⋅   1.0
   ⋅   1.0
 
 julia> qr(A)
-SuiteSparse.SPQR.QRSparse{Float64,Int64}
+SuiteSparse.SPQR.QRSparse{Float64, Int64}
 Q factor:
-4×4 SuiteSparse.SPQR.QRSparseQ{Float64,Int64}:
+4×4 SuiteSparse.SPQR.QRSparseQ{Float64, Int64}:
  -0.707107   0.0        0.0       -0.707107
   0.0       -0.707107  -0.707107   0.0
   0.0       -0.707107   0.707107   0.0
  -0.707107   0.0        0.0        0.707107
 R factor:
-2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+2×2 SparseMatrixCSC{Float64, Int64} with 2 stored entries:
  -1.41421    ⋅
    ⋅       -1.41421
 Row permutation:
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  3
  4
  2
 Column permutation:
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 ```
@@ -223,7 +223,7 @@ LinearAlgebra.qr(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32}}; tol=_defaul
 LinearAlgebra.qr(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
    tol=_default_tol(A)) where {T<:AbstractFloat} =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
-    "Try qr(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
+    "Try qr(convert(SparseMatrixCSC{Float64/ComplexF64, Int}, A)) for ",
     "sparse floating point QR using SPQR or qr(Array(A)) for generic ",
     "dense QR.")))
 LinearAlgebra.qr(A::SparseMatrixCSC; tol=_default_tol(A)) = qr(float(A); tol=tol)
@@ -302,28 +302,28 @@ Extract factors of a QRSparse factorization. Possible values of `d` are
 julia> F = qr(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
 
 julia> F.Q
-4×4 SuiteSparse.SPQR.QRSparseQ{Float64,Int64}:
+4×4 SuiteSparse.SPQR.QRSparseQ{Float64, Int64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0
 
 julia> F.R
-4×4 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
+4×4 SparseMatrixCSC{Float64, Int64} with 5 stored entries:
  3.0   ⋅    ⋅    ⋅
   ⋅   4.0   ⋅   2.0
   ⋅    ⋅   5.0   ⋅
   ⋅    ⋅    ⋅   1.0
 
 julia> F.prow
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  3
  4
  1
 
 julia> F.pcol
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  2
  3
  4
@@ -441,14 +441,14 @@ when the problem is underdetermined.
 # Examples
 ```jldoctest
 julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
-4×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+4×2 SparseMatrixCSC{Float64, Int64} with 3 stored entries:
  1.0   ⋅
  1.0   ⋅
   ⋅    ⋅
  1.0   ⋅
 
 julia> qr(A)\\fill(1.0, 4)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  1.0
  0.0
 ```

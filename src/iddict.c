@@ -37,7 +37,11 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
     jl_array_t *a = *pa;
     size_t orig, index, iter, empty_slot;
     size_t newsz, sz = hash_size(a);
-    assert(sz >= 1);
+    if (sz == 0) {
+        a = jl_alloc_vec_any(HT_N_INLINE);
+        sz = hash_size(a);
+        *pa = a;
+    }
     size_t maxprobe = max_probe(sz);
     void **tab = (void **)a->data;
 
@@ -77,9 +81,9 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            tab[empty_slot] = key;
+            jl_atomic_store_relaxed(&tab[empty_slot], key);
             jl_gc_wb(a, key);
-            tab[empty_slot + 1] = val;
+            jl_atomic_store_relaxed(&tab[empty_slot + 1], val);
             jl_gc_wb(a, val);
             return 1;
         }
@@ -108,7 +112,8 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
 jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
 {
     size_t sz = hash_size(a);
-    assert(sz >= 1);
+    if (sz == 0)
+        return NULL;
     size_t maxprobe = max_probe(sz);
     void **tab = (void **)a->data;
     uint_t hv = keyhash(key);
@@ -122,7 +127,7 @@ jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
         if (k2 == NULL)
             return NULL;
         if (jl_egal(key, k2)) {
-            if (tab[index + 1] != NULL)
+            if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL)
                 return (jl_value_t**)&tab[index + 1];
             // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
             if (key != jl_nothing)
@@ -154,7 +159,7 @@ JL_DLLEXPORT
 jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
 {
     jl_value_t **bp = jl_table_peek_bp(h, key);
-    return (bp == NULL) ? deflt : *bp;
+    return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp);
 }
 
 JL_DLLEXPORT

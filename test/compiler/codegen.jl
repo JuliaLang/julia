@@ -400,7 +400,7 @@ g33829() # warm up
 @test called33829 # make sure there was a global side effect so it's hard for this call to simply be removed
 let src = get_llvm(f33829, Tuple{Float64}, true, true)
     @test occursin(r"call [^(]*double @", src)
-    @test !occursin(r"call [^(]*\%jl_value_t", src)
+    @test !occursin(r"call [^(]*\{}", src)
 end
 
 let io = IOBuffer()
@@ -444,3 +444,15 @@ function _handle_message_test()
     return _handle_progress_test(progress)
 end
 @test _handle_message_test() isa Tuple{Base.UUID, String}
+
+@testset "#30739" begin
+    ifelsetuple(n::Integer, k::Integer, f, g) = ntuple(i -> (i <= k ? f : g), n)
+    f(x) = x^2; g(x) = x^3;
+    a = [1]; b = [2]
+    @test ifelsetuple(5, 3, a, b) == ([1], [1], [1], [2], [2])
+end
+
+@testset "#36422" begin
+    str_36422 = "using InteractiveUtils; code_llvm(Base.ht_keyindex, (Dict{NTuple{65,Int64},Nothing}, NTuple{65,Int64}))"
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e $str_36422`)
+end

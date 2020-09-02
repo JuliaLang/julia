@@ -89,7 +89,7 @@ the following modifications:
       ```julia
       using PkgTemplates
       t = Template()
-      generate("MyPkg", t)
+      t("MyPkg")
       ```
       This will create a blank package, `"MyPkg"`, in your `.julia/dev` directory.
       Note that PkgTemplates allows you to control many different options

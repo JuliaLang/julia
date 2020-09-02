@@ -117,7 +117,7 @@ cst = map(cost, ci.code)
 
 # output
 
-31-element Array{Int64,1}:
+31-element Vector{Int64}:
   0
   0
  20

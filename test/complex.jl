@@ -241,7 +241,7 @@ end
     @test isequal(sqrt(complex(-Inf, NaN)), complex( NaN, Inf))
 
     @test isequal(sqrt(complex( NaN, 0.0)), complex( NaN, NaN))
-    @test isequal(sqrt(complex( NaN, 0.0)), complex( NaN, NaN))
+    @test isequal(sqrt(complex( NaN,-0.0)), complex( NaN, NaN))
     @test isequal(sqrt(complex( NaN, Inf)), complex( Inf, Inf))
     @test isequal(sqrt(complex( NaN,-Inf)), complex( Inf,-Inf))
 
@@ -833,9 +833,9 @@ end
 @test complex.([1.0, 1.0], 1.0) == [complex(1.0, 1.0), complex(1.0, 1.0)]
 # robust division of Float64
 # hard complex divisions from Fig 6 of arxiv.1210.4539
-z7 = Complex{Float64}(3.898125604559113300e289, 8.174961907852353577e295)
-z9 = Complex{Float64}(0.001953125, -0.001953125)
-z10 = Complex{Float64}( 1.02951151789360578e-84, 6.97145987515076231e-220)
+z7 = ComplexF64(3.898125604559113300e289, 8.174961907852353577e295)
+z9 = ComplexF64(0.001953125, -0.001953125)
+z10 = ComplexF64( 1.02951151789360578e-84, 6.97145987515076231e-220)
 harddivs = ((1.0+im*1.0, 1.0+im*2^1023.0, 2^-1023.0-im*2^-1023.0), #1
       (1.0+im*1.0, 2^-1023.0+im*2^-1023.0, 2^1023.0+im*0.0), #2
       (2^1023.0+im*2^-1023.0, 2^677.0+im*2^-677.0, 2^346.0-im*2^-1008.0), #3
@@ -868,8 +868,8 @@ end
 
 # division of non-Float64
 function cdiv_test(a,b)
-    c=convert(Complex{Float64},a)/convert(Complex{Float64},b)
-    50 <= sb_accuracy(c,convert(Complex{Float64},a/b))
+    c=convert(ComplexF64,a)/convert(ComplexF64,b)
+    50 <= sb_accuracy(c,convert(ComplexF64,a/b))
 end
 @test cdiv_test(complex(1//2, 3//4), complex(17//13, 4//5))
 @test cdiv_test(complex(1,2), complex(8997,2432))
@@ -958,7 +958,7 @@ end
 @test typeof(Int8(1) - im) == Complex{Int8}
 
 # issue #10926
-@test typeof(π - 1im) == Complex{Float64}
+@test typeof(π - 1im) == ComplexF64
 
 @testset "issue #15969" begin
     # specialized muladd for complex types
@@ -1012,7 +1012,7 @@ end
     a = [1.0 + 1e-10im, 2.0e-15 - 2.0e-5im, 1.0e-15 + 2im, 1.0 + 2e-15im]
     @test sprint((io, x) -> show(io, MIME("text/plain"), x), a) ==
         join([
-            "4-element Array{Complex{Float64},1}:",
+            "4-element Vector{ComplexF64}:",
             "     1.0 + 1.0e-10im",
             " 2.0e-15 - 2.0e-5im",
             " 1.0e-15 + 2.0im",

@@ -224,7 +224,7 @@ julia> lstrip(a)
 """
 function lstrip(f, s::AbstractString)
     e = lastindex(s)
-    for (i, c) in pairs(s)
+    for (i::Int, c::AbstractChar) in pairs(s)
         !f(c) && return @inbounds SubString(s, i, e)
     end
     SubString(s, e+1, e)
@@ -256,7 +256,7 @@ julia> rstrip(a)
 """
 function rstrip(f, s::AbstractString)
     for (i, c) in Iterators.reverse(pairs(s))
-        f(c) || return @inbounds SubString(s, 1, i)
+        f(c::AbstractChar) || return @inbounds SubString(s, 1, i::Int)
     end
     SubString(s, 1, 0)
 end
@@ -369,7 +369,7 @@ julia> a = "Ma.rch"
 "Ma.rch"
 
 julia> split(a, ".")
-2-element Array{SubString{String},1}:
+2-element Vector{SubString{String}}:
  "Ma"
  "rch"
 ```
@@ -389,26 +389,26 @@ function split(str::T, splitter::AbstractChar;
     _split(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 
-function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
+function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Vector)
     i = 1 # firstindex(str)
-    n = lastindex(str)
-    r = findfirst(splitter,str)
+    n = lastindex(str)::Int
+    r = findfirst(splitter,str)::Union{Nothing,Int,UnitRange{Int}}
     if !isnothing(r)
-        j, k = first(r), nextind(str,last(r))
+        j, k = first(r), nextind(str,last(r))::Int
         while 0 < j <= n && length(strs) != limit-1
             if i < k
                 if keepempty || i < j
-                    push!(strs, @inbounds SubString(str,i,prevind(str,j)))
+                    push!(strs, @inbounds SubString(str,i,prevind(str,j)::Int))
                 end
                 i = k
             end
-            (k <= j) && (k = nextind(str,j))
-            r = findnext(splitter,str,k)
+            (k <= j) && (k = nextind(str,j)::Int)
+            r = findnext(splitter,str,k)::Union{Nothing,Int,UnitRange{Int}}
             isnothing(r) && break
-            j, k = first(r), nextind(str,last(r))
+            j, k = first(r), nextind(str,last(r))::Int
         end
     end
-    if keepempty || i <= ncodeunits(str)
+    if keepempty || i <= ncodeunits(str)::Int
         push!(strs, @inbounds SubString(str,i))
     end
     return strs
@@ -431,7 +431,7 @@ julia> a = "M.a.r.c.h"
 "M.a.r.c.h"
 
 julia> rsplit(a, ".")
-5-element Array{SubString{String},1}:
+5-element Vector{SubString{String}}:
  "M"
  "a"
  "r"
@@ -439,11 +439,11 @@ julia> rsplit(a, ".")
  "h"
 
 julia> rsplit(a, "."; limit=1)
-1-element Array{SubString{String},1}:
+1-element Vector{SubString{String}}:
  "M.a.r.c.h"
 
 julia> rsplit(a, "."; limit=2)
-2-element Array{SubString{String},1}:
+2-element Vector{SubString{String}}:
  "M.a.r.c"
  "h"
 ```
@@ -464,13 +464,13 @@ function rsplit(str::T, splitter::AbstractChar;
 end
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
-    n = lastindex(str)
-    r = something(findlast(splitter, str), 0)
+    n = lastindex(str)::Int
+    r = something(findlast(splitter, str)::Union{Nothing,Int,UnitRange{Int}}, 0)
     j, k = first(r), last(r)
     while j > 0 && k > 0 && length(strs) != limit-1
-        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k),n))
-        n = prevind(str, j)
-        r = something(findprev(splitter,str,n), 0)
+        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k)::Int,n))
+        n = prevind(str, j)::Int
+        r = something(findprev(splitter,str,n)::Union{Nothing,Int,UnitRange{Int}}, 0)
         j, k = first(r), last(r)
     end
     (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))
@@ -507,6 +507,10 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern = _pat_replacer(pattern)
     r = something(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
+    if j == 0
+        _free_pat_replacer(pattern)
+        return str
+    end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
         if i == a || i <= k
@@ -521,7 +525,7 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
             i = k = nextind(str, k)
         end
         r = something(findnext(pattern,str,k), 0)
-        r == 0:-1 || n == count && break
+        r === 0:-1 || n == count && break
         j, k = first(r), last(r)
         n += 1
     end
@@ -582,12 +586,12 @@ julia> s = string(12345, base = 16)
 "3039"
 
 julia> hex2bytes(s)
-2-element Array{UInt8,1}:
+2-element Vector{UInt8}:
  0x30
  0x39
 
 julia> a = b"01abEF"
-6-element Base.CodeUnits{UInt8,String}:
+6-element Base.CodeUnits{UInt8, String}:
  0x30
  0x31
  0x61
@@ -596,7 +600,7 @@ julia> a = b"01abEF"
  0x46
 
 julia> hex2bytes(a)
-3-element Array{UInt8,1}:
+3-element Vector{UInt8}:
  0x01
  0xab
  0xef
@@ -651,7 +655,7 @@ julia> a = string(12345, base = 16)
 "3039"
 
 julia> b = hex2bytes(a)
-2-element Array{UInt8,1}:
+2-element Vector{UInt8}:
  0x30
  0x39
 

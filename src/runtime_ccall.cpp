@@ -3,7 +3,6 @@
 #include "llvm-version.h"
 #include <map>
 #include <string>
-#include <cstdio>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/raw_ostream.h>
@@ -28,7 +27,7 @@ using namespace llvm;
 static std::map<std::string, void*> libMap;
 static jl_mutex_t libmap_lock;
 extern "C"
-void *jl_get_library_(const char *f_lib, int throw_err)
+void *jl_get_library_(const char *f_lib, int throw_err) JL_NOTSAFEPOINT
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
@@ -55,7 +54,7 @@ void *jl_get_library_(const char *f_lib, int throw_err)
 }
 
 extern "C" JL_DLLEXPORT
-void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
+void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd) JL_NOTSAFEPOINT
 {
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)
@@ -114,8 +113,6 @@ jl_value_t *jl_get_JIT(void)
 # define MAXHOSTNAMELEN 256
 #endif
 
-extern "C" int jl_getpid();
-
 // Form a file name from a pattern made by replacing tokens,
 // similar to many of those provided by ssh_config TOKENS:
 //
@@ -129,7 +126,7 @@ extern "C" int jl_getpid();
 std::string jl_format_filename(StringRef output_pattern)
 {
     std::string buf;
-    llvm::raw_string_ostream outfile(buf);
+    raw_string_ostream outfile(buf);
     bool special = false;
     char hostname[MAXHOSTNAMELEN + 1];
     uv_passwd_t pwd;

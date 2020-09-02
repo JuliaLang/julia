@@ -117,6 +117,8 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid2 = UUID(uuidstr2)
     uuids = [uuid, uuid2]
     @test (uuids .== uuid) == [true, false]
+
+    @test parse(UUID, uuidstr2) == uuid2
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
 
@@ -164,9 +166,10 @@ end
                 d = findfirst(line -> line == "[deps]", p)
                 t = findfirst(line -> startswith(line, "This"), p)
                 # look up various packages by name
-                root = Base.explicit_project_deps_get(project_file, "Root")
-                this = Base.explicit_project_deps_get(project_file, "This")
-                that = Base.explicit_project_deps_get(project_file, "That")
+                cache = Base.TOMLCache()
+                root = Base.explicit_project_deps_get(project_file, "Root", cache)
+                this = Base.explicit_project_deps_get(project_file, "This", cache)
+                that = Base.explicit_project_deps_get(project_file, "That", cache)
                 # test that the correct answers are given
                 @test root == (something(n, N+1) ≥ something(d, N+1) ? nothing :
                                something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
@@ -181,15 +184,30 @@ end
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
-saved_home_project = Base.HOME_PROJECT[]
 saved_active_project = Base.ACTIVE_PROJECT[]
 
 push!(empty!(LOAD_PATH), "project")
 push!(empty!(DEPOT_PATH), "depot")
-Base.HOME_PROJECT[] = nothing
 Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]
+
+
+# locate `tail(names)` package by following the search path graph through `names` starting from `where`
+function recurse_package(where::PkgId, name::String, names::String...)
+    pkg = identify_package(where, name, Base.TOMLCache())
+    pkg === nothing && return nothing
+    return recurse_package(pkg, names...)
+end
+
+recurse_package(pkg::String) = identify_package(pkg)
+recurse_package(where::PkgId, pkg::String) = identify_package(where, pkg, Base.TOMLCache())
+
+function recurse_package(name::String, names::String...)
+    pkg = identify_package(name)
+    pkg === nothing && return nothing
+    return recurse_package(pkg, names...)
+end
 
 @testset "project & manifest identify_package & locate_package" begin
     local path
@@ -201,14 +219,14 @@ Base.ACTIVE_PROJECT[] = nothing
         ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"                ),
     ]
         n = map(String, split(names, '.'))
-        pkg = identify_package(n...)
+        pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
     end
     @test identify_package("Baz") == nothing
     @test identify_package("Qux") == nothing
     @testset "equivalent package names" begin
-        local classes = [
+         classes = [
             ["Foo"],
             ["Bar", "Foo.Bar"],
             ["Foo.Baz", "Bar.Baz", "Foo.Bar.Baz"],
@@ -221,15 +239,15 @@ Base.ACTIVE_PROJECT[] = nothing
         for i = 1:length(classes)
             A = classes[i]
             for x in A
-                X = identify_package(map(String, split(x, '.'))...)
+                X = recurse_package(map(String, split(x, '.'))...)
                 for y in A
-                    Y = identify_package(map(String, split(y, '.'))...)
+                    Y = recurse_package(map(String, split(y, '.'))...)
                     @test X == Y
                 end
                 for j = i+1:length(classes)
                     B = classes[j]
                     for z in B
-                        Z = identify_package(map(String, split(z, '.'))...)
+                        Z = recurse_package(map(String, split(z, '.'))...)
                         @test X != Z
                     end
                 end
@@ -384,8 +402,6 @@ const envs = Dict{String,Any}()
 append!(empty!(DEPOT_PATH), depots)
 
 @testset "load code uniqueness" begin
-    @show UUIDS
-    @show depots
     @test allunique(UUIDS)
     @test allunique(depots)
     @test allunique(DEPOT_PATH)
@@ -665,7 +681,6 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-Base.HOME_PROJECT[] = saved_home_project
 Base.ACTIVE_PROJECT[] = saved_active_project
 
 # issue #28190

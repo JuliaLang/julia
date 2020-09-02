@@ -51,8 +51,7 @@ end
 """
     addprocs(machines; tunnel=false, sshflags=\`\`, max_parallel=10, kwargs...) -> List of process identifiers
 
-Add processes on remote machines via SSH. Requires `julia` to be installed in the same
-location on each node, or to be available via a shared file system.
+Add processes on remote machines via SSH. See `exename` to set the path to the `julia` installation on remote machines.
 
 `machines` is a vector of machine specifications. Workers are started for each specification.
 
@@ -269,6 +268,7 @@ end
 
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
+    id = Int(id)
     if op === :interrupt
         ospid = config.ospid
         if ospid !== nothing
@@ -444,7 +444,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     # master connecting to workers
     if config.io !== nothing
-        (bind_addr, port) = read_worker_host_port(config.io)
+        (bind_addr, port::Int) = read_worker_host_port(config.io)
         pubhost = something(config.host, bind_addr)
         config.host = pubhost
         config.port = port
@@ -504,7 +504,7 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 end
 
 function connect_w2w(pid::Int, config::WorkerConfig)
-    (rhost, rport) = notnothing(config.connect_at)
+    (rhost, rport) = notnothing(config.connect_at)::Tuple{String, Int}
     config.host = rhost
     config.port = rport
     (s, bind_addr) = connect_to_worker(rhost, rport)

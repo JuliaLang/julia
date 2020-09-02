@@ -111,10 +111,12 @@ end
 
 for a in vals
     a isa AbstractArray || continue
-    if keys(a) == keys(Array(a))
-        @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
+    aa  = copyto!(Array{eltype(a)}(undef, size(a)), a)
+    aaa = copyto!(Array{Any}(undef, size(a)), a)
+    if keys(a) == keys(aa)
+        @test hash(a) == hash(aa) == hash(aaa)
     else
-        @test hash(a) == hash(OffsetArray(Array(a), (first.(axes(a)).-1)...)) == hash(OffsetArray(Array{Any}(a), (first.(axes(a)).-1)...))
+        @test hash(a) == hash(OffsetArray(aa, (first.(axes(a)).-1)...)) == hash(OffsetArray(aaa, (first.(axes(a)).-1)...))
     end
 end
 

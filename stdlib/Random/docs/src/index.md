@@ -26,7 +26,7 @@ unbounded integers, the interval must be specified (e.g. `rand(big.(1:6))`).
 Additionally, normal and exponential distributions are implemented for some `AbstractFloat` and
 `Complex` types, see [`randn`](@ref) and [`randexp`](@ref) for details.
 
-!!! warn
+!!! warning
     Because the precise way in which random numbers are generated is considered an implementation detail, bug fixes and speed improvements may change the stream of numbers that are generated after a version change. Relying on a specific seed or generated stream of numbers during unit testing is thus discouraged - consider testing properties of the methods in question instead.
 
 ## Random numbers module
@@ -151,13 +151,13 @@ julia> rand(MersenneTwister(0), Die)
 Die(16)
 
 julia> rand(Die, 3)
-3-element Array{Die,1}:
+3-element Vector{Die}:
  Die(5)
  Die(20)
  Die(9)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
-3-element Array{Die,1}:
+3-element Vector{Die}:
  Die(11)
  Die(20)
  Die(10)
@@ -176,7 +176,7 @@ julia> rand(Die(4))
 2
 
 julia> rand(Die(4), 3)
-3-element Array{Any,1}:
+3-element Vector{Any}:
  1
  4
  2

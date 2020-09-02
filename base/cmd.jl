@@ -11,7 +11,7 @@ struct Cmd <: AbstractCmd
     exec::Vector{String}
     ignorestatus::Bool
     flags::UInt32 # libuv process flags
-    env::Union{Array{String},Nothing}
+    env::Union{Vector{String},Nothing}
     dir::String
     Cmd(exec::Vector{String}) =
         new(exec, false, 0x00, nothing, "")
@@ -354,16 +354,16 @@ end
 function cmd_gen(parsed)
     args = String[]
     if length(parsed) >= 1 && isa(parsed[1], Tuple{Cmd})
-        cmd = parsed[1][1]
+        cmd = (parsed[1]::Tuple{Cmd})[1]
         (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
         append!(args, cmd.exec)
         for arg in tail(parsed)
-            append!(args, arg_gen(arg...))
+            append!(args, arg_gen(arg...)::Vector{String})
         end
         return Cmd(Cmd(args), ignorestatus, flags, env, dir)
     else
         for arg in parsed
-            append!(args, arg_gen(arg...))
+            append!(args, arg_gen(arg...)::Vector{String})
         end
         return Cmd(args)
     end
@@ -386,5 +386,6 @@ Process(`echo 1`, ProcessExited(0))
 ```
 """
 macro cmd(str)
-    return :(cmd_gen($(esc(shell_parse(str, special=shell_special)[1]))))
+    cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
+    return :(cmd_gen($(esc(cmd_ex))))
 end

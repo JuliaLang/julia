@@ -62,8 +62,9 @@ true
 ```
 """
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
-isexpr(@nospecialize(ex), heads::Union{Set,Vector,Tuple}) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) == n
+isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
+isexpr(@nospecialize(ex), head::Symbol, n::Int) = isa(ex, Expr) && ex.head === head && length(ex.args) == n
+isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
 
 """
     Meta.show_sexpr([io::IO,], ex)
@@ -154,7 +155,7 @@ function _parse_string(text::AbstractString, filename::AbstractString,
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset = Core._parse(text, filename, index-1, options)
+    ex, offset::Int = Core._parse(text, filename, index-1, options)
     ex, offset+1
 end
 

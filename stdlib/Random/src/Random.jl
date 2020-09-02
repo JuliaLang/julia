@@ -253,7 +253,7 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 rand(rng::AbstractRNG, X)                                           = rand(rng, Sampler(rng, X, Val(1)))
 # this is needed to disambiguate
 rand(rng::AbstractRNG, X::Dims)                                     = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))
+rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))::X
 
 rand(X)                   = rand(default_rng(), X)
 rand(::Type{X}) where {X} = rand(default_rng(), X)
@@ -365,7 +365,7 @@ but without allocating a new array.
 julia> rng = MersenneTwister(1234);
 
 julia> rand!(rng, zeros(5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  0.5908446386657102
  0.7667970365022592
  0.5662374165061859

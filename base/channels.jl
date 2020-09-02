@@ -7,6 +7,9 @@ Representation of a channel passing objects of type `T`.
 """
 abstract type AbstractChannel{T} end
 
+push!(c::AbstractChannel, v) = (put!(c, v); c)
+popfirst!(c::AbstractChannel) = take!(c)
+
 """
     Channel{T=Any}(size::Int=0)
 
@@ -236,9 +239,10 @@ julia> take!(c)
 1
 
 julia> put!(c, 1);
-ERROR: TaskFailedException:
-foo
+ERROR: TaskFailedException
 Stacktrace:
+[...]
+    nested task error: foo
 [...]
 ```
 """
@@ -346,8 +350,6 @@ function put_unbuffered(c::Channel, v)
     return v
 end
 
-push!(c::Channel, v) = put!(c, v)
-
 """
     fetch(c::Channel)
 
@@ -394,8 +396,6 @@ function take_buffered(c::Channel)
     end
 end
 
-popfirst!(c::Channel) = take!(c)
-
 # 0-size channel
 function take_unbuffered(c::Channel{T}) where T
     lock(c)
@@ -419,6 +419,7 @@ on a [`put!`](@ref).
 """
 isready(c::Channel) = n_avail(c) > 0
 n_avail(c::Channel) = isbuffered(c) ? length(c.data) : length(c.cond_put.waitq)
+isempty(c::Channel) = isbuffered(c) ? isempty(c.data) : isempty(c.cond_put.waitq)
 
 lock(c::Channel) = lock(c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)

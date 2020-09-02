@@ -678,8 +678,8 @@ function count_meta_loc(exprs)
     return push_count
 end
 
-function is_return_ssavalue(ex::Expr)
-    ex.head === :return && isa(ex.args[1], Core.SSAValue)
+function is_return_ssavalue(ex)
+    ex isa Core.ReturnNode && ex.val isa Core.SSAValue
 end
 
 function is_pop_loc(ex::Expr)
@@ -2091,6 +2091,18 @@ end
 end
 @test z28789 == 42
 
+# issue #37126
+@test isempty(Test.collect_test_logs() do
+    include_string(@__MODULE__, """
+        function foo37126()
+            f(lhs::Integer, rhs::Integer) = nothing
+            f(lhs::Integer, rhs::AbstractVector{<:Integer}) = nothing
+            return f
+        end
+        struct Bar37126{T<:Real, P<:Real} end
+        """)
+    end[1])
+
 # issue #34673
 # check that :toplevel still returns a value when nested inside something else
 @test eval(Expr(:block, 0, Expr(:toplevel, 43))) == 43
@@ -2264,3 +2276,60 @@ x = let var"'"(x) = 2x
     3'
 end
 @test x == 6
+
+# issue #36196
+@test_throws ParseError("\"for\" at none:1 expected \"end\", got \")\"") Meta.parse("(for i=1; println())")
+@test_throws ParseError("\"try\" at none:1 expected \"end\", got \")\"") Meta.parse("(try i=1; println())")
+
+# issue #36272
+macro m36272()
+    :((a, b=1) -> a*b)
+end
+@test @m36272()(1) == 1
+
+# issue #37134
+macro m37134()
+    :(x :: Int -> 62)
+end
+@test @m37134()(1) == 62
+@test_throws MethodError @m37134()(1.0) == 62
+
+@testset "unary ± and ∓" begin
+    @test Meta.parse("±x") == Expr(:call, :±, :x)
+    @test Meta.parse("∓x") == Expr(:call, :∓, :x)
+end
+
+@testset "test .<: and .>:" begin
+    tmp = [Int, Float64, String, Bool] .<: Union{Int, String}
+    @test tmp == Bool[1, 0, 1, 0]
+
+    tmp = [Int, Float64, String, Bool] .>: [Int, Float64, String, Bool]
+    @test tmp == Bool[1, 1, 1, 1]
+
+    tmp = @. [Int, Float64, String, Bool] <: Union{Int, String}
+    @test tmp == Bool[1, 0,1, 0]
+
+    @test (Int .<: [Integer] .<: [Real]) == [true]
+end
+
+@test :(a <-- b <-- c) == Expr(:call, :<--, :a, Expr(:call, :<--, :b, :c))
+@test :(a .<-- b.<--c) == Expr(:call, :.<--, :a, Expr(:call, :.<--, :b, :c))
+@test :(a<-->b<-->c) == Expr(:call, :<-->, :a, Expr(:call, :<-->, :b, :c))
+@test :(a.<-->b .<--> c) == Expr(:call, :.<-->, :a, Expr(:call, :.<-->, :b, :c))
+@test :(a --> b --> c) == Expr(:-->, :a, Expr(:-->, :b, :c))
+@test :(a --> b.-->c) == Expr(:-->, :a, Expr(:call, :.-->, :b, :c))
+let (-->) = (+)
+    @test (40 --> 2) == 42
+end
+@test_throws ParseError("invalid operator \"<---\"") Meta.parse("1<---2")
+@test_throws ParseError("invalid operator \".<---\"") Meta.parse("1 .<--- 2")
+@test_throws ParseError("invalid operator \"--\"") Meta.parse("a---b")
+@test_throws ParseError("invalid operator \".--\"") Meta.parse("a.---b")
+
+# issue #37228
+# NOTE: the `if` needs to be at the top level
+if isodd(1) && all(iseven(2) for c in ())
+    @test true
+else
+    @test false
+end

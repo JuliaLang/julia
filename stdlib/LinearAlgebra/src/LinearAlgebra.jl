@@ -176,7 +176,7 @@ in dimension 1 in units of element size.
 # Examples
 ```jldoctest
 julia> A = [1,2,3,4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
@@ -186,7 +186,7 @@ julia> LinearAlgebra.stride1(A)
 1
 
 julia> B = view(A, 2:2:4)
-2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:
+2-element view(::Vector{Int64}, 2:2:4) with eltype Int64:
  2
  4
 
@@ -213,7 +213,7 @@ For multiple arguments, return a vector.
 julia> A = fill(1, (4,4)); B = fill(1, (5,5));
 
 julia> LinearAlgebra.checksquare(A, B)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  4
  5
 ```
@@ -280,13 +280,13 @@ julia> Y = zero(X);
 julia> ldiv!(Y, qr(A), X);
 
 julia> Y
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.051652892561983674
   0.10020661157024757
 
 julia> A\\X
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.05165289256198333
   0.10020661157024785
@@ -317,13 +317,13 @@ julia> Y = copy(X);
 julia> ldiv!(qr(A), X);
 
 julia> X
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.051652892561983674
   0.10020661157024757
 
 julia> A\\Y
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.05165289256198333
   0.10020661157024785

@@ -122,7 +122,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
     return r;
 }
 
-JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED
+JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
     jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
     return s && s->top != 0 ? jl_excstack_exception(s, s->top) : jl_nothing;
@@ -316,7 +316,7 @@ JL_DLLEXPORT void jl_sigatomic_end(void)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT int jl_is_debugbuild(void)
+JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT
 {
 #ifdef JL_DEBUG_BUILD
     return 1;
@@ -325,7 +325,7 @@ JL_DLLEXPORT int jl_is_debugbuild(void)
 #endif
 }
 
-JL_DLLEXPORT int8_t jl_is_memdebug(void) {
+JL_DLLEXPORT int8_t jl_is_memdebug(void) JL_NOTSAFEPOINT {
 #ifdef MEMDEBUG
     return 1;
 #else

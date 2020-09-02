@@ -12,14 +12,14 @@ See also [`conj`](@ref).
 # Examples
 ```jldoctest
 julia> A = [1+im 2-im; 2+2im 3+im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+1im  2-1im
  2+2im  3+1im
 
 julia> conj!(A);
 
 julia> A
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1-1im  2+1im
  2-2im  3-1im
 ```
@@ -58,8 +58,9 @@ end
 
 ## data movement ##
 
-function reverse(A::Array{T}; dims::Integer) where T
-    nd = ndims(A); d = dims
+reverse(A::Array; dims::Integer) = _reverse_int(A, Int(dims))
+function _reverse_int(A::Array{T}, d::Int) where T
+    nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
     if sd == 1 || isempty(A)
@@ -70,7 +71,7 @@ function reverse(A::Array{T}; dims::Integer) where T
 
     nnd = 0
     for i = 1:nd
-        nnd += Int(size(A,i)==1 || i==d)
+        nnd += size(A,i)==1 || i==d
     end
     if nnd==nd
         # reverse along the only non-singleton dimension
@@ -81,8 +82,10 @@ function reverse(A::Array{T}; dims::Integer) where T
     end
 
     d_in = size(A)
-    leading = d_in[1:(d-1)]
-    M = prod(leading)
+    M = 1
+    for i = 1:d-1
+        M *= d_in[i]
+    end
     N = length(A)
     stride = M * sd
 
@@ -127,12 +130,12 @@ Rotate matrix `A` left 90 degrees.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rotl90(a)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  1  3
 ```
@@ -155,12 +158,12 @@ Rotate matrix `A` right 90 degrees.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rotr90(a)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  1
  4  2
 ```
@@ -182,12 +185,12 @@ Rotate matrix `A` 180 degrees.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rot180(a)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  2  1
 ```
@@ -210,27 +213,27 @@ If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rotl90(a,1)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  1  3
 
 julia> rotl90(a,2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  2  1
 
 julia> rotl90(a,3)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  1
  4  2
 
 julia> rotl90(a,4)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```
@@ -250,27 +253,27 @@ If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rotr90(a,1)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  1
  4  2
 
 julia> rotr90(a,2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  2  1
 
 julia> rotr90(a,3)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  1  3
 
 julia> rotr90(a,4)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```
@@ -285,17 +288,17 @@ If `k` is even, this is equivalent to a `copy`.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rot180(a,1)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  2  1
 
 julia> rot180(a,2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```

@@ -4,12 +4,9 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
-
-#include <iostream>
-#include <sstream>
 
 #include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Support/DynamicLibrary.h>
 
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
@@ -42,7 +39,7 @@ void jl_dump_compiles(void *s)
     dump_compiles_stream = (JL_STREAM*)s;
 }
 
-static void jl_add_to_ee();
+static void jl_add_to_ee(std::unique_ptr<Module> m);
 static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
 static uint64_t getAddressForFunction(StringRef fname);
 
@@ -50,9 +47,17 @@ void jl_link_global(GlobalVariable *GV, void *addr)
 {
     Constant *P = literal_static_pointer_val(addr, GV->getValueType());
     GV->setInitializer(P);
-    GV->setConstant(true);
-    GV->setLinkage(GlobalValue::PrivateLinkage);
-    GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+    if (jl_options.image_codegen) {
+        // If we are forcing imaging mode codegen for debugging,
+        // emit external non-const symbol to avoid LLVM optimizing the code
+        // similar to non-imaging mode.
+        GV->setLinkage(GlobalValue::ExternalLinkage);
+    }
+    else {
+        GV->setConstant(true);
+        GV->setLinkage(GlobalValue::PrivateLinkage);
+        GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+    }
 }
 
 void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
@@ -99,7 +104,8 @@ static jl_callptr_t _jl_compile_codeinst(
             emitted[codeinst] = std::move(result);
         jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
 
-        jl_add_to_ee();
+        if (params._shared_module)
+            jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
         StringMap<std::unique_ptr<Module>*> NewExports;
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
@@ -150,7 +156,7 @@ static jl_callptr_t _jl_compile_codeinst(
                 this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
                 this_code->isspecsig = isspecsig;
             }
-            this_code->invoke = addr;
+            jl_atomic_store_release(&this_code->invoke, addr);
         }
         else if (this_code->invoke == jl_fptr_const_return && !decls.specFunctionObject.empty()) {
             // hack to export this pointer value to jl_dump_method_asm
@@ -197,7 +203,7 @@ static jl_callptr_t _jl_compile_codeinst(
     return fptr;
 }
 
-Function *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT
@@ -208,14 +214,19 @@ void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declr
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     if (pparams == NULL)
         pparams = &params;
-    jl_generate_ccallable(llvmmod, sysimg, declrt, sigt, *pparams);
+    Module *into = (Module*)llvmmod;
+    if (into == NULL)
+        into = jl_create_llvm_module("cextern");
+    jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams);
     if (!sysimg) {
         if (p == NULL) {
             jl_jit_globals(params.globals);
             assert(params.workqueue.empty());
+            if (params._shared_module)
+                jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
         }
         if (llvmmod == NULL)
-            jl_add_to_ee();
+            jl_add_to_ee(std::unique_ptr<Module>(into));
     }
     JL_UNLOCK(&codegen_lock);
 }
@@ -314,8 +325,9 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
 extern "C"
 void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
 {
-    if (unspec->invoke != NULL)
+    if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
         return;
+    }
     JL_LOCK(&codegen_lock);
     if (unspec->invoke == NULL) {
         jl_code_info_t *src = NULL;
@@ -337,9 +349,10 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         }
         assert(src && jl_is_code_info(src));
         _jl_compile_codeinst(unspec, src, unspec->min_world);
-        if (unspec->invoke == NULL)
+        if (unspec->invoke == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
-            unspec->invoke = &jl_fptr_interpret_call;
+            jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
+        }
         JL_GC_POP();
     }
     JL_UNLOCK(&codegen_lock); // Might GC
@@ -360,7 +373,8 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
         uintptr_t specfptr = (uintptr_t)codeinst->specptr.fptr;
         if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
-            // so create an exception here so we can print pretty lies
+            // (using sentinel value `1` instead)
+            // so create an exception here so we can print pretty our lies
             JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             specfptr = (uintptr_t)codeinst->specptr.fptr;
             if (specfptr == 0) {
@@ -387,7 +401,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
             }
             JL_UNLOCK(&codegen_lock);
         }
-        if (specfptr)
+        if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo);
     }
 
@@ -590,14 +604,10 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
 
 void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 {
-    bool successful = GlobalSymbolTable.insert(std::make_pair(Name, (void*)Addr)).second;
+    std::string MangleName = getMangledName(Name);
+    bool successful = GlobalSymbolTable.insert(std::make_pair(MangleName, (void*)Addr)).second;
     (void)successful;
     assert(successful);
-}
-
-void JuliaOJIT::addGlobalMapping(const GlobalValue *GV, void *Addr)
-{
-    addGlobalMapping(getMangledName(GV), (uintptr_t)Addr);
 }
 
 void *JuliaOJIT::getPointerToGlobalIfAvailable(StringRef S)
@@ -634,9 +644,9 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                        findUnmangledSymbol(F->getName()) ||
                        SectionMemoryManager::getSymbolAddressInProcess(
                            getMangledName(F->getName())))) {
-                std::cerr << "FATAL ERROR: "
-                          << "Symbol \"" << F->getName().str() << "\""
-                          << "not found";
+                llvm::errs() << "FATAL ERROR: "
+                             << "Symbol \"" << F->getName().str() << "\""
+                             << "not found";
                 abort();
             }
         }
@@ -717,11 +727,13 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
     return addr ? addr.get() : 0;
 }
 
+static int globalUniqueGeneratedNames;
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
     auto &fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
     if (fname.empty()) {
-        std::stringstream stream_fname;
+        std::string string_fname;
+        raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
         if (Addr == (uintptr_t)codeinst->invoke) {
             stream_fname << "jsysw_";
@@ -736,9 +748,8 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
             stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
-        stream_fname << unadorned_name << "_" << globalUnique++;
-        std::string string_fname = stream_fname.str();
-        fname = strdup(string_fname.c_str());
+        stream_fname << unadorned_name << "_" << globalUniqueGeneratedNames++;
+        fname = strdup(stream_fname.str().c_str());
         LocalSymbolTable[getMangledName(string_fname)] = (void*)(uintptr_t)Addr;
     }
     return fname;
@@ -803,8 +814,31 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
                 sG->eraseFromParent();
                 continue;
             }
+            //// If we start using llvm.used, we need to enable and test this
+            //else if (!dG->isDeclaration() && dG->hasAppendingLinkage() && sG->hasAppendingLinkage()) {
+            //    auto *dCA = cast<ConstantArray>(dG->getInitializer());
+            //    auto *sCA = cast<ConstantArray>(sG->getInitializer());
+            //    SmallVector<Constant *, 16> Init;
+            //    for (auto &Op : dCA->operands())
+            //        Init.push_back(cast_or_null<Constant>(Op));
+            //    for (auto &Op : sCA->operands())
+            //        Init.push_back(cast_or_null<Constant>(Op));
+            //    Type *Int8PtrTy = Type::getInt8PtrTy(dest.getContext());
+            //    ArrayType *ATy = ArrayType::get(Int8PtrTy, Init.size());
+            //    GlobalVariable *GV = new GlobalVariable(dest, ATy, dG->isConstant(),
+            //            GlobalValue::AppendingLinkage, ConstantArray::get(ATy, Init), "",
+            //            dG->getThreadLocalMode(), dG->getType()->getAddressSpace());
+            //    GV->copyAttributesFrom(dG);
+            //    sG->replaceAllUsesWith(GV);
+            //    dG->replaceAllUsesWith(GV);
+            //    GV->takeName(sG);
+            //    sG->eraseFromParent();
+            //    dG->eraseFromParent();
+            //    continue;
+            //}
             else {
-                assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
+                assert(dG->isDeclaration() || (dG->getInitializer() == sG->getInitializer() &&
+                            dG->isConstant() && sG->isConstant()));
                 dG->replaceAllUsesWith(sG);
                 dG->eraseFromParent();
             }
@@ -870,10 +904,30 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
     }
 }
 
-// this is a unique_ptr, but we don't want
-// C++ to attempt to run out finalizer on exit
-// since it also owned by jl_LLVMContext
-static Module *ready_to_emit;
+// optimize memory by turning long strings into memoized copies, instead of
+// making a copy per object file of output.
+void jl_jit_share_data(Module &M)
+{
+    std::vector<GlobalVariable*> erase;
+    for (auto &GV : M.globals()) {
+        if (!GV.hasInitializer() || !GV.isConstant())
+            continue;
+        ConstantDataSequential *CDS = dyn_cast<ConstantDataSequential>(GV.getInitializer());
+        if (CDS == nullptr)
+            continue;
+        StringRef data = CDS->getRawDataValues();
+        if (data.size() > 16) { // only for long strings: keep short ones as values
+            Type *T_size = Type::getIntNTy(GV.getContext(), sizeof(void*) * 8);
+            Constant *v = ConstantExpr::getIntToPtr(
+                ConstantInt::get(T_size, (uintptr_t)data.data()),
+                GV.getType());
+            GV.replaceAllUsesWith(v);
+            erase.push_back(&GV);
+        }
+    }
+    for (auto GV : erase)
+        GV->eraseFromParent();
+}
 
 static void jl_add_to_ee(std::unique_ptr<Module> m)
 {
@@ -882,33 +936,20 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
     Type *T_uint32 = Type::getInt32Ty(m->getContext());
     ArrayType *atype = ArrayType::get(T_uint32, 3); // want 4-byte alignment of 12-bytes of data
-    (new GlobalVariable(*m, atype,
-        false, GlobalVariable::InternalLinkage,
-        ConstantAggregateZero::get(atype), "__UnwindData"))->setSection(".text");
-    (new GlobalVariable(*m, atype,
-        false, GlobalVariable::InternalLinkage,
-        ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
+    GlobalVariable *gvs[2] = {
+        new GlobalVariable(*m, atype,
+            false, GlobalVariable::InternalLinkage,
+            ConstantAggregateZero::get(atype), "__UnwindData"),
+        new GlobalVariable(*m, atype,
+            false, GlobalVariable::InternalLinkage,
+            ConstantAggregateZero::get(atype), "__catchjmp") };
+    gvs[0]->setSection(".text");
+    gvs[1]->setSection(".text");
+    appendToUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
+    jl_jit_share_data(*m);
     assert(jl_ExecutionEngine);
     jl_ExecutionEngine->addModule(std::move(m));
-}
-
-static void jl_add_to_ee()
-{
-    std::unique_ptr<Module> m(ready_to_emit);
-    ready_to_emit = NULL;
-    if (m)
-        jl_add_to_ee(std::move(m));
-}
-
-// this passes ownership of a module to the JIT after code emission is complete
-// TODO: this should be deprecated
-void jl_finalize_module(std::unique_ptr<Module> m)
-{
-    if (ready_to_emit)
-        jl_merge_module(ready_to_emit, std::move(m));
-    else
-        ready_to_emit = m.release();
 }
 
 static int jl_add_to_ee(
@@ -985,17 +1026,7 @@ static uint64_t getAddressForFunction(StringRef fname)
 }
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine
-void add_named_global(GlobalObject *gv, void *addr, bool dllimport)
+void add_named_global(StringRef name, void *addr)
 {
-#ifdef _OS_WINDOWS_
-    // setting JL_DLLEXPORT correctly only matters when building a binary
-    // (global_proto will strip this from the JIT)
-    if (dllimport && imaging_mode) {
-        assert(gv->getLinkage() == GlobalValue::ExternalLinkage);
-        // add the __declspec(dllimport) attribute
-        gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-    }
-#endif // _OS_WINDOWS_
-
-    jl_ExecutionEngine->addGlobalMapping(gv, addr);
+    jl_ExecutionEngine->addGlobalMapping(name, (uint64_t)(uintptr_t)addr);
 }

@@ -163,13 +163,13 @@ julia> a = Real[]
 Real[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a, π)
-3-element Array{Real,1}:
+3-element Vector{Real}:
  1
  2.0
  π = 3.1415926535897...
 ```
 
-Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
+Because `a` is an array of abstract type [`Real`](@ref), it must be able to hold any
 `Real` value. Since `Real` objects can be of arbitrary size and structure, `a` must be
 represented as an array of pointers to individually allocated `Real` objects. However, if we instead
 only allow numbers of the same type, e.g. [`Float64`](@ref), to be stored in `a` these can be stored more
@@ -180,7 +180,7 @@ julia> a = Float64[]
 Float64[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.0
  2.0
  3.141592653589793
@@ -188,6 +188,10 @@ julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 
 Assigning numbers into `a` will now convert them to `Float64` and `a` will be stored as
 a contiguous block of 64-bit floating-point values that can be manipulated efficiently.
+
+If you cannot avoid containers with abstract value types, it is sometimes better to
+parametrize with `Any` to avoid runtime type checking. E.g. `IdDict{Any, Any}` performs
+better than `IdDict{Type, Vector}`
 
 See also the discussion under [Parametric Types](@ref).
 
@@ -356,7 +360,7 @@ MySimpleContainer{UnitRange{Int64}}
 julia> c = MySimpleContainer([1:3;]);
 
 julia> typeof(c)
-MySimpleContainer{Array{Int64,1}}
+MySimpleContainer{Vector{Int64}}
 
 julia> b = MyAmbiguousContainer(1:3);
 
@@ -453,9 +457,9 @@ annotation in this context in order to achieve type stability. This is because t
 cannot deduce the type of the return value of a function, even `convert`, unless the types of
 all the function's arguments are known.
 
-Type annotation will not enhance (and can actually hinder) performance if the type is constructed
-at run-time. This is because the compiler cannot use the annotation to specialize the subsequent
-code, and the type-check itself takes time. For example, in the code:
+Type annotation will not enhance (and can actually hinder) performance if the type is abstract,
+or constructed at run-time. This is because the compiler cannot use the annotation to specialize
+the subsequent code, and the type-check itself takes time. For example, in the code:
 
 ```julia
 function nr(a, prec)
@@ -637,7 +641,7 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.0
  2.0
  2.0
@@ -659,7 +663,7 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.0
  2.0
  2.0
@@ -686,7 +690,7 @@ can be created like this:
 
 ```jldoctest
 julia> A = fill(5.0, (3, 3))
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
@@ -707,7 +711,7 @@ julia> function array3(fillval, N)
 array3 (generic function with 1 method)
 
 julia> array3(5.0, 2)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
@@ -731,7 +735,7 @@ julia> function array3(fillval, ::Val{N}) where N
 array3 (generic function with 1 method)
 
 julia> array3(5.0, Val(2))
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
@@ -824,12 +828,12 @@ as shown below (notice that the array is ordered `[1 3 2 4]`, not `[1 2 3 4]`):
 
 ```jldoctest
 julia> x = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> x[:]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  3
  2
@@ -1047,10 +1051,10 @@ julia> @views fview(x) = sum(x[2:end-1]);
 julia> x = rand(10^6);
 
 julia> @time fcopy(x);
-  0.003051 seconds (7 allocations: 7.630 MB)
+  0.003051 seconds (3 allocations: 7.629 MB)
 
 julia> @time fview(x);
-  0.001020 seconds (6 allocations: 224 bytes)
+  0.001020 seconds (1 allocation: 16 bytes)
 ```
 
 Notice both the 3× speedup and the decreased memory allocation
@@ -1432,7 +1436,7 @@ julia> function f(x)
 
 julia> @code_warntype f(3.2)
 Variables
-  #self#::Core.Compiler.Const(f, false)
+  #self#::Core.Const(f, false)
   x::Float64
   y::UNION{FLOAT64, INT64}
 
@@ -1579,7 +1583,7 @@ In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
 
-# Checking for equality with a singleton
+## Checking for equality with a singleton
 
 When checking if a value is equal to some singleton it can be
 better for performance to check for identicality (`===`) instead of

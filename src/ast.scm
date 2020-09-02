@@ -67,7 +67,7 @@
                         (string #\( (deparse (caddr e)) #\))))))
         ((memq (car e) '(... |'|))
          (string (deparse (cadr e)) (car e)))
-        ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
+        ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|) (eq? (car e) '-->))
          (if (length= e 2)
              (string (car e) (deparse (cadr e)))
              (string (deparse (cadr e)) " " (car e) " " (deparse (caddr e)))))
@@ -288,7 +288,7 @@
        (symbol? (cadr e))))
 
 (define (lam:args x) (cadr x))
-(define (lam:vars x) (llist-vars (lam:args x)))
+(define (lam:argnames x) (llist-vars (lam:args x)))
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 (define (lam:sp x) (cadddr (lam:vinfo x)))
@@ -360,6 +360,9 @@
 
 (define (outerref? e)
   (and (pair? e) (eq? (car e) 'outerref)))
+
+(define (nothing? e)
+  (and (pair? e) (eq? (car e) 'null)))
 
 (define (symbol-like? e)
   (or (symbol? e) (ssavalue? e)))

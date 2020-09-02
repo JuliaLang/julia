@@ -79,6 +79,12 @@ using Random
 
 @test_throws ArgumentError VersionNumber(4, 3, 2, (), ("", 1))
 
+# parse()/tryparse()
+@test parse(VersionNumber, "1.2.3") == v"1.2.3"
+@test_throws ArgumentError parse(VersionNumber, "not a version")
+@test tryparse(VersionNumber, "3.2.1") == v"3.2.1"
+@test tryparse(VersionNumber, "not a version") === nothing
+
 # show
 io = IOBuffer()
 show(io,v"4.3.2+1.a")
@@ -227,3 +233,4 @@ io = IOBuffer()
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
+

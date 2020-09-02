@@ -359,7 +359,7 @@ end
     D = complex(D)
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{Complex{Float64}}
+    @test CD isa Cholesky{ComplexF64}
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0

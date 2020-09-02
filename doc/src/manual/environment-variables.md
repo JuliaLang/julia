@@ -186,9 +186,9 @@ a master process to establish a connection before dying.
 
 An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
 available to Julia. If `$JULIA_NUM_THREADS` exceeds the number of available
-physical CPU cores, then the number of threads is set to the number of cores. If
+CPU threads (logical cores), then the number of threads is set to the number of CPU threads. If
 `$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
-cores cannot be determined through system calls, then the number of threads is
+threads cannot be determined through system calls, then the number of threads is
 set to `1`.
 
 !!! note
@@ -244,16 +244,6 @@ should have at the terminal.
 
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
-
-### `JULIA_STACKFRAME_LINEINFO_COLOR`
-
-The formatting `Base.stackframe_lineinfo_color()` (default: bold, `"\033[1m"`)
-that line info should have during a stack trace at the terminal.
-
-### `JULIA_STACKFRAME_FUNCTION_COLOR`
-
-The formatting `Base.stackframe_function_color()` (default: bold, `"\033[1m"`)
-that function calls should have during a stack trace at the terminal.
 
 ## Debugging and profiling
 

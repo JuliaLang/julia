@@ -171,6 +171,10 @@ try
               const layout2 = Any[Ptr{Int8}(0), Ptr{Int16}(1), Ptr{Int32}(-1)]
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
 
+              # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
+              call_bottom() = show(stdout::IO, Union{})
+              Core.Compiler.return_type(call_bottom, ())
+
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
           end
@@ -223,11 +227,13 @@ try
 
     @eval begin function ccallable_test()
         Base.llvmcall(
-        (""" declare i32 @f35014(i32)""",
-         """
-         %1 = call i32 @f35014(i32 3)
-         ret i32 %1
-         """), Cint, Tuple{})
+        ("""declare i32 @f35014(i32)
+            define i32 @entry() {
+            0:
+                %1 = call i32 @f35014(i32 3)
+                ret i32 %1
+            }""", "entry"
+        ), Cint, Tuple{})
     end
     @test ccallable_test() == 4
     end
@@ -238,7 +244,7 @@ try
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_logs (:warn, "Replacing module `$Foo_module`") begin
-        ms = Base._require_from_serialized(cachefile)
+        ms = Base._require_from_serialized(cachefile, Base.TOMLCache())
         @test isa(ms, Array{Any,1})
     end
 
@@ -286,7 +292,7 @@ try
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, ]),
+                 :Statistics, :TOML]),
                 # Plus precompilation module generated at build time
                 let id = Base.PkgId("__PackagePrecompilationStatementModule")
                     Dict(id => Base.module_build_id(Base.root_module(id)))
@@ -403,7 +409,7 @@ try
           error("break me")
           end
           """)
-    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn "LoadError: break me\nStacktrace:\n [1] error" try
             Base.require(Main, :FooBar2)
             error("the \"break me\" test failed")
         catch exc

@@ -49,8 +49,14 @@ $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
+$(LIBGIT2_SRC_PATH)/libgit2-case-sensitive.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-case-sensitive.patch
+	echo 1 > $@
+
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-case-sensitive.patch-applied \
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)

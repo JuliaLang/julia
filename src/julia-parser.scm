@@ -3,9 +3,6 @@
 ; for most operators X there is a .X "elementwise" equivalent
 (define (add-dots ops) (append! ops (map (lambda (op) (symbol (string "." op))) ops)))
 
-;; note: there are some strange-looking things in here because
-;; the way the lexer works, every prefix of an operator must also
-;; be an operator.
 (define prec-assignment
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
            (add-dots '(~))
@@ -13,14 +10,12 @@
 ;; comma - higher than assignment outside parentheses, lower when inside
 (define prec-pair (add-dots '(=>)))
 (define prec-conditional '(?))
-(define prec-arrow       (append!
-                          '(-- -->)
-                          (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻ <: >:))))
+(define prec-arrow       (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻ --> <-- <-->)))
 (define prec-lazy-or     '(|\|\||))
 (define prec-lazy-and    '(&&))
 (define prec-comparison
-  (append! '(|<:| |>:| in isa)
-           (add-dots '(> < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊂ ⊄ ⊊ ∝ ∊ ∍ ∥ ∦ ∷ ∺ ∻ ∽ ∾ ≁ ≃ ≂ ≄ ≅ ≆ ≇ ≈ ≉ ≊ ≋ ≌ ≍ ≎ ≐ ≑ ≒ ≓ ≖ ≗ ≘ ≙ ≚ ≛ ≜ ≝ ≞ ≟ ≣ ≦ ≧ ≨ ≩ ≪ ≫ ≬ ≭ ≮ ≯ ≰ ≱ ≲ ≳ ≴ ≵ ≶ ≷ ≸ ≹ ≺ ≻ ≼ ≽ ≾ ≿ ⊀ ⊁ ⊃ ⊅ ⊇ ⊉ ⊋ ⊏ ⊐ ⊑ ⊒ ⊜ ⊩ ⊬ ⊮ ⊰ ⊱ ⊲ ⊳ ⊴ ⊵ ⊶ ⊷ ⋍ ⋐ ⋑ ⋕ ⋖ ⋗ ⋘ ⋙ ⋚ ⋛ ⋜ ⋝ ⋞ ⋟ ⋠ ⋡ ⋢ ⋣ ⋤ ⋥ ⋦ ⋧ ⋨ ⋩ ⋪ ⋫ ⋬ ⋭ ⋲ ⋳ ⋴ ⋵ ⋶ ⋷ ⋸ ⋹ ⋺ ⋻ ⋼ ⋽ ⋾ ⋿ ⟈ ⟉ ⟒ ⦷ ⧀ ⧁ ⧡ ⧣ ⧤ ⧥ ⩦ ⩧ ⩪ ⩫ ⩬ ⩭ ⩮ ⩯ ⩰ ⩱ ⩲ ⩳ ⩵ ⩶ ⩷ ⩸ ⩹ ⩺ ⩻ ⩼ ⩽ ⩾ ⩿ ⪀ ⪁ ⪂ ⪃ ⪄ ⪅ ⪆ ⪇ ⪈ ⪉ ⪊ ⪋ ⪌ ⪍ ⪎ ⪏ ⪐ ⪑ ⪒ ⪓ ⪔ ⪕ ⪖ ⪗ ⪘ ⪙ ⪚ ⪛ ⪜ ⪝ ⪞ ⪟ ⪠ ⪡ ⪢ ⪣ ⪤ ⪥ ⪦ ⪧ ⪨ ⪩ ⪪ ⪫ ⪬ ⪭ ⪮ ⪯ ⪰ ⪱ ⪲ ⪳ ⪴ ⪵ ⪶ ⪷ ⪸ ⪹ ⪺ ⪻ ⪼ ⪽ ⪾ ⪿ ⫀ ⫁ ⫂ ⫃ ⫄ ⫅ ⫆ ⫇ ⫈ ⫉ ⫊ ⫋ ⫌ ⫍ ⫎ ⫏ ⫐ ⫑ ⫒ ⫓ ⫔ ⫕ ⫖ ⫗ ⫘ ⫙ ⫷ ⫸ ⫹ ⫺ ⊢ ⊣ ⟂))))
+  (append! '(in isa)
+           (add-dots '(> < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊂ ⊄ ⊊ ∝ ∊ ∍ ∥ ∦ ∷ ∺ ∻ ∽ ∾ ≁ ≃ ≂ ≄ ≅ ≆ ≇ ≈ ≉ ≊ ≋ ≌ ≍ ≎ ≐ ≑ ≒ ≓ ≖ ≗ ≘ ≙ ≚ ≛ ≜ ≝ ≞ ≟ ≣ ≦ ≧ ≨ ≩ ≪ ≫ ≬ ≭ ≮ ≯ ≰ ≱ ≲ ≳ ≴ ≵ ≶ ≷ ≸ ≹ ≺ ≻ ≼ ≽ ≾ ≿ ⊀ ⊁ ⊃ ⊅ ⊇ ⊉ ⊋ ⊏ ⊐ ⊑ ⊒ ⊜ ⊩ ⊬ ⊮ ⊰ ⊱ ⊲ ⊳ ⊴ ⊵ ⊶ ⊷ ⋍ ⋐ ⋑ ⋕ ⋖ ⋗ ⋘ ⋙ ⋚ ⋛ ⋜ ⋝ ⋞ ⋟ ⋠ ⋡ ⋢ ⋣ ⋤ ⋥ ⋦ ⋧ ⋨ ⋩ ⋪ ⋫ ⋬ ⋭ ⋲ ⋳ ⋴ ⋵ ⋶ ⋷ ⋸ ⋹ ⋺ ⋻ ⋼ ⋽ ⋾ ⋿ ⟈ ⟉ ⟒ ⦷ ⧀ ⧁ ⧡ ⧣ ⧤ ⧥ ⩦ ⩧ ⩪ ⩫ ⩬ ⩭ ⩮ ⩯ ⩰ ⩱ ⩲ ⩳ ⩵ ⩶ ⩷ ⩸ ⩹ ⩺ ⩻ ⩼ ⩽ ⩾ ⩿ ⪀ ⪁ ⪂ ⪃ ⪄ ⪅ ⪆ ⪇ ⪈ ⪉ ⪊ ⪋ ⪌ ⪍ ⪎ ⪏ ⪐ ⪑ ⪒ ⪓ ⪔ ⪕ ⪖ ⪗ ⪘ ⪙ ⪚ ⪛ ⪜ ⪝ ⪞ ⪟ ⪠ ⪡ ⪢ ⪣ ⪤ ⪥ ⪦ ⪧ ⪨ ⪩ ⪪ ⪫ ⪬ ⪭ ⪮ ⪯ ⪰ ⪱ ⪲ ⪳ ⪴ ⪵ ⪶ ⪷ ⪸ ⪹ ⪺ ⪻ ⪼ ⪽ ⪾ ⪿ ⫀ ⫁ ⫂ ⫃ ⫄ ⫅ ⫆ ⫇ ⫈ ⫉ ⫊ ⫋ ⫌ ⫍ ⫎ ⫏ ⫐ ⫑ ⫒ ⫓ ⫔ ⫕ ⫖ ⫗ ⫘ ⫙ ⫷ ⫸ ⫹ ⫺ ⊢ ⊣ ⟂ <: >:))))
 (define prec-pipe<       '(|.<\|| |<\||))
 (define prec-pipe>       '(|.\|>| |\|>|))
 (define prec-colon       (append! '(: |..|) (add-dots '(… ⁝ ⋮ ⋱ ⋰ ⋯))))
@@ -66,7 +61,7 @@
 ; only allow/strip suffixes for some operators
 (define no-suffix? (Set (append prec-assignment prec-conditional prec-lazy-or prec-lazy-and
                                 prec-colon prec-decl prec-dot
-                                '(-- --> -> |<:| |>:| in isa $)
+                                '(-> |<:| |>:| in isa $)
                                 (list ctrans-op trans-op vararg-op))))
 (define (maybe-strip-op-suffix op)
   (if (symbol? op)
@@ -115,7 +110,7 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
-           '(:= --> $= && |\|\|| |.| ... ->)))
+           '(:= $= && |\|\|| |.| ... ->)))
 (define syntactic-unary-operators '($ & |::|))
 
 (define syntactic-op? (Set syntactic-operators))
@@ -249,13 +244,24 @@
                                  (or sufchar? (opchar? c)))
                              (let* ((newop (string str c))
                                     (opsym (string->symbol newop)))
-                               (if (operator? opsym)
+                               (if (or (operator? opsym)
+                                       (and (or (eq? opsym '<---) (eq? opsym '.<---))
+                                            (error (string "invalid operator \"" newop "\"")))
+                                       ;; -- is not an operator but --> is
+                                       (and (or (eq? opsym '--) (eq? opsym '.--))
+                                            (read-char port)
+                                            (or (begin0 (eqv? (peek-char port) #\>)
+                                                        (io.ungetc port #\-))
+                                                (error (string "invalid operator \"" newop "\""))))
+                                       ;; <- is not an operator but <-- and <--> are
+                                       (and (or (eq? opsym '<-) (eq? opsym '.<-))
+                                            (read-char port)
+                                            (begin0 (eqv? (peek-char port) #\-)
+                                                    (io.ungetc port #\-))))
                                    (begin (read-char port)
                                           (loop newop (peek-char port) sufchar?))
                                    str))
                              str))))))
-        (if (equal? str "--")
-            (error (string "invalid operator \"" str "\"")))
         (string->symbol str))))
 
 (define (accum-digits c pred port _-digit-sep)
@@ -662,16 +668,13 @@
                    (first? #t)
                    (t (peek-token s)))
           (if (not (memv t ops))
-              (begin
-                (if (not (or (eof-object? t) (eqv? t #\newline) (closer? t)))
-                    (error (string "extra token \"" t "\" after end of expression")))
-                (if (or (null? ex) (pair? (cdr ex)) (not first?))
-                    ;; () => (head)
-                    ;; (ex2 ex1) => (head ex1 ex2)
-                    ;; (ex1) if operator appeared => (head ex1) (handles "x;")
-                    (cons head (reverse! ex))
-                    ;; (ex1) => ex1
-                    (car ex)))
+              (if (or (null? ex) (pair? (cdr ex)) (not first?))
+                  ;; () => (head)
+                  ;; (ex2 ex1) => (head ex1 ex2)
+                  ;; (ex1) if operator appeared => (head ex1) (handles "x;")
+                  (cons head (reverse! ex))
+                  ;; (ex1) => ex1
+                  (car ex))
               (begin (take-token s)
                      ;; allow input to end with the operator, as in a;b;
                      (if (or (eof-object? (peek-token s))
@@ -1270,15 +1273,18 @@
 
 (define (expect-end s word)
   (let ((t (peek-token s)))
-    (cond ((eq? t 'end) (take-token s))
-          ((eof-object? t)
-           (error (string "incomplete: \"" word "\" at " ; NOTE: changing this may affect code in base/client.jl
-                          current-filename ":" expect-end-current-line
-                          " requires end")))
-          (else
-           (error (string "\"" word "\" at "
-                          current-filename ":" expect-end-current-line
-                          " expected \"end\", got \"" t "\""))))))
+    (if (eq? t 'end)
+        (take-token s)
+        (expect-end-error t word))))
+
+(define (expect-end-error t word)
+  (if (eof-object? t)
+      (error (string "incomplete: \"" word "\" at " ; NOTE: changing this may affect code in base/client.jl
+                     current-filename ":" expect-end-current-line
+                     " requires end"))
+      (error (string "\"" word "\" at "
+                     current-filename ":" expect-end-current-line
+                     " expected \"end\", got \"" t "\""))))
 
 (define (parse-subtype-spec s)
   (parse-comparison s))
@@ -1469,10 +1475,10 @@
                              (expect-end (take-lineendings s) "primitive type"))))))
 
        ((try)
-        (let ((try-block (if (memq (require-token s) '(catch finally))
+        (let ((try-block (if (memq (peek-token s) '(catch finally))
                              '(block)
                              (parse-block s))))
-          (let loop ((nxt    (require-token s))
+          (let loop ((nxt    (peek-token s))
                      (catchb #f)
                      (catchv #f)
                      (finalb #f))
@@ -1519,7 +1525,7 @@
                       catchb
                       catchv
                       fb)))
-             (else    (error (string "unexpected \"" nxt "\"")))))))
+             (else (expect-end-error nxt 'try))))))
        ((return)          (let ((t (peek-token s)))
                             (if (or (eqv? t #\newline) (closing-token? t))
                                 (list 'return '(null))

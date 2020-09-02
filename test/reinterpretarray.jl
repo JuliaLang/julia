@@ -22,7 +22,7 @@ let Ac = copy(A), Bc = copy(B)
     @test Bc == Complex{Int64}[1+2im, 3+4im, 5+6im]
 
     A1 = reinterpret(Float64, A)
-    A2 = reinterpret(Complex{Float64}, A)
+    A2 = reinterpret(ComplexF64, A)
     A1[1] = 1.0
     @test real(A2[1]) == 1.0
 end
@@ -176,7 +176,7 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     offsetvt = (-2, 4)
     vt = OffsetArray(at, offsetvt)
     istr = string(Int)
-    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr,$istr}` array to `$istr` when the first axis is Base.IdentityUnitRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
+    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is Base.IdentityUnitRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
     vt = reshape(vt, 1:1, axes(vt)...)
     r = reinterpret(Int, vt)
     @test r == OffsetArray(reshape(1:8, 2, 2, 2), (0, offsetvt...))

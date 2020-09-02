@@ -69,7 +69,7 @@ the specified dimensions is equal to the length of the original array
 # Examples
 ```jldoctest
 julia> A = Vector(1:16)
-16-element Array{Int64,1}:
+16-element Vector{Int64}:
   1
   2
   3
@@ -88,14 +88,14 @@ julia> A = Vector(1:16)
  16
 
 julia> reshape(A, (4, 4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
 julia> reshape(A, 2, :)
-2×8 Array{Int64,2}:
+2×8 Matrix{Int64}:
  1  3  5  7   9  11  13  15
  2  4  6  8  10  12  14  16
 

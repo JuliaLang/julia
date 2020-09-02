@@ -39,13 +39,14 @@ static void *const _tags[] = {
          &jl_expr_type, &jl_globalref_type, &jl_string_type,
          &jl_module_type, &jl_tvar_type, &jl_method_instance_type, &jl_method_type, &jl_code_instance_type,
          &jl_linenumbernode_type, &jl_lineinfonode_type,
-         &jl_gotonode_type, &jl_quotenode_type,
+         &jl_gotonode_type, &jl_quotenode_type, &jl_gotoifnot_type, &jl_argument_type, &jl_returnnode_type,
+         &jl_const_type, &jl_partial_struct_type, &jl_method_match_type,
          &jl_pinode_type, &jl_phinode_type, &jl_phicnode_type, &jl_upsilonnode_type,
-         &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type, &jl_addrspace_pointer_type,
+         &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type, &jl_llvmpointer_type,
          &jl_vararg_type, &jl_abstractarray_type,
          &jl_densearray_type, &jl_nothing_type, &jl_function_type, &jl_typeofbottom_type,
          &jl_unionall_type, &jl_typename_type, &jl_builtin_type, &jl_code_info_type,
-         &jl_task_type, &jl_uniontype_type, &jl_typetype_type, &jl_abstractstring_type,
+         &jl_task_type, &jl_uniontype_type, &jl_abstractstring_type,
          &jl_array_any_type, &jl_intrinsic_type, &jl_abstractslot_type,
          &jl_methtable_type, &jl_typemap_level_type, &jl_typemap_entry_type,
          &jl_voidpointer_type, &jl_uint8pointer_type, &jl_newvarnode_type,
@@ -57,7 +58,7 @@ static void *const _tags[] = {
          &jl_float16_type, &jl_float32_type, &jl_float64_type, &jl_floatingpoint_type,
          &jl_number_type, &jl_signed_type,
          // special typenames
-         &jl_tuple_typename, &jl_pointer_typename, &jl_addrspace_pointer_typename, &jl_array_typename, &jl_type_typename,
+         &jl_tuple_typename, &jl_pointer_typename, &jl_llvmpointer_typename, &jl_array_typename, &jl_type_typename,
          &jl_vararg_typename, &jl_namedtuple_typename,
          &jl_vecelement_typename,
          // special exceptions
@@ -117,7 +118,8 @@ void *native_functions;
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
 static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_throw, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
-    &jl_f_typeassert, &jl_f__apply, &jl_f__apply_iterate, &jl_f__apply_pure, &jl_f__apply_latest, &jl_f_isdefined,
+    &jl_f_typeassert, &jl_f__apply, &jl_f__apply_iterate, &jl_f__apply_pure,
+    &jl_f__apply_latest, &jl_f__apply_in_world, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call, &jl_f_invoke_kwsorter,
     &jl_f_getfield, &jl_f_setfield, &jl_f_fieldtype, &jl_f_nfields,
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
@@ -947,7 +949,7 @@ static void jl_read_symbols(jl_serializer_state *s)
         const char *str = (const char*)base;
         base += len + 1;
         //printf("symbol %3d: %s\n", len, str);
-        jl_sym_t *sym = jl_symbol_n(str, len);
+        jl_sym_t *sym = _jl_symbol(str, len);
         arraylist_push(&deser_sym, (void*)sym);
     }
 }
@@ -1027,6 +1029,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
             return (uintptr_t)jl_box_uint8(offset);
         // offset -= 256;
         assert(0 && "corrupt relocation item id");
+        jl_unreachable(); // terminate control flow if assertion is disabled.
     case BuiltinFunctionRef:
         assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer ID");
         return (uintptr_t)id_to_fptrs[offset];
@@ -1189,7 +1192,6 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             else {
                 codeinst->invoke = (jl_callptr_t)fptr;
             }
-            jl_fptr_to_llvm(fptr, codeinst, specfunc);
         }
     }
     jl_register_fptrs(sysimage_base, &fvars, linfos, sysimg_fvars_max);
@@ -1473,9 +1475,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     ios_close(&f);
     JL_SIGATOMIC_END();
 }
-
-extern void jl_init_int32_int64_cache(void);
-extern void jl_gc_set_permalloc_region(void *start, void *end);
 
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)

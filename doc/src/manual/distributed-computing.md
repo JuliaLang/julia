@@ -87,7 +87,7 @@ julia> remotecall_fetch(getindex, 2, r, 1, 1)
 Remember that [`getindex(r,1,1)`](@ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
 the first element of the future `r`.
 
-To make things easier, the symbol `:any` can be passed to [`@spawnat`], which picks where to do
+To make things easier, the symbol `:any` can be passed to [`@spawnat`](@ref), which picks where to do
 the operation for you:
 
 ```julia-repl
@@ -652,7 +652,7 @@ remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@re
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed
-as a local call. It is usually(not always) executed in a different task - but there is no
+as a local call. It is usually (not always) executed in a different task - but there is no
 serialization/deserialization of data. Consequently, the call refers to the same object instances
 as passed - no copies are created. This behavior is highlighted below:
 

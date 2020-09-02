@@ -71,7 +71,7 @@ julia> t = ccall(:clock, Int32, ())
 julia> t
 2292761
 
-julia> typeof(ans)
+julia> typeof(t)
 Int32
 ```
 
@@ -226,7 +226,7 @@ The final call to `qsort` looks like this:
 
 ```jldoctest mycompare
 julia> A = [1.3, -2.7, 4.4, 3.1]
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
   1.3
  -2.7
   4.4
@@ -236,7 +236,7 @@ julia> ccall(:qsort, Cvoid, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Cvoid}),
              A, length(A), sizeof(eltype(A)), mycompare_c)
 
 julia> A
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
  -2.7
   1.3
   3.1
@@ -967,8 +967,8 @@ and load in the new changes. One can either restart Julia or use the
 ```julia
 lib = Libdl.dlopen("./my_lib.so") # Open the library explicitly.
 sym = Libdl.dlsym(lib, :my_fcn)   # Get a symbol for the function to call.
-ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the
-same).  Libdl.dlclose(lib) # Close the library explicitly.
+ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the same).
+Libdl.dlclose(lib) # Close the library explicitly.
 ```
 
 Note that when using `ccall` with the tuple input

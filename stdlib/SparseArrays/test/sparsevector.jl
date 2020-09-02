@@ -60,7 +60,7 @@ end
     @test occursin("3.5", string(spv_x1))
 
     # issue #30589
-    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool,$Int} with 1 stored entry:\n  [1]  =  1"
+    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool, $Int} with 1 stored entry:\n  [1]  =  1"
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -1039,11 +1039,11 @@ end
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)
-        densecomplexmat = I + randn(Complex{Float64}, m, m)/(4m)
+        densecomplexmat = I + randn(ComplexF64, m, m)/(4m)
 
         inttypes = (Int32, Int64, BigInt)
         floattypes = (Float32, Float64, BigFloat)
-        complextypes = (Complex{Float32}, Complex{Float64})
+        complextypes = (ComplexF32, ComplexF64)
         eltypes = (inttypes..., floattypes..., complextypes...)
 
         for eltypemat in eltypes
@@ -1297,9 +1297,9 @@ mutable struct t20488 end
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparsevec(Int64[1], [1.0]))
-    @test String(take!(io)) == "1-element SparseArrays.SparseVector{Float64,Int64} with 1 stored entry:\n  [1]  =  1.0"
+    @test String(take!(io)) == "1-element SparseArrays.SparseVector{Float64, Int64} with 1 stored entry:\n  [1]  =  1.0"
     show(io, MIME"text/plain"(),  spzeros(Float64, Int64, 2))
-    @test String(take!(io)) == "2-element SparseArrays.SparseVector{Float64,Int64} with 0 stored entries"
+    @test String(take!(io)) == "2-element SparseArrays.SparseVector{Float64, Int64} with 0 stored entries"
     show(io, similar(sparsevec(rand(3) .+ 0.1), t20488))
     @test String(take!(io)) == "  [1]  =  #undef\n  [2]  =  #undef\n  [3]  =  #undef"
 end
@@ -1440,6 +1440,21 @@ end
     @test A != B
     @test nonzeroinds(A) !== nonzeroinds(B)
     @test nonzeros(A) !== nonzeros(B)
+end
+
+@testset "multiplication of Triangular sparse matrices with sparse vectors #35642" begin
+    n = 10
+    A = sprand(n, n, 5/n)
+    U = UpperTriangular(A)
+    L = LowerTriangular(A)
+    x = sprand(n, 5/n)
+    y = view(A, :, 6)
+    z = view(x, :)
+    ty = typeof
+    @testset "matvec multiplication $(ty(X)) * $(ty(v))" for X in (U, L), v in (x, y, z)
+        @test X * v ≈ Matrix(X) * Vector(v)
+        @test typeof(X * v) == typeof(x)
+    end
 end
 
 end # module

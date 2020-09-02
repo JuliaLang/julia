@@ -466,7 +466,7 @@ end
 @test all(Diagonal(range(1, stop=3, length=3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
-for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
+for t in (Float32, Float64, Int, ComplexF64, Rational{Int})
     @test Diagonal(Matrix{t}[fill(t(1), 2, 2), fill(t(1), 3, 3)])[2,1] == zeros(t, 3, 2)
 end
 
@@ -600,7 +600,7 @@ end
 end
 
 @testset "multiplication of transposes of Diagonal (#22428)" begin
-    for T in (Float64, Complex{Float64})
+    for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, 5, 5))
         B = Diagonal(randn(T, 5, 5))
         DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
@@ -642,6 +642,15 @@ end
     yt = transpose(y)
     @test y'*D*y == (y'*D)*y == (y'*A)*y
     @test yt*D*y == (yt*D)*y == (yt*A)*y
+end
+
+@testset "Multiplication of single element Diagonal (#36746)" begin
+    @test_throws DimensionMismatch Diagonal(randn(1)) * randn(5)
+    @test_throws DimensionMismatch Diagonal(randn(1)) * Diagonal(randn(3, 3))
+    A = [1 0; 0 2]
+    v = [3, 4]
+    @test Diagonal(A) * v == A * v
+    @test Diagonal(A) * Diagonal(A) == A * A
 end
 
 @testset "Triangular division by Diagonal #27989" begin

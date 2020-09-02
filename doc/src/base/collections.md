@@ -269,6 +269,7 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
+Base.popat!
 Base.pushfirst!
 Base.popfirst!
 Base.insert!

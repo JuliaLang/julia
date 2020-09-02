@@ -2,7 +2,7 @@
 
 # Method and method table pretty-printing
 
-function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (argname, argtype)
+function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
     t = sig.parameters[i]
     if i == nargs && isva && !isvarargtype(t)
         t = Vararg{t,length(sig.parameters)-nargs+1}
@@ -10,10 +10,10 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
-    s = string(n)
+    s = string(n)::String
     i = findfirst(isequal('#'), s)
     if i !== nothing
-        s = s[1:i-1]
+        s = s[1:prevind(s, i)::Int]
     end
     if t === Any && !isempty(s)
         return s, ""
@@ -37,7 +37,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
                 return s, string_with_env(env, tt) * "..."
             end
         end
-        return s, string_with_env(env, "Vararg{", tt, ",", tn, "}")
+        return s, string_with_env(env, "Vararg{", tt, ", ", tn, "}")
     end
     return s, string_with_env(env, t)
 end
@@ -80,7 +80,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)
-        sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
+        sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
@@ -88,7 +88,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
             kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
             # ensure the kwarg... is always printed last. The order of the arguments are not
             # necessarily the same as defined in the function
-            i = findfirst(x -> endswith(string(x), "..."), kws)
+            i = findfirst(x -> endswith(string(x)::String, "..."), kws)
             if i !== nothing
                 push!(kws, kws[i])
                 deleteat!(kws, i)
@@ -241,7 +241,9 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     n = rest = 0
     local last
 
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
+
     for meth in ms
         if max==-1 || n<max
             n += 1
@@ -249,7 +251,9 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             print(io, "[$n] ")
             show(io, meth)
             file, line = updated_methodloc(meth)
-            push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
+            if last_shown_line_infos !== nothing
+                push!(last_shown_line_infos, (string(file), line))
+            end
         else
             rest += 1
             last = meth
@@ -373,7 +377,8 @@ show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, Metho
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
     first = true
     for (i, m) in enumerate(mt)
         first || println(io)
@@ -381,7 +386,9 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         print(io, "[$(i)] ")
         show(io, m)
         file, line = updated_methodloc(m)
-        push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
+        if last_shown_line_infos !== nothing
+            push!(last_shown_line_infos, (string(file), line))
+        end
     end
 end
 

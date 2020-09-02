@@ -36,6 +36,8 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->counter = 1;
     m->nospecialize = 0;
     m->optlevel = -1;
+    m->compile = -1;
+    m->infer = -1;
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -86,6 +88,39 @@ JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m)
         lvl = m->optlevel;
     }
     return lvl;
+}
+
+JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value)
+{
+    self->compile = value;
+}
+
+JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m)
+{
+    int value = m->compile;
+    while (value == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->compile;
+    }
+    return value;
+}
+
+JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value)
+{
+    self->infer = value;
+    // no reason to specialize if inference is off
+    if (!value)
+        jl_set_module_nospecialize(self, 1);
+}
+
+JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m)
+{
+    int value = m->infer;
+    while (value == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->infer;
+    }
+    return value;
 }
 
 JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)
@@ -314,8 +349,6 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
     return jl_get_binding_(m, var, NULL);
 }
-
-void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var)
 {
@@ -612,9 +645,9 @@ JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 extern const char *jl_filename;
 extern int jl_lineno;
 
-char dep_message_prefix[] = "_dep_message_";
+static char const dep_message_prefix[] = "_dep_message_";
 
-jl_binding_t *jl_get_dep_message_binding(jl_module_t *m, jl_binding_t *deprecated_binding)
+static jl_binding_t *jl_get_dep_message_binding(jl_module_t *m, jl_binding_t *deprecated_binding)
 {
     size_t prefix_len = strlen(dep_message_prefix);
     size_t name_len = strlen(jl_symbol_name(deprecated_binding->name));
@@ -697,7 +730,7 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
     }
 }
 
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
     if (b->constp) {
         jl_value_t *old = jl_atomic_compare_exchange(&b->value, NULL, rhs);
@@ -708,11 +741,13 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         if (jl_egal(rhs, old))
             return;
         if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs)) {
+#ifndef __clang_analyzer__
             jl_errorf("invalid redefinition of constant %s",
                       jl_symbol_name(b->name));
+#endif
         }
-        jl_printf(JL_STDERR, "WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
-                  jl_symbol_name(b->name));
+        jl_safe_printf("WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
+                       jl_symbol_name(b->name));
     }
     jl_atomic_store_relaxed(&b->value, rhs);
     jl_gc_wb_binding(b, rhs);
