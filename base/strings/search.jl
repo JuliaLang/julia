@@ -266,7 +266,7 @@ function _search(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
     idx = _searchindex(s,t,i)
     if isempty(t)
         idx:idx-1
-    elseif idx > firstindex(s) - 1
+    elseif idx >= firstindex(s)
         idx:(idx + lastindex(t) - 1)
     else
         nothing

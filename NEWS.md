@@ -13,6 +13,8 @@ New language features
 * The library name passed to `ccall` or `@ccall` can now be an expression involving
   global variables and function calls. The expression will be evaluated the first
   time the `ccall` executes ([#36458]).
+* `findfirst`, `findnext`, `findlast`, and `findall` now support arguments `(pattern, array)`
+  where `pattern` and `array` are `AbstractVector{<:Union{Int8,UInt8}}` (mix allowed) ([#37283])
 
 Language changes
 ----------------
