@@ -271,15 +271,30 @@ int jl_pointer_egal(jl_value_t *t)
         return 0; // when setting up the initial types, jl_is_type_type gets confused about this
     if (t == (jl_value_t*)jl_symbol_type)
         return 1;
+    if (t == (jl_value_t*)jl_bool_type)
+        return 1;
     if (jl_is_mutable_datatype(t) && // excludes abstract types
         t != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
         t != (jl_value_t*)jl_simplevector_type &&
         !jl_is_kind(t))
         return 1;
-    if (jl_is_type_type(t) && jl_is_concrete_type(jl_tparam0(t))) {
+    if ((jl_is_datatype(t) && jl_is_datatype_singleton((jl_datatype_t*)t)) ||
+        t == (jl_value_t*)jl_typeofbottom_type->super)
+        return 1;
+    if (jl_is_type_type(t) && jl_is_datatype(jl_tparam0(t))) {
         // need to use typeseq for most types
         // but can compare some types by pointer
-        return 1;
+        jl_datatype_t *dt = (jl_datatype_t*)jl_tparam0(t);
+        // `Core.TypeofBottom` and `Type{Union{}}` are used interchangeably
+        // with different pointer values even though `Core.TypeofBottom` is a concrete type.
+        // See `Core.Compiler.hasuniquerep`
+        if (dt != jl_typeofbottom_type &&
+            (dt->isconcretetype || jl_svec_len(dt->parameters) == 0)) {
+            // Concrete types have unique pointer values
+            // If the type has zero type parameters it'll also have only one possible
+            // pointer value.
+            return 1;
+        }
     }
     return 0;
 }

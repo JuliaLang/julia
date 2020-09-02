@@ -1106,6 +1106,12 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         return std::make_pair(ConstantInt::get(T_int1, *known_isa), true);
     }
 
+    if (jl_is_type_type(intersected_type) && jl_pointer_egal(intersected_type)) {
+        // Use the check in `jl_pointer_egal` to see if the type enclosed
+        // has unique pointer value.
+        auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_tparam0(intersected_type)));
+        return {ctx.builder.CreateICmpEQ(boxed(ctx, x), ptr), false};
+    }
     // intersection with Type needs to be handled specially
     if (jl_has_intersect_type_not_kind(type) || jl_has_intersect_type_not_kind(intersected_type)) {
         Value *vx = boxed(ctx, x);
@@ -1148,6 +1154,10 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 // handle the case where we know that `x` is unboxed (but of unknown type), but that concrete type `type` cannot be unboxed
                 return std::make_pair(ConstantInt::get(T_int1, 0), false);
             }
+        }
+        if (auto val = ((jl_datatype_t*)intersected_type)->instance) {
+            auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, val));
+            return {ctx.builder.CreateICmpEQ(boxed(ctx, x), ptr), false};
         }
         return std::make_pair(ctx.builder.CreateICmpEQ(emit_typeof_boxed(ctx, x),
             track_pjlvalue(ctx, literal_pointer_val(ctx, intersected_type))), false);
