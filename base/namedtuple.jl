@@ -394,7 +394,7 @@ keys must be of type `Symbol`.
 # Examples
 ```jldoctest
 julia> namedtuple([:a, :b, :c], [1, 2, 3])
- (a = 1, b = 2, c = 3)
+(a = 1, b = 2, c = 3)
 ```
 """
 namedtuple(K, V) = NamedTuple{Tuple(K)}(V)
