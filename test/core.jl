@@ -7288,3 +7288,35 @@ function f37044(r)
 end
 r37044 = Ref37044(A37044{Int}.body)
 @test f37044(r37044)[1] === Int
+
+a37265() = 0
+b37265() = 0
+function c37265(d)
+    if d == 1
+        e = a37265
+    elseif d == 2
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws UndefVarError c37265(0)
+@test c37265(1) === a37265
+@test c37265(2) === b37265
+
+function c37265_2(d)
+    if 0
+        e = a37265
+    elseif 0
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws TypeError c37265_2(0)
