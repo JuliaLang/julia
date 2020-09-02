@@ -126,12 +126,13 @@ mutable struct I1628{X}
 end
 let
     # here the potential problem is that the run-time value of static
-    # parameter X in the I1628 constructor is (DataType,DataType),
-    # but type inference will track it more accurately as
-    # (Type{Integer}, Type{Int}).
+    # parameter X in the I1628 constructor is Tuple{DataType, DataType},
+    # but type inference may track the values also (as a PartialStruct).
     f1628() = I1628((Integer,Int))
     @test isa(f1628(), I1628{Tuple{DataType,DataType}})
 end
+
+@test Core.Compiler.tuple_tfunc(Any[Type{<:Integer}, Union{Type{Integer}, Integer}]) == Tuple{Type, Union{Integer, Type}}
 
 let
     fT(x::T) where {T} = T

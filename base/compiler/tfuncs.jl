@@ -251,9 +251,6 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
     else
         a1 = widenconst(arg1)
     end
-    if isType(a1)
-        return Bool
-    end
     a1 = unwrap_unionall(a1)
     if isa(a1, DataType) && !a1.abstract
         if a1 === Module
@@ -791,7 +788,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         s = widenconst(s)
     end
-    if isType(s) || !isa(s, DataType) || s.abstract
+    if !isa(s, DataType) || s.abstract
         return Any
     end
     if s <: Tuple && name ⊑ Symbol
@@ -1274,13 +1271,14 @@ function tuple_tfunc(atypes::Vector{Any})
             params[i] = typeof(x.val)
         else
             x = widenconst(x)
-            if isType(x)
+            if isconstType(x)
                 xparam = x.parameters[1]
-                if hasuniquerep(xparam) || xparam === Bottom
-                    params[i] = typeof(xparam)
-                else
-                    params[i] = Type
-                end
+                params[i] = typeof(xparam)
+            elseif typeintersect(x, Type) !== Bottom
+                # if x includes `Type{T} where T<:S`
+                # need to widen that to include typeof(S)
+                # (e.g. DataType, for example)
+                params[i] = Union{x, Type}
             else
                 params[i] = x
             end
