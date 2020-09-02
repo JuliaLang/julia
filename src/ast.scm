@@ -355,6 +355,9 @@
 (define (ssavalue? e)
   (and (pair? e) (eq? (car e) 'ssavalue)))
 
+(define (slot? e)
+  (and (pair? e) (eq? (car e) 'slot)))
+
 (define (globalref? e)
   (and (pair? e) (eq? (car e) 'globalref)))
 
@@ -438,6 +441,11 @@
 (define (complex-return? e) (and (return? e)
                                  (let ((x (cadr e)))
                                    (not (simple-atom? x)))))
+
+(define (tuple-call? e)
+  (and (length> e 1)
+       (eq? (car e) 'call)
+       (equal? (cadr e) '(core tuple))))
 
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))

@@ -878,7 +878,15 @@ it must be handled in other ways.
 
 ## Non-constant Function Specifications
 
-A `(name, library)` function specification must be a constant expression. However, it is possible
+In some cases, the exact name or path of the needed library is not known in advance and must
+be computed at run time. To handle such cases, the library component of a `(name, library)`
+specification can be a function call, e.g. `(:dgemm_, find_blas())`. The call expression will
+be executed when the `ccall` itself is executed. However, it is assumed that the library
+location does not change once it is determined, so the result of the call can be cached and
+reused. Therefore, the number of times the expression executes is undefined, and returning
+different values for multiple calls results in undefined behavior.
+
+If even more flexibility is needed, it is possible
 to use computed values as function names by staging through [`eval`](@ref) as follows:
 
 ```

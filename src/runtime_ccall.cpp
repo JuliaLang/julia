@@ -64,6 +64,23 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd) JL_N
     return ptr;
 }
 
+// jl_load_and_lookup, but with library computed at run time on first call
+extern "C" JL_DLLEXPORT
+void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name)
+{
+    char *f_lib;
+
+    if (jl_is_symbol(lib_val))
+        f_lib = jl_symbol_name((jl_sym_t*)lib_val);
+    else if (jl_is_string(lib_val))
+        f_lib = jl_string_data(lib_val);
+    else
+        jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
+    void *ptr;
+    jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
+    return ptr;
+}
+
 // miscellany
 std::string jl_get_cpu_name_llvm(void)
 {

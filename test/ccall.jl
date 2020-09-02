@@ -1701,3 +1701,11 @@ end
     str = GC.@preserve buffer unsafe_string(Cwstring(pointer(buffer)))
     @test str == "α+β=15"
 end
+
+# issue #36458
+compute_lib_name() = "libcc" * "alltest"
+ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,), x % UInt8)
+@test ccall_lazy_lib_name(0) == 0
+@test ccall_lazy_lib_name(3) == 1
+ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid},), C_NULL)
+@test_throws UndefVarError(:xx_nOt_DeFiNeD_xx) ccall_with_undefined_lib()
