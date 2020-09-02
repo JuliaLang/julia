@@ -407,7 +407,8 @@ The first value in each pair must be of type `Symbol`.
 """
 namedtuple(d::AbstractDict) = namedtuple(keys(d), values(d))
 function namedtuple(d)
-    NamedTuple{Tuple(first(p) for p ∈ d)}(last(p) for p ∈ d)
+    t = Tuple(d)
+    NamedTuple{map(first, t)}(map(last, t))
 end
 
 namedtuple(nt::NamedTuple) = nt
