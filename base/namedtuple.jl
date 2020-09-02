@@ -384,3 +384,33 @@ macro NamedTuple(ex)
     types = [esc(e isa Symbol ? :Any : e.args[2]) for e in decls]
     return :(NamedTuple{($(vars...),), Tuple{$(types...)}})
 end
+
+"""
+    namedtuple(K, V)
+
+Creates a `NamedTuple` object out of `K`, an iterator of keys and `V`, an iterator of values.  All
+keys must be of type `Symbol`.
+
+# Examples
+```jldoctest
+julia> namedtuple([:a, :b, :c], [1, 2, 3])
+ (a = 1, b = 2, c = 3)
+```
+"""
+namedtuple(K, V) = NamedTuple{Tuple(K)}(V)
+
+"""
+    namedtuple(d)
+
+Create a `NamedTuple` object from any iterable of `Pair`s `d` (for example, any `AbstractDict`).
+The first value in each pair must be of type `Symbol`.
+"""
+namedtuple(d::AbstractDict) = namedtuple(keys(d), values(d))
+function namedtuple(d)
+    NamedTuple{Tuple(first(p) for p ∈ d)}(last(p) for p ∈ d)
+end
+
+namedtuple(nt::NamedTuple) = nt
+
+
+export namedtuple

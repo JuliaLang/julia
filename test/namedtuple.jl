@@ -304,3 +304,10 @@ let x = 1, y = 2
     @test Meta.lower(Main, Meta.parse("(; a.y, y)")) == Expr(:error, "field name \"y\" repeated in named tuple")
     @test (; a.y, x) === (y=2, x=1)
 end
+
+@testset "namedtuple" begin
+    @test namedtuple([:a, :b, :c], [1, 2, 3]) == (a=1, b=2, c=3)
+    @test namedtuple((:kirk, :spock, :bones), (im, ℯ, π)) == (kirk=im, spock=ℯ, bones=π)
+    @test namedtuple(Dict(:a=>1, :b=>2, :c=>3)) == (a=1, b=2, c=3)
+    @test namedtuple([:kirk=>im, :spock=>ℯ, :bones=>π]) == (kirk=im, spock=ℯ, bones=π)
+end
