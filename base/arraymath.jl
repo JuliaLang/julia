@@ -108,7 +108,7 @@ function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
     ntuple(k -> @inbounds(idx[k] = size(A,k)), Val{N}())
     @inbounds idx[dims[1]] = (idx[dims[1]] + 1) >> 1
 
-    last1 = ntuple(k -> lastindex(A,k)+1, Val{N}())
+    last1 = ntuple(k -> lastindex(A,k)+firstindex(A,k), Val{N}())
     for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(idx[k]), Val{N}()))
         ntuple(k -> @inbounds(idx[k] = i[k]), Val{N}())
         ntuple(Val{M}()) do k
