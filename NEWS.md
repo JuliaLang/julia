@@ -74,6 +74,9 @@ New library features
 Standard library changes
 ------------------------
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
+* The `reverse(A; dims)` function for multidimensional `A` can now reverse multiple dimensions at once
+  by passing a tuple for `dims`, and defaults to reversing all dimensions; there is also a multidimensional
+  in-place `reverse!(A; dims)` ([#37367]).
 * The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array) arguments `x` and `y` ([#35883]).
 * `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
 * All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
