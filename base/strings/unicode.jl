@@ -284,7 +284,7 @@ Tests whether a character is a lowercase letter.
 A character is classified as lowercase if it belongs to Unicode category Ll,
 Letter: Lowercase.
 
-See also: [`isuppercase`](@ref), [`iscased`](@ref).
+See also: [`isuppercase`](@ref).
 
 # Examples
 ```jldoctest
@@ -309,7 +309,7 @@ Tests whether a character is an uppercase letter.
 A character is classified as uppercase if it belongs to Unicode category Lu,
 Letter: Uppercase, or Lt, Letter: Titlecase.
 
-See also: [`islowercase`](@ref), [`iscased`](@ref).
+See also: [`islowercase`](@ref).
 
 # Examples
 ```jldoctest
