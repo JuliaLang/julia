@@ -1555,7 +1555,7 @@ end
     @test reverse(["a" "b"; "c" "d"], dims = 2) == ["b" "a"; "d" "c"]
 end
 
-@test "reverse multiple dims" begin
+@testset "reverse multiple dims" begin
     for A in (zeros(2,4), zeros(3,5))
         A[:] .= 1:length(A) # unique-ify elements
         @test reverse(A) == reverse(reverse(A, dims=1), dims=2) ==
