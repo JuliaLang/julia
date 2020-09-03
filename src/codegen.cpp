@@ -3355,7 +3355,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
 
 static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t rval_info, jl_value_t *l=NULL)
 {
-    if (!vi.used)
+    if (!vi.used || vi.value.typ == jl_bottom_type)
         return;
 
     // convert rval-type to lval-type
@@ -3439,6 +3439,49 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     jl_varinfo_t &vi = ctx.slots[sl];
     jl_cgval_t rval_info = emit_expr(ctx, r, ssaval);
     emit_varinfo_assign(ctx, vi, rval_info, l);
+}
+
+static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
+{
+    jl_varinfo_t &vi = ctx.phic_slots[phic];
+    // If the val is null, we can ignore the store.
+    // The middle end guarantees that the value from this
+    // upsilon node is not dynamically observed.
+    if (val) {
+        jl_cgval_t rval_info = emit_expr(ctx, val);
+        if (rval_info.typ == jl_bottom_type)
+            // as a special case, PhiC nodes are allowed to use undefined
+            // values, since they are just copy operations, so we need to
+            // ignore the store (it will not by dynamically observed), while
+            // normally, for any other operation result, we'd assume this store
+            // was unreachable and dead
+            val = NULL;
+        else
+            emit_varinfo_assign(ctx, vi, rval_info);
+    }
+    if (!val) {
+        if (vi.boxroot) {
+            // memory optimization: eagerly clear this gc-root now
+            ctx.builder.CreateAlignedStore(ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), vi.boxroot, true, Align(sizeof(void*)));
+        }
+        if (vi.pTIndex) {
+            // We don't care what the contents of the variable are, but it
+            // does need to satisfy the union invariants (i.e. inbounds
+            // tindex).
+            ctx.builder.CreateAlignedStore(
+                vi.boxroot ? ConstantInt::get(T_int8, 0x80) :
+                             ConstantInt::get(T_int8, 0x01),
+                vi.pTIndex, true, Align(1));
+        }
+        else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
+            assert(vi.value.ispointer());
+            Type *T = cast<AllocaInst>(vi.value.V)->getAllocatedType();
+            if (CountTrackedPointers(T).count) {
+                // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
+                ctx.builder.CreateStore(Constant::getNullValue(T), vi.value.V, true);
+            }
+        }
+    }
 }
 
 // --- convert expression to code ---
@@ -5425,9 +5468,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             i == 0) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(T_prjlvalue, 0,
                 jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
-            StoreInst *SI = new StoreInst(
-                ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), av,
-                false);
+            StoreInst *SI = new StoreInst(ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), av, false, Align(sizeof(void*)));
             SI->insertAfter(ctx.ptlsStates);
             varinfo.boxroot = av;
             if (ctx.debug_enabled && varinfo.dinfo) {
@@ -6020,23 +6061,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             continue;
         }
         if (jl_is_upsilonnode(stmt)) {
-            jl_value_t *val = jl_fieldref_noalloc(stmt, 0);
-            // If the val is null, we can ignore the store.
-            // The middle end guarantees that the value from this
-            // upsilon node is not dynamically observed.
-            jl_varinfo_t &vi = ctx.phic_slots[upsilon_to_phic[cursor+1]];
-            if (val) {
-                jl_cgval_t rval_info = emit_expr(ctx, val);
-                emit_varinfo_assign(ctx, vi, rval_info);
-            } else if (vi.pTIndex) {
-                // We don't care what the contents of the variable are, but it
-                // does need to satisfy the union invariants (i.e. inbounds
-                // tindex).
-                ctx.builder.CreateStore(
-                    vi.boxroot ? ConstantInt::get(T_int8, 0x80) :
-                                 ConstantInt::get(T_int8, 0x01),
-                    vi.pTIndex, true);
-            }
+            emit_upsilonnode(ctx, upsilon_to_phic[cursor + 1], jl_fieldref_noalloc(stmt, 0));
             find_next_stmt(cursor + 1);
             continue;
         }
