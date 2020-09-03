@@ -1142,10 +1142,11 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
         (sig, invoke_data) = r
 
         # Check whether this call was @pure and evaluates to a constant
-        if isa(sig.f, widenconst(sig.ft)) &&
-                isa(calltype, Const) && calltype.actual && is_inlineable_constant(calltype.val)
-            ir.stmts[idx][:inst] = quoted(calltype.val)
-            continue
+        if calltype isa Const && info isa MethodResultPure
+            if is_inlineable_constant(calltype.val)
+                ir.stmts[idx][:inst] = quoted(calltype.val)
+                continue
+            end
         end
 
         # Ok, now figure out what method to call
