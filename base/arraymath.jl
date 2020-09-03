@@ -79,7 +79,7 @@ julia> reverse(b, dims=2)
  4  3
 
 julia> reverse(b)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  2  1
 ```
