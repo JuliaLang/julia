@@ -58,69 +58,71 @@ end
 
 ## data movement ##
 
-reverse(A::Array; dims::Integer) = _reverse_int(A, Int(dims))
-function _reverse_int(A::Array{T}, d::Int) where T
-    nd = ndims(A)
-    1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
-    sd = size(A, d)
-    if sd == 1 || isempty(A)
-        return copy(A)
-    end
+"""
+    reverse(A; dims=:)
 
-    B = similar(A)
+Reverse `A` along dimension `dims`, which can be an integer (a
+single dimension), a tuple of integers (a tuple of dimensions)
+or `:` (reverse along all the dimensions, the default).  See
+also [`reverse!`](@ref) for in-place reversal.
 
-    nnd = 0
-    for i = 1:nd
-        nnd += size(A,i)==1 || i==d
+# Examples
+```jldoctest
+julia> b = Int64[1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> reverse(b, dims=2)
+2×2 Matrix{Int64}:
+ 2  1
+ 4  3
+
+ julia> reverse(b)
+2×2 Array{Int64,2}:
+ 4  3
+ 2  1
+```
+"""
+reverse(A::AbstractArray; dims=:) = _reverse(A, dims)
+_reverse(A, dims) = reverse!(copymutable(A); dims)
+
+"""
+    reverse!(A; dims=:)
+
+Like [`reverse`](@ref), but operates in-place in `A`.
+"""
+reverse!(A::AbstractArray; dims=:) = _reverse!(A, dims)
+_reverse!(A::AbstractArray{<:Any,N}, ::Colon) where {N} = _reverse!(A, ntuple(identity, Val{N}()))
+_reverse!(A, dim::Integer) = _reverse!(A, (Int(dim),))
+_reverse!(A, dims::NTuple{M,Integer}) where {M} = _reverse!(A, Int.(dims))
+function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
+    if N < M || !allunique(dims) || !all(d -> 1 ≤ d ≤ N, dims)
+        throw(ArgumentError("invalid dimensions $dims in reverse!"))
     end
-    if nnd==nd
-        # reverse along the only non-singleton dimension
-        for i = 1:sd
-            B[i] = A[sd+1-i]
+    M == 0 && return A # nothing to reverse
+
+    idx = Vector{Int}(undef, N) # temporary array for index calculations
+
+    # compute sizes for half of reversed array
+    ntuple(k -> @inbounds(idx[k] = size(A,k)), Val{N}())
+    @inbounds idx[dims[1]] = (idx[dims[1]] + 1) >> 1
+
+    last1 = ntuple(k -> lastindex(A,k)+1, Val{N}())
+    for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(idx[k]), Val{N}()))
+        ntuple(k -> @inbounds(idx[k] = i[k]), Val{N}())
+        ntuple(Val{M}()) do k
+            @inbounds j = dims[k]
+            @inbounds idx[j] = last1[j] - idx[j]
         end
-        return B
+        iᵣ = CartesianIndex(ntuple(k -> @inbounds(idx[k]), Val{N}()))
+        @inbounds A[iᵣ], A[i] = A[i], A[iᵣ]
     end
-
-    d_in = size(A)
-    M = 1
-    for i = 1:d-1
-        M *= d_in[i]
-    end
-    N = length(A)
-    stride = M * sd
-
-    if M==1
-        for j = 0:stride:(N-stride)
-            for i = 1:sd
-                ri = sd+1-i
-                B[j + ri] = A[j + i]
-            end
-        end
-    else
-        if allocatedinline(T) && M>200
-            for i = 1:sd
-                ri = sd+1-i
-                for j=0:stride:(N-stride)
-                    offs = j + 1 + (i-1)*M
-                    boffs = j + 1 + (ri-1)*M
-                    copyto!(B, boffs, A, offs, M)
-                end
-            end
-        else
-            for i = 1:sd
-                ri = sd+1-i
-                for j=0:stride:(N-stride)
-                    offs = j + 1 + (i-1)*M
-                    boffs = j + 1 + (ri-1)*M
-                    for k=0:(M-1)
-                        B[boffs + k] = A[offs + k]
-                    end
-                end
-            end
-        end
-    end
-    return B
+    return A
 end
+# fix ambiguity with array.jl:
+_reverse!(A::AbstractVector, dim::Tuple{Int}) = _reverse!(A, first(dim))
+
 
 """
     rotl90(A)

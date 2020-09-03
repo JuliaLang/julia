@@ -1163,8 +1163,8 @@ end
 
 # TODO some of this could be optimized
 
-reverse(A::BitArray; dims::Integer) = _reverse_int(A, Int(dims))
-function _reverse_int(A::BitArray, d::Int)
+_reverse(A::BitArray, d::Tuple{Integer}) = _reverse(A, d[1])
+function _reverse(A::BitArray, d::Int)
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
@@ -1210,7 +1210,7 @@ function _reverse_int(A::BitArray, d::Int)
     return B
 end
 
-function reverse!(B::BitVector)
+function _reverse!(B::BitVector, ::Colon)
     # Basic idea: each chunk is divided into two blocks of size k = n % 64, and
     # h = 64 - k. Walk from either end (with indices i and j) reversing chunks
     # and separately ORing their two blocks into place.
@@ -1263,9 +1263,6 @@ function reverse!(B::BitVector)
 
     return B
 end
-
-reverse(v::BitVector) = reverse!(copy(v))
-
 
 function (<<)(B::BitVector, i::UInt)
     n = length(B)
