@@ -122,7 +122,7 @@ function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
         # middle slice for odd dimensions must be recursively flipped
         mid = firstindex(A, dims[1]) + (size(A, dims[1]) >> 1)
         midslice = CartesianIndices(ntuple(k -> k == dims[1] ? (mid:mid) : axes(A, k), Val{N}()))
-        _reverse!(@view(A[midslice]), dims[2:end])
+        _reverse!(view(A, midslice), dims[2:end])
     end
     return A
 end
