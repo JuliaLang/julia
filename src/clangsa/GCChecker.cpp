@@ -682,6 +682,16 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
 void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
                                  CheckerContext &C) const {
   ProgramStateRef State = C.getState();
+
+  if (RS && gcEnabledHere(C) && RS->getRetValue() && isGCTracked(RS->getRetValue())) {
+    auto ResultVal = C.getSVal(RS->getRetValue());
+    SymbolRef Sym = ResultVal.getAsSymbol(true);
+    const ValueState *ValS = Sym ? State->get<GCValueMap>(Sym) : nullptr;
+    if (ValS && ValS->isPotentiallyFreed()) {
+      report_value_error(C, Sym, "Return value may have been GCed", RS->getSourceRange());
+    }
+  }
+
   bool Changed = false;
   if (State->get<GCDisabledAt>() == C.getStackFrame()->getIndex()) {
     State = State->set<GCDisabledAt>((unsigned)-1);
@@ -695,10 +705,7 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
     C.addTransition(State);
   if (!C.inTopFrame())
     return;
-  // If `RS` is NULL, the function did not return normally.
-  // This could be either an abort/assertion failure or an exception throw.
-  // Do not require the GC frame to match in such case.
-  if (RS && C.getState()->get<GCDepth>() > 0)
+  if (C.getState()->get<GCDepth>() > 0)
     report_error(C, "Non-popped GC frame present at end of function");
 }
 
@@ -867,11 +874,16 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
     }
   }
 
+  // Don't free the return value
+  SymbolRef RetSym = Call.getReturnValue().getAsSymbol();
+
   // Symbolically free all unrooted values.
   GCValueMapTy AMap = State->get<GCValueMap>();
   for (auto I = AMap.begin(), E = AMap.end(); I != E; ++I) {
     if (I.getData().isJustAllocated()) {
       if (SpeciallyRootedSymbol == I.getKey())
+        continue;
+      if (RetSym == I.getKey())
         continue;
       State = State->set<GCValueMap>(I.getKey(), ValueState::getFreed());
       DidChange = true;
@@ -941,17 +953,7 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
     State = State->set<GCValueMap>(Sym, ValueState::getRooted(nullptr, -1));
   else {
     const ValueState *ValS = State->get<GCValueMap>(Sym);
-    ValueState NewVState = ValueState::getAllocated();
-    if (ValS) {
-      // If the call was inlined, we may have accidentally killed the return
-      // value above. Revive it here.
-      const ValueState *PrevValState = C.getState()->get<GCValueMap>(Sym);
-      if (!ValS->isPotentiallyFreed() ||
-          (PrevValState && PrevValState->isPotentiallyFreed())) {
-        return false;
-      }
-      NewVState = *PrevValState;
-    }
+    ValueState NewVState = ValS ? *ValS : ValueState::getAllocated();
     auto *Decl = Call.getDecl();
     const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
     if (FD) {
