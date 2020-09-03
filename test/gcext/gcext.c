@@ -486,7 +486,9 @@ void task_scanner(jl_task_t *task, int root_task)
     // doing actual work does not trigger a problem.
     char *start_stack;
     char *end_stack;
-    jl_active_task_stack(task, &start_stack, &end_stack);
+    char *total_start_stack;
+    char *total_end_stack;
+    jl_active_task_stack(task, &start_stack, &end_stack, &total_start_stack, &total_end_stack);
 
     // this is the live stack of a thread. Is it ours?
     if (start_stack && task == (jl_task_t *)jl_get_current_task()) {

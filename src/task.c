@@ -247,10 +247,13 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
     return (void *)((char *)task->stkbuf + off);
 }
 
-JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task, char **start, char **end)
+JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
+                                       char **active_start, char **active_end,
+                                       char **total_start, char **total_end)
 {
     if (!task->started) {
-        *start = *end = 0;
+        *total_start = *active_start = 0;
+        *total_end = *active_end = 0;
         return;
     }
 
@@ -258,38 +261,40 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task, char **start, char **end
     jl_ptls_t ptls2 = (tid != -1) ? jl_all_tls_states[tid] : 0;
 
     if (task->copy_stack && ptls2 && task == ptls2->current_task) {
-        *start  = (char*)ptls2->stackbase - ptls2->stacksize;
-        *end = (char*)ptls2->stackbase;
+        *total_start = *active_start = (char*)ptls2->stackbase - ptls2->stacksize;
+        *total_end = *active_end = (char*)ptls2->stackbase;
     }
     else if (task->stkbuf) {
-        *start  = (char*)task->stkbuf;
-#ifdef COPY_STACKS
-        // save_stack stores the stack of an inactive task in stkbuf, and the
-        // actual number of used bytes in copy_stack.
-        if (task->copy_stack > 1)
-            *end = (char*)task->stkbuf + task->copy_stack;
-        else
-#endif
-            *end = (char*)task->stkbuf + task->bufsz;
-
+        *total_start = *active_start = (char*)task->stkbuf;
 #ifndef _OS_WINDOWS_
         if (jl_all_tls_states[0]->root_task == task) {
             // See jl_init_root_task(). The root task of the main thread
             // has its buffer enlarged by an artificial 3000000 bytes, but
             // that means that the start of the buffer usually points to
             // inaccessible memory. We need to correct for this.
-            *start += ROOT_TASK_STACK_ADJUSTMENT;
+            *active_start += ROOT_TASK_STACK_ADJUSTMENT;
+            *total_start += ROOT_TASK_STACK_ADJUSTMENT;
         }
+#endif
+
+        *total_end = *active_end = (char*)task->stkbuf + task->bufsz;
+#ifdef COPY_STACKS
+        // save_stack stores the stack of an inactive task in stkbuf, and the
+        // actual number of used bytes in copy_stack.
+        if (task->copy_stack > 1)
+            *active_end = (char*)task->stkbuf + task->copy_stack;
 #endif
     }
     else {
-        *start = *end = 0;
+        // no stack allocated yet
+        *total_start = *active_start = 0;
+        *total_end = *active_end = 0;
         return;
     }
 
     if (task == jl_current_task) {
         // scan up to current `sp` for current thread and task
-        *start = (char*)jl_get_frame_addr();
+        *active_start = (char*)jl_get_frame_addr();
     }
 }
 
