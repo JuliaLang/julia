@@ -103,25 +103,20 @@ _reverse!(A::AbstractArray{<:Any,N}, ::Colon) where {N} = _reverse!(A, ntuple(id
 _reverse!(A, dim::Integer) = _reverse!(A, (Int(dim),))
 _reverse!(A, dims::NTuple{M,Integer}) where {M} = _reverse!(A, Int.(dims))
 function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
-    if N < M || !allunique(dims) || !all(d -> 1 ≤ d ≤ N, dims)
+    dimrev = ntuple(k -> k in dims, Val{N}()) # boolean tuple indicating reversed dims
+
+    if N < M || M != sum(dimrev)
         throw(ArgumentError("invalid dimensions $dims in reverse!"))
     end
     M == 0 && return A # nothing to reverse
 
-    idx = Vector{Int}(undef, N) # temporary array for index calculations
+    # swapping loop only needs to traverse ≈half of the array
+    halfsz = ntuple(k -> k == dims[1] ? size(A,k) >> 1 : size(A,k), Val{N}())
 
-    # compute sizes for half of reversed array
-    ntuple(k -> @inbounds(idx[k] = size(A,k)), Val{N}())
-    @inbounds idx[dims[1]] = idx[dims[1]] >> 1
-
-    last1 = ntuple(k -> lastindex(A,k)+firstindex(A,k), Val{N}())
-    for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(idx[k]), Val{N}()))
-        ntuple(k -> @inbounds(idx[k] = i[k]), Val{N}())
-        ntuple(Val{M}()) do k
-            @inbounds j = dims[k]
-            @inbounds idx[j] = last1[j] - idx[j]
-        end
-        iᵣ = CartesianIndex(ntuple(k -> @inbounds(idx[k]), Val{N}()))
+    last1 = ntuple(k -> lastindex(A,k)+firstindex(A,k), Val{N}()) # offset for reversed index
+    @inbounds for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(halfsz[k]), Val{N}()))
+        iₜ = Tuple(i)
+        iᵣ = CartesianIndex(ifelse.(dimrev, last1 .- iₜ, iₜ))
         @inbounds A[iᵣ], A[i] = A[i], A[iᵣ]
     end
     if M > 1 && isodd(size(A, dims[1]))
