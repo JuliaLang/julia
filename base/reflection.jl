@@ -433,6 +433,9 @@ false
 julia> ismutable([1,2])
 true
 ```
+
+!!! compat "Julia 1.5"
+    This function requires at least Julia 1.5.
 """
 ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
 
