@@ -1033,3 +1033,12 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
+
+# recursive arithmetic (fallback)
+
+for op ∈ (:div,:rem,:mod,:mod1,:fld,:fld1,:cld,:ldexp)
+    @eval $op(z::Complex,n) = Complex($op(real(z),n),$op(imag(z),n))
+end
+for op ∈ (:mod2pi,:rem2pi)
+    @eval $op(z::Complex) = Complex($op(real(z)), $op(imag(z)))
+end
