@@ -2504,6 +2504,10 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
 // emit code for is (===).
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
+    // handle simple static expressions with no side-effects
+    if (arg1.constant && arg2.constant)
+        return ConstantInt::get(T_int1, jl_egal(arg1.constant, arg2.constant));
+
     jl_value_t *rt1 = arg1.typ;
     jl_value_t *rt2 = arg2.typ;
     if (jl_is_concrete_type(rt1) && jl_is_concrete_type(rt2) && !jl_is_kind(rt1) && !jl_is_kind(rt2) && rt1 != rt2) {
@@ -2511,8 +2515,10 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         return ConstantInt::get(T_int1, 0);
     }
 
-    if (arg1.isghost || arg2.isghost) {
-        // comparing to a singleton object
+    if (arg1.isghost || arg2.isghost || arg1.constant == jl_bottom_type ||
+        arg2.constant == jl_bottom_type) {
+        // comparing to a singleton object, special case for value `jl_bottom_type`
+        // since it is normalized to `::Type{Union{}}` instead...
         if (arg1.TIndex)
             return emit_isa(ctx, arg1, rt2, NULL).first; // rt2 is a singleton type
         if (arg2.TIndex)
@@ -2528,6 +2534,17 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
 
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
         return ConstantInt::get(T_int1, 0);
+
+    // If both sides are boxed or can be trivially boxed,
+    // we'll prefer to do a pointer check.
+    // At this point, we know that at least one of the arguments isn't a constant
+    // so a runtime content check will involve at least one load from the
+    // pointer (and likely a type check)
+    // so a pointer comparison should be no worse than that even in imaging mode
+    // when the constant pointer has to be loaded.
+    if ((arg1.V || arg1.constant) && (arg2.V || arg2.constant) &&
+        (jl_pointer_egal(rt1) || jl_pointer_egal(rt2)))
+        return ctx.builder.CreateICmpEQ(boxed(ctx, arg1), boxed(ctx, arg2));
 
     bool justbits1 = jl_is_concrete_immutable(rt1);
     bool justbits2 = jl_is_concrete_immutable(rt2);
@@ -2565,18 +2582,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 // returns true if the call has been handled
 {
     if (f == jl_builtin_is && nargs == 2) {
-        // emit values
-        const jl_cgval_t &v1 = argv[1];
-        const jl_cgval_t &v2 = argv[2];
-        // handle simple static expressions with no side-effects
-        if (v1.constant) {
-            if (v2.constant) {
-                *ret = mark_julia_type(ctx, ConstantInt::get(T_int8, jl_egal(v1.constant, v2.constant)), false, jl_bool_type);
-                return true;
-            }
-        }
         // emit comparison test
-        Value *ans = emit_f_is(ctx, v1, v2);
+        Value *ans = emit_f_is(ctx, argv[1], argv[2]);
         *ret = mark_julia_type(ctx, ctx.builder.CreateZExt(ans, T_int8), false, jl_bool_type);
         return true;
     }
