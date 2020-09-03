@@ -705,9 +705,6 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
     C.addTransition(State);
   if (!C.inTopFrame())
     return;
-  // If `RS` is NULL, the function did not return normally.
-  // This could be either an abort/assertion failure or an exception throw.
-  // Do not require the GC frame to match in such case.
   if (C.getState()->get<GCDepth>() > 0)
     report_error(C, "Non-popped GC frame present at end of function");
 }
