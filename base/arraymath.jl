@@ -78,7 +78,7 @@ julia> reverse(b, dims=2)
  2  1
  4  3
 
- julia> reverse(b)
+julia> reverse(b)
 2×2 Array{Int64,2}:
  4  3
  2  1
