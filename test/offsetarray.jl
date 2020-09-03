@@ -522,6 +522,12 @@ soa = OffsetArray([2,2,3], typemax(Int)-4)
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
 @test reverse(A, dims=1) == OffsetArray(reverse(parent(A), dims=1), A.offsets)
 @test reverse(A, dims=2) == OffsetArray(reverse(parent(A), dims=2), A.offsets)
+@test reverse(A) == reverse!(reverse(A, dims=1), dims=2)
+
+Aodd = OffsetArray(rand(3,5), (-3,5))
+@test reverse(Aodd, dims=1) == OffsetArray(reverse(parent(Aodd), dims=1), Aodd.offsets)
+@test reverse(Aodd, dims=2) == OffsetArray(reverse(parent(Aodd), dims=2), Aodd.offsets)
+@test reverse(Aodd) == reverse!(reverse(Aodd, dims=1), dims=2)
 
 @test A .+ 1 == OffsetArray(parent(A) .+ 1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)
