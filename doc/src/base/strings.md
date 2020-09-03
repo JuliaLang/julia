@@ -69,6 +69,7 @@ Base.nextind
 Base.prevind
 Base.textwidth
 Base.isascii
+Base.iscased
 Base.iscntrl
 Base.isdigit
 Base.isletter
