@@ -106,7 +106,7 @@ function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
 
     # compute sizes for half of reversed array
     ntuple(k -> @inbounds(idx[k] = size(A,k)), Val{N}())
-    @inbounds idx[dims[1]] = (idx[dims[1]] + 1) >> 1
+    @inbounds idx[dims[1]] = idx[dims[1]] >> 1
 
     last1 = ntuple(k -> lastindex(A,k)+firstindex(A,k), Val{N}())
     for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(idx[k]), Val{N}()))
@@ -117,6 +117,12 @@ function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
         end
         iᵣ = CartesianIndex(ntuple(k -> @inbounds(idx[k]), Val{N}()))
         @inbounds A[iᵣ], A[i] = A[i], A[iᵣ]
+    end
+    if M > 1 && isodd(size(A, dims[1]))
+        # middle slice for odd dimensions must be recursively flipped
+        mid = firstindex(A, dims[1]) + (size(A, dims[1]) >> 1)
+        midslice = CartesianIndices(ntuple(k -> k == dims[1] ? (mid:mid) : axes(A, k), Val{N}()))
+        _reverse!(@view(A[midslice]), dims[2:end])
     end
     return A
 end
