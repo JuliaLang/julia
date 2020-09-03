@@ -1170,7 +1170,7 @@ static jl_method_instance_t *cache_method(
 
 static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, size_t world, size_t *min_valid, size_t *max_valid);
 
-static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt, size_t world)
+static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world)
 {
     // caller must hold the mt->writelock
     assert(tt->isdispatchtuple || tt->hasfreetypevars);
@@ -1783,8 +1783,8 @@ jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t w
     JL_GC_PUSH1(&tt);
     JL_LOCK(&mt->writelock);
     jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, tt, world);
-    JL_GC_POP();
     JL_UNLOCK(&mt->writelock);
+    JL_GC_POP();
     return sf;
 }
 
@@ -2314,8 +2314,8 @@ have_entry:
         // cache miss case
         JL_TIMING(METHOD_LOOKUP_SLOW);
         mfunc = jl_mt_assoc_by_type(mt, tt, world);
-        JL_GC_POP();
         JL_UNLOCK(&mt->writelock);
+        JL_GC_POP();
         if (jl_options.malloc_log)
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
         if (mfunc == NULL) {
