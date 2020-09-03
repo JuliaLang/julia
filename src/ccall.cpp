@@ -166,8 +166,7 @@ static Value *runtime_sym_lookup(
         gvname += f_name;
         gvname += "_";
         gvname += std::to_string(globalUnique++);
-        Module *M = ctx.emission_context.shared_module(jl_LLVMContext);
-        llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
+        llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), gvname);
     }
