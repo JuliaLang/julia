@@ -7107,7 +7107,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         SmallVector<std::string, 1> Exports;
         for (const auto &F: Mod->functions())
             if (!F.isDeclaration())
-                Exports.push_back(F.getName());
+                Exports.push_back(F.getName().str());
         if (Linker::linkModules(*jl_Module, std::move(Mod))) {
             jl_error("Failed to link LLVM bitcode");
         }
