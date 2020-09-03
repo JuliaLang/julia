@@ -99,6 +99,14 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Union{Int32, Nothing, Tuple{ComplexF32}}, Union{Int32, Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Int32, Nothing, Tuple{Vararg{ComplexF32}}}
 
+@test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
+@test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
+
+struct SomethingBits
+    x::Base.BitIntegerType
+end
+@test Base.return_types(getproperty, (SomethingBits, Symbol)) == Any[Base.BitIntegerType]
+
 # issue 9770
 @noinline x9770() = false
 function f9770(x)

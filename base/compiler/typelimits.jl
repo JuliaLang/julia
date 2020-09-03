@@ -283,6 +283,8 @@ end
 # but without losing too much precision in common cases
 # and also trying to be mostly associative and commutative
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
+    typea === Union{} && return typeb
+    typeb === Union{} && return typea
     suba = typea ⊑ typeb
     suba && issimpleenoughtype(typeb) && return typeb
     subb = typeb ⊑ typea
