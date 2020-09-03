@@ -1236,11 +1236,7 @@ function compilecache(pkg::PkgId, path::String)
         end
     finally
         rm(tmppath, force=true)
-        if should_log_deps
-            print("\e[$(length(precomp_msg))D") 
-            print(repeat(" ", length(precomp_msg))) #overwrite dep print
-            print("\e[$(length(precomp_msg))D") 
-        end
+        should_log_deps && print("\e[$(length(precomp_msg))D\e[0K") #clear last dep print
     end
     if p.exitcode == 125
         return PrecompilableError()
