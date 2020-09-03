@@ -1173,7 +1173,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             continue
         end
 
-        nu = countunionsplit(sig.atypes)
+        nu = unionsplitcost(sig.atypes)
         if nu == 1 || nu > state.params.MAX_UNION_SPLITTING
             if !isa(info, MethodMatchInfo)
                 if state.method_table === nothing

@@ -769,20 +769,23 @@ g11015(::Type{Bool}, ::Bool) = 2.0
 
 # better inference of apply (#20343)
 f20343(::String, ::Int) = 1
-f20343(::Int, ::String, ::Int, ::Int) = 1
-f20343(::Int, ::Int, ::String, ::Int, ::Int, ::Int) = 1
-f20343(::Union{Int,String}...) = Int8(1)
+f20343(::Int, ::String, ::Int, ::Int) = 2
+f20343(::Int, ::Int, ::String, ::Int, ::Int, ::Int) = 3
+f20343(::Int, ::Int, ::Int, ::String, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int) = 4
+f20343(::Union{Int,String}...) = Int8(5)
 f20343(::Any...) = "no"
 function g20343()
     n = rand(1:3)
-    i = ntuple(i->n==i ? "" : 0, 2n)::Union{Tuple{String,Int},Tuple{Int,String,Int,Int},Tuple{Int,Int,String,Int,Int,Int}}
+    T = Union{Tuple{String, Int}, Tuple{Int, String, Int, Int}, Tuple{Int, Int, String, Int, Int, Int}}
+    i = ntuple(i -> n == i ? "" : 0, 2n)::T
     f20343(i...)
 end
 @test Base.return_types(g20343, ()) == [Int]
 function h20343()
     n = rand(1:3)
-    i = ntuple(i->n==i ? "" : 0, 3)::Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}
-    f20343(i..., i...)
+    T = Union{Tuple{String, Int, Int}, Tuple{Int, String, Int}, Tuple{Int, Int, String}}
+    i = ntuple(i -> n == i ? "" : 0, 3)::T
+    f20343(i..., i..., i..., i...)
 end
 @test Base.return_types(h20343, ()) == [Union{Int8, Int}]
 function i20343()
@@ -2099,7 +2102,11 @@ end
 # issue #28356
 # unit test to make sure countunionsplit overflows gracefully
 # we don't care what number is returned as long as it's large
-@test Core.Compiler.countunionsplit(Any[Union{Int32,Int64} for i=1:80]) > 100000
+@test Core.Compiler.unionsplitcost(Any[Union{Int32, Int64} for i=1:80]) > 100000
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}]) == 2
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32, Int64}, Int8]) == 8
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32}, Int8]) == 6
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32}, Union{Int8, Int16, Int32, Int64}, Int8]) == 6
 
 # make sure compiler doesn't hang in union splitting
 
