@@ -114,7 +114,7 @@ function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
     halfsz = ntuple(k -> k == dims[1] ? size(A,k) >> 1 : size(A,k), Val{N}())
 
     last1 = ntuple(k -> lastindex(A,k)+firstindex(A,k), Val{N}()) # offset for reversed index
-    @inbounds for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(halfsz[k]), Val{N}()))
+    for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(halfsz[k]), Val{N}()))
         iₜ = Tuple(i)
         iᵣ = CartesianIndex(ifelse.(dimrev, last1 .- iₜ, iₜ))
         @inbounds A[iᵣ], A[i] = A[i], A[iᵣ]
