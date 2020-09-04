@@ -468,7 +468,20 @@ end
 end
 
 @testset "CompoundPeriod and Period isless()" begin
-    @test h < h + ns
-    @test h - ns < h
+    #tests for allowed comparisons
+    #FixedPeriod
+    @test (h - ms < h + ns) == true
+    @test (h + ns < h -ms) == false
+    @test (h  < h -ms) == false
+    @test (h-ms  < h) == true
+    #OtherPeriod
+    @test (2y-m < 25m+1y) == true
+    @test (2y < 25m+1y) == true
+    @test (25m+1y < 2y) == false
+    #tests for error throwing for not allowed comparisons (FixedPeriod and OtherPeriod combinations)
+    @test_throws ErrorException y + h < h + m
+    @test_throws ErrorException y + h < m
+    @test_throws ErrorException y < m+h
+
 end
 end
