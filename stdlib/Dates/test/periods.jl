@@ -467,4 +467,8 @@ end
     @test Dates.toms(Dates.Second(1) + Dates.Microsecond(1)) == 1e3
 end
 
+@testset "CompoundPeriod and Period isless()" begin
+    @test h < h + ns
+    @test h - ns < h
+end
 end
