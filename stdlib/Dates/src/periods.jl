@@ -473,9 +473,9 @@ Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed)
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
 Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
 
-Base.isless(x::Period, y::CompoundPeriod) = tons(x) < sum(Dates.tons,y.periods)
-Base.isless(x::CompoundPeriod, y::Period) = sum(Dates.tons,x.periods) < tons(y)
-Base.isless(x::CompoundPeriod, y::CompoundPeriod) = sum(Dates.tons,x.periods) < sum(Dates.tons,y.periods) 
+Base.isless(x::Period, y::CompoundPeriod) = tons(x) < sum(tons,y.periods)
+Base.isless(x::CompoundPeriod, y::Period) = sum(tons,x.periods) < tons(y)
+Base.isless(x::CompoundPeriod, y::CompoundPeriod) = sum(tons,x.periods) < sum(tons,y.periods) 
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
 toms(c::Nanosecond)  = div(value(c), 1000000)
