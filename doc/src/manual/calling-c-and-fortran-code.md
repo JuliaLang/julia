@@ -883,8 +883,8 @@ be computed at run time. To handle such cases, the library component of a `(name
 specification can be a function call, e.g. `(:dgemm_, find_blas())`. The call expression will
 be executed when the `ccall` itself is executed. However, it is assumed that the library
 location does not change once it is determined, so the result of the call can be cached and
-reused. Therefore, the number of times the expression executes is undefined, and returning
-different values for multiple calls results in undefined behavior.
+reused. Therefore, the number of times the expression executes is unspecified, and returning
+different values for multiple calls results in unspecified behavior.
 
 If even more flexibility is needed, it is possible
 to use computed values as function names by staging through [`eval`](@ref) as follows:
