@@ -429,4 +429,15 @@ end
     @test cholstring == "$(summary(C))\n$rankstring\n$factorstring\npermutation:\n$permstring"
 end
 
+@testset "destructuring for Cholesky[Pivoted]" begin
+    for val in (true, false)
+        A = rand(8, 8)
+        B = A'A
+        C = cholesky(B, Val(val), check=false)
+        l, u = C
+        @test l == C.L
+        @test u == C.U
+    end
+end
+
 end # module TestCholesky
