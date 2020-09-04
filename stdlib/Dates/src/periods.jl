@@ -480,7 +480,8 @@ function Base.isless(x::CompoundPeriod, y::CompoundPeriod)
     has_fixed = false
     x_val::Int64 = 0
     y_val::Int64 = 0
-    #if any overlap of OtherPeriod or FixedPeriod occurs an error is thrown so it can be treated as x and y val either being in Nanosecond or Month
+    # if any overlap of OtherPeriod or FixedPeriod occurs an error is thrown so it can be treated as 
+    # x and y val only being either Nanosecond or Month
     for p in x.periods
         if(istype(p) <: FixedPeriod)
             has_fixed = true
