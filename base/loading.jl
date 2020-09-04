@@ -1146,9 +1146,13 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
                        --eval 'eval(Meta.parse(read(stdin,String)))'`, stderr=stderr),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
+    # pass isprecompilinginteractively state recursively
     write(io.in, """
-        Base.include_package_for_output($(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
+        begin
+            Base.isprecompilinginteractively!($(isprecompilinginteractively()))
+            Base.include_package_for_output($(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(uuid_tuple)), $(repr(source_path(nothing))))
+        end
         """)
     close(io.in)
     return io
@@ -1210,9 +1214,10 @@ function compilecache(pkg::PkgId, path::String)
     end
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+    isinteractive() && isprecompilinginteractively!(true)
     @logmsg verbosity "Precompiling $pkg"
-    precomp_msg = " > $(pkg.name)"
-    should_log_deps = (Base.CoreLogging.current_logstate().min_enabled_level >= verbosity) && !isinteractive()
+    precomp_msg = " ► $(pkg.name)"
+    should_log_deps = isprecompilinginteractively() && !isinteractive() && (CoreLogging.current_logstate().min_enabled_level > CoreLogging.Debug) #don't print for main package or when in debug
     should_log_deps && print(precomp_msg)
 
     # create a temporary file in `cachepath` directory, write the cache in it,
@@ -1244,6 +1249,10 @@ function compilecache(pkg::PkgId, path::String)
         error("Failed to precompile $pkg to $cachefile.")
     end
 end
+
+const IS_PRECOMPILING_INTERACTIVELY = Ref{Bool}(false)
+isprecompilinginteractively!(b::Bool) = IS_PRECOMPILING_INTERACTIVELY[] = b
+isprecompilinginteractively()::Bool = IS_PRECOMPILING_INTERACTIVELY[]::Bool
 
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
 

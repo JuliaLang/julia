@@ -1216,6 +1216,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         if have_color
             print(repl.stream,repl.prompt_color)
         end
+        Base.isprecompilinginteractively!(false) #state reset
         print(repl.stream, "julia> ")
         if have_color
             print(repl.stream, input_color(repl))
