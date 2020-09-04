@@ -1580,18 +1580,21 @@
       e))
 
 (define (parse-imports s word)
-  (let* ((first (parse-import s word))
+  (let* ((first (parse-import s word #f))
          (next  (peek-token s))
-         (from  (and (eq? next ':) (not (ts:space? s))))
+         (from  (and (eq? next ':) (not (ts:space? s))
+                     (or (not (and (pair? first) (eq? (car first) 'as)))
+                         (error (string "invalid syntax \"" word " " (deparse first) ":\"")))))
          (done  (cond ((or from (eqv? next #\,))
                        (begin (take-token s) #f))
-                      ((or (eq? next '|.|)
+                      ;; TODO: this seems to be wrong; figure out if it's needed
+                      #;((or (eq? next '|.|)
                            (eqv? (string.sub (string next) 0 1) ".")) #f)
                       (else #t)))
          (rest  (if done
                     '()
                     (let ((ex (parse-comma-separated s (lambda (s)
-                                                         (parse-import s word)))))
+                                                         (parse-import s word from)))))
                       (if (eq? (peek-token s) ':)
                           (error (string "\":\" in \"" word "\" syntax can only be used "
                                          "when importing a single module. "
@@ -1599,7 +1602,9 @@
                           ex)))))
     (if from
         `(,word (|:| ,first ,@rest))
-        (list* word first rest))))
+        (begin (if (and (eq? word 'using) (pair? first) (eq? (car first) 'as))
+                   (error (string "invalid syntax \"using " (deparse-import-path (cadr first)) " as ...\"")))
+               (list* word first rest)))))
 
 (define (parse-import-dots s)
   (let loop ((l '())
@@ -1619,7 +1624,7 @@
           (else
            (cons (macrocall-to-atsym (parse-unary-prefix s)) l)))))
 
-(define (parse-import s word)
+(define (parse-import-path s word)
   (let loop ((path (parse-import-dots s)))
     (if (not (symbol-or-interpolate? (car path)))
         (error (string "invalid \"" word "\" statement: expected identifier")))
@@ -1638,6 +1643,16 @@
                     path)))
        (else
         (cons '|.| (reverse path)))))))
+
+(define (parse-import s word from)
+  (let ((path (parse-import-path s word)))
+    (if (eq? (peek-token s) 'as)
+        (begin
+          (if (and (not from) (eq? word 'using))
+              (error (string "invalid syntax \"using " (deparse-import-path path) " as ...\"")))
+          (take-token s)
+          `(as ,path ,(parse-unary-prefix s)))
+        path)))
 
 ;; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated s what)

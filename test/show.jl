@@ -205,6 +205,11 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 @test_repr "import A.B, C.D"
+@test_repr "import A as B"
+@test_repr "import A.x as y"
+@test_repr "import A: x as y"
+@test_repr "import A.B: x, y as z"
+@test_repr "import A.B: x, y as z, a.b as c, xx"
 
 # keyword args (issue #34023 and #32775)
 @test_repr "f(a, b=c)"
