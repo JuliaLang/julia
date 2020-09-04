@@ -473,9 +473,50 @@ Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed)
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
 Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
 
-Base.isless(x::Period, y::CompoundPeriod) = tons(x) < sum(tons,y.periods)
-Base.isless(x::CompoundPeriod, y::Period) = sum(tons,x.periods) < tons(y)
-Base.isless(x::CompoundPeriod, y::CompoundPeriod) = sum(tons,x.periods) < sum(tons,y.periods) 
+Base.isless(x::Period, y::CompoundPeriod) = CompoundPeriod(x) < y
+Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
+function Base.isless(x::CompoundPeriod, y::CompoundPeriod)
+    has_other = false
+    has_fixed = false
+    for p in x.periods
+        if(istype(p) <: FixedPeriod)
+            has_fixed = true
+        else
+            has_other = true
+        end
+    end
+    if(has_fixed && has_other)
+        throw(ErrorException("Can not compare OtherPeriods and FixedPeriods in a CompoundPeriod."))
+    end
+    for p in y.periods
+        if(istype(p) <: FixedPeriod)
+            has_fixed = true
+        else
+            has_other = true
+        end
+    end
+    if(has_fixed && has_other)
+        throw(ErrorException("Can not compare OtherPeriods and FixedPeriods in a CompoundPeriod."))
+    end
+    x_val::Int64 = 0
+    y_val::Int64 = 0
+    if(has_other)
+        for p in x.periods
+            x_val += convert(Month,p)
+        end
+        for p in y.periods
+            y_val += convert(Month,p)
+        end
+    else
+        for p in x.periods
+            x_val += convert(Nanosecond,p)
+        end
+        for p in y.periods
+            y_val += convert(Nanosecond,p)
+        end
+    end
+    return x_val < y_val
+end
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
 toms(c::Nanosecond)  = div(value(c), 1000000)
