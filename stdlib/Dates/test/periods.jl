@@ -378,6 +378,18 @@ end
     @test Dates.Date(2009, 2, 1) - (Dates.Month(1) + Dates.Day(1)) == Dates.Date(2008, 12, 31)
     @test_throws MethodError (Dates.Month(1) + Dates.Day(1)) - Dates.Date(2009,2,1)
 end
+
+@testset "canonicalize Period" begin
+    # reduce individual Period into most basic CompoundPeriod
+    @test Dates.canonicalize(Dates.Nanosecond(1000000)) == Dates.canonicalize(Dates.Millisecond(1))
+    @test Dates.canonicalize(Dates.Millisecond(1000)) == Dates.canonicalize(Dates.Second(1))
+    @test Dates.canonicalize(Dates.Second(60)) == Dates.canonicalize(Dates.Minute(1))
+    @test Dates.canonicalize(Dates.Minute(60)) == Dates.canonicalize(Dates.Hour(1))
+    @test Dates.canonicalize(Dates.Hour(24)) == Dates.canonicalize(Dates.Day(1))
+    @test Dates.canonicalize(Dates.Day(7)) == Dates.canonicalize(Dates.Week(1))
+    @test Dates.canonicalize(Dates.Month(12)) == Dates.canonicalize(Dates.Year(1))
+    @test Dates.canonicalize(Dates.Minute(24*60*1 + 12*60)) == Dates.canonicalize(Dates.CompoundPeriod([Dates.Day(1),Dates.Hour(12)]))
+end
 @testset "unary ops and vectorized period arithmetic" begin
     pa = [1y 1m 1w 1d; 1h 1mi 1s 1ms]
     cpa = [1y + 1s 1m + 1s 1w + 1s 1d + 1s; 1h + 1s 1mi + 1s 2m + 1s 1s + 1ms]
@@ -468,3 +480,4 @@ end
 end
 
 end
+
