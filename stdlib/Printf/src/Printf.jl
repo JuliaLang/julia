@@ -4,8 +4,9 @@ module Printf
 
 using Base.Ryu
 
-export @printf, @sprintf, Format, format, @format_str, tofloat
+export @printf, @sprintf
 
+# format specifier categories
 const Ints = Union{Val{'d'}, Val{'i'}, Val{'u'}, Val{'x'}, Val{'X'}, Val{'o'}}
 const Floats = Union{Val{'e'}, Val{'E'}, Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'}, Val{'a'}, Val{'A'}}
 const Chars = Union{Val{'c'}, Val{'C'}}
@@ -13,6 +14,13 @@ const Strings = Union{Val{'s'}, Val{'S'}}
 const Pointer = Val{'p'}
 const HexBases = Union{Val{'x'}, Val{'X'}, Val{'a'}, Val{'A'}}
 
+"""
+Typed representation of a format specifier.
+
+`T` is a `Val{'_'}`, where `_` is a valid format specifier character.
+
+Fields are the various modifiers allowed for various format specifiers.
+"""
 struct Spec{T} # T => %type => Val{'type'}
     leftalign::Bool
     plus::Bool
@@ -23,6 +31,7 @@ struct Spec{T} # T => %type => Val{'type'}
     precision::Int
 end
 
+# recreate the format specifier string from a typed Spec
 Base.string(f::Spec{T}; modifier::String="") where {T} =
     string("%", f.leftalign ? "-" : "", f.plus ? "+" : "", f.space ? " " : "",
         f.zero ? "0" : "", f.hash ? "#" : "", f.width > 0 ? f.width : "",
@@ -32,12 +41,33 @@ Base.show(io::IO, f::Spec) = print(io, string(f))
 ptrfmt(s::Spec{T}, x) where {T} =
     Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.width, sizeof(x) == 8 ? 16 : 8)
 
+"""
+    Printf.Format(format_str)
+
+Create a C printf-compatible format object that can be used for formatting values.
+
+The input `format_str` can include any valid format specifier character and modifiers.
+
+A `Format` object can be passed to `Printf.format(f::Format, args...)` to produce a
+formatted string, or `Printf.format(io::IO, f::Format, args...)` to print the
+formatted string directly to `io`.
+
+For convenience, the `Printf.format"..."` string macro form can be used for building
+a `Printf.Format` object at macro-expansion-time.
+"""
 struct Format{S, T}
-    str::S
+    str::S # original full format string as CodeUnits
+    # keep track of non-format specifier strings to print
+    # length(substringranges) == length(formats) + 1
+    # so when printing, we start with printing
+      # str[substringranges[1]], then formats[1] + args[1]
+      # then str[substringranges[2]], then formats[2] + args[2]
+      # and so on, then at the end, str[substringranges[end]]
     substringranges::Vector{UnitRange{Int}}
     formats::T # Tuple of Specs
 end
 
+# what number base should be used for a given format specifier?
 base(T) = T <: HexBases ? 16 : T <: Val{'o'} ? 8 : 10
 char(::Type{Val{c}}) where {c} = c
 
@@ -85,7 +115,7 @@ function Format(f::AbstractString)
         # parse width
         width = 0
         while b - UInt8('0') < 0x0a
-            width = 10width + (b - UInt8('0'))
+            width = 10 * width + (b - UInt8('0'))
             b = bytes[pos]
             pos += 1
             pos > len && break
@@ -339,25 +369,23 @@ tofloat(x::BigFloat) = x
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     x = tofloat(arg)
-    if x isa BigFloat && !isnan(x) && isfinite(x)
+    if x isa BigFloat && isfinite(x)
         ptr = pointer(buf, pos)
-        newpos = ccall((:mpfr_snprintf, :libmpfr), Int32,
-                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}),
-                ptr, length(buf), string(spec; modifier="R"), arg)
+        newpos = @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, (length(buf) - pos + 1)::Csize_t, string(spec; modifier="R")::Ptr{UInt8}; arg::Ref{BigFloat})::Cint
         newpos > 0 || error("invalid printf formatting for BigFloat")
         return pos + newpos
     elseif x isa BigFloat
         x = Float64(x)
     end
-    if T <: Union{Val{'e'}, Val{'E'}}
+    if T == Val{'e'} || T == Val{'E'}
         newpos = Ryu.writeexp(buf, pos, x, prec, plus, space, hash, char(T), UInt8('.'))
-    elseif T <: Union{Val{'f'}, Val{'F'}}
+    elseif T == Val{'f'} || T == Val{'F'}
         newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
-    elseif T <: Union{Val{'g'}, Val{'G'}}
+    elseif T == Val{'g'} || T == Val{'G'}
         prec = prec == 0 ? 1 : prec
         x = round(x, sigdigits=prec)
         newpos = Ryu.writeshortest(buf, pos, x, plus, space, hash, prec, T == Val{'g'} ? UInt8('e') : UInt8('E'), true, UInt8('.'))
-    elseif T <: Union{Val{'a'}, Val{'A'}}
+    elseif T == Val{'a'} || T == Val{'A'}
         x, neg = x < 0 ? (-x, true) : (x, false)
         newpos = pos
         if neg
@@ -608,6 +636,8 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     return pos
 end
 
+const UNROLL_UPTO = 16
+# if you have your own buffer + pos, write formatted args directly to it
 @inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
     # write out first substring
     for i in f.substringranges[1]
@@ -615,9 +645,9 @@ end
         pos += 1
     end
     # for each format, write out arg and next substring
-    # unroll up to 8 formats
+    # unroll up to 16 formats
     N = length(f.formats)
-    Base.@nexprs 8 i -> begin
+    Base.@nexprs 16 i -> begin
         if N >= i
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
@@ -626,8 +656,8 @@ end
             end
         end
     end
-    if N > 8
-        for i = 9:length(f.formats)
+    if N > 16
+        for i = 17:length(f.formats)
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
                 buf[pos] = f.str[j]
@@ -653,25 +683,20 @@ function plength(f::Spec{T}, x) where {T <: Ints}
 end
 
 function plength(f::Spec{T}, x) where {T <: Floats}
-    x2 = tofloat(x)
-    if x2 isa BigFloat
-        return length(Base.MPFR.string_mpfr(x2, string(f))) + 3
-    else
-        return max(f.width, f.precision + 309 + 17 + f.hash + 5)
-    end
+    return max(f.width, f.precision + 309 + 17 + f.hash + 5)
 end
 
 @inline function computelen(substringranges, formats, args)
     len = sum(length, substringranges)
     N = length(formats)
-    # unroll up to 8 formats
-    Base.@nexprs 8 i -> begin
+    # unroll up to 16 formats
+    Base.@nexprs 16 i -> begin
         if N >= i
             len += plength(formats[i], args[i])
         end
     end
-    if N > 8
-        for i = 9:length(formats)
+    if N > 16
+        for i = 17:length(formats)
             len += plength(formats[i], args[i])
         end
     end
@@ -682,7 +707,7 @@ end
     throw(ArgumentError("mismatch between # of format specifiers and provided args: $a != $b"))
 
 function format(io::IO, f::Format, args...) # => Nothing
-    length(args) == length(f.formats) || argmismatch(length(args), length(f.formats))
+    length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
     write(io, resize!(buf, pos - 1))
@@ -690,20 +715,21 @@ function format(io::IO, f::Format, args...) # => Nothing
 end
 
 function format(f::Format, args...) # => String
-    length(args) == length(f.formats) || argmismatch(length(args), length(f.formats))
+    length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
     return String(resize!(buf, pos - 1))
 end
 
 """
-    @printf([io::IOStream], "%Fmt", args...)
+    @printf([io::IO], "%Fmt", args...)
+
 Print `args` using C `printf` style format specification string, with some caveats:
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
 equally close to the numeric values of two possible output strings, the output
 string further away from zero is chosen.
-Optionally, an [`IOStream`](@ref)
+Optionally, an [`IO`](@ref)
 may be passed as the first argument to redirect output.
 See also: [`@sprintf`](@ref)
 # Examples
@@ -729,6 +755,7 @@ end
 
 """
     @sprintf("%Fmt", args...)
+
 Return `@printf` formatted output as string.
 # Examples
 ```jldoctest

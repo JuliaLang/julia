@@ -2,6 +2,8 @@
 
 using Test, Printf
 
+@testset "Printf" begin
+
 @testset "%p" begin
 
     # pointers
@@ -343,6 +345,10 @@ end
     # comprehension
     @test (Printf.@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
+    # more than 16 formats/args
+    @test (Printf.@sprintf "%s %s %s %d %d %d %f %f %f %s %s %s %d %d %d %f %f %f" Any[10^x+(x+1) for x=1:18 ]...) ==
+        "12 103 1004 10005 100006 1000007 10000008.000000 100000009.000000 1000000010.000000 10000000011 100000000012 1000000000013 10000000000014 100000000000015 1000000000000016 10000000000000016.000000 100000000000000016.000000 1000000000000000000.000000"
+
     # Check bug with trailing nul printing BigFloat
     @test (Printf.@sprintf("%.330f", BigFloat(1)))[end] != '\0'
 
@@ -634,3 +640,5 @@ end
     @test Printf.@sprintf("%20.X",  UInt(0)) == "                   0"
 
 end
+
+end # @testset "Printf"
