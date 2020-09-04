@@ -4102,7 +4102,7 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
     if (!val) {
         if (vi.boxroot) {
             // memory optimization: eagerly clear this gc-root now
-            ctx.builder.CreateAlignedStore(V_rnull, vi.boxroot, true, Align(sizeof(void*)));
+            ctx.builder.CreateAlignedStore(V_rnull, vi.boxroot, Align(sizeof(void*)), true);
         }
         if (vi.pTIndex) {
             // We don't care what the contents of the variable are, but it
@@ -4111,7 +4111,7 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
             ctx.builder.CreateAlignedStore(
                 vi.boxroot ? ConstantInt::get(T_int8, 0x80) :
                              ConstantInt::get(T_int8, 0x01),
-                vi.pTIndex, true, Align(1));
+                vi.pTIndex, Align(1), true);
         }
         else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
             assert(vi.value.ispointer());
