@@ -104,6 +104,11 @@ let shastr1 = "ab"^20, shastr2 = "ac"^20
     @test !isless(hash1, hash1)
 end
 
+# Test bad SHA1 values
+@test_throws ArgumentError SHA1("this is not a valid SHA1")
+@test_throws ArgumentError parse(SHA1, "either is this")
+@test tryparse(SHA1, "nor this") === nothing
+
 let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid = UUID(uuidstr)
     @test uuid == eval(Meta.parse(repr(uuid))) # check show method
@@ -121,6 +126,8 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test parse(UUID, uuidstr2) == uuid2
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
+@test_throws ArgumentError parse(UUID, "not a UUID")
+@test tryparse(UUID, "either is this") === nothing
 
 function subset(v::Vector{T}, m::Int) where T
     T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]

@@ -91,6 +91,17 @@ struct SHA1
     end
 end
 SHA1(s::AbstractString) = SHA1(hex2bytes(s))
+parse(::Type{SHA1}, s::AbstractString) = SHA1(s)
+function tryparse(::Type{SHA1}, s::AbstractString)
+    try
+        return parse(SHA1, s)
+    catch e
+        if isa(e, ArgumentError)
+            return nothing
+        end
+        rethrow(e)
+    end
+end
 
 string(hash::SHA1) = bytes2hex(hash.bytes)
 print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)

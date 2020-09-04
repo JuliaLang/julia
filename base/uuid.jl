@@ -71,7 +71,16 @@ end
 end
 
 parse(::Type{UUID}, s::AbstractString) = UUID(s)
-
+function tryparse(::Type{UUID}, s::AbstractString)
+    try
+        return parse(UUID, s)
+    catch e
+        if isa(e, ArgumentError)
+            return nothing
+        end
+        rethrow(e)
+    end
+end
 
 let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
     global string
