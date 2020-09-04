@@ -478,43 +478,35 @@ Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
 function Base.isless(x::CompoundPeriod, y::CompoundPeriod)
     has_other = false
     has_fixed = false
+    x_val::Int64 = 0
+    y_val::Int64 = 0
+    #if any overlap of OtherPeriod or FixedPeriod occurs an error is thrown so it can be treated as x and y val either being in Nanosecond or Month
     for p in x.periods
         if(istype(p) <: FixedPeriod)
             has_fixed = true
+            x_val += convert(Nanosecond,p)
         else
             has_other = true
+            x_val += convert(Month,p)
+        end
+        if(has_fixed && has_other)
+            throw(ErrorException("Can not compare OtherPeriods and FixedPeriods in a CompoundPeriod."))
         end
     end
-    if(has_fixed && has_other)
-        throw(ErrorException("Can not compare OtherPeriods and FixedPeriods in a CompoundPeriod."))
-    end
+
     for p in y.periods
         if(istype(p) <: FixedPeriod)
             has_fixed = true
+            y_val += convert(Nanosecond,p)
         else
             has_other = true
-        end
-    end
-    if(has_fixed && has_other)
-        throw(ErrorException("Can not compare OtherPeriods and FixedPeriods in a CompoundPeriod."))
-    end
-    x_val::Int64 = 0
-    y_val::Int64 = 0
-    if(has_other)
-        for p in x.periods
-            x_val += convert(Month,p)
-        end
-        for p in y.periods
             y_val += convert(Month,p)
         end
-    else
-        for p in x.periods
-            x_val += convert(Nanosecond,p)
-        end
-        for p in y.periods
-            y_val += convert(Nanosecond,p)
+        if(has_fixed && has_other)
+            throw(ErrorException("Can not compare OtherPeriods and FixedPeriods in a CompoundPeriod."))
         end
     end
+
     return x_val < y_val
 end
 # truncating conversions to milliseconds, nanoseconds and days:
