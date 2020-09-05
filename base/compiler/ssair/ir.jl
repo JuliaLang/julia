@@ -981,6 +981,11 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 ssa_rename[idx] = pi_val
                 return result_idx
             end
+        elseif isa(pi_val, Argument)
+            if stmt.typ === compact.ir.argtypes[pi_val.n]
+                ssa_rename[idx] = pi_val
+                return result_idx
+            end
         elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef)
             valtyp = isa(pi_val, QuoteNode) ? typeof(pi_val.value) : typeof(pi_val)
             if valtyp === stmt.typ
