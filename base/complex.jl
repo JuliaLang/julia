@@ -1036,8 +1036,11 @@ end
 
 # recursive arithmetic (fallback)
 
-for op ∈ (:div,:rem,:mod,:mod1,:fld,:fld1,:cld,:ldexp)
-    @eval $op(z::Complex,n) = Complex($op(real(z),n),$op(imag(z),n))
+for op ∈ (:mod,:mod1,:fld,:fld1,:cld,:ldexp)
+    @eval $op(z::Complex,n::Real) = Complex($op(real(z),n),$op(imag(z),n))
+end
+for op ∈ (:div,:rem)
+    @eval $op(z::Complex,n::Real,r::RoundingMode=RoundToZero) = Complex($op(real(z),n,r),$op(imag(z),n,r))
 end
 for op ∈ (:mod2pi,:rem2pi)
     @eval $op(z::Complex) = Complex($op(real(z)), $op(imag(z)))
