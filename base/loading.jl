@@ -824,9 +824,19 @@ function require(into::Module, mod::Symbol)
     return require(uuidkey, cache)
 end
 
+struct PkgOrigin
+    # version::VersionNumber
+    # path::String
+    cachepath::Union{String,Nothing}
+end
+const pkgorigins = Dict{PkgId,PkgOrigin}()
+
 function require(uuidkey::PkgId, cache::TOMLCache=TOMLCache())
     if !root_module_exists(uuidkey)
-        _require(uuidkey, cache)
+        cachefile = _require(uuidkey, cache)
+        if cachefile !== nothing
+            pkgorigins[uuidkey] = PkgOrigin(cachefile)
+        end
         # After successfully loading, notify downstream consumers
         for callback in package_callbacks
             invokelatest(callback, uuidkey)
@@ -881,6 +891,7 @@ function unreference_module(key::PkgId)
     end
 end
 
+# Returns `nothing` or the name of the newly-created cachefile
 function _require(pkg::PkgId, cache::TOMLCache)
     # handle recursive calls to require
     loading = get(package_locks, pkg, false)
@@ -942,7 +953,7 @@ function _require(pkg::PkgId, cache::TOMLCache)
                     if isa(m, Exception)
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     else
-                        return
+                        return cachefile
                     end
                 end
             end
@@ -1257,6 +1268,13 @@ module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
 isvalid_cache_header(f::IOStream) = (0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios))
 isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
+struct CacheHeaderIncludes
+    id::PkgId
+    filename::String
+    mtime::Float64
+    modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
+end
+
 function parse_cache_header(f::IO)
     modules = Vector{Pair{PkgId, UInt64}}()
     while true
@@ -1270,7 +1288,7 @@ function parse_cache_header(f::IO)
     totbytes = read(f, Int64) # total bytes for file dependencies
     # read the list of requirements
     # and split the list into include and requires statements
-    includes = Tuple{PkgId, String, Float64}[]
+    includes = CacheHeaderIncludes[]
     requires = Pair{PkgId, PkgId}[]
     while true
         n2 = read(f, Int32)
@@ -1280,20 +1298,21 @@ function parse_cache_header(f::IO)
         n1 = read(f, Int32)
         # map ids to keys
         modkey = (n1 == 0) ? PkgId("") : modules[n1].first
+        modpath = String[]
         if n1 != 0
-            # consume (and ignore) the module path too
+            # determine the complete module path
             while true
                 n1 = read(f, Int32)
                 totbytes -= 4
                 n1 == 0 && break
-                skip(f, n1) # String(read(f, n1))
+                push!(modpath, String(read(f, n1)))
                 totbytes -= n1
             end
         end
         if depname[1] == '\0'
             push!(requires, modkey => binunpack(depname))
         else
-            push!(includes, (modkey, depname, mtime))
+            push!(includes, CacheHeaderIncludes(modkey, depname, mtime, modpath))
         end
         totbytes -= 4 + 4 + n2 + 8
     end
@@ -1312,11 +1331,20 @@ function parse_cache_header(f::IO)
     return modules, (includes, requires), required_modules, srctextpos
 end
 
-function parse_cache_header(cachefile::String)
+function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
     io = open(cachefile, "r")
     try
         !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
-        return parse_cache_header(io)
+        ret = parse_cache_header(io)
+        srcfiles_only || return ret
+        modules, (includes, requires), required_modules, srctextpos = ret
+        srcfiles = srctext_files(io, srctextpos)
+        delidx = Int[]
+        for (i, chi) in enumerate(includes)
+            chi.filename ∈ srcfiles || push!(delidx, i)
+        end
+        deleteat!(includes, delidx)
+        return modules, (includes, requires), required_modules, srctextpos
     finally
         close(io)
     end
@@ -1324,7 +1352,7 @@ end
 
 function cache_dependencies(f::IO)
     defs, (includes, requires), modules = parse_cache_header(f)
-    return modules, map(mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3]), includes)  # discard the module
+    return modules, map(chi -> (chi.filename, chi.mtime), includes)  # return just filename and mtime
 end
 
 function cache_dependencies(cachefile::String)
@@ -1368,6 +1396,21 @@ function read_dependency_src(cachefile::String, filename::AbstractString)
     end
 end
 
+function srctext_files(f::IO, srctextpos::Int64)
+    files = Set{String}()
+    srctextpos == 0 && return files
+    seek(f, srctextpos)
+    while !eof(f)
+        filenamelen = read(f, Int32)
+        filenamelen == 0 && break
+        fn = String(read(f, filenamelen))
+        len = read(f, UInt64)
+        push!(files, fn)
+        seek(f, position(f) + len)
+    end
+    return files
+end
+
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
 stale_cachefile(modpath::String, cachefile::String) = stale_cachefile(modpath, cachefile, TOMLCache())
@@ -1379,6 +1422,7 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
             return true # invalid cache file
         end
         (modules, (includes, requires), required_modules) = parse_cache_header(io)
+        id = isempty(modules) ? nothing : first(modules).first
         modules = Dict{PkgId, UInt64}(modules)
 
         # Check if transitive dependencies can be fulfilled
@@ -1423,8 +1467,8 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
 
         # now check if this file is fresh relative to its source files
         if !skip_timecheck
-            if !samefile(includes[1][2], modpath)
-                @debug "Rejecting cache file $cachefile because it is for file $(includes[1][2])) not file $modpath"
+            if !samefile(includes[1].filename, modpath)
+                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename)) not file $modpath"
                 return true # cache file was compiled from a different path
             end
             for (modkey, req_modkey) in requires
@@ -1434,7 +1478,8 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
                     return true
                 end
             end
-            for (_, f, ftime_req) in includes
+            for chi in includes
+                f, ftime_req = chi.filename, chi.mtime
                 # Issue #13606: compensate for Docker images rounding mtimes
                 # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
                 ftime = mtime(f)
@@ -1448,6 +1493,10 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
         if !isvalid_file_crc(io)
             @debug "Rejecting cache file $cachefile because it has an invalid checksum"
             return true
+        end
+
+        if isa(id, PkgId)
+            pkgorigins[id] = PkgOrigin(cachefile)
         end
 
         return depmods # fresh cachefile
