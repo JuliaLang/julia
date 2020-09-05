@@ -48,10 +48,9 @@ end
 reinterpret(::Type{T}, a::ReinterpretArray) where {T} = reinterpret(T, a.parent)
 
 # Definition of StridedArray
-ContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}},Tuple{Vararg{ScalarIndex}}},L} = SubArray{T,N,P,I,L}
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
-StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,ContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
-StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,StridedReinterpretArray,ContiguousSubArray}} = ReshapedArray{T,N,A}}
+StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
+StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,StridedReinterpretArray}} = ReshapedArray{T,N,A}
 StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray,StridedReinterpretArray},
     I<:Tuple{Vararg{Union{RangeIndex, ReshapedUnitRange, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
 StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
@@ -63,7 +62,14 @@ StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 # a tuple containing 1 and a cumulative product of the first N-1 sizes
 # this definition is also used for StridedReshapedArray and StridedReinterpretedArray
 # which have the same memory storage as Array
-function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
+stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int) = _stride(a, i)
+
+function stride(a::ReinterpretArray, i::Int)
+    a.parent isa StridedArray || ArgumentError("Parent must be strided.") |> throw
+    return _stride(a, i)
+end
+
+function _stride(a, i)
     if i > ndims(a)
         return length(a)
     end
@@ -74,6 +80,10 @@ function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray
     return s
 end
 
+function strides(a::ReinterpretArray)
+    a.parent isa StridedArray || ArgumentError("Parent must be strided.") |> throw
+    size_to_strides(1, size(a)...)
+end
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
 
 function check_readable(a::ReinterpretArray{T, N, S} where N) where {T,S}
