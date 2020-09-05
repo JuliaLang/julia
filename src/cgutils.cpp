@@ -1078,6 +1078,51 @@ static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type,
                        { msg_val, maybe_decay_untracked(ctx, type), mark_callee_rooted(ctx, boxed(ctx, x))});
 }
 
+// Should agree with `emit_isa` below
+static bool _can_optimize_isa(jl_value_t *type, int &counter)
+{
+    if (counter > 127)
+        return false;
+    if (jl_is_uniontype(type)) {
+        counter++;
+        return (_can_optimize_isa(((jl_uniontype_t*)type)->a, counter) &&
+                _can_optimize_isa(((jl_uniontype_t*)type)->b, counter));
+    }
+    if (jl_is_type_type(type) && jl_pointer_egal(type))
+        return true;
+    if (jl_has_intersect_type_not_kind(type))
+        return false;
+    if (jl_is_concrete_type(type))
+        return true;
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(type);
+    if (jl_is_datatype(dt) && !dt->abstract && jl_subtype(dt->name->wrapper, type))
+        return true;
+    return false;
+}
+
+static bool can_optimize_isa_union(jl_uniontype_t *type)
+{
+    int counter = 1;
+    return (_can_optimize_isa(type->a, counter) && _can_optimize_isa(type->b, counter));
+}
+
+static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x,
+                                        jl_value_t *type, const std::string *msg);
+
+static void emit_isa_union(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type,
+                           SmallVectorImpl<std::pair<BasicBlock*,Value*>> &bbs)
+{
+    if (jl_is_uniontype(type)) {
+        emit_isa_union(ctx, x, ((jl_uniontype_t*)type)->a, bbs);
+        emit_isa_union(ctx, x, ((jl_uniontype_t*)type)->b, bbs);
+        return;
+    }
+    bbs.emplace_back(ctx.builder.GetInsertBlock(), emit_isa(ctx, x, type, nullptr).first);
+    BasicBlock *isaBB = BasicBlock::Create(jl_LLVMContext, "isa", ctx.f);
+    ctx.builder.SetInsertPoint(isaBB);
+}
+
+// Should agree with `_can_optimize_isa` above
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const std::string *msg)
 {
     // TODO: The subtype check below suffers from incorrectness issues due to broken
@@ -1171,6 +1216,28 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                     mark_callee_rooted(ctx, emit_datatype_name(ctx, emit_typeof_boxed(ctx, x))),
                     mark_callee_rooted(ctx, literal_pointer_val(ctx, (jl_value_t*)dt->name))),
                 false);
+    }
+    if (jl_is_uniontype(intersected_type) &&
+        can_optimize_isa_union((jl_uniontype_t*)intersected_type)) {
+        SmallVector<std::pair<BasicBlock*,Value*>,4> bbs;
+        emit_isa_union(ctx, x, intersected_type, bbs);
+        int nbbs = bbs.size();
+        BasicBlock *currBB = ctx.builder.GetInsertBlock();
+        PHINode *res = ctx.builder.CreatePHI(T_int1, nbbs);
+        for (int i = 0; i < nbbs; i++) {
+            auto bb = bbs[i].first;
+            ctx.builder.SetInsertPoint(bb);
+            if (i + 1 < nbbs) {
+                ctx.builder.CreateCondBr(bbs[i].second, currBB, bbs[i + 1].first);
+                res->addIncoming(ConstantInt::get(T_int1, 1), bb);
+            }
+            else {
+                ctx.builder.CreateBr(currBB);
+                res->addIncoming(bbs[i].second, bb);
+            }
+        }
+        ctx.builder.SetInsertPoint(currBB);
+        return {res, false};
     }
     // everything else can be handled via subtype tests
     return std::make_pair(ctx.builder.CreateICmpNE(
