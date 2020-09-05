@@ -127,56 +127,6 @@ julia> selectdim(A, 2, 3)
     return view(A, idxs...)
 end
 
-"""
-    reverse(A; dims::Integer)
-
-Reverse `A` in dimension `dims`.
-
-# Examples
-```jldoctest
-julia> b = [1 2; 3 4]
-2×2 Matrix{Int64}:
- 1  2
- 3  4
-
-julia> reverse(b, dims=2)
-2×2 Matrix{Int64}:
- 2  1
- 4  3
-```
-"""
-function reverse(A::AbstractArray; dims::Integer)
-    nd = ndims(A); d = dims
-    1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
-    if isempty(A)
-        return copy(A)
-    elseif nd == 1
-        return reverse(A)
-    end
-    inds = axes(A)
-    B = similar(A)
-    nnd = 0
-    for i = 1:nd
-        nnd += Int(length(inds[i])==1 || i==d)
-    end
-    indsd = inds[d]
-    sd = first(indsd)+last(indsd)
-    if nnd==nd
-        # reverse along the only non-singleton dimension
-        for i in indsd
-            B[i] = A[sd-i]
-        end
-        return B
-    end
-    let B=B # workaround #15276
-        alli = [ axes(B,n) for n in 1:nd ]
-        for i in indsd
-            B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = selectdim(A, d, i)
-        end
-    end
-    return B
-end
-
 function circshift(a::AbstractArray, shiftamt::Real)
     circshift!(similar(a), a, (Integer(shiftamt),))
 end
