@@ -517,8 +517,7 @@ function perform_lifting!(compact::IncrementalCompact,
 
     if stmt_val in keys(lifted_leaves)
         stmt_val = lifted_leaves[stmt_val]
-    else
-        isa(stmt_val, Union{SSAValue, OldSSAValue}) && stmt_val in keys(reverse_mapping)
+    elseif isa(stmt_val, Union{NewSSAValue, SSAValue, OldSSAValue}) && stmt_val in keys(reverse_mapping)
         stmt_val = RefValue{Any}(lifted_phis[reverse_mapping[stmt_val]].ssa)
     end
 
