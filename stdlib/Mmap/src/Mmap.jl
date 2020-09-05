@@ -335,10 +335,10 @@ const MS_SYNC = 4
 Forces synchronization between the in-memory version of a memory-mapped `Array` or
 [`BitArray`](@ref) and the on-disk version.
 """
-function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
+function sync!(m::Array, flags::Integer=MS_SYNC)
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset
-    mmaplen = length(m) * sizeof(T) + offset
+    mmaplen = sizeof(m) + offset
     GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
                     ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flags) != 0)
@@ -397,10 +397,10 @@ end
 Advises the kernel on the intended usage of the memory-mapped `array`, with the intent
 `flag` being one of the available `MADV_*` constants.
 """
-function madvise!(m::Array{T}, flag::Integer=MADV_NORMAL) where T
+function madvise!(m::Array, flag::Integer=MADV_NORMAL)
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset
-    mmaplen = length(m) * sizeof(T) + offset
+    mmaplen = sizeof(m) + offset
     GC.@preserve m begin
         systemerror("madvise",
                     ccall(:madvise, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flag) != 0)
