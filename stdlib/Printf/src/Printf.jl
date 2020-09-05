@@ -272,7 +272,7 @@ end
     n = i = ndigits(arg2, base=bs, pad=1)
     x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
     arglen = n + (neg || (plus | space)) +
-        (T == Val{'o'} && hash ? 2 : 0) +
+        (T == Val{'o'} && hash ? 1 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
     arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) : arglen
     if !leftalign && !zero && arglen2 < width
@@ -291,8 +291,7 @@ end
     end
     if T == Val{'o'} && hash
         buf[pos] = UInt8('0')
-        buf[pos + 1] = UInt8('o')
-        pos += 2
+        pos += 1
     elseif T == Val{'x'} && hash
         buf[pos] = UInt8('0')
         buf[pos + 1] = UInt8('x')

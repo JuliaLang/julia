@@ -270,6 +270,32 @@ end
 
 end
 
+function _test_flags(val, vflag::AbstractString, fmt::AbstractString, res::AbstractString, prefix::AbstractString)
+    vflag = string("%", vflag)
+    space_fmt = string(length(res) + length(prefix) + 3, fmt)
+    fsign = string((val < 0 ? "-" : "+"), prefix)
+    nsign = string((val < 0 ? "-" : " "), prefix)
+    osign = val < 0 ? string("-", prefix) : string(prefix, "0")
+    esign = string(val < 0 ? "-" : "", prefix)
+    esignend = val < 0 ? "" : " "
+
+    for (flag::AbstractString, ans::AbstractString) in (
+            ("", string("  ", nsign, res)),
+            ("+", string("  ", fsign, res)),
+            (" ", string("  ", nsign, res)),
+            ("0", string(osign, "00", res)),
+            ("-", string(esign, res, "  ", esignend)),
+            ("0+", string(fsign, "00", res)),
+            ("0 ", string(nsign, "00", res)),
+            ("-+", string(fsign, res, "  ")),
+            ("- ", string(nsign, res, "  ")),
+        )
+        fmt_string = string(vflag, flag, space_fmt)
+        fmtd = Printf.format(Printf.Format(fmt_string), val)
+        @test fmtd == ans
+    end
+end
+
 @testset "basics" begin
 
     @test Printf.@sprintf("%%") == "%"
@@ -314,23 +340,46 @@ end
                    ("%u", "42"),
                    ("Test: %i", "Test: 42"),
                    ("%#x", "0x2a"),
-                #    ("%#o", "052"),
                    ("%x", "2a"),
                    ("%X", "2A"),
                    ("% i", " 42"),
                    ("%+i", "+42"),
                    ("%4i", "  42"),
                    ("%-4i", "42  "),
-                #    ("%a", "0x2.ap+4"),
-                #    ("%A", "0X2.AP+4"),
-                #    ("%20a","            0x2.ap+4"),
-                #    ("%-20a","0x2.ap+4            "),
                    ("%f", "42.000000"),
                    ("%g", "42"),
                    ("%e", "4.200000e+01")),
         num in (UInt16(42), UInt32(42), UInt64(42), UInt128(42),
                 Int16(42), Int32(42), Int64(42), Int128(42), big"42")
         @test Printf.format(Printf.Format(fmt), num) == val
+    end
+
+    for i in (
+            (42, "", "i", "42", ""),
+            (42, "", "d", "42", ""),
+
+            (42, "", "u", "42", ""),
+            (42, "", "x", "2a", ""),
+            (42, "", "X", "2A", ""),
+            (42, "", "o", "52", ""),
+
+            (42, "#", "x", "2a", "0x"),
+            (42, "#", "X", "2A", "0X"),
+            (42, "#", "o", "052", ""),
+
+            (1.2345, "", ".2f", "1.23", ""),
+            (1.2345, "", ".2e", "1.23e+00", ""),
+            (1.2345, "", ".2E", "1.23E+00", ""),
+
+            (1.2345, "#", ".0f", "1.", ""),
+            (1.2345, "#", ".0e", "1.e+00", ""),
+            (1.2345, "#", ".0E", "1.E+00", ""),
+
+            (1.2345, "", ".2a", "1.3cp+0", "0x"),
+            (1.2345, "", ".2A", "1.3CP+0", "0X"),
+        )
+        _test_flags(i...)
+        _test_flags(-i[1], i[2:5]...)
     end
 
     # reasonably complex
