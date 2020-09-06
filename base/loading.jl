@@ -1091,7 +1091,8 @@ function load_path_setup_code(load_path::Bool=true)
 end
 
 # this is called in the external process that generates precompiled package files
-function include_package_for_output(input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String}, concrete_deps::typeof(_concrete_dependencies), uuid_tuple::NTuple{2,UInt64}, source::Union{Nothing,String})
+function include_package_for_output(input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String}, concrete_deps::typeof(_concrete_dependencies), uuid_tuple::NTuple{2,UInt64}, source::Union{Nothing,String}, precompiling_interactively::Bool)
+    Base.PRECOMPILING_INTERACTIVELY[] = precompiling_interactively
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
@@ -1114,8 +1115,8 @@ function include_package_for_output(input::String, depot_path::Vector{String}, d
     end
 end
 
-@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},Nothing))
-@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},String))
+@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},Nothing, Bool))
+@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},String, Bool))
 
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
@@ -1148,11 +1149,8 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     # pass PRECOMPILING_INTERACTIVELY state recursively
     write(io.in, """
-        begin
-            Base.PRECOMPILING_INTERACTIVELY[] = $(PRECOMPILING_INTERACTIVELY[])
-            Base.include_package_for_output($(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
-            $(repr(load_path)), $deps, $(repr(uuid_tuple)), $(repr(source_path(nothing))))
-        end
+        Base.include_package_for_output($(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
+            $(repr(load_path)), $deps, $(repr(uuid_tuple)), $(repr(source_path(nothing))), $(PRECOMPILING_INTERACTIVELY[]))
         """)
     close(io.in)
     return io
