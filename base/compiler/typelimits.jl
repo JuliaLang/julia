@@ -335,7 +335,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
 
        typea_nfields = nfields_tfunc(typea)
        typeb_nfields = nfields_tfunc(typeb)
-       if !isa(typea_nfields, Const) || !isa(typea_nfields, Const) || typea_nfields.val !== typeb_nfields.val
+       if !isa(typea_nfields, Const) || !isa(typeb_nfields, Const) || typea_nfields.val !== typeb_nfields.val
             return widenconst(typea)
        end
 
