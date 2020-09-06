@@ -88,7 +88,6 @@ default_svd_alg(A) = DivideAndConquer()
 
 `svd!` is the same as [`svd`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy. See documentation of [`svd`](@ref) for details.
-```
 """
 function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T<:BlasFloat
     m,n = size(A)
@@ -358,7 +357,6 @@ Base.iterate(S::GeneralizedSVD, ::Val{:done}) = nothing
 
 `svd!` is the same as [`svd`](@ref), but modifies the arguments
 `A` and `B` in-place, instead of making copies. See documentation of [`svd`](@ref) for details.
-```
 """
 function svd!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
