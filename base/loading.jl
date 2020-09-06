@@ -1216,8 +1216,8 @@ function compilecache(pkg::PkgId, path::String)
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
     isinteractive() && precompiling_interactively!(true)
     @logmsg verbosity "Precompiling $pkg"
-    precomp_msg = " ► $(pkg.name)"
     should_log_deps = is_precompiling_interactively() && !isinteractive() && (CoreLogging.current_logstate().min_enabled_level > CoreLogging.Debug) #don't print for main package or when in debug
+    precomp_msg = " > $(pkg.name)"
     should_log_deps && print(precomp_msg)
 
     # create a temporary file in `cachepath` directory, write the cache in it,
