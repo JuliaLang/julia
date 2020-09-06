@@ -315,6 +315,16 @@ let K = rand(2,2)
     @test test_29253(K) == 2
 end
 
+function no_op_refint(r)
+    r[]
+    return
+end
+let code = code_typed(no_op_refint,Tuple{Base.RefValue{Int}})[1].first.code
+    @test length(code) == 1
+    @test isa(code[1], Core.ReturnNode)
+    @test code[1].val === nothing
+end
+
 # check getfield elim handling of GlobalRef
 const _some_coeffs = (1,[2],3,4)
 splat_from_globalref(x) = (x, _some_coeffs...,)

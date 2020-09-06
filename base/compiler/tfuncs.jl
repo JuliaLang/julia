@@ -659,7 +659,8 @@ function try_compute_fieldidx(typ::DataType, @nospecialize(field))
     if isa(field, Symbol)
         field = fieldindex(typ, field, false)
         field == 0 && return nothing
-    elseif isa(field, Integer)
+    elseif isa(field, Int)
+        # Numerical field name can only be of type `Int`
         max_fields = fieldcount_noerror(typ)
         max_fields === nothing && return nothing
         (1 <= field <= max_fields) || return nothing
@@ -706,7 +707,8 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), @nospecialize
         return false
     end
 
-    s = unwrap_unionall(widenconst(s00))
+    s0 = widenconst(s00)
+    s = unwrap_unionall(s0)
     if isa(s, Union)
         return getfield_nothrow(rewrap(s.a, s00), name, inbounds) &&
             getfield_nothrow(rewrap(s.b, s00), name, inbounds)
@@ -723,6 +725,8 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), @nospecialize
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false
         field <= s.ninitialized && return true
+        # `try_compute_fieldidx` already check for field index bound.
+        !isvatuple(s) && isbitstype(fieldtype(s0, field)) && return true
     end
 
     return false
