@@ -1146,10 +1146,10 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
                        --eval 'eval(Meta.parse(read(stdin,String)))'`, stderr=stderr),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
-    # pass precompiling_interactively state recursively
+    # pass PRECOMPILING_INTERACTIVELY state recursively
     write(io.in, """
         begin
-            Base.precompiling_interactively!($(is_precompiling_interactively()))
+            Base.PRECOMPILING_INTERACTIVELY[] = $(PRECOMPILING_INTERACTIVELY[])
             Base.include_package_for_output($(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(uuid_tuple)), $(repr(source_path(nothing))))
         end
@@ -1214,10 +1214,10 @@ function compilecache(pkg::PkgId, path::String)
     end
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-    isinteractive() && precompiling_interactively!(true)
+    isinteractive() && (PRECOMPILING_INTERACTIVELY[] = true)
     @logmsg verbosity "Precompiling $pkg"
-    should_log_deps = is_precompiling_interactively() && !isinteractive() && (CoreLogging.current_logstate().min_enabled_level > CoreLogging.Debug) #don't print for main package or when in debug
     precomp_msg = " > $(pkg.name)"
+    should_log_deps = PRECOMPILING_INTERACTIVELY[] && !isinteractive() && (CoreLogging.current_logstate().min_enabled_level > CoreLogging.Debug) #don't print for main package or when in debug
     should_log_deps && print(precomp_msg)
 
     # create a temporary file in `cachepath` directory, write the cache in it,
@@ -1251,8 +1251,6 @@ function compilecache(pkg::PkgId, path::String)
 end
 
 const PRECOMPILING_INTERACTIVELY = Ref{Bool}(false)
-precompiling_interactively!(b::Bool) = PRECOMPILING_INTERACTIVELY[] = b
-is_precompiling_interactively()::Bool = PRECOMPILING_INTERACTIVELY[]::Bool
 
 module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
 
