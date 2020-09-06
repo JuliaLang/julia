@@ -127,10 +127,7 @@ There are three important standard modules:
     By default Julia ships with some standard library modules. These behave like regular
     Julia packages except that you don't need to install them explicitly. For example,
     if you wanted to perform some unit testing, you could load the `Test` standard library
-    as follows:
-    ```julia
-    using Test
-    ```
+    as follows: `using Test`
 
 ### Default top-level definitions and bare modules
 
