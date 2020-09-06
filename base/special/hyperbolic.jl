@@ -58,7 +58,7 @@ function sinh_kernel(x2::Float32)
     return exthorner(x2, (1.0f0, 0.16666648f0, 0.008333524f0, hi_order))
 end
 
-function mysinh(x::T) where T<:Union{Float32,Float64}
+function sinh(x::T) where T<:Union{Float32,Float64}
     # Method
     # mathematically sinh(x) is defined to be (exp(x)-exp(-x))/2
     #    1. Sometimes replace x by |x| (sinh(-x) = -sinh(x)).
@@ -70,7 +70,7 @@ function mysinh(x::T) where T<:Union{Float32,Float64}
     #      d)   H_LARGE_X  <= x < H_OVERFLOW_X
     #               return sinh(x) = exp(x/2)/2 * exp(x/2)
     #               Note that this branch automatically deals with Infs and NaNs
-    
+
     absx = abs(x)
     if absx <= SINH_SMALL_X(T)
         hi, lo = sinh_kernel(x*x)
@@ -97,7 +97,7 @@ function cosh_kernel(x2::Float64)
                          1.1663435515945578e-11))
 end
 
-function mycosh(x::T) where T<:Union{Float32,Float64}
+function cosh(x::T) where T<:Union{Float32,Float64}
     # Method
     # mathematically cosh(x) is defined to be (exp(x)+exp(-x))/2
     #    1. Replace x by |x| (cosh(x) = cosh(-x)).
