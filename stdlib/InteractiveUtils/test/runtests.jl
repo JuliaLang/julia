@@ -577,15 +577,9 @@ file, ln = functionloc(versioninfo, Tuple{})
         e
     end
     @test e isa MethodError
+    m = @which versioninfo()
     s = sprint(showerror, e)
-    m = match(r"at (.*?):[0-9]*", s)
-    @info "DEBUG START"
-    println(s)
-    println(m)
-    println(m.captures[1])
-    println(expanduser(m.captures[1]))
-    @info "DEBUG END"
-
+    m = match(Regex("at (.*?):$(m.line)"), s)
     @test isfile(expanduser(m.captures[1]))
 
     g() = x
