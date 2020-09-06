@@ -307,9 +307,11 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
                 }
                 if (src == NULL || !jl_is_code_info(src)) {
                     src = jl_type_infer(mi, params.world, 0);
-                    codeinst = jl_get_method_inferred(mi, src->rettype, src->min_world, src->max_world);
-                    if (src->inferred && !codeinst->inferred)
-                        codeinst->inferred = jl_nothing;
+                    if (src) {
+                        codeinst = jl_get_method_inferred(mi, src->rettype, src->min_world, src->max_world);
+                        if (src->inferred && !codeinst->inferred)
+                            codeinst->inferred = jl_nothing;
+                    }
                 }
                 if (src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
