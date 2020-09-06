@@ -133,7 +133,7 @@ Standard library changes
 
 #### Dates
 * `Quarter` period is defined ([#35519]).
-
+* `canonicalize` can now take `Period` as an input ([#37391])
 #### Statistics
 
 
