@@ -1607,7 +1607,7 @@ function validate_keymap(keymap)
     end
 end
 
-function keymap(keymaps::Union{Vector{AnyDict},Vector{Dict{Char,Any}}})
+function keymap(@specialize(keymaps::AbstractVector{<:AbstractDict}))
     # keymaps is a vector of prioritized keymaps, with highest priority first
     ret = keymap_unify(map(normalize_keys, reverse(keymaps)))
     validate_keymap(ret)
