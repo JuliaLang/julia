@@ -46,9 +46,9 @@ SINH_SMALL_X(::Type{Float64}) = 2.0
 SINH_SMALL_X(::Type{Float32}) = 4.0
 
 function sinh_kernel(x2::Float64)
-    hi_order = evalpoly(x2, (8.333333333337979e-3, 1.984126984007895e-4, 
+    hi_order = evalpoly(x2, (8.333333333337979e-3, 1.984126984007895e-4,
                              2.755731937687675e-6, 2.5052097364218946e-8,
-                             1.6059510146369204e-10, 7.635683932974871e-13, 
+                             1.6059510146369204e-10, 7.635683932974871e-13,
                              2.9632282505934393e-15))
     return exthorner(x2, (1.0, 0.16666666666666596, hi_order))
 end
@@ -84,7 +84,7 @@ function mysinh(x::T) where T<:Union{Float32,Float64}
 end
 sinh(x::Real) = sinh(float(x))
 
-COSH_SMALL_X(::T) = one(T)
+COSH_SMALL_X(::Type{T}) where T= one(T)
 
 function cosh_kernel(x2::Float32)
     return evalpoly(x2, (1.0f0, 0.49999997f0, 0.041666888f0, 0.0013882756f0, 2.549933f-5))
@@ -92,7 +92,7 @@ end
 
 function cosh_kernel(x2::Float64)
     return evalpoly(x2, (1.0, 0.5000000000000002, 0.04166666666666269,
-                         1.3888888889206764e-3, 2.4801587176784207e-5, 
+                         1.3888888889206764e-3, 2.4801587176784207e-5,
                          2.7557345825742837e-7, 2.0873617441235094e-9,
                          1.1663435515945578e-11))
 end
