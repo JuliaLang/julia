@@ -15,27 +15,27 @@ end
 
 @testset "various constructors" begin
     c = Channel()
-    @test eltype(c) == Any
+    @test eltype(c) === Any
     @test c.sz_max == 0
 
     c = Channel(1)
-    @test eltype(c) == Any
+    @test eltype(c) === Any
     @test put!(c, 1) == 1
     @test isready(c) == true
     @test take!(c) == 1
     @test isready(c) == false
-    @test eltype(Channel(1.0)) == Any
+    @test eltype(Channel(1.0)) === Any
 
     c = Channel{Int}(1)
-    @test eltype(c) == Int
+    @test eltype(c) === Int
     @test_throws MethodError put!(c, "Hello")
 
     c = Channel{Int}()
-    @test eltype(c) == Int
+    @test eltype(c) === Int
     @test c.sz_max == 0
 
     c = Channel{Int}(Inf)
-    @test eltype(c) == Int
+    @test eltype(c) === Int
     pvals = map(i->put!(c,i), 1:10^6)
     tvals = Int[take!(c) for i in 1:10^6]
     @test pvals == tvals
@@ -46,7 +46,7 @@ end
 
 @testset "Task constructors" begin
     c = Channel{Int}() do c; map(i->put!(c,i), 1:100); end
-    @test eltype(c) == Int
+    @test eltype(c) === Int
     @test c.sz_max == 0
     @test collect(c) == 1:100
 
@@ -55,15 +55,15 @@ end
     @test collect(c) == [1, "hi"]
 
     c = Channel(Inf) do c; put!(c,1); end
-    @test eltype(c) == Any
+    @test eltype(c) === Any
     @test c.sz_max == typemax(Int)
     c = Channel{Int}(Inf) do c; put!(c,1); end
-    @test eltype(c) == Int
+    @test eltype(c) === Int
     @test c.sz_max == typemax(Int)
 
     taskref = Ref{Task}()
     c = Channel{Int}(0, taskref=taskref) do c; put!(c, 0); end
-    @test eltype(c) == Int
+    @test eltype(c) === Int
     @test c.sz_max == 0
     @test istaskstarted(taskref[])
     @test !istaskdone(taskref[])
@@ -72,7 +72,7 @@ end
 
     # Legacy constructor
     c = Channel(ctype=Float32, csize=2) do c; map(i->put!(c,i), 1:100); end
-    @test eltype(c) == Float32
+    @test eltype(c) === Float32
     @test c.sz_max == 2
     @test isopen(c)
     @test collect(c) == 1:100

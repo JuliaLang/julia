@@ -27,9 +27,9 @@ dreal = randn(n)/2
 dimg  = randn(n)/2
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
-    a = eltya == Int ? rand(1:7, n, n) :
+    a = eltya === Int ? rand(1:7, n, n) :
         convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    d = if eltya == Int
+    d = if eltya === Int
         Tridiagonal(rand(1:7, n-1), rand(1:7, n), rand(1:7, n-1))
     elseif eltya <: Complex
         convert(Tridiagonal{eltya}, Tridiagonal(
@@ -76,7 +76,7 @@ dimg  = randn(n)/2
             # test Factorization with different eltype
             if eltya <: BlasReal
                 @test Array(Factorization{Float16}(lua)) ≈ Array(lu(convert(Matrix{Float16}, a)))
-                @test eltype(Factorization{Float16}(lua)) == Float16
+                @test eltype(Factorization{Float16}(lua)) === Float16
             end
         end
         # compact printing
@@ -93,7 +93,7 @@ dimg  = randn(n)/2
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d
         @test Array(lud) ≈ d
-        if eltya != Int
+        if eltya !== Int
             dlu = convert.(eltya, [1, 1])
             dia = convert.(eltya, [-2, -2, -2])
             tri = Tridiagonal(dlu, dia, dlu)
@@ -101,9 +101,9 @@ dimg  = randn(n)/2
         end
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-        b  = eltyb == Int ? rand(1:5, n, 2) :
+        b  = eltyb === Int ? rand(1:5, n, 2) :
             convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
-        c  = eltyb == Int ? rand(1:5, n) :
+        c  = eltyb === Int ? rand(1:5, n) :
             convert(Vector{eltyb}, eltyb <: Complex ? complex.(creal, cimg) : creal)
         εb = eps(abs(float(one(eltyb))))
         ε  = max(εa,εb)
@@ -142,7 +142,7 @@ dimg  = randn(n)/2
                 @test norm(b_dest - lua' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua' \ c, 1) < ε*κ*n
 
-                if eltyb != Int && !(eltya <: Complex) || eltya <: Complex && eltyb <: Complex
+                if eltyb !== Int && !(eltya <: Complex) || eltya <: Complex && eltyb <: Complex
                     p = Matrix(b')
                     q = Matrix(c')
                     p_dest = copy(p)
@@ -170,7 +170,7 @@ dimg  = randn(n)/2
                     @test norm(d*(lud\bb) - bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     if eltya <: Real
                         @test norm((transpose(lud)\bb) - Array(transpose(d))\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
-                        if eltya != Int && eltyb != Int
+                        if eltya !== Int && eltyb !== Int
                             @test norm(LinearAlgebra.ldiv!(transpose(lud), copy(bb)) - Array(transpose(d))\bb, 1) < ε*κd*n*2
                         end
                     end

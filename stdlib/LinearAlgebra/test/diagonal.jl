@@ -110,7 +110,7 @@ Random.seed!(1)
             @test transpose(U)*D ≈ transpose(U)*Array(D)
             @test U'*D ≈ U'*Array(D)
 
-            if relty != BigFloat
+            if relty !== BigFloat
                 atol_two = 2n^2 * eps(relty) * (1 + (elty <: Complex))
                 atol_three = 2n^3 * eps(relty) * (1 + (elty <: Complex))
                 @test D\v ≈ DM\v atol=atol_two
@@ -475,7 +475,7 @@ end
 
 @testset "Triangular and Diagonal" begin
     function _test_matrix(type)
-        if type == Int
+        if type === Int
             return rand(1:9, 5, 5)
         else
             return randn(type, 5, 5)
@@ -683,15 +683,15 @@ end
     @test sum(D, dims=1) == sum(Ddense, dims=1)
     @test sum(D, dims=2) == sum(Ddense, dims=2)
     @test sum(D, dims=3) == sum(Ddense, dims=3)
-    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
+    @test typeof(sum(D, dims=1)) === typeof(sum(Ddense, dims=1))
     @test mapreduce(one, min, D, dims=1) == mapreduce(one, min, Ddense, dims=1)
     @test mapreduce(one, min, D, dims=2) == mapreduce(one, min, Ddense, dims=2)
     @test mapreduce(one, min, D, dims=3) == mapreduce(one, min, Ddense, dims=3)
-    @test typeof(mapreduce(one, min, D, dims=1)) == typeof(mapreduce(one, min, Ddense, dims=1))
+    @test typeof(mapreduce(one, min, D, dims=1)) === typeof(mapreduce(one, min, Ddense, dims=1))
     @test mapreduce(zero, max, D, dims=1) == mapreduce(zero, max, Ddense, dims=1)
     @test mapreduce(zero, max, D, dims=2) == mapreduce(zero, max, Ddense, dims=2)
     @test mapreduce(zero, max, D, dims=3) == mapreduce(zero, max, Ddense, dims=3)
-    @test typeof(mapreduce(zero, max, D, dims=1)) == typeof(mapreduce(zero, max, Ddense, dims=1))
+    @test typeof(mapreduce(zero, max, D, dims=1)) === typeof(mapreduce(zero, max, Ddense, dims=1))
 
     D = Diagonal(Int[])
     Ddense = Matrix(D)
@@ -700,7 +700,7 @@ end
     @test sum(D, dims=1) == sum(Ddense, dims=1)
     @test sum(D, dims=2) == sum(Ddense, dims=2)
     @test sum(D, dims=3) == sum(Ddense, dims=3)
-    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
+    @test typeof(sum(D, dims=1)) === typeof(sum(Ddense, dims=1))
 
     D = Diagonal(Int[2])
     Ddense = Matrix(D)
@@ -709,7 +709,7 @@ end
     @test sum(D, dims=1) == sum(Ddense, dims=1)
     @test sum(D, dims=2) == sum(Ddense, dims=2)
     @test sum(D, dims=3) == sum(Ddense, dims=3)
-    @test typeof(sum(D, dims=1)) == typeof(sum(Ddense, dims=1))
+    @test typeof(sum(D, dims=1)) === typeof(sum(Ddense, dims=1))
 end
 
 @testset "logabsdet for generic eltype" begin

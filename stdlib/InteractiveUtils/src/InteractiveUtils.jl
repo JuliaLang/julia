@@ -139,9 +139,9 @@ function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=fa
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
                        (type_close_enough(x, t) ||
-                        (supertypes ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
-                         (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                        x != Any)
+                        (supertypes ? (t <: x && (!isa(x,TypeVar) || x.ub !== Any)) :
+                         (isa(x,TypeVar) && x.ub !== Any && t == x.ub)) &&
+                        x !== Any)
                    end
                end,
                unwrap_unionall(d.sig).parameters)
@@ -189,7 +189,7 @@ function _subtypes(m::Module, x::Type, sts=Base.IdSet{Any}(), visited=Base.IdSet
                 t = t::DataType
                 if t.name.name === s && supertype(t).name == xt.name
                     ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
+                    ti !== Bottom && push!(sts, ti)
                 end
             elseif isa(t, UnionAll)
                 t = t::UnionAll
@@ -198,7 +198,7 @@ function _subtypes(m::Module, x::Type, sts=Base.IdSet{Any}(), visited=Base.IdSet
                 tt = tt::DataType
                 if tt.name.name === s && supertype(tt).name == xt.name
                     ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
+                    ti !== Bottom && push!(sts, ti)
                 end
             elseif isa(t, Module)
                 t = t::Module

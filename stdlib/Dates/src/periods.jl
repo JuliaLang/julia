@@ -172,7 +172,7 @@ struct CompoundPeriod <: AbstractTime
             while j <= n
                 k = j + 1
                 while k <= n
-                    if typeof(p[j]) == typeof(p[k])
+                    if typeof(p[j]) === typeof(p[k])
                         p[j] += p[k]
                         k += 1
                     else

@@ -276,7 +276,7 @@ show(io::IO, ms::MethodList) = show_method_table(io, ms)
 show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
 
 function inbase(m::Module)
-    if m == Base
+    if m === Base
         true
     else
         parent = parentmodule(m)

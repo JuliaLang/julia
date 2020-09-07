@@ -230,7 +230,7 @@ end
     for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128,BigInt),
             b = 2:62,
             _ = 1:10
-        n = (T != BigInt) ? rand(T) : BigInt(rand(Int128))
+        n = (T !== BigInt) ? rand(T) : BigInt(rand(Int128))
         @test parse(T, string(n, base = b),  base = b) == n
     end
     end

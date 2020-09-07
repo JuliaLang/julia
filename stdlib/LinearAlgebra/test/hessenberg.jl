@@ -58,7 +58,7 @@ let n = 10
     end
 
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int), herm in (false, true)
-        A_ = eltya == Int ?
+        A_ = eltya === Int ?
                 rand(1:7, n, n) :
                 convert(Matrix{eltya}, eltya <: Complex ?
                     complex.(Areal, Aimg) :

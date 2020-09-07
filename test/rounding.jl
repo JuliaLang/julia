@@ -159,7 +159,7 @@ end
     end
 
     # rounding vectors
-    let ≈(x,y) = x==y && typeof(x)==typeof(y)
+    let ≈(x,y) = x==y && typeof(x) === typeof(y)
         for t in [Float32,Float64]
             # try different vector lengths
             for n in [0,3,255,256]

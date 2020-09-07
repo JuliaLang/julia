@@ -64,10 +64,10 @@ end
     @test unsigned(true) isa Unsigned
     @test unsigned(true) == unsigned(1)
 
-    @test signed(Bool) == Int
-    @test signed(Bool) == typeof(signed(true))
-    @test unsigned(Bool) == UInt
-    @test unsigned(Bool) == typeof(unsigned(true))
+    @test signed(Bool) === Int
+    @test signed(Bool) === typeof(signed(true))
+    @test unsigned(Bool) === UInt
+    @test unsigned(Bool) === typeof(unsigned(true))
 end
 @testset "bswap" begin
     @test bswap(Int8(3)) == 3
@@ -218,11 +218,11 @@ end
     @test widen(UInt64(3)) === UInt128(3)
     @test widen(UInt128(3)) == 3
 
-    @test typeof(widen(UInt8(3))) == UInt16
-    @test typeof(widen(UInt16(3))) == UInt32
-    @test typeof(widen(UInt32(3))) == UInt64
-    @test typeof(widen(UInt64(3))) == UInt128
-    @test typeof(widen(UInt128(3))) == BigInt
+    @test typeof(widen(UInt8(3))) === UInt16
+    @test typeof(widen(UInt16(3))) === UInt32
+    @test typeof(widen(UInt32(3))) === UInt64
+    @test typeof(widen(UInt64(3))) === UInt128
+    @test typeof(widen(UInt128(3))) === BigInt
 
     @test widen(Int8(-3)) === Int16(-3)
     @test widen(Int16(-3)) === Int32(-3)
@@ -230,11 +230,11 @@ end
     @test widen(Int64(-3)) === Int128(-3)
     @test widen(Int128(-3)) == -3
 
-    @test typeof(widen(Int8(-3))) == Int16
-    @test typeof(widen(Int16(-3))) == Int32
-    @test typeof(widen(Int32(-3))) == Int64
-    @test typeof(widen(Int64(-3))) == Int128
-    @test typeof(widen(Int128(-3))) == BigInt
+    @test typeof(widen(Int8(-3))) === Int16
+    @test typeof(widen(Int16(-3))) === Int32
+    @test typeof(widen(Int32(-3))) === Int64
+    @test typeof(widen(Int64(-3))) === Int128
+    @test typeof(widen(Int128(-3))) === BigInt
 
     @test widemul(false, false) == false
     @test widemul(false, 3) == 0
@@ -295,7 +295,7 @@ end
 @testset "left shift with Vector{Int} on BigInt-scalar #13832" begin
     x = BigInt(1) .<< [1:70;]
     @test x[end] == 1180591620717411303424
-    @test eltype(x) == BigInt
+    @test eltype(x) === BigInt
 end
 
 # issue #9292
@@ -330,7 +330,7 @@ end
 struct MyInt26779 <: Integer
     x::Int
 end
-@test promote_type(MyInt26779, Int) == Integer
+@test promote_type(MyInt26779, Int) === Integer
 @test_throws ErrorException MyInt26779(1) + 1
 let i = MyInt26779(1)
     @test_throws MethodError i >> 1

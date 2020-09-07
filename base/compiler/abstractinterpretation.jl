@@ -1017,7 +1017,7 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
     else
         # non-constant function, but the number of arguments is known
         # and the ft is not a Builtin or IntrinsicFunction
-        if typeintersect(widenconst(ft), Builtin) != Union{}
+        if typeintersect(widenconst(ft), Builtin) !== Union{}
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end

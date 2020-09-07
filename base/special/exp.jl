@@ -88,7 +88,7 @@ function exp(x::T) where T<:Union{Float32,Float64}
     # Float64, which is well within the allowable error; however,
     # 2.718281828459045 is closer to the true value so we prefer that answer,
     # given that 1.0 is such an important argument value.
-    if x == T(1.0) && T == Float64
+    if x == T(1.0) && T === Float64
         return 2.718281828459045235360
     end
     # compute approximation

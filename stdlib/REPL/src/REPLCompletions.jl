@@ -182,7 +182,7 @@ function complete_symbol(sym::String, ffunc, context_module::Module=Main)
         end
     else
         # Looking for a member of a type
-        if t isa DataType && t != Any
+        if t isa DataType && t !== Any
             # Check for cases like Type{typeof(+)}
             if t isa DataType && t.name === Base._TYPE_NAME
                 t = typeof(t.parameters[1])

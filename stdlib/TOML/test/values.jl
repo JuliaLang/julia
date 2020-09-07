@@ -5,7 +5,7 @@ using TOML: Internals
 function testval(s, v)
     f = "foo = $s"
     parsed = TOML.parse(f)["foo"]
-    return isequal(v, parsed) && typeof(v) == typeof(parsed)
+    return isequal(v, parsed) && typeof(v) === typeof(parsed)
 end
 
 function failval(s, v)

@@ -406,7 +406,7 @@ using .Main.Furlongs
         @test isone(one(A))
         @test zero(A) == zero(Matrix(A))
         @test one(A) == one(Matrix(A))
-        @test eltype(one(A)) == typeof(one(eltype(A)))
+        @test eltype(one(A)) === typeof(one(eltype(A)))
     end
 end
 

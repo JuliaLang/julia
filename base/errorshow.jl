@@ -255,7 +255,7 @@ function showerror(io::IO, ex::MethodError)
     else
         if ft <: Function && isempty(ft.parameters) &&
                 isdefined(ft.name.module, name) &&
-                ft == typeof(getfield(ft.name.module, name))
+                ft === typeof(getfield(ft.name.module, name))
             f_is_function = true
         end
         print(io, "no method matching ")
@@ -683,7 +683,7 @@ function print_stackframe(io, i, frame, n, digit_align_width, modulecolordict, m
     if m !== nothing
         while parentmodule(m) !== m
             pm = parentmodule(m)
-            pm == Main && break
+            pm === Main && break
             m = pm
         end
         if !haskey(modulecolordict, m)

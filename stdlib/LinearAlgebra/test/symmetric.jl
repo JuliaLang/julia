@@ -33,7 +33,7 @@ end
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
-        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+        a = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         asym = transpose(a) + a                 # symmetric indefinite
         aherm = a' + a                 # Hermitian indefinite
         apos  = a' * a                 # Hermitian positive definite
@@ -43,9 +43,9 @@ end
         x = randn(n)
         y = randn(n)
         b = randn(n,n)/2
-        x = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(x, zeros(n)) : x)
-        y = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(y, zeros(n)) : y)
-        b = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(b, zeros(n,n)) : b)
+        x = eltya === Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(x, zeros(n)) : x)
+        y = eltya === Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(y, zeros(n)) : y)
+        b = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(b, zeros(n,n)) : b)
         @testset "basic ops" begin
             @testset "constructor" begin
                 @test Symmetric(Symmetric(asym, :U))     === Symmetric(asym, :U)
@@ -198,7 +198,7 @@ end
                 @test isposdef(Symmetric(aposs)) == isposdef(aposs) == true
                 @test isposdef(Hermitian(aherm)) == isposdef(aherm)
                 @test isposdef(Hermitian(apos))  == isposdef(apos) == true
-                if eltya != Int #chol! won't work with Int
+                if eltya !== Int #chol! won't work with Int
                     @test isposdef!(Symmetric(copy(asym)))  == isposdef(asym)
                     @test isposdef!(Symmetric(copy(aposs))) == isposdef(aposs) == true
                     @test isposdef!(Hermitian(copy(aherm))) == isposdef(aherm)
@@ -240,7 +240,7 @@ end
             end
 
             # Revisit when implemented in julia
-            if eltya != BigFloat
+            if eltya !== BigFloat
                 @testset "cond" begin
                     if eltya <: Real #svdvals! has no method for Symmetric{Complex}
                         @test cond(Symmetric(asym)) ≈ cond(asym)
@@ -388,7 +388,7 @@ end
                 for eltyc in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
                     creal = randn(n, n)/2
                     cimag = randn(n, n)/2
-                    c = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimag) : creal)
+                    c = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimag) : creal)
                     symcu = mtype(c, :U)
                     symcl = mtype(c, :L)
                     msymcu = Matrix(symcu)
@@ -400,7 +400,7 @@ end
                 end
 
                 # block matrices
-                blockm = [eltya == Int ? rand(1:7, 3, 3) : convert(Matrix{eltya}, eltya <: Complex ? complex.(randn(3, 3)/2, randn(3, 3)/2) : randn(3, 3)/2) for _ in 1:3, _ in 1:3]
+                blockm = [eltya === Int ? rand(1:7, 3, 3) : convert(Matrix{eltya}, eltya <: Complex ? complex.(randn(3, 3)/2, randn(3, 3)/2) : randn(3, 3)/2) for _ in 1:3, _ in 1:3]
                 symblockmu = mtype(blockm, :U)
                 symblockml = mtype(blockm, :L)
                 msymblockmu = Matrix(symblockmu)
@@ -658,9 +658,9 @@ end
 
 @testset "symmetric()/hermitian() for Numbers" begin
     @test LinearAlgebra.symmetric(1, :U) == 1
-    @test LinearAlgebra.symmetric_type(Int) == Int
+    @test LinearAlgebra.symmetric_type(Int) === Int
     @test LinearAlgebra.hermitian(1, :U) == 1
-    @test LinearAlgebra.hermitian_type(Int) == Int
+    @test LinearAlgebra.hermitian_type(Int) === Int
 end
 
 @testset "sqrt(nearly semidefinite)" begin

@@ -26,7 +26,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                         (UnitLowerTriangular, :L))
 
         # Construct test matrix
-        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 == :U ? t : copy(t')))
+        A1 = t1(elty1 === Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 == :U ? t : copy(t')))
         @test t1(A1) === A1
         @test t1{elty1}(A1) === A1
         # test the ctor works for AbstractMatrix
@@ -50,7 +50,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test isa(similar(A1), t1)
         @test eltype(similar(A1)) == elty1
         @test isa(similar(A1, Int), t1)
-        @test eltype(similar(A1, Int)) == Int
+        @test eltype(similar(A1, Int)) === Int
         @test isa(similar(A1, (3,2)), Matrix{elty1})
         @test isa(similar(A1, Int, (3,2)), Matrix{Int})
 
@@ -196,14 +196,14 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         #exp/log
-        if (elty1 == Float64 || elty1 == ComplexF64) && (t1 == UpperTriangular || t1 == LowerTriangular)
+        if (elty1 === Float64 || elty1 === ComplexF64) && (t1 == UpperTriangular || t1 == LowerTriangular)
             @test exp(Matrix(log(A1))) ≈ A1
         end
 
         # scale
         if (t1 == UpperTriangular || t1 == LowerTriangular)
             unitt = istriu(A1) ? UnitUpperTriangular : UnitLowerTriangular
-            if elty1 == Int
+            if elty1 === Int
                 cr = 2
             else
                 cr = 0.5
@@ -285,7 +285,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         # eigenproblems
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
             vals, vecs = eigen(A1)
-            if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
+            if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 !== Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
                 @test vecs*diagm(0 => vals)/vecs ≈ A1 atol=sqrt(eps(float(real(one(vals[1])))))*(opnorm(A1,Inf)*n)^2
             end
         end
@@ -313,7 +313,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
                 debug && println("elty1: $elty1, A1: $t1, elty2: $elty2")
 
-                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo2 == :U ? t : copy(t')))
+                A2 = t2(elty2 === Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo2 == :U ? t : copy(t')))
 
                 # Convert
                 if elty1 <: Real && !(elty2 <: Integer)
@@ -348,16 +348,16 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test_throws DimensionMismatch transpose(A2) * offsizeA
                 @test_throws DimensionMismatch A2'  * offsizeA
                 @test_throws DimensionMismatch A2   * offsizeA
-                if (uplo1 == uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
+                if (uplo1 == uplo2 && elty1 == elty2 !== Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
                     @test rdiv!(copy(A1), copy(A2)) ≈ A1/A2 ≈ Matrix(A1)/Matrix(A2)
                 end
-                if (uplo1 != uplo2 && elty1 == elty2 != Int && t2 != UnitLowerTriangular && t2 != UnitUpperTriangular)
+                if (uplo1 != uplo2 && elty1 == elty2 !== Int && t2 != UnitLowerTriangular && t2 != UnitUpperTriangular)
                     @test lmul!(adjoint(copy(A1)), copy(A2)) ≈ A1'*A2 ≈ Matrix(A1)'*Matrix(A2)
                     @test lmul!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
                     @test ldiv!(adjoint(copy(A1)), copy(A2)) ≈ A1'\A2 ≈ Matrix(A1)'\Matrix(A2)
                     @test ldiv!(transpose(copy(A1)), copy(A2)) ≈ transpose(A1)\A2 ≈ transpose(Matrix(A1))\Matrix(A2)
                 end
-                if (uplo1 != uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
+                if (uplo1 != uplo2 && elty1 == elty2 !== Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
                     @test rmul!(copy(A1), adjoint(copy(A2))) ≈ A1*A2' ≈ Matrix(A1)*Matrix(A2)'
                     @test rmul!(copy(A1), transpose(copy(A2))) ≈ A1*transpose(A2) ≈ Matrix(A1)*transpose(Matrix(A2))
                     @test rdiv!(copy(A1), adjoint(copy(A2))) ≈ A1/A2' ≈ Matrix(A1)/Matrix(A2)'
@@ -480,8 +480,8 @@ A2real  = randn(n, n)/2
 A2img   = randn(n, n)/2
 
 for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
-    A = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(Areal, Aimg) : Areal)
-    # a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
+    A = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(Areal, Aimg) : Areal)
+    # a2 = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     εa = eps(abs(float(one(eltya))))
 
     for eltyb in (Float32, Float64, ComplexF32, ComplexF64)
@@ -496,7 +496,7 @@ for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         x = Matrix(Atri) \ b
 
         debug && println("Test error estimates")
-        if eltya != BigFloat && eltyb != BigFloat
+        if eltya !== BigFloat && eltyb !== BigFloat
             for i = 1:2
                 @test  norm(x[:,1] .- 1) <= errorbounds(UpperTriangular(A), x, b)[1][i]
             end
@@ -505,7 +505,7 @@ for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
 
         x = Atri \ b
         γ = n*ε/(1 - n*ε)
-        if eltya != BigFloat
+        if eltya !== BigFloat
             bigA = big.(Atri)
             x̂ = fill(1., n, 2)
             for i = 1:size(b, 2)
@@ -524,17 +524,17 @@ for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
         x = Matrix(Atri)\b
 
         debug && println("Test error estimates")
-        if eltya != BigFloat && eltyb != BigFloat
+        if eltya !== BigFloat && eltyb !== BigFloat
             for i = 1:2
                 @test  norm(x[:,1] .- 1) <= errorbounds(UpperTriangular(A), x, b)[1][i]
             end
         end
 
         debug && println("Test forward error [JIN 5705] if this is not a BigFloat")
-        b = (b0 = Atri*fill(1, n, 2); convert(Matrix{eltyb}, eltyb == Int ? trunc.(b0) : b0))
+        b = (b0 = Atri*fill(1, n, 2); convert(Matrix{eltyb}, eltyb === Int ? trunc.(b0) : b0))
         x = Atri \ b
         γ = n*ε/(1 - n*ε)
-        if eltya != BigFloat
+        if eltya !== BigFloat
             bigA = big.(Atri)
             x̂ = fill(1., n, 2)
             for i = 1:size(b, 2)

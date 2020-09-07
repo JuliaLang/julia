@@ -655,7 +655,7 @@ function fieldcount(@nospecialize t)
             throw(ArgumentError("type does not have a definite number of fields"))
         end
         t = t::DataType
-    elseif t == Union{}
+    elseif t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
     if !(t isa DataType)
@@ -1334,7 +1334,7 @@ function bodyfunction(basemethod::Method)
     f = nothing
     if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
         callexpr = ast.code[end-1]
-        if isa(callexpr, Expr) && callexpr.head == :call
+        if isa(callexpr, Expr) && callexpr.head === :call
             fsym = callexpr.args[1]
             if isa(fsym, Symbol)
                 f = getfield(fmod, fsym)

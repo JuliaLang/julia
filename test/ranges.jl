@@ -1067,7 +1067,7 @@ end
     @test convert(LinRange, 0:1:5) === LinRange{Int}(0, 5, 6)
 
     function test_range_index(r, s)
-        @test typeof(r[s]) == typeof(r)
+        @test typeof(r[s]) === typeof(r)
         @test [r;][s] == [r[s];]
     end
     test_range_index(range(0.1, stop=0.3, length=3), 1:2)
@@ -1122,7 +1122,7 @@ end
         big_r = broadcast(big, _r)
         big_rdot = big.(_r)
         @test big_rdot == big_r
-        @test typeof(big_r) == typeof(big_rdot)
+        @test typeof(big_r) === typeof(big_rdot)
         @test typeof(big_r).name === typeof(_r).name
         if eltype(_r) <: AbstractFloat
             @test isa(float_r, typeof(_r))
@@ -1181,7 +1181,7 @@ end
     for r in (big(1):big(2), UInt128(1):UInt128(2), 0x1:0x2)
         local r
         rr = r[r]
-        @test typeof(rr) == typeof(r)
+        @test typeof(rr) === typeof(r)
         @test r[r] == r
         # these calls to similar must not throw:
         @test size(similar(r, size(r))) == size(similar(r, length(r)))

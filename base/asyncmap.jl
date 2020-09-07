@@ -253,7 +253,7 @@ end
 # map on a single BitArray returns a BitArray if the mapping function is boolean.
 function asyncmap(f, b::BitArray; kwargs...)
     b2 = async_usemap(f, b; kwargs...)
-    if eltype(b2) == Bool
+    if eltype(b2) === Bool
         return BitArray(b2)
     end
     return b2

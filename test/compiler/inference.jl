@@ -212,7 +212,7 @@ barTuple2() = fooTuple{tuple(:y)}()
 # issue #6050
 @test Core.Compiler.getfield_tfunc(
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
-          Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
+          Core.Compiler.Const(:vals)) === Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
 # issue #12476
 function f12476(a)
@@ -243,13 +243,13 @@ myeltype(::Type{Any}) = Any
 
 end
 
-@test @inferred(MyColors.myeltype(MyColors.RGB{Float32})) == Float32
-@test @inferred(MyColors.myeltype(MyColors.RGB)) == Any
+@test @inferred(MyColors.myeltype(MyColors.RGB{Float32})) === Float32
+@test @inferred(MyColors.myeltype(MyColors.RGB)) === Any
 
 
 # issue #12826
 f12826(v::Vector{I}) where {I<:Integer} = v[1]
-@test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] == Integer
+@test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] === Integer
 
 
 # non-terminating inference, issue #14009
@@ -325,7 +325,7 @@ mutable struct Foo7810{T<:AbstractVector}
     v::T
 end
 bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
-@test Base.return_types(bar7810,Tuple{})[1] == Array{Foo7810{Array{Tuple{Int,Int},1}},1}
+@test Base.return_types(bar7810,Tuple{})[1] === Array{Foo7810{Array{Tuple{Int,Int},1}},1}
 
 
 # issue #11366
@@ -647,8 +647,8 @@ f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
 @test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Type{Union{Int,String}}]
 let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     fieldtype_nothrow = Core.Compiler.fieldtype_nothrow
-    @test fieldtype_tfunc(Union{}, :x) == Union{}
-    @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
+    @test fieldtype_tfunc(Union{}, :x) === Union{}
+    @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) === Union{}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Real}, Const(:x)) == Type{<:Real}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Array}}, Type{Int32}}, Const(:x)) == Type{Array}
@@ -884,7 +884,7 @@ err20033(x::Float64...) = prod(x)
 
 # nfields tfunc on `DataType`
 let f = ()->Val{nfields(DataType[Int][1])}
-    @test f() == Val{length(DataType.types)}
+    @test f() === Val{length(DataType.types)}
 end
 
 # inference on invalid getfield call
@@ -1054,16 +1054,16 @@ mutable struct SometimesDefined
         return v
     end
 end
-@test isdefined_tfunc(SometimesDefined, Const(:x)) == Bool
+@test isdefined_tfunc(SometimesDefined, Const(:x)) === Bool
 @test isdefined_tfunc(SometimesDefined, Const(:y)) === Const(false)
 @test isdefined_tfunc(Const(Base), Const(:length)) === Const(true)
-@test isdefined_tfunc(Const(Base), Symbol) == Bool
-@test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) == Bool
+@test isdefined_tfunc(Const(Base), Symbol) === Bool
+@test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) === Bool
 @test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
 @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
-@test isdefined_tfunc(Vector{Int}, Const(1)) == Const(false)
-@test isdefined_tfunc(Vector{Any}, Const(1)) == Const(false)
+@test isdefined_tfunc(Vector{Int}, Const(1)) === Const(false)
+@test isdefined_tfunc(Vector{Any}, Const(1)) === Const(false)
 @test isdefined_tfunc(Module, Int) === Union{}
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(0)) === Const(false)
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) === Const(true)
@@ -1124,8 +1124,8 @@ copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test isdefined_tfunc(typeof((a=1,b=2)), Const(1)) === Const(true)
 @test isdefined_tfunc(typeof((a=1,b=2)), Const(2)) === Const(true)
 @test isdefined_tfunc(typeof((a=1,b=2)), Const(3)) === Const(false)
-@test isdefined_tfunc(NamedTuple, Const(1)) == Bool
-@test isdefined_tfunc(NamedTuple, Symbol) == Bool
+@test isdefined_tfunc(NamedTuple, Const(1)) === Bool
+@test isdefined_tfunc(NamedTuple, Symbol) === Bool
 @test Const(false) ⊑ isdefined_tfunc(NamedTuple{(:x,:y)}, Const(:z))
 @test Const(true) ⊑ isdefined_tfunc(NamedTuple{(:x,:y)}, Const(1))
 @test Const(false) ⊑ isdefined_tfunc(NamedTuple{(:x,:y)}, Const(3))
@@ -1246,7 +1246,7 @@ isdefined_f3(x) = isdefined(x, 3)
 let isa_tfunc = Core.Compiler.isa_tfunc
     @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
-    @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
+    @test isa_tfunc(Array, Type{AbstractArray{Int}}) === Bool
     @test isa_tfunc(Array{Real}, Type{AbstractArray{Int}}) === Const(false)
     @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Real, 2})) === Const(true)
     @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Int, 2})) === Const(false)
@@ -1338,12 +1338,12 @@ let egal_tfunc
         @test r === Core.Compiler.egal_tfunc(b, a)
         return r
     end
-    @test egal_tfunc(Const(12345.12345), Const(12344.12345 + 1)) == Const(true)
+    @test egal_tfunc(Const(12345.12345), Const(12344.12345 + 1)) === Const(true)
     @test egal_tfunc(Array, Const(Array)) === Const(false)
     @test egal_tfunc(Array, Type{Array}) === Const(false)
-    @test egal_tfunc(Int, Int) == Bool
-    @test egal_tfunc(Array, Array) == Bool
-    @test egal_tfunc(Array, AbstractArray{Int}) == Bool
+    @test egal_tfunc(Int, Int) === Bool
+    @test egal_tfunc(Array, Array) === Bool
+    @test egal_tfunc(Array, AbstractArray{Int}) === Bool
     @test egal_tfunc(Array{Real}, AbstractArray{Int}) === Const(false)
     @test egal_tfunc(Array{Real, 2}, AbstractArray{Real, 2}) === Bool
     @test egal_tfunc(Array{Real, 2}, AbstractArray{Int, 2}) === Const(false)
@@ -1415,7 +1415,7 @@ using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test !sizeof_nothrow(Type{Union{Int, String}})
 @test sizeof_nothrow(String)
 @test !sizeof_nothrow(Type{String})
-@test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
+@test sizeof_tfunc(Type{Union{Int64, Int32}}) === Const(Core.sizeof(Union{Int64, Int32}))
 let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
     @test sizeof_tfunc(PT) === Const(16)
     @test nfields_tfunc(PT) === Const(2)
@@ -1520,9 +1520,9 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
 
 # inference of `T.mutable`
-@test Core.Compiler.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
-@test Core.Compiler.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
-@test Core.Compiler.getfield_tfunc(DataType, Const(:mutable)) == Bool
+@test Core.Compiler.getfield_tfunc(Const(Int), Const(:mutable)) === Const(false)
+@test Core.Compiler.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) === Const(true)
+@test Core.Compiler.getfield_tfunc(DataType, Const(:mutable)) === Bool
 
 # getfield on abstract named tuples. issue #32698
 import Core.Compiler.getfield_tfunc
@@ -1814,8 +1814,8 @@ end
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union}}) == Type{Union{}}
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any}) == Type
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Any}) == Type
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Int}) == Union{}
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) == Union{}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Int}) === Union{}
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) === Union{}
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Type
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Type
 
@@ -2012,7 +2012,7 @@ Base.iterate(i::Iterator27434, ::Val{2}) = i.z, Val(3)
 Base.iterate(::Iterator27434, ::Any) = nothing
 @test @inferred(splat27434(Iterator27434(1, 2, 3))) == (1, 2, 3)
 @test @inferred((1, 2, 3) == (1, 2, 3))
-@test Core.Compiler.return_type(splat27434, Tuple{typeof(Iterators.repeated(1))}) == Union{}
+@test Core.Compiler.return_type(splat27434, Tuple{typeof(Iterators.repeated(1))}) === Union{}
 
 # issue #32465
 let rt = Base.return_types(splat27434, (NamedTuple{(:x,), Tuple{T}} where T,))
@@ -2259,7 +2259,7 @@ my_tail_const_prop(i, tail...) = tail
 function foo_tail_const_prop()
     Val{my_tail_const_prop(1,2,3,4)}()
 end
-@test (@inferred foo_tail_const_prop()) == Val{(2,3,4)}()
+@test (@inferred foo_tail_const_prop()) === Val{(2,3,4)}()
 
 # PR #28955
 
@@ -2386,7 +2386,7 @@ function foo30783(b)
     f = ()->(use30783(b); Val(a))
     f()
 end
-@test @inferred(foo30783(2)) == Val(1)
+@test @inferred(foo30783(2)) === Val(1)
 
 # PartialStruct tmerge
 using Core.Compiler: PartialStruct, tmerge, Const, ⊑
@@ -2433,8 +2433,8 @@ h28762(::Type{X}) where {X} = Array{f28762(X)}(undef, 0)
 
 @testset "@inferred bug from #28762" begin
     # this works since Julia 1.1
-    @test (@inferred eltype(Array)) == Any
-    @test (@inferred f28762(Array)) == Any
+    @test (@inferred eltype(Array)) === Any
+    @test (@inferred f28762(Array)) === Any
     @inferred g28762(Array{Int})
     @inferred h28762(Array{Int})
     @inferred g28762(Array)
@@ -2624,7 +2624,7 @@ end
 
 f() = _foldl_iter(step, (Missing[],), [0.0], 1)
 end
-@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) === Tuple{Int}
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
 
 # constant prop through keyword arguments

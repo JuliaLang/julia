@@ -514,7 +514,7 @@ function should_send_whole_type(s, t::DataType)
         isanonfunction = mod === Main && # only Main
             t.super === Function && # only Functions
             unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
-            (!isdefined(mod, name) || t != typeof(getfield(mod, name))) # XXX: 95% accurate test for this being an inner function
+            (!isdefined(mod, name) || t !== typeof(getfield(mod, name))) # XXX: 95% accurate test for this being an inner function
             # TODO: more accurate test? (tn.name !== "#" name)
         #TODO: iskw = startswith(tn.name, "#kw#") && ???
         #TODO: iskw && return send-as-kwftype

@@ -524,7 +524,7 @@ module TestPR18218
     A = TypeA[1 2; 3 4]
     b = [1, 2]
     d = A * b
-    @test typeof(d) == Vector{TypeC}
+    @test typeof(d) === Vector{TypeC}
     @test d == TypeC[5, 11]
 end
 

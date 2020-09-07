@@ -270,8 +270,8 @@ end
     n = i = ndigits(arg2, base=bs, pad=1)
     x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
     arglen = n + (neg || (plus | space)) +
-        (T == Val{'o'} && hash ? 1 : 0) +
-        (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
+        (T === Val{'o'} && hash ? 1 : 0) +
+        (T === Val{'x'} && hash ? 2 : 0) + (T === Val{'X'} && hash ? 2 : 0)
     arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) : arglen
     if !leftalign && !zero && arglen2 < width
         # pad left w/ spaces
@@ -287,14 +287,14 @@ end
     elseif space
         buf[pos] = UInt8(' '); pos += 1
     end
-    if T == Val{'o'} && hash
+    if T === Val{'o'} && hash
         buf[pos] = UInt8('0')
         pos += 1
-    elseif T == Val{'x'} && hash
+    elseif T === Val{'x'} && hash
         buf[pos] = UInt8('0')
         buf[pos + 1] = UInt8('x')
         pos += 2
-    elseif T == Val{'X'} && hash
+    elseif T === Val{'X'} && hash
         buf[pos] = UInt8('0')
         buf[pos + 1] = UInt8('X')
         pos += 2
@@ -317,7 +317,7 @@ end
     end
     while i > 0
         @inbounds buf[pos + i - 1] = bs == 16 ?
-            (T == Val{'x'} ? hex[(x & 0x0f) + 1] : HEX[(x & 0x0f) + 1]) :
+            (T === Val{'x'} ? hex[(x & 0x0f) + 1] : HEX[(x & 0x0f) + 1]) :
             (48 + (bs == 8 ? (x & 0x07) : rem(x, 10)))
         if bs == 8
             x >>= 3
@@ -374,15 +374,15 @@ tofloat(x::BigFloat) = x
     elseif x isa BigFloat
         x = Float64(x)
     end
-    if T == Val{'e'} || T == Val{'E'}
+    if T === Val{'e'} || T === Val{'E'}
         newpos = Ryu.writeexp(buf, pos, x, prec, plus, space, hash, char(T), UInt8('.'))
-    elseif T == Val{'f'} || T == Val{'F'}
+    elseif T === Val{'f'} || T === Val{'F'}
         newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
-    elseif T == Val{'g'} || T == Val{'G'}
+    elseif T === Val{'g'} || T === Val{'G'}
         prec = prec == 0 ? 1 : prec
         x = round(x, sigdigits=prec)
-        newpos = Ryu.writeshortest(buf, pos, x, plus, space, hash, prec, T == Val{'g'} ? UInt8('e') : UInt8('E'), true, UInt8('.'))
-    elseif T == Val{'a'} || T == Val{'A'}
+        newpos = Ryu.writeshortest(buf, pos, x, plus, space, hash, prec, T === Val{'g'} ? UInt8('e') : UInt8('E'), true, UInt8('.'))
+    elseif T === Val{'a'} || T === Val{'A'}
         x, neg = x < 0 ? (-x, true) : (x, false)
         newpos = pos
         if neg
@@ -441,7 +441,7 @@ tofloat(x::BigFloat) = x
                 end
                 frac = u > 9 || hash || prec > 0
                 while i > 1
-                    buf[newpos + i] = T == Val{'a'} ? hex[(u & 0x0f) + 1] : HEX[(u & 0x0f) + 1]
+                    buf[newpos + i] = T === Val{'a'} ? hex[(u & 0x0f) + 1] : HEX[(u & 0x0f) + 1]
                     u >>= 4
                     i -= 1
                     prec -= 1
@@ -449,7 +449,7 @@ tofloat(x::BigFloat) = x
                 if frac
                     buf[newpos + 1] = UInt8('.')
                 end
-                buf[newpos] = T == Val{'a'} ? hex[(u & 0x0f) + 1] : HEX[(u & 0x0f) + 1]
+                buf[newpos] = T === Val{'a'} ? hex[(u & 0x0f) + 1] : HEX[(u & 0x0f) + 1]
                 newpos += n + frac
                 while prec > 0
                     buf[newpos] = UInt8('0')

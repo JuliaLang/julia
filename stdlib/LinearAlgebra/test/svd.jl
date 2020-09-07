@@ -46,7 +46,7 @@ areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
-    aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    aa = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = aa' + aa                 # symmetric indefinite
     for a in (aa, view(aa, 1:n, 1:n))
         usv = svd(a)
@@ -89,7 +89,7 @@ aimg  = randn(n,n)/2
             @test_throws ErrorException usv.Z
             @test_throws ErrorException gsvd.Z
             @test gsvd.vals ≈ svdvals(a,a_svd)
-            α = eltya == Int ? -1 : rand(eltya)
+            α = eltya === Int ? -1 : rand(eltya)
             β = svd(α)
             @test β.S == [abs(α)]
             @test svdvals(α) == abs(α)
@@ -130,7 +130,7 @@ aimg  = randn(n,n)/2
             @test svdvals(x, y) ≈  first(svdvals(fill(x, 1, 1), fill(y, 1, 1)))
         end
     end
-    if eltya != Int
+    if eltya !== Int
         @testset "isequal, ==, and hash" begin
             x, y   = rand(eltya), convert(eltya, NaN)
             Fx, Fy = svd(x), svd(y)

@@ -22,7 +22,7 @@ n = 5 # should be odd
     #  axiomatic definition of determinants.
     # If all axioms are satisfied and all the composition rules work,
     #  all determinants will be correct except for floating point errors.
-    if elty != Rational{BigInt}
+    if elty !== Rational{BigInt}
         @testset "det(A::Matrix)" begin
             # The determinant of the identity matrix should always be 1.
             for i = 1:10
@@ -38,7 +38,7 @@ n = 5 # should be odd
             end
 
             # The determinant of a rotation matrix should always be 1.
-            if elty != Int
+            if elty !== Int
                 for theta = convert(Vector{elty}, pi ./ [1:4;])
                     R = [cos(theta) -sin(theta);
                          sin(theta) cos(theta)]
@@ -288,7 +288,7 @@ end
         @test vec(normalize(arr)) == normalize(vec(arr))
     end
 
-    @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
+    @test typeof(normalize([1 2 3; 4 5 6])) === Array{Float64,2}
 end
 
 @testset "Issue #30466" begin
@@ -325,8 +325,8 @@ end
 end
 
 @testset "Issue 19035" begin
-    @test LinearAlgebra.promote_leaf_eltypes([1, 2, [3.0, 4.0]]) == Float64
-    @test LinearAlgebra.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == ComplexF64
+    @test LinearAlgebra.promote_leaf_eltypes([1, 2, [3.0, 4.0]]) === Float64
+    @test LinearAlgebra.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) === ComplexF64
     @test [1, 2, 3] ≈ [1, 2, 3]
     @test [[1, 2], [3, 4]] ≈ [[1, 2], [3, 4]]
     @test [[1, 2], [3, 4]] ≈ [[1.0-eps(), 2.0+eps()], [3.0+2eps(), 4.0-1e8eps()]]

@@ -34,7 +34,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     else
         name = mt.name
         isself = isdefined(ft.name.module, name) &&
-                 ft == typeof(getfield(ft.name.module, name))
+                 ft === typeof(getfield(ft.name.module, name))
         n = length(methods(f))
         m = n==1 ? "method" : "methods"
         sname = string(name)
@@ -872,7 +872,7 @@ end
 
 function show_supertypes(io::IO, typ::DataType)
     print(io, typ)
-    while typ != Any
+    while typ !== Any
         typ = supertype(typ)
         print(io, " <: ", typ)
     end
@@ -910,15 +910,15 @@ print(io::IO, n::Unsigned) = print(io, string(n))
 show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(string(UInt(p), base = 16, pad = Sys.WORD_SIZE>>2))")
 
 has_tight_type(p::Pair) =
-    typeof(p.first)  == typeof(p).parameters[1] &&
-    typeof(p.second) == typeof(p).parameters[2]
+    typeof(p.first)  === typeof(p).parameters[1] &&
+    typeof(p.second) === typeof(p).parameters[2]
 
 isdelimited(io::IO, x) = true
 isdelimited(io::IO, x::Function) = !isoperator(Symbol(x))
 
 # !isdelimited means that the Pair is printed with "=>" (like in "1 => 2"),
 # without its explicit type (like in "Pair{Integer,Integer}(1, 2)")
-isdelimited(io::IO, p::Pair) = !(has_tight_type(p) || get(io, :typeinfo, Any) == typeof(p))
+isdelimited(io::IO, p::Pair) = !(has_tight_type(p) || get(io, :typeinfo, Any) === typeof(p))
 
 function gettypeinfos(io::IO, p::Pair)
     typeinfo = get(io, :typeinfo, Any)
@@ -1237,7 +1237,7 @@ function with_output_color end
 
 const indent_width = 4
 
-is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
+is_expected_union(u::Union) = u.a === Nothing || u.b === Nothing || u.a === Missing || u.b === Missing
 
 emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
     printstyled(io, str; color=col, bold=true) :
@@ -1657,7 +1657,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
         funcargslike = head === :(.) ? (args[2]::Expr).args : args[2:end]
-        show_call(head == :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
+        show_call(head === :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
 
     # comprehensions
     elseif head === :typed_comprehension && nargs == 2
@@ -2024,7 +2024,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     uw = unwrap_unionall(ft)
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
         isdefined(uw.name.module, uw.name.mt.name) &&
-        ft == typeof(getfield(uw.name.module, uw.name.mt.name))
+        ft === typeof(getfield(uw.name.module, uw.name.mt.name))
         print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
     elseif isa(ft, DataType) && ft.name === Type.body.name &&
         (f = ft.parameters[1]; !isa(f, TypeVar))

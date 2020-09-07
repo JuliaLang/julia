@@ -38,7 +38,7 @@ _similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
     if isempty(s)
-        if get(io, :typeinfo, Any) == typeof(s)
+        if get(io, :typeinfo, Any) === typeof(s)
             print(io, "Set()")
         else
             show(io, typeof(s))

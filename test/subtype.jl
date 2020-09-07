@@ -688,8 +688,8 @@ macro testintersect(a, b, result)
         @test $cmp(_type_intersect($b, $a), $result)
         # test simplified intersect
         if !($result === Union{})
-            @test typeintersect($a, $b) != Union{}
-            @test typeintersect($b, $a) != Union{}
+            @test typeintersect($a, $b) !== Union{}
+            @test typeintersect($b, $a) !== Union{}
         end
     end)
 end
@@ -1532,7 +1532,7 @@ end
 
 # issue #31082 and #30741
 @test typeintersect(Tuple{T, Ref{T}, T} where T,
-                    Tuple{Ref{S}, S, S} where S) != Union{}
+                    Tuple{Ref{S}, S, S} where S) !== Union{}
 @testintersect(Tuple{Pair{B,C},Union{C,Pair{B,C}},Union{B,Real}} where {B,C},
                Tuple{Pair{B,C},C,C} where {B,C},
                Tuple{Pair{B,C},C,C} where C<:Union{Real, B} where B)

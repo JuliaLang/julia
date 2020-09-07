@@ -103,7 +103,7 @@ function TCPSocket(fd::OS_HANDLE)
     iolock_end()
     return tcp
 end
-if OS_HANDLE != RawFD
+if OS_HANDLE !== RawFD
     TCPSocket(fd::RawFD) = TCPSocket(Libc._get_osfhandle(fd))
 end
 

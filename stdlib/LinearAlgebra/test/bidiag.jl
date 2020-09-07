@@ -43,7 +43,7 @@ Random.seed!(1)
             @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
         end
         @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
-        @test eltype(Bidiagonal([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == Float32 # promotion test
+        @test eltype(Bidiagonal([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) === Float32 # promotion test
         @test isa(Bidiagonal{elty,Vector{elty}}(GenericArray(dv), ev, :U), Bidiagonal{elty,Vector{elty}})
         @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
         @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
@@ -214,7 +214,7 @@ Random.seed!(1)
             end
             condT = cond(map(ComplexF64,Tfull))
             promty = typeof((zero(relty)*zero(relty) + zero(relty)*zero(relty))/one(relty))
-            if relty != BigFloat
+            if relty !== BigFloat
                 x = transpose(T)\transpose(c)
                 tx = transpose(Tfull) \ transpose(c)
                 elty <: AbstractFloat && @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
@@ -257,7 +257,7 @@ Random.seed!(1)
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
-                    if relty != BigFloat # not supported by pivoted QR
+                    if relty !== BigFloat # not supported by pivoted QR
                         @test T/b' ≈ Tfull/b'
                     end
                 end
@@ -344,7 +344,7 @@ Random.seed!(1)
             end
             # test mul! for BiTrySym * adjoint/transpose AbstractMat
             for f in (identity, transpose, adjoint)
-                C = relty == Int ? rand(float(elty), n, n) : rand(elty, n, n)
+                C = relty === Int ? rand(float(elty), n, n) : rand(elty, n, n)
                 B = rand(elty, n, n)
                 D = copy(C) + 2.0 * Array(T*f(B))
                 mul!(C, T, f(B), 2.0, 1.0) ≈ D
@@ -396,7 +396,7 @@ end
     A = Bidiagonal(fill(1f0,10),fill(1f0,9),:U)
     B = rand(Float64,10,10)
     C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
-    @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
+    @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) === Matrix{Float64}
     @test promote(B,A) == (B, convert(Matrix{Float64}, A))
     @test promote(B,A) isa Tuple{Matrix{Float64}, Matrix{Float64}}
     @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
@@ -490,28 +490,28 @@ end
     @test sum(Bu, dims=1) == sum(Budense, dims=1)
     @test sum(Bu, dims=2) == sum(Budense, dims=2)
     @test sum(Bu, dims=3) == sum(Budense, dims=3)
-    @test typeof(sum(Bu, dims=1)) == typeof(sum(Budense, dims=1))
+    @test typeof(sum(Bu, dims=1)) === typeof(sum(Budense, dims=1))
     @test mapreduce(one, min, Bu, dims=1) == mapreduce(one, min, Budense, dims=1)
     @test mapreduce(one, min, Bu, dims=2) == mapreduce(one, min, Budense, dims=2)
     @test mapreduce(one, min, Bu, dims=3) == mapreduce(one, min, Budense, dims=3)
-    @test typeof(mapreduce(one, min, Bu, dims=1)) == typeof(mapreduce(one, min, Budense, dims=1))
+    @test typeof(mapreduce(one, min, Bu, dims=1)) === typeof(mapreduce(one, min, Budense, dims=1))
     @test mapreduce(zero, max, Bu, dims=1) == mapreduce(zero, max, Budense, dims=1)
     @test mapreduce(zero, max, Bu, dims=2) == mapreduce(zero, max, Budense, dims=2)
     @test mapreduce(zero, max, Bu, dims=3) == mapreduce(zero, max, Budense, dims=3)
-    @test typeof(mapreduce(zero, max, Bu, dims=1)) == typeof(mapreduce(zero, max, Budense, dims=1))
+    @test typeof(mapreduce(zero, max, Bu, dims=1)) === typeof(mapreduce(zero, max, Budense, dims=1))
     @test_throws ArgumentError sum(Bl, dims=0)
     @test sum(Bl, dims=1) == sum(Bldense, dims=1)
     @test sum(Bl, dims=2) == sum(Bldense, dims=2)
     @test sum(Bl, dims=3) == sum(Bldense, dims=3)
-    @test typeof(sum(Bl, dims=1)) == typeof(sum(Bldense, dims=1))
+    @test typeof(sum(Bl, dims=1)) === typeof(sum(Bldense, dims=1))
     @test mapreduce(one, min, Bl, dims=1) == mapreduce(one, min, Bldense, dims=1)
     @test mapreduce(one, min, Bl, dims=2) == mapreduce(one, min, Bldense, dims=2)
     @test mapreduce(one, min, Bl, dims=3) == mapreduce(one, min, Bldense, dims=3)
-    @test typeof(mapreduce(one, min, Bl, dims=1)) == typeof(mapreduce(one, min, Bldense, dims=1))
+    @test typeof(mapreduce(one, min, Bl, dims=1)) === typeof(mapreduce(one, min, Bldense, dims=1))
     @test mapreduce(zero, max, Bl, dims=1) == mapreduce(zero, max, Bldense, dims=1)
     @test mapreduce(zero, max, Bl, dims=2) == mapreduce(zero, max, Bldense, dims=2)
     @test mapreduce(zero, max, Bl, dims=3) == mapreduce(zero, max, Bldense, dims=3)
-    @test typeof(mapreduce(zero, max, Bl, dims=1)) == typeof(mapreduce(zero, max, Bldense, dims=1))
+    @test typeof(mapreduce(zero, max, Bl, dims=1)) === typeof(mapreduce(zero, max, Bldense, dims=1))
 
     Bu = Bidiagonal([2], Int[], :U)
     Budense = Matrix(Bu)
@@ -523,7 +523,7 @@ end
     @test sum(Bu, dims=1) == sum(Budense, dims=1)
     @test sum(Bu, dims=2) == sum(Budense, dims=2)
     @test sum(Bu, dims=3) == sum(Budense, dims=3)
-    @test typeof(sum(Bu, dims=1)) == typeof(sum(Budense, dims=1))
+    @test typeof(sum(Bu, dims=1)) === typeof(sum(Budense, dims=1))
 end
 
 @testset "empty sub-diagonal" begin
@@ -548,7 +548,7 @@ end
 @testset "multiplication of bidiagonal and triangular matrix" begin
     n = 5
     for eltyB in (Int, ComplexF64)
-        if eltyB == Int
+        if eltyB === Int
             BU = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :U)
             BL = Bidiagonal(rand(1:7, n), rand(1:7, n - 1), :L)
         else
@@ -557,7 +557,7 @@ end
         end
         for eltyT in (Int, ComplexF64)
             for TriT in (LowerTriangular, UnitLowerTriangular, UpperTriangular, UnitUpperTriangular)
-                if eltyT == Int
+                if eltyT === Int
                     T = TriT(rand(1:7, n, n))
                 else
                     T = TriT(randn(eltyT, n, n))

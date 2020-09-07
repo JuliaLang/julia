@@ -14,27 +14,27 @@ import Base.MPFR
           parse(BigFloat,"12 ") == parse(BigFloat," 12") == parse(BigFloat," 12 ") ==
           BigFloat(Float32(12.)) == BigFloat(12//1) == BigFloat(SubString("12"))
 
-    @test typeof(BigFloat(typemax(Int8))) == BigFloat
-    @test typeof(BigFloat(typemax(Int16))) == BigFloat
-    @test typeof(BigFloat(typemax(Int32))) == BigFloat
-    @test typeof(BigFloat(typemax(Int64))) == BigFloat
-    @test typeof(BigFloat(typemax(Int128))) == BigFloat
+    @test typeof(BigFloat(typemax(Int8))) === BigFloat
+    @test typeof(BigFloat(typemax(Int16))) === BigFloat
+    @test typeof(BigFloat(typemax(Int32))) === BigFloat
+    @test typeof(BigFloat(typemax(Int64))) === BigFloat
+    @test typeof(BigFloat(typemax(Int128))) === BigFloat
 
-    @test typeof(BigFloat(true)) == BigFloat
-    @test typeof(BigFloat(typemax(UInt8))) == BigFloat
-    @test typeof(BigFloat(typemax(UInt16))) == BigFloat
-    @test typeof(BigFloat(typemax(UInt32))) == BigFloat
-    @test typeof(BigFloat(typemax(UInt64))) == BigFloat
-    @test typeof(BigFloat(typemax(UInt128))) == BigFloat
+    @test typeof(BigFloat(true)) === BigFloat
+    @test typeof(BigFloat(typemax(UInt8))) === BigFloat
+    @test typeof(BigFloat(typemax(UInt16))) === BigFloat
+    @test typeof(BigFloat(typemax(UInt32))) === BigFloat
+    @test typeof(BigFloat(typemax(UInt64))) === BigFloat
+    @test typeof(BigFloat(typemax(UInt128))) === BigFloat
 
-    @test typeof(BigFloat(floatmax(Float32))) == BigFloat
-    @test typeof(BigFloat(floatmax(Float64))) == BigFloat
+    @test typeof(BigFloat(floatmax(Float32))) === BigFloat
+    @test typeof(BigFloat(floatmax(Float64))) === BigFloat
 
-    @test typeof(BigFloat(BigInt(1))) == BigFloat
-    @test typeof(BigFloat(BigFloat(1))) == BigFloat
+    @test typeof(BigFloat(BigInt(1))) === BigFloat
+    @test typeof(BigFloat(BigFloat(1))) === BigFloat
 
-    @test typeof(BigFloat(1//1)) == BigFloat
-    @test typeof(BigFloat(one(Rational{BigInt}))) == BigFloat
+    @test typeof(BigFloat(1//1)) === BigFloat
+    @test typeof(BigFloat(one(Rational{BigInt}))) === BigFloat
 
     # BigFloat constructor respects global precision when not specified
     let prec = precision(BigFloat) < 16 ? 256 : precision(BigFloat) ÷ 2
@@ -64,13 +64,13 @@ end
     @test !(b <= a)
 
     c = parse(BigFloat,"24.69135780242")
-    @test typeof(a * 2) == BigFloat
+    @test typeof(a * 2) === BigFloat
     @test a*2 ≈ c atol=tol
     @test (c-a) ≈ a atol=tol
 
 
     d = parse(BigFloat,"-24.69135780242")
-    @test typeof(d) == BigFloat
+    @test typeof(d) === BigFloat
     @test d+c ≈ 0 atol=tol
 
     @test (BigFloat(3)/BigFloat(2)) ≈ BigFloat(1.5) atol=tol
@@ -400,17 +400,17 @@ end
 end
 @testset "convert to BigFloat" begin
     @test convert(BigFloat, 1//2) == parse(BigFloat,"0.5")
-    @test typeof(convert(BigFloat, 1//2)) == BigFloat
+    @test typeof(convert(BigFloat, 1//2)) === BigFloat
     @test convert(BigFloat, 0.5) == parse(BigFloat,"0.5")
-    @test typeof(convert(BigFloat, 0.5)) == BigFloat
+    @test typeof(convert(BigFloat, 0.5)) === BigFloat
     @test convert(BigFloat, 40) == parse(BigFloat,"40")
-    @test typeof(convert(BigFloat, 40)) == BigFloat
+    @test typeof(convert(BigFloat, 40)) === BigFloat
     @test convert(BigFloat, Float32(0.5)) == parse(BigFloat,"0.5")
-    @test typeof(convert(BigFloat, Float32(0.5))) == BigFloat
+    @test typeof(convert(BigFloat, Float32(0.5))) === BigFloat
     @test convert(BigFloat, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
-    @test typeof(convert(BigFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
+    @test typeof(convert(BigFloat, parse(BigInt,"9223372036854775808"))) === BigFloat
     @test convert(AbstractFloat, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
-    @test typeof(convert(AbstractFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
+    @test typeof(convert(AbstractFloat, parse(BigInt,"9223372036854775808"))) === BigFloat
 
     @test signbit(BigFloat(NaN)) == 0
     @test signbit(BigFloat(-NaN)) == 1
@@ -764,95 +764,95 @@ end
     b = parse(BigInt,"123456789012345678901234567890")
     c = parse(BigInt,"123456789012345678901234567891")
     @test ceil(x) == z
-    @test typeof(ceil(x)) == BigFloat
+    @test typeof(ceil(x)) === BigFloat
     @test floor(x) == y
-    @test typeof(floor(x)) == BigFloat
+    @test typeof(floor(x)) === BigFloat
     @test trunc(x) == y
-    @test typeof(trunc(x)) == BigFloat
+    @test typeof(trunc(x)) === BigFloat
 
     @test ceil(Integer,x) == z
-    @test typeof(ceil(Integer,x)) == BigInt
+    @test typeof(ceil(Integer,x)) === BigInt
     @test floor(Integer,x) == y
-    @test typeof(floor(Integer,x)) == BigInt
+    @test typeof(floor(Integer,x)) === BigInt
     @test trunc(Integer,x) == y
-    @test typeof(trunc(Integer,x)) == BigInt
+    @test typeof(trunc(Integer,x)) === BigInt
 
     @test ceil(Int64, x) == Int64(z)
-    @test typeof(ceil(Int64, x)) == Int64
+    @test typeof(ceil(Int64, x)) === Int64
     @test floor(Int64, x) == Int64(y)
-    @test typeof(floor(Int64, x)) == Int64
+    @test typeof(floor(Int64, x)) === Int64
     @test trunc(Int64, x) == Int64(y)
-    @test typeof(trunc(Int64, x)) == Int64
+    @test typeof(trunc(Int64, x)) === Int64
 
     @test ceil(Int32, x) == Int32(z)
-    @test typeof(ceil(Int32, x)) == Int32
+    @test typeof(ceil(Int32, x)) === Int32
     @test floor(Int32, x) == Int32(y)
-    @test typeof(floor(Int32, x)) == Int32
+    @test typeof(floor(Int32, x)) === Int32
     @test trunc(Int32, x) == Int32(y)
-    @test typeof(trunc(Int32, x)) == Int32
+    @test typeof(trunc(Int32, x)) === Int32
 
     @test ceil(Int16, x) == Int16(z)
-    @test typeof(ceil(Int16, x)) == Int16
+    @test typeof(ceil(Int16, x)) === Int16
     @test floor(Int16, x) == Int16(y)
-    @test typeof(floor(Int16, x)) == Int16
+    @test typeof(floor(Int16, x)) === Int16
     @test trunc(Int16, x) == Int16(y)
-    @test typeof(trunc(Int16, x)) == Int16
+    @test typeof(trunc(Int16, x)) === Int16
 
     #@test ceil(Int8, x) == Int8(z)
-    #@test typeof(ceil(Int8, x)) == Int8
+    #@test typeof(ceil(Int8, x)) === Int8
     #@test floor(Int8, x) == Int8(y)
-    #@test typeof(floor(Int8, x)) == Int8
+    #@test typeof(floor(Int8, x)) === Int8
     #@test trunc(Int8, x) == Int8(y)
-    #@test typeof(trunc(Int8, x)) == Int8
+    #@test typeof(trunc(Int8, x)) === Int8
 
     @test ceil(UInt64, x) == UInt64(z)
-    @test typeof(ceil(UInt64, x)) == UInt64
+    @test typeof(ceil(UInt64, x)) === UInt64
     @test floor(UInt64, x) == UInt64(y)
-    @test typeof(floor(UInt64, x)) == UInt64
+    @test typeof(floor(UInt64, x)) === UInt64
     @test trunc(UInt64, x) == UInt64(y)
-    @test typeof(trunc(UInt64, x)) == UInt64
+    @test typeof(trunc(UInt64, x)) === UInt64
 
     @test ceil(UInt32, x) == UInt32(z)
-    @test typeof(ceil(UInt32, x)) == UInt32
+    @test typeof(ceil(UInt32, x)) === UInt32
     @test floor(UInt32, x) == UInt32(y)
-    @test typeof(floor(UInt32, x)) == UInt32
+    @test typeof(floor(UInt32, x)) === UInt32
     @test trunc(UInt32, x) == UInt32(y)
-    @test typeof(trunc(UInt32, x)) == UInt32
+    @test typeof(trunc(UInt32, x)) === UInt32
 
     @test ceil(UInt16, x) == UInt16(z)
-    @test typeof(ceil(UInt16, x)) == UInt16
+    @test typeof(ceil(UInt16, x)) === UInt16
     @test floor(UInt16, x) == UInt16(y)
-    @test typeof(floor(UInt16, x)) == UInt16
+    @test typeof(floor(UInt16, x)) === UInt16
     @test trunc(UInt16, x) == UInt16(y)
-    @test typeof(trunc(UInt16, x)) == UInt16
+    @test typeof(trunc(UInt16, x)) === UInt16
 
     #@test ceil(UInt8, x) == UInt8(z)
-    #@test typeof(ceil(UInt8, x)) == UInt8
+    #@test typeof(ceil(UInt8, x)) === UInt8
     #@test floor(UInt8, x) == UInt8(y)
-    #@test typeof(floor(UInt8, x)) == UInt8
+    #@test typeof(floor(UInt8, x)) === UInt8
     #@test trunc(UInt8, x) == UInt8(y)
-    #@test typeof(trunc(UInt8, x)) == UInt8
+    #@test typeof(trunc(UInt8, x)) === UInt8
 
     @test ceil(Integer,a) == c
-    @test typeof(ceil(Integer,a)) == BigInt
+    @test typeof(ceil(Integer,a)) === BigInt
     @test floor(Integer,a) == b
-    @test typeof(floor(Integer,a)) == BigInt
+    @test typeof(floor(Integer,a)) === BigInt
     @test trunc(Integer,a) == b
-    @test typeof(trunc(Integer,a)) == BigInt
+    @test typeof(trunc(Integer,a)) === BigInt
 
     @test ceil(Int128,a) == c
-    @test typeof(ceil(Int128,a)) == Int128
+    @test typeof(ceil(Int128,a)) === Int128
     @test floor(Int128,a) == b
-    @test typeof(floor(Int128,a)) == Int128
+    @test typeof(floor(Int128,a)) === Int128
     @test trunc(Int128,a) == b
-    @test typeof(trunc(Int128,a)) == Int128
+    @test typeof(trunc(Int128,a)) === Int128
 
     @test ceil(UInt128,a) == c
-    @test typeof(ceil(UInt128,a)) == UInt128
+    @test typeof(ceil(UInt128,a)) === UInt128
     @test floor(UInt128,a) == b
-    @test typeof(floor(UInt128,a)) == UInt128
+    @test typeof(floor(UInt128,a)) === UInt128
     @test trunc(UInt128,a) == b
-    @test typeof(trunc(UInt128,a)) == UInt128
+    @test typeof(trunc(UInt128,a)) === UInt128
 
     # Issue #33676
     @test trunc(UInt8, parse(BigFloat,"255.1")) == UInt8(255)
@@ -1028,7 +1028,7 @@ end
 
 @testset "big(::Type)" begin
     for x in (2f0, pi, 7.8, big(ℯ))
-        @test big(typeof(x)) == typeof(big(x))
-        @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
+        @test big(typeof(x)) === typeof(big(x))
+        @test big(typeof(complex(x, x))) === typeof(big(complex(x, x)))
     end
 end

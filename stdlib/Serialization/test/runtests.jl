@@ -45,7 +45,7 @@ create_serialization_stream() do s
     for x in ss
         y = deserialize(s)
         @test x == y
-        @test typeof(x) == typeof(y)
+        @test typeof(x) === typeof(y)
     end
 end
 

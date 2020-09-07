@@ -14,7 +14,7 @@ using LinearAlgebra: BlasInt
     Random.seed!(123)
     Ainit = randn(5,5)
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        if elty == ComplexF32 || elty == ComplexF64
+        if elty === ComplexF32 || elty === ComplexF64
             A = complex.(Ainit, Ainit)
         else
             A = Ainit

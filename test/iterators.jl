@@ -13,12 +13,12 @@ let z = zip(1:2)
     @test size(z) == (2,)
     @test collect(z) == [(1,), (2,)]
     # Issue #13979
-    @test eltype(z) == Tuple{Int}
+    @test eltype(z) === Tuple{Int}
 end
 
 for z in (zip(1:2, 3:4), zip(1:2, 3:5))
     @test collect(z) == [(1,3), (2,4)]
-    @test eltype(z) == Tuple{Int,Int}
+    @test eltype(z) === Tuple{Int,Int}
     @test size(z) == (2,)
     @test axes(z) == (Base.OneTo(2),)
     @test length(z) == 2
@@ -26,7 +26,7 @@ end
 
 let z = zip(1:2, Iterators.countfrom(3))
     @test collect(z) == [(1,3), (2,4)]
-    @test eltype(z) == Tuple{Int,Int}
+    @test eltype(z) === Tuple{Int,Int}
     @test_throws MethodError size(z) # by convention, the zip of a finite and
                          # an infinite iterator has only `length`
     @test_throws MethodError axes(z)
@@ -40,7 +40,7 @@ let z = zip([i*j for i in 1:3, j in -1:2:1], 1:6)
                          (1, 4)
                          (2, 5)
                          (3, 6) ]
-    @test eltype(z) == Tuple{Int,Int}
+    @test eltype(z) === Tuple{Int,Int}
     @test_throws DimensionMismatch size(z)
     @test_throws DimensionMismatch axes(z)
     @test length(z) == 6
@@ -50,7 +50,7 @@ let z = zip([i*j for i in 1:3, j in -1:2:1], [i*j for i in 1:3, j in -1:2:1])
     @test collect(z) == [(-1, -1) (1, 1)
                         (-2, -2) (2, 2)
                         (-3, -3) (3, 3)]
-    @test eltype(z) == Tuple{Int,Int}
+    @test eltype(z) === Tuple{Int,Int}
     @test size(z) == (3, 2)
     @test axes(z) == (Base.OneTo(3), Base.OneTo(2))
     @test length(z) == 6
@@ -59,10 +59,10 @@ end
 let z = zip(1:2, 3:4, 5:6)
     @test size(z) == (2,)
     @test collect(z) == [(1,3,5), (2,4,6)]
-    @test eltype(z) == Tuple{Int,Int,Int}
+    @test eltype(z) === Tuple{Int,Int,Int}
 end
 
-@test eltype(Iterators.filter(isodd, 1:5)) == Int
+@test eltype(Iterators.filter(isodd, 1:5)) === Int
 
 # typed `collect`
 @test collect(Float64, Iterators.filter(isodd, [1,2,3,4]))[1] === 1.0
@@ -241,8 +241,8 @@ let i = 0
         i <= 10 || break
     end
 end
-@test eltype(repeated(0))    == Int
-@test eltype(repeated(0, 5)) == Int
+@test eltype(repeated(0))    === Int
+@test eltype(repeated(0, 5)) === Int
 @test Base.IteratorSize(repeated(0))      == Base.IsInfinite()
 @test Base.IteratorSize(repeated(0, 5))   == Base.HasLength()
 @test Base.IteratorEltype(repeated(0))    == Base.HasEltype()
@@ -283,7 +283,7 @@ let (a, b) = (1:3, [4 6;
     @test size(p)    == (3, 2, 2)
     @test length(p)  == 12
     @test ndims(p)   == 3
-    @test eltype(p)  == NTuple{2, Int}
+    @test eltype(p)  === NTuple{2, Int}
     cp = collect(p)
     for i = 1:3
         @test cp[i, :, :] == [(i, 4) (i, 6);
@@ -307,9 +307,9 @@ let a = 1:2,
     @test size(product(a, b, c))   == (2, 10, 0)
 
     # eltype
-    @test eltype(product(a))       == Tuple{Int}
-    @test eltype(product(a, b))    == Tuple{Int, Float64}
-    @test eltype(product(a, b, c)) == Tuple{Int, Float64, Int32}
+    @test eltype(product(a))       === Tuple{Int}
+    @test eltype(product(a, b))    === Tuple{Int, Float64}
+    @test eltype(product(a, b, c)) === Tuple{Int, Float64, Int32}
 
     # ndims
     @test ndims(product(a))        == 1
@@ -435,7 +435,7 @@ end
 @test collect(flatten(Any[flatten(Any[1:2, 4:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,4,5,6,7,8,9]
 @test collect(flatten(Any[flatten(Any[1:2, 6:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,6,7,8,9]
 @test collect(flatten(Any[2:1])) == Any[]
-@test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
+@test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) === Int8
 @test length(flatten(zip(1:3, 4:6))) == 6
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
@@ -584,7 +584,7 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
 end
 
 @testset "collect finite iterators issue #12009" begin
-    @test eltype(collect(enumerate(Iterators.Filter(x -> x>0, randn(10))))) == Tuple{Int, Float64}
+    @test eltype(collect(enumerate(Iterators.Filter(x -> x>0, randn(10))))) === Tuple{Int, Float64}
 end
 
 @testset "product iterator infinite loop" begin
@@ -594,7 +594,7 @@ end
 @testset "filter empty iterable #16704" begin
     arr = filter(n -> true, 1:0)
     @test length(arr) == 0
-    @test eltype(arr) == Int
+    @test eltype(arr) === Int
 end
 
 @testset "Pairs type" begin
@@ -688,7 +688,7 @@ end
         @test peek(a) == 3
         @test sum(a) == 7
     end
-    @test eltype(Iterators.Stateful("a")) == Char
+    @test eltype(Iterators.Stateful("a")) === Char
     # Interaction of zip/Stateful
     let a = Iterators.Stateful("a"), b = ""
 	@test isempty(collect(zip(a,b)))

@@ -43,12 +43,12 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
         b_allzero = false
         b_lastdigit = 0x00
         if e2 >= 0
-            q = log10pow2(e2) - (T == Float64 ? (e2 > 3) : 0)
+            q = log10pow2(e2) - (T === Float64 ? (e2 > 3) : 0)
             e10 = q
             k = pow5_inv_bitcount(T) + pow5bits(q) - 1
             i = -e2 + q + k
             a, b, c = mulshiftinvsplit(T, u, v, w, q, i)
-            if T == Float32 || T == Float16
+            if T === Float32 || T === Float16
                 if q != 0 && div(c - 1, 10) <= div(a, 10)
                     l = pow5_inv_bitcount(T) + pow5bits(q - 1) - 1
                     mul = pow5invsplit_lookup(T, q-1)
@@ -65,13 +65,13 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
                 end
             end
         else
-            q = log10pow5(-e2) - (T == Float64 ? (-e2 > 1) : 0)
+            q = log10pow5(-e2) - (T === Float64 ? (-e2 > 1) : 0)
             e10 = q + e2
             i = -e2 - q
             k = pow5bits(i) - pow5_bitcount(T)
             j = q - k
             a, b, c = mulshiftsplit(T, u, v, w, i, j)
-            if T == Float32 || T == Float16
+            if T === Float32 || T === Float16
                 if q != 0 && div(c - 1, 10) <= div(a, 10)
                     j = q - 1 - (pow5bits(i + 1) - pow5_bitcount(T))
                     mul = pow5split_lookup(T, i+1)
@@ -330,7 +330,7 @@ end
     olength = decimallength(output)
     exp_form = true
     pt = nexp + olength
-    if -4 < pt <= (precision == -1 ? (T == Float16 ? 3 : 6) : precision) &&
+    if -4 < pt <= (precision == -1 ? (T === Float16 ? 3 : 6) : precision) &&
         !(pt >= olength && abs(mod(x + 0.05, 10^(pt - olength)) - 0.05) > 0.05)
         exp_form = false
         if pt <= 0

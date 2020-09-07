@@ -49,8 +49,8 @@ end
     bimg  = randn(n,2)/2
 
     for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
-        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-        a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
+        a = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+        a2 = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
 
         ε = εa = eps(abs(float(one(eltya))))
 
@@ -62,7 +62,7 @@ end
         κ     = cond(apd, 1) #condition number
 
         unary_ops_tests(apd, capd, ε*κ*n)
-        if eltya != Int
+        if eltya !== Int
             @test Factorization{eltya}(capd) === capd
             if eltya <: Real
                 @test Array(Factorization{complex(eltya)}(capd)) ≈ Array(factorize(complex(apd)))
@@ -131,7 +131,7 @@ end
         end
 
         #pivoted upper Cholesky
-        if eltya != BigFloat
+        if eltya !== BigFloat
             cpapd = cholesky(apdh, Val(true))
             unary_ops_tests(apdh, cpapd, ε*κ*n)
             @test rank(cpapd) == n
@@ -141,7 +141,7 @@ end
         end
 
         for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-            b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+            b = eltyb === Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
 
@@ -155,13 +155,13 @@ end
 
                 @test norm(a*(capd\(a'*b)) - b,1)/norm(b,1) <= ε*κ*n # Ad hoc, revisit
 
-                if eltya != BigFloat && eltyb != BigFloat
+                if eltya !== BigFloat && eltyb !== BigFloat
                     lapd = cholesky(apdhL)
                     @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
                     @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
                 end
 
-                if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
+                if eltya !== BigFloat && eltyb !== BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
 
                     cpapd = cholesky(apdh, Val(true))
                     @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
@@ -189,7 +189,7 @@ end
                 ldiv!(capd, BB)
                 @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(apd * BB - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                if eltya != BigFloat
+                if eltya !== BigFloat
                     cpapd = cholesky(apdh, Val(true))
                     BB = copy(B)
                     ldiv!(cpapd, BB)
@@ -220,7 +220,7 @@ end
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                if eltya != BigFloat
+                if eltya !== BigFloat
                     cpapd = cholesky(eltya <: Complex ? apdh : apds, Val(true))
                     BB = copy(B)
                     rdiv!(BB, cpapd)

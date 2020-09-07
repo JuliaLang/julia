@@ -11,11 +11,11 @@
     @test_throws BoundsError getindex('a', 1, 1, 2)
 
     @test 'b' + 1 == 'c'
-    @test typeof('b' + 1) == Char
+    @test typeof('b' + 1) === Char
     @test 1 + 'b' == 'c'
-    @test typeof(1 + 'b') == Char
+    @test typeof(1 + 'b') === Char
     @test 'b' - 1 == 'a'
-    @test typeof('b' - 1) == Char
+    @test typeof('b' - 1) === Char
 
     @test widen('a') === 'a'
     # just check this works
@@ -113,7 +113,7 @@ end
 
     #eltype(c::Char) = Char
     for x in testarrays
-        @test eltype(x) == Char
+        @test eltype(x) === Char
     end
 
     #iterate(c::Char)
@@ -172,15 +172,15 @@ end #end of let block
 @testset "issue #14573" begin
     array = ['a', 'b', 'c'] + [1, 2, 3]
     @test array == ['b', 'd', 'f']
-    @test eltype(array) == Char
+    @test eltype(array) === Char
 
     array = [1, 2, 3] + ['a', 'b', 'c']
     @test array == ['b', 'd', 'f']
-    @test eltype(array) == Char
+    @test eltype(array) === Char
 
     array = ['a', 'b', 'c'] - [0, 1, 2]
     @test array == ['a', 'a', 'a']
-    @test eltype(array) == Char
+    @test eltype(array) === Char
 end
 
 @testset "sprint, repr" begin

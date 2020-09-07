@@ -38,7 +38,7 @@ convert(::Type{Some{T}}, x::Some{T}) where {T} = x
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
 
 function show(io::IO, x::Some)
-    if get(io, :typeinfo, Any) == typeof(x)
+    if get(io, :typeinfo, Any) === typeof(x)
         show(io, x.value)
     else
         print(io, "Some(")

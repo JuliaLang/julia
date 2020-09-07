@@ -398,12 +398,12 @@ end
     @test length(rt) == 1 && rt[1] === Array{Int32, 3}
 end
 @testset "construction" begin
-    @test typeof(Vector{Int}(undef, 3)) == Vector{Int}
-    @test typeof(Vector{Int}()) == Vector{Int}
-    @test typeof(Vector(undef, 3)) == Vector{Any}
-    @test typeof(Vector()) == Vector{Any}
-    @test typeof(Matrix{Int}(undef, 2,3)) == Matrix{Int}
-    @test typeof(Matrix(undef, 2,3)) == Matrix{Any}
+    @test typeof(Vector{Int}(undef, 3)) === Vector{Int}
+    @test typeof(Vector{Int}()) === Vector{Int}
+    @test typeof(Vector(undef, 3)) === Vector{Any}
+    @test typeof(Vector()) === Vector{Any}
+    @test typeof(Matrix{Int}(undef, 2,3)) === Matrix{Int}
+    @test typeof(Matrix(undef, 2,3)) === Matrix{Any}
 
     @test size(Vector{Int}(undef, 3)) == (3,)
     @test size(Vector{Int}()) == (0,)
@@ -427,7 +427,7 @@ end
     x = get(A, (4,4), -12)
     @test x == -12
     X = get(A, -5:5, NaN32)
-    @test eltype(X) == Float32
+    @test eltype(X) === Float32
     @test Base.elsize(X) == sizeof(Float32)
     @test !all(isinteger, X)
     @test isnan.(X) == [trues(6);falses(5)]
@@ -1116,7 +1116,7 @@ end
     @testset "tuples" begin # Issue #25338
         @test union((1, 2), (3)) == [1, 2, 3]
         u = union((1, 0x2), [3])
-        @test eltype(u) == Integer
+        @test eltype(u) === Integer
         @test u == [1, 2, 3]
         @test intersect((1, 2), (3, 2)) == [2]
         @test setdiff((1, 2), (3, 2)) == [1]
@@ -1378,7 +1378,7 @@ end
     fill!(S, 3)
     @test A == [1 1 3; 2 2 3; 1 1 1]
     rt = Base.return_types(fill!, Tuple{Array{Int32, 3}, UInt8})
-    @test length(rt) == 1 && rt[1] == Array{Int32, 3}
+    @test length(rt) == 1 && rt[1] === Array{Int32, 3}
     A = Vector{Union{UInt8,Int8}}(undef, 3)
     fill!(A, UInt8(3))
     @test A == [0x03, 0x03, 0x03]
@@ -1998,8 +1998,8 @@ let x = fill(1.5f0, 10^7)
 end
 
 # PR #10164
-@test eltype(Array{Int}) == Int
-@test eltype(Array{Int,1}) == Int
+@test eltype(Array{Int}) === Int
+@test eltype(Array{Int,1}) === Int
 
 # PR #11080
 let x = fill(0.9, 1000)
@@ -2349,19 +2349,19 @@ end
 
     @test sign.(A) == [-1,0,1]
     @test sign.(B) == [-1,0,1]
-    @test typeof(sign.(A)) == Vector{Int}
-    @test typeof(sign.(B)) == Vector{Float64}
+    @test typeof(sign.(A)) === Vector{Int}
+    @test typeof(sign.(B)) === Vector{Float64}
 
     @test conj(A) == A
     @test conj!(copy(A)) == A
     @test conj(B) == A
     @test conj(C) == [1,-im,0]
-    @test typeof(conj(A)) == Vector{Int}
-    @test typeof(conj(B)) == Vector{Float64}
-    @test typeof(conj(C)) == Vector{Complex{Int}}
+    @test typeof(conj(A)) === Vector{Int}
+    @test typeof(conj(B)) === Vector{Float64}
+    @test typeof(conj(C)) === Vector{Complex{Int}}
 
     @test .~A == [9,-1,-4]
-    @test typeof(.~A) == Vector{Int}
+    @test typeof(.~A) === Vector{Int}
 end
 
 # @inbounds is expression-like, returning its value; #15558
@@ -2622,7 +2622,7 @@ Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 @test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]
 
 #15907
-@test typeof(Array{Int,0}(undef)) == Array{Int,0}
+@test typeof(Array{Int,0}(undef)) === Array{Int,0}
 
 # check a == b for arrays of Union type (#22403)
 let TT = Union{UInt8, Int8}
@@ -2643,7 +2643,7 @@ end
 let a = Vector{Int}[[1]],
     b = Vector{Float64}[[2.0]],
     c = Vector{Char}[['a']]
-    @test eltype([a;b]) == Vector{Float64}
+    @test eltype([a;b]) === Vector{Float64}
     @test eltype([a;c]) == Vector
 end
 
@@ -2807,7 +2807,7 @@ end
     A = Array[rand(2, 3), rand(3, 1)]
     B = Array[rand(2, 2), rand(1, 4)]
     C = hcat(A, B)
-    @test typeof(C) == Array{Array{Float64,2},2}
+    @test typeof(C) === Array{Array{Float64,2},2}
 end
 
 # issue #33974

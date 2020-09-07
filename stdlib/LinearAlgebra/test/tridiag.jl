@@ -53,7 +53,7 @@ end
     @test_throws ArgumentError Tridiagonal(dl, dl, dl)
     @test_throws ArgumentError convert(SymTridiagonal{elty}, Tridiagonal(dl, d, du))
 
-    if elty != Int
+    if elty !== Int
         @testset "issue #1490" begin
             @test det(fill(elty(1),3,3)) ≈ zero(elty) atol=3*eps(real(one(elty)))
             @test det(SymTridiagonal(elty[],elty[])) == one(elty)
@@ -244,7 +244,7 @@ end
                 @test func(func(A)) == A
             end
         end
-        if elty != Int
+        if elty !== Int
             @testset "Simple unary functions" begin
                 for func in (det, inv)
                     @test func(A) ≈ func(fA) atol=n^2*sqrt(eps(real(one(elty))))
@@ -345,7 +345,7 @@ end
                             test_approx_eq_modphase(eigvecs(A), eigvecs(fA))
                             #call to LAPACK.stein here
                             test_approx_eq_modphase(eigvecs(A,eigvals(A)),eigvecs(A))
-                        elseif elty != Int
+                        elseif elty !== Int
                             # check that undef is determined accurately even if type inference
                             # bails out due to the number of try/catch blocks in this code.
                             @test_throws UndefVarError fA
@@ -500,28 +500,28 @@ end
     @test sum(T, dims=1) == sum(Tdense, dims=1)
     @test sum(T, dims=2) == sum(Tdense, dims=2)
     @test sum(T, dims=3) == sum(Tdense, dims=3)
-    @test typeof(sum(T, dims=1)) == typeof(sum(Tdense, dims=1))
+    @test typeof(sum(T, dims=1)) === typeof(sum(Tdense, dims=1))
     @test mapreduce(one, min, T, dims=1) == mapreduce(one, min, Tdense, dims=1)
     @test mapreduce(one, min, T, dims=2) == mapreduce(one, min, Tdense, dims=2)
     @test mapreduce(one, min, T, dims=3) == mapreduce(one, min, Tdense, dims=3)
-    @test typeof(mapreduce(one, min, T, dims=1)) == typeof(mapreduce(one, min, Tdense, dims=1))
+    @test typeof(mapreduce(one, min, T, dims=1)) === typeof(mapreduce(one, min, Tdense, dims=1))
     @test mapreduce(zero, max, T, dims=1) == mapreduce(zero, max, Tdense, dims=1)
     @test mapreduce(zero, max, T, dims=2) == mapreduce(zero, max, Tdense, dims=2)
     @test mapreduce(zero, max, T, dims=3) == mapreduce(zero, max, Tdense, dims=3)
-    @test typeof(mapreduce(zero, max, T, dims=1)) == typeof(mapreduce(zero, max, Tdense, dims=1))
+    @test typeof(mapreduce(zero, max, T, dims=1)) === typeof(mapreduce(zero, max, Tdense, dims=1))
     @test_throws ArgumentError sum(S, dims=0)
     @test sum(S, dims=1) == sum(Sdense, dims=1)
     @test sum(S, dims=2) == sum(Sdense, dims=2)
     @test sum(S, dims=3) == sum(Sdense, dims=3)
-    @test typeof(sum(S, dims=1)) == typeof(sum(Sdense, dims=1))
+    @test typeof(sum(S, dims=1)) === typeof(sum(Sdense, dims=1))
     @test mapreduce(one, min, S, dims=1) == mapreduce(one, min, Sdense, dims=1)
     @test mapreduce(one, min, S, dims=2) == mapreduce(one, min, Sdense, dims=2)
     @test mapreduce(one, min, S, dims=3) == mapreduce(one, min, Sdense, dims=3)
-    @test typeof(mapreduce(one, min, S, dims=1)) == typeof(mapreduce(one, min, Sdense, dims=1))
+    @test typeof(mapreduce(one, min, S, dims=1)) === typeof(mapreduce(one, min, Sdense, dims=1))
     @test mapreduce(zero, max, S, dims=1) == mapreduce(zero, max, Sdense, dims=1)
     @test mapreduce(zero, max, S, dims=2) == mapreduce(zero, max, Sdense, dims=2)
     @test mapreduce(zero, max, S, dims=3) == mapreduce(zero, max, Sdense, dims=3)
-    @test typeof(mapreduce(zero, max, S, dims=1)) == typeof(mapreduce(zero, max, Sdense, dims=1))
+    @test typeof(mapreduce(zero, max, S, dims=1)) === typeof(mapreduce(zero, max, Sdense, dims=1))
 
     T = Tridiagonal(Int[], Int[], Int[])
     Tdense = Matrix(T)
@@ -533,12 +533,12 @@ end
     @test sum(T, dims=1) == sum(Tdense, dims=1)
     @test sum(T, dims=2) == sum(Tdense, dims=2)
     @test sum(T, dims=3) == sum(Tdense, dims=3)
-    @test typeof(sum(T, dims=1)) == typeof(sum(Tdense, dims=1))
+    @test typeof(sum(T, dims=1)) === typeof(sum(Tdense, dims=1))
     @test_throws ArgumentError sum(S, dims=0)
     @test sum(S, dims=1) == sum(Sdense, dims=1)
     @test sum(S, dims=2) == sum(Sdense, dims=2)
     @test sum(S, dims=3) == sum(Sdense, dims=3)
-    @test typeof(sum(S, dims=1)) == typeof(sum(Sdense, dims=1))
+    @test typeof(sum(S, dims=1)) === typeof(sum(Sdense, dims=1))
 
     T = Tridiagonal(Int[], Int[2], Int[])
     Tdense = Matrix(T)
@@ -550,12 +550,12 @@ end
     @test sum(T, dims=1) == sum(Tdense, dims=1)
     @test sum(T, dims=2) == sum(Tdense, dims=2)
     @test sum(T, dims=3) == sum(Tdense, dims=3)
-    @test typeof(sum(T, dims=1)) == typeof(sum(Tdense, dims=1))
+    @test typeof(sum(T, dims=1)) === typeof(sum(Tdense, dims=1))
     @test_throws ArgumentError sum(S, dims=0)
     @test sum(S, dims=1) == sum(Sdense, dims=1)
     @test sum(S, dims=2) == sum(Sdense, dims=2)
     @test sum(S, dims=3) == sum(Sdense, dims=3)
-    @test typeof(sum(S, dims=1)) == typeof(sum(Sdense, dims=1))
+    @test typeof(sum(S, dims=1)) === typeof(sum(Sdense, dims=1))
 end
 
 @testset "Issue #28994 (sum of Tridigonal and UniformScaling)" begin

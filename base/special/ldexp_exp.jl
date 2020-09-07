@@ -37,7 +37,7 @@ exponent_lshift(T::Type{Float64}, hw) = hw << 20 # this comes from 32 (bits in U
 
 function modify_exponent(x::T, expnt_x) where T <: Union{Float32, Float64}
     # mask away exponent; "100...0111..111" with 9 or 12 leading 0's
-    high_mask = T == Float32 ? 0x807fffff : 0x800fffff # don't mask away the sign
+    high_mask = T === Float32 ? 0x807fffff : 0x800fffff # don't mask away the sign
     # use mask to replace with first 9 or 12 bits with expnt_x << appropriately
     modify_highword(x, (highword(x) & high_mask) | exponent_lshift(T, expnt_x))
 end
@@ -89,7 +89,7 @@ function _frexp_exp(x::T) where T<:Union{Float32, Float64}
 
     # We use exp(x) = exp(x - kln2) * 2**k, carefully chosen to
     # minimize |exp(kln2) - 2**k|.
-    kr = T == Float32 ? UInt32(235) : UInt32(1799)
+    kr = T === Float32 ? UInt32(235) : UInt32(1799)
 
     # We also scale the exponent of exp_x to exponent_bias + the largest finite
     # exponent (exponent of T(Inf)-1, so that the result can be multiplied by

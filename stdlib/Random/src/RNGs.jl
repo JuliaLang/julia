@@ -591,7 +591,7 @@ for T in BitInteger_types
         A
     end
 
-    T == UInt128 && continue
+    T === UInt128 && continue
 
     @eval function rand!(r::MersenneTwister, A::UnsafeView{$T}, ::SamplerType{$T})
         n = length(A)

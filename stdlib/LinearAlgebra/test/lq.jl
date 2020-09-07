@@ -29,7 +29,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
     @test abs(lq(α).Q[1,1]) ≈ one(eltya)
 
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-        b = eltyb == Int ? rand(1:5, m, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? bcomplex : real(bcomplex))
+        b = eltyb === Int ? rand(1:5, m, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? bcomplex : real(bcomplex))
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
@@ -69,7 +69,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     @test x ≈ qra \ b rtol=3000ε
                     @test lqa*x ≈ a*x rtol=3000ε
                     @test (sq = size(q.factors, 2); *(Matrix{eltyb}(I, sq, sq), adjoint(q))*squareQ(q)) ≈ Matrix(I, n, n) rtol=5000ε
-                    if eltya != Int
+                    if eltya !== Int
                         @test Matrix{eltyb}(I, n, n)*q ≈ convert(AbstractMatrix{tab},q)
                     end
                     @test q*x ≈ squareQ(q)*x rtol=100ε
