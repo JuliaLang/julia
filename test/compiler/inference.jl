@@ -2691,6 +2691,8 @@ function symcmp36230(vec)
     a, b = vec[1], vec[2]
     if isa(a, Symbol) && isa(b, Symbol)
         return a == b
+    elseif isa(a, Int) && isa(b, Int)
+        return a == b
     end
     return false
 end
