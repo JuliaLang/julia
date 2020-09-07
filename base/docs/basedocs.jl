@@ -2394,6 +2394,17 @@ another named tuple.
 NamedTuple{names}(nt::NamedTuple)
 
 """
+    NamedTuple(itr)
+
+Construct a named tuple from an iterator of key-value pairs (where the keys must be
+`Symbol`s). Equivalent to `(; itr...)`.
+
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+"""
+NamedTuple(itr)
+
+"""
     typeassert(x, type)
 
 Throw a [`TypeError`](@ref) unless `x isa type`.
