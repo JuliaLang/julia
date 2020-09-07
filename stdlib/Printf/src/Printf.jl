@@ -705,6 +705,16 @@ end
 @noinline argmismatch(a, b) =
     throw(ArgumentError("mismatch between # of format specifiers and provided args: $a != $b"))
 
+"""
+    Printf.format(f::Printf.Format, args...) => String
+    Printf.format(io::IO, f::Printf.Format, args...)
+
+Apply a printf format object `f` to provided `args` and return the formatted string
+(1st method), or print directly to an `io` object (2nd method). See [`@printf`](@ref)
+for more details on C `printf` support.
+"""
+function format end
+
 function format(io::IO, f::Format, args...) # => Nothing
     length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
