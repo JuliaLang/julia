@@ -250,7 +250,6 @@ using .Filesystem
 include("cmd.jl")
 include("process.jl")
 include("ttyhascolor.jl")
-include("grisu/grisu.jl")
 include("secretbuffer.jl")
 
 # core math functions

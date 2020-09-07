@@ -55,6 +55,12 @@ Build system changes
   `./julia-installer.exe /TASKS="desktopicon,startmenu,addtopath"`, adds a desktop
   icon, a startmenu group icon, and adds Julia to system PATH.
 
+
+Library functions
+-----------------
+* The `Base.Grisu` code has been officially removed (float printing was switched to the ryu algorithm code in 1.4)
+
+
 New library functions
 ---------------------
 
@@ -99,6 +105,13 @@ Standard library changes
 * `(+)(::UniformScaling)` is now defined, making `+I` a valid unary operation. ([#36784])
 
 #### Markdown
+
+#### Printf
+
+* Complete overhaul of internal code to use the ryu float printing algorithms (from Julia 1.4); leads to consistent 2-5x performance improvements
+* New `Printf.tofloat` function allowing custom float types to more easily integrate with Printf formatting by converting their type to `Float16`, `Float32`, `Float64`, or `BigFloat`
+* New `Printf.format"..."` and `Printf.Format(...)` functions that allow creating `Printf.Format` objects that can be passed to `Printf.format` for easier dynamic printf formatting
+* `Printf.format(f::Printf.Format, args...)` as a non-macro function that applies a printf format `f` to provided `args`
 
 
 #### Random
