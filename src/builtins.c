@@ -1581,6 +1581,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
     add_builtin("MethodInstance", (jl_value_t*)jl_method_instance_type);
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
+    add_builtin("AbstractRef", (jl_value_t*)jl_abstract_ref_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);

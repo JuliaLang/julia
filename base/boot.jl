@@ -77,6 +77,7 @@
 #mutable struct TypeMapEntry
 #end
 
+#abstract type AbstractRef{T} end
 #abstract type Ref{T} end
 #primitive type Ptr{T} <: Ref{T} {32|64} end
 
@@ -161,7 +162,7 @@ export
     Function, Method,
     Module, Symbol, Task, Array, UndefInitializer, undef, WeakRef, VecElement,
     # numeric types
-    Number, Real, Integer, Bool, Ref, Ptr,
+    Number, Real, Integer, Bool, AbstractRef, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,

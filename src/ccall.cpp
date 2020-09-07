@@ -992,7 +992,7 @@ public:
 private:
 std::string generate_func_sig(const char *fname)
 {
-    assert(rt && !jl_is_abstract_ref_type(rt));
+    assert(rt && !jl_is_ref_type(rt));
 
     std::vector<AttrBuilder> paramattrs;
     std::unique_ptr<AbiLayout> abi;
@@ -1034,7 +1034,7 @@ std::string generate_func_sig(const char *fname)
         jl_value_t *tti = jl_svecref(at, i);
         Type *t = NULL;
         bool isboxed;
-        if (jl_is_abstract_ref_type(tti)) {
+        if (jl_subtype(tti, (jl_value_t*)jl_abstract_ref_type)) {
             tti = (jl_value_t*)jl_voidpointer_type;
             t = T_pint8;
             isboxed = false;
@@ -1307,7 +1307,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ? (jl_unionall_t*)ctx.linfo->def.method->sig
         : NULL;
 
-    if (jl_is_abstract_ref_type(rt)) {
+    if (jl_is_ref_type(rt)) {
         if (!verify_ref_type(ctx, jl_tparam0(rt), unionall, 0, "ccall")) {
             JL_GC_POP();
             return jl_cgval_t();
@@ -1352,7 +1352,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                        cc, llvmcall, &ctx.emission_context);
     for (size_t i = 0; i < nccallargs; i++) {
         jl_value_t *tti = jl_svecref(at, i);
-        if (jl_is_abstract_ref_type(tti)) {
+        if (jl_is_ref_type(tti)) {
             if (!verify_ref_type(ctx, jl_tparam0(tti), unionall, i + 1, "ccall")) {
                 JL_GC_POP();
                 return jl_cgval_t();
@@ -1378,7 +1378,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *ary;
         Type *largty;
         bool isboxed;
-        if (jl_is_abstract_ref_type(tti)) {
+        if (jl_is_ref_type(tti)) {
             tti = (jl_value_t*)jl_voidpointer_type;
             largty = T_size;
             isboxed = false;
@@ -1759,17 +1759,16 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 jl_add_method_root(ctx, jargty_in_env);
         }
 
-        Value *v;
-        if (jl_is_abstract_ref_type(jargty)) {
+        if (jl_subtype(jargty, (jl_value_t*)jl_abstract_ref_type)) {
             if (!jl_is_cpointer_type(arg.typ)) {
-                emit_cpointercheck(ctx, arg, "ccall: argument to Ref{T} is not a pointer");
+                emit_cpointercheck(ctx, arg, "ccall: argument to <:AbstractRef{T} is not a pointer");
                 arg.typ = (jl_value_t*)jl_voidpointer_type;
                 arg.isboxed = false;
             }
             jargty_in_env = (jl_value_t*)jl_voidpointer_type;
         }
 
-        v = julia_to_native(ctx, largty, toboxed, jargty_in_env, unionall_env, arg, byRef, ai);
+        Value *v = julia_to_native(ctx, largty, toboxed, jargty_in_env, unionall_env, arg, byRef, ai);
         bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type);
         if (byRef) {
             v = decay_derived(ctx, v);

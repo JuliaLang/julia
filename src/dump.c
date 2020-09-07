@@ -2557,7 +2557,7 @@ void jl_init_serializer(void)
                      jl_box_int64(21),
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
-                     jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
+                     jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_abstract_ref_type, jl_ref_type,
                      jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_nothing_type,
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type,

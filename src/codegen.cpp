@@ -4843,7 +4843,7 @@ static Function* gen_cfun_wrapper(
         assert(sig.fargt_sig.at(i + sig.sret) == val->getType());
         jl_cgval_t &inputarg = inputargs[i + 1];
         jl_value_t *jargty = jl_svecref(sig.at, i);
-        bool aref = jl_is_abstract_ref_type(jargty);
+        bool aref = jl_is_ref_type(jargty);
         if (aref) // a pointer to a value
             jargty = jl_tparam0(jargty);
 
@@ -5216,7 +5216,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         sparam_vals = ctx.linfo->sparam_vals;
 
     jl_value_t *rt = declrt;
-    if (jl_is_abstract_ref_type(declrt)) {
+    if (jl_is_ref_type(declrt)) {
         declrt = jl_tparam0(declrt);
         if (!verify_ref_type(ctx, declrt, unionall_env, 0, "cfunction")) {
             return jl_cgval_t();
@@ -5271,7 +5271,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         approx = true;
     for (size_t i = 0; i < nargt; i++) {
         jl_value_t *jargty = jl_svecref(argt, i);
-        if (jl_is_abstract_ref_type(jargty)) {
+        if (jl_is_ref_type(jargty)) {
             jargty = jl_tparam0(jargty);
             if (!verify_ref_type(ctx, jargty, unionall_env, i + 1, "cfunction")) {
                 JL_GC_POP();
@@ -5376,7 +5376,7 @@ void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declr
     assert(ff);
     const char *name = jl_symbol_name(ft->name->mt->name);
     jl_value_t *crt = declrt;
-    if (jl_is_abstract_ref_type(declrt)) {
+    if (jl_is_ref_type(declrt)) {
         declrt = jl_tparam0(declrt);
         crt = (jl_value_t*)jl_any_type;
     }
