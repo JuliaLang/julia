@@ -27,6 +27,7 @@ export # also exported by Base
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     # order & algorithm:
     sort,
     sort!,
@@ -517,11 +518,13 @@ function insorted(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::
     end
 end
 
-@eval begin
-    $insorted(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $insorted(v,x,first(inds),last(inds),o))
-    $insorted(v::AbstractVector, x;
-       lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-        $insorted(v,x,ord(lt,by,rev,order))
+for s in [:insorted]
+    @eval begin
+        $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
+        $s(v::AbstractVector, x;
+           lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
+            $s(v,x,ord(lt,by,rev,order))
+    end
 end
 
 """
