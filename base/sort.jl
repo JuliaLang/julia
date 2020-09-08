@@ -408,7 +408,7 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 ```
 """ searchsortedlast
 
-function insorted(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
+function _insortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
     if x > v[hi]
         return false
     end
@@ -421,6 +421,50 @@ function insorted(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool where T
             lo = m
         else
             hi = m
+        end
+    end
+    if v[hi] == x
+        return true
+    end
+    return false
+end
+
+function _insortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
+    if x > v[hi]
+        return false
+    end
+    u = T(1)
+    lo = lo - u
+    hi = hi + u
+    @inbounds while lo < hi - u
+        m = midpoint(lo, hi)
+        if lt(o, x, v[m])
+            hi = m
+        else
+            lo = m
+        end
+    end
+    if v[hi] == x
+        return true
+    end
+    return false
+end
+
+function insorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::Bool where T<:Integer
+    if x > v[ihi]
+        return false
+    end
+    u = T(1)
+    lo = ilo - u
+    hi = ihi + u
+    @inbounds while lo < hi - u
+        m = midpoint(lo, hi)
+        if lt(o, v[m], x)
+            lo = m
+        elseif lt(o, x, v[m])
+            hi = m
+        else
+            return _insortedfirst(v, x, max(lo,ilo), m, o) || _insortedlast(v, x, max(hi,ihi), m, o)
         end
     end
     if v[hi] == x
