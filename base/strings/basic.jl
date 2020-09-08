@@ -323,10 +323,10 @@ false
 """
 function ==(a::AbstractString, b::AbstractString)
     a === b && return true
-    lastindex(a) != lastindex(b) && return false
     for (c::AbstractChar, d::AbstractChar) in zip(a, b)
         c != d && return false
     end
+    length(a) != length(b) && return false
     return true
 end
 
