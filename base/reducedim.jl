@@ -369,6 +369,9 @@ dimensions.
 !!! compat "Julia 1.5"
     `dims` keyword was added in Julia 1.5.
 
+!!! compat "Julia 1.6"
+    `init` keyword was added in Julia 1.6.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -386,11 +389,11 @@ julia> count(<=(2), A, dims=2)
  0
 ```
 """
-count(A::AbstractArrayOrBroadcasted; dims=:) = count(identity, A, dims=dims)
-count(f, A::AbstractArrayOrBroadcasted; dims=:) = _count(f, A, dims)
+count(A::AbstractArrayOrBroadcasted; dims=:, init=0) = count(identity, A; dims, init)
+count(f, A::AbstractArrayOrBroadcasted; dims=:, init=0) = _count(f, A, dims, init)
 
-_count(f, A::AbstractArrayOrBroadcasted, dims::Colon) = _simple_count(f, A)
-_count(f, A::AbstractArrayOrBroadcasted, dims) = mapreduce(_bool(f), add_sum, A, dims=dims, init=0)
+_count(f, A::AbstractArrayOrBroadcasted, dims::Colon, init) = _simple_count(f, A, init)
+_count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_sum, A; dims, init)
 
 """
     count!([f=identity,] r, A)
