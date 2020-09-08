@@ -1,4 +1,16 @@
-using Test, Base.BinaryPlatforms
+using Test, Base.BinaryPlatforms, Base.BinaryPlatforms.CPUID
+
+@testset "CPUID" begin
+    @test CPUID.cpu_isa() isa CPUID.ISA
+
+    get_x86_64(n) = (CPUID.ISAs_by_family["x86_64"][n].second)
+    @test get_x86_64(2) <  get_x86_64(4)
+    @test get_x86_64(5) <= get_x86_64(5)
+    @test get_x86_64(3) >= get_x86_64(3)
+    @test get_x86_64(7) >= get_x86_64(1)
+    @test sort([get_x86_64(6), get_x86_64(4), get_x86_64(2), get_x86_64(4)]) ==
+        [get_x86_64(2), get_x86_64(4), get_x86_64(4), get_x86_64(6)]
+end
 
 # Helper constructor to create a Platform with `validate_strict` set to `true`.
 P(args...; kwargs...) = Platform(args...; validate_strict=true, kwargs...)
