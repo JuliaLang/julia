@@ -15,12 +15,14 @@ UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
-precompile(Tuple{typeof(Base.stale_cachefile), String, String})
-precompile(Tuple{typeof(push!), Set{Module}, Module})
-precompile(Tuple{typeof(push!), Set{Method}, Method})
-precompile(Tuple{typeof(push!), Set{Base.PkgId}, Base.PkgId})
-precompile(Tuple{typeof(setindex!), Dict{String,Base.PkgId}, Base.PkgId, String})
-precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(Base.stale_cachefile), String, String})
+@assert precompile(Tuple{typeof(push!), Set{Module}, Module})
+@assert precompile(Tuple{typeof(push!), Set{Method}, Method})
+@assert precompile(Tuple{typeof(push!), Set{Base.PkgId}, Base.PkgId})
+@assert precompile(Tuple{typeof(setindex!), Dict{String,Base.PkgId}, Base.PkgId, String})
+@assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
+@assert precompile(Tuple{typeof(pushfirst!), Vector{Any}, Function})
 """
 
 precompile_script = """
@@ -45,6 +47,11 @@ julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+if have_repl
+    hardcoded_precompile_statements *= """
+    @assert precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+    """
+end
 
 Distributed = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
@@ -64,6 +71,16 @@ Pkg = get(Base.loaded_modules,
 
 if Pkg !== nothing
     precompile_script *= Pkg.precompile_script
+end
+
+FileWatching = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching"),
+          nothing)
+if FileWatching !== nothing
+    hardcoded_precompile_statements *= """
+    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
+    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+    """
 end
 
 function generate_precompile_statements()
