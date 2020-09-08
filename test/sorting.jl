@@ -299,6 +299,64 @@ Base.step(r::ConstantRange) = 0
         end
     end
 end
+@testset "insorted" begin
+    numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
+                UInt8, UInt16, UInt32, UInt64, UInt128,
+                Float16, Float32, Float64, BigInt, BigFloat]
+
+    @test insorted([1:10;], 1, by=(x -> x >= 5)) == true
+    @test insorted([1:10;], 10, by=(x -> x >= 5)) == true
+    @test insorted([1:5; 1:5; 1:5], 1, 6, 10, Forward) == true
+    @test insorted(fill(1, 15), 1, 6, 10, Forward) == true
+
+    for R in numTypes, T in numTypes
+        @test insorted(R[1, 1, 2, 2, 3, 3], T(0)) === false
+        @test insorted(R[1, 1, 2, 2, 3, 3], T(1)) == true
+        @test insorted(R[1, 1, 2, 2, 3, 3], T(2)) == true
+        @test insorted(R[1, 1, 2, 2, 3, 3], T(4)) === false
+        @test insorted(R[1, 1, 2, 2, 3, 3], 2.5) === false
+
+        @test insorted(1:3, T(0)) === false
+        @test insorted(1:3, T(1)) == true
+        @test insorted(1:3, T(2)) == true
+        @test insorted(1:3, T(4)) === false
+
+        @test insorted(R[1:10;], T(1), by=(x -> x >= 5)) == true
+        @test insorted(R[1:10;], T(10), by=(x -> x >= 5)) == true
+        @test insorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Forward) == true
+        @test insorted(fill(R(1), 15), T(1), 6, 10, Forward) == true
+    end
+
+    for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
+        rg_r = reverse(rg)
+        rgv, rgv_r = [rg;], [rg_r;]
+        for i = I
+            @test insorted(rg,i) === insorted(rgv,i)
+            @test insorted(rg_r,i,rev=true) === insorted(rgv_r,i,rev=true)
+        end
+    end
+
+    rg = 0.0:0.01:1.0
+    for i = 2:101
+        @test insorted(rg, rg[i]) == true
+        @test insorted(rg, prevfloat(rg[i])) === false
+        @test insorted(rg, nextfloat(rg[i])) === false
+    end
+
+    rg_r = reverse(rg)
+    for i = 1:100
+        @test insorted(rg_r, rg_r[i], rev=true) == true
+        @test insorted(rg_r, prevfloat(rg_r[i]), rev=true) === false
+        @test insorted(rg_r, nextfloat(rg_r[i]), rev=true) === false
+    end
+
+    @test insorted(1:10, 1, by=(x -> x >= 5)) == insorted([1:10;], 1, by=(x -> x >= 5))
+    @test insorted(1:10, 10, by=(x -> x >= 5)) == insorted([1:10;], 10, by=(x -> x >= 5))
+
+    @test insorted([], 0) === false
+    @test insorted([1,2,3], 0) === false
+    @test insorted([1,2,3], 4) === false
+end
 @testset "PartialQuickSort" begin
     a = rand(1:10000, 1000)
     # test PartialQuickSort only does a partial sort
