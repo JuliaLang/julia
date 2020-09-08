@@ -926,11 +926,25 @@ Short-circuiting boolean AND.
 kw"&&"
 
 """
+    `and` is not used in Julia
+
+Use `&&` for short-circuiting boolean AND.
+"""
+kw"and"
+
+"""
     x || y
 
 Short-circuiting boolean OR.
 """
 kw"||"
+
+"""
+    `or` is not used in Julia
+
+Use `|| for short-circuiting boolean OR.
+"""
+kw"or"
 
 """
     ccall((function_name, library), returntype, (argtype1, ...), argvalue1, ...)
