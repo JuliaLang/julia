@@ -323,7 +323,7 @@ false
 """
 function ==(a::AbstractString, b::AbstractString)
     a === b && return true
-    ncodeunits(a) != ncodeunits(b) && return false
+    lastindex(a) != lastindex(b) && return false
     for (c::AbstractChar, d::AbstractChar) in zip(a, b)
         c != d && return false
     end
