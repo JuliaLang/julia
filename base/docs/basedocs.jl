@@ -942,7 +942,7 @@ kw"||"
 """
     `or` is not used in Julia
 
-Use `|| for short-circuiting boolean OR.
+Use `||` for short-circuiting boolean OR.
 """
 kw"or"
 
