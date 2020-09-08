@@ -88,6 +88,10 @@ end
     @test Printf.@sprintf("%g", 123456.7) == "123457"
     @test Printf.@sprintf("%g", 1234567.8) == "1.23457e+06"
 
+    # zeros
+    @test Printf.@sprintf("%.15g", 0) == "0"
+    @test Printf.@sprintf("%#.15g", 0) == "0.00000000000000"
+
 end
 
 @testset "%f" begin
