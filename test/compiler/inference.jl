@@ -2751,3 +2751,25 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test !Core.Compiler.sizeof_nothrow(UnionAll)
 
 @test Base.return_types(Expr) == Any[Expr]
+
+# Use a global constant to rely less on unrelated constant propagation
+const const_int32_typename = Int32.name
+# Check constant propagation for field of constant `TypeName`
+# works for both valid and invalid field names. (Ref #37443)
+getfield_const_typename_good1() = getfield(const_int32_typename, 1)
+getfield_const_typename_good2() = getfield(const_int32_typename, :name)
+getfield_const_typename_bad1() = getfield(const_int32_typename, 0x1)
+@eval getfield_const_typename_bad2() = getfield(const_int32_typename, $(()))
+for goodf in [getfield_const_typename_good1, getfield_const_typename_good2]
+    local goodf
+    local code = code_typed(goodf, Tuple{})[1].first.code
+    @test code[1] === Core.ReturnNode(QuoteNode(:Int32))
+    @test goodf() === :Int32
+end
+for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
+    local badf
+    local code = code_typed(badf, Tuple{})[1].first.code
+    @test Meta.isexpr(code[1], :call)
+    @test code[end] === Core.ReturnNode()
+    @test_throws TypeError badf()
+end
