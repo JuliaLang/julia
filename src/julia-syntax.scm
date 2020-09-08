@@ -1902,11 +1902,17 @@
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
 (define (expand-if e)
-  (if (and (pair? (cadr e)) (eq? (car (cadr e)) '&&))
-      (let ((clauses (cdr (flatten-ex '&& (cadr e)))))
-        `(if (&& ,@(map expand-forms clauses))
-             ,@(map expand-forms (cddr e))))
-      (cons (car e) (map expand-forms (cdr e)))))
+  (let* ((test (cadr e))
+         (blk? (and (pair? test) (eq? (car test) 'block)))
+         (stmts (if blk? (cdr (butlast test)) '()))
+         (test  (if blk? (last test) test)))
+    (if (and (pair? test) (eq? (car test) '&&))
+        (let ((clauses `(&& ,@(map expand-forms (cdr (flatten-ex '&& test))))))
+          `(if ,(if blk?
+                    `(block ,@(map expand-forms stmts) ,clauses)
+                    clauses)
+               ,@(map expand-forms (cddr e))))
+        (cons (car e) (map expand-forms (cdr e))))))
 
 ;; move an assignment into the last statement of a block to keep more statements at top level
 (define (sink-assignment lhs rhs)
