@@ -250,8 +250,9 @@ no
 Short-circuit evaluation is quite similar to conditional evaluation. The behavior is found in
 most imperative programming languages having the `&&` and `||` boolean operators: in a series
 of boolean expressions connected by these operators, only the minimum number of expressions are
-evaluated as are necessary to determine the final boolean value of the entire chain. Explicitly,
-this means that:
+evaluated as are necessary to determine the final boolean value of the entire chain. Some
+languages (like Python) refer to them as `and` (`&&`) and `or` (`||`). Explicitly, this means
+that:
 
   * In the expression `a && b`, the subexpression `b` is only evaluated if `a` evaluates to `true`.
   * In the expression `a || b`, the subexpression `b` is only evaluated if `a` evaluates to `false`.
