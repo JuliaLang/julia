@@ -561,7 +561,7 @@ mutable struct IncrementalCompact
                     succs[j] = bb_rename[succs[j]]
                 end
             end
-            let blocks = blocks
+            let blocks = blocks, bb_rename = bb_rename
                 result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
             end
         else

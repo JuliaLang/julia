@@ -1175,10 +1175,10 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
             if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val) &&
-                    _all(i->at.val[i] isa fieldtype(t, i), 1:n)
+                let t = t, at = at; _all(i->at.val[i] isa fieldtype(t, i), 1:n); end
                 t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
             elseif isa(at, PartialStruct) && at ⊑ Tuple && n == length(at.fields) &&
-                    _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n)
+                let t = t, at = at; _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n); end
                 t = PartialStruct(t, at.fields)
             end
         end
