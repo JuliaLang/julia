@@ -165,15 +165,13 @@ function Format(f::AbstractString)
         end
         push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision))
         start = pos
-        prevperc = false
         while pos <= len
             b = bytes[pos]
             pos += 1
             if b == UInt8('%')
                 pos > len && throw(ArgumentError("invalid format string: '$f'"))
                 if bytes[pos] == UInt8('%')
-                    pos += 1
-                    pos > len && break
+                    # escaped '%'
                     b = bytes[pos]
                     pos += 1
                 else

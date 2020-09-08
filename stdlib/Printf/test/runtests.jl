@@ -414,6 +414,11 @@ end
     @test Printf.@sprintf("%f", 1) == "1.000000"
     @test Printf.@sprintf("%e", 1) == "1.000000e+00"
     @test Printf.@sprintf("%g", 1) == "1"
+
+    # escaped '%'
+    @test_throws ArgumentError @sprintf("%s%%%s", "a")
+    @test @sprintf("%s%%%s", "a", "b") == "a%%b"
+
 end
 
 @testset "integers" begin
