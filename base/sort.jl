@@ -407,6 +407,149 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 ```
 """ searchsortedlast
 
+function insorted(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
+    if x > v[hi]
+        return false
+    end
+    u = T(1)
+    lo = lo - u
+    hi = hi + u
+    @inbounds while lo < hi - u
+        m = midpoint(lo, hi)
+        if lt(o, v[m], x)
+            lo = m
+        else
+            hi = m
+        end
+    end
+    if v[hi] == x
+        return true
+    end
+    return false
+end
+
+function insorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::Bool
+    require_one_based_indexing(a)
+    if step(a) == 0
+        if first(a) == x
+            return true
+        else
+            return false
+        end
+    else
+        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
+        if a[n] == x
+            return true
+        else
+            return false
+        end
+    end
+end
+
+function insorted(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::Bool
+    require_one_based_indexing(a)
+    h = step(a)
+    if h == 0
+        if first(a) == x
+            return true
+        else
+            return false
+        end
+    elseif h > 0 && x <= first(a)
+        if first(a) == x
+            return true
+        else
+            return false
+        end
+    elseif h > 0 && x >= last(a)
+        if last(a) == x
+            return true
+        else
+            return false
+        end
+    elseif h < 0 && x >= first(a)
+        if first(a) == x
+            return true
+        else
+            return false
+        end
+    elseif h < 0 && x <= last(a)
+        if last(a) == x
+            return true
+        else
+            return false
+        end
+    else
+        if o isa ForwardOrdering
+            if -fld(floor(Integer, -x) + Signed(first(a)), h) + 1 == x
+                return true
+            else
+                return false
+            end
+        else
+            if -fld(ceil(Integer, -x) + Signed(first(a)), h) + 1 == x
+                return true
+            else
+                return false
+            end
+        end
+    end
+end
+
+function insorted(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::Bool
+    require_one_based_indexing(a)
+    if lt(o, first(a), x)
+        if step(a) == 0
+            return false
+        else
+            if min(cld(x - first(a), step(a)), length(a)) + 1 == x
+                return true
+            else
+                return false
+            end
+        end
+    else
+        if first(a) == x
+            return true
+        else
+            return false
+        end
+    end
+end
+
+@eval begin
+    $insorted(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $insorted(v,x,first(inds),last(inds),o))
+    $insorted(v::AbstractVector, x;
+       lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
+        $insorted(v,x,ord(lt,by,rev,order))
+end
+
+"""
+    insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+
+Determine whether an item is in the given sorted collection, in the sense that
+it is [`==`](@ref) to one of the values of the collection. Returns a `Bool`
+value.
+
+# Examples
+```jldoctest
+julia> insorted([1, 2, 4, 5, 5, 7], 4) # single match
+true
+
+julia> insorted([1, 2, 4, 5, 5, 7], 5) # multiple matches
+true
+
+julia> insorted([1, 2, 4, 5, 5, 7], 3) # no match
+false
+
+julia> insorted([1, 2, 4, 5, 5, 7], 9) # no match
+false
+
+julia> insorted([1, 2, 4, 5, 5, 7], 0) # no match
+false
+```
+""" insorted
+
 
 ## sorting algorithms ##
 
