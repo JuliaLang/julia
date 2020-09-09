@@ -928,7 +928,7 @@ kw"&&"
 """
     x || y
 
-Short-circuiting boolean OR.
+Short-circuiting boolean OR. Note, to concatenate strings in Julia use the `*` operator.
 """
 kw"||"
 
@@ -2107,9 +2107,15 @@ Creates a null pointer to type `T`.
 Ptr{T}()
 
 """
+    `plus` is not used in Julia.
+Use `+` for adding numbers together, but note, `*` is used in Julia to concatenate strings.
+"""
+kw"plus"
+
+"""
     +(x, y...)
 
-Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
+Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`. Note, to concatenate strings in Julia, use the `*` operator.
 
 # Examples
 ```jldoctest
