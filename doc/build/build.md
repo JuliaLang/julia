@@ -156,6 +156,7 @@ Building Julia requires that the following software be installed:
 - **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
 - **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
 - **[powershell]** (>= 3.0)     — necessary only on Windows.
+- **[which]**                   - needed for checking build dependencies.
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
@@ -220,6 +221,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 [powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
+[which]:        https://carlowood.github.io/which/
 
 ## Build dependencies
 
