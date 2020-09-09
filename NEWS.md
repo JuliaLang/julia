@@ -149,6 +149,8 @@ Standard library changes
 
 #### Dates
 * `Quarter` period is defined ([#35519]).
+* Zero-valued `FixedPeriod`s and `OtherPeriod`s now compare equal, e.g.,
+  `Year(0) == Day(0)`. The behavior of non-zero `Period`s is not changed. ([#37486])
 
 #### Statistics
 
