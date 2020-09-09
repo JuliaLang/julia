@@ -1225,7 +1225,7 @@ julia> A = Array(Bidiagonal(fill(1.0, (5, 5)), :U))
  0.0  0.0  0.0  0.0  1.0
 
 julia> factorize(A) # factorize will check to see that A is already factorized
-5×5 Bidiagonal{Float64,Vector{Float64}}:
+5×5 Bidiagonal{Float64, Vector{Float64}}:
  1.0  1.0   ⋅    ⋅    ⋅
   ⋅   1.0  1.0   ⋅    ⋅
   ⋅    ⋅   1.0  1.0   ⋅

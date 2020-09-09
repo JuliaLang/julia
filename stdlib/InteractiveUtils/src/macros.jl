@@ -219,7 +219,7 @@ end
 macro code_typed(ex0...)
     thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0)
     quote
-        results = $thecall
+        local results = $thecall
         length(results) == 1 ? results[1] : results
     end
 end
@@ -227,7 +227,7 @@ end
 macro code_lowered(ex0...)
     thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_lowered, ex0)
     quote
-        results = $thecall
+        local results = $thecall
         length(results) == 1 ? results[1] : results
     end
 end

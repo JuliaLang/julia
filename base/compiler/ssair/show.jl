@@ -38,9 +38,10 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         print(io, stmt.typ)
         print(io, ")")
     elseif isexpr(stmt, :invoke)
+        stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
         print(io, "invoke ")
-        linfo = stmt.args[1]
+        linfo = stmt.args[1]::Core.MethodInstance
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
@@ -55,8 +56,8 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
     # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
-    elseif isexpr(stmt, :enter) && length(stmt.args) == 1 && stmt.args[1] isa Int
-        print(io, "\$(Expr(:enter, #", stmt.args[1]::Int, "))")
+    elseif isexpr(stmt, :enter) && length((stmt::Expr).args) == 1 && (stmt::Expr).args[1] isa Int
+        print(io, "\$(Expr(:enter, #", (stmt::Expr).args[1]::Int, "))")
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa PhiNode
@@ -239,12 +240,12 @@ function compute_ir_line_annotations(code::IRCode)
     loc_methods = String[]
     loc_lineno = String[]
     cur_group = 1
-    last_line = 0
     last_lineno = 0
-    last_stack = []
+    last_stack = Int[]
     last_printed_depth = 0
     linetable = code.linetable
     lines = code.stmts.line
+    last_line = zero(eltype(lines))
     for idx in 1:length(lines)
         buf = IOBuffer()
         line = lines[idx]
@@ -259,7 +260,9 @@ function compute_ir_line_annotations(code::IRCode)
             x = min(length(last_stack), length(stack))
             if length(stack) != 0
                 # Compute the last depth that was in common
-                first_mismatch = findfirst(i->last_stack[i] != stack[i], 1:x)
+                first_mismatch = let last_stack=last_stack
+                    findfirst(i->last_stack[i] != stack[i], 1:x)
+                end
                 # If the first mismatch is the last stack frame, that might just
                 # be a line number mismatch in inner most frame. Ignore those
                 if length(last_stack) == length(stack) && first_mismatch == length(stack)
@@ -324,7 +327,7 @@ end
 Base.show(io::IO, code::IRCode) = show_ir(io, code)
 
 
-lineinfo_disabled(io::IO, linestart::String, lineidx::Int32) = ""
+lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
 
 function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
     context = LineInfoNode[]
@@ -358,7 +361,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
             #empty!(context)
             #context_depth[] = 0
             nframes = length(DI)
-            nctx = 0
+            nctx::Int = 0
             pop_skips = 0
             # compute the size of the matching prefix in the inlining information stack
             for i = 1:min(length(context), nframes)
@@ -367,7 +370,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                 CtxLine === FrameLine || break
                 nctx = i
             end
-            update_line_only = false
+            update_line_only::Bool = false
             if collapse && 0 < nctx
                 # check if we're adding more frames with the same method name,
                 # if so, drop all existing calls to it from the top of the context
@@ -419,9 +422,9 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
             end
             # now print the new frames
             while nctx < nframes
-                frame = DI[nframes - nctx]
+                frame::LineInfoNode = DI[nframes - nctx]
                 nctx += 1
-                started = false
+                started::Bool = false
                 if !update_line_only && showtypes && !isa(frame.method, Symbol) && nctx != 1
                     print(io, linestart)
                     Base.with_output_color(linecolor, io) do io
@@ -479,7 +482,7 @@ end
 
 
 function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_printer; verbose_linetable=false)
-    cols = displaysize(io)[2]
+    cols = (displaysize(io)::Tuple{Int,Int})[2]
     used = BitSet()
     stmts = code.stmts
     isempty(stmts) && return # unlikely, but avoid errors from reducing over empty sets
@@ -653,6 +656,11 @@ end
 
 # Show a single statement, code.code[idx], in the context of the whole CodeInfo.
 # Returns the updated value of bb_idx.
+# line_info_preprinter(io::IO, indent::String, idx::Int) may print relevant info
+#   at the beginning of the line, and should at least print `indent`. It returns a
+#   string that will be printed after the final basic-block annotation.
+# line_info_postprinter(io::IO, typ, used::Bool) prints the type-annotation at the end
+#   of the statement
 function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, line_info_postprinter, used::BitSet, cfg::CFG, bb_idx::Int)
     ds = get(io, :displaysize, (24, 80))::Tuple{Int,Int}
     cols = ds[2]
@@ -678,7 +686,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
     if bb_idx > length(cfg.blocks)
         # If invariants are violated, print a special leader
         linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
-        inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+        inlining_indent = line_info_preprinter(io, linestart, idx)
         printstyled(io, "!!! ", "─"^max_bb_idx_size, color=:light_black)
     else
         bbrange = cfg.blocks[bb_idx].stmts
@@ -686,7 +694,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
         # Print line info update
         linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:light_black), context=io)
         linestart *= " "^max_bb_idx_size
-        inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+        inlining_indent = line_info_preprinter(io, linestart, idx)
         if idx == first(bbrange)
             bb_idx_str = string(bb_idx)
             bb_pad = max_bb_idx_size - length(bb_idx_str)
@@ -713,7 +721,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
         stmt = GotoNode(block_for_inst(cfg, stmt.label))
     elseif stmt isa PhiNode
         e = stmt.edges
-        stmt = PhiNode(Any[block_for_inst(cfg, e[i]) for i in 1:length(e)], stmt.values)
+        stmt = PhiNode(Int32[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)
     end
     show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
     print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
@@ -730,8 +738,14 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
     return bb_idx
 end
 
-function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(code.linetable), line_info_postprinter=default_expr_type_printer)
-    ioctx = IOContext(io, :displaysize => displaysize(io))
+function statementidx_lineinfo_printer(f, code::CodeInfo)
+    printer = f(code.linetable)
+    return (io::IO, indent::String, idx::Int) -> printer(io, indent, idx > 0 ? code.codelocs[idx] : typemin(Int32))
+end
+statementidx_lineinfo_printer(code::CodeInfo) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
+
+function show_ir(io::IO, code::CodeInfo, line_info_preprinter=statementidx_lineinfo_printer(code), line_info_postprinter=default_expr_type_printer)
+    ioctx = IOContext(io, :displaysize => displaysize(io)::Tuple{Int,Int})
     stmts = code.code
     used = BitSet()
     cfg = compute_basic_blocks(stmts)
@@ -745,7 +759,7 @@ function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(
     end
 
     max_bb_idx_size = length(string(length(cfg.blocks)))
-    line_info_preprinter(io, " "^(max_bb_idx_size + 2), typemin(Int32))
+    line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
     nothing
 end
 

@@ -264,7 +264,7 @@ function unique!(f, A::AbstractVector; seen::Union{Nothing,Set}=nothing)
         return A
     end
 
-    i = firstindex(A)
+    i = firstindex(A)::Int
     x = @inbounds A[i]
     y = f(x)
     if seen === nothing
@@ -291,7 +291,7 @@ function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
         end
         i += 1
     end
-    return resize!(A, current - firstindex(A) + 1)::typeof(A)
+    return resize!(A, current - firstindex(A)::Int + 1)::typeof(A)
 end
 
 
@@ -382,15 +382,26 @@ false
 ```
 """
 function allunique(C)
-    seen = Set{eltype(C)}()
-    for x in C
-        if in(x, seen)
-            return false
-        else
-            push!(seen, x)
+    seen = Dict{eltype(C), Nothing}()
+    x = iterate(C)
+    if haslength(C) && length(C) > 1000
+        for i in OneTo(1000)
+            v, s = x
+            idx = ht_keyindex2!(seen, v)
+            idx > 0 && return false
+            _setindex!(seen, nothing, v, -idx)
+            x = iterate(C, s)
         end
+        sizehint!(seen, length(C))
     end
-    true
+    while x !== nothing
+        v, s = x
+        idx = ht_keyindex2!(seen, v)
+        idx > 0 && return false
+        _setindex!(seen, nothing, v, -idx)
+        x = iterate(C, s)
+    end
+    return true
 end
 
 allunique(::Union{AbstractSet,AbstractDict}) = true
@@ -496,7 +507,7 @@ julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 julia> replace!(Dict(1=>2, 3=>4)) do kv
            first(kv) < 3 ? first(kv)=>3 : kv
        end
-Dict{Int64,Int64} with 2 entries:
+Dict{Int64, Int64} with 2 entries:
   3 => 4
   1 => 3
 
@@ -586,7 +597,7 @@ julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 julia> replace(Dict(1=>2, 3=>4)) do kv
            first(kv) < 3 ? first(kv)=>3 : kv
        end
-Dict{Int64,Int64} with 2 entries:
+Dict{Int64, Int64} with 2 entries:
   3 => 4
   1 => 3
 ```

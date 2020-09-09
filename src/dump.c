@@ -375,7 +375,9 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint64(s->s, m->build_id);
     write_int32(s->s, m->counter);
     write_int32(s->s, m->nospecialize);
-    write_int32(s->s, m->optlevel);
+    write_uint8(s->s, m->optlevel);
+    write_uint8(s->s, m->compile);
+    write_uint8(s->s, m->infer);
 }
 
 static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
@@ -1528,7 +1530,9 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     m->build_id = read_uint64(s->s);
     m->counter = read_int32(s->s);
     m->nospecialize = read_int32(s->s);
-    m->optlevel = read_int32(s->s);
+    m->optlevel = read_int8(s->s);
+    m->compile = read_int8(s->s);
+    m->infer = read_int8(s->s);
     m->primary_world = jl_world_counter;
     return (jl_value_t*)m;
 }
@@ -1656,7 +1660,7 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
 {
     assert(!ios_eof(s->s));
     jl_value_t *v;
-    size_t i, n;
+    size_t n;
     uintptr_t pos;
     uint8_t tag = read_uint8(s->s);
     if (tag > LAST_TAG)
@@ -1774,14 +1778,6 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
         arraylist_push(&backref_list, v);
         ios_readall(s->s, jl_string_data(v), n);
         return v;
-    case TAG_LINEINFO:
-        v = jl_new_struct_uninit(jl_lineinfonode_type);
-        arraylist_push(&backref_list, v);
-        for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++) {
-            size_t offs = jl_field_offset(jl_lineinfonode_type, i);
-            set_nth_field(jl_lineinfonode_type, (void*)v, i, jl_deserialize_value(s, (jl_value_t**)((char*)v + offs)));
-        }
-        return v;
     case TAG_DATATYPE:
         pos = backref_list.len;
         arraylist_push(&backref_list, NULL);
@@ -1804,8 +1800,6 @@ static void jl_insert_methods(jl_array_t *list)
         jl_method_table_insert(mt, meth, simpletype);
     }
 }
-
-extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 
 // verify that these edges intersect with the same methods as before
 static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
@@ -1932,7 +1926,7 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *mod_list)
         uuid.hi = read_uint64(s);
         uuid.lo = read_uint64(s);
         uint64_t build_id = read_uint64(s);
-        jl_sym_t *sym = jl_symbol_n(name, len);
+        jl_sym_t *sym = _jl_symbol(name, len);
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_list, i);
         if (!m || !jl_is_module(m) || m->uuid.hi != uuid.hi || m->uuid.lo != uuid.lo || m->name != sym || m->build_id != build_id) {
             return jl_get_exceptionf(jl_errorexception_type,
@@ -2404,7 +2398,6 @@ static void jl_recache_other(void)
     flagref_list.len = 0;
 }
 
-extern tracer_cb jl_newmeth_tracer;
 static int trace_method(jl_typemap_entry_t *entry, void *closure)
 {
     jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)entry->func.method);

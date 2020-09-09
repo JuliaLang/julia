@@ -32,7 +32,7 @@ and installing Julia, below.
 - **Binaries:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Documentation:** <https://docs.julialang.org>
-- **Packages:** <https://pkg.julialang.org/>
+- **Packages:** <https://julialang.org/packages/>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
@@ -81,7 +81,7 @@ Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.4.2
+    git checkout v1.5.0
 
 Now run `make` to build the `julia` executable.
 
@@ -117,16 +117,18 @@ can be uninstalled by deleting `~/.julia`.
 
 The Julia source code is organized as follows:
 
-    base/          source code for the Base module (part of Julia's standard library)
-    stdlib/        source code for other standard library packages
-    contrib/       editor support for Julia source, miscellaneous scripts
-    deps/          external dependencies
-    doc/src/manual source for the user manual
-    doc/build      detailed notes for building Julia
-    src/           source for Julia language core
-    test/          test suites
-    ui/            source for various front ends
-    usr/           binaries and shared libraries loaded by Julia's standard libraries
+| Directory         | Contents                                                           |
+| -                 | -                                                                  |
+| `base/`           | source code for the Base module (part of Julia's standard library) |
+| `stdlib/`         | source code for other standard library packages                    |
+| `contrib/`        | editor support for Julia source, miscellaneous scripts             |
+| `deps/`           | external dependencies                                              |
+| `doc/src/manual/` | source for the user manual                                         |
+| `doc/build/`      | detailed notes for building Julia                                  |
+| `src/`            | source for Julia language core                                     |
+| `test/`           | test suites                                                        |
+| `ui/`             | source for various front ends                                      |
+| `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |
 
 ## Terminal, Editors and IDEs
 

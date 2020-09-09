@@ -8,7 +8,7 @@
 Create a async condition that wakes up tasks waiting for it
 (by calling [`wait`](@ref) on the object)
 when notified from C by a call to `uv_async_send`.
-Waiting tasks are woken with an error when the object is closed (by [`close`](@ref).
+Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
 Use [`isopen`](@ref) to check whether it is still active.
 """
 mutable struct AsyncCondition
@@ -59,7 +59,7 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 
 Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
 `interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
-the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
+the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
 """
 mutable struct Timer
@@ -225,7 +225,7 @@ calls the function `callback`.
 Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
 and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
 is only triggered once. The function `callback` is called with a single argument, the timer itself.
-When the timer is closed (by [`close`](@ref) waiting tasks are woken with an error. Use [`isopen`](@ref)
+When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
 to check whether a timer is still active.
 
 # Examples
@@ -256,11 +256,11 @@ function Timer(cb::Function, timeout::Real; interval::Real=0.0)
 end
 
 """
-    timedwait(testcb::Function, timeout::Real; pollint::Real=0.1)
+    timedwait(callback::Function, timeout::Real; pollint::Real=0.1)
 
-Waits until `testcb` returns `true` or for `timeout` seconds, whichever is earlier.
-`testcb` is polled every `pollint` seconds. The minimum duration for `timeout` and `pollint`
-is 1 millisecond or `0.001`.
+Waits until `callback` returns `true` or `timeout` seconds have passed, whichever is earlier.
+`callback` is polled every `pollint` seconds. The minimum value for `timeout` and `pollint`
+is `0.001`, that is, 1 millisecond.
 
 Returns :ok or :timed_out
 """

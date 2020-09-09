@@ -278,6 +278,7 @@ default_group(file) = Symbol(splitext(basename(file))[1])
 function logmsg_code(_module, file, line, level, message, exs...)
     log_data = process_logmsg_exs(_module, file, line, level, message, exs...)
     quote
+    let
         level = $level
         std_level = convert(LogLevel, level)
         if std_level >= getindex(_min_enabled_level)
@@ -305,6 +306,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
         end
         nothing
     end
+    end
 end
 
 function process_logmsg_exs(_orig_module, _file, _line, level, message, exs...)
@@ -312,10 +314,10 @@ function process_logmsg_exs(_orig_module, _file, _line, level, message, exs...)
     _module = _orig_module
     kwargs = Any[]
     for ex in exs
-        if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
+        if ex isa Expr && ex.head === :(=)
             k,v = ex.args
             if !(k isa Symbol)
-                throw(ArgumentError("Expected symbol for key in key value pair `$ex`"))
+                k = Symbol(k)
             end
 
             # Recognize several special keyword arguments

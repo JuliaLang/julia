@@ -1,0 +1,1 @@
+invalid-codepoint = "This string contains a non scalar unicode codepoint \uD801"

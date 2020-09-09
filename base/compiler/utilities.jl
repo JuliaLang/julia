@@ -190,7 +190,7 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
             isa(src, IRCode) ? src.argtypes[x.n] :
             slottypes[x.n]
     elseif isa(x, QuoteNode)
-        return AbstractEvalConstant((x::QuoteNode).value)
+        return Const((x::QuoteNode).value)
     elseif isa(x, GlobalRef)
         return abstract_eval_global(x.mod, (x::GlobalRef).name)
     elseif isa(x, PhiNode)
@@ -198,7 +198,7 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
     elseif isa(x, PiNode)
         return x.typ
     else
-        return AbstractEvalConstant(x)
+        return Const(x)
     end
 end
 

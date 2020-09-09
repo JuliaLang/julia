@@ -166,3 +166,8 @@ end
         @test length(readavailable(io)) > 0
     end
 end
+
+@testset "inference" begin
+    @test all(T -> T <: Union{UInt, Int}, Base.return_types(unsafe_write, (IO, Ptr{UInt8}, UInt)))
+    @test all(T -> T === Bool, Base.return_types(eof, (IO,)))
+end

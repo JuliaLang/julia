@@ -6,8 +6,6 @@
 
 @nospecialize
 
-const AbstractEvalConstant = Const
-
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 
 const INT_INF = typemax(Int) # integer infinity
@@ -515,40 +513,40 @@ function typeof_tfunc(@nospecialize(t))
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
 
+function typeassert_type_instance(@nospecialize(v), @nospecialize(t))
+    if isa(v, Const)
+        if !has_free_typevars(t) && !isa(v.val, t)
+            return Bottom
+        end
+        return v
+    elseif isa(v, PartialStruct)
+        has_free_typevars(t) && return v
+        widev = widenconst(v)
+        if widev <: t
+            return v
+        elseif typeintersect(widev, t) === Bottom
+            return Bottom
+        end
+        @assert widev <: Tuple
+        new_fields = Vector{Any}(undef, length(v.fields))
+        for i = 1:length(new_fields)
+            new_fields[i] = typeassert_type_instance(v.fields[i], getfield_tfunc(t, Const(i)))
+            if new_fields[i] === Bottom
+                return Bottom
+            end
+        end
+        return tuple_tfunc(new_fields)
+    elseif isa(v, Conditional)
+        if !(Bool <: t)
+            return Bottom
+        end
+        return v
+    end
+    return typeintersect(widenconst(v), t)
+end
 function typeassert_tfunc(@nospecialize(v), @nospecialize(t))
     t = instanceof_tfunc(t)[1]
     t === Any && return v
-    function typeassert_type_instance(@nospecialize(v), @nospecialize(t))
-        if isa(v, Const)
-            if !has_free_typevars(t) && !isa(v.val, t)
-                return Bottom
-            end
-            return v
-        elseif isa(v, PartialStruct)
-            has_free_typevars(t) && return v
-            widev = widenconst(v)
-            if widev <: t
-                return v
-            elseif typeintersect(widev, t) === Bottom
-                return Bottom
-            end
-            @assert widev <: Tuple
-            new_fields = Vector{Any}(undef, length(v.fields))
-            for i = 1:length(new_fields)
-                new_fields[i] = typeassert_type_instance(v.fields[i], getfield_tfunc(t, Const(i)))
-                if new_fields[i] === Bottom
-                    return Bottom
-                end
-            end
-            return tuple_tfunc(new_fields)
-        elseif isa(v, Conditional)
-            if !(Bool <: t)
-                return Bottom
-            end
-            return v
-        end
-        return typeintersect(widenconst(v), t)
-    end
     return typeassert_type_instance(v, t)
 end
 add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
@@ -747,6 +745,9 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         if isa(name, Const)
             nv = name.val
+            if !(isa(nv,Symbol) || isa(nv,Int))
+                return Bottom
+            end
             if isa(sv, UnionAll)
                 if nv === :var || nv === 1
                     return Const(sv.var)
@@ -767,17 +768,14 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 if (fld == TYPENAME_NAME_FIELDINDEX ||
                     fld == TYPENAME_MODULE_FIELDINDEX ||
                     fld == TYPENAME_WRAPPER_FIELDINDEX)
-                    return AbstractEvalConstant(getfield(sv, fld))
+                    return Const(getfield(sv, fld))
                 end
             end
             if isa(sv, Module) && isa(nv, Symbol)
                 return abstract_eval_global(sv, nv)
             end
-            if !(isa(nv,Symbol) || isa(nv,Int))
-                return Bottom
-            end
             if (isa(sv, SimpleVector) || !ismutable(sv)) && isdefined(sv, nv)
-                return AbstractEvalConstant(getfield(sv, nv))
+                return Const(getfield(sv, nv))
             end
         end
         s = typeof(sv)
@@ -1262,7 +1260,7 @@ function tuple_tfunc(atypes::Vector{Any})
         end
     end
     if all_are_const
-        return Const(tuple(Any[atypes[i].val for i in 1:length(atypes)]...))
+        return Const(ntuple(i -> atypes[i].val, length(atypes)))
     end
     params = Vector{Any}(undef, length(atypes))
     anyinfo = false
@@ -1414,7 +1412,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             end
         end
         return Any
-    elseif f === Expr
+    elseif f === Core._expr
         if length(argtypes) < 1 && !isva
             return Bottom
         end
@@ -1553,7 +1551,7 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
-function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
     if length(argtypes) == 3
         tt = argtypes[3]
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
@@ -1566,7 +1564,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, v
                     if contains_is(argtypes_vec, Union{})
                         return Const(Union{})
                     end
-                    rt = abstract_call(interp, nothing, argtypes_vec, vtypes, sv, -1).rt
+                    rt = abstract_call(interp, nothing, argtypes_vec, sv, -1).rt
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))

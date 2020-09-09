@@ -99,6 +99,14 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) == Vector
+@test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
+@test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
+
+struct SomethingBits
+    x::Base.BitIntegerType
+end
+@test Base.return_types(getproperty, (SomethingBits, Symbol)) == Any[Base.BitIntegerType]
+
 
 # issue 9770
 @noinline x9770() = false
@@ -1408,7 +1416,7 @@ using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test sizeof_nothrow(String)
 @test !sizeof_nothrow(Type{String})
 @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
-let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
+let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
     @test sizeof_tfunc(PT) === Const(16)
     @test nfields_tfunc(PT) === Const(2)
     @test sizeof_nothrow(PT)
@@ -2683,6 +2691,8 @@ function symcmp36230(vec)
     a, b = vec[1], vec[2]
     if isa(a, Symbol) && isa(b, Symbol)
         return a == b
+    elseif isa(a, Int) && isa(b, Int)
+        return a == b
     end
     return false
 end
@@ -2741,3 +2751,27 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test (sizeof(Ptr),) == sizeof.((Ptr,)) == sizeof.((Ptr{Cvoid},))
 @test Core.Compiler.sizeof_tfunc(UnionAll) === Int
 @test !Core.Compiler.sizeof_nothrow(UnionAll)
+
+@test Base.return_types(Expr) == Any[Expr]
+
+# Use a global constant to rely less on unrelated constant propagation
+const const_int32_typename = Int32.name
+# Check constant propagation for field of constant `TypeName`
+# works for both valid and invalid field names. (Ref #37443)
+getfield_const_typename_good1() = getfield(const_int32_typename, 1)
+getfield_const_typename_good2() = getfield(const_int32_typename, :name)
+getfield_const_typename_bad1() = getfield(const_int32_typename, 0x1)
+@eval getfield_const_typename_bad2() = getfield(const_int32_typename, $(()))
+for goodf in [getfield_const_typename_good1, getfield_const_typename_good2]
+    local goodf
+    local code = code_typed(goodf, Tuple{})[1].first.code
+    @test code[1] === Core.ReturnNode(QuoteNode(:Int32))
+    @test goodf() === :Int32
+end
+for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
+    local badf
+    local code = code_typed(badf, Tuple{})[1].first.code
+    @test Meta.isexpr(code[1], :call)
+    @test code[end] === Core.ReturnNode()
+    @test_throws TypeError badf()
+end

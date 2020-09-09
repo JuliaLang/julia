@@ -216,7 +216,7 @@ end
     if ptr > size
         throw(EOFError())
     end
-    @inbounds byte = from.data[ptr]
+    @inbounds byte = from.data[ptr]::UInt8
     from.ptr = ptr + 1
     return byte
 end
@@ -226,7 +226,7 @@ function peek(from::GenericIOBuffer, ::Type{UInt8})
     if from.ptr > from.size
         throw(EOFError())
     end
-    return from.data[from.ptr]
+    return from.data[from.ptr]::UInt8
 end
 
 read(from::GenericIOBuffer, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(from, UInt))
@@ -418,7 +418,7 @@ end
 function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)
-    written = Int(min(nb, length(to.data) - ptr + 1))
+    written = Int(min(nb, Int(length(to.data))::Int - ptr + 1))
     towrite = written
     d = to.data
     while towrite > 0

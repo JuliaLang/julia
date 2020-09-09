@@ -356,7 +356,7 @@ end
     d = Dict{Int, String}()
     show(io, d)
     str = String(take!(io))
-    @test str == "Dict{$(Int),String}()"
+    @test str == "Dict{$(Int), String}()"
     close(io)
 end
 
@@ -439,7 +439,7 @@ mutable struct T10647{T}; x::T; end
     Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
-@testset "IdDict{Any,Any}" begin
+@testset "IdDict{Any,Any} and partial inference" begin
     a = IdDict{Any,Any}()
     a[1] = a
     a[a] = 2
@@ -478,6 +478,13 @@ end
     @test isa(d, IdDict{Any,Any})
     @test d == IdDict{Any,Any}(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Any,Any}
+
+    d = IdDict{Any,Int32}(:hi => 7)
+    let c = Ref{Any}(1.5)
+        f() = c[]
+        @test @inferred(get!(f, d, :hi)) === Int32(7)
+        @test_throws InexactError(:Int32, Int32, 1.5) get!(f, d, :hello)
+    end
 end
 
 @testset "IdDict" begin
@@ -1060,38 +1067,38 @@ end
     io = IOContext(buf, :displaysize => (4, 80), :limit => true)
     d = Base.ImmutableDict(1=>2)
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int, $Int} with 1 entry: …"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 1 entry. Keys: …"
 
     io = IOContext(io, :displaysize => (5, 80))
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int, $Int} with 1 entry:\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 1 entry. Keys:\n  1"
     d = Base.ImmutableDict(d, 3=>4)
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int, $Int} with 2 entries:\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 2 entries. Keys:\n  ⋮"
 
     io = IOContext(io, :displaysize => (6, 80))
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
-        "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
+        "Base.ImmutableDict{$Int, $Int} with 2 entries:\n  3 => 4\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 2 entries. Keys:\n  3\n  1"
     d = Base.ImmutableDict(d, 5=>6)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
-        "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
+        "Base.ImmutableDict{$Int, $Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 3 entries. Keys:\n  5\n  ⋮"
 end
 
 @testset "copy!" begin

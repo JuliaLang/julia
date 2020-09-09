@@ -458,6 +458,32 @@ function tempdir()
     end
 end
 
+"""
+    prepare_for_deletion(path::AbstractString)
+
+Prepares the given `path` for deletion by ensuring that all directories within that
+`path` have write permissions, so that files can be removed from them.  This is
+automatically invoked by methods such as `mktempdir()` to ensure that no matter what
+weird permissions a user may have created directories with within the temporary prefix,
+it will always be deleted.
+"""
+function prepare_for_deletion(path::AbstractString)
+    # Nothing to do for non-directories
+    if !isdir(path)
+        return
+    end
+
+    try chmod(path, filemode(path) | 0o333)
+    catch; end
+    for (root, dirs, files) in walkdir(path)
+        for dir in dirs
+            dpath = joinpath(root, dir)
+            try chmod(dpath, filemode(dpath) | 0o333)
+            catch; end
+        end
+    end
+end
+
 const TEMP_CLEANUP_MIN = Ref(1024)
 const TEMP_CLEANUP_MAX = Ref(1024)
 const TEMP_CLEANUP = Dict{String,Bool}()
@@ -484,6 +510,7 @@ function temp_cleanup_purge(; force::Bool=false)
             if (force || asap) && ispath(path)
                 need_gc && GC.gc(true)
                 need_gc = false
+                prepare_for_deletion(path)
                 rm(path, recursive=true, force=true)
             end
             !ispath(path) && delete!(TEMP_CLEANUP, path)
@@ -682,7 +709,10 @@ function mktempdir(fn::Function, parent::AbstractString=tempdir();
         fn(tmpdir)
     finally
         try
-            ispath(tmpdir) && rm(tmpdir, recursive=true)
+            if ispath(tmpdir)
+                prepare_for_deletion(tmpdir)
+                rm(tmpdir, recursive=true)
+            end
         catch ex
             @error "mktempdir cleanup" _group=:file exception=(ex, catch_backtrace())
             # might be possible to remove later
@@ -777,7 +807,7 @@ function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
     err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
                 C_NULL, uv_readdir_req, dir, 0, C_NULL)
-    err < 0 && throw(SystemError("unable to read directory $dir", -err))
+    err < 0 && throw(_UVError("readdir", err, "with ", repr(dir)))
 
     # iterate the listing into entries
     entries = String[]
@@ -804,10 +834,9 @@ readdir(; join::Bool=false, sort::Bool=true) =
 Return an iterator that walks the directory tree of a directory.
 The iterator returns a tuple containing `(rootpath, dirs, files)`.
 The directory tree can be traversed top-down or bottom-up.
-If `walkdir` encounters a [`SystemError`](@ref)
-it will rethrow the error by default.
+If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
-`onerror` is called with a `SystemError` as argument.
+`onerror` is called with a `IOError` as argument.
 
 # Examples
 ```julia
@@ -839,48 +868,45 @@ julia> (root, dirs, files) = first(itr)
 ```
 """
 function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
-    content = nothing
-    try
-        content = readdir(root)
-    catch err
-        isa(err, SystemError) || throw(err)
-        onerror(err)
-        # Need to return an empty closed channel to skip the current root folder
-        chnl = Channel(0)
-        close(chnl)
-        return chnl
-    end
-    dirs = Vector{eltype(content)}()
-    files = Vector{eltype(content)}()
-    for name in content
-        path = joinpath(root, name)
-
-        # If we're not following symlinks, then treat all symlinks as files
-        if (!follow_symlinks && islink(path)) || !isdir(path)
-            push!(files, name)
-        else
-            push!(dirs, name)
-        end
-    end
-
-    function _it(chnl)
-        if topdown
-            put!(chnl, (root, dirs, files))
-        end
-        for dir in dirs
-            path = joinpath(root,dir)
-            if follow_symlinks || !islink(path)
-                for (root_l, dirs_l, files_l) in walkdir(path, topdown=topdown, follow_symlinks=follow_symlinks, onerror=onerror)
-                    put!(chnl, (root_l, dirs_l, files_l))
+    function _walkdir(chnl, root)
+        tryf(f, p) = try
+                f(p)
+            catch err
+                isa(err, IOError) || rethrow()
+                try
+                    onerror(err)
+                catch err2
+                    close(chnl, err2)
                 end
+                return
+            end
+        content = tryf(readdir, root)
+        content === nothing && return
+        dirs = Vector{eltype(content)}()
+        files = Vector{eltype(content)}()
+        for name in content
+            path = joinpath(root, name)
+
+            # If we're not following symlinks, then treat all symlinks as files
+            if (!follow_symlinks && something(tryf(islink, path), true)) || !something(tryf(isdir, path), false)
+                push!(files, name)
+            else
+                push!(dirs, name)
             end
         end
-        if !topdown
-            put!(chnl, (root, dirs, files))
-        end
-    end
 
-    return Channel(_it)
+        if topdown
+            push!(chnl, (root, dirs, files))
+        end
+        for dir in dirs
+            _walkdir(chnl, joinpath(root, dir))
+        end
+        if !topdown
+            push!(chnl, (root, dirs, files))
+        end
+        nothing
+    end
+    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, root))
 end
 
 function unlink(p::AbstractString)

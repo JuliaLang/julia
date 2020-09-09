@@ -42,7 +42,7 @@ splat2(5, 2)
 splat2(1:3, 5.2)
 @test String(take!(stagediobuf)) == "(UnitRange{$intstr}, Float64)"
 splat2(3, 5:2:7)
-@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr,$intstr})"
+@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr, $intstr})"
 splat2(1, 2, 3, 4)
 @test String(take!(stagediobuf)) == "($intstr, $intstr, $intstr, $intstr)"
 splat2(1, 2, 3)

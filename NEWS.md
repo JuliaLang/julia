@@ -8,10 +8,19 @@ New language features
   `(Foo{T} where T)(x) = ...`.
 * `<--` and `<-->` are now available as infix operators, with the same precedence
   and associativity as other arrow-like operators ([#36666]).
+* Compilation and type inference can now be enabled or disabled at the module level
+  using the experimental macro `Base.Experimental.@compiler_options` ([#37041]).
+* The library name passed to `ccall` or `@ccall` can now be an expression involving
+  global variables and function calls. The expression will be evaluated the first
+  time the `ccall` executes ([#36458]).
 
 Language changes
 ----------------
 
+* The `-->` operator now lowers to a `:call` expression, so it can be defined as
+  a function like other operators. The dotted version `.-->` is now parsed as well.
+  For backwards compatibility, `-->` still parses using its own expression head
+  instead of `:call`.
 
 Compiler/Runtime improvements
 -----------------------------
@@ -46,6 +55,12 @@ Build system changes
   `./julia-installer.exe /TASKS="desktopicon,startmenu,addtopath"`, adds a desktop
   icon, a startmenu group icon, and adds Julia to system PATH.
 
+
+Library functions
+-----------------
+* The `Base.Grisu` code has been officially removed (float printing was switched to the ryu algorithm code in 1.4)
+
+
 New library functions
 ---------------------
 
@@ -56,6 +71,7 @@ New library functions
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
 * New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more
   efficiently ([#35816]).
+* New function `addenv` for adding environment mappings into a `Cmd` object, returning the new `Cmd` object.
 
 New library features
 --------------------
@@ -64,8 +80,10 @@ New library features
 
 Standard library changes
 ------------------------
-
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
+* The `reverse(A; dims)` function for multidimensional `A` can now reverse multiple dimensions at once
+  by passing a tuple for `dims`, and defaults to reversing all dimensions; there is also a multidimensional
+  in-place `reverse!(A; dims)` ([#37367]).
 * The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array) arguments `x` and `y` ([#35883]).
 * `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
 * All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
@@ -76,6 +94,10 @@ Standard library changes
 * `first` and `last` functions now accept an integer as second argument to get that many
   leading or trailing elements of any iterable ([#34868]).
 * `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
+* `push!(c::Channel, v)` now returns channel `c`. Previously, it returned the pushed value `v` ([#34202]).
+* `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
+* For consistency `haskey(r::RegexMatch, i::Integer)` has also been added and returns if the capture group for `i` exists ([#37300]).
+* A new standard library `TOML` has been added for parsing and printing [TOML files](https://toml.io) ([#37034]).
 
 #### LinearAlgebra
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
@@ -84,6 +106,13 @@ Standard library changes
 * `(+)(::UniformScaling)` is now defined, making `+I` a valid unary operation. ([#36784])
 
 #### Markdown
+
+#### Printf
+
+* Complete overhaul of internal code to use the ryu float printing algorithms (from Julia 1.4); leads to consistent 2-5x performance improvements
+* New `Printf.tofloat` function allowing custom float types to more easily integrate with Printf formatting by converting their type to `Float16`, `Float32`, `Float64`, or `BigFloat`
+* New `Printf.format"..."` and `Printf.Format(...)` functions that allow creating `Printf.Format` objects that can be passed to `Printf.format` for easier dynamic printf formatting
+* `Printf.format(f::Printf.Format, args...)` as a non-macro function that applies a printf format `f` to provided `args`
 
 
 #### Random

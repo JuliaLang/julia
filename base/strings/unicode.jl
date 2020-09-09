@@ -284,6 +284,8 @@ Tests whether a character is a lowercase letter.
 A character is classified as lowercase if it belongs to Unicode category Ll,
 Letter: Lowercase.
 
+See also: [`isuppercase`](@ref).
+
 # Examples
 ```jldoctest
 julia> islowercase('α')
@@ -307,6 +309,8 @@ Tests whether a character is an uppercase letter.
 A character is classified as uppercase if it belongs to Unicode category Lu,
 Letter: Uppercase, or Lt, Letter: Titlecase.
 
+See also: [`islowercase`](@ref).
+
 # Examples
 ```jldoctest
 julia> isuppercase('γ')
@@ -328,6 +332,8 @@ end
     iscased(c::AbstractChar) -> Bool
 
 Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
+
+See also: [`islowercase`](@ref), [`isuppercase`](@ref).
 """
 function iscased(c::AbstractChar)
     cat = category_code(c)
@@ -513,6 +519,8 @@ isxdigit(c::AbstractChar) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 
 Return `s` with all characters converted to uppercase.
 
+See also: [`lowercase`](@ref), [`titlecase`](@ref), [`uppercasefirst`](@ref).
+
 # Examples
 ```jldoctest
 julia> uppercase("Julia")
@@ -525,6 +533,8 @@ uppercase(s::AbstractString) = map(uppercase, s)
     lowercase(s::AbstractString)
 
 Return `s` with all characters converted to lowercase.
+
+See also: [`uppercase`](@ref), [`titlecase`](@ref), [`lowercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -545,6 +555,8 @@ a predicate can be passed as the `wordsep` keyword to determine
 which characters should be considered as word separators.
 See also [`uppercasefirst`](@ref) to capitalize only the first
 character in `s`.
+
+See also: [`uppercase`](@ref), [`lowercase`](@ref), [`uppercasefirst`](@ref).
 
 # Examples
 ```jldoctest

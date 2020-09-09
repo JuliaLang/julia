@@ -42,7 +42,7 @@ julia> collect(x)
  2
 
 julia> collect(pairs(x))
-2-element Vector{Pair{Symbol,Int64}}:
+2-element Vector{Pair{Symbol, Int64}}:
  :a => 1
  :b => 2
 ```
@@ -161,7 +161,9 @@ function show(io::IO, t::NamedTuple)
     end
 end
 
-eltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
+eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
+nteltype(::Type) = Any
+nteltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
 
 ==(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) == Tuple(b)
 ==(a::NamedTuple, b::NamedTuple) = false
@@ -248,6 +250,8 @@ merge(a::NamedTuple{()}, b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple)     = b
 
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
+
+merge(a::NamedTuple, b::Iterators.Zip{<:Tuple{Any,Any}}) = merge(a, NamedTuple{Tuple(b.is[1])}(b.is[2]))
 
 merge(a::NamedTuple, b::NamedTuple, cs::NamedTuple...) = merge(merge(a, b), cs...)
 
@@ -360,13 +364,13 @@ can also be declared via `@NamedTuple` as:
 
 ```jldoctest
 julia> @NamedTuple{a::Float64, b::String}
-NamedTuple{(:a, :b),Tuple{Float64,String}}
+NamedTuple{(:a, :b), Tuple{Float64, String}}
 
 julia> @NamedTuple begin
            a::Float64
            b::String
        end
-NamedTuple{(:a, :b),Tuple{Float64,String}}
+NamedTuple{(:a, :b), Tuple{Float64, String}}
 ```
 
 !!! compat "Julia 1.5"

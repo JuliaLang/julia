@@ -1656,6 +1656,8 @@ end
 # #6080
 @test Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x))) == Expr(:error, "invalid syntax &x")
 
+@test Meta.lower(@__MODULE__, :(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ())))) == Expr(:error, "ccall function name and library expression cannot reference local variables")
+
 @test_throws ParseError Meta.parse("x.'")
 @test_throws ParseError Meta.parse("0.+1")
 
@@ -2091,6 +2093,18 @@ end
 end
 @test z28789 == 42
 
+# issue #37126
+@test isempty(Test.collect_test_logs() do
+    include_string(@__MODULE__, """
+        function foo37126()
+            f(lhs::Integer, rhs::Integer) = nothing
+            f(lhs::Integer, rhs::AbstractVector{<:Integer}) = nothing
+            return f
+        end
+        struct Bar37126{T<:Real, P<:Real} end
+        """)
+    end[1])
+
 # issue #34673
 # check that :toplevel still returns a value when nested inside something else
 @test eval(Expr(:block, 0, Expr(:toplevel, 43))) == 43
@@ -2275,6 +2289,13 @@ macro m36272()
 end
 @test @m36272()(1) == 1
 
+# issue #37134
+macro m37134()
+    :(x :: Int -> 62)
+end
+@test @m37134()(1) == 62
+@test_throws MethodError @m37134()(1.0) == 62
+
 @testset "unary ± and ∓" begin
     @test Meta.parse("±x") == Expr(:call, :±, :x)
     @test Meta.parse("∓x") == Expr(:call, :∓, :x)
@@ -2297,5 +2318,20 @@ end
 @test :(a .<-- b.<--c) == Expr(:call, :.<--, :a, Expr(:call, :.<--, :b, :c))
 @test :(a<-->b<-->c) == Expr(:call, :<-->, :a, Expr(:call, :<-->, :b, :c))
 @test :(a.<-->b .<--> c) == Expr(:call, :.<-->, :a, Expr(:call, :.<-->, :b, :c))
+@test :(a --> b --> c) == Expr(:-->, :a, Expr(:-->, :b, :c))
+@test :(a --> b.-->c) == Expr(:-->, :a, Expr(:call, :.-->, :b, :c))
+let (-->) = (+)
+    @test (40 --> 2) == 42
+end
 @test_throws ParseError("invalid operator \"<---\"") Meta.parse("1<---2")
 @test_throws ParseError("invalid operator \".<---\"") Meta.parse("1 .<--- 2")
+@test_throws ParseError("invalid operator \"--\"") Meta.parse("a---b")
+@test_throws ParseError("invalid operator \".--\"") Meta.parse("a.---b")
+
+# issue #37228
+# NOTE: the `if` needs to be at the top level
+if isodd(1) && all(iseven(2) for c in ())
+    @test true
+else
+    @test false
+end

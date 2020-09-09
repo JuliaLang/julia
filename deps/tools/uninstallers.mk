@@ -26,7 +26,7 @@ $(addprefix version-check-,$(DEP_LIBS_STAGED)) : version-check-% : install-%
 	@if [ ! -e $(build_prefix)/manifest/$* ] || ( \
 			[ "1" != "`wc -w $(build_prefix)/manifest/$* | cut -f 1 -d ' '`" ] && \
 			[ "$(UNINSTALL_$*)" != "`cat $(build_prefix)/manifest/$*`" ]) ; then \
-		echo "WARNING: using mismatched version for $$(cat $(build_prefix)/manifest/$*):" ; \
+		echo "WARNING: using mismatched version for $$( if [ -e $(build_prefix)/manifest/$* ]; then cat $(build_prefix)/manifest/$*; else echo $*; fi):" ; \
 		echo "  want $(UNINSTALL_$*)" ; \
 		echo "  To resolve this warning, you could try either of the following suggestions: " ; \
 		echo "  1. Run the following command: make -C deps uninstall" ; \

@@ -250,7 +250,6 @@ using .Filesystem
 include("cmd.jl")
 include("process.jl")
 include("ttyhascolor.jl")
-include("grisu/grisu.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -340,6 +339,8 @@ include("threadcall.jl")
 
 # code loading
 include("uuid.jl")
+include("pkgid.jl")
+include("toml_parser.jl")
 include("loading.jl")
 
 # misc useful functions & macros

@@ -1,4 +1,5 @@
 # Install dependencies needed to build the documentation.
+Base.ACTIVE_PROJECT[] = nothing
 empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)
@@ -194,7 +195,10 @@ else
     Documenter.HTML(
         prettyurls = ("deploy" in ARGS),
         canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
-        assets = ["assets/julia-manual.css", ],
+        assets = [
+            "assets/julia-manual.css",
+            "assets/julia.ico",
+        ],
         analytics = "UA-28835595-6",
         collapselevel = 1,
         sidebar_sitename = false,
@@ -218,17 +222,18 @@ makedocs(
 
 # Define our own DeployConfig
 struct BuildBotConfig <: Documenter.DeployConfig end
-function Documenter.deploy_folder(::BuildBotConfig; devurl, kwargs...)
-    haskey(ENV, "DOCUMENTER_KEY") || return nothing
+function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs...)
+    haskey(ENV, "DOCUMENTER_KEY") || return Documenter.DeployDecision(; all_ok=false)
     if Base.GIT_VERSION_INFO.tagged_commit
         # Strip extra pre-release info (1.5.0-rc2.0 -> 1.5.0-rc2)
         ver = VersionNumber(VERSION.major, VERSION.minor, VERSION.patch,
             isempty(VERSION.prerelease) ? () : (VERSION.prerelease[1],))
-        return "v$(ver)"
+        subfolder = "v$(ver)"
+        return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder)
     elseif Base.GIT_VERSION_INFO.branch == "master"
-        return devurl
+        return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder=devurl)
     end
-    return nothing
+    return Documenter.DeployDecision(; all_ok=false)
 end
 
 const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"

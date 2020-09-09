@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
+
 # Advisory reentrant lock
 """
     ReentrantLock()
@@ -10,10 +12,10 @@ Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 """
 mutable struct ReentrantLock <: AbstractLock
     locked_by::Union{Task, Nothing}
-    cond_wait::GenericCondition{Threads.SpinLock}
+    cond_wait::ThreadSynchronizer
     reentrancy_cnt::Int
 
-    ReentrantLock() = new(nothing, GenericCondition{Threads.SpinLock}(), 0)
+    ReentrantLock() = new(nothing, ThreadSynchronizer(), 0)
 end
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
@@ -232,16 +234,14 @@ end
     """
     Special note for [`Threads.Condition`](@ref):
 
-    The caller must be holding the [`lock`](@ref) that owns `c` before calling this method.
+    The caller must be holding the [`lock`](@ref) that owns a `Threads.Condition` before calling this method.
     The calling task will be blocked until some other task wakes it,
-    usually by calling [`notify`](@ref) on the same Condition object.
+    usually by calling [`notify`](@ref) on the same `Threads.Condition` object.
     The lock will be atomically released when blocking (even if it was locked recursively),
     and will be reacquired before returning.
     """
     wait(c::Condition)
 end
-
-const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 
 """
     Semaphore(sem_size)

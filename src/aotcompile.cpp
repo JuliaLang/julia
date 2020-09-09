@@ -2,7 +2,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
 
 // target support
 #include <llvm/ADT/Triple.h>
@@ -21,9 +20,8 @@
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Vectorize.h>
-#if defined(JL_ASAN_ENABLED)
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
-#endif
+#include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
@@ -268,9 +266,11 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         }
         else {
             *src_out = jl_type_infer(mi, world, 0);
-            codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
-            if ((*src_out)->inferred && !codeinst->inferred)
-                codeinst->inferred = jl_nothing;
+            if (*src_out) {
+                codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
+                if ((*src_out)->inferred && !codeinst->inferred)
+                    codeinst->inferred = jl_nothing;
+            }
         }
     }
     *ci_out = codeinst;
@@ -624,15 +624,19 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         }
         PM->add(createMemCpyOptPass());
         PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
+        PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (lower_intrinsics) {
             PM->add(createBarrierNoopPass());
             PM->add(createLowerExcHandlersPass());
             PM->add(createGCInvariantVerifierPass(false));
+            PM->add(createRemoveNIPass());
             PM->add(createLateLowerGCFramePass());
             PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSPass(dump_native));
         }
-        PM->add(createRemoveNIPass());
+        else {
+            PM->add(createRemoveNIPass());
+        }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
@@ -641,6 +645,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(JL_MSAN_ENABLED)
         PM->add(createMemorySanitizerPass(true));
+#endif
+#if defined(JL_TSAN_ENABLED)
+        PM->add(createThreadSanitizerLegacyPassPass());
 #endif
         return;
     }
@@ -749,15 +756,26 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
+        // Needed **before** LateLowerGCFrame on LLVM < 12
+        // due to bug in `CreateAlignmentAssumption`.
+        PM->add(createRemoveNIPass());
         PM->add(createLateLowerGCFramePass());
         PM->add(createFinalLowerGCPass());
+        // We need these two passes and the instcombine below
+        // after GC lowering to let LLVM do some constant propagation on the tags.
+        // and remove some unnecessary write barrier checks.
+        PM->add(createGVNPass());
+        PM->add(createSCCPPass());
         // Remove dead use of ptls
         PM->add(createDeadCodeEliminationPass());
         PM->add(createLowerPTLSPass(dump_native));
+        PM->add(createInstructionCombiningPass());
         // Clean up write barrier and ptls lowering
         PM->add(createCFGSimplificationPass());
     }
-    PM->add(createRemoveNIPass());
+    else {
+        PM->add(createRemoveNIPass());
+    }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
 #if defined(JL_ASAN_ENABLED)
@@ -765,6 +783,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(JL_MSAN_ENABLED)
     PM->add(createMemorySanitizerPass(true));
+#endif
+#if defined(JL_TSAN_ENABLED)
+    PM->add(createThreadSanitizerLegacyPassPass());
 #endif
 }
 
@@ -862,6 +883,11 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         Function *F = NULL;
         if (m) {
             // if compilation succeeded, prepare to return the result
+            // For imaging mode, global constants are currently private without initializer
+            // which isn't legal. Convert them to extern linkage so that the code can compile
+            // and will better match what's actually in sysimg.
+            for (auto &global : output.globals)
+                global.second->setLinkage(GlobalValue::ExternalLinkage);
             if (optimize)
                 PM->run(*m.get());
             const std::string *fname;

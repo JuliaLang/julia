@@ -12,8 +12,9 @@ eligible to be the scope of some set of variables. The scope of a variable canno
 set of source lines; instead, it will always line up with one of these blocks. There are two main
 types of scopes in Julia, *global scope* and *local scope*. The latter can be nested. There is also
 a distinction in Julia between constructs which introduce a "hard scope" and those which only
-introduce a "soft scope", which affects whether shadowing a global variable by the same name is
-allowed or not.
+introduce a "soft scope", which affects whether
+[shadowing](https://en.wikipedia.org/wiki/Variable_shadowing)
+a global variable by the same name is allowed or not.
 
 ### [Scope constructs](@id man-scope-table)
 

@@ -360,7 +360,7 @@ end
         """
     # test for invalid state in Workqueue during yield
     t = @async nothing
-    t.state = :invalid
+    t._state = 66
     newstderr = redirect_stderr()
     try
         errstream = @async read(newstderr[1], String)
@@ -539,6 +539,11 @@ end
 let t = @async nothing
     wait(t)
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
+end
+
+@testset "push!(c, v) -> c" begin
+    c = Channel(Inf)
+    @test push!(c, nothing) === c
 end
 
 # Channel `show`

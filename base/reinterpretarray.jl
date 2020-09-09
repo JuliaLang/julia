@@ -62,7 +62,14 @@ StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 # a tuple containing 1 and a cumulative product of the first N-1 sizes
 # this definition is also used for StridedReshapedArray and StridedReinterpretedArray
 # which have the same memory storage as Array
-function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int)
+stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int) = _stride(a, i)
+
+function stride(a::ReinterpretArray, i::Int)
+    a.parent isa StridedArray || ArgumentError("Parent must be strided.") |> throw
+    return _stride(a, i)
+end
+
+function _stride(a, i)
     if i > ndims(a)
         return length(a)
     end
@@ -73,6 +80,10 @@ function stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray
     return s
 end
 
+function strides(a::ReinterpretArray)
+    a.parent isa StridedArray || ArgumentError("Parent must be strided.") |> throw
+    size_to_strides(1, size(a)...)
+end
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
 
 function check_readable(a::ReinterpretArray{T, N, S} where N) where {T,S}
@@ -151,18 +162,32 @@ end
         GC.@preserve t s begin
             tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
             sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
-            i = 1
-            nbytes_copied = 0
-            # This is a bit complicated to deal with partial elements
-            # at both the start and the end. LLVM will fold as appropriate,
-            # once it knows the data layout
-            while nbytes_copied < sizeof(T)
-                s[] = a.parent[ind_start + i, tailinds...]
-                nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
-                _memcpy!(tptr + nbytes_copied, sptr + sidx, nb)
-                nbytes_copied += nb
-                sidx = 0
-                i += 1
+            # Optimizations that avoid branches
+            if sizeof(T) % sizeof(S) == 0
+                # T is bigger than S and contains an integer number of them
+                n = sizeof(T) ÷ sizeof(S)
+                for i = 1:n
+                    s[] = a.parent[ind_start + i, tailinds...]
+                    _memcpy!(tptr + (i-1)*sizeof(S), sptr, sizeof(S))
+                end
+            elseif sizeof(S) % sizeof(T) == 0
+                # S is bigger than T and contains an integer number of them
+                s[] = a.parent[ind_start + 1, tailinds...]
+                _memcpy!(tptr, sptr + sidx, sizeof(T))
+            else
+                i = 1
+                nbytes_copied = 0
+                # This is a bit complicated to deal with partial elements
+                # at both the start and the end. LLVM will fold as appropriate,
+                # once it knows the data layout
+                while nbytes_copied < sizeof(T)
+                    s[] = a.parent[ind_start + i, tailinds...]
+                    nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
+                    _memcpy!(tptr + nbytes_copied, sptr + sidx, nb)
+                    nbytes_copied += nb
+                    sidx = 0
+                    i += 1
+                end
             end
         end
         return t[]
@@ -200,33 +225,48 @@ end
         GC.@preserve t s begin
             tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
             sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
-            nbytes_copied = 0
-            i = 1
-            # Deal with any partial elements at the start. We'll have to copy in the
-            # element from the original array and overwrite the relevant parts
-            if sidx != 0
-                s[] = a.parent[ind_start + i, tailinds...]
-                nb = min(sizeof(S) - sidx, sizeof(T))
-                _memcpy!(sptr + sidx, tptr, nb)
-                nbytes_copied += nb
-                a.parent[ind_start + i, tailinds...] = s[]
-                i += 1
-                sidx = 0
-            end
-            # Deal with the main body of elements
-            while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)
-                nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                _memcpy!(sptr, tptr + nbytes_copied, nb)
-                nbytes_copied += nb
-                a.parent[ind_start + i, tailinds...] = s[]
-                i += 1
-            end
-            # Deal with trailing partial elements
-            if nbytes_copied < sizeof(T)
-                s[] = a.parent[ind_start + i, tailinds...]
-                nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                _memcpy!(sptr, tptr + nbytes_copied, nb)
-                a.parent[ind_start + i, tailinds...] = s[]
+            # Optimizations that avoid branches
+            if sizeof(T) % sizeof(S) == 0
+                # T is bigger than S and contains an integer number of them
+                n = sizeof(T) ÷ sizeof(S)
+                for i = 0:n-1
+                    _memcpy!(sptr, tptr + i*sizeof(S), sizeof(S))
+                    a.parent[ind_start + i + 1, tailinds...] = s[]
+                end
+            elseif sizeof(S) % sizeof(T) == 0
+                # S is bigger than T and contains an integer number of them
+                s[] = a.parent[ind_start + 1, tailinds...]
+                _memcpy!(sptr + sidx, tptr, sizeof(T))
+                a.parent[ind_start + 1, tailinds...] = s[]
+            else
+                nbytes_copied = 0
+                i = 1
+                # Deal with any partial elements at the start. We'll have to copy in the
+                # element from the original array and overwrite the relevant parts
+                if sidx != 0
+                    s[] = a.parent[ind_start + i, tailinds...]
+                    nb = min((sizeof(S) - sidx) % UInt, sizeof(T) % UInt)
+                    _memcpy!(sptr + sidx, tptr, nb)
+                    nbytes_copied += nb
+                    a.parent[ind_start + i, tailinds...] = s[]
+                    i += 1
+                    sidx = 0
+                end
+                # Deal with the main body of elements
+                while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)
+                    nb = min(sizeof(S), sizeof(T) - nbytes_copied)
+                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    nbytes_copied += nb
+                    a.parent[ind_start + i, tailinds...] = s[]
+                    i += 1
+                end
+                # Deal with trailing partial elements
+                if nbytes_copied < sizeof(T)
+                    s[] = a.parent[ind_start + i, tailinds...]
+                    nb = min(sizeof(S), sizeof(T) - nbytes_copied)
+                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    a.parent[ind_start + i, tailinds...] = s[]
+                end
             end
         end
     end
