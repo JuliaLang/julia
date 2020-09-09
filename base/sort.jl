@@ -409,7 +409,7 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsortedlast
 
 function _insortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
-    if x > v[hi]
+    if lt(o, v[hi], x)
         return false
     end
     u = T(1)
@@ -430,7 +430,7 @@ function _insortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool w
 end
 
 function _insortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
-    if x > v[hi]
+    if lt(o, x, v[lo])
         return false
     end
     u = T(1)
@@ -444,14 +444,16 @@ function _insortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool wh
             lo = m
         end
     end
-    if v[hi] == x
+    if v[lo] == x
         return true
     end
     return false
 end
 
 function insorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::Bool where T<:Integer
-    if x > v[ihi]
+    if isempty(v)
+        return false
+    elseif lt(o, v[ihi], x)
         return false
     end
     u = T(1)
@@ -464,10 +466,10 @@ function insorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::Bool where
         elseif lt(o, x, v[m])
             hi = m
         else
-            return _insortedfirst(v, x, max(lo,ilo), m, o) || _insortedlast(v, x, max(hi,ihi), m, o)
+            return _insortedfirst(v, x, max(lo,ilo), m, o) || _insortedlast(v, x, m, min(hi,ihi), o)
         end
     end
-    if v[hi] == x
+    if hi <= ihi && v[hi] == x
         return true
     end
     return false
@@ -475,6 +477,9 @@ end
 
 function insorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::Bool
     require_one_based_indexing(a)
+    if lt(o, x, first(a)) || lt(o, last(a), x)
+        return false
+    end
     if step(a) == 0
         if first(a) == x
             return true
@@ -482,17 +487,17 @@ function insorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::Bool
             return false
         end
     else
-        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
-        if a[n] == x
-            return true
-        else
-            return false
-        end
+        #TODO Replace the following
+        # Precision issue avoided here in an inefficient way
+        return insorted([a;], x, o)
     end
 end
 
 function insorted(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::Bool
     require_one_based_indexing(a)
+    if lt(o, x, first(a)) || lt(o, last(a), x) || !isinteger(x)
+        return false
+    end
     h = step(a)
     if h == 0
         if first(a) == x
@@ -500,43 +505,11 @@ function insorted(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::Bool
         else
             return false
         end
-    elseif h > 0 && x <= first(a)
-        if first(a) == x
-            return true
-        else
-            return false
-        end
-    elseif h > 0 && x >= last(a)
-        if last(a) == x
-            return true
-        else
-            return false
-        end
-    elseif h < 0 && x >= first(a)
-        if first(a) == x
-            return true
-        else
-            return false
-        end
-    elseif h < 0 && x <= last(a)
-        if last(a) == x
-            return true
-        else
-            return false
-        end
     else
-        if o isa ForwardOrdering
-            if -fld(floor(Integer, -x) + Signed(first(a)), h) + 1 == x
-                return true
-            else
-                return false
-            end
+        if isinteger((x - first(a)) / step(a))
+            return true
         else
-            if -fld(ceil(Integer, -x) + Signed(first(a)), h) + 1 == x
-                return true
-            else
-                return false
-            end
+            return false
         end
     end
 end
@@ -546,19 +519,19 @@ function insorted(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::
     if lt(o, first(a), x)
         if step(a) == 0
             return false
-        else
-            if min(cld(x - first(a), step(a)), length(a)) + 1 == x
+        elseif !lt(o, last(a), x)
+            if isinteger((x - first(a)) / step(a))
                 return true
             else
                 return false
             end
-        end
-    else
-        if first(a) == x
-            return true
         else
             return false
         end
+    elseif first(a) == x
+        return true
+    else
+        return false
     end
 end
 
