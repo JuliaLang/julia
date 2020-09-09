@@ -181,7 +181,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 - **[GMP]**                  — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]**                 — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
 - **[libgit2]**              — Git linkable library, used by Julia's package manager.
-- **[curl]**                 — libcurl provides download and proxy support for Julia's package manager.
+- **[curl]**                 — libcurl provides download and proxy support.
 - **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
 - **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
