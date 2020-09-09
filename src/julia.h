@@ -746,7 +746,7 @@ extern void JL_GC_PUSH2(void *, void *) JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH3(void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH4(void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH5(void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
-extern void JL_GC_PUSH7(void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
+extern void JL_GC_PUSH6(void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
 // This is necessary, because otherwise the analyzer considers this undefined
 // behavior and terminates the exploration
@@ -782,11 +782,6 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 #define JL_GC_PUSH6(arg1, arg2, arg3, arg4, arg5, arg6)                                                 \
   void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(6), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6};   \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
-
-#define JL_GC_PUSH7(arg1, arg2, arg3, arg4, arg5, arg6, arg7)                                           \
-  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(7), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7}; \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
-
 
 #define JL_GC_PUSHARGS(rts_var,n)                                                                       \
   rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;                                      \

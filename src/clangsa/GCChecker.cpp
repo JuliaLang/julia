@@ -1340,8 +1340,7 @@ bool GCChecker::evalCall(const CallExpr *CE,
     return true;
   } else if (name == "JL_GC_PUSH1" || name == "JL_GC_PUSH2" ||
              name == "JL_GC_PUSH3" || name == "JL_GC_PUSH4" ||
-             name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6" ||
-             name == "JL_GC_PUSH7") {
+             name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6") {
     ProgramStateRef State = C.getState();
     // Transform slots to roots, transform values to rooted
     unsigned NumArgs = CE->getNumArgs();
@@ -1349,7 +1348,8 @@ bool GCChecker::evalCall(const CallExpr *CE,
       SVal V = C.getSVal(CE->getArg(i));
       auto MRV = V.getAs<loc::MemRegionVal>();
       if (!MRV) {
-        report_error(C, "JL_GC_PUSH with something other than a local variable");
+        report_error(C,
+                     "JL_GC_PUSH with something other than a local variable");
         return true;
       }
       const MemRegion *Region = MRV->getRegion();

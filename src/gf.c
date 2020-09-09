@@ -1454,7 +1454,7 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
         }
         if (intersects) {
             if (_jl_debug_method_invalidation) {
-                jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)oldentry);
                 jl_value_t *loctag = jl_cstr_to_string("invalidate_mt_cache");
                 JL_GC_PUSH1(&loctag);
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
@@ -1551,32 +1551,6 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_UNLOCK(&mt->writelock);
 }
 
-static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **isect, jl_value_t **isect2)
-{
-    *isect2 = NULL;
-    *isect = jl_type_intersection(t1, t2);
-    if (*isect == jl_bottom_type)
-        return 0;
-    if (!(jl_subtype(*isect, t1) && jl_subtype(*isect, t2))) {
-        // if the intersection was imprecise, see if we can do
-        // better by switching the types
-        *isect2 = jl_type_intersection(t2, t1);
-        if (*isect2 == jl_bottom_type) {
-            *isect = jl_bottom_type;
-            *isect2 = NULL;
-            return 0;
-        }
-        if (jl_subtype(*isect2, t1) && jl_subtype(*isect2, t2)) {
-            *isect = *isect2;
-            *isect2 = NULL;
-        }
-        else if (jl_types_equal(*isect2, *isect)) {
-            *isect2 = NULL;
-        }
-    }
-    return 1;
-}
-
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
     JL_TIMING(ADD_METHOD);
@@ -1590,10 +1564,8 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     size_t max_world = method->primary_world - 1;
     jl_value_t *loctag = NULL;  // debug info for invalidation
     jl_value_t *isect = NULL;
-    jl_value_t *isect2 = NULL;
-    jl_value_t *isect3 = NULL;
     jl_typemap_entry_t *newentry = NULL;
-    JL_GC_PUSH7(&oldvalue, &oldmi, &newentry, &loctag, &isect, &isect2, &isect3);
+    JL_GC_PUSH5(&oldvalue, &oldmi, &newentry, &loctag, &isect);
     JL_LOCK(&mt->writelock);
     // first find if we have an existing entry to delete
     struct jl_typemap_assoc search = {(jl_value_t*)type, method->primary_world, NULL, 0, ~(size_t)0};
@@ -1628,15 +1600,14 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
                 jl_value_t *backedgetyp = backedges[i - 1];
-                if (jl_type_intersection2(backedgetyp, (jl_value_t*)type, &isect, &isect2)) {
+                isect = jl_type_intersection(backedgetyp, (jl_value_t*)type);
+                if (isect != jl_bottom_type) {
                     // see if the intersection was actually already fully
                     // covered by anything (method or ambiguity is okay)
                     size_t j;
                     for (j = 0; j < n; j++) {
                         jl_method_t *m = d[j];
                         if (jl_subtype(isect, m->sig))
-                            break;
-                        if (isect2 && jl_subtype(isect2, m->sig))
                             break;
                     }
                     if (j != n)
@@ -1680,8 +1651,9 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                     jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
                     if (mi == NULL)
                         continue;
-                    isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
-                    if (jl_type_intersection2(type, isect3, &isect, &isect2)) {
+                    isect = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
+                    isect = jl_type_intersection(type, isect);
+                    if (isect != jl_bottom_type) {
                         if (morespec[j] == (char)morespec_unknown)
                             morespec[j] = (char)jl_type_morespecific(m->sig, type) ? morespec_is : morespec_isnot;
                         if (morespec[j] == (char)morespec_is)
@@ -1695,7 +1667,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                             size_t k;
                             for (k = 0; k < n; k++) {
                                 jl_method_t *m2 = d[k];
-                                if (m == m2 || !(jl_subtype(isect, m2->sig) || (isect && jl_subtype(isect, m2->sig))))
+                                if (m == m2 || !jl_subtype(isect, m2->sig))
                                     continue;
                                 if (morespec[k] == (char)morespec_unknown)
                                     morespec[k] = (char)jl_type_morespecific(m2->sig, type) ? morespec_is : morespec_isnot;
@@ -2645,8 +2617,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         intersections, world, lim, /* .t = */ jl_an_empty_vec_any,
         /* .min_valid = */ *min_valid, /* .max_valid = */ *max_valid, /* .matc = */ NULL};
     struct jl_typemap_assoc search = {(jl_value_t*)type, world, jl_emptysvec, 1, ~(size_t)0};
-    jl_value_t *isect2 = NULL;
-    JL_GC_PUSH6(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti, &isect2);
+    JL_GC_PUSH5(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti);
 
     // check the leaf cache if this type can be in there
     if (((jl_datatype_t*)unw)->isdispatchtuple) {
@@ -2716,75 +2687,83 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
     int minmax_ambig = 0;
     int all_subtypes = 1;
     if (len > 1) {
-        // first try to pre-process the results to find the most specific
-        // result that fully covers the input, since we can do this in linear
-        // time, and the rest is O(n^2)
-        //   - first find a candidate for the best of these method results
+        // first try to pre-process the results to find the most specific result that fully covers the input
+        // (since we can do this in linear time, and the rest is O(n^2)
+        //   - first see if this might even be profitable, given the requested output we need to compute
         for (i = 0; i < len; i++) {
             jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
-            if (matc->fully_covers == FULLY_COVERS) {
-                jl_method_t *m = matc->method;
-                if (minmax != NULL) {
-                    jl_method_t *minmaxm = minmax->method;
-                    if (jl_type_morespecific((jl_value_t*)minmaxm->sig, (jl_value_t*)m->sig))
-                        continue;
-                }
-                minmax = matc;
-            }
-            else {
+            if (matc->fully_covers != FULLY_COVERS) {
                 all_subtypes = 0;
+                break;
             }
         }
-        //   - then see if it dominated all of the other choices
-        if (minmax != NULL) {
+        if (all_subtypes || !include_ambiguous) {
+            //   - then find a candidate for the best of these method results
+            //     (If we have a reason to compute this. There's no point in
+            //     finding the minmax now, if we still need to examine all
+            //     methods for ambiguities later.)
             for (i = 0; i < len; i++) {
                 jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
-                if (matc == minmax)
-                    break;
                 if (matc->fully_covers == FULLY_COVERS) {
                     jl_method_t *m = matc->method;
-                    jl_method_t *minmaxm = minmax->method;
-                    if (!jl_type_morespecific((jl_value_t*)minmaxm->sig, (jl_value_t*)m->sig)) {
-                        minmax_ambig = 1;
-                        minmax = NULL;
-                        *has_ambiguity = 1;
+                    if (minmax != NULL) {
+                        jl_method_t *minmaxm = minmax->method;
+                        if (jl_type_morespecific((jl_value_t*)minmaxm->sig, (jl_value_t*)m->sig))
+                            continue;
+                    }
+                    minmax = matc;
+                }
+            }
+            //   - then see if it dominated all of the other choices
+            if (minmax != NULL) {
+                for (i = 0; i < len; i++) {
+                    jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
+                    if (matc == minmax)
                         break;
+                    if (matc->fully_covers == FULLY_COVERS) {
+                        jl_method_t *m = matc->method;
+                        jl_method_t *minmaxm = minmax->method;
+                        if (!jl_type_morespecific((jl_value_t*)minmaxm->sig, (jl_value_t*)m->sig)) {
+                            minmax_ambig = 1;
+                            *has_ambiguity = 1;
+                            if (include_ambiguous)
+                                minmax = NULL;
+                            break;
+                        }
                     }
                 }
             }
-        }
-        //   - it may even dominate some choices that are not subtypes!
-        //     move those into the subtype group, where we're filter them out shortly after
-        //     (and avoid potentially reporting these as an ambiguity)
-        if (!all_subtypes && minmax != NULL && !minmax_ambig) {
-            jl_method_t *minmaxm = minmax->method;
-            if (!include_ambiguous)
-                all_subtypes = 0;
-            for (i = 0; i < len; i++) {
-                jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
-                if (matc->fully_covers != FULLY_COVERS) {
-                    jl_method_t *m = matc->method;
-                    if (jl_type_morespecific((jl_value_t*)minmaxm->sig, (jl_value_t*)m->sig))
-                        matc->fully_covers = SENTINEL; // put a sentinel value here for sorting
-                    else
-                        all_subtypes = 0;
+            //   - it may even dominate some choices that are not subtypes!
+            //     move those into the subtype group, where we're filter them out shortly after
+            if (!all_subtypes && minmax) {
+                jl_method_t *minmaxm = minmax->method;
+                all_subtypes = 1;
+                for (i = 0; i < len; i++) {
+                    jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
+                    if (matc->fully_covers != FULLY_COVERS) {
+                        jl_method_t *m = matc->method;
+                        if (jl_type_morespecific((jl_value_t*)minmaxm->sig, (jl_value_t*)m->sig))
+                            matc->fully_covers = SENTINEL; // put a sentinel value here for sorting
+                        else
+                            all_subtypes = 0;
+                    }
                 }
             }
-        }
-        //    - now we might have a fast-return here, if we see that
-        //      we've already processed all of the possible outputs
-        if (all_subtypes) {
-            if (minmax_ambig) {
-                if (!include_ambiguous) {
-                    len = 0;
-                    env.t = jl_an_empty_vec_any;
+            //    - now we might have a fast-return here, if we see that
+            //      we've already processed all of the possible outputs
+            if (all_subtypes) {
+                if (minmax_ambig) {
+                    if (!include_ambiguous) {
+                        len = 0;
+                        env.t = jl_an_empty_vec_any;
+                    }
                 }
-            }
-            else {
-                assert(minmax != NULL);
-                jl_array_ptr_set(env.t, 0, minmax);
-                jl_array_del_end((jl_array_t*)env.t, len - 1);
-                len = 1;
+                else {
+                    assert(minmax != NULL);
+                    jl_array_ptr_set(env.t, 0, minmax);
+                    jl_array_del_end((jl_array_t*)env.t, len - 1);
+                    len = 1;
+                }
             }
         }
     }
@@ -2797,7 +2776,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
             env.matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
             jl_method_t *m = env.matc->method;
             int subt = env.matc->fully_covers != NOT_FULLY_COVERS;
-            if ((minmax != NULL || minmax_ambig) && !include_ambiguous && subt) {
+            if (minmax != NULL && subt) {
                 continue; // already the biggest
             }
             for (j = 0; j < i; j++) {
@@ -2818,7 +2797,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         // we stopped early with just having all non-subtypes before all
         // subtypes, but the case on the boundary might be wrongly placed:
         // check for that now
-        if (minmax == NULL && !minmax_ambig) {
+        if (!minmax) {
             for (i = 0; i < len; i++) {
                 jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
                 if (matc->fully_covers == FULLY_COVERS)
@@ -2844,9 +2823,17 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         }
         char *skip = (char*)alloca(len);
         memset(skip, 0, len);
-        // if we had a minmax method (any subtypes), now may now be able to
-        // quickly cleanup some of our sort result
-        if (minmax != NULL || (minmax_ambig && !include_ambiguous)) {
+        // since we had a minmax method, now may now be able to cleanup some of our sort result
+        if (minmax_ambig && !include_ambiguous) {
+            for (i = 0; i < len; i++) {
+                jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
+                if (matc->fully_covers != NOT_FULLY_COVERS) {
+                    skip[i] = 1;
+                }
+            }
+        }
+        else if (minmax != NULL) {
+            assert(all_subtypes || !include_ambiguous);
             for (i = 0; i < len; i++) {
                 jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
                 if (minmax != matc && matc->fully_covers != NOT_FULLY_COVERS) {
@@ -2879,36 +2866,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                     disjoint = 0;
                     ambig_groupid[i] = j - 1; // ambiguity covering range [i:j)
                 }
-                else {
-                    jl_value_t *ti;
-                    if (subt) {
-                        ti = (jl_value_t*)matc2->spec_types;
-                        isect2 = NULL;
-                    }
-                    else if (subt2) {
-                        ti = (jl_value_t*)matc->spec_types;
-                        isect2 = NULL;
-                    }
-                    else {
-                        jl_type_intersection2((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types, &env.match.ti, &isect2);
-                        ti = env.match.ti;
-                    }
-                    if (ti != jl_bottom_type && !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
-                        // m and m2 are ambiguous, but let's see if we can find another method (m3)
-                        // that dominates their intersection, and means we can ignore this
-                        size_t k;
-                        for (k = j; k > 0; k--) {
-                            jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(env.t, k - 1);
-                            jl_method_t *m3 = matc3->method;
-                            if ((jl_subtype(ti, m3->sig) || (isect2 && jl_subtype(isect2, m3->sig)))
-                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m->sig)
-                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m2->sig))
-                                break;
-                        }
-                        if (k == 0)
-                            ambig_groupid[i] = j - 1; // ambiguity covering range [i:j)
-                    }
-                    isect2 = NULL;
+                else if (subt || subt2 || !jl_has_empty_intersection(m->sig, m2->sig)) {
+                    if (!jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig))
+                        ambig_groupid[i] = j - 1; // ambiguity covering range [i:j)
                     disjoint = 0;
                 }
             }
@@ -2984,17 +2944,20 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
             }
         }
         // Compute whether anything could be ambiguous by seeing if any two
-        // remaining methods in the result are in the same ambiguity group.
-        if (len > 0) {
-            uint32_t agid = ambig_groupid[0];
-            for (i = 1; i < len; i++) {
-                if (!skip[i]) {
-                    if (agid == ambig_groupid[i]) {
-                        *has_ambiguity = 1;
-                        break;
+        // methods in the result are in the same ambiguity group.
+        for (i = 0; i < len; i++) {
+            if (!skip[i]) {
+                uint32_t agid = ambig_groupid[i];
+                for (; i < len; i++) {
+                    if (!skip[i]) {
+                        if (agid == ambig_groupid[i]) {
+                            *has_ambiguity = 1;
+                            break;
+                        }
+                        agid = ambig_groupid[i];
                     }
-                    agid = ambig_groupid[i];
                 }
+                break;
             }
         }
         // If we're only returning possible matches, now filter out any method
