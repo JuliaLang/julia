@@ -52,6 +52,14 @@ let A = collect(reshape(1:20, 5, 4))
     @test reshape(R, :) isa StridedArray
 end
 
+# and ensure a reinterpret array containing a strided array can have strides computed
+let A = view(reinterpret(Int16, collect(reshape(UnitRange{Int64}(1, 20), 5, 4))), :, 1:2)
+    R = reinterpret(Int32, A)
+    @test strides(R) == (1, 10)
+    @test stride(R, 1) == 1
+    @test stride(R, 2) == 10
+end
+
 @testset "strides" begin
     a = rand(10)
     b = view(a,2:2:10)
