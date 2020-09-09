@@ -266,9 +266,11 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         }
         else {
             *src_out = jl_type_infer(mi, world, 0);
-            codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
-            if ((*src_out)->inferred && !codeinst->inferred)
-                codeinst->inferred = jl_nothing;
+            if (*src_out) {
+                codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
+                if ((*src_out)->inferred && !codeinst->inferred)
+                    codeinst->inferred = jl_nothing;
+            }
         }
     }
     *ci_out = codeinst;
