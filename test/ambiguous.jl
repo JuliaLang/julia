@@ -11,6 +11,8 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
+using LinearAlgebra, SparseArrays
+
 # For curmod_*
 include("testenv.jl")
 
@@ -147,61 +149,21 @@ end
 ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
-
-using LinearAlgebra, SparseArrays, SuiteSparse
-
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
-@testset "detect_ambiguities" begin
-    let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false)))
-        @test_broken isempty(ambig)
+@test detect_ambiguities(Core, Base; imported=true, recursive=true, ambiguous_bottom=false) == []
+# some ambiguities involving Union{} type parameters are expected, but not required
+@test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
 
-        # this is basically just a list of everything for which typeintersection is too conservative,
-        # and ends up matching some methods that don't actually have an interesting intersection
-        expect = []
-        push!(expect, (Tuple{typeof(convert),Type{T},Any} where T>:Union{Missing, Nothing}, Tuple{typeof(convert),Type{T},T} where T>:Nothing))
-        push!(expect, (Tuple{typeof(convert),Type{T},T} where T, Tuple{typeof(convert),Type{T},Any} where T>:Missing))
-        push!(expect, (Tuple{typeof(convert),Type{T},T} where T, Tuple{typeof(convert),Type{T},Any} where T>:Nothing))
-        push!(expect, (Tuple{typeof(convert),Type{T},T} where T, Tuple{typeof(convert),Type{T},Any} where T>:Union{Missing, Nothing}))
-        push!(expect, (Tuple{typeof(convert),Type{T},T} where T>:Missing, Tuple{typeof(convert),Type{T},Any} where T>:Union{Missing, Nothing}))
-        push!(expect, (Tuple{typeof(hcat),Vararg{Union{Vector{T}, Matrix{T}, LinearAlgebra.Adjoint{T,Vector{T}}, LinearAlgebra.Transpose{T,Vector{T}}, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T)},N} where N} where T, Tuple{typeof(hcat),Vararg{BitVector,N} where N}))
-        push!(expect, (Tuple{typeof(hcat),Vararg{Union{Vector{T}, Matrix{T}, LinearAlgebra.Adjoint{T,Vector{T}}, LinearAlgebra.Transpose{T,Vector{T}}, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T)},N} where N} where T, Tuple{typeof(hcat),Vararg{Number,N} where N}))
-        push!(expect, (Tuple{typeof(hcat),Vararg{Union{Vector{T}, Matrix{T}, LinearAlgebra.Adjoint{T,Vector{T}}, LinearAlgebra.Transpose{T,Vector{T}}, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T)},N} where N} where T, Tuple{typeof(hcat),Vararg{Union{BitMatrix, BitVector},N} where N}))
-        push!(expect, (Tuple{typeof(hvcat),Tuple{Vararg{Int,N} where N},Vararg{Union{Vector{T}, Matrix{T}, LinearAlgebra.Adjoint{T,Vector{T}}, LinearAlgebra.Transpose{T,Vector{T}}, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T)},N} where N} where T, Tuple{typeof(hvcat),Tuple{Vararg{Int,N} where N},Vararg{Number,N} where N}))
-        push!(expect, (Tuple{typeof(vcat),Vararg{Union{Vector{T} where T, Matrix{T} where T, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T) where T, LinearAlgebra.AbstractTriangular{T,A} where A<:Union{LinearAlgebra.Adjoint{var"#s849",var"#s848"} where var"#s848"<:SparseArrays.SparseVector where var"#s849", LinearAlgebra.Bidiagonal, LinearAlgebra.Diagonal, LinearAlgebra.SymTridiagonal, LinearAlgebra.Transpose{var"#s847",var"#s846"} where var"#s846"<:SparseArrays.SparseVector where var"#s847", LinearAlgebra.Tridiagonal, SparseArrays.AbstractSparseMatrixCSC, SparseArrays.SparseVector} where T, LinearAlgebra.Adjoint{var"#s849",var"#s848"} where var"#s848"<:(Vector{T} where T) where var"#s849", LinearAlgebra.Adjoint{var"#s849",var"#s848"} where var"#s848"<:SparseArrays.SparseVector where var"#s849", LinearAlgebra.Bidiagonal, LinearAlgebra.Diagonal, LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T) where T, LinearAlgebra.Hermitian{T,A} where A<:Union{LinearAlgebra.Adjoint{var"#s849",var"#s848"} where var"#s848"<:SparseArrays.SparseVector where var"#s849", LinearAlgebra.Bidiagonal, LinearAlgebra.Diagonal, LinearAlgebra.SymTridiagonal, LinearAlgebra.Transpose{var"#s847",var"#s846"} where var"#s846"<:SparseArrays.SparseVector where var"#s847", LinearAlgebra.Tridiagonal, SparseArrays.AbstractSparseMatrixCSC, SparseArrays.SparseVector} where T, LinearAlgebra.SymTridiagonal, LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T) where T, LinearAlgebra.Symmetric{T,A} where A<:Union{LinearAlgebra.Adjoint{var"#s849",var"#s848"} where var"#s848"<:SparseArrays.SparseVector where var"#s849", LinearAlgebra.Bidiagonal, LinearAlgebra.Diagonal, LinearAlgebra.SymTridiagonal, LinearAlgebra.Transpose{var"#s847",var"#s846"} where var"#s846"<:SparseArrays.SparseVector where var"#s847", LinearAlgebra.Tridiagonal, SparseArrays.AbstractSparseMatrixCSC, SparseArrays.SparseVector} where T, LinearAlgebra.Transpose{var"#s847",var"#s846"} where var"#s846"<:(Vector{T} where T) where var"#s847", LinearAlgebra.Transpose{var"#s847",var"#s846"} where var"#s846"<:SparseArrays.SparseVector where var"#s847", LinearAlgebra.Tridiagonal, SparseArrays.AbstractSparseMatrixCSC, SparseArrays.SparseVector},N} where N}, Tuple{typeof(vcat),Vararg{AbstractRange{T},N} where N} where T))
-        push!(expect, (Tuple{typeof(vcat),Vararg{Union{Vector{T} where T, Matrix{T} where T, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T) where T, LinearAlgebra.Adjoint{var"#s849",var"#s848"} where var"#s848"<:(Vector{T} where T) where var"#s849", LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T) where T, LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T) where T, LinearAlgebra.Transpose{var"#s847",var"#s846"} where var"#s846"<:(Vector{T} where T) where var"#s847"},N} where N}, Tuple{typeof(vcat),Vararg{AbstractRange{T},N} where N} where T))
-        push!(expect, (Tuple{typeof(vcat),Vararg{Union{Vector{T}, Matrix{T}, LinearAlgebra.Adjoint{T,Vector{T}}, LinearAlgebra.Transpose{T,Vector{T}}, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T)},N} where N} where T, Tuple{typeof(vcat),Vararg{AbstractRange{T},N} where N} where T))
-        push!(expect, (Tuple{typeof(vcat),Vararg{Union{Vector{T}, Matrix{T}, LinearAlgebra.Adjoint{T,Vector{T}}, LinearAlgebra.Transpose{T,Vector{T}}, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T)},N} where N} where T, Tuple{typeof(vcat),Vararg{BitMatrix,N} where N}))
-        push!(expect, (Tuple{typeof(vcat),Vararg{Union{Vector{T}, Matrix{T}, LinearAlgebra.Adjoint{T,Vector{T}}, LinearAlgebra.Transpose{T,Vector{T}}, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T)},N} where N} where T, Tuple{typeof(vcat),Vararg{BitVector,N} where N}))
-        push!(expect, (Tuple{typeof(vcat),Vararg{Union{Vector{T}, Matrix{T}, LinearAlgebra.Adjoint{T,Vector{T}}, LinearAlgebra.Transpose{T,Vector{T}}, LinearAlgebra.AbstractTriangular{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Hermitian{T,A} where A<:(Matrix{T} where T), LinearAlgebra.Symmetric{T,A} where A<:(Matrix{T} where T)},N} where N} where T, Tuple{typeof(vcat),Vararg{Number,N} where N}))
+module AmbigStdlib
+using Test
 
-        while !isempty(ambig)
-            sigs = pop!(ambig)
-            i = findfirst(==(sigs), expect)
-            if i === nothing
-                println(stderr, "push!(expect, (", sigs[1], ", ", sigs[2], "))")
-                continue
-            end
-            deleteat!(expect, i)
-        end
-        @test isempty(expect)
-    end
+# List standard libraries.  Exclude modules such as Main.
+modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing]
 
-    # some ambiguities involving Union{} type parameters are expected, but not required
-    let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
-        @test !isempty(ambig)
-    end
-
-    STDLIB_DIR = Sys.STDLIB
-    STDLIBS = filter!(x -> x != "LinearAlgebra" && x != "SparseArrays" && # Some packages run this test themselves
-                           isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")),
-                      readdir(STDLIB_DIR))
-
-    # List standard libraries. Exclude modules such as Main, Base, and Core.
-    let modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing && String(pkg.name) in STDLIBS]
-        @test isempty(detect_ambiguities(modules...; recursive=true))
-    end
-end
+# not using isempty so this prints more information when it fails
+@test detect_ambiguities(modules...; imported=true, recursive=true) == []
+end  # module
 
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2
@@ -290,7 +252,7 @@ end
 for f in (Ambig8.f, Ambig8.g)
     @test length(methods(f, (Integer,))) == 2 # 1 is also acceptable
     @test length(methods(f, (Signed,))) == 1 # 2 is also acceptable
-    @test length(Base.methods_including_ambiguous(f, (Signed,))) == 2
+    @test length(Base.methods_including_ambiguous(f, (Signed,))) == 3
     @test f(0x00) == 1
     @test f(Ambig8.Irrational2()) == 2
     @test f(MathConstants.γ) == 3
@@ -336,6 +298,7 @@ end
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
+        pop!(need_to_handle_undef_sparam, which(Base._cat, (Any, SparseArrays._TypedDenseConcatGroup{T} where T)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
@@ -361,18 +324,8 @@ f35983(::Type, ::Type) = 2
 @test first(Base.methods_including_ambiguous(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 @test length(Base.methods(f35983, (Any, Any))) == 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
-let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
-    @test length(ms) == 1
-    @test ambig[1] == 0
-end
 f35983(::Type{Int16}, ::Any) = 3
-@test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
+@test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 3
 @test length(Base.methods(f35983, (Type, Type))) == 2
-let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
-    @test length(ms) == 2
-    @test ambig[1] == 1
-end
 
-nothing
+nothing # don't return a module from the remote include
