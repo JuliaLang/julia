@@ -876,9 +876,9 @@ See also [Base.ComposedFunction](@ref).
 function ∘ end
 
 """
-    Base.ComposedFunction{F,G} <: Function
+    Base.ComposedFunction{Outer,Inner} <: Function
 
-Represents the composition of two callable objects `f::F` and `g::G`.
+Represents the composition of two callable objects `f::Outer` and `g::Inner`.
 ```jldoctest
 julia> sin ∘ cos === Base.ComposedFunction(sin, cos)
 true
@@ -891,10 +891,10 @@ The composed pieces are stored in the fields of `ComposedFunction` and can be re
 julia> composition = sin ∘ cos
 sin ∘ cos
 
-julia> composition.f === sin
+julia> composition.outer === sin
 true
 
-julia> composition.g === cos
+julia> composition.inner === cos
 true
 ```
 !!! compat "Julia 1.6"
@@ -902,23 +902,23 @@ true
 
 See also [`∘`](@ref).
 """
-struct ComposedFunction{F,G} <: Function
-    f::F
-    g::G
-    ComposedFunction{F, G}(f, g) where {F, G} = new{F, G}(f, g)
-    ComposedFunction(f, g) = new{Core.Typeof(f),Core.Typeof(g)}(f, g)
+struct ComposedFunction{O,I} <: Function
+    outer::O
+    inner::I
+    ComposedFunction{O, I}(outer, inner) where {O, I} = new{O, I}(outer, inner)
+    ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...) = c.f(c.g(x...))
+(c::ComposedFunction)(x...) = c.outer(c.inner(x...))
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    show(io, c.f)
+    show(io, c.outer)
     print(io, " ∘ ")
-    show(io, c.g)
+    show(io, c.inner)
 end
 
 """
