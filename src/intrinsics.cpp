@@ -106,10 +106,8 @@ static Type *FLOATT(Type *t)
         return T_float64;
     if (nb == 32)
         return T_float32;
-#ifndef DISABLE_FLOAT16
     if (nb == 16)
         return T_float16;
-#endif
     if (nb == 128)
         return T_float128;
     return NULL;
