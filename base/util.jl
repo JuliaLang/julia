@@ -387,7 +387,7 @@ _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
 
 """
-    @kwdef typedef
+    @kwdef [kwshow=true] typedef
 
 This is a helper macro that automatically defines a keyword-based constructor for the type
 declared in the expression `typedef`, which must be a `struct` or `mutable struct`
@@ -402,6 +402,12 @@ order to function correctly with the keyword outer constructor.
 !!! compat "Julia 1.1"
     `Base.@kwdef` for parametric structs, and structs with supertypes
     requires at least Julia 1.1.
+
+!!! compat "Julia 1.6"
+    The `kwshow=true` parameter requires at least Julia 1.6.
+
+If `kwshow=true` is passed, this will also provide a default definition for
+`Base.show()`, which prints fields via keyword argument syntax.
 
 # Examples
 ```jldoctest
@@ -418,9 +424,21 @@ julia> Foo()
 ERROR: UndefKeywordError: keyword argument b not assigned
 Stacktrace:
 [...]
+
+julia> Base.@kwdef kwshow=true struct Bar
+    a::Int = 1         # specified default
+    b::String          # required keyword
+end
+Bar
+
+julia> Bar(a = 1, b = "hi")
+Bar(a = 1, b = "hi")
 ```
 """
 macro kwdef(expr)
+    esc(:($Base.@kwdef((), $expr)))
+end
+macro kwdef(flags, expr)
     expr = macroexpand(__module__, expr) # to expand @static
     expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
     expr = expr::Expr
@@ -455,11 +473,32 @@ macro kwdef(expr)
         else
             error("Invalid usage of @kwdef")
         end
+
+        if flags != ()
+            # Repeat the above test for curly {} type params
+            S = T isa Symbol ? T : T.args[1]
+
+            # Currently `:kwshow` is the only supported flag.
+            @assert flags.head == :(=) && flags.args[1] == :kwshow
+            should_kwshow = flags.args[2]
+            if should_kwshow
+                kwshow = :(
+                    function $Base.show(io::$IO, s::$(esc(S)))
+                        $print(io, "$($(esc(S)))(")
+                        $print(io, join(("$a = $(repr(getfield(s,a)))" for a in $call_args), ", "))
+                        $print(io, ")")
+                    end
+                )
+            end
+        else
+            kwshow = nothing
+        end
     else
         kwdefs = nothing
     end
     quote
         Base.@__doc__($(esc(expr)))
+        $kwshow
         $kwdefs
     end
 end
