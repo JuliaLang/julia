@@ -871,9 +871,40 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 ```
+See also [ComposedFunction](@ref).
 """
 function ∘ end
 
+"""
+    ComposedFunction{F,G} <: Function
+
+Represents the composition of two callable objects `f::F` and `g::G`.
+```jldoctest
+julia> sin ∘ cos === Base.ComposedFunction(sin, cos)
+true
+
+julia> typeof(sin∘cos)
+Base.ComposedFunction{typeof(sin), typeof(cos)}
+
+julia> sin ∘ cos === Base.ComposedFunction(sin, cos)
+true
+```
+The composed pieces are stored in the fields of `ComposedFunction` and can be retrieved as follows:
+```jldoctest
+julia> composition = sin ∘ cos
+sin ∘ cos
+
+julia> composition.f === sin
+true
+
+julia composition.g === cos
+true
+```
+!!! compat "Julia 1.6"
+    ComposedFunction requires at least Julia 1.6. In earlier version `∘` returns an anonymous function instead.
+
+See also [`∘`](@ref).
+"""
 struct ComposedFunction{F,G} <: Function
     f::F
     g::G
