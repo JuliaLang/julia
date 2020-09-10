@@ -894,7 +894,7 @@ sin ∘ cos
 julia> composition.f === sin
 true
 
-julia composition.g === cos
+julia> composition.g === cos
 true
 ```
 !!! compat "Julia 1.6"
