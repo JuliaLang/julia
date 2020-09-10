@@ -319,6 +319,11 @@ let a = [[4, 5], [6, 7]], b = reshape(a, 1, 2)
     b[1, CartesianIndex(1)] .= 5
     @test a == [[5, 5], [6, 7]]
 end
+let a = [1, 2, 3, 4]
+    @test a[1] == 1
+    a[CartesianIndex(1,1)] .= 0
+    @test a[1] == 0
+end
 let d = Dict(:foo => [1,3,7], (3,4) => [5,9])
     d[:foo] .+= 2
     @test d[:foo] == [3,5,9]
