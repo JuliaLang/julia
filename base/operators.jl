@@ -234,7 +234,7 @@ const ≡ = ===
     !==(x, y)
     ≢(x,y)
 
-Always gives the opposite answer as [`===`](@ref). Beware, it's not te opposite of [`==`](@ref).
+Always gives the opposite answer as [`===`](@ref). Beware, it's not the opposite of [`==`](@ref).
 
 # Examples
 ```jldoctest
