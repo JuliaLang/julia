@@ -726,4 +726,7 @@ end
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
 end
 
+# issue 37359
+@test isa(I \ Diagonal(ones(Integer, n)), Diagonal)
+
 end # module TestDiagonal
