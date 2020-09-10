@@ -876,7 +876,7 @@ See also [Base.ComposedFunction](@ref).
 function ∘ end
 
 """
-    ComposedFunction{F,G} <: Function
+    Base.ComposedFunction{F,G} <: Function
 
 Represents the composition of two callable objects `f::F` and `g::G`.
 ```jldoctest
