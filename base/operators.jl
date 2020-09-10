@@ -885,9 +885,6 @@ true
 
 julia> typeof(sin∘cos)
 Base.ComposedFunction{typeof(sin), typeof(cos)}
-
-julia> sin ∘ cos === Base.ComposedFunction(sin, cos)
-true
 ```
 The composed pieces are stored in the fields of `ComposedFunction` and can be retrieved as follows:
 ```jldoctest
