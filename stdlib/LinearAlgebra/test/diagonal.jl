@@ -727,6 +727,11 @@ end
 end
 
 # issue 37359
-@test isa(I \ Diagonal(ones(Integer, n)), Diagonal)
+@testset "Issue #37359 return Diagonal Matrix for Abstract type :> Number" begin
+    D = Diagonal(rand(Int, n))
+    D2 = Diagonal{Integer}(rand(Int, n))
+    @test isa(I \ Diagonal(ones(Integer, n)), Diagonal)
+    @test D \ D2 ≈ Diagonal(Matrix(D) \ Matrix(D2))
+end
 
 end # module TestDiagonal
