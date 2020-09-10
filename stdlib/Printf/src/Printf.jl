@@ -266,7 +266,7 @@ end
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     bs = base(T)
-    arg2 = arg isa AbstractFloat ? Integer(trunc(arg)) : arg
+    arg2 = arg isa AbstractFloat ? Integer(round(arg)) : arg
     n = i = ndigits(arg2, base=bs, pad=1)
     x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
     arglen = n + (neg || (plus | space)) +
@@ -675,7 +675,7 @@ function plength(f::Spec{T}, x) where {T <: Strings}
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
-    x2 = x isa AbstractFloat ? Integer(trunc(x)) : x
+    x2 = x isa AbstractFloat ? Integer(round(x)) : x
     return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
 end
 
