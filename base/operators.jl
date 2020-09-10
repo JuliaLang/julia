@@ -55,7 +55,8 @@ end
 """
     ==(x, y)
 
-Generic equality operator. Falls back to [`===`](@ref).
+Generic equality operator (its opposite is [`!=`](@ref), not [`!==`](@ref),
+a different operator). It falls back to [`===`](@ref).
 Should be implemented for all types with a notion of equality, based on the abstract value
 that an instance represents. For example, all numeric types are compared by numeric value,
 ignoring type. Strings are compared as sequences of characters, ignoring encoding.
@@ -184,7 +185,7 @@ end
     !=(x, y)
     ≠(x,y)
 
-Not-equals comparison operator. Always gives the opposite answer as [`==`](@ref).
+Not-equals comparison operator. Always gives the opposite answer to [`==`](@ref).
 
 # Implementation
 New types should generally not implement this, and rely on the fallback definition
@@ -233,7 +234,7 @@ const ≡ = ===
     !==(x, y)
     ≢(x,y)
 
-Always gives the opposite answer as [`===`](@ref).
+Always gives the opposite answer as [`===`](@ref). Beware, it's not te opposite of [`==`](@ref).
 
 # Examples
 ```jldoctest
