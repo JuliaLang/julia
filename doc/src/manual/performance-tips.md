@@ -1103,7 +1103,7 @@ far outweighed by the speed boost from doing the matrix multiplication on a cont
 
 ## Consider StaticArrays for small fixed-size vector/matrix operations
 
-If your application involves many small (`< 20` element) arrays of fixed sizes (i.e. the size is
+If your application involves many small (`< 100` element) arrays of fixed sizes (i.e. the size is
 known prior to execution), then you might want to consider using the [StaticArrays.jl package](https://github.com/JuliaArrays/StaticArrays.jl).
 This package allows you to represent such arrays in a way that avoids unnecessary heap allocations and allows the compiler to
 specialize code for the *size* of the array, e.g. by completely unrolling vector operations (eliminating the loops) and storing elements in CPU registers.
