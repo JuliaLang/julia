@@ -1110,7 +1110,7 @@ specialize code for the *size* of the array, e.g. by completely unrolling vector
 
 For example, if you are doing computations with 2d geometries, you might have many computations with 2-component vectors.  By
 using the `SVector` type from StaticArrays.jl, you can use convenient vector notation and operations like `norm(3v - w)` on
-these vectors `v` and `w`, while allowing the compiler to unroll the code to a minimal computation like `@inbounds hypot(3v[1]-w[1], 3v[2]-w[2])`.
+vectors `v` and `w`, while allowing the compiler to unroll the code to a minimal computation equivalent to `@inbounds hypot(3v[1]-w[1], 3v[2]-w[2])`.
 
 ## Avoid string interpolation for I/O
 
