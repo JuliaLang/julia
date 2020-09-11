@@ -732,6 +732,8 @@ end
     D2 = Diagonal{Integer}(rand(Int, n))
     @test isa(I \ Diagonal(ones(Integer, n)), Diagonal)
     @test D \ D2 ≈ Diagonal(Matrix(D) \ Matrix(D2))
+    v = Integer[-5:5...]
+    @test 2I \ Diagonal(v) == 2\Diagonal(v) == Diagonal(v/2)
 end
 
 end # module TestDiagonal
