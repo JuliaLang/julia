@@ -400,6 +400,11 @@ end
     @test 0denseI != 2I != 0denseI # test generic path / inequality on diag
     @test alltwos != 2I != alltwos # test generic path / inequality off diag
     @test rdenseI !=  I != rdenseI # test square matrix check
+
+    # isequal
+    @test !isequal(I, I(3))
+    @test !isequal(I(1), I)
+    @test !isequal([1], I)
 end
 
 @testset "operations involving I should preserve eltype" begin
