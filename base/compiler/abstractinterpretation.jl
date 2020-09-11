@@ -1257,8 +1257,15 @@ function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     return typ
 end
 
+#const __collect_inference_callees__ = Ref{Bool}(false)
+const __inference_callees__ = Vector{MethodInstance}()
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
+    #if __collect_inference_callees__[]
+        push!(__inference_callees__, frame.linfo)
+    #end
+
     @assert !frame.inferred
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
