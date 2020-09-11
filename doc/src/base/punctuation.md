@@ -56,3 +56,5 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | [`===`](@ref) | triple equals sign is programmatically identical equality comparison                      |
 | [`=>`](@ref Pair) | right arrow using an equals sign defines a [`Pair`](@ref) typically used to populate [dictionaries](@ref Dictionaries) |
 | `->` | right arrow using a hyphen defines an [anonymous function](@ref man-anonymous-functions) on a single line         |
+| `|>` | pipe operator passes output from the left argument to input of right argument, usually a [function](@ref Function-composition-and-piping) |
+| `∘` | function composition operator combines two functions as though they are a single larger [function](@ref Function-composition-and-piping) |
