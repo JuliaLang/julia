@@ -195,7 +195,7 @@ end
         for r in (RoundUp, RoundDown)
             @test round(Date, now_, p, r) == round(Date(now_), p, r)
         end
-        @test round(Date, now_, p) == round(Date, now_, p, RoundUp)
+        @test round(Date, now_, p) == round(Date, now_, p, RoundNearestTiesUp)
         @test floor(Date, now_, p) == round(Date, now_, p, RoundDown)
         @test ceil(Date, now_, p)  == round(Date, now_, p, RoundUp)
     end
