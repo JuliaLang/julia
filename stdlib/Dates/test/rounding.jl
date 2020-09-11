@@ -190,12 +190,12 @@ end
 end
 
 @testset "Rouding DateTime to Date" begin
-    now_ = now()
+    now_ = DateTime(2020, 9, 1, 13)
     for p in (Year, Month, Day)
         for r in (RoundUp, RoundDown)
             @test round(Date, now_, p, r) == round(Date(now_), p, r)
         end
-        @test round(Date, now_, p) == round(Date, now_, p, RoundUp)
+        @test round(Date, now_, p) == round(Date, now_, p, RoundNearestTiesUp)
         @test floor(Date, now_, p) == round(Date, now_, p, RoundDown)
         @test ceil(Date, now_, p)  == round(Date, now_, p, RoundUp)
     end
