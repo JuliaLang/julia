@@ -49,7 +49,7 @@ function choosetests(choices = [])
         "euler", "show", "client",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs",
-        "misc", "threads", "stress",
+        "misc", "threads", "stress", "binaryplatforms",
         "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
