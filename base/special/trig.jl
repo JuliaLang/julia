@@ -1079,10 +1079,8 @@ sinc(x::Integer) = iszero(x) ? one(x) : zero(x)
 _sinc(x::Number) = iszero(x) ? one(x) : isinf_real(x) ? zero(x) : sinpi(x)/(pi*x)
 _sinc_threshold(::Type{Float64}) = 0.001
 _sinc_threshold(::Type{Float32}) = 0.05f0
-@inline function _sinc(x::Union{T,Complex{T}}) where {T<:Union{Float32,Float64}}
-    a = fastabs(x)
-    return a < _sinc_threshold(T) ? evalpoly(x^2, (T(1), -T(pi)^2/6, T(pi)^4/120)) : isinf_real(a) ? zero(x) : sinpi(x)/(pi*x)
-end
+@inline _sinc(x::Union{T,Complex{T}}) where {T<:Union{Float32,Float64}} =
+    fastabs(x) < _sinc_threshold(T) ? evalpoly(x^2, (T(1), -T(pi)^2/6, T(pi)^4/120)) : isinf_real(x) ? zero(x) : sinpi(x)/(pi*x)
 _sinc(x::Float16) = Float16(_sinc(Float32(x)))
 _sinc(x::ComplexF16) = ComplexF16(_sinc(ComplexF32(x)))
 
