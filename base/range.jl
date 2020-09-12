@@ -1147,7 +1147,7 @@ mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + 
 
 Clamp `x` to lie within range `r`.
 
-!!! compat "Julia 1.5"
-     This method requires at least Julia 1.5.
+!!! compat "Julia 1.6"
+     This method requires at least Julia 1.6.
 """
-clamp(x::Integer, r::AbstractUnitRange) = clamp(x, first(r), last(r))
+clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))
