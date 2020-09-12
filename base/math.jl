@@ -97,6 +97,15 @@ function clamp!(x::AbstractArray, lo, hi)
     x
 end
 
+"""
+    clamp(x::Integer, r::AbstractUnitRange)
+
+Clamp `x` to lie within range `r`.
+
+!!! compat "Julia 1.6"
+     This method requires at least Julia 1.6.
+"""
+clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))
 
 """
     evalpoly(x, p)
