@@ -1101,7 +1101,7 @@ julia> @time begin
 Provided there is enough memory for the copies, the cost of copying the view to an array is
 far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
 
-## Consider StaticArrays for small fixed-size vector/matrix operations
+## Consider StaticArrays.jl for small fixed-size vector/matrix operations
 
 If your application involves many small (`< 100` element) arrays of fixed sizes (i.e. the size is
 known prior to execution), then you might want to consider using the [StaticArrays.jl package](https://github.com/JuliaArrays/StaticArrays.jl).
