@@ -425,6 +425,10 @@ end
 
     # print float as %d uses round(x)
     @test @sprintf("%d", 25.5) == "26"
+
+    # 37539
+    @test @sprintf(" %.1e\n", 0.999) == " 1.0e+00\n"
+    @test @sprintf("   %.1f", 9.999) == "   10.0"
 end
 
 @testset "integers" begin
