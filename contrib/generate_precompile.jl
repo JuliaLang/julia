@@ -163,7 +163,7 @@ function generate_precompile_statements()
                 write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
-                # NOTE: this is rather innaccurate because the Pkg REPL mode is a special flower
+                # NOTE: this is rather inaccurate because the Pkg REPL mode is a special flower
                 readuntil(output_copy, "\n")
                 readuntil(output_copy, "> ")
             end
