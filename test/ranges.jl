@@ -1638,7 +1638,7 @@ end
         @test clamp(n, 0:4) == clamp(n, 0, 4)
         @test clamp(n, Base.OneTo(5)) == clamp(n, 1, 5)
     end
-    @test clamp(Int32(3), 1:5) == Int(3)
+    @test clamp(Int32(3), 1:5) === Int(3)
     @test clamp(big(typemax(Int))+99, 0:4) == 4
     @test_throws MethodError clamp(3.141, 1:5)
     @test_throws MethodError clamp(3, UnitRange(1.0,5.0))
