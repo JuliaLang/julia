@@ -3,26 +3,38 @@
 using Test
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
+isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
+using .Main: TSlow, WrapperArray
 
 A = Int64[1, 2, 3, 4]
+As = TSlow(A)
 Ars = Int64[1 3; 2 4]
+Arss = TSlow(Ars)
 B = Complex{Int64}[5+6im, 7+8im, 9+10im]
+Bs = TSlow(B)
 Av = [Int32[1,2], Int32[3,4]]
 
-@test @inferred(ndims(reinterpret(reshape, Complex{Int64}, Ars))) == 1
-@test @inferred(axes(reinterpret(reshape, Complex{Int64}, Ars))) === (Base.OneTo(2),)
-@test @inferred(size(reinterpret(reshape, Complex{Int64}, Ars))) == (2,)
-@test @inferred(ndims(reinterpret(reshape, Int64, B))) == 2
-@test @inferred(axes(reinterpret(reshape, Int64, B))) === (Base.OneTo(2), Base.OneTo(3))
-@test @inferred(size(reinterpret(reshape, Int64, B))) == (2, 3)
-@test @inferred(ndims(reinterpret(reshape, Int128, B))) == 1
-@test @inferred(axes(reinterpret(reshape, Int128, B))) === (Base.OneTo(3),)
-@test @inferred(size(reinterpret(reshape, Int128, B))) == (3,)
+for Ar in (Ars, Arss)
+    @test @inferred(ndims(reinterpret(reshape, Complex{Int64}, Ar))) == 1
+    @test @inferred(axes(reinterpret(reshape, Complex{Int64}, Ar))) === (Base.OneTo(2),)
+    @test @inferred(size(reinterpret(reshape, Complex{Int64}, Ar))) == (2,)
+end
+for _B in (B, Bs)
+    @test @inferred(ndims(reinterpret(reshape, Int64, _B))) == 2
+    @test @inferred(axes(reinterpret(reshape, Int64, _B))) === (Base.OneTo(2), Base.OneTo(3))
+    @test @inferred(size(reinterpret(reshape, Int64, _B))) == (2, 3)
+    @test @inferred(ndims(reinterpret(reshape, Int128, _B))) == 1
+    @test @inferred(axes(reinterpret(reshape, Int128, _B))) === (Base.OneTo(3),)
+    @test @inferred(size(reinterpret(reshape, Int128, _B))) == (3,)
+end
 
 @test_throws ArgumentError("cannot reinterpret `Int64` as `Vector{Int64}`, type `Vector{Int64}` is not a bits type") reinterpret(Vector{Int64}, A)
 @test_throws ArgumentError("cannot reinterpret `Vector{Int32}` as `Int32`, type `Vector{Int32}` is not a bits type") reinterpret(Int32, Av)
 @test_throws ArgumentError("cannot reinterpret a zero-dimensional `Int64` array to `Int32` which is of a different size") reinterpret(Int32, reshape([Int64(0)]))
 @test_throws ArgumentError("cannot reinterpret a zero-dimensional `Int32` array to `Int64` which is of a different size") reinterpret(Int64, reshape([Int32(0)]))
+@test_throws ArgumentError("""cannot reinterpret an `$Int` array to `Tuple{$Int, $Int}` whose first dimension has size `5`.
+                              The resulting array would have non-integral first dimension.
+                              """) reinterpret(Tuple{Int,Int}, [1,2,3,4,5])
 
 @test_throws ArgumentError("`reinterpret(reshape, Complex{Int64}, a)` where `eltype(a)` is Int64 requires that `axes(a, 1)` (got Base.OneTo(4)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Complex{Int64}, A)
 @test_throws ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got 24) and `sizeof(eltype(a))` (got 16) be an integer multiple of the other") reinterpret(reshape, NTuple{3, Int64}, B)
@@ -30,38 +42,68 @@ Av = [Int32[1,2], Int32[3,4]]
 @test_throws ArgumentError("cannot reinterpret a zero-dimensional `UInt8` array to `UInt16` which is of a larger size") reinterpret(reshape, UInt16, reshape([0x01]))
 
 # getindex
-@test reinterpret(Complex{Int64}, A) == [1 + 2im, 3 + 4im]
-@test reinterpret(reshape, Complex{Int64}, Ars) == [1 + 2im, 3 + 4im]
-@test reinterpret(Float64, A) == reinterpret.(Float64, A)
-@test reinterpret(reshape, Float64, A) == reinterpret.(Float64, A)
-@test reinterpret(reshape, Float64, Ars) == reinterpret.(Float64, Ars)
+for _A in (A, As)
+    @test reinterpret(Complex{Int64}, _A) == [1 + 2im, 3 + 4im]
+    @test reinterpret(Float64, _A) == reinterpret.(Float64, A)
+    @test reinterpret(reshape, Float64, _A) == reinterpret.(Float64, A)
+end
+for Ar in (Ars, Arss)
+    @test reinterpret(reshape, Complex{Int64}, Ar) == [1 + 2im, 3 + 4im]
+    @test reinterpret(reshape, Float64, Ar) == reinterpret.(Float64, Ars)
+end
 
-@test reinterpret(NTuple{3, Int64}, B) == [(5,6,7),(8,9,10)]
-@test reinterpret(reshape, Int64, B) == [5 7 9; 6 8 10]
+for _B in (B, Bs)
+    @test reinterpret(NTuple{3, Int64}, _B) == [(5,6,7),(8,9,10)]
+    @test reinterpret(reshape, Int64, _B) == [5 7 9; 6 8 10]
+end
 
 # setindex
-let Ac = copy(A), Arsc = copy(Ars), Bc = copy(B)
-    reinterpret(Complex{Int64}, Ac)[2] = -1 - 2im
-    @test Ac == [1, 2, -1, -2]
-    reinterpret(Complex{Int64}, Arsc)[2] = -1 - 2im
-    @test Arsc == [1 -1; 2 -2]
-    reinterpret(NTuple{3, Int64}, Bc)[2] = (4,5,6)
-    @test Bc == Complex{Int64}[5+6im, 7+4im, 5+6im]
-    reinterpret(NTuple{3, Int64}, Bc)[1] = (1,2,3)
-    @test Bc == Complex{Int64}[1+2im, 3+4im, 5+6im]
-    Bc = copy(B)
-    reinterpret(reshape, Int64, Bc)[2, 3] = -5
-    @test Bc == Complex{Int64}[5+6im, 7+8im, 9-5im]
+for (_A, Ar, _B) in ((A, Ars, B), (As, Arss, Bs))
+    let Ac = copy(_A), Arsc = copy(Ar), Bc = copy(_B)
+        reinterpret(Complex{Int64}, Ac)[2] = -1 - 2im
+        @test Ac == [1, 2, -1, -2]
+        reinterpret(Complex{Int64}, Arsc)[2] = -1 - 2im
+        @test Arsc == [1 -1; 2 -2]
+        reinterpret(NTuple{3, Int64}, Bc)[2] = (4,5,6)
+        @test Bc == Complex{Int64}[5+6im, 7+4im, 5+6im]
+        reinterpret(NTuple{3, Int64}, Bc)[1] = (1,2,3)
+        @test Bc == Complex{Int64}[1+2im, 3+4im, 5+6im]
+        Bc = copy(_B)
+        Brrs = reinterpret(reshape, Int64, Bc)
+        Brrs[2, 3] = -5
+        @test Bc == Complex{Int64}[5+6im, 7+8im, 9-5im]
+        Brrs[last(eachindex(Brrs))] = 22
+        @test Bc == Complex{Int64}[5+6im, 7+8im, 9+22im]
 
-    A1 = reinterpret(Float64, A)
-    A2 = reinterpret(ComplexF64, A)
-    A1[1] = 1.0
-    @test real(A2[1]) == 1.0
-    A1rs = reinterpret(Float64, Ars)
-    A2rs = reinterpret(ComplexF64, Ars)
-    A1rs[1, 1] = 1.0
-    @test real(A2rs[1]) == 1.0
+        A1 = reinterpret(Float64, _A)
+        A2 = reinterpret(ComplexF64, _A)
+        A1[1] = 1.0
+        @test real(A2[1]) == 1.0
+        A1 = reinterpret(reshape, Float64, _A)
+        A1[1] = 2.5
+        @test reinterpret(Float64, _A[1]) == 2.5
+        A1rs = reinterpret(Float64, Ar)
+        A2rs = reinterpret(ComplexF64, Ar)
+        A1rs[1, 1] = 1.0
+        @test real(A2rs[1]) == 1.0
+        A1rs = reinterpret(reshape, Float64, Ar)
+        A2rs = reinterpret(reshape, ComplexF64, Ar)
+        A1rs[1, 1] = 2.5
+        @test real(A2rs[1]) == 2.5
+    end
 end
+A3 = collect(reshape(1:18, 2, 3, 3))
+A3r = reinterpret(reshape, Complex{Int}, A3)
+@test A3r[4] === A3r[1,2] === A3r[CartesianIndex(1, 2)] === 7+8im
+A3r[2,3] = -8-15im
+@test A3[1,2,3] == -8
+@test A3[2,2,3] == -15
+A3r[4] = 100+200im
+@test A3[1,1,2] == 100
+@test A3[2,1,2] == 200
+A3r[CartesianIndex(1,2)] = 300+400im
+@test A3[1,1,2] == 300
+@test A3[2,1,2] == 400
 
 # same-size reinterpret where one of the types is non-primitive
 let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
@@ -74,6 +116,20 @@ let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
     reinterpret(reshape, Float32, a)[1] = 2.0
     @test reinterpret(reshape, Float32, a)[1] == 2.0
 end
+
+# Pass-through indexing
+B = Complex{Int64}[5+6im, 7+8im, 9+10im]
+Br = reinterpret(reshape, Int64, B)
+W = WrapperArray(Br)
+for (b, w) in zip(5:10, W)
+    @test b == w
+end
+for (i, j) in zip(eachindex(W), 11:16)
+    W[i] = j
+end
+@test B[1] === Complex{Int64}(11+12im)
+@test B[2] === Complex{Int64}(13+14im)
+@test B[3] === Complex{Int64}(15+16im)
 
 # ensure that reinterpret arrays aren't erroneously classified as strided
 let A = reshape(1:20, 5, 4)
@@ -256,3 +312,15 @@ B[] = Int32(5)
 @test B[] === Int32(5)
 @test Brs[] === Int32(5)
 @test A[] === UInt32(5)
+
+# reductions
+a = [(1,2,3), (4,5,6)]
+ars = reinterpret(reshape, Int, a)
+@test sum(ars) == 21
+@test sum(ars; dims=1) == [6 15]
+@test sum(ars; dims=2) == reshape([5,7,9], (3, 1))
+@test sum(ars; dims=(1,2)) == reshape([21], (1, 1))
+# also test large sizes for the pairwise algorithm
+a = [(k,k+1,k+2) for k = 1:3:4000]
+ars = reinterpret(reshape, Int, a)
+@test sum(ars) == 8010003

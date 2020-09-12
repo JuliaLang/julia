@@ -175,8 +175,96 @@ function check_writable(a::ReinterpretArray{T, N, S} where N) where {T,S}
     end
 end
 
-IndexStyle(a::ReinterpretArray) = IndexStyle(a.parent)
-IndexStyle(a::ReshapedReinterpretArray{T, N, S}) where {T, N, S} = sizeof(T) < sizeof(S) ? IndexCartesian() : IndexStyle(a.parent)
+## IndexStyle specializations
+
+# For `reinterpret(reshape, T, a)` where we're adding a channel dimension and with
+# `IndexStyle(a) == IndexLinear()`, it's advantageous to retain pseudo-linear indexing.
+struct IndexSCartesian2{K,N} <: IndexStyle end   # K = sizeof(S) ÷ sizeof(T), a static-sized 2d cartesian iterator
+
+IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}} = IndexStyle(A)
+function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:AbstractArray{S}}
+    if sizeof(T) < sizeof(S)
+        IndexStyle(A) === IndexLinear() && return IndexSCartesian2{sizeof(S) ÷ sizeof(T),N}()
+        return IndexCartesian()
+    end
+    return IndexStyle(A)
+end
+IndexStyle(::IndexSCartesian2{K,N}, ::IndexSCartesian2{K,N}) where {K,N} = IndexSCartesian2{K,N}()
+
+struct SCartesianIndex2{K,N} <: AbstractCartesianIndex{N}
+    i::Int
+    j::Int
+end
+to_index(i::SCartesianIndex2) = i
+
+struct SCartesianIndices2{K,N,R<:AbstractUnitRange{Int}} <: AbstractMatrix{SCartesianIndex2{K}}
+    indices2::R
+end
+SCartesianIndices2{K,N}(indices2::AbstractUnitRange{Int}) where {K,N} = (@assert K::Int > 1; SCartesianIndices2{K,N,typeof(indices2)}(indices2))
+
+eachindex(::IndexSCartesian2{K,N}, A::AbstractArray) where {K,N} = SCartesianIndices2{K,N}(eachindex(IndexLinear(), parent(A)))
+
+size(iter::SCartesianIndices2{K}) where K = (K, length(iter.indices2))
+axes(iter::SCartesianIndices2{K}) where K = (Base.OneTo(K), iter.indices2)
+
+first(iter::SCartesianIndices2{K,N}) where {K,N} = SCartesianIndex2{K,N}(1, first(iter.indices2))
+last(iter::SCartesianIndices2{K,N}) where {K,N}  = SCartesianIndex2{K,N}(K, last(iter.indices2))
+
+@inline function getindex(iter::SCartesianIndices2{K,N}, i::Int, j::Int) where {K,N}
+    @boundscheck checkbounds(iter, i, j)
+    return SCartesianIndex2{K,N}(i, iter.indices2[j])
+end
+
+function iterate(iter::SCartesianIndices2{K,N}) where {K,N}
+    ret = iterate(iter.indices2)
+    ret === nothing && return nothing
+    item2, state2 = ret
+    return SCartesianIndex2{K,N}(1, item2), (1, item2, state2)
+end
+
+function iterate(iter::SCartesianIndices2{K,N}, (state1, item2, state2)) where {K,N}
+    if state1 < K
+        item1 = state1 + 1
+        return SCartesianIndex2{K,N}(item1, item2), (item1, item2, state2)
+    end
+    ret = iterate(iter.indices2, state2)
+    ret === nothing && return nothing
+    item2, state2 = ret
+    return SCartesianIndex2{K,N}(1, item2), (1, item2, state2)
+end
+
+SimdLoop.simd_outer_range(iter::SCartesianIndices2) = iter.indices2
+SimdLoop.simd_inner_length(::SCartesianIndices2{K}, ::Any) where K = K
+@inline function SimdLoop.simd_index(::SCartesianIndices2{K,N}, Ilast::Int, I1::Int) where {K,N}
+    SCartesianIndex2{K,N}(I1+1, Ilast)
+end
+
+_maybe_reshape(::IndexSCartesian2, A::ReshapedReinterpretArray, I...) = A
+
+# fallbacks
+function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, I::Vararg{Int, N}) where {T,N}
+    @_propagate_inbounds_meta
+    getindex(A, I...)
+end
+function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) where {T,N}
+    @_propagate_inbounds_meta
+    setindex!(A, v, I...)
+end
+# fallbacks for array types that use "pass-through" indexing (e.g., `IndexStyle(A) = IndexStyle(parent(A))`)
+# but which don't handle SCartesianIndex2
+function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, ind::SCartesianIndex2) where {T,N}
+    @_propagate_inbounds_meta
+    I = _to_subscript_indices(A, ind.i, ind.j)
+    getindex(A, I...)
+end
+function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesianIndex2) where {T,N}
+    @_propagate_inbounds_meta
+    I = _to_subscript_indices(A, ind.i, ind.j)
+    setindex!(A, v, I...)
+end
+
+
+## AbstractArray interface
 
 parent(a::ReinterpretArray) = a.parent
 dataids(a::ReinterpretArray) = dataids(a.parent)
@@ -229,6 +317,19 @@ end
     # the loop in _getindex_ra
     inds = _to_subscript_indices(a, i)
     _getindex_ra(a, inds[1], tail(inds))
+end
+
+@inline @propagate_inbounds function getindex(a::ReshapedReinterpretArray{T,N,S}, ind::SCartesianIndex2) where {T,N,S}
+    check_readable(a)
+    n = sizeof(S) ÷ sizeof(T)
+    t = Ref{NTuple{n,T}}()
+    s = Ref{S}(a.parent[ind.j])
+    GC.@preserve t s begin
+        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
+        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
+        _memcpy!(tptr, sptr, sizeof(S))
+    end
+    return t[][ind.i]
 end
 
 @inline _memcpy!(dst, src, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), dst, src, n)
@@ -292,9 +393,17 @@ end
             if sizeof(T) > sizeof(S)
                 # Extra dimension in the parent array
                 n = sizeof(T) ÷ sizeof(S)
-                for i = 1:n
-                    s[] = a.parent[i, i1, tailinds...]
-                    _memcpy!(tptr + (i-1)*sizeof(S), sptr, sizeof(S))
+                if isempty(tailinds) && IndexStyle(a.parent) === IndexLinear()
+                    offset = n * (i1 - firstindex(a))
+                    for i = 1:n
+                        s[] = a.parent[i + offset]
+                        _memcpy!(tptr + (i-1)*sizeof(S), sptr, sizeof(S))
+                    end
+                else
+                    for i = 1:n
+                        s[] = a.parent[i, i1, tailinds...]
+                        _memcpy!(tptr + (i-1)*sizeof(S), sptr, sizeof(S))
+                    end
                 end
             else
                 # No extra dimension
@@ -332,6 +441,20 @@ end
     end
     inds = _to_subscript_indices(a, i)
     _setindex_ra!(a, v, inds[1], tail(inds))
+end
+
+@inline @propagate_inbounds function setindex!(a::ReshapedReinterpretArray{T,N,S}, v, ind::SCartesianIndex2) where {T,N,S}
+    check_writable(a)
+    v = convert(T, v)::T
+    t = Ref{T}(v)
+    s = Ref{S}(a.parent[ind.j])
+    GC.@preserve t s begin
+        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
+        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
+        _memcpy!(sptr + (ind.i-1)*sizeof(T), tptr, sizeof(T))
+    end
+    a.parent[ind.j] = s[]
+    return a
 end
 
 @inline @propagate_inbounds function _setindex_ra!(a::NonReshapedReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
@@ -407,13 +530,21 @@ end
     GC.@preserve t s begin
         tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
         sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
-        if sizeof(T) >= sizeof(S) == 0
+        if sizeof(T) >= sizeof(S)
             if sizeof(T) > sizeof(S)
                 # Extra dimension in the parent array
                 n = sizeof(T) ÷ sizeof(S)
-                for i = 1:n
-                    _memcpy!(sptr, tptr + (i-1)*sizeof(S), sizeof(S))
-                    a.parent[i, i1, tailinds...] = s[]
+                if isempty(tailinds) && IndexStyle(a.parent) === IndexLinear()
+                    offset = n * (i1 - firstindex(a))
+                    for i = 1:n
+                        _memcpy!(sptr, tptr + (i-1)*sizeof(S), sizeof(S))
+                        a.parent[i + offset] = s[]
+                    end
+                else
+                    for i = 1:n
+                        _memcpy!(sptr, tptr + (i-1)*sizeof(S), sizeof(S))
+                        a.parent[i, i1, tailinds...] = s[]
+                    end
                 end
             else
                 # No extra dimension
@@ -523,3 +654,46 @@ using .Iterators: Stateful
     end
     return true
 end
+
+# Reductions with IndexSCartesian2
+
+function _mapreduce(f::F, op::OP, style::IndexSCartesian2{K}, A::AbstractArrayOrBroadcasted) where {F,OP,K}
+    inds = eachindex(style, A)
+    n = size(inds)[2]
+    if n == 0
+        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
+    else
+        return mapreduce_impl(f, op, A, first(inds), last(inds))
+    end
+end
+
+@noinline function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted,
+                                  ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
+    if ifirst.j + blksize > ilast.j
+        # sequential portion
+        @inbounds a1 = A[ifirst]
+        @inbounds a2 = A[SCI(2,ifirst.j)]
+        v = op(f(a1), f(a2))
+        @simd for i = ifirst.i + 2 : K
+            @inbounds ai = A[SCI(i,ifirst.j)]
+            v = op(v, f(ai))
+        end
+        # Remaining columns
+        for j = ifirst.j+1 : ilast.j
+            @simd for i = 1:K
+                @inbounds ai = A[SCI(i,j)]
+                v = op(v, f(ai))
+            end
+        end
+        return v
+    else
+        # pairwise portion
+        jmid = (ifirst.j + ilast.j) >> 1
+        v1 = mapreduce_impl(f, op, A, ifirst, SCI(K,jmid), blksize)
+        v2 = mapreduce_impl(f, op, A, SCI(1,jmid+1), ilast, blksize)
+        return op(v1, v2)
+    end
+end
+
+mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP} =
+    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
