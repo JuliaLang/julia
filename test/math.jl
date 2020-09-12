@@ -471,6 +471,7 @@ end
     @test cosc(Inf + 3im) == 0
 
     @test isequal(sinc(Inf + Inf*im), NaN + NaN*im)
+    @test isequal(cosc(Inf + Inf*im), NaN + NaN*im)
 end
 
 # issue #37227
