@@ -1465,7 +1465,7 @@ REPL tab completion on `x.` shows only the `private=false` properties.
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
-propertynames(x, private) = propertynames(x) # ignore private flag by default
+propertynames(x, private::Bool) = propertynames(x) # ignore private flag by default
 
 """
     hasproperty(x, s::Symbol)
