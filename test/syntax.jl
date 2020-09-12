@@ -2335,3 +2335,5 @@ if isodd(1) && all(iseven(2) for c in ())
 else
     @test false
 end
+
+@test :(a +ꜝ b) == Expr(:call, :+ꜝ, :a, :b)
