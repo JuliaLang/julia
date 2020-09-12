@@ -3,36 +3,39 @@
 """
 Gives a reinterpreted view (of element type T) of the underlying array (of element type S).
 If the size of `T` differs from the size of `S`, the array will be compressed/expanded in
-the first dimension.
+the first dimension. The variant `reinterpret(reshape, T, a)` instead adds or consumes the first dimension
+depending on the ratio of element sizes.
 """
-struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
+struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T, N}
     parent::A
     readable::Bool
     writable::Bool
+
+    function throwbits(S::Type, T::Type, U::Type)
+        @_noinline_meta
+        throw(ArgumentError("cannot reinterpret `$(S)` as `$(T)`, type `$(U)` is not a bits type"))
+    end
+    function throwsize0(S::Type, T::Type, msg)
+        @_noinline_meta
+        throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a $msg size"))
+    end
+
     global reinterpret
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
-        function throwbits(::Type{S}, ::Type{T}, ::Type{U}) where {S,T,U}
-            @_noinline_meta
-            throw(ArgumentError("cannot reinterpret `$(S)` `$(T)`, type `$(U)` is not a bits type"))
-        end
-        function throwsize0(::Type{S}, ::Type{T})
-            @_noinline_meta
-            throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a different size"))
-        end
-        function thrownonint(::Type{S}, ::Type{T}, dim)
+        function thrownonint(S::Type, T::Type, dim)
             @_noinline_meta
             throw(ArgumentError("""
                 cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
                 The resulting array would have non-integral first dimension.
                 """))
         end
-        function throwaxes1(::Type{S}, ::Type{T}, ax1)
+        function throwaxes1(S::Type, T::Type, ax1)
             @_noinline_meta
             throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` when the first axis is $ax1. Try reshaping first."))
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
-        (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T)
+        (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T, "different")
         if N != 0 && sizeof(S) != sizeof(T)
             ax1 = axes(a)[1]
             dim = length(ax1)
@@ -41,15 +44,82 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
         end
         readable = array_subpadding(T, S)
         writable = array_subpadding(S, T)
-        new{T, N, S, A}(a, readable, writable)
+        new{T, N, S, A, false}(a, readable, writable)
+    end
+
+    # With reshaping
+    function reinterpret(::typeof(reshape), ::Type{T}, a::A) where {T,S,A<:AbstractArray{S}}
+        function throwintmult(S::Type, T::Type)
+            @_noinline_meta
+            throw(ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got $(sizeof(T))) and `sizeof(eltype(a))` (got $(sizeof(S))) be an integer multiple of the other"))
+        end
+        function throwsize1(a::AbstractArray, T::Type)
+            @_noinline_meta
+            throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $(eltype(a)) requires that `axes(a, 1)` (got $(axes(a, 1))) be equal to 1:$(sizeof(T) ÷ sizeof(eltype(a))) (from the ratio of element sizes)"))
+        end
+        isbitstype(T) || throwbits(S, T, T)
+        isbitstype(S) || throwbits(S, T, S)
+        if sizeof(S) == sizeof(T)
+            N = ndims(a)
+        elseif sizeof(S) > sizeof(T)
+            rem(sizeof(S), sizeof(T)) == 0 || throwintmult(S, T)
+            N = ndims(a) + 1
+        else
+            rem(sizeof(T), sizeof(S)) == 0 || throwintmult(S, T)
+            N = ndims(a) - 1
+            N > -1 || throwsize0(S, T, "larger")
+            axes(a, 1) == Base.OneTo(sizeof(T) ÷ sizeof(S)) || throwsize1(a, T)
+        end
+        readable = array_subpadding(T, S)
+        writable = array_subpadding(S, T)
+        new{T, N, S, A, true}(a, readable, writable)
     end
 end
+
+ReshapedReinterpretArray{T,N,S,A<:AbstractArray{S}} = ReinterpretArray{T,N,S,A,true}
+NonReshapedReinterpretArray{T,N,S,A<:AbstractArray{S, N}} = ReinterpretArray{T,N,S,A,false}
+
+"""
+    reinterpret(reshape, T, A::AbstractArray{S}) -> B
+
+Change the type-interpretation of `A` while consuming or adding a "channel dimension."
+
+If `sizeof(T) = n*sizeof(S)` for `n>1`, `A`'s first dimension must be
+of size `n` and `B` lacks `A`'s first dimension. Conversely, if `sizeof(S) = n*sizeof(T)` for `n>1`,
+`B` gets a new first dimension of size `n`. The dimensionality is unchanged if `sizeof(T) == sizeof(S)`.
+
+# Examples
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{$Int}:
+ 1  2
+ 3  4
+
+julia> reinterpret(reshape, Complex{Int}, A)    # the result is a vector
+2-element reinterpret(reshape, Complex{$Int}, ::Matrix{$Int}):
+ 1 + 3im
+ 2 + 4im
+
+julia> a = [(1,2,3), (4,5,6)]
+2-element Vector{Tuple{$Int, $Int, $Int}}:
+ (1, 2, 3)
+ (4, 5, 6)
+
+julia> reinterpret(reshape, Int, a)             # the result is a matrix
+3×2 reinterpret(reshape, $Int, ::Vector{Tuple{$Int, $Int, $Int}}):
+ 1  4
+ 2  5
+ 3  6
+```
+"""
+reinterpret(::typeof(reshape), T::Type, a::AbstractArray)
 
 reinterpret(::Type{T}, a::ReinterpretArray) where {T} = reinterpret(T, a.parent)
 
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
-StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReinterpretArray{T,N,S,A} where S
+StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray},IsReshaped} = ReinterpretArray{T,N,S,A,IsReshaped} where S
 StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,StridedReinterpretArray}} = ReshapedArray{T,N,A}
 StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray,StridedReinterpretArray},
     I<:Tuple{Vararg{Union{RangeIndex, ReshapedUnitRange, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
@@ -106,30 +176,43 @@ function check_writable(a::ReinterpretArray{T, N, S} where N) where {T,S}
 end
 
 IndexStyle(a::ReinterpretArray) = IndexStyle(a.parent)
+IndexStyle(a::ReshapedReinterpretArray{T, N, S}) where {T, N, S} = sizeof(T) < sizeof(S) ? IndexCartesian() : IndexStyle(a.parent)
 
 parent(a::ReinterpretArray) = a.parent
 dataids(a::ReinterpretArray) = dataids(a.parent)
 unaliascopy(a::ReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))
 
-function size(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
+function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
     size1 = div(psize[1]*sizeof(S), sizeof(T))
     tuple(size1, tail(psize)...)
 end
-size(a::ReinterpretArray{T,0}) where {T} = ()
+function size(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
+    psize = size(a.parent)
+    sizeof(S) > sizeof(T) && return (div(sizeof(S), sizeof(T)), psize...)
+    sizeof(S) < sizeof(T) && return Base.tail(psize)
+    return psize
+end
+size(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 
-function axes(a::ReinterpretArray{T,N,S} where {N}) where {T,S}
+function axes(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     paxs = axes(a.parent)
     f, l = first(paxs[1]), length(paxs[1])
     size1 = div(l*sizeof(S), sizeof(T))
     tuple(oftype(paxs[1], f:f+size1-1), tail(paxs)...)
 end
-axes(a::ReinterpretArray{T,0}) where {T} = ()
+function axes(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
+    paxs = axes(a.parent)
+    sizeof(S) > sizeof(T) && return (Base.OneTo(div(sizeof(S), sizeof(T))), paxs...)
+    sizeof(S) < sizeof(T) && return Base.tail(paxs)
+    return paxs
+end
+axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
-@inline @propagate_inbounds getindex(a::ReinterpretArray{T,0}) where {T} = reinterpret(T, a.parent[])
+@inline @propagate_inbounds getindex(a::NonReshapedReinterpretArray{T,0}) where {T} = reinterpret(T, a.parent[])
 @inline @propagate_inbounds getindex(a::ReinterpretArray) = a[1]
 
 @inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
@@ -150,7 +233,7 @@ end
 
 @inline _memcpy!(dst, src, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), dst, src, n)
 
-@inline @propagate_inbounds function _getindex_ra(a::ReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+@inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         return reinterpret(T, a.parent[i1, tailinds...])
@@ -194,8 +277,47 @@ end
     end
 end
 
+@inline @propagate_inbounds function _getindex_ra(a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+    # Make sure to match the scalar reinterpret if that is applicable
+    if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+        return reinterpret(T, a.parent[i1, tailinds...])
+    end
+    @boundscheck checkbounds(a, i1, tailinds...)
+    if sizeof(T) >= sizeof(S)
+        t = Ref{T}()
+        s = Ref{S}()
+        GC.@preserve t s begin
+            tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
+            sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
+            if sizeof(T) > sizeof(S)
+                # Extra dimension in the parent array
+                n = sizeof(T) ÷ sizeof(S)
+                for i = 1:n
+                    s[] = a.parent[i, i1, tailinds...]
+                    _memcpy!(tptr + (i-1)*sizeof(S), sptr, sizeof(S))
+                end
+            else
+                # No extra dimension
+                s[] = a.parent[i1, tailinds...]
+                _memcpy!(tptr, sptr, sizeof(S))
+            end
+        end
+        return t[]
+    end
+    # S is bigger than T and contains an integer number of them
+    n = sizeof(S) ÷ sizeof(T)
+    t = Ref{NTuple{n,T}}()
+    s = Ref{S}()
+    GC.@preserve t s begin
+        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
+        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
+        s[] = a.parent[tailinds...]
+        _memcpy!(tptr, sptr, sizeof(S))
+    end
+    return t[][i1]
+end
 
-@inline @propagate_inbounds setindex!(a::ReinterpretArray{T,0,S} where T, v) where {S} = (a.parent[] = reinterpret(S, v))
+@inline @propagate_inbounds setindex!(a::NonReshapedReinterpretArray{T,0,S} where T, v) where {S} = (a.parent[] = reinterpret(S, v))
 @inline @propagate_inbounds setindex!(a::ReinterpretArray, v) = (a[1] = v)
 
 @inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
@@ -212,7 +334,7 @@ end
     _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
-@inline @propagate_inbounds function _setindex_ra!(a::ReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
+@inline @propagate_inbounds function _setindex_ra!(a::NonReshapedReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
@@ -268,6 +390,41 @@ end
                     a.parent[ind_start + i, tailinds...] = s[]
                 end
             end
+        end
+    end
+    return a
+end
+
+@inline @propagate_inbounds function _setindex_ra!(a::ReshapedReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
+    v = convert(T, v)::T
+    # Make sure to match the scalar reinterpret if that is applicable
+    if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+        return setindex!(a.parent, reinterpret(S, v), i1, tailinds...)
+    end
+    @boundscheck checkbounds(a, i1, tailinds...)
+    t = Ref{T}(v)
+    s = Ref{S}()
+    GC.@preserve t s begin
+        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
+        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
+        if sizeof(T) >= sizeof(S) == 0
+            if sizeof(T) > sizeof(S)
+                # Extra dimension in the parent array
+                n = sizeof(T) ÷ sizeof(S)
+                for i = 1:n
+                    _memcpy!(sptr, tptr + (i-1)*sizeof(S), sizeof(S))
+                    a.parent[i, i1, tailinds...] = s[]
+                end
+            else
+                # No extra dimension
+                _memcpy!(sptr, tptr, sizeof(S))
+                a.parent[i1, tailinds...] = s[]
+            end
+        else
+            # S is bigger than T and contains an integer number of them
+            s[] = a.parent[tailinds...]
+            _memcpy!(sptr + (i1-1)*sizeof(T), tptr, sizeof(T))
+            a.parent[tailinds...] = s[]
         end
     end
     return a

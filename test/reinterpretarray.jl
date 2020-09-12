@@ -5,26 +5,62 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
 using .Main.OffsetArrays
 
 A = Int64[1, 2, 3, 4]
+Ars = Int64[1 3; 2 4]
 B = Complex{Int64}[5+6im, 7+8im, 9+10im]
+Av = [Int32[1,2], Int32[3,4]]
+
+@test @inferred(ndims(reinterpret(reshape, Complex{Int64}, Ars))) == 1
+@test @inferred(axes(reinterpret(reshape, Complex{Int64}, Ars))) === (Base.OneTo(2),)
+@test @inferred(size(reinterpret(reshape, Complex{Int64}, Ars))) == (2,)
+@test @inferred(ndims(reinterpret(reshape, Int64, B))) == 2
+@test @inferred(axes(reinterpret(reshape, Int64, B))) === (Base.OneTo(2), Base.OneTo(3))
+@test @inferred(size(reinterpret(reshape, Int64, B))) == (2, 3)
+@test @inferred(ndims(reinterpret(reshape, Int128, B))) == 1
+@test @inferred(axes(reinterpret(reshape, Int128, B))) === (Base.OneTo(3),)
+@test @inferred(size(reinterpret(reshape, Int128, B))) == (3,)
+
+@test_throws ArgumentError("cannot reinterpret `Int64` as `Vector{Int64}`, type `Vector{Int64}` is not a bits type") reinterpret(Vector{Int64}, A)
+@test_throws ArgumentError("cannot reinterpret `Vector{Int32}` as `Int32`, type `Vector{Int32}` is not a bits type") reinterpret(Int32, Av)
+@test_throws ArgumentError("cannot reinterpret a zero-dimensional `Int64` array to `Int32` which is of a different size") reinterpret(Int32, reshape([Int64(0)]))
+@test_throws ArgumentError("cannot reinterpret a zero-dimensional `Int32` array to `Int64` which is of a different size") reinterpret(Int64, reshape([Int32(0)]))
+
+@test_throws ArgumentError("`reinterpret(reshape, Complex{Int64}, a)` where `eltype(a)` is Int64 requires that `axes(a, 1)` (got Base.OneTo(4)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Complex{Int64}, A)
+@test_throws ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got 24) and `sizeof(eltype(a))` (got 16) be an integer multiple of the other") reinterpret(reshape, NTuple{3, Int64}, B)
+@test_throws ArgumentError("cannot reinterpret `Int64` as `Vector{Int64}`, type `Vector{Int64}` is not a bits type") reinterpret(reshape, Vector{Int64}, Ars)
+@test_throws ArgumentError("cannot reinterpret a zero-dimensional `UInt8` array to `UInt16` which is of a larger size") reinterpret(reshape, UInt16, reshape([0x01]))
+
 # getindex
 @test reinterpret(Complex{Int64}, A) == [1 + 2im, 3 + 4im]
+@test reinterpret(reshape, Complex{Int64}, Ars) == [1 + 2im, 3 + 4im]
 @test reinterpret(Float64, A) == reinterpret.(Float64, A)
+@test reinterpret(reshape, Float64, A) == reinterpret.(Float64, A)
+@test reinterpret(reshape, Float64, Ars) == reinterpret.(Float64, Ars)
 
 @test reinterpret(NTuple{3, Int64}, B) == [(5,6,7),(8,9,10)]
+@test reinterpret(reshape, Int64, B) == [5 7 9; 6 8 10]
 
 # setindex
-let Ac = copy(A), Bc = copy(B)
+let Ac = copy(A), Arsc = copy(Ars), Bc = copy(B)
     reinterpret(Complex{Int64}, Ac)[2] = -1 - 2im
     @test Ac == [1, 2, -1, -2]
+    reinterpret(Complex{Int64}, Arsc)[2] = -1 - 2im
+    @test Arsc == [1 -1; 2 -2]
     reinterpret(NTuple{3, Int64}, Bc)[2] = (4,5,6)
     @test Bc == Complex{Int64}[5+6im, 7+4im, 5+6im]
     reinterpret(NTuple{3, Int64}, Bc)[1] = (1,2,3)
     @test Bc == Complex{Int64}[1+2im, 3+4im, 5+6im]
+    Bc = copy(B)
+    reinterpret(reshape, Int64, Bc)[2, 3] = -5
+    @test Bc == Complex{Int64}[5+6im, 7+8im, 9-5im]
 
     A1 = reinterpret(Float64, A)
     A2 = reinterpret(ComplexF64, A)
     A1[1] = 1.0
     @test real(A2[1]) == 1.0
+    A1rs = reinterpret(Float64, Ars)
+    A2rs = reinterpret(ComplexF64, Ars)
+    A1rs[1, 1] = 1.0
+    @test real(A2rs[1]) == 1.0
 end
 
 # same-size reinterpret where one of the types is non-primitive
@@ -32,6 +68,11 @@ let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
     @test reinterpret(Float32, a)[1] == reinterpret(Float32, 0x04030201)
     reinterpret(Float32, a)[1] = 2.0
     @test reinterpret(Float32, a)[1] == 2.0
+end
+let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
+    @test reinterpret(reshape, Float32, a)[1] == reinterpret(Float32, 0x04030201)
+    reinterpret(reshape, Float32, a)[1] = 2.0
+    @test reinterpret(reshape, Float32, a)[1] == 2.0
 end
 
 # ensure that reinterpret arrays aren't erroneously classified as strided
@@ -166,7 +207,9 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     @test r[0,3] === reinterpret(Int64, v[0,3])
     @test r[1,3] === reinterpret(Int64, v[1,3])
     @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is Base.IdentityUnitRange(0:1). Try reshaping first.") reinterpret(UInt32, v)
+    @test_throws ArgumentError("`reinterpret(reshape, Tuple{Float64, Float64}, a)` where `eltype(a)` is Float64 requires that `axes(a, 1)` (got Base.IdentityUnitRange(0:1)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Tuple{Float64,Float64}, v)
     v = OffsetArray(a, (0, 1))
+    @test axes(reinterpret(reshape, Tuple{Float64,Float64}, v)) === (Base.IdentityUnitRange(2:3),)
     r = reinterpret(UInt32, v)
     axsv = axes(v)
     @test axes(r) === (oftype(axsv[1], 1:4), axsv[2])
@@ -206,8 +249,10 @@ end
 # Test 0-dimensional Arrays
 A = zeros(UInt32)
 B = reinterpret(Int32,A)
-@test size(B) == ()
-@test axes(B) == ()
+Brs = reinterpret(reshape,Int32,A)
+@test size(B) == size(Brs) == ()
+@test axes(B) == axes(Brs) == ()
 B[] = Int32(5)
 @test B[] === Int32(5)
+@test Brs[] === Int32(5)
 @test A[] === UInt32(5)
