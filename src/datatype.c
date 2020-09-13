@@ -453,11 +453,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     zeroinit = 1;
                 }
                 else {
+                    uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->haspadding)
                         haspadding = 1;
+                    if (i >= st->ninitialized && fld_npointers &&
+                        fld_npointers * sizeof(void*) != fsz) {
+                        // field may be undef (may be uninitialized and contains pointer),
+                        // and contains non-pointer fields of non-zero sizes.
+                        haspadding = 1;
+                    }
                     if (!zeroinit)
                         zeroinit = ((jl_datatype_t*)fld)->zeroinit;
-                    npointers += ((jl_datatype_t*)fld)->layout->npointers;
+                    npointers += fld_npointers;
                 }
             }
             else {

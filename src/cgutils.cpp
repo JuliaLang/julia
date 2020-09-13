@@ -765,6 +765,12 @@ static bool for_each_uniontype_small(
     return false;
 }
 
+static bool is_uniontype_allunboxed(jl_value_t *typ)
+{
+    unsigned counter = 0;
+    return for_each_uniontype_small([&](unsigned, jl_datatype_t*) {}, typ, counter);
+}
+
 static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p);
 
 static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
@@ -841,13 +847,9 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
     }
     if (p.TIndex) {
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(T_int8, 0x7f));
-        unsigned counter = 0;
-        bool allunboxed = for_each_uniontype_small(
-                [&](unsigned idx, jl_datatype_t *jt) { },
-                p.typ,
-                counter);
+        bool allunboxed = is_uniontype_allunboxed(p.typ);
         Value *datatype_or_p = imaging_mode ? Constant::getNullValue(T_ppjlvalue) : V_rnull;
-        counter = 0;
+        unsigned counter = 0;
         for_each_uniontype_small(
             [&](unsigned idx, jl_datatype_t *jt) {
                 Value *cmp = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, idx));
@@ -1064,10 +1066,20 @@ static void raise_exception_unless(jl_codectx_t &ctx, Value *cond, Value *exc)
     raise_exception(ctx, exc, passBB);
 }
 
-static void null_pointer_check(jl_codectx_t &ctx, Value *v)
+static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)
 {
-    raise_exception_unless(ctx,
-            ctx.builder.CreateICmpNE(v, Constant::getNullValue(v->getType())),
+    return ctx.builder.CreateICmpNE(v, Constant::getNullValue(v->getType()));
+}
+
+// If `nullcheck` is not NULL and a pointer NULL check is necessary
+// store the pointer to be checked in `*nullcheck` instead of checking it
+static void null_pointer_check(jl_codectx_t &ctx, Value *v, Value **nullcheck = nullptr)
+{
+    if (nullcheck) {
+        *nullcheck = v;
+        return;
+    }
+    raise_exception_unless(ctx, null_pointer_cmp(ctx, v),
             literal_pointer_val(ctx, jl_undefref_exception));
 }
 
@@ -1378,9 +1390,12 @@ Value *extract_first_ptr(jl_codectx_t &ctx, Value *V)
     return ctx.builder.CreateExtractValue(V, path);
 }
 
+// If `nullcheck` is not NULL and a pointer NULL check is necessary
+// store the pointer to be checked in `*nullcheck` instead of checking it
 static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, jl_value_t *jltype,
                              MDNode *tbaa, MDNode *aliasscope,
-                             bool maybe_null_if_boxed = true, unsigned alignment = 0)
+                             bool maybe_null_if_boxed = true, unsigned alignment = 0,
+                             Value **nullcheck = nullptr)
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(ctx, jltype, &isboxed);
@@ -1416,7 +1431,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         if (maybe_null_if_boxed) {
             Value *first_ptr = isboxed ? load : extract_first_ptr(ctx, load);
             if (first_ptr)
-                null_pointer_check(ctx, first_ptr);
+                null_pointer_check(ctx, first_ptr, nullcheck);
         }
     //}
     if (jltype == (jl_value_t*)jl_bool_type) { // "freeze" undef memory to a valid value
@@ -1580,7 +1595,9 @@ static void emit_memcpy(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, const j
 
 
 
-static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct, unsigned idx, jl_datatype_t *jt);
+static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct,
+                                         unsigned idx, jl_datatype_t *jt,
+                                         Value **nullcheck = nullptr);
 
 static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         jl_cgval_t *ret, jl_cgval_t strct,
@@ -1711,7 +1728,11 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
     return false;
 }
 
-static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct, unsigned idx, jl_datatype_t *jt)
+// If `nullcheck` is not NULL and a pointer NULL check is necessary
+// store the pointer to be checked in `*nullcheck` instead of checking it
+static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct,
+                                         unsigned idx, jl_datatype_t *jt,
+                                         Value **nullcheck)
 {
     jl_value_t *jfty = jl_field_type(jt, idx);
     if (jfty == jl_bottom_type) {
@@ -1759,7 +1780,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             maybe_mark_load_dereferenceable(Load, maybe_null, jl_field_type(jt, idx));
             Value *fldv = tbaa_decorate(tbaa, Load);
             if (maybe_null)
-                null_pointer_check(ctx, fldv);
+                null_pointer_check(ctx, fldv, nullcheck);
             return mark_julia_type(ctx, fldv, true, jfty);
         }
         else if (jl_is_uniontype(jfty)) {
@@ -1796,7 +1817,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             return mark_julia_slot(addr, jfty, NULL, tbaa);
         }
         unsigned align = jl_field_align(jt, idx);
-        return typed_load(ctx, addr, NULL, jfty, tbaa, nullptr, maybe_null, align);
+        return typed_load(ctx, addr, NULL, jfty, tbaa, nullptr, maybe_null, align, nullcheck);
     }
     else if (isa<UndefValue>(strct.V)) {
         return jl_cgval_t();
@@ -1858,7 +1879,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         if (maybe_null) {
             Value *first_ptr = jl_field_isptr(jt, idx) ? fldv : extract_first_ptr(ctx, fldv);
             if (first_ptr)
-                null_pointer_check(ctx, first_ptr);
+                null_pointer_check(ctx, first_ptr, nullcheck);
         }
         return mark_julia_type(ctx, fldv, jl_field_isptr(jt, idx), jfty);
     }
