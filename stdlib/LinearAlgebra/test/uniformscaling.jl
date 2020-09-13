@@ -405,6 +405,8 @@ end
     @test !isequal(I, I(3))
     @test !isequal(I(1), I)
     @test !isequal([1], I)
+    @test isequal(I, 1I)
+    @test !isequal(2I, 3I)
 end
 
 @testset "operations involving I should preserve eltype" begin
