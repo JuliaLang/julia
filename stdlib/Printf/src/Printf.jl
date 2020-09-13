@@ -262,11 +262,17 @@ end
 end
 
 # integers
+toint(x) = x
+toint(x::Rational) = Integer(x)
+toint(x::AbstractFloat) = x > typemax(Int128) ?
+                            BigInt(round(x)) : x > typemax(Int64) ?
+                            Int128(round(x)) : Int64(round(x))
+
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     bs = base(T)
-    arg2 = arg isa AbstractFloat ? Integer(round(arg)) : arg
+    arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
     x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
     arglen = n + (neg || (plus | space)) +
@@ -675,7 +681,7 @@ function plength(f::Spec{T}, x) where {T <: Strings}
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
-    x2 = x isa AbstractFloat ? Integer(round(x)) : x
+    x2 = toint(x)
     return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
 end
 
