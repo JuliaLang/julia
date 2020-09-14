@@ -304,58 +304,58 @@ end
                 UInt8, UInt16, UInt32, UInt64, UInt128,
                 Float16, Float32, Float64, BigInt, BigFloat]
 
-    @test insorted([1:10;], 1, by=(x -> x >= 5)) == true
-    @test insorted([1:10;], 10, by=(x -> x >= 5)) == true
-    @test insorted([1:5; 1:5; 1:5], 1, 6, 10, Forward) == true
-    @test insorted(fill(1, 15), 1, 6, 10, Forward) == true
+    @test insorted(1, [1:10;], by=(x -> x >= 5)) == true
+    @test insorted(10, [1:10;], by=(x -> x >= 5)) == true
+    @test insorted(1, [1:5; 1:5; 1:5], 6, 10, Forward) == true
+    @test insorted(1, fill(1, 15), 6, 10, Forward) == true
 
     for R in numTypes, T in numTypes
-        @test insorted(R[1, 1, 2, 2, 3, 3], T(0)) === false
-        @test insorted(R[1, 1, 2, 2, 3, 3], T(1)) == true
-        @test insorted(R[1, 1, 2, 2, 3, 3], T(2)) == true
-        @test insorted(R[1, 1, 2, 2, 3, 3], T(4)) === false
-        @test insorted(R[1, 1, 2, 2, 3, 3], 2.5) === false
+        @test insorted(T(0), R[1, 1, 2, 2, 3, 3]) === false
+        @test insorted(T(1), R[1, 1, 2, 2, 3, 3]) == true
+        @test insorted(T(2), R[1, 1, 2, 2, 3, 3]) == true
+        @test insorted(T(4), R[1, 1, 2, 2, 3, 3]) === false
+        @test insorted(2.5, R[1, 1, 2, 2, 3, 3]) === false
 
-        @test insorted(1:3, T(0)) === false
-        @test insorted(1:3, T(1)) == true
-        @test insorted(1:3, T(2)) == true
-        @test insorted(1:3, T(4)) === false
+        @test insorted(T(0), 1:3) === false
+        @test insorted(T(1), 1:3) == true
+        @test insorted(T(2), 1:3) == true
+        @test insorted(T(4), 1:3) === false
 
-        @test insorted(R[1:10;], T(1), by=(x -> x >= 5)) == true
-        @test insorted(R[1:10;], T(10), by=(x -> x >= 5)) == true
-        @test insorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Forward) == true
-        @test insorted(fill(R(1), 15), T(1), 6, 10, Forward) == true
+        @test insorted(T(1), R[1:10;], by=(x -> x >= 5)) == true
+        @test insorted(T(10), R[1:10;], by=(x -> x >= 5)) == true
+        @test insorted(T(1), R[1:5; 1:5; 1:5], 6, 10, Forward) == true
+        @test insorted(T(1), fill(R(1), 15), 6, 10, Forward) == true
     end
 
     for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
         rg_r = reverse(rg)
         rgv, rgv_r = [rg;], [rg_r;]
         for i = I
-            @test insorted(rg,i) === insorted(rgv,i)
-            @test insorted(rg_r,i,rev=true) === insorted(rgv_r,i,rev=true)
+            @test insorted(i,rg) === insorted(i,rgv)
+            @test insorted(i,rg_r,rev=true) === insorted(i,rgv_r,rev=true)
         end
     end
 
     rg = 0.0:0.01:1.0
     for i = 2:101
-        @test insorted(rg, rg[i]) == true
-        @test insorted(rg, prevfloat(rg[i])) === false
-        @test insorted(rg, nextfloat(rg[i])) === false
+        @test insorted(rg[i], rg) == true
+        @test insorted(prevfloat(rg[i]), rg) === false
+        @test insorted(nextfloat(rg[i]), rg) === false
     end
 
     rg_r = reverse(rg)
     for i = 1:100
-        @test insorted(rg_r, rg_r[i], rev=true) == true
-        @test insorted(rg_r, prevfloat(rg_r[i]), rev=true) === false
-        @test insorted(rg_r, nextfloat(rg_r[i]), rev=true) === false
+        @test insorted(rg_r[i], rg_r, rev=true) == true
+        @test insorted(prevfloat(rg_r[i]), rg_r, rev=true) === false
+        @test insorted(nextfloat(rg_r[i]), rg_r, rev=true) === false
     end
 
-    @test insorted(1:10, 1, by=(x -> x >= 5)) == insorted([1:10;], 1, by=(x -> x >= 5))
-    @test insorted(1:10, 10, by=(x -> x >= 5)) == insorted([1:10;], 10, by=(x -> x >= 5))
+    @test insorted(1, 1:10, by=(x -> x >= 5)) == insorted(1, [1:10;], by=(x -> x >= 5))
+    @test insorted(10, 1:10, by=(x -> x >= 5)) == insorted(10, [1:10;], by=(x -> x >= 5))
 
-    @test insorted([], 0) === false
-    @test insorted([1,2,3], 0) === false
-    @test insorted([1,2,3], 4) === false
+    @test insorted(0, []) === false
+    @test insorted(0, [1,2,3]) === false
+    @test insorted(4, [1,2,3]) === false
 end
 @testset "PartialQuickSort" begin
     a = rand(1:10000, 1000)

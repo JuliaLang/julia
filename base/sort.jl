@@ -408,7 +408,7 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 ```
 """ searchsortedlast
 
-function _insortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
+function _insortedfirst(x, v::AbstractVector, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
     if lt(o, v[hi], x)
         return false
     end
@@ -429,7 +429,7 @@ function _insortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool w
     return false
 end
 
-function _insortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
+function _insortedlast(x, v::AbstractVector, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
     if lt(o, x, v[lo])
         return false
     end
@@ -450,7 +450,7 @@ function _insortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::Bool wh
     return false
 end
 
-function insorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::Bool where T<:Integer
+function insorted(x, v::AbstractVector, ilo::T, ihi::T, o::Ordering)::Bool where T<:Integer
     if isempty(v)
         return false
     elseif lt(o, v[ihi], x)
@@ -466,7 +466,7 @@ function insorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::Bool where
         elseif lt(o, x, v[m])
             hi = m
         else
-            return _insortedfirst(v, x, max(lo,ilo), m, o) || _insortedlast(v, x, m, min(hi,ihi), o)
+            return _insortedfirst(x, v, max(lo,ilo), m, o) || _insortedlast(x, v, m, min(hi,ihi), o)
         end
     end
     if hi <= ihi && v[hi] == x
@@ -475,72 +475,14 @@ function insorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::Bool where
     return false
 end
 
-function insorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::Bool
-    require_one_based_indexing(a)
-    if lt(o, x, first(a)) || lt(o, last(a), x)
-        return false
-    end
-    if step(a) == 0
-        if first(a) == x
-            return true
-        else
-            return false
-        end
-    else
-        #TODO Replace the following
-        # Precision issue avoided here in an inefficient way
-        return insorted([a;], x, o)
-    end
-end
-
-function insorted(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::Bool
-    require_one_based_indexing(a)
-    if lt(o, x, first(a)) || lt(o, last(a), x) || !isinteger(x)
-        return false
-    end
-    h = step(a)
-    if h == 0
-        if first(a) == x
-            return true
-        else
-            return false
-        end
-    else
-        if isinteger((x - first(a)) / step(a))
-            return true
-        else
-            return false
-        end
-    end
-end
-
-function insorted(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::Bool
-    require_one_based_indexing(a)
-    if lt(o, first(a), x)
-        if step(a) == 0
-            return false
-        elseif !lt(o, last(a), x)
-            if isinteger((x - first(a)) / step(a))
-                return true
-            else
-                return false
-            end
-        else
-            return false
-        end
-    elseif first(a) == x
-        return true
-    else
-        return false
-    end
-end
+insorted(x, r::AbstractRange, o::DirectOrdering=Forward) = in(x, r)
 
 for s in [:insorted]
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
-        $s(v::AbstractVector, x;
+        $s(x, v::AbstractVector, o::Ordering) = (inds = axes(v, 1); $s(x,v,first(inds),last(inds),o))
+        $s(x, v::AbstractVector;
            lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-            $s(v,x,ord(lt,by,rev,order))
+            $s(x,v,ord(lt,by,rev,order))
     end
 end
 
@@ -553,19 +495,19 @@ value.
 
 # Examples
 ```jldoctest
-julia> insorted([1, 2, 4, 5, 5, 7], 4) # single match
+julia> insorted(4, [1, 2, 4, 5, 5, 7]) # single match
 true
 
-julia> insorted([1, 2, 4, 5, 5, 7], 5) # multiple matches
+julia> insorted(5, [1, 2, 4, 5, 5, 7]) # multiple matches
 true
 
-julia> insorted([1, 2, 4, 5, 5, 7], 3) # no match
+julia> insorted(3, [1, 2, 4, 5, 5, 7]) # no match
 false
 
-julia> insorted([1, 2, 4, 5, 5, 7], 9) # no match
+julia> insorted(9, [1, 2, 4, 5, 5, 7]) # no match
 false
 
-julia> insorted([1, 2, 4, 5, 5, 7], 0) # no match
+julia> insorted(0, [1, 2, 4, 5, 5, 7]) # no match
 false
 ```
 """ insorted
