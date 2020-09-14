@@ -367,7 +367,7 @@ Therefore in this case the diagonal rule is not really necessary, since
 the array determines `T` and we can then allow `x` and `y` to be of
 any subtypes of `T`.
 So variables that occur in invariant position are never considered diagonal.
-This choice of behavior is slightly controversial --- some feel this definition
+This choice of behavior is slightly controversial -- some feel this definition
 should be written as
 
 ```julia
@@ -480,8 +480,8 @@ A good way to start is to watch subtyping in action.
 Build Julia with `make debug` and fire up Julia within a debugger.
 [gdb debugging tips](@ref) has some tips which may be useful.
 
-Because the subtyping code is used heavily in the REPL itself--and hence breakpoints in this
-code get triggered often--it will be easiest if you make the following definition:
+Because the subtyping code is used heavily in the REPL itself -- and hence breakpoints in this
+code get triggered often -- it will be easiest if you make the following definition:
 
 ```julia-repl
 julia> function mysubtype(a,b)
