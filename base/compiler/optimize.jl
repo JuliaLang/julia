@@ -125,7 +125,7 @@ function add_backedge!(li::CodeInstance, caller::OptimizationState)
     nothing
 end
 
-function isinlineable(m::Method, me::OptimizationState, params::OptimizationParams, bonus::Int=0)
+function isinlineable(m::Method, me::OptimizationState, params::OptimizationParams, union_penalties::Bool, bonus::Int=0)
     # compute the cost (size) of inlining this code
     inlineable = false
     cost_threshold = params.inline_cost_threshold
@@ -143,7 +143,7 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
         end
     end
     if !inlineable
-        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, params, cost_threshold + bonus)
+        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, params, union_penalties, cost_threshold + bonus)
     end
     return inlineable
 end
@@ -219,15 +219,14 @@ function optimize(opt::OptimizationState, params::OptimizationParams, @nospecial
     replace_code_newstyle!(opt.src, ir, nargs)
 
     # determine and cache inlineability
+    union_penalties = false
     if !force_noinline
-        # don't keep ASTs for functions specialized on a Union argument
-        # TODO: this helps avoid a type-system bug mis-computing sparams during intersection
         sig = unwrap_unionall(opt.linfo.specTypes)
         if isa(sig, DataType) && sig.name === Tuple.name
             for P in sig.parameters
                 P = unwrap_unionall(P)
                 if isa(P, Union)
-                    force_noinline = true
+                    union_penalties = true
                     break
                 end
             end
@@ -252,7 +251,7 @@ function optimize(opt::OptimizationState, params::OptimizationParams, @nospecial
                 # For functions declared @inline, increase the cost threshold 20x
                 bonus += params.inline_cost_threshold*19
             end
-            opt.src.inlineable = isinlineable(def, opt, params, bonus)
+            opt.src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
         end
     end
     nothing
@@ -281,7 +280,9 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 # known return type
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
-function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::OptimizationParams, error_path::Bool = false)
+function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any},
+                        slottypes::Vector{Any}, union_penalties::Bool,
+                        params::OptimizationParams, error_path::Bool = false)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -314,6 +315,13 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
+            elseif f === Main.Core.isa
+                # If we're in a union context, we penalize type computations
+                # on union types. In such cases, it is usually better to perform
+                # union splitting on the outside.
+                if union_penalties && isa(argextype(ex.args[2],  src, sptypes, slottypes), Union)
+                    return params.inline_nonleaf_penalty
+                end
             elseif (f === Main.Core.arrayref || f === Main.Core.const_arrayref) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes, slottypes)
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
@@ -362,10 +370,12 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
     return 0
 end
 
-function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::OptimizationParams, throw_blocks::Union{Nothing,BitSet})
+function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::CodeInfo, sptypes::Vector{Any},
+                                  slottypes::Vector{Any}, union_penalties::Bool, params::OptimizationParams,
+                                  throw_blocks::Union{Nothing,BitSet})
     thiscost = 0
     if stmt isa Expr
-        thiscost = statement_cost(stmt, line, src, sptypes, slottypes, params,
+        thiscost = statement_cost(stmt, line, src, sptypes, slottypes, union_penalties, params,
                                   params.unoptimize_throw_blocks && line in throw_blocks)::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
@@ -379,24 +389,24 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::CodeInfo,
 end
 
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any},
-                       params::OptimizationParams, cost_threshold::Integer=params.inline_cost_threshold)
+                       params::OptimizationParams, union_penalties::Bool=false, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
     throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
     for line = 1:length(body)
         stmt = body[line]
-        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, slottypes, params, throw_blocks)
+        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, slottypes, union_penalties, params, throw_blocks)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return false
     end
     return true
 end
 
-function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::CodeInfo, sptypes::Vector{Any}, params::OptimizationParams)
+function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::CodeInfo, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
     throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
-        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, src.slottypes, params, throw_blocks)
+        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, src.slottypes, unionpenalties, params, throw_blocks)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost
