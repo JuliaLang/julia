@@ -74,9 +74,11 @@ Base.MathConstants.golden
 Base.Inf
 Base.Inf32
 Base.Inf16
+Base.inf
 Base.NaN
 Base.NaN32
 Base.NaN16
+Base.nan
 Base.issubnormal
 Base.isfinite
 Base.isinf

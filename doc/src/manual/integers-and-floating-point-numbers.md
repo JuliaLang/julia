@@ -703,7 +703,9 @@ letter and does not behave like `f` in numeric literals. Hence, expressions star
 followed by `F` are interpreted as the numerical literal multiplied by a variable, which means that, for
 example, `1.5F22` is equal to `1.5 * F22`.
 
-## Literal zero and one
+## Literal Value Creation
+
+### zero and one
 
 Julia provides functions which return literal 0 and 1 corresponding to a specified type or the
 type of a given variable.
@@ -730,4 +732,40 @@ julia> one(Int32)
 
 julia> one(BigFloat)
 1.0
+```
+
+### inf and nan
+
+!!! compat "Julia 1.6"
+    The [`nan(x)`](@ref) and [`inf(x)`](@ref) functions require at least Julia 1.6.
+
+Julia provides functions which return the literals not-a-number and infinity corresponding to a specified
+floating-point type or the floating-point type of a given variable.
+
+| Function          | Description                                                    |
+|:----------------- |:-------------------------------------------------------------- |
+| [`inf(x)`](@ref)  | Literal positive infinity of type `x` or type of variable `x`  |
+| [`nan(x)`](@ref)  | Literal not a number of type `x` or type of variable `x`       |
+
+These functions are useful for generic code designed to work with different precisions and set a floating-point
+number to either infinity or not a number. They should not be used to compare against `Inf` or `NaN`, instead
+the [`isfinite(x)`](@ref) and [`isnan(x)`](@ref) functions should be used for comparisons.
+
+Examples:
+
+```jldoctest
+julia> nan(Float32)
+NaN32
+
+julia> nan(Float16(1.0))
+NaN16
+
+julia> inf(Float32)
+Inf32
+
+julia> inf(Float64(1.0))
+Inf
+
+julia> inf(BigFloat)
+Inf
 ```
