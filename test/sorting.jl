@@ -332,7 +332,7 @@ end
         rgv, rgv_r = [rg;], [rg_r;]
         for i = I
             @test insorted(i,rg) === insorted(i,rgv)
-            @test insorted(i,rg_r,rev=true) === insorted(i,rgv_r,rev=true)
+            @test insorted(i,rg_r) === insorted(i,rgv_r,rev=true)
         end
     end
 
@@ -345,13 +345,13 @@ end
 
     rg_r = reverse(rg)
     for i = 1:100
-        @test insorted(rg_r[i], rg_r, rev=true) == true
-        @test insorted(prevfloat(rg_r[i]), rg_r, rev=true) === false
-        @test insorted(nextfloat(rg_r[i]), rg_r, rev=true) === false
+        @test insorted(rg_r[i], rg_r) == true
+        @test insorted(prevfloat(rg_r[i]), rg_r) === false
+        @test insorted(nextfloat(rg_r[i]), rg_r) === false
     end
 
-    @test insorted(1, 1:10, by=(x -> x >= 5)) == insorted(1, [1:10;], by=(x -> x >= 5))
-    @test insorted(10, 1:10, by=(x -> x >= 5)) == insorted(10, [1:10;], by=(x -> x >= 5))
+    @test insorted(1, 1:10) == insorted(1, [1:10;], by=(x -> x >= 5))
+    @test insorted(10, 1:10) == insorted(10, [1:10;], by=(x -> x >= 5))
 
     @test insorted(0, []) === false
     @test insorted(0, [1,2,3]) === false

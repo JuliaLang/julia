@@ -408,74 +408,11 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 ```
 """ searchsortedlast
 
-function _insortedfirst(x, v::AbstractVector, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
-    if lt(o, v[hi], x)
-        return false
-    end
-    u = T(1)
-    lo = lo - u
-    hi = hi + u
-    @inbounds while lo < hi - u
-        m = midpoint(lo, hi)
-        if lt(o, v[m], x)
-            lo = m
-        else
-            hi = m
-        end
-    end
-    if v[hi] == x
-        return true
-    end
-    return false
+function insorted(x, coll::AbstractVector, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
+    !isempty(searchsorted(coll, x, lo, hi, o))
 end
 
-function _insortedlast(x, v::AbstractVector, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
-    if lt(o, x, v[lo])
-        return false
-    end
-    u = T(1)
-    lo = lo - u
-    hi = hi + u
-    @inbounds while lo < hi - u
-        m = midpoint(lo, hi)
-        if lt(o, x, v[m])
-            hi = m
-        else
-            lo = m
-        end
-    end
-    if v[lo] == x
-        return true
-    end
-    return false
-end
-
-function insorted(x, v::AbstractVector, ilo::T, ihi::T, o::Ordering)::Bool where T<:Integer
-    if isempty(v)
-        return false
-    elseif lt(o, v[ihi], x)
-        return false
-    end
-    u = T(1)
-    lo = ilo - u
-    hi = ihi + u
-    @inbounds while lo < hi - u
-        m = midpoint(lo, hi)
-        if lt(o, v[m], x)
-            lo = m
-        elseif lt(o, x, v[m])
-            hi = m
-        else
-            return _insortedfirst(x, v, max(lo,ilo), m, o) || _insortedlast(x, v, m, min(hi,ihi), o)
-        end
-    end
-    if hi <= ihi && v[hi] == x
-        return true
-    end
-    return false
-end
-
-insorted(x, r::AbstractRange, o::DirectOrdering=Forward) = in(x, r)
+insorted(x, r::AbstractRange) = in(x, r)
 
 for s in [:insorted]
     @eval begin
@@ -485,6 +422,7 @@ for s in [:insorted]
             $s(x,v,ord(lt,by,rev,order))
     end
 end
+
 
 """
     insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
