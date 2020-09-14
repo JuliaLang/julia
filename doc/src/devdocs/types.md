@@ -418,15 +418,19 @@ whether that appearance of the variable is used or not.
 Otherwise types can behave differently depending on which other types
 they are compared to, making subtyping not transitive. For example, consider
 
+```julia
 Tuple{Int,Int8,Vector{Integer}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+```
 
 If the `T` inside the Union is ignored, then `T` is concrete and the answer is "false"
 since the first two types aren't the same.
 But consider instead
 
+```julia
 Tuple{Int,Int8,Vector{Any}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+```
 
-Now we cannot ignore the `T` in the Union (we must have T == Any), so `T` is not
+Now we cannot ignore the `T` in the Union (we must have `T == Any`), so `T` is not
 concrete and the answer is "true".
 That would make the concreteness of `T` depend on the other type, which is not
 acceptable since a type must have a clear meaning on its own.
