@@ -398,6 +398,13 @@ end
     @test isnan(x) == true
     @test isnan(y) == false
 end
+@testset "inf, nan generation functions" begin
+    @test isinf(inf(BigFloat))
+    @test typeof(inf(BigFloat)) == BigFloat
+
+    @test isnan(nan(BigFloat))
+    @test typeof(nan(BigFloat)) == BigFloat
+end
 @testset "convert to BigFloat" begin
     @test convert(BigFloat, 1//2) == parse(BigFloat,"0.5")
     @test typeof(convert(BigFloat, 1//2)) == BigFloat

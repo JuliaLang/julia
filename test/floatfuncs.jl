@@ -167,3 +167,17 @@ end
     @test ≈(1.0; atol=1).(1.0:3.0) == [true, true, false]
 
 end
+
+@testset "inf, nan generation functions" begin
+    @test isnan(nan(Float64))
+    @test isnan(nan(Float32(1.0)))
+    @test typeof(nan(Float64)) == Float64
+    @test typeof(nan(Float32)) == Float32
+    @test typeof(nan(Float32(1.0))) == Float32
+
+    @test isinf(inf(Float64))
+    @test isinf(inf(Float32(1.0)))
+    @test typeof(inf(Float64)) == Float64
+    @test typeof(inf(Float32)) == Float32
+    @test typeof(inf(Float32(1.0))) == Float32
+end

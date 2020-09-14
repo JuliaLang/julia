@@ -127,6 +127,12 @@ end
 
     @test nextfloat(Inf16) === Inf16
     @test prevfloat(-Inf16) === -Inf16
+
+    @test isinf(inf(Float16))
+    @test typeof(inf(Float16)) == Float16
+
+    @test isnan(nan(Float16))
+    @test typeof(nan(Float16)) == Float16
 end
 
 @test repr(Float16(44099)) == "Float16(4.41e4)"

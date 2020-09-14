@@ -25,7 +25,7 @@ const Inf32 = bitcast(Float32, 0x7f800000)
 """
     NaN32
 
-A not-a-number value of type [`Float32`](@ref).
+A not a number value of type [`Float32`](@ref).
 """
 const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)
@@ -43,9 +43,45 @@ const NaN = NaN64
 """
     NaN, NaN64
 
-A not-a-number value of type [`Float64`](@ref).
+A not a number value of type [`Float64`](@ref).
 """
 NaN, NaN64
+
+"""
+    nan(x)
+    nan(::Type{T}) where {T<:AbstractFloat}
+
+Return the not a number value of type `T` or the type of `x`.
+
+!!! compat "Julia 1.6"
+    This function requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> nan(Float32)
+NaN32
+```
+"""
+nan(::Type{T}) where {T<:AbstractFloat} = convert(T, NaN)
+nan(x::T) where {T<:AbstractFloat} = nan(T)
+
+"""
+    inf(x)
+    inf(::Type{T}) where {T<:AbstractFloat}
+
+Return positive infinity of type `T` or the type of `x`.
+
+!!! compat "Julia 1.6"
+    This function requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> inf(Float32)
+Inf32
+```
+"""
+inf(::Type{T}) where {T<:AbstractFloat} = convert(T, Inf)
+inf(x::T) where {T<:AbstractFloat} = inf(T)
 
 ## conversions to floating-point ##
 Float16(x::Integer) = convert(Float16, convert(Float32, x)::Float32)
