@@ -45,7 +45,7 @@ struct Base64EncodePipe <: IO
 end
 
 Base.isreadable(::Base64EncodePipe) = false
-Base.iswritable(pipe::Base64EncodePipe) = iswritable(pipe.io) && true
+Base.iswritable(pipe::Base64EncodePipe) = iswritable(pipe.io)
 
 function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::Int
     buffer = pipe.buffer
