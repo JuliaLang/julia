@@ -59,6 +59,22 @@ true
 """
 isone(x) = x == one(x) # fallback method
 
+"""
+    isfinite(f) -> Bool
+
+Test whether a number is finite.
+
+# Examples
+```jldoctest
+julia> isfinite(5)
+true
+
+julia> isfinite(NaN32)
+false
+```
+"""
+isfinite(x::Number) = iszero(x - x)
+
 size(x::Number) = ()
 size(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 axes(x::Number) = ()
@@ -133,22 +149,6 @@ julia> abs2(-3)
 ```
 """
 abs2(x::Real) = x*x
-
-"""
-    isfinite(f) -> Bool
-
-Test whether a number is finite.
-
-# Examples
-```jldoctest
-julia> isfinite(5)
-true
-
-julia> isfinite(NaN32)
-false
-```
-"""
-isfinite(x) = iszero(x - x)
 
 """
     flipsign(x, y)
