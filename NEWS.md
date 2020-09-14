@@ -20,6 +20,9 @@ New language features
 Language changes
 ----------------
 
+* Macros that return `:quote` expressions (e.g. via `Expr(:quote, ...)`) were previously
+  able to work without escaping (`esc(...)`) their output when needed. This has been
+  corrected, and now `esc` must be used in these macros as it is in other macros ([#37540]).
 * The `-->` operator now lowers to a `:call` expression, so it can be defined as
   a function like other operators. The dotted version `.-->` is now parsed as well.
   For backwards compatibility, `-->` still parses using its own expression head

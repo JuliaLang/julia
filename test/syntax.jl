@@ -2345,3 +2345,12 @@ end
 
 # issue #37656
 @test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
+
+# issue #37540
+macro m37540()
+    quote
+        x = 1
+        :($x)
+    end
+end
+@test @m37540() == 1
