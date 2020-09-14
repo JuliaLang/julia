@@ -1,26 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
-    truncwidth = textwidth(truncmark)
-    (width <= 0 || width < truncwidth) && return ""
-
-    wid = truncidx = lastidx = 0
-    for (idx, c) in pairs(str)
-        lastidx = idx
-        wid += textwidth(c)
-        wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
-        (wid >= width || c in chars) && break
-    end
-
-    lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
-    truncidx == 0 && (truncidx = lastidx)
-    if lastidx < lastindex(str)
-        return String(SubString(str, 1, truncidx) * truncmark)
-    else
-        return String(str)
-    end
-end
-
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
                              :typeinfo => eltype(t))

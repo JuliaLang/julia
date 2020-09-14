@@ -368,6 +368,26 @@ end
     close(io)
 end
 
+
+struct RainBowString
+    s::String
+end
+
+function Base.show(io::IO, rbs::RainBowString)
+    for s in rbs.s
+        _, color = rand(Base.text_colors)
+        print(io, color, s, "\e[0m")
+    end
+end
+
+@testset "Display with colors" begin
+    d = Dict([randstring(8) => [RainBowString(randstring(8)) for i in 1:10] for j in 1:5]...)
+    str = sprint(io -> show(io, MIME("text/plain"), d); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    lines = split(str, '\n')
+    @test all(endswith('…'), lines[2:end])
+    @test all(x -> length(x) > 100, lines[2:end])
+end
+
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
     d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
     buf = IOBuffer()
@@ -1259,3 +1279,19 @@ end
     sizehint!(d, 10)
     @test length(d.slots) < 100
 end
+
+using Random
+
+struct RainBowString
+    s::String
+end
+
+function Base.show(io::IO, rbs::RainBowString)
+    for s in rbs.s
+        _, color = rand(Base.text_colors)
+        print(io, color, s, "\e[0m")
+    end
+end
+
+
+d = Dict([randstring(8) => [RainBowString(randstring(8)) for i in 1:10] for j in 1:5]...)
