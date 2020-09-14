@@ -259,7 +259,7 @@ end
 function foo_apply_apply_type_svec()
     A = (Tuple, Float32)
     B = Tuple{Float32, Float32}
-    Core.apply_type(A..., B.types...)
+    Core.apply_type(A..., B.parameters...)
 end
 let ci = code_typed(foo_apply_apply_type_svec, Tuple{})[1].first
     @test length(ci.code) == 1 && ci.code[1] == ReturnNode(NTuple{3, Float32})

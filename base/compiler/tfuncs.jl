@@ -24,12 +24,7 @@ function find_tfunc(@nospecialize f)
     end
 end
 
-const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
-const DATATYPE_PARAMETERS_FIELDINDEX = fieldindex(DataType, :parameters)
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
-const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
-const DATATYPE_MUTABLE_FIELDINDEX = fieldindex(DataType, :mutable)
-const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
 
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
 const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
@@ -282,7 +277,11 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
                 return Const(true)
             elseif isa(arg1, Const)
                 arg1v = (arg1::Const).val
-                if !ismutable(arg1v) || isdefined(arg1v, idx) || (isa(arg1v, DataType) && is_dt_const_field(idx))
+                if isa(arg1v, DataType)
+                    if !is_dt_nonconst_field(idx)
+                        return Const(isdefined(arg1v, idx))
+                    end
+                elseif !ismutable(arg1v) || isdefined(arg1v, idx)
                     return Const(isdefined(arg1v, idx))
                 end
             end
@@ -611,22 +610,7 @@ function subtype_tfunc(@nospecialize(a), @nospecialize(b))
 end
 add_tfunc(<:, 2, 2, subtype_tfunc, 0)
 
-is_dt_const_field(fld::Int) = (
-     fld == DATATYPE_NAME_FIELDINDEX ||
-     fld == DATATYPE_PARAMETERS_FIELDINDEX ||
-     fld == DATATYPE_TYPES_FIELDINDEX ||
-     fld == DATATYPE_SUPER_FIELDINDEX ||
-     fld == DATATYPE_MUTABLE_FIELDINDEX ||
-     fld == DATATYPE_INSTANCE_FIELDINDEX
-    )
-function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
-    if fld == DATATYPE_INSTANCE_FIELDINDEX
-        return isdefined(sv, fld) ? Const(getfield(sv, fld)) : Union{}
-    elseif is_dt_const_field(fld) && isdefined(sv, fld)
-        return Const(getfield(sv, fld))
-    end
-    return nothing
-end
+is_dt_nonconst_field(fld::Int) = fld == DATATYPE_TYPES_FIELDINDEX
 
 function fieldcount_noerror(@nospecialize t)
     if t isa UnionAll || t isa Union
@@ -753,20 +737,10 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             if !(isa(nv,Symbol) || isa(nv,Int))
                 return Bottom
             end
-            if isa(sv, UnionAll)
-                if nv === :var || nv === 1
-                    return Const(sv.var)
-                elseif nv === :body || nv === 2
-                    return Const(sv.body)
-                end
-            elseif isa(sv, DataType)
-                idx = nv
-                if isa(idx, Symbol)
-                    idx = fieldindex(DataType, idx, false)
-                end
-                if isa(idx, Int)
-                    t = const_datatype_getfield_tfunc(sv, idx)
-                    t === nothing || return t
+            if isa(sv, DataType)
+                idx = isa(nv, Symbol) ? fieldindex(DataType, nv, false) : nv
+                if !is_dt_nonconst_field(idx)
+                     return isdefined(sv, nv) ? Const(getfield(sv, nv)) : Bottom
                 end
             elseif isa(sv, Core.TypeName)
                 fld = isa(nv, Symbol) ? fieldindex(Core.TypeName, nv, false) : nv
@@ -775,12 +749,11 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                     fld == TYPENAME_WRAPPER_FIELDINDEX)
                     return Const(getfield(sv, fld))
                 end
-            end
-            if isa(sv, Module) && isa(nv, Symbol)
+            elseif isa(sv, Module) && isa(nv, Symbol)
                 return abstract_eval_global(sv, nv)
             end
-            if (isa(sv, SimpleVector) || !ismutable(sv)) && isdefined(sv, nv)
-                return Const(getfield(sv, nv))
+            if !ismutable(sv)
+                return isdefined(sv, nv) ? Const(getfield(sv, nv)) : Bottom
             end
         end
         s = typeof(sv)
@@ -863,17 +836,6 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     end
     if fld < 1 || fld > nf
         return Bottom
-    end
-    if isconstType(s00)
-        sp = s00.parameters[1]
-    elseif isa(s00, Const)
-        sp = s00.val
-    else
-        sp = nothing
-    end
-    if isa(sp, DataType)
-        t = const_datatype_getfield_tfunc(sp, fld)
-        t !== nothing && return t
     end
     R = ftypes[fld]
     if isempty(s.parameters)
