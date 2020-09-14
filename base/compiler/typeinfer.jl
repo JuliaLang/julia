@@ -497,6 +497,8 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
     return false
 end
 
+const __inference_callee_edges4__ = Vector{Tuple{MethodInstance, Vector{Tuple{MethodInstance,MethodInstance}}}}()
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, caller::InferenceState)
     mi = specialize_method(method, atypes, sparams)::MethodInstance
@@ -532,6 +534,11 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         end
         if caller.cached || caller.limited # don't involve uncached functions in cycle resolution
             frame.parent = caller
+        end
+        if __collect_inference_callees__[]
+            #Core.println("edge!")
+            #Core.println(__inference_callee_edges4__)
+            push!(__inference_callee_edges4__[end][2], (caller.linfo, frame.linfo))
         end
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
