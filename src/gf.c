@@ -1557,6 +1557,7 @@ static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **is
     *isect = jl_type_intersection(t1, t2);
     if (*isect == jl_bottom_type)
         return 0;
+    // determine if type-intersection can be convinced to give a better, non-bad answer
     if (!(jl_subtype(*isect, t1) && jl_subtype(*isect, t2))) {
         // if the intersection was imprecise, see if we can do
         // better by switching the types
@@ -2759,7 +2760,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
         if (!all_subtypes && minmax != NULL && !minmax_ambig) {
             jl_method_t *minmaxm = minmax->method;
             if (!include_ambiguous)
-                all_subtypes = 0;
+                all_subtypes = 1;
             for (i = 0; i < len; i++) {
                 jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
                 if (matc->fully_covers != FULLY_COVERS) {
@@ -2893,23 +2894,26 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                         jl_type_intersection2((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types, &env.match.ti, &isect2);
                         ti = env.match.ti;
                     }
-                    if (ti != jl_bottom_type && !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
-                        // m and m2 are ambiguous, but let's see if we can find another method (m3)
-                        // that dominates their intersection, and means we can ignore this
-                        size_t k;
-                        for (k = j; k > 0; k--) {
-                            jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(env.t, k - 1);
-                            jl_method_t *m3 = matc3->method;
-                            if ((jl_subtype(ti, m3->sig) || (isect2 && jl_subtype(isect2, m3->sig)))
-                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m->sig)
-                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m2->sig))
-                                break;
+                    if (ti != jl_bottom_type) {
+                        if (!jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
+                            // m and m2 are ambiguous, but let's see if we can find another method (m3)
+                            // that dominates their intersection, and means we can ignore this
+                            size_t k;
+                            for (k = j; k > 0; k--) {
+                                jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(env.t, k - 1);
+                                jl_method_t *m3 = matc3->method;
+                                if ((jl_subtype(ti, m3->sig) || (isect2 && jl_subtype(isect2, m3->sig)))
+                                        && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m->sig)
+                                        && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m2->sig))
+                                    break;
+                            }
+                            if (k == 0) {
+                                ambig_groupid[i] = j - 1; // ambiguity covering range [i:j)
+                            }
                         }
-                        if (k == 0)
-                            ambig_groupid[i] = j - 1; // ambiguity covering range [i:j)
+                        disjoint = 0;
                     }
                     isect2 = NULL;
-                    disjoint = 0;
                 }
             }
             if (disjoint && lim >= 0) {

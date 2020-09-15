@@ -1462,7 +1462,12 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         if ti2 <: m1.sig && ti2 <: m2.sig
             ti = ti2
         elseif ti != ti2
-            inner(ti2) || return false
+            # TODO: this would be the correct way to handle this case, but
+            #       people complained so we don't do it
+            # inner(ti2) || return false
+            return false # report that the type system failed to decide if it was ambiguous by saying they definitely aren't
+        else
+            return false # report that the type system failed to decide if it was ambiguous by saying they definitely aren't
         end
     end
     inner(ti) || return false
