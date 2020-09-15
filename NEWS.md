@@ -71,6 +71,7 @@ New library functions
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
 * New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more
   efficiently ([#35816]).
+* New function `insorted` for determining whether an element is in a sorted collection or not ([#37490]).
 
 New library features
 --------------------
