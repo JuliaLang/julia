@@ -408,28 +408,18 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 ```
 """ searchsortedlast
 
-function insorted(x, coll::AbstractVector, lo::T, hi::T, o::Ordering)::Bool where T<:Integer
-    !isempty(searchsorted(coll, x, lo, hi, o))
-end
-
+function insorted end
+insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x, kw...))
 insorted(x, r::AbstractRange) = in(x, r)
-
-for s in [:insorted]
-    @eval begin
-        $s(x, v::AbstractVector, o::Ordering) = (inds = axes(v, 1); $s(x,v,first(inds),last(inds),o))
-        $s(x, v::AbstractVector;
-           lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-            $s(x,v,ord(lt,by,rev,order))
-    end
-end
-
 
 """
     insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
 
 Determine whether an item is in the given sorted collection, in the sense that
-it is [`==`](@ref) to one of the values of the collection. Returns a `Bool`
-value.
+it is [`==`](@ref) to one of the values of the collection according to the order
+specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
+sorted in that order, see [`sort`](@ref) for the keywords. See also
+[`in`](@ref). Returns a `Bool` value.
 
 # Examples
 ```jldoctest
@@ -448,6 +438,9 @@ false
 julia> insorted(0, [1, 2, 4, 5, 5, 7]) # no match
 false
 ```
+
+!!! compat "Julia 1.6"
+     `insorted` was added in Julia 1.6.
 """ insorted
 
 
