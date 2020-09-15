@@ -58,40 +58,52 @@ end
 add_tfunc(throw, 1, 1, (@nospecialize(x)) -> Bottom, 0)
 
 # the inverse of typeof_tfunc
-# returns (type, isexact)
+# returns (type, isexact, isconcrete)
 # if isexact is false, the actual runtime type may (will) be a subtype of t
+# if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 function instanceof_tfunc(@nospecialize(t))
     if isa(t, Const)
         if isa(t.val, Type)
-            return t.val, true
+            return t.val, true, isconcretetype(t.val)
         end
-        return Bottom, true
+        return Bottom, true, false # runtime throws on non-Type
     end
     t = widenconst(t)
-    if t === Bottom || t === typeof(Bottom) || typeintersect(t, Type) === Bottom
-        return Bottom, true
+    if t === Bottom
+        return Bottom, true, true # runtime unreachable
+    elseif t === typeof(Bottom) || typeintersect(t, Type) === Bottom
+        return Bottom, true, false # literal Bottom or non-Type
     elseif isType(t)
         tp = t.parameters[1]
-        return tp, !has_free_typevars(tp)
+        return tp, !has_free_typevars(tp), isconcretetype(tp)
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
-        t′′, isexact = instanceof_tfunc(t′)
+        t′′, isexact, isconcrete = instanceof_tfunc(t′)
         tr = rewrap_unionall(t′′, t)
-        if t′′ isa DataType && !has_free_typevars(tr)
+        if t′′ isa DataType && t′′.name !== Tuple.name && !has_free_typevars(tr)
             # a real instance must be within the declared bounds of the type,
             # so we can intersect with the original wrapper.
             tr = typeintersect(tr, t′′.name.wrapper)
+            isconcrete = !t′′.abstract
+            if tr === Union{}
+                # runtime unreachable (our inference Type{T} where S is
+                # uninhabited with any runtime T that exists)
+                isexact = true
+            end
         end
-        return tr, isexact
+        return tr, isexact, isconcrete
     elseif isa(t, Union)
-        ta, isexact_a = instanceof_tfunc(t.a)
-        tb, isexact_b = instanceof_tfunc(t.b)
-        ta === Union{} && return tb, isexact_b
-        tb === Union{} && return ta, isexact_a
-        ta == tb && return ta, isexact_a && isexact_b
-        return Union{ta, tb}, false # at runtime, will be exactly one of these
+        ta, isexact_a, isconcrete_a = instanceof_tfunc(t.a)
+        tb, isexact_b, isconcrete_b = instanceof_tfunc(t.b)
+        isconcrete = isconcrete_a && isconcrete_b
+        # most users already handle the Union case, so here we assume that
+        # `isexact` only cares about the answers where there's actually a Type
+        # (and assuming other cases causing runtime errors)
+        ta === Union{} && return tb, isexact_b, isconcrete
+        tb === Union{} && return ta, isexact_a, isconcrete
+        return Union{ta, tb}, false, isconcrete # at runtime, will be exactly one of these
     end
-    return Any, false
+    return Any, false, false
 end
 bitcast_tfunc(@nospecialize(t), @nospecialize(x)) = instanceof_tfunc(t)[1]
 math_tfunc(@nospecialize(x)) = widenconst(x)
@@ -294,38 +306,41 @@ add_tfunc(isdefined, 2, 2, isdefined_tfunc, 1)
 
 function sizeof_nothrow(@nospecialize(x))
     if isa(x, Const)
-        x = x.val
-        if !isa(x, Type) || x === DataType
+        if !isa(x.val, Type) || x.val === DataType
             return true
         end
     elseif isa(x, Conditional)
         return true
     end
-    if isa(x, Union)
-        return sizeof_nothrow(x.a) && sizeof_nothrow(x.b)
+    xu = unwrap_unionall(x)
+    if isa(xu, Union)
+        return sizeof_nothrow(rewrap_unionall(xu.a, x)) &&
+               sizeof_nothrow(rewrap_unionall(xu.b, x))
     end
-    t, exact = instanceof_tfunc(x)
-    if !exact
-        # Could always be bottom at runtime, which throws
-        return false
-    end
-    if t !== Bottom
-        t === DataType && return true
-        x = t
-        x = unwrap_unionall(x)
-        if isa(x, Union)
-            isinline, sz, _ = uniontype_layout(x)
-            return isinline
-        end
-        isa(x, DataType) || return false
-        x.layout == C_NULL && return false
-        (datatype_nfields(x) == 0 && !datatype_pointerfree(x)) && return false
-        return true
-    else
+    t, exact, isconcrete = instanceof_tfunc(x)
+    if t === Bottom
+        # x must be an instance (not a Type) or is the Bottom type object
         x = widenconst(x)
-        x === DataType && return false
-        return isconcretetype(x) || isprimitivetype(x)
+        return typeintersect(x, Type) === Union{}
     end
+    x = unwrap_unionall(t)
+    if isconcrete
+        if isa(x, DataType) && x.layout != C_NULL
+            # there's just a few concrete types with an opaque layout
+            (datatype_nfields(x) == 0 && !datatype_pointerfree(x)) && return false
+        end
+        return true # these must always have a size of these
+    end
+    exact || return false # Could always be the type Bottom at runtime, for example, which throws
+    t === DataType && return true # DataType itself has a size
+    if isa(x, Union)
+        isinline, sz, _ = uniontype_layout(x)
+        return isinline # even any subset of this union would have a size
+    end
+    isa(x, DataType) || return false
+    x.layout == C_NULL && return false
+    (datatype_nfields(x) == 0 && !datatype_pointerfree(x)) && return false # is-layout-opaque
+    return true
 end
 
 function _const_sizeof(@nospecialize(x))
@@ -346,8 +361,10 @@ function sizeof_tfunc(@nospecialize(x),)
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
     isconstType(x) && return _const_sizeof(x.parameters[1])
-    if isa(x, Union)
-        return tmerge(sizeof_tfunc(x.a), sizeof_tfunc(x.b))
+    xu = unwrap_unionall(x)
+    if isa(xu, Union)
+        return tmerge(sizeof_tfunc(rewrap_unionall(xu.a, x)),
+                      sizeof_tfunc(rewrap_unionall(xu.b, x)))
     end
     # Core.sizeof operates on either a type or a value. First check which
     # case we're in.
@@ -356,9 +373,9 @@ function sizeof_tfunc(@nospecialize(x),)
         # The value corresponding to `x` at runtime could be a type.
         # Normalize the query to ask about that type.
         x = unwrap_unionall(t)
-        if isa(x, Union)
+        if exact && isa(x, Union)
             isinline, sz, _ = uniontype_layout(x)
-            return isinline ? Const(Int(sz)) : (exact ? Bottom : Int)
+            return isinline ? Const(Int(sz)) : Bottom
         end
         isa(x, DataType) || return Int
         (isconcretetype(x) || isprimitivetype(x)) && return _const_sizeof(x)
@@ -1531,18 +1548,18 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         return argtypes[1] ⊑ Array
     end
     if f === Intrinsics.bitcast
-        ty = instanceof_tfunc(argtypes[1])[1]
+        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
         xty = widenconst(argtypes[2])
-        return isprimitivetype(ty) && isprimitivetype(xty) && ty.size === xty.size
+        return isconcrete && isprimitivetype(ty) && isprimitivetype(xty) && Core.sizeof(ty) === Core.sizeof(xty)
     end
     if f in (Intrinsics.sext_int, Intrinsics.zext_int, Intrinsics.trunc_int,
              Intrinsics.fptoui, Intrinsics.fptosi, Intrinsics.uitofp,
              Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
-        # If !isexact, `ty` may be Union{} at runtime even if we have
+        # If !isconcrete, `ty` may be Union{} at runtime even if we have
         # isprimitivetype(ty).
-        ty, isexact = instanceof_tfunc(argtypes[1])
+        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
         xty = widenconst(argtypes[2])
-        return isexact && isprimitivetype(ty) && isprimitivetype(xty)
+        return isconcrete && isprimitivetype(ty) && isprimitivetype(xty)
     end
     # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
     # primitive types of the same type.
