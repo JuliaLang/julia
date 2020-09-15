@@ -2006,3 +2006,6 @@ end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
+
+@test sprint(show, :(./)) == ":((./))"
+@test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

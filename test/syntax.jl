@@ -2340,3 +2340,22 @@ if isodd(1) && all(iseven(2) for c in ())
 else
     @test false
 end
+
+function ncalls_in_lowered(ex, fname)
+    lowered_exprs = Meta.lower(Main, ex).args[1].code
+    return count(lowered_exprs) do ex
+        Meta.isexpr(ex, :call) && ex.args[1] == fname
+    end
+end
+
+@testset "standalone .op" begin
+    @test :(.+) == Expr(:., :+)
+    @test :(map(.-, a)) == Expr(:call, :map, Expr(:., :-), :a)
+
+    @test ncalls_in_lowered(:(.*), GlobalRef(Base, :BroadcastFunction)) == 1
+    @test ncalls_in_lowered(:((.^).(a, b)), GlobalRef(Base, :broadcasted)) == 1
+    @test ncalls_in_lowered(:((.^).(a, b)), GlobalRef(Base, :BroadcastFunction)) == 1
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :broadcasted)) == 3
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :BroadcastFunction)) == 0
+end
