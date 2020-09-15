@@ -1512,9 +1512,10 @@ function fixup_keymaps!(dict::Dict{Char,Any}, level, s, subkeymap)
     nothing
 end
 
-function add_specialisations(dict::Dict{Char,Any}, subdict, level)
+function add_specialisations(dict::Dict{Char,Any}, subdict::Dict{Char,Any}, level::Int)
     default_branch = subdict[wildcard]
     if isa(default_branch, Dict)
+        default_branch = default_branch::Dict{Char,Any}
         # Go through all the keymaps in the default branch
         # and copy them over to dict
         for s in keys(default_branch)
@@ -1549,7 +1550,7 @@ end
 
 # `target` is the total keymap being built up, already being a nested tree of Dicts.
 # source is the keymap specified by the user (with normalized keys)
-function keymap_merge(target::Dict{Char,Any}, source::Dict)
+function keymap_merge(target::Dict{Char,Any}, source::Union{Dict{Char,Any},AnyDict})
     ret = copy(target)
     direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Nothing}), source)
     # first direct entries
