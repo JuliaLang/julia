@@ -408,10 +408,6 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 ```
 """ searchsortedlast
 
-function insorted end
-insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
-insorted(x, r::AbstractRange) = in(x, r)
-
 """
     insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
 
@@ -441,8 +437,10 @@ false
 
 !!! compat "Julia 1.6"
      `insorted` was added in Julia 1.6.
-""" insorted
-
+"""
+function insorted end
+insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
+insorted(x, r::AbstractRange) = in(x, r)
 
 ## sorting algorithms ##
 
