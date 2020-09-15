@@ -1293,7 +1293,12 @@ end
 
 @inline (op::BroadcastFunction)(x...; kwargs...) = op.f.(x...; kwargs...)
 
-Base.show(io::IO, op::BroadcastFunction) = print(io, BroadcastFunction, '(', op.f, ')')
+function Base.show(io::IO, op::BroadcastFunction)
+    print(io, BroadcastFunction, '(')
+    show(io, op.f)
+    print(io, ')')
+    nothing
+end
 Base.show(io::IO, ::MIME"text/plain", op::BroadcastFunction) = show(io, op)
 
 end # module
