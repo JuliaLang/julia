@@ -1774,12 +1774,20 @@
                      (make-fuse f (cdr x))))
                 (else
                  (error (string "invalid syntax \"" (deparse e) "\"")))))
-        (if (and (pair? e) (eq? (car e) 'call) (dotop-named? (cadr e)))
-            (let ((f (undotop (cadr e))) (x (cddr e)))
-              (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
-                  (make-fuse '(top literal_pow)
-                             (list f (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
-                  (make-fuse f x)))
+        (if (and (pair? e) (eq? (car e) 'call))
+            (begin
+              (define (make-fuse- f x)
+                (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
+                    (make-fuse '(top literal_pow)
+                               (list f (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
+                    (make-fuse f x)))
+              (let ((f (cadr e)))
+                (cond ((dotop-named? f)
+                       (make-fuse- (undotop f) (cddr e)))
+                      ((and (length= f 2) (eq? (car f) '|.|))
+                       (make-fuse- (cadr f) (cddr e)))
+                      (else
+                        e))))
             e)))
   (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
@@ -2162,6 +2170,9 @@
          (let ((f (cadr e)))
            (cond ((dotop-named? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
+                 ;; "(.op)(...)"
+                 ((and (length= f 2) (eq? (car f) '|.|))
+                  (expand-fuse-broadcast '() `(|.| ,(cadr f) (tuple ,@(cddr e)))))
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
