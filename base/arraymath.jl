@@ -30,7 +30,6 @@ for f in (:-, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast_preserving_zero_d($f, A)
 end
 
-
 ## Binary arithmetic operators ##
 
 for f in (:+, :-)

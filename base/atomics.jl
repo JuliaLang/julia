@@ -344,7 +344,6 @@ inttype(::Type{Float16}) = Int16
 inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
 
-
 import ..Base.gc_alignment
 
 # All atomic operations have acquire and/or release semantics, depending on

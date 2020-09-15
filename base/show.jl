@@ -208,7 +208,6 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     end
 end
 
-
 print(io::IO, s::Symbol) = (write(io,s); nothing)
 
 """
@@ -2214,7 +2213,6 @@ function show(io::IO, ::Core.Compiler.NativeInterpreter)
     print(io, "Core.Compiler.NativeInterpreter(...)")
 end
 
-
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)
         print(io, "empty SimpleVector")
@@ -2381,7 +2379,6 @@ function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
     mod = get(stdout, :module, Main)
     dump(IOContext(stdout::IO, :limit => true, :module => mod), arg; maxdepth=maxdepth)
 end
-
 
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are

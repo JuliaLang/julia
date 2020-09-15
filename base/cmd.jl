@@ -341,7 +341,6 @@ run(pipeline("out.txt", `grep xyz`))
 """
 pipeline(a, b, c, d...) = pipeline(pipeline(a, b), c, d...)
 
-
 ## implementation of `cmd` syntax ##
 
 cmd_interpolate(xs...) = cstr(string(map(cmd_interpolate1, xs)...))

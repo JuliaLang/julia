@@ -522,7 +522,6 @@ for op in (:(==), :<, :<=)
     end
 end
 
-
 abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16, x) & 0x7fff)
 abs(x::Float32) = abs_float(x)
 abs(x::Float64) = abs_float(x)
@@ -598,7 +597,6 @@ signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the r
 """
 uabs(x::Integer) = abs(x)
 uabs(x::BitSigned) = unsigned(abs(x))
-
 
 """
     nextfloat(x::AbstractFloat, n::Integer)
@@ -860,7 +858,6 @@ julia> x + prevfloat(eps(x)/2) # rounds down
 ```
 """
 eps(::AbstractFloat)
-
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::IEEEFloat) = bswap_int(x)

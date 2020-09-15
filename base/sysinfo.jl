@@ -74,7 +74,6 @@ A symbol representing the architecture of the build configuration.
 """
 const ARCH = ccall(:jl_get_ARCH, Any, ())
 
-
 """
     Sys.KERNEL
 

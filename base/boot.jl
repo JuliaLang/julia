@@ -425,7 +425,6 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
-
 ## primitive Array constructors
 struct UndefInitializer end
 const undef = UndefInitializer()
@@ -450,7 +449,6 @@ Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T,3}(unde
 Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d)
 # empty vector constructor
 Array{T,1}() where {T} = Array{T,1}(undef, 0)
-
 
 (Array{T,N} where T)(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
 
@@ -507,7 +505,6 @@ macro big_str end
 
 # macro for command syntax
 macro cmd end
-
 
 # simple stand-alone print definitions for debugging
 abstract type IO end

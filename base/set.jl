@@ -10,7 +10,6 @@ end
 Set{T}(itr) where {T} = union!(Set{T}(), itr)
 Set() = Set{Any}()
 
-
 """
     Set([itr])
 
@@ -293,7 +292,6 @@ function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
     end
     return resize!(A, current - firstindex(A)::Int + 1)::typeof(A)
 end
-
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
 # seen so far.

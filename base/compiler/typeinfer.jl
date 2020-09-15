@@ -678,7 +678,6 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
     return src
 end
 
-
 function return_type(@nospecialize(f), @nospecialize(t))
     world = ccall(:jl_get_tls_world_age, UInt, ())
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_return_type, f, t, world], 4)

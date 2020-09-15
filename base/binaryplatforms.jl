@@ -246,8 +246,6 @@ function get_compare_strategy(p::Platform, key::String, default = compare_defaul
 end
 get_compare_strategy(p::AbstractPlatform, key::String, default = compare_default) = default
 
-
-
 """
     compare_default(a::String, b::String, a_requested::Bool, b_requested::Bool)
 
@@ -289,8 +287,6 @@ function compare_version_cap(a::String, b::String, a_requested::Bool, b_requeste
         return a <= b
     end
 end
-
-
 
 """
     HostPlatform(p::AbstractPlatform)
@@ -977,7 +973,6 @@ platforms_match(a::String, b::String) = platforms_match(parse(Platform, a), pars
 platforms_match(a::AbstractString, b::AbstractPlatform) = platforms_match(string(a)::String, b)
 platforms_match(a::AbstractPlatform, b::AbstractString) = platforms_match(a, string(b)::String)
 platforms_match(a::AbstractString, b::AbstractString) = platforms_match(string(a)::String, string(b)::String)
-
 
 """
     select_platform(download_info::Dict, platform::AbstractPlatform = HostPlatform())

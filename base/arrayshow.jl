@@ -121,7 +121,6 @@ function print_matrix_row(io::IO,
     end
 end
 
-
 """
 `print_matrix_vdots` is used to show a series of vertical ellipsis instead
 of a bunch of rows for long matrices. Not only is the string vdots shown
@@ -413,7 +412,6 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
     print(io, "]")
 end
 
-
 _show_nonempty(io::IO, X::AbstractArray, prefix::String) =
     show_nd(io, X, (io, slice) -> _show_nonempty(io, slice, prefix), false)
 
@@ -480,7 +478,6 @@ function show_vector(io::IO, v, opn='[', cls=']')
         show_delim_array(io, v, opn, ",", cls, false)
     end
 end
-
 
 ## Logic for displaying type information
 

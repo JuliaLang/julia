@@ -77,7 +77,6 @@ end
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
 //(x::Number, y::Complex) = x*conj(y)//abs2(y)
 
-
 //(X::AbstractArray, y::Number) = X .// y
 
 function show(io::IO, x::Rational)
@@ -328,7 +327,6 @@ fma(x::Rational, y::Rational, z::Rational) = x*y+z
                                widemul(x.num,y.den) < widemul(x.den,y.num)
 <=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num :
                                widemul(x.num,y.den) <= widemul(x.den,y.num)
-
 
 ==(x::Rational, y::Integer ) = (x.den == 1) & (x.num == y)
 ==(x::Integer , y::Rational) = y == x

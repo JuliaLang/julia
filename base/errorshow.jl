@@ -35,7 +35,6 @@ show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
-
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
@@ -674,7 +673,6 @@ function show_reduced_backtrace(io::IO, t::Vector)
     end
 end
 
-
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
@@ -695,7 +693,6 @@ function print_stackframe(io, i, frame, n, digit_align_width, modulecolordict, m
     end
     print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
 end
-
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
@@ -753,7 +750,6 @@ function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
-
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
@@ -786,7 +782,6 @@ function show_backtrace(io::IO, t::Vector)
     show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
     return
 end
-
 
 function is_kw_sorter_name(name::Symbol)
     sn = string(name)

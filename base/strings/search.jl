@@ -137,7 +137,6 @@ function findnext(testf::Function, s::AbstractString, i::Integer)
     return nothing
 end
 
-
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 
 function _searchindex(s::Union{AbstractString,ByteArray},

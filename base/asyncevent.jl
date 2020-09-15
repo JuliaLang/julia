@@ -130,7 +130,6 @@ function wait(t::Union{Timer, AsyncCondition})
     nothing
 end
 
-
 isopen(t::Union{Timer, AsyncCondition}) = t.isopen
 
 function close(t::Union{Timer, AsyncCondition})

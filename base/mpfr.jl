@@ -125,7 +125,6 @@ setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
 rounding(::Type{BigFloat}) = convert(RoundingMode, rounding_raw(BigFloat))
 setrounding(::Type{BigFloat}, r::RoundingMode) = setrounding_raw(BigFloat, convert(MPFRRoundingMode, r))
 
-
 # overload the definition of unsafe_convert to ensure that `x.d` is assigned
 # it may have been dropped in the event that the BigFloat was serialized
 Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = x
@@ -301,7 +300,6 @@ round(::Type{T}, x::BigFloat, r::RoundingMode) where T<:Union{Signed, Unsigned} 
 round(::Type{BigInt}, x::BigFloat, r::RoundingMode) =
     invoke(round, Tuple{Type{BigInt}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, BigInt, x, r)
 round(::Type{<:Integer}, x::BigFloat, r::RoundingMode) = throw(MethodError(round, (Integer, x, r)))
-
 
 unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_trunc(T, _unchecked_cast(T, x, RoundToZero))
 unsafe_trunc(::Type{BigInt}, x::BigFloat) = _unchecked_cast(BigInt, x, RoundToZero)

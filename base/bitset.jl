@@ -105,7 +105,6 @@ end
     s
 end
 
-
 # An internal function to resize a Bits object and ensure the newly allocated
 # elements are zeroed (will become unnecessary if this behavior changes)
 @inline function _growend0!(b::Bits, nchunks::Int)
@@ -256,7 +255,6 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
     end
     b1 # the new offset
 end
-
 
 @noinline _throw_bitset_bounds_err() =
     throw(ArgumentError("elements of BitSet must be between typemin(Int) and typemax(Int)"))
@@ -428,7 +426,6 @@ function issubset(a::BitSet, b::BitSet)
         all(@inbounds iszero(a.bits[i]) for i in max(1, j+1):n))
 end
 ⊊(a::BitSet, b::BitSet) = a <= b && a != b
-
 
 minimum(s::BitSet) = first(s)
 maximum(s::BitSet) = last(s)

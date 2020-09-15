@@ -414,7 +414,6 @@ is closed.
 eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
 reseteof(io::AbstractPipe) = reseteof(pipe_reader(io)::IO)
 
-
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
 write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), filename, "w")

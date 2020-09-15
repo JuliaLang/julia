@@ -493,7 +493,6 @@ module IteratorsMD
     eltype(::Type{PartitionIterator{T}}) where {T<:Union{UnitRange, StepRange, StepRangeLen, LinRange}} = T
     Iterators.IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:Union{OneTo, UnitRange, StepRange, StepRangeLen, LinRange}} = Iterators.IteratorEltype(T)
 
-
     @inline function iterate(iter::CartesianPartition)
         isempty(iter) && return nothing
         f = first(iter)
@@ -537,7 +536,6 @@ module IteratorsMD
         CartesianIndex((I1 + offset + startoffset, Ilast.I...))
     end
 end  # IteratorsMD
-
 
 using .IteratorsMD
 

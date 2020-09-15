@@ -90,7 +90,6 @@ function unsafe_SecretBuffer!(p::Ptr{UInt8}, len=1)
     s
 end
 
-
 show(io::IO, s::SecretBuffer) = print(io, "SecretBuffer(\"*******\")")
 
 # Unlike other IO objects, equality is computed by value for convenience

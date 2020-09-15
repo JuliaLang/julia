@@ -366,7 +366,6 @@ getindex(S::Slice, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck check
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 iterate(S::Slice, s...) = iterate(S.indices, s...)
 
-
 """
     IdentityUnitRange(range::AbstractUnitRange)
 

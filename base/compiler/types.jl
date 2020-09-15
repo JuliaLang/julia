@@ -34,7 +34,6 @@ mutable struct InferenceResult
     end
 end
 
-
 """
     OptimizationParams
 

@@ -617,7 +617,6 @@ function ccall_macro_parse(expr::Expr)
     return func, rettype, types, args, nreq
 end
 
-
 function ccall_macro_lower(convention, func, rettype, types, args, nreq)
     lowering = []
     realargs = []
@@ -679,7 +678,6 @@ cconvert(argtype, argvalue))`. (See also the documentation for
 [`unsafe_convert`](@ref Base.unsafe_convert) and [`cconvert`](@ref
 Base.cconvert) for further details.) In most cases, this simply
 results in a call to `convert(argtype, argvalue)`.
-
 
 # Examples
 

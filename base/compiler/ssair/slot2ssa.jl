@@ -32,7 +32,6 @@ function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
     end
 end
 
-
 function lift_defuse(cfg::CFG, defuse)
     map(defuse) do slot
         SlotInfo(

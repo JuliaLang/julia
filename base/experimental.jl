@@ -51,7 +51,6 @@ macro aliasscope(body)
     end
 end
 
-
 function sync_end(c::Channel{Any})
     if !isready(c)
         # there must be at least one item to begin with

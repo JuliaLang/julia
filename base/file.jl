@@ -61,7 +61,6 @@ function pwd()
     end
 end
 
-
 """
     cd(dir::AbstractString=homedir())
 
@@ -108,6 +107,7 @@ else
         end
     end
 end
+
 """
     cd(f::Function, dir::AbstractString=homedir())
 
@@ -286,7 +286,6 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         systemerror(:rmdir, ret != 0, extrainfo=path)
     end
 end
-
 
 # The following use Unix command line facilities
 function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::AbstractString;
@@ -591,9 +590,7 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     return (b, fdio(p, true))
 end
 
-
 end # os-test
-
 
 """
     tempname(parent=tempdir(); cleanup=true) -> String
@@ -672,7 +669,6 @@ function mktempdir(parent::AbstractString=tempdir();
         Libc.free(req)
     end
 end
-
 
 """
     mktemp(f::Function, parent=tempdir())

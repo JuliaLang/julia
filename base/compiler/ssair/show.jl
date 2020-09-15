@@ -326,7 +326,6 @@ end
 
 Base.show(io::IO, code::IRCode) = show_ir(io, code)
 
-
 lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
 
 function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
@@ -479,7 +478,6 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
     end
     return emit_lineinfo_update
 end
-
 
 function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_printer; verbose_linetable=false)
     cols = (displaysize(io)::Tuple{Int,Int})[2]

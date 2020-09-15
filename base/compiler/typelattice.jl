@@ -18,7 +18,6 @@
 # end
 import Core: Const, PartialStruct
 
-
 # The type of this value might be Bool.
 # However, to enable a limited amount of back-propagagation,
 # we also keep some information about how this Bool value was created.

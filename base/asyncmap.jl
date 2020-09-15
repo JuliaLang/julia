@@ -116,7 +116,6 @@ function verify_batch_size(batch_size)
     end
 end
 
-
 function verify_ntasks(iterable, ntasks)
     if !((isa(ntasks, Number) && (ntasks >= 0)) || isa(ntasks, Function))
         err = string("ntasks must be specified as a positive integer or a 0-arg function. ntasks=", ntasks)

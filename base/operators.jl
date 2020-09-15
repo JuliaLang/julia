@@ -166,7 +166,6 @@ isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
-
 function ==(T::Type, S::Type)
     @_pure_meta
     return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
@@ -758,7 +757,6 @@ julia> mod1(4, 3)
 """
 mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
 
-
 """
     fld1(x, y)
 
@@ -794,7 +792,6 @@ Return `(fld1(x,y), mod1(x,y))`.
 See also: [`fld1`](@ref), [`mod1`](@ref).
 """
 fldmod1(x, y) = (fld1(x, y), mod1(x, y))
-
 
 """
     widen(x)

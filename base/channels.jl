@@ -371,7 +371,6 @@ function fetch_buffered(c::Channel)
 end
 fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
 
-
 """
     take!(c::Channel)
 

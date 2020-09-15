@@ -342,7 +342,6 @@ function iscased(c::AbstractChar)
            cat == UTF8PROC_CATEGORY_LL
 end
 
-
 """
     isdigit(c::AbstractChar) -> Bool
 

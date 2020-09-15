@@ -51,7 +51,6 @@ unlock(l::AlwaysLockedST) = assert_havelock(l)
 trylock(l::AlwaysLockedST) = l.ownertid == Threads.threadid()
 islocked(::AlwaysLockedST) = true
 
-
 ## condition variables
 
 """
@@ -144,7 +143,6 @@ n_waiters(c::GenericCondition) = length(c.waitq)
 Return `true` if no tasks are waiting on the condition, `false` otherwise.
 """
 isempty(c::GenericCondition) = isempty(c.waitq)
-
 
 # default (Julia v1.0) is currently single-threaded
 # (although it uses MT-safe versions, when possible)

@@ -287,7 +287,6 @@ function print_shell_escaped_winsomely(io::IO, args::AbstractString...)
     return nothing
 end
 
-
 """
      shell_escaped_winsomely(args::Union{Cmd,AbstractString...})::String
 

@@ -464,7 +464,6 @@ function _tuple_any(f::Function, tf::Bool, a, b...)
 end
 _tuple_any(f::Function, tf::Bool) = tf
 
-
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     @nospecialize itr
@@ -478,7 +477,6 @@ function in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     @nospecialize itr
     return sym_in(x, itr)
 end
-
 
 """
     empty(x::Tuple)

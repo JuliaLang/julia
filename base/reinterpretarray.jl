@@ -194,7 +194,6 @@ end
     end
 end
 
-
 @inline @propagate_inbounds setindex!(a::ReinterpretArray{T,0,S} where T, v) where {S} = (a.parent[] = reinterpret(S, v))
 @inline @propagate_inbounds setindex!(a::ReinterpretArray, v) = (a[1] = v)
 

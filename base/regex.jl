@@ -333,7 +333,6 @@ findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
 ))
 findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 
-
 """
     findall(
         pattern::Union{AbstractString,Regex},
@@ -480,7 +479,6 @@ function _write_capture(io, re::RegexAndMatchData, group)
     io.ptr += len
     io.size = max(io.size, io.ptr - 1)
 end
-
 
 const SUB_CHAR = '\\'
 const GROUP_CHAR = 'g'
@@ -714,7 +712,6 @@ const _regex_opts_str = Ref{ImmutableDict{UInt32,String}}()
     end
     ImmutableDict(d, opt => str)
 end
-
 
 """
     ^(s::Regex, n::Integer)

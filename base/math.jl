@@ -83,7 +83,6 @@ julia> clamp(-200, Int8)
 """
 clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 
-
 """
     clamp!(array::AbstractArray, lo, hi)
 
@@ -96,7 +95,6 @@ function clamp!(x::AbstractArray, lo, hi)
     end
     x
 end
-
 
 """
     evalpoly(x, p)

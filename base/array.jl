@@ -195,7 +195,6 @@ function _unsetindex!(A::Array{T}, i::Int) where {T}
     return A
 end
 
-
 """
     Base.bitsunionsize(U::Union)
 
@@ -246,7 +245,6 @@ function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
           dest, src, n * aligned_sizeof(T))
     return dest
 end
-
 
 function _unsafe_copyto!(dest, doffs, src, soffs, n)
     destp = pointer(dest, doffs)

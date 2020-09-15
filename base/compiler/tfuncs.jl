@@ -342,6 +342,7 @@ function _const_sizeof(@nospecialize(x))
         end
     return Const(size)
 end
+
 function sizeof_tfunc(@nospecialize(x),)
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
@@ -658,7 +659,6 @@ function fieldcount_noerror(@nospecialize t)
     end
     return isdefined(t, :types) ? length(t.types) : length(t.name.names)
 end
-
 
 function try_compute_fieldidx(typ::DataType, @nospecialize(field))
     if isa(field, Symbol)

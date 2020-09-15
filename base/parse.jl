@@ -102,7 +102,6 @@ end
         _a <= _c <= _z ? _c-_a+a           : UInt32(base)
 end
 
-
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if sgn == 0 && base == 0 && i == 0

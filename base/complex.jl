@@ -841,7 +841,6 @@ function cos(z::Complex{T}) where T
     end
 end
 
-
 function tan(z::Complex)
     zr, zi = reim(z)
     w = tanh(Complex(-zi, zr))
@@ -1015,7 +1014,6 @@ function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; k
     Complex(round(real(z), rr; kwargs...),
             round(imag(z), ri; kwargs...))
 end
-
 
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))

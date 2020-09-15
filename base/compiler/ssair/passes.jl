@@ -715,7 +715,6 @@ function getfield_elim_pass!(ir::IRCode)
         compact[idx] = val === nothing ? nothing : val.x
     end
 
-
     non_dce_finish!(compact)
     # Copy the use count, `simple_dce!` may modify it and for our predicate
     # below we need it consistent with the state of the IR here (after tracking

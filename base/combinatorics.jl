@@ -33,7 +33,6 @@ else
     factorial(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}) = factorial(Int64(n))
 end
 
-
 # Basic functions for working with permutations
 
 @inline function _foldoneto(op, acc, ::Val{N}) where N

@@ -16,7 +16,6 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
 
-
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods::Int = InferenceParams(interp).MAX_METHODS)
     if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
@@ -182,7 +181,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     #print("=> ", rettype, "\n")
     return CallMeta(rettype, info)
 end
-
 
 function const_prop_profitable(@nospecialize(arg))
     # have new information from argtypes that wasn't available from the signature

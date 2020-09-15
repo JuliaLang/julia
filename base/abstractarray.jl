@@ -457,7 +457,6 @@ end
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
-
 function isassigned(a::AbstractArray, i::Integer...)
     try
         a[i...]
@@ -870,7 +869,6 @@ end
 """
     copyto!(dest::AbstractArray, src) -> dest
 
-
 Copy all elements from collection `src` to array `dest`, whose length must be greater than
 or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
 the other elements are left untouched.
@@ -1047,7 +1045,6 @@ function iterate(A::AbstractArray, state=(eachindex(A),))
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)
-
 
 ## range conversions ##
 

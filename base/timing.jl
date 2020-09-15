@@ -55,7 +55,6 @@ function gc_alloc_count(diff::GC_Diff)
     diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
 end
 
-
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
@@ -91,7 +90,6 @@ function padded_nonzero_print(value, str)
         println(str, ":", blanks, value)
     end
 end
-
 
 function format_bytes(bytes) # also used by InteractiveUtils
     bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))

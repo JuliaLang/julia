@@ -155,7 +155,6 @@ macro fastmath(expr)
     make_fastmath(esc(expr))
 end
 
-
 # Basic arithmetic
 
 const FloatTypes = Union{Float32,Float64}
@@ -270,7 +269,6 @@ for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :rem, :min, :max, :minmax)
         $op_fast(x::T,ys::T...) where {T<:Number} = $op(x,ys...)
     end
 end
-
 
 # Math functions
 

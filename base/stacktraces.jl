@@ -5,7 +5,6 @@ Tools for collecting and manipulating stack traces. Mainly used for building err
 """
 module StackTraces
 
-
 import Base: hash, ==, show
 import Core: CodeInfo, MethodInstance
 
@@ -76,7 +75,6 @@ const StackTrace = Vector{StackFrame}
 const empty_sym = Symbol("")
 const UNKNOWN = StackFrame(empty_sym, empty_sym, -1, nothing, true, false, 0) # === lookup(C_NULL)
 
-
 #=
 If the StackFrame has function and line information, we consider two of them the same if
 they share the same function/line information.
@@ -94,7 +92,6 @@ function hash(frame::StackFrame, h::UInt)
     h = hash(frame.inlined, h)
     return h
 end
-
 
 """
     lookup(pointer::Ptr{Cvoid}) -> Vector{StackFrame}

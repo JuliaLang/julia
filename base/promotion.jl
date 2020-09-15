@@ -5,7 +5,6 @@
 """
     typejoin(T, S)
 
-
 Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
 they both inherit.
 """
@@ -133,7 +132,6 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
     return Union{a, b, c}::Type
 end
 _promote_typesubtract(@nospecialize(a)) = Core.Compiler.typesubtract(a, Union{Nothing, Missing})
-
 
 # Returns length, isfixed
 function full_va_len(p)

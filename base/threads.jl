@@ -11,7 +11,6 @@ include("threadingconstructs.jl")
 include("atomics.jl")
 include("locks-mt.jl")
 
-
 """
     resize_nthreads!(A, copyvalue=A[1])
 

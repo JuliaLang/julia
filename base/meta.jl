@@ -137,7 +137,6 @@ macro lower(mod, code)
     return :(lower($(esc(mod)), $(QuoteNode(code))))
 end
 
-
 ## interface to parser ##
 
 """

@@ -586,7 +586,6 @@ Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
 @inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
 
-
 """
     _broadcast_getindex(A, I)
 
@@ -1146,8 +1145,6 @@ function Base.fill!(B::BitMaskedBitArray, b::Bool)
     end
     return B
 end
-
-
 
 ############################################################
 

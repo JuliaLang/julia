@@ -188,7 +188,6 @@ function setrounding_raw(f::Function, ::Type{T}, rounding) where T
     end
 end
 
-
 # Should be equivalent to:
 #   setrounding(Float64,r) do
 #       convert(T,x)

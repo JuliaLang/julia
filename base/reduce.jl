@@ -202,7 +202,6 @@ necessary to provide `init` to work with empty collections.
 """
 mapfoldr(f, op, itr; init=_InitialValue()) = mapfoldr_impl(f, op, init, itr)
 
-
 """
     foldr(op, itr; [init])
 
@@ -293,7 +292,6 @@ pairwise_blocksize(f, op) = 1024
 
 # This combination appears to show a benefit from a larger block size
 pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
-
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))

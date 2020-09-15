@@ -363,7 +363,6 @@ function datatype_nfields(dt::DataType)
     return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
 end
 
-
 """
     Base.datatype_pointerfree(dt::DataType) -> Bool
 

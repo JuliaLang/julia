@@ -214,7 +214,6 @@ function divrem(x::Unsigned, y::BitSigned)
     unsigned(flipsign(signed(q), y)), r
 end
 
-
 """
     mod(x, y)
     rem(x, y, RoundDown)
@@ -731,7 +730,6 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemax(::Type{UInt128}) = $(bitcast(UInt128, convert(Int128, -1)))
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
-
 
 widen(::Type{Int8}) = Int16
 widen(::Type{Int16}) = Int32

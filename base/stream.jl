@@ -10,7 +10,6 @@ else
     const INVALID_OS_HANDLE = RawFD(-1)
 end
 
-
 ## types ##
 abstract type IOServer end
 """
@@ -125,7 +124,6 @@ else
     const MAX_OS_WRITE = UInt(typemax(Csize_t))
 end
 
-
 const StatusUninit      = 0 # handle is allocated, but not initialized
 const StatusInit        = 1 # handle is valid, but not connected/active
 const StatusConnecting  = 2 # handle is in process of connecting
@@ -212,7 +210,6 @@ end
 if OS_HANDLE != RawFD
     PipeEndpoint(fd::RawFD) = PipeEndpoint(Libc._get_osfhandle(fd))
 end
-
 
 mutable struct TTY <: LibuvStream
     handle::Ptr{Cvoid}
@@ -720,7 +717,6 @@ show(io::IO, stream::Pipe) = print(io,
     uv_status_string(stream.out), ", ",
     bytesavailable(stream), " bytes waiting)")
 
-
 ## Functions for PipeEndpoint and PipeServer ##
 
 function open_pipe!(p::PipeEndpoint, handle::OS_HANDLE)
@@ -734,7 +730,6 @@ function open_pipe!(p::PipeEndpoint, handle::OS_HANDLE)
     iolock_end()
     return p
 end
-
 
 function link_pipe!(read_end::PipeEndpoint, reader_supports_async::Bool,
                     write_end::PipeEndpoint, writer_supports_async::Bool)
@@ -1037,7 +1032,6 @@ function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         end
     end
 end
-
 
 # Optimized send
 # - smaller writes are buffered, final uv write on flush or when buffer full

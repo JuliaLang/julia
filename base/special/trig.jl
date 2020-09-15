@@ -203,8 +203,6 @@ _sincos(x) = (sin(x), cos(x))
 
 sincos(x) = _sincos(float(x))
 
-
-
 # There's no need to write specialized kernels, as inlining takes care of remo-
 # ving superfluous calculations.
 @inline sincos_kernel(y::Union{Float32, Float64, DoubleFloat32, DoubleFloat64}) = (sin_kernel(y), cos_kernel(y))
@@ -388,7 +386,6 @@ arc_p(t::Float32) =
 arc_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
 
 @inline arc_tRt(t) = arc_p(t)/arc_q(t)
-
 
 @inline function asin_kernel(t::Float64, x::Float64)
     # we use that for 1/2 <= x < 1 we have
@@ -1163,7 +1160,6 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
         Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::Number) = ($hfainv)(inv(y))
     end
 end
-
 
 # multiply in extended precision
 function deg2rad_ext(x::Float64)

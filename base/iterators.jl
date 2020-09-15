@@ -734,7 +734,6 @@ end
 iterate(it::Drop, state) = iterate(it.xs, state)
 isdone(it::Drop, state) = isdone(it.xs, state)
 
-
 # takewhile
 
 struct TakeWhile{I,P<:Function}
@@ -780,7 +779,6 @@ end
 IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
 eltype(::Type{TakeWhile{I,P}} where P) where {I} = eltype(I)
 IteratorEltype(::Type{TakeWhile{I}} where P) where {I} = IteratorEltype(I)
-
 
 # dropwhile
 
@@ -831,7 +829,6 @@ end
 IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
 eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
 IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
-
 
 # Cycle an iterator forever
 

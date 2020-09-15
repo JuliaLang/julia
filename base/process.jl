@@ -183,7 +183,6 @@ function _spawn(cmd::Cmd, stdios::SpawnIOs, chain::ProcessChain)
     return chain
 end
 
-
 # open the child end of each element of `stdios`, and initialize the parent end
 function setup_stdios(f, stdios::SpawnIOs)
     nstdio = length(stdios)
@@ -494,7 +493,6 @@ section in the manual), and tell whether it was successful (exited with a code o
 An exception is raised if the process cannot be started.
 """
 success(cmd::AbstractCmd) = success(_spawn(cmd))
-
 
 """
     ProcessFailedException

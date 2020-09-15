@@ -80,5 +80,3 @@ This info is illegal on any statement that is not an _apply_iterate call.
 struct UnionSplitApplyCallInfo
     infos::Vector{ApplyCallInfo}
 end
-
-

@@ -321,7 +321,6 @@ struct UndefToken
 end
 const undef_token = UndefToken()
 
-
 function getindex(x::UseRef)
     stmt = x.stmt
     if isa(stmt, Expr) && stmt.head === :(=)

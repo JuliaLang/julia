@@ -434,7 +434,6 @@ struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
 end
 
-
 """
     InsertionSort
 
@@ -452,6 +451,7 @@ Characteristics:
     it is well-suited to small collections but should not be used for large ones.
 """
 const InsertionSort = InsertionSortAlg()
+
 """
     QuickSort
 
@@ -467,6 +467,7 @@ Characteristics:
   * *good performance* for large collections.
 """
 const QuickSort     = QuickSortAlg()
+
 """
     MergeSort
 
@@ -638,7 +639,6 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{
     return v
 end
 
-
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{T},
                o::Ordering) where T<:OrdinalRange
     @inbounds while lo < hi
@@ -661,7 +661,6 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{
     end
     return v
 end
-
 
 ## generic sorting methods ##
 
@@ -1197,7 +1196,6 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     sort!(v, i,  hi, a, right(o))
     return v
 end
-
 
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
     sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)

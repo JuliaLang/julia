@@ -257,7 +257,6 @@ function optimize(opt::OptimizationState, params::OptimizationParams, @nospecial
     nothing
 end
 
-
 # whether `f` is pure for inference
 function is_pure_intrinsic_infer(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile

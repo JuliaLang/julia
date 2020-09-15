@@ -42,7 +42,6 @@ else
     error("path primitives for this OS need to be defined")
 end
 
-
 """
     splitdrive(path::AbstractString) -> (AbstractString, AbstractString)
 
@@ -408,7 +407,6 @@ end
 
 end # os-test
 
-
 """
     realpath(path::AbstractString) -> String
 
@@ -463,7 +461,6 @@ function contractuser(path::AbstractString)
 end
 end
 
-
 """
     expanduser(path::AbstractString) -> AbstractString
 
@@ -477,7 +474,6 @@ expanduser(path::AbstractString)
 On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
 """
 contractuser(path::AbstractString)
-
 
 """
     relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString

@@ -35,7 +35,6 @@ function truncbits(x::F, nb) where {F<:IEEEFloat}
 end
 truncbits(x, nb) = x
 
-
 ## Dekker arithmetic
 
 """
@@ -153,7 +152,6 @@ function div12(x::T, y::T) where {T<:AbstractFloat}
 end
 div12(x::T, y::T) where {T} = (p = x / y; (p, zero(p)))
 div12(x, y) = div12(promote(x, y)...)
-
 
 ## TwicePrecision
 
@@ -348,8 +346,6 @@ function steprangelen_hp(::Type{T}, ref::F_or_FF,
     StepRangeLen{T}(asF64(ref),
                     asF64(step), Int(len), offset)
 end
-
-
 
 StepRangeLen(ref::TwicePrecision{T}, step::TwicePrecision{T},
              len::Integer, offset::Integer=1) where {T} =

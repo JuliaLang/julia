@@ -70,7 +70,6 @@ logger type.
 """
 catch_exceptions(logger) = true
 
-
 # Prevent invalidation when packages define custom loggers
 # Using invoke in combination with @nospecialize eliminates backedges to these methods
 function _invoked_shouldlog(logger, level, _module, group, id)
@@ -102,7 +101,6 @@ min_enabled_level(::NullLogger) = AboveMaxLevel
 shouldlog(::NullLogger, args...) = false
 handle_message(::NullLogger, args...; kwargs...) =
     error("Null logger handle_message() should not be called")
-
 
 #-------------------------------------------------------------------------------
 # Standard log levels
@@ -149,7 +147,6 @@ function show(io::IO, level::LogLevel)
     else                           print(io, "LogLevel($(level.level))")
     end
 end
-
 
 #-------------------------------------------------------------------------------
 # Logging macros
@@ -360,7 +357,6 @@ function default_group_code(file)
     end
 end
 
-
 # Report an error in log message creation (or in the logger itself).
 @noinline function logging_error(logger, level, _module, group, id,
                                  filepath, line, @nospecialize(err))
@@ -501,7 +497,6 @@ global function env_override_minlevel(group, _module)
 end
 end
 
-
 """
     global_logger()
 
@@ -549,7 +544,6 @@ Return the logger for the current task, or the global logger if none is
 attached to the task.
 """
 current_logger() = current_logstate().logger
-
 
 #-------------------------------------------------------------------------------
 # SimpleLogger

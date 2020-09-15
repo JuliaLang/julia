@@ -52,7 +52,6 @@ size(g::Generator) = size(g.iter)
 axes(g::Generator) = axes(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 
-
 ## iterator traits
 
 abstract type IteratorSize end

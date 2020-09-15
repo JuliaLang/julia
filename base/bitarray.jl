@@ -356,7 +356,6 @@ const bitcache_size = 64 * bitcache_chunks # do not change this
 dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
     copy_to_bitarray_chunks!(Bc, ((bind - 1) << 6) + 1, C, 1, min(bitcache_size, (length(Bc)-bind+1) << 6))
 
-
 ## custom iterator ##
 function iterate(B::BitArray, i::Int=0)
     i >= length(B) && return nothing
@@ -1083,7 +1082,6 @@ function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins)
     return splice!(B, r, Bins)
 end
 
-
 function empty!(B::BitVector)
     _deleteend!(B.chunks, length(B.chunks))
     B.len = 0
@@ -1750,7 +1748,6 @@ function filter(f, Bs::BitArray)
     Bs[boolmap]
 end
 
-
 ## Concatenation ##
 
 function hcat(B::BitVector...)
@@ -1841,7 +1838,6 @@ function _cat(dims::Int, X::Union{BitArray, Bool}...)
 end
 
 # hvcat -> use fallbacks in abstractarray.jl
-
 
 # BitArray I/O
 

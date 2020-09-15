@@ -92,7 +92,6 @@ const t_log_Float64 = ((0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
     (0.6853040030982811,6.383161517064652e-13),(0.6892332812385575,2.5144230728376075e-13),
     (0.6931471805601177,-1.7239444525614835e-13))
 
-
 # Float32 lookup table
 # to generate values:
   # N=16
@@ -148,7 +147,6 @@ const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) != 0
 @inline function truncbits(x::Float64)
     reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
 end
-
 
 # Procedure 1
 @inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,jp::Int)
@@ -210,7 +208,6 @@ end
     end
 end
 
-
 @inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,jp::Int)
     ## Steps 1 and 2
     @inbounds hi = t_log_Float32[jp]
@@ -248,7 +245,6 @@ end
     ## Step 4
     Float32(u64 + q)
 end
-
 
 function log(x::Float64)
     if x > 0.0
@@ -321,7 +317,6 @@ function log(x::Float32)
         throw_complex_domainerror(:log, x)
     end
 end
-
 
 function log1p(x::Float64)
     if x > -1.0

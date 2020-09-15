@@ -157,7 +157,6 @@ rdims(out::Tuple{Any}, inds::NTuple{M,Any}) where {M} = (OneTo(rdims_trailing(in
 rdims(out::NTuple{N,Any}, inds::NTuple{N,Any}) where {N} = inds # N > 1, M == N
 rdims(out::NTuple{N,Any}, inds::NTuple{M,Any}) where {N,M} = (first(inds), rdims(tail(out), tail(inds))...) # N > 1, M > 1, M != N
 
-
 # _reshape on Array returns an Array
 _reshape(parent::Vector, dims::Dims{1}) = parent
 _reshape(parent::Array, dims::Dims{1}) = reshape(parent, dims)

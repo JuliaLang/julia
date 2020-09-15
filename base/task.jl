@@ -319,7 +319,6 @@ function fetch(t::Task)
     return task_result(t)
 end
 
-
 ## lexically-scoped waiting for multiple items
 
 function sync_end(c::Channel{Any})
@@ -431,7 +430,6 @@ function _lift_one_interp_helper(expr::Expr, in_quote_context, letargs)
     expr
 end
 
-
 # add a wait-able object to the sync pool
 macro sync_add(expr)
     var = esc(sync_varname)
@@ -487,7 +485,6 @@ function task_done_hook(t::Task)
         end
     end
 end
-
 
 ## scheduler and work queue
 

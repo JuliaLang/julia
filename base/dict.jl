@@ -476,7 +476,6 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     return v
 end
 
-
 function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
     @inbounds return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V

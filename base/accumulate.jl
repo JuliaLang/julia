@@ -37,7 +37,6 @@ function accumulate_pairwise(op, v::AbstractVector{T}) where T
     return accumulate_pairwise!(op, out, v)
 end
 
-
 """
     cumsum!(B, A; dims::Integer)
 
@@ -150,7 +149,6 @@ julia> cumsum(x^2 for x in 1:3)
 cumsum(x::AbstractVector) = cumsum(x, dims=1)
 cumsum(itr) = accumulate(add_sum, itr)
 
-
 """
     cumprod!(B, A; dims::Integer)
 
@@ -233,7 +231,6 @@ julia> cumprod(x^2 for x in 1:3)
 """
 cumprod(x::AbstractVector) = cumprod(x, dims=1)
 cumprod(itr) = accumulate(mul_prod, itr)
-
 
 """
     accumulate(op, A; dims::Integer, [init])

@@ -186,7 +186,6 @@ function setdiff!(s::AbstractSet, itr)
     return s
 end
 
-
 """
     symdiff(s, itrs...)
 

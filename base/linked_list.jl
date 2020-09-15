@@ -120,7 +120,6 @@ end
 #    return q
 #end
 
-
 mutable struct LinkedListItem{T}
     # Adapter class to use any `T` in a LinkedList
     next::Union{LinkedListItem{T}, Nothing}

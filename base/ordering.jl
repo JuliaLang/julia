@@ -2,7 +2,6 @@
 
 module Order
 
-
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 import .Base:
@@ -84,7 +83,6 @@ function ord(lt, by, rev::Bool, order::Ordering=Forward)
     o = _ord(lt, by, order)
     return rev ? ReverseOrdering(o) : o
 end
-
 
 # This function is not in use anywhere in Base but we observed
 # use in sorting-related packages (#34719). It's probably best to move

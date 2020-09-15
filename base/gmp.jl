@@ -124,7 +124,6 @@ function __init__()
     end
 end
 
-
 module MPZ
 # wrapping of libgmp functions
 # - "output parameters" are labeled x, y, z, and are returned when appropriate
@@ -326,7 +325,6 @@ function BigInt(x::Integer)
     z
 end
 
-
 rem(x::BigInt, ::Type{Bool}) = !iszero(x) & unsafe_load(x.d) % Bool # never unsafe here
 
 rem(x::BigInt, ::Type{T}) where T<:Union{SLimbMax,ULimbMax} =
@@ -365,7 +363,6 @@ function (::Type{T})(x::BigInt) where T<:Base.BitSigned
         y
     end
 end
-
 
 Float64(n::BigInt, ::RoundingMode{:ToZero}) = MPZ.get_d(n)
 
