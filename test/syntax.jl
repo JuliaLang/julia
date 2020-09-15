@@ -2103,6 +2103,18 @@ end
 end
 @test z28789 == 42
 
+# issue #37126
+@test isempty(Test.collect_test_logs() do
+    include_string(@__MODULE__, """
+        function foo37126()
+            f(lhs::Integer, rhs::Integer) = nothing
+            f(lhs::Integer, rhs::AbstractVector{<:Integer}) = nothing
+            return f
+        end
+        struct Bar37126{T<:Real, P<:Real} end
+        """)
+    end[1])
+
 # issue #34673
 # check that :toplevel still returns a value when nested inside something else
 @test eval(Expr(:block, 0, Expr(:toplevel, 43))) == 43
@@ -2282,6 +2294,18 @@ macro m36272()
     :((a, b=1) -> a*b)
 end
 @test @m36272()(1) == 1
+
+# issue #37134
+macro m37134()
+    :(x :: Int -> 62)
+end
+@test @m37134()(1) == 62
+@test_throws MethodError @m37134()(1.0) == 62
+
+macro n37134()
+    :($(esc(Expr(:tuple, Expr(:..., :x))))->$(esc(:x)))
+end
+@test @n37134()(2,1) === (2,1)
 
 @testset "unary ± and ∓" begin
     @test Meta.parse("±x") == Expr(:call, :±, :x)

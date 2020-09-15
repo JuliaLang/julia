@@ -333,6 +333,7 @@ for itype in UmfpackIndexTypes
             if status != UMFPACK_WARNING_singular_matrix
                 umferror(status)
             end
+            U.numeric != C_NULL && umfpack_free_numeric(U)
             U.numeric = tmp[1]
             return U
         end
@@ -349,6 +350,7 @@ for itype in UmfpackIndexTypes
             if status != UMFPACK_WARNING_singular_matrix
                 umferror(status)
             end
+            U.numeric != C_NULL && umfpack_free_numeric(U)
             U.numeric = tmp[1]
             return U
         end

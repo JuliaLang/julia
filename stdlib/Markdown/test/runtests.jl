@@ -1138,3 +1138,23 @@ let m = Markdown.parse("---"), io = IOBuffer()
     show(io, "text/latex", m)
     @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
 end
+
+# issue #16194: interpolation in md"..." strings
+@testset "issue #16194: interpolation in md\"...\" strings" begin
+    x = "X"
+    contains_X(md) = occursin(x, sprint(show, MIME("text/plain"), md))
+    @test contains_X(md"# $x") # H1
+    @test contains_X(md"## $x") # H2
+    @test contains_X(md"### $x") # H3
+    @test contains_X(md"x = $x") # Paragraph
+    @test contains_X(md"- $x") # List
+    @test contains_X(md"[$x](..)") # Link
+    @test contains_X(md"**$x**") # Bold
+    @test contains_X(md"*$x*") # Italic
+    @test contains_X( # Table
+        md"""
+        | name |
+        |------|
+        |  $x  |
+        """)
+end

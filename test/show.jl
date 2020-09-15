@@ -235,7 +235,10 @@ for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:call, :+, :n, Expr(:kw, :x, 1)),
            :((a=1,; $(Expr(:(=), :x, 2)))),
            :(($(Expr(:(=), :a, 1)),; x = 2)),
-           Expr(:tuple, Expr(:parameters))]
+           Expr(:tuple, Expr(:parameters)),
+           Expr(:call, :*, 0, :x01),
+           Expr(:call, :*, 0, :b01),
+           Expr(:call, :*, 0, :o01)]
     @test eval(Meta.parse(repr(ex))) == ex
 end
 

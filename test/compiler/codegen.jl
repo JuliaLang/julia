@@ -10,14 +10,8 @@ const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().mallo
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
 # `_dump_function` might be more efficient but it doesn't really matter here...
-get_llvm(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
-    sprint(code_llvm, f, t, strip_ir_metadata, dump_module)
-
-get_llvm_noopt(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
-    InteractiveUtils._dump_function(f, t,
-                #=native=# false, #=wrapper=# false, #=strip=# strip_ir_metadata,
-                #=dump_module=# dump_module, #=syntax=#:att, #=optimize=#false)
-
+get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true) =
+    sprint(code_llvm, f, t, raw, dump_module, optimize)
 
 if opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
@@ -448,4 +442,24 @@ end
 @testset "#36422" begin
     str_36422 = "using InteractiveUtils; code_llvm(Base.ht_keyindex, (Dict{NTuple{65,Int64},Nothing}, NTuple{65,Int64}))"
     @test success(`$(Base.julia_cmd()) --startup-file=no -e $str_36422`)
+end
+
+@noinline g37262(x) = (x ? error("intentional") : (0x1, "v", "1", ".", "2"))
+function f37262(x)
+    try
+        GC.safepoint()
+    catch
+        GC.safepoint()
+    end
+    try
+        GC.gc()
+        return g37262(x)
+    catch ex
+        GC.gc()
+    finally
+        GC.gc()
+    end
+end
+@testset "#37262" begin
+    @test f37262(Base.inferencebarrier(true)) === nothing
 end

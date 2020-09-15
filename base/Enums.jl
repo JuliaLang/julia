@@ -47,13 +47,17 @@ function Base.show(io::IO, ::MIME"text/plain", x::Enum)
     show(io, Integer(x))
 end
 
-function Base.show(io::IO, ::MIME"text/plain", t::Type{<:Enum})
-    print(io, "Enum ")
-    Base.show_datatype(io, t)
-    print(io, ":")
-    for x in instances(t)
-        print(io, "\n", Symbol(x), " = ")
-        show(io, Integer(x))
+function Base.show(io::IO, m::MIME"text/plain", t::Type{<:Enum})
+    if isconcretetype(t)
+        print(io, "Enum ")
+        Base.show_datatype(io, t)
+        print(io, ":")
+        for x in instances(t)
+            print(io, "\n", Symbol(x), " = ")
+            show(io, Integer(x))
+        end
+    else
+        invoke(show, Tuple{IO, MIME"text/plain", Type}, io, m, t)
     end
 end
 

@@ -656,6 +656,33 @@ end
     @test _test_27632(view(ones(Int64, (1, 1, 1)), 1, 1, 1)) === nothing
 end
 
+@testset "issue #37199: 1-d views with offset range indices" begin
+    b = zeros(6, 3)
+    b[Base.IdentityUnitRange(4:6), 2] .= 3
+    @test b == [zeros(6, 1) [0,0,0,3,3,3] zeros(6,1)]
+    b[4, Base.IdentityUnitRange(2:3)] .= 4
+    @test b == [zeros(6,1) [0,0,0,4,3,3] [0,0,0,4,0,0]]
+    b[Base.IdentityUnitRange(2:3), :] .= 5
+    @test b == [zeros(1, 3); fill(5, 2, 3); [zeros(3) [4,3,3] [4,0,0]]]
+    b[:, Base.IdentityUnitRange(3:3)] .= 6
+    @test b == [[zeros(1, 2); fill(5, 2, 2); [zeros(3) [4,3,3]]] fill(6, 6)]
+
+    A = reshape(1:5*7*11, 11, 7, 5)
+    inds = (1:4, 2:5, 2, :, fill(3))
+    offset(x) = x
+    offset(r::UnitRange) = Base.IdentityUnitRange(r)
+    for i1 in inds
+        for i2 in inds
+            for i3 in inds
+                vo = @view A[offset(i1), offset(i2), offset(i3)]
+                v = @view A[i1, i2, i3]
+                @test first(vo) == first(v) == first(A[i1, i2, i3])
+                @test collect(A[i1, i2, i3]) == collect(vo) == collect(v)
+            end
+        end
+    end
+end
+
 @testset "issue #29608; contiguousness" begin
     @test Base.iscontiguous(view(ones(1), 1))
     @test Base.iscontiguous(view(ones(10), 1:10))

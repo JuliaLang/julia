@@ -1,4 +1,5 @@
 # Install dependencies needed to build the documentation.
+Base.HOME_PROJECT[] = nothing
 empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)

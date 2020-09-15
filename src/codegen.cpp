@@ -3355,7 +3355,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
 
 static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t rval_info, jl_value_t *l=NULL)
 {
-    if (!vi.used)
+    if (!vi.used || vi.value.typ == jl_bottom_type)
         return;
 
     // convert rval-type to lval-type
@@ -3439,6 +3439,49 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     jl_varinfo_t &vi = ctx.slots[sl];
     jl_cgval_t rval_info = emit_expr(ctx, r, ssaval);
     emit_varinfo_assign(ctx, vi, rval_info, l);
+}
+
+static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
+{
+    jl_varinfo_t &vi = ctx.phic_slots[phic];
+    // If the val is null, we can ignore the store.
+    // The middle end guarantees that the value from this
+    // upsilon node is not dynamically observed.
+    if (val) {
+        jl_cgval_t rval_info = emit_expr(ctx, val);
+        if (rval_info.typ == jl_bottom_type)
+            // as a special case, PhiC nodes are allowed to use undefined
+            // values, since they are just copy operations, so we need to
+            // ignore the store (it will not by dynamically observed), while
+            // normally, for any other operation result, we'd assume this store
+            // was unreachable and dead
+            val = NULL;
+        else
+            emit_varinfo_assign(ctx, vi, rval_info);
+    }
+    if (!val) {
+        if (vi.boxroot) {
+            // memory optimization: eagerly clear this gc-root now
+            ctx.builder.CreateAlignedStore(ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), vi.boxroot, Align(sizeof(void*)), true);
+        }
+        if (vi.pTIndex) {
+            // We don't care what the contents of the variable are, but it
+            // does need to satisfy the union invariants (i.e. inbounds
+            // tindex).
+            ctx.builder.CreateAlignedStore(
+                vi.boxroot ? ConstantInt::get(T_int8, 0x80) :
+                             ConstantInt::get(T_int8, 0x01),
+                vi.pTIndex, Align(1), true);
+        }
+        else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
+            assert(vi.value.ispointer());
+            Type *T = cast<AllocaInst>(vi.value.V)->getAllocatedType();
+            if (CountTrackedPointers(T).count) {
+                // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
+                ctx.builder.CreateStore(Constant::getNullValue(T), vi.value.V, true);
+            }
+        }
+    }
 }
 
 // --- convert expression to code ---
@@ -5425,9 +5468,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             i == 0) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(T_prjlvalue, 0,
                 jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
-            StoreInst *SI = new StoreInst(
-                ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), av,
-                false);
+            StoreInst *SI = new StoreInst(ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), av, false, Align(sizeof(void*)));
             SI->insertAfter(ctx.ptlsStates);
             varinfo.boxroot = av;
             if (ctx.debug_enabled && varinfo.dinfo) {
@@ -6020,23 +6061,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             continue;
         }
         if (jl_is_upsilonnode(stmt)) {
-            jl_value_t *val = jl_fieldref_noalloc(stmt, 0);
-            // If the val is null, we can ignore the store.
-            // The middle end guarantees that the value from this
-            // upsilon node is not dynamically observed.
-            jl_varinfo_t &vi = ctx.phic_slots[upsilon_to_phic[cursor+1]];
-            if (val) {
-                jl_cgval_t rval_info = emit_expr(ctx, val);
-                emit_varinfo_assign(ctx, vi, rval_info);
-            } else if (vi.pTIndex) {
-                // We don't care what the contents of the variable are, but it
-                // does need to satisfy the union invariants (i.e. inbounds
-                // tindex).
-                ctx.builder.CreateStore(
-                    vi.boxroot ? ConstantInt::get(T_int8, 0x80) :
-                                 ConstantInt::get(T_int8, 0x01),
-                    vi.pTIndex, true);
-            }
+            emit_upsilonnode(ctx, upsilon_to_phic[cursor + 1], jl_fieldref_noalloc(stmt, 0));
             find_next_stmt(cursor + 1);
             continue;
         }
@@ -6206,19 +6231,25 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             }
             else {
                 Value *RTindex;
-                Value *V;
+                // The branch below is a bit too complex for GCC to realize that
+                // `V` is always initialized when it is used.
+                // Ref https://gcc.gnu.org/bugzilla/show_bug.cgi?id=96629
+                Value *V = nullptr;
                 if (val.typ == (jl_value_t*)jl_bottom_type) {
-                    V = undef_value_for_type(VN->getType());
+                    if (VN)
+                        V = undef_value_for_type(VN->getType());
                     RTindex = UndefValue::get(T_int8);
                 }
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
                     size_t tindex = get_box_tindex((jl_datatype_t*)val.typ, phiType);
                     if (tindex == 0) {
-                        V = boxed(ctx, val);
+                        if (VN)
+                            V = boxed(ctx, val);
                         RTindex = ConstantInt::get(T_int8, 0x80);
                     }
                     else {
-                        V = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                        if (VN)
+                            V = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
                         Type *lty = julia_type_to_llvm(ctx, val.typ);
                         if (dest && !type_is_ghost(lty)) // basically, if !ghost union
                             emit_unbox(ctx, lty, val, val.typ, dest);
@@ -6238,7 +6269,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                         }
                         new_union.TIndex = RTindex;
                     }
-                    V = new_union.Vboxed ? new_union.Vboxed : ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                    if (VN)
+                        V = new_union.Vboxed ? new_union.Vboxed : ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
                     if (dest) { // basically, if !ghost union
                         Value *skip = NULL;
                         if (new_union.Vboxed != nullptr)
@@ -7230,7 +7262,6 @@ static void init_julia_llvm_env(Module *m)
     jl_newbits_func = Function::Create(FunctionType::get(T_prjlvalue, newbits_args, false),
                                          Function::ExternalLinkage,
                                          "jl_new_bits");
-    add_return_attr(jl_newbits_func, Attribute::NoAlias);
     add_return_attr(jl_newbits_func, Attribute::NonNull);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
 

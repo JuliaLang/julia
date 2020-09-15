@@ -1682,16 +1682,18 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         else if (is_tupletype_homogeneous(stt->types)) {
             assert(nfields > 0); // nf == 0 trapped by all_pointers case
             jl_value_t *jft = jl_svecref(stt->types, 0);
+            assert(jl_is_concrete_type(jft));
             idx = idx0();
             Value *ptr = maybe_decay_tracked(data_pointer(ctx, strct));
-            if (!stt->mutabl && !(maybe_null && jft == (jl_value_t*)jl_bool_type)) {
+            if (!stt->mutabl && !(maybe_null && (jft == (jl_value_t*)jl_bool_type ||
+                                                 ((jl_datatype_t*)jft)->layout->npointers))) {
                 // just compute the pointer and let user load it when necessary
                 Type *fty = julia_type_to_llvm(ctx, jft);
                 Value *addr = ctx.builder.CreateInBoundsGEP(fty, emit_bitcast(ctx, ptr, PointerType::get(fty, 0)), idx);
                 *ret = mark_julia_slot(addr, jft, NULL, strct.tbaa);
                 return true;
             }
-            *ret = typed_load(ctx, ptr, idx, jft, strct.tbaa, nullptr, false);
+            *ret = typed_load(ctx, ptr, idx, jft, strct.tbaa, nullptr, maybe_null);
             return true;
         }
         else if (strct.isboxed) {
@@ -1779,12 +1781,14 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             }
             return mark_julia_slot(addr, jfty, tindex, strct.tbaa);
         }
-        else if (!jt->mutabl && !(maybe_null && jfty == (jl_value_t*)jl_bool_type)) {
+        assert(jl_is_concrete_type(jfty));
+        if (!jt->mutabl && !(maybe_null && (jfty == (jl_value_t*)jl_bool_type ||
+                                            ((jl_datatype_t*)jfty)->layout->npointers))) {
             // just compute the pointer and let user load it when necessary
             return mark_julia_slot(addr, jfty, NULL, strct.tbaa);
         }
         unsigned align = jl_field_align(jt, idx);
-        return typed_load(ctx, addr, NULL, jfty, strct.tbaa, nullptr, true, align);
+        return typed_load(ctx, addr, NULL, jfty, strct.tbaa, nullptr, maybe_null, align);
     }
     else if (isa<UndefValue>(strct.V)) {
         return jl_cgval_t();
