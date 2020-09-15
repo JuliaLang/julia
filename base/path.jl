@@ -165,10 +165,17 @@ See also: [`basename`](@ref)
 
 Get the file name part of a path.
 
+Note that the result of this function is different from the Unix `basename` program, where trailing
+slashes are ignored, i.e. `basename` for `/foo/bar/` returns `bar`, whereas  the `basename` function returns
+an empty string `""`.
+
 # Examples
 ```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
+
+julia> basename("/home/myuser/")
+""
 ```
 
 See also: [`dirname`](@ref)
