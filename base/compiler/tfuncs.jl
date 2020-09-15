@@ -381,6 +381,11 @@ function nfields_tfunc(@nospecialize(x))
             return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
         end
     end
+    if isa(x, Union)
+        na = nfields_tfunc(x.a)
+        na === Int && return Int
+        return tmerge(na, nfields_tfunc(x.b))
+    end
     return Int
 end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
@@ -513,40 +518,40 @@ function typeof_tfunc(@nospecialize(t))
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
 
+function typeassert_type_instance(@nospecialize(v), @nospecialize(t))
+    if isa(v, Const)
+        if !has_free_typevars(t) && !isa(v.val, t)
+            return Bottom
+        end
+        return v
+    elseif isa(v, PartialStruct)
+        has_free_typevars(t) && return v
+        widev = widenconst(v)
+        if widev <: t
+            return v
+        elseif typeintersect(widev, t) === Bottom
+            return Bottom
+        end
+        @assert widev <: Tuple
+        new_fields = Vector{Any}(undef, length(v.fields))
+        for i = 1:length(new_fields)
+            new_fields[i] = typeassert_type_instance(v.fields[i], getfield_tfunc(t, Const(i)))
+            if new_fields[i] === Bottom
+                return Bottom
+            end
+        end
+        return tuple_tfunc(new_fields)
+    elseif isa(v, Conditional)
+        if !(Bool <: t)
+            return Bottom
+        end
+        return v
+    end
+    return typeintersect(widenconst(v), t)
+end
 function typeassert_tfunc(@nospecialize(v), @nospecialize(t))
     t = instanceof_tfunc(t)[1]
     t === Any && return v
-    function typeassert_type_instance(@nospecialize(v), @nospecialize(t))
-        if isa(v, Const)
-            if !has_free_typevars(t) && !isa(v.val, t)
-                return Bottom
-            end
-            return v
-        elseif isa(v, PartialStruct)
-            has_free_typevars(t) && return v
-            widev = widenconst(v)
-            if widev <: t
-                return v
-            elseif typeintersect(widev, t) === Bottom
-                return Bottom
-            end
-            @assert widev <: Tuple
-            new_fields = Vector{Any}(undef, length(v.fields))
-            for i = 1:length(new_fields)
-                new_fields[i] = typeassert_type_instance(v.fields[i], getfield_tfunc(t, Const(i)))
-                if new_fields[i] === Bottom
-                    return Bottom
-                end
-            end
-            return tuple_tfunc(new_fields)
-        elseif isa(v, Conditional)
-            if !(Bool <: t)
-                return Bottom
-            end
-            return v
-        end
-        return typeintersect(widenconst(v), t)
-    end
     return typeassert_type_instance(v, t)
 end
 add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
@@ -745,6 +750,9 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         if isa(name, Const)
             nv = name.val
+            if !(isa(nv,Symbol) || isa(nv,Int))
+                return Bottom
+            end
             if isa(sv, UnionAll)
                 if nv === :var || nv === 1
                     return Const(sv.var)
@@ -770,9 +778,6 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             end
             if isa(sv, Module) && isa(nv, Symbol)
                 return abstract_eval_global(sv, nv)
-            end
-            if !(isa(nv,Symbol) || isa(nv,Int))
-                return Bottom
             end
             if (isa(sv, SimpleVector) || !ismutable(sv)) && isdefined(sv, nv)
                 return Const(getfield(sv, nv))

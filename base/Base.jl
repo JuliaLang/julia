@@ -236,6 +236,9 @@ include("weakkeydict.jl")
 include("logging.jl")
 using .CoreLogging
 
+# BinaryPlatforms, used by Artifacts
+include("binaryplatforms.jl")
+
 # functions defined in Random
 function rand end
 function randn end

@@ -1710,8 +1710,8 @@ end
 end
 
 @testset "Tuple summary" begin
-    @test summary((1,2,3)) == "(1, 2, 3)"
-    @test summary((:a, "b", 'c')) == "(:a, \"b\", 'c')"
+    @test summary((1,2,3)) == "Tuple{$Int, $Int, $Int}"
+    @test summary((:a, "b", 'c')) == "Tuple{Symbol, String, Char}"
 end
 
 # Tests for code_typed linetable annotations

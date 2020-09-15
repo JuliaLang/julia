@@ -1355,7 +1355,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     return urs[]
 end
 
-function find_inferred(mi::MethodInstance, @nospecialize(atypes), sv::OptimizationState, @nospecialize(rettype))
+function find_inferred(mi::MethodInstance, atypes::Vector{Any}, sv::OptimizationState, @nospecialize(rettype))
     # see if the method has a InferenceResult in the current cache
     # or an existing inferred code info store in `.inferred`
     haveconst = false

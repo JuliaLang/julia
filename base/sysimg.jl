@@ -47,6 +47,7 @@ let
             :Distributed,
             :SharedArrays,
             :TOML,
+            :Artifacts,
             :Pkg,
             :Test,
             :REPL,

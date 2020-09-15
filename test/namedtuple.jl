@@ -156,6 +156,8 @@ let d = [:a=>1, :b=>2, :c=>3]   # use an array to preserve order
     y = (w=30, z=40)
     @test (;t..., y...) == (x=1, y=20, w=30, z=40)
     @test (;t..., y=0, y...) == (x=1, y=0, w=30, z=40)
+
+    @test NamedTuple(d) === (a=1, b=2, c=3)
 end
 
 # inference tests

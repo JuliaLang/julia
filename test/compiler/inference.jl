@@ -1435,6 +1435,7 @@ end
 @test nfields_tfunc(Type{Union{}}) === Const(0)
 @test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
 @test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
+@test nfields_tfunc(Union{Tuple{Int, Float64}, Tuple{Int, Int}}) === Const(2)
 
 using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
@@ -2691,6 +2692,8 @@ function symcmp36230(vec)
     a, b = vec[1], vec[2]
     if isa(a, Symbol) && isa(b, Symbol)
         return a == b
+    elseif isa(a, Int) && isa(b, Int)
+        return a == b
     end
     return false
 end
@@ -2751,3 +2754,25 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test !Core.Compiler.sizeof_nothrow(UnionAll)
 
 @test Base.return_types(Expr) == Any[Expr]
+
+# Use a global constant to rely less on unrelated constant propagation
+const const_int32_typename = Int32.name
+# Check constant propagation for field of constant `TypeName`
+# works for both valid and invalid field names. (Ref #37443)
+getfield_const_typename_good1() = getfield(const_int32_typename, 1)
+getfield_const_typename_good2() = getfield(const_int32_typename, :name)
+getfield_const_typename_bad1() = getfield(const_int32_typename, 0x1)
+@eval getfield_const_typename_bad2() = getfield(const_int32_typename, $(()))
+for goodf in [getfield_const_typename_good1, getfield_const_typename_good2]
+    local goodf
+    local code = code_typed(goodf, Tuple{})[1].first.code
+    @test code[1] === Core.ReturnNode(QuoteNode(:Int32))
+    @test goodf() === :Int32
+end
+for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
+    local badf
+    local code = code_typed(badf, Tuple{})[1].first.code
+    @test Meta.isexpr(code[1], :call)
+    @test code[end] === Core.ReturnNode()
+    @test_throws TypeError badf()
+end

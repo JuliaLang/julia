@@ -490,55 +490,47 @@ munged_history_message(path::String) = """
 Invalid history file ($path) format:
 An editor may have converted tabs to spaces at line """
 
-function hist_getline(file::IO)
-    while !eof(file)
-        line = readline(file, keep=true)
-        isempty(line) && return line
-        line[1] in "\r\n" || return line
-    end
-    return ""
-end
-
-function hist_from_file(hp::REPLHistoryProvider, file::IO, path::String)
-    hp.history_file = file
-    seek(file, 0)
+function hist_from_file(hp::REPLHistoryProvider, path::String)
+    getline(lines, i) = i > length(lines) ? "" : lines[i]
+    file_lines = readlines(path)
     countlines = 0
     while true
-        mode = :julia
-        line = hist_getline(file)
-        isempty(line) && break
+        # First parse the metadata that starts with '#' in particular the REPL mode
         countlines += 1
+        line = getline(file_lines, countlines)
+        mode = :julia
+        isempty(line) && break
         line[1] != '#' &&
             error(invalid_history_message(path), repr(line[1]), " at line ", countlines)
         while !isempty(line)
-            m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
-            m === nothing && break
-            if m.captures[1] == "mode"
-                mode = Symbol(m.captures[2])
+            startswith(line, '#') || break
+            if startswith(line, "# mode: ")
+                mode = Symbol(SubString(line, 9))
             end
-            line = hist_getline(file)
             countlines += 1
+            line = getline(file_lines, countlines)
         end
         isempty(line) && break
-        # Make sure starts with tab
+
+        # Now parse the code for the current REPL mode
         line[1] == ' '  &&
             error(munged_history_message(path), countlines)
         line[1] != '\t' &&
             error(invalid_history_message(path), repr(line[1]), " at line ", countlines)
         lines = String[]
         while !isempty(line)
-            push!(lines, chomp(line[2:end]))
-            eof(file) && break
-            ch = peek(file, Char)
-            ch == ' '  && error(munged_history_message(path), countlines)
-            ch != '\t' && break
-            line = hist_getline(file)
+            push!(lines, chomp(SubString(line, 2)))
+            next_line = getline(file_lines, countlines+1)
+            isempty(next_line) && break
+            first(next_line) == ' '  && error(munged_history_message(path), countlines)
+            # A line not starting with a tab means we are done with code for this entry
+            first(next_line) != '\t' && break
             countlines += 1
+            line = getline(file_lines, countlines)
         end
         push!(hp.modes, mode)
         push!(hp.history, join(lines, '\n'))
     end
-    seekend(file)
     hp.start_idx = length(hp.history)
     return hp
 end
@@ -942,10 +934,12 @@ function setup_interface(
             hist_path = find_hist_file()
             mkpath(dirname(hist_path))
             f = open(hist_path, read=true, write=true, create=true)
+            hp.history_file = f
+            seekend(f)
             finalizer(replc) do replc
                 close(f)
             end
-            hist_from_file(hp, f, hist_path)
+            hist_from_file(hp, hist_path)
         catch
             # use REPL.hascolor to avoid using the local variable with the same name
             print_response(repl, (catch_stack(),true), true, REPL.hascolor(repl))

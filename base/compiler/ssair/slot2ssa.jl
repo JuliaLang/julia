@@ -57,21 +57,19 @@ function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     result
 end
 
-function renumber_ssa(stmt::SSAValue, ssanums::Vector{Any}, new_ssa::Bool=false, used_ssa::Union{Nothing, Vector{Int}}=nothing)
+function renumber_ssa(stmt::SSAValue, ssanums::Vector{SSAValue}, new_ssa::Bool=false)
     id = stmt.id
     if id > length(ssanums)
         return stmt
     end
     val = ssanums[id]
-    if isa(val, SSAValue) && used_ssa !== nothing
-        used_ssa[val.id] += 1
-    end
+    @assert val.id > 0
     return val
 end
 
-function renumber_ssa!(@nospecialize(stmt), ssanums::Vector{Any}, new_ssa::Bool=false, used_ssa::Union{Nothing, Vector{Int}}=nothing)
-    isa(stmt, SSAValue) && return renumber_ssa(stmt, ssanums, new_ssa, used_ssa)
-    return ssamap(val->renumber_ssa(val, ssanums, new_ssa, used_ssa), stmt)
+function renumber_ssa!(@nospecialize(stmt), ssanums::Vector{SSAValue}, new_ssa::Bool=false)
+    isa(stmt, SSAValue) && return renumber_ssa(stmt, ssanums, new_ssa)
+    return ssamap(val->renumber_ssa(val, ssanums, new_ssa), stmt)
 end
 
 function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ))
@@ -428,8 +426,11 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
     end
     result = InstructionStream(nstmts + ncritbreaks + nnewfallthroughs)
-    inst_rename = Vector{Any}(undef, length(ir.stmts) + length(ir.new_nodes))
-    for i = 1:length(ir.new_nodes)
+    inst_rename = Vector{SSAValue}(undef, length(ir.stmts) + length(ir.new_nodes))
+    @inbounds for i = 1:length(ir.stmts)
+        inst_rename[i] = SSAValue(-1)
+    end
+    @inbounds for i = 1:length(ir.new_nodes)
         inst_rename[i + length(ir.stmts)] = SSAValue(i + length(result))
     end
     bb_start_off = 0
@@ -802,7 +803,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
     # Convert into IRCode form
     nstmts = length(ir.stmts)
     new_code = Vector{Any}(undef, nstmts)
-    ssavalmap = Any[SSAValue(-1) for _ in 0:length(ci.ssavaluetypes)]
+    ssavalmap = fill(SSAValue(-1), length(ci.ssavaluetypes) + 1)
     result_types = Any[Any for _ in 1:nstmts]
     # Detect statement positions for assignments and construct array
     for (bb, idx) in bbidxiter(ir)

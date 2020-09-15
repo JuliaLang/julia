@@ -182,6 +182,7 @@ DocMeta.setdocmeta!(SuiteSparse, :DocTestSetup, :(using SparseArrays, LinearAlge
 DocMeta.setdocmeta!(UUIDs, :DocTestSetup, :(using UUIDs, Random), recursive=true, warn=false)
 DocMeta.setdocmeta!(Pkg, :DocTestSetup, :(using Pkg, Pkg.Artifacts), recursive=true, warn=false)
 DocMeta.setdocmeta!(Pkg.BinaryPlatforms, :DocTestSetup, :(using Pkg, Pkg.BinaryPlatforms), recursive=true, warn=false)
+DocMeta.setdocmeta!(Base.BinaryPlatforms, :DocTestSetup, :(using Base.BinaryPlatforms), recursive=true, warn=false)
 
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
     global const buildroot = i === nothing ? (@__DIR__) : first(match(r, ARGS[i]).captures)

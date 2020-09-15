@@ -445,8 +445,12 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
                                                        :help  => help_mode))
-
-        REPL.hist_from_file(hp, IOBuffer(fakehistory), "fakehistorypath")
+        hist_path = tempname()
+        write(hist_path, fakehistory)
+        REPL.hist_from_file(hp, hist_path)
+        f = open(hist_path, read=true, write=true, create=true)
+        hp.history_file = f
+        seekend(f)
         REPL.history_reset_state(hp)
 
         histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
