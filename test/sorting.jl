@@ -306,8 +306,6 @@ end
 
     @test insorted(1, [1:10;], by=(x -> x >= 5)) == true
     @test insorted(10, [1:10;], by=(x -> x >= 5)) == true
-    @test insorted(1, [1:5; 1:5; 1:5], 6, 10, Forward) == true
-    @test insorted(1, fill(1, 15), 6, 10, Forward) == true
 
     for R in numTypes, T in numTypes
         @test insorted(T(0), R[1, 1, 2, 2, 3, 3]) === false
@@ -323,8 +321,6 @@ end
 
         @test insorted(T(1), R[1:10;], by=(x -> x >= 5)) == true
         @test insorted(T(10), R[1:10;], by=(x -> x >= 5)) == true
-        @test insorted(T(1), R[1:5; 1:5; 1:5], 6, 10, Forward) == true
-        @test insorted(T(1), fill(R(1), 15), 6, 10, Forward) == true
     end
 
     for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
@@ -356,6 +352,7 @@ end
     @test insorted(0, []) === false
     @test insorted(0, [1,2,3]) === false
     @test insorted(4, [1,2,3]) === false
+    @test insorted(3, [10,8,6,9,4,7,2,5,3,1], by=(x -> iseven(x) ? x+5 : x), rev=true) === true
 end
 @testset "PartialQuickSort" begin
     a = rand(1:10000, 1000)

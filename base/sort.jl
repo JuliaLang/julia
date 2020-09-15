@@ -409,7 +409,7 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsortedlast
 
 function insorted end
-insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x, kw...))
+insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
 insorted(x, r::AbstractRange) = in(x, r)
 
 """
