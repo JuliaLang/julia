@@ -1279,7 +1279,7 @@ julia> a = [[1 3; 2 4], [5 7; 6 8]];
 julia> b = [[9 11; 10 12], [13 15; 14 16]];
 
 julia> map(.*, a, b)
-2-element Array{Array{Int64,2},1}:
+2-element Vector{Matrix{Int64}}:
  [9 33; 20 48]
  [65 105; 84 128]
 
