@@ -3494,6 +3494,19 @@ end
 _numel(vect::AbstractSparseVector) = nnz(vect)
 _numel(vect::AbstractVector) = length(vect)
 
+function _inds(vect::AbstractSparseVector, row, col)
+    
+    ix = nonzeroinds(vect)
+    return (row .+ ix, col .+ ix)
+end
+function _inds(vect::AbstractVector, row, col)
+    veclen = length(vect)
+    return (row+1:row+veclen, col+1:col+veclen)
+end
+
+_elems(vect::AbstractSparseVector) = nonzeros(vect)
+_elems(vect::AbstractVector) = vect
+
 function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
     for p in kv
@@ -3508,7 +3521,6 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     for p in kv
         dia = p.first
         vect = p.second
-        numinds = length(vect)
         numel = _numel(vect)
         if dia < 0
             row = -dia
@@ -3521,17 +3533,11 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
             col = 0
         end
         r = 1+i:numel+i
-        if vect isa AbstractSparseVector
-            I[r] = row .+ nonzeroinds(vect)
-            J[r] = col .+ nonzeroinds(vect)
-            copyto!(view(V, r), nonzeros(vect))
-        else
-            I[r] = row+1:row+numinds
-            J[r] = col+1:col+numinds
-            copyto!(view(V, r), vect)
-        end
-        m = max(m, row + numinds)
-        n = max(n, col + numinds)
+        I[r], J[r] = _inds(vect, row, col)
+        copyto!(view(V, r), _elems(vect))
+        veclen = length(vect)
+        m = max(m, row + veclen)
+        n = max(n, col + veclen)
         i += numel
     end
     return I, J, V, m, n
