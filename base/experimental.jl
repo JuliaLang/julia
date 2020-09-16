@@ -220,8 +220,8 @@ Closest candidates are:
     To insulate yourself against changes, consider putting any registrations inside an
     `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
 """
-function register_error_hint(handler, exct::Type)
-    list = get!(()->[], _hint_handlers, exct)
+function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
+    list = get!(Vector{Any}, _hint_handlers, exct)
     push!(list, handler)
     return nothing
 end
