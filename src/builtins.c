@@ -102,6 +102,16 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
                     return 0;
                 ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
             }
+            else if (ft->layout->first_ptr >= 0) {
+                // If the field is a inline immutable that can be can be undef
+                // we need to check to check for undef first since undef struct
+                // may have fields that are different but should still be treated as equal.
+                jl_value_t *ptra = ((jl_value_t**)ao)[ft->layout->first_ptr];
+                jl_value_t *ptrb = ((jl_value_t**)bo)[ft->layout->first_ptr];
+                if (ptra == NULL && ptrb == NULL) {
+                    return 1;
+                }
+            }
             if (!ft->layout->haspadding) {
                 if (!bits_equal(ao, bo, ft->size))
                     return 0;
@@ -314,7 +324,16 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
             }
             assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
-            u = immut_id_(fieldtype, (jl_value_t*)vo, 0);
+            int32_t first_ptr = fieldtype->layout->first_ptr;
+            if (first_ptr >= 0 && ((jl_value_t**)vo)[first_ptr] == NULL) {
+                // If the field is a inline immutable that can be can be undef
+                // we need to check to check for undef first since undef struct
+                // may have fields that are different but should still be treated as equal.
+                u = 0;
+            }
+            else {
+                u = immut_id_(fieldtype, (jl_value_t*)vo, 0);
+            }
         }
         h = bitmix(h, u);
     }

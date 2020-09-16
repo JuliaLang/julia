@@ -7396,3 +7396,83 @@ let v = NullableHomogeneousPointerImmutable(),
     @test getfield_knownindex_used3(r, v2) === 2
     @test r[] == 3
 end
+
+struct PointerNopadding{T}
+    a::Symbol
+    b::T
+end
+struct ContainsPointerNopadding{T}
+    a::PointerNopadding{T}
+    ContainsPointerNopadding{T}() where T = new{T}()
+    ContainsPointerNopadding{T}(a) where T = new{T}(a)
+end
+
+@test !Base.datatype_haspadding(PointerNopadding{Symbol})
+@test !Base.datatype_haspadding(PointerNopadding{Int})
+# Sanity check to make sure the meaning of haspadding didn't change.
+@test Base.datatype_haspadding(PointerNopadding{Any})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Symbol}})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Int}})
+@test !Base.datatype_haspadding(ContainsPointerNopadding{Symbol})
+@test Base.datatype_haspadding(ContainsPointerNopadding{Int})
+
+# Test the codegen optimized version as well as the unoptimized version of `jl_egal`
+@noinline unopt_jl_egal(@nospecialize(a), @nospecialize(b)) =
+    ccall(:jl_egal, Cint, (Any, Any), a, b) != 0
+@noinline opt_jl_egal(a, b) = a === b
+
+let aint = ContainsPointerNopadding{Int}(), asym = ContainsPointerNopadding{Symbol}(),
+    hint = objectid(aint), hsym = objectid(asym)
+    # Test that the uninitialized bits field doesn't affect the objectid or ===
+    for i in 1:100
+        local i
+        # Increase the chance one of the objects contains garbage int
+        local bint = ContainsPointerNopadding{Int}()
+        local bsym = ContainsPointerNopadding{Symbol}()
+        @test objectid(bint) === hint
+        @test objectid(bsym) === hsym
+        @test aint === bint
+        @test asym === bsym
+        @test unopt_jl_egal(aint, bint)
+        @test unopt_jl_egal(asym, bsym)
+        @test opt_jl_egal(aint, bint)
+        @test opt_jl_egal(asym, bsym)
+        aint = bint
+        asym = bsym
+    end
+end
+
+# Check === for potentially NULL field
+let vnull1 = NullableHomogeneousPointerImmutable(),
+    vnull2 = NullableHomogeneousPointerImmutable(),
+    v1 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2)),
+    v2 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2))
+
+    @test vnull1 === vnull2
+    @test unopt_jl_egal(vnull1, vnull2)
+    @test opt_jl_egal(vnull1, vnull2)
+    @test v1 === v2
+    @test unopt_jl_egal(v1, v2)
+    @test opt_jl_egal(v1, v2)
+
+    @test vnull1 !== v1
+    @test !unopt_jl_egal(vnull1, v1)
+    @test !opt_jl_egal(vnull1, v1)
+    @test vnull2 !== v2
+    @test !unopt_jl_egal(vnull2, v2)
+    @test !opt_jl_egal(vnull2, v2)
+end
+
+# Make sure non-allbits union is handled correctly
+@noinline returns_union37557(r) = r[]
+@noinline compare_union37557(r1, r2) = returns_union37557(r1) === returns_union37557(r2)
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(Int[]), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                          Ref{Union{Int,Vector{Int}}}(3))
+let array = Int[]
+    @test compare_union37557(Ref{Union{Int,Vector{Int}}}(array),
+                             Ref{Union{Int,Vector{Int}}}(array))
+end
+@test compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                         Ref{Union{Int,Vector{Int}}}(1))
