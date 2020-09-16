@@ -26,8 +26,10 @@ specified, a temporary path. Returns the path of the downloaded file.
     directly instead of calling this.
 """
 function download(url::AbstractString, path::AbstractString)
+    depwarn("Base.download is deprecated; use Downloads.download instead", :download)
     invokelatest(Downloads().download, download_url(url), path)
 end
 function download(url::AbstractString)
+    depwarn("Base.download is deprecated; use Downloads.download instead", :download)
     invokelatest(Downloads().download, download_url(url))
 end
