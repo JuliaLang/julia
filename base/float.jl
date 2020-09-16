@@ -285,7 +285,7 @@ Equivalent to `typeof(float(zero(T)))`.
 # Examples
 ```jldoctest
 julia> float(Complex{Int})
-ComplexF64 = Complex{Float64}
+ComplexF64 (alias for Complex{Float64})
 
 julia> float(Int)
 Float64

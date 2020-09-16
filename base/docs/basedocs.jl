@@ -1848,7 +1848,7 @@ Rational{Int64}
 julia> M = [1 2; 3.5 4];
 
 julia> typeof(M)
-Matrix{Float64} = Array{Float64, 2}
+Matrix{Float64} (alias for Array{Float64, 2})
 ```
 """
 typeof
