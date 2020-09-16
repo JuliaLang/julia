@@ -168,9 +168,9 @@ typedef enum {
 } jl_callingconv_t;
 
 
-// this supports up to 1 GB images and 16 RefTags
+// this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
 // if a larger size is required, will need to add support for writing larger relocations in many cases below
-#define RELOC_TAG_OFFSET 28
+#define RELOC_TAG_OFFSET 29
 
 
 /* read and write in host byte order */
@@ -1394,6 +1394,12 @@ static void jl_save_system_image_to_stream(ios_t *f)
         jl_write_relocations(&s);
         jl_write_gv_syms(&s, jl_get_root_symbol());
         jl_write_gv_ints(&s);
+    }
+
+    if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET) ||
+        const_data.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)) {
+        jl_printf(JL_STDERR, "ERROR: system image too large\n");
+        jl_exit(1);
     }
 
     // step 3: combine all of the sections into one file
