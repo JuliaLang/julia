@@ -3506,6 +3506,19 @@ end
 _nzvals(v::AbstractSparseVector) = nonzeros(v)
 _nzvals(v::AbstractVector) = v
 
+function _inds(vect::AbstractSparseVector, row, col)
+    
+    ix = nonzeroinds(vect)
+    return (row .+ ix, col .+ ix)
+end
+function _inds(vect::AbstractVector, row, col)
+    veclen = length(vect)
+    return (row+1:row+veclen, col+1:col+veclen)
+end
+
+_elems(vect::AbstractSparseVector) = nonzeros(vect)
+_elems(vect::AbstractVector) = vect
+
 function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
     for p in kv
