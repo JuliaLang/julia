@@ -172,6 +172,7 @@ function load_overrides(;force::Bool = false)
     end
 
     ARTIFACT_OVERRIDES[] = overrides
+    return overrides
 end
 
 # Helpers to map an override to an actual path
@@ -186,10 +187,10 @@ map_override_path(x::Nothing) = nothing
 Query the loaded `<DEPOT>/artifacts/Overrides.toml` settings for artifacts that should be
 redirected to a particular path or another content-hash.
 """
-function query_override(hash::SHA1; overrides::Dict = load_overrides())
+function query_override(hash::SHA1; overrides::Dict{Symbol} = load_overrides())
     return map_override_path(get(overrides[:hash], hash, nothing))
 end
-function query_override(pkg::Base.UUID, artifact_name::String; overrides::Dict = load_overrides())
+function query_override(pkg::Base.UUID, artifact_name::String; overrides::Dict{Symbol} = load_overrides())
     if haskey(overrides[:UUID], pkg)
         return map_override_path(get(overrides[:UUID][pkg], artifact_name, nothing))
     end
@@ -258,7 +259,7 @@ end
 Given an `entry` for the artifact named `name`, located within the file `artifacts_toml`,
 returns the `Platform` object that this entry specifies.  Returns `nothing` on error.
 """
-function unpack_platform(entry::Dict, name::String, artifacts_toml::String)::Union{Nothing,Platform}
+function unpack_platform(entry::Dict{String}, name::String, artifacts_toml::String)::Union{Nothing,Platform}
     if !haskey(entry, "os")
         @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entry '$name' missing 'os' key")
         return nothing
@@ -270,7 +271,12 @@ function unpack_platform(entry::Dict, name::String, artifacts_toml::String)::Uni
     end
 
     # Collect all String-valued mappings in `entry` and use them as tags
-    tags = Dict(Symbol(k) => v for (k, v) in entry if isa(v, String))
+    tags = Dict{Symbol, String}()
+    for (k, v) in entry
+        if v isa String
+            tags[Symbol(k)] = v
+        end
+    end
     # Removing some known entries that shouldn't be passed through `tags`
     delete!(tags, :os)
     delete!(tags, :arch)
@@ -376,8 +382,12 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
     meta = artifact_dict[name]
 
     # If it's an array, find the entry that best matches our current platform
-    if isa(meta, Array)
-        dl_dict = Dict{AbstractPlatform,Dict{String,Any}}(unpack_platform(x, name, artifacts_toml) => x for x in meta)
+    if isa(meta, Vector)
+        dl_dict = Dict{AbstractPlatform,Dict{String,Any}}()
+        for x in meta
+            x::Dict{String}
+            dl_dict[unpack_platform(x, name, artifacts_toml)] = x
+        end
         meta = select_platform(dl_dict, platform)
     # If it's NOT a dict, complain
     elseif !isa(meta, Dict)
@@ -610,24 +620,24 @@ end
 # Support `AbstractString`s, but avoid compilers needing to track backedges for callers
 # of these functions in case a user defines a new type that is `<: AbstractString`
 with_artifacts_directory(f::Function, artifacts_dir::AbstractString) =
-    with_artifacts_directory(f, string(artifacts_dir))
+    with_artifacts_directory(f, String(artifacts_dir)::String)
 query_override(pkg::Base.UUID, artifact_name::AbstractString; kwargs...) =
-    query_override(pkg, string(artifact_name); kwargs...)
+    query_override(pkg, String(artifact_name)::String; kwargs...)
 unpack_platform(entry::Dict, name::AbstractString, artifacts_toml::AbstractString) =
-    unpack_platform(entry, string(name), string(artifacts_toml))
+    unpack_platform(entry, String(name)::String, String(artifacts_toml)::String)
 load_artifacts_toml(artifacts_toml::AbstractString; kwargs...) =
-    load_artifacts_toml(string(artifacts_toml); kwargs...)
+    load_artifacts_toml(String(artifacts_toml)::String; kwargs...)
 artifact_meta(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
-    artifact_meta(string(name), string(artifacts_toml); kwargs...)
+    artifact_meta(String(name)::String, String(artifacts_toml)::String; kwargs...)
 artifact_meta(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString; kwargs...) =
-    artifact_meta(string(name), artifact_dict, string(artifacts_toml); kwargs...)
+    artifact_meta(String(name)::String, artifact_dict, String(artifacts_toml)::String; kwargs...)
 artifact_hash(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
-    artifact_hash(string(name), string(artifacts_toml); kwargs...)
+    artifact_hash(String(name)::String, String(artifacts_toml)::String; kwargs...)
 find_artifacts_toml(path::AbstractString) =
-    find_artifacts_toml(string(path))
+    find_artifacts_toml(String(path)::String)
 split_artifact_slash(name::AbstractString) =
-    split_artifact_slash(string(name))
+    split_artifact_slash(String(name)::String)
 artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
-    artifact_slash_lookup(string(name), artifact_dict, string(artifacts_toml))
+    artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
 
 end # module Artifacts
