@@ -3507,7 +3507,6 @@ _nzvals(v::AbstractSparseVector) = nonzeros(v)
 _nzvals(v::AbstractVector) = v
 
 function _inds(vect::AbstractSparseVector, row, col)
-    
     ix = nonzeroinds(vect)
     return (row .+ ix, col .+ ix)
 end
