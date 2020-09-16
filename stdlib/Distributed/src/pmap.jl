@@ -220,7 +220,7 @@ function process_batch_errors!(p, f, results, on_error, retry_delays, retry_chec
                 pmap(x->f(x...), p, Any[x.data for x in errors];
                         on_error = on_error, retry_delays = collect(retry_delays)[2:end::Int], retry_check = retry_check)
             elseif on_error !== nothing
-                map(on_error, exceptions)
+                Base.mapany(on_error, exceptions)
             else
                 throw(CompositeException(exceptions))
             end

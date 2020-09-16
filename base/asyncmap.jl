@@ -158,7 +158,7 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
     asyncrun_excp = nothing
     local asyncrun
     try
-        asyncrun = map(wrapped_f, c...)
+        asyncrun = Base.mapany(wrapped_f, c...)
     catch ex
         if isa(ex,InvalidStateException)
             # channel could be closed due to exceptions in the async tasks,
@@ -179,12 +179,13 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
     # check if there was a genuine problem with asyncrun
     (asyncrun_excp !== nothing) && throw(asyncrun_excp)
 
-    if isa(asyncrun, Ref)
+    if ndims(asyncrun) == 0
         # scalar case
-        return asyncrun.x
+        return asyncrun[].x
     else
         # second run, extract values from the Refs and return
-        return map(ref->ref.x, asyncrun)
+        # Use mapany to 
+        return identity.(mapany(ref->ref.x, asyncrun))
     end
 end
 
