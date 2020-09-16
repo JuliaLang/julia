@@ -3495,7 +3495,6 @@ _numel(vect::AbstractSparseVector) = nnz(vect)
 _numel(vect::AbstractVector) = length(vect)
 
 function _inds(vect::AbstractSparseVector, row, col)
-    
     ix = nonzeroinds(vect)
     return (row .+ ix, col .+ ix)
 end
