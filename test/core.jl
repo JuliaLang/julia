@@ -7396,3 +7396,11 @@ let v = NullableHomogeneousPointerImmutable(),
     @test getfield_knownindex_used3(r, v2) === 2
     @test r[] == 3
 end
+
+struct RedefinedSingleton
+end
+redefined_singleton_ref = Ref{Any}(RedefinedSingleton())
+struct RedefinedSingleton
+end
+cmp_refs(a::Ref{Any}) = a[] === RedefinedSingleton()
+@test cmp_refs(redefined_singleton_ref)

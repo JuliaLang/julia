@@ -224,8 +224,11 @@ STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
 {
     if (jl_is_datatype_make_singleton(st)) {
-        st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
-        jl_gc_wb(st, st->instance);
+        // It's possible for st to already have an ->instance if it was redefined
+        if (!st->instance) {
+            st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
+            jl_gc_wb(st, st->instance);
+        }
     }
 }
 
