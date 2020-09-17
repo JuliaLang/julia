@@ -1117,13 +1117,14 @@ function load_path_setup_code(load_path::Bool=true)
 end
 
 # this is called in the external process that generates precompiled package files
-function include_package_for_output(input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String}, concrete_deps::typeof(_concrete_dependencies), uuid_tuple::NTuple{2,UInt64}, source::Union{Nothing,String})
+function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String}, concrete_deps::typeof(_concrete_dependencies), uuid_tuple::NTuple{2,UInt64}, source::Union{Nothing,String})
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
     ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
     Base.ACTIVE_PROJECT[] = nothing
     Base._track_dependencies[] = true
+    get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
 
     ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
@@ -1140,10 +1141,10 @@ function include_package_for_output(input::String, depot_path::Vector{String}, d
     end
 end
 
-@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},Nothing))
-@assert precompile(include_package_for_output, (String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},String))
+@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},Nothing))
+@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),NTuple{2,UInt64},String))
 
-function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
+function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
@@ -1153,13 +1154,15 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         error("LOAD_PATH entries cannot contain $(repr(path_sep))")
 
     deps_strs = String[]
-    for (pkg, build_id) in concrete_deps
-        pkg_str = if pkg.uuid === nothing
-            "Base.PkgId($(repr(pkg.name)))"
+    function pkg_str(_pkg::PkgId)
+        if _pkg.uuid === nothing
+            "Base.PkgId($(repr(_pkg.name)))"
         else
-            "Base.PkgId(Base.UUID(\"$(pkg.uuid)\"), $(repr(pkg.name)))"
+            "Base.PkgId(Base.UUID(\"$(_pkg.uuid)\"), $(repr(_pkg.name)))"
         end
-        push!(deps_strs, "$pkg_str => $(repr(build_id))")
+    end
+    for (pkg, build_id) in concrete_deps
+        push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
     end
     deps = repr(eltype(concrete_deps)) * "[" * join(deps_strs, ",") * "]"
 
@@ -1173,15 +1176,15 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
-        Base.include_package_for_output($(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
+        Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(uuid_tuple)), $(repr(source_path(nothing))))
         """)
     close(io.in)
     return io
 end
 
-@assert precompile(create_expr_cache, (String, String, typeof(_concrete_dependencies), Nothing))
-@assert precompile(create_expr_cache, (String, String, typeof(_concrete_dependencies), UUID))
+@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), Nothing))
+@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), UUID))
 
 function compilecache_path(pkg::PkgId)::String
     entrypath, entryfile = cache_file_entry(pkg)
@@ -1244,7 +1247,7 @@ function compilecache(pkg::PkgId, path::String)
     local p
     try
         close(tmpio)
-        p = create_expr_cache(path, tmppath, concrete_deps, pkg.uuid)
+        p = create_expr_cache(pkg, path, tmppath, concrete_deps, pkg.uuid)
         if success(p)
             # append checksum to the end of the .ji file:
             open(tmppath, "a+") do f
