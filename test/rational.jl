@@ -595,7 +595,6 @@ end
     @test -2//3 * 0x1 == 0x1 * -2//3 == -2//3
 end
 
-
 @testset "ispow2" begin
     @test ispow2(4//1)
     @test ispow2(1//8)
