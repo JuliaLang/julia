@@ -114,7 +114,10 @@ end
     @test p["foo"] == "bar"
     @test p["os"] == "linux"
     p["os"] = "JuliaOS"
-    @test p["os"] == "JuliaOS"
+    @test p["os"] == "juliaos"
+
+    # Test that trying to set illegal tags fails
+    @test_throws ArgumentError p["os"] = "a+b"
 end
 
 @testset "Triplet parsing" begin
