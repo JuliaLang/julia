@@ -17,7 +17,7 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 # Examples
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Eigen{Float64,Float64,Matrix{Float64},Vector{Float64}}
+Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}}
 values:
 3-element Vector{Float64}:
   1.0
@@ -83,7 +83,7 @@ julia> B = [0 1; 1 0]
  1  0
 
 julia> F = eigen(A, B)
-GeneralizedEigen{ComplexF64,ComplexF64,Matrix{ComplexF64},Vector{ComplexF64}}
+GeneralizedEigen{ComplexF64, ComplexF64, Matrix{ComplexF64}, Vector{ComplexF64}}
 values:
 2-element Vector{ComplexF64}:
  0.0 - 1.0im
@@ -201,7 +201,7 @@ accept a `sortby` keyword.
 # Examples
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Eigen{Float64,Float64,Matrix{Float64},Vector{Float64}}
+Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}}
 values:
 3-element Vector{Float64}:
   1.0

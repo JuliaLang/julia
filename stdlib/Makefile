@@ -14,7 +14,7 @@ VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 $(build_datarootdir)/julia/stdlib/$(VERSDIR):
 	mkdir -p $@
 
-STDLIBS = Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
+STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
           Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization SHA \
           SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs

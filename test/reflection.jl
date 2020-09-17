@@ -42,6 +42,13 @@ end
 test_code_reflections(test_ir_reflection, code_lowered)
 test_code_reflections(test_ir_reflection, code_typed)
 
+io = IOBuffer()
+Base.print_statement_costs(io, map, (typeof(sqrt), Tuple{Int}))
+str = String(take!(io))
+@test occursin("map(f, t::Tuple{Any})", str)
+@test occursin("sitofp", str)
+@test occursin(r"20 .*sqrt_llvm.*::Float64", str)
+
 end # module ReflectionTest
 
 # isbits, isbitstype
@@ -214,7 +221,7 @@ let ex = :(a + b)
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825(::Array{T,N}, ::Array, ::Vector{T} where T)")
+                 "foo13825(::Array{T, N}, ::Array, ::Vector{T} where T)")
 
 mutable struct TLayout
     x::Int8

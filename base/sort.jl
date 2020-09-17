@@ -700,13 +700,13 @@ julia> v = [3, 1, 2]; sort!(v, rev = true); v
  1
 
 julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[1]); v
-3-element Vector{Tuple{Int64,String}}:
+3-element Vector{Tuple{Int64, String}}:
  (1, "c")
  (2, "b")
  (3, "a")
 
 julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
-3-element Vector{Tuple{Int64,String}}:
+3-element Vector{Tuple{Int64, String}}:
  (3, "a")
  (2, "b")
  (1, "c")

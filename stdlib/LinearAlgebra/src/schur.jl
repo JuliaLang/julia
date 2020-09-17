@@ -22,7 +22,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64,Matrix{Float64}}
+Schur{Float64, Matrix{Float64}}
 T factor:
 2×2 Matrix{Float64}:
  3.0   9.0
@@ -74,7 +74,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schur!(A)
-Schur{Float64,Matrix{Float64}}
+Schur{Float64, Matrix{Float64}}
 T factor:
 2×2 Matrix{Float64}:
  3.0   9.0
@@ -114,7 +114,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64,Matrix{Float64}}
+Schur{Float64, Matrix{Float64}}
 T factor:
 2×2 Matrix{Float64}:
  3.0   9.0

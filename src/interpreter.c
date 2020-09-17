@@ -71,8 +71,6 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel);
 
-int jl_is_toplevel_only_expr(jl_value_t *e);
-
 // method definition form
 
 static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
@@ -536,10 +534,22 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)specialize_sym) {
                         jl_set_module_nospecialize(s->module, 0);
                     }
-                    if (jl_expr_nargs(stmt) == 2 && jl_exprarg(stmt, 0) == (jl_value_t*)optlevel_sym) {
-                        if (jl_is_long(jl_exprarg(stmt, 1))) {
-                            int n = jl_unbox_long(jl_exprarg(stmt, 1));
-                            jl_set_module_optlevel(s->module, n);
+                    if (jl_expr_nargs(stmt) == 2) {
+                        if (jl_exprarg(stmt, 0) == (jl_value_t*)optlevel_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                int n = jl_unbox_long(jl_exprarg(stmt, 1));
+                                jl_set_module_optlevel(s->module, n);
+                            }
+                        }
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)compile_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                jl_set_module_compile(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            }
+                        }
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)infer_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                jl_set_module_infer(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            }
                         }
                     }
                 }

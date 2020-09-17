@@ -211,11 +211,12 @@ eachindex(itrs...) = keys(itrs...)
 # eachindex iterates over all indices. IndexCartesian definitions are later.
 eachindex(A::AbstractVector) = (@_inline_meta(); axes1(A))
 
-@noinline function throw_eachindex_mismatch(::IndexLinear, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(eachindex.(A), ", ", " and "))"))
+
+@noinline function throw_eachindex_mismatch_indices(::IndexLinear, inds...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(inds, ", ", " and "))"))
 end
-@noinline function throw_eachindex_mismatch(::IndexCartesian, A...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(axes.(A), ", ", " and "))"))
+@noinline function throw_eachindex_mismatch_indices(::IndexCartesian, inds...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(inds, ", ", " and "))"))
 end
 
 """
@@ -269,7 +270,7 @@ function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     indsA = eachindex(IndexLinear(), A)
     _all_match_first(X->eachindex(IndexLinear(), X), indsA, B...) ||
-        throw_eachindex_mismatch(IndexLinear(), A, B...)
+        throw_eachindex_mismatch_indices(IndexLinear(), eachindex(A), eachindex.(B)...)
     indsA
 end
 function _all_match_first(f::F, inds, A, B...) where F<:Function
@@ -1069,8 +1070,8 @@ function pointer(x::AbstractArray{T}, i::Integer) where T
 end
 
 # The distance from pointer(x) to the element at x[I...] in bytes
-_memory_offset(x::DenseArray, I...) = (_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
-function _memory_offset(x::AbstractArray, I...)
+_memory_offset(x::DenseArray, I::Vararg{Any,N}) where {N} = (_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
+function _memory_offset(x::AbstractArray, I::Vararg{Any,N}) where {N}
     J = _to_subscript_indices(x, I...)
     return sum(map((i, s, o)->s*(i-o), J, strides(x), Tuple(first(CartesianIndices(x)))))*elsize(x)
 end
@@ -1315,10 +1316,11 @@ unaliascopy(A::Array) = copy(A)
 unaliascopy(A::AbstractArray)::typeof(A) = (@_noinline_meta; _unaliascopy(A, copy(A)))
 _unaliascopy(A::T, C::T) where {T} = C
 _unaliascopy(A, C) = throw(ArgumentError("""
-    an array of type `$(typeof(A).name)` shares memory with another argument and must
-    make a preventative copy of itself in order to maintain consistent semantics,
-    but `copy(A)` returns a new array of type `$(typeof(C))`. To fix, implement:
-        `Base.unaliascopy(A::$(typeof(A).name))::typeof(A)`"""))
+    an array of type `$(typename(typeof(A)).wrapper)` shares memory with another argument
+    and must make a preventative copy of itself in order to maintain consistent semantics,
+    but `copy(::$(typeof(A)))` returns a new array of type `$(typeof(C))`.
+    To fix, implement:
+        `Base.unaliascopy(A::$(typename(typeof(A)).wrapper))::typeof(A)`"""))
 unaliascopy(A) = A
 
 """
@@ -1436,15 +1438,15 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
 function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
-    n::Int = 0
+    n = 0
     for Vk in V
-        n += length(Vk)
+        n += Int(length(Vk))::Int
     end
     a = similar(V[1], T, n)
     pos = 1
-    for k=1:length(V)
+    for k=1:Int(length(V))::Int
         Vk = V[k]
-        p1 = pos+length(Vk)-1
+        p1 = pos + Int(length(Vk))::Int - 1
         a[pos:p1] = Vk
         pos = p1+1
     end
@@ -1506,7 +1508,7 @@ function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     pos = 1
     for k=1:nargs
         Ak = A[k]
-        p1 = pos+size(Ak,1)-1
+        p1 = pos+size(Ak,1)::Int-1
         B[pos:p1, :] = Ak
         pos = p1+1
     end
@@ -1584,17 +1586,18 @@ end
 _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
-@inline function _cat_t(dims, T::Type, X...)
+@inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, map(cat_size, X))
+    shape = cat_shape(catdims, map(cat_size, X)::Tuple{Vararg{Union{Int,Dims}}})::Dims
     A = cat_similar(X[1], T, shape)
-    if count(!iszero, catdims) > 1
+    if count(!iszero, catdims)::Int > 1
         fill!(A, zero(T))
     end
     return __cat(A, shape, catdims, X...)
 end
 
-function __cat(A, shape::NTuple{N}, catdims, X...) where N
+function __cat(A, shape::NTuple{M,Int}, catdims, X...) where M
+    N = M::Int
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(undef, N)
     concat = copyto!(zeros(Bool, N), catdims)
@@ -1701,8 +1704,8 @@ julia> hcat(x, [1; 2; 3])
 """
 hcat(X...) = cat(X...; dims=Val(2))
 
-typed_vcat(T::Type, X...) = cat_t(T, X...; dims=Val(1))
-typed_hcat(T::Type, X...) = cat_t(T, X...; dims=Val(2))
+typed_vcat(::Type{T}, X...) where T = cat_t(T, X...; dims=Val(1))
+typed_hcat(::Type{T}, X...) where T = cat_t(T, X...; dims=Val(2))
 
 """
     cat(A...; dims=dims)
@@ -2094,7 +2097,7 @@ for all `i` and `j`.
 # Examples
 ```jldoctest
 julia> a = reshape(Vector(1:16),(2,2,2,2))
-2×2×2×2 Array{Int64,4}:
+2×2×2×2 Array{Int64, 4}:
 [:, :, 1, 1] =
  1  3
  2  4
@@ -2112,7 +2115,7 @@ julia> a = reshape(Vector(1:16),(2,2,2,2))
  14  16
 
 julia> mapslices(sum, a, dims = [1,2])
-1×1×2×2 Array{Int64,4}:
+1×1×2×2 Array{Int64, 4}:
 [:, :, 1, 1] =
  10
 
@@ -2229,7 +2232,8 @@ end
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
-mapany(f, itr) = map!(f, Vector{Any}(undef, length(itr)::Int), itr)  # convenient for Expr.args
+mapany(f, A::AbstractArray) = map!(f, Vector{Any}(undef, length(A)), A)
+mapany(f, itr) = Any[f(x) for x in itr]
 
 # default to returning an Array for `map` on general iterators
 """

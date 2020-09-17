@@ -350,8 +350,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
 end
 
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
-                        oid_ptr::Ptr{GitHash}, is_merge::Cuint, payload::Ptr{Cvoid})
-    fhead_vec = unsafe_pointer_to_objref(payload)::Vector{FetchHead}
+                                    oid_ptr::Ptr{GitHash}, is_merge::Cuint, payload::Any)
+    fhead_vec = payload::Vector{FetchHead}
     Base.push!(fhead_vec, FetchHead(unsafe_string(ref_name), unsafe_string(remote_url),
         unsafe_load(oid_ptr), is_merge == 1))
     return Cint(0)
@@ -362,4 +362,4 @@ mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cs
 "C function pointer for `credentials_callback`"
 credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any))
 "C function pointer for `fetchhead_foreach_callback`"
-fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Ptr{Cvoid}))
+fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Any))

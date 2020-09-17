@@ -152,8 +152,6 @@ function complete_symbol(sym::String, ffunc, context_module::Module=Main)
             t, found = get_type(ex, context_module)
         end
         found || return Completion[]
-        # Ensure REPLCompletion do not crash when asked to complete a tuple, #15329
-        !lookup_module && t <: Tuple && return Completion[]
     end
 
     suggestions = Completion[]
@@ -177,8 +175,8 @@ function complete_symbol(sym::String, ffunc, context_module::Module=Main)
         end
     elseif val !== nothing # looking for a property of an instance
         for property in propertynames(val, false)
-            s = string(property)
-            if startswith(s, name)
+            # TODO: support integer arguments (#36872)
+            if property isa Symbol && startswith(string(property), name)
                 push!(suggestions, PropertyCompletion(val, property))
             end
         end
@@ -280,10 +278,10 @@ function complete_path(path::AbstractString, pos::Int; use_envpath=false, shell_
                 filesinpath = readdir(pathdir)
             catch e
                 # Bash allows dirs in PATH that can't be read, so we should as well.
-                if isa(e, Base.IOError)
+                if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
                     continue
                 else
-                    # We only handle IOError here
+                    # We only handle IOError and ArgumentError here
                     rethrow()
                 end
             end
@@ -585,23 +583,15 @@ end
 
 function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)
     loading_candidates = String[]
-    open(project_file) do io
-        state = :top
-        for line in eachline(io)
-            if occursin(Base.re_section, line)
-                state = occursin(Base.re_section_deps, line) ? :deps : :other
-            elseif state === :top
-                if (m = match(Base.re_name_to_string, line)) !== nothing
-                    root_name = String(m.captures[1])
-                    startswith(root_name, pkgstarts) && push!(loading_candidates, root_name)
-                end
-            elseif state === :deps
-                if (m = match(Base.re_key_to_string, line)) !== nothing
-                    dep_name = m.captures[1]
-                    startswith(dep_name, pkgstarts) && push!(loading_candidates, dep_name)
-                end
-            end
-        end
+    p = Base.TOML.Parser()
+    Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
+    d = Base.TOML.parse(p)
+    pkg = get(d, "name", nothing)
+    if pkg !== nothing && startswith(pkg, pkgstarts)
+        push!(loading_candidates, pkg)
+    end
+    for (pkg, _) in get(d, "deps", [])
+        startswith(pkg, pkgstarts) && push!(loading_candidates, pkg)
     end
     return Completion[PackageCompletion(name) for name in loading_candidates]
 end

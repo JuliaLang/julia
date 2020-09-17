@@ -204,7 +204,7 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
     if istaskfailed(t)
         println(io)
-        show_task_exception(io, t)
+        show_task_exception(io, t, indent = false)
     end
 end
 
@@ -617,7 +617,7 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector)
         for i = 1:n
             p = env[i]
             show(io, p)
-            i < n && print(io, ",")
+            i < n && print(io, ", ")
         end
     end
     print(io, "}")
@@ -844,13 +844,14 @@ function show_type_name(io::IO, tn::Core.TypeName)
     nothing
 end
 
-function show_datatype(io::IO, x::DataType)
+function show_datatype(io::IO, @nospecialize(x::DataType))
+    parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
-    n = length(x.parameters)::Int
+    n = length(parameters)
 
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
-    if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
-        print(io, "NTuple{", n, ',', x.parameters[1], "}")
+    if istuple && n > 3 && all(i -> (parameters[1] === i), parameters)
+        print(io, "NTuple{", n, ", ", parameters[1], "}")
     else
         show_type_name(io, x.name)
         if (n > 0 || istuple) && x !== Tuple
@@ -860,9 +861,9 @@ function show_datatype(io::IO, x::DataType)
             # since this information is still useful.
             print(io, '{')
             for i = 1:n
-                p = x.parameters[i]
+                p = parameters[i]
                 show(io, p)
-                i < n && print(io, ',')
+                i < n && print(io, ", ")
             end
             print(io, '}')
         end
@@ -1601,7 +1602,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # scalar multiplication (i.e. "100x")
         elseif (func === :* &&
             length(func_args) == 2 && isa(func_args[1], Union{Int, Int64, Float32, Float64}) &&
-            isa(func_args[2], Symbol) && !in(string(func_args[2]::Symbol)[1], ('e', 'E', 'f')))
+            isa(func_args[2], Symbol) &&
+            !in(string(func_args[2]::Symbol)[1], ('e', 'E', 'f', (func_args[1] == 0 && func_args[1] isa Integer ?
+                                                                  # don't juxtapose 0 with b, o, x
+                                                                  ('b', 'o', 'x') : ())...)))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec, quote_level)
             else
@@ -2165,9 +2169,9 @@ module IRShow
     include("compiler/ssair/show.jl")
 
     const __debuginfo = Dict{Symbol, Any}(
-        # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
-        :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
-        # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
+        # :full => src -> Base.IRShow.statementidx_lineinfo_printer(src), # and add variable slot information
+        :source => src -> Base.IRShow.statementidx_lineinfo_printer(src),
+        # :oneliner => src -> Base.IRShow.statementidx_lineinfo_printer(Base.IRShow.PartialLineInfoPrinter, src),
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
     const default_debuginfo = Ref{Symbol}(:none)
@@ -2362,14 +2366,14 @@ julia> x = MyStruct(1, (2,3));
 julia> dump(x)
 MyStruct
   x: Int64 1
-  y: Tuple{Int64,Int64}
+  y: Tuple{Int64, Int64}
     1: Int64 2
     2: Int64 3
 
 julia> dump(x; maxdepth = 1)
 MyStruct
   x: Int64 1
-  y: Tuple{Int64,Int64}
+  y: Tuple{Int64, Int64}
 ```
 """
 function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
@@ -2456,7 +2460,6 @@ function summary(x)
     summary(io, x)
     String(take!(io))
 end
-summary(io::IO, t::Tuple) = print(io, t)
 
 ## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
@@ -2498,12 +2501,12 @@ specialize this function for specific types to customize printing.
 A SubArray created as `view(a, :, 3, 2:5)`, where `a` is a
 3-dimensional Float64 array, has type
 
-    SubArray{Float64,2,Array{Float64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}
+    SubArray{Float64, 2, Array{Float64, 3}, Tuple{Colon, Int64, UnitRange{Int64}}, false}
 
 The default `show` printing would display this full type.
 However, the summary for SubArrays actually prints as
 
-    2×4 view(::Array{Float64,3}, :, 3, 2:5) with eltype Float64
+    2×4 view(::Array{Float64, 3}, :, 3, 2:5) with eltype Float64
 
 because of a definition similar to
 

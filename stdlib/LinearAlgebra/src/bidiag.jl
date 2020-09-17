@@ -47,14 +47,14 @@ julia> ev = [7, 8, 9]
  9
 
 julia> Bu = Bidiagonal(dv, ev, :U) # ev is on the first superdiagonal
-4×4 Bidiagonal{Int64,Vector{Int64}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  7  ⋅  ⋅
  ⋅  2  8  ⋅
  ⋅  ⋅  3  9
  ⋅  ⋅  ⋅  4
 
 julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
-4×4 Bidiagonal{Int64,Vector{Int64}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  7  2  ⋅  ⋅
  ⋅  8  3  ⋅
@@ -91,14 +91,14 @@ julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
  4  4  4  4
 
 julia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A
-4×4 Bidiagonal{Int64,Vector{Int64}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  1  ⋅  ⋅
  ⋅  2  2  ⋅
  ⋅  ⋅  3  3
  ⋅  ⋅  ⋅  4
 
 julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
-4×4 Bidiagonal{Int64,Vector{Int64}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  2  2  ⋅  ⋅
  ⋅  3  3  ⋅

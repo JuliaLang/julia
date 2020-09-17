@@ -188,19 +188,19 @@ in which case `combine` defaults to `|`.
 julia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];
 
 julia> sparsevec(II, V)
-5-element SparseVector{Float64,Int64} with 3 stored entries:
+5-element SparseVector{Float64, Int64} with 3 stored entries:
   [1]  =  0.1
   [3]  =  0.5
   [5]  =  0.2
 
 julia> sparsevec(II, V, 8, -)
-8-element SparseVector{Float64,Int64} with 3 stored entries:
+8-element SparseVector{Float64, Int64} with 3 stored entries:
   [1]  =  0.1
   [3]  =  -0.1
   [5]  =  0.2
 
 julia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])
-3-element SparseVector{Bool,Int64} with 3 stored entries:
+3-element SparseVector{Bool, Int64} with 3 stored entries:
   [1]  =  1
   [2]  =  0
   [3]  =  1
@@ -262,7 +262,7 @@ the dictionary, and the nonzero values are the values from the dictionary.
 # Examples
 ```jldoctest
 julia> sparsevec(Dict(1 => 3, 2 => 2))
-2-element SparseVector{Int64,Int64} with 2 stored entries:
+2-element SparseVector{Int64, Int64} with 2 stored entries:
   [1]  =  3
   [2]  =  2
 ```
@@ -340,16 +340,16 @@ Drop entry `x[i]` from `x` if `x[i]` is stored and otherwise do nothing.
 # Examples
 ```jldoctest
 julia> x = sparsevec([1, 3], [1.0, 2.0])
-3-element SparseVector{Float64,Int64} with 2 stored entries:
+3-element SparseVector{Float64, Int64} with 2 stored entries:
   [1]  =  1.0
   [3]  =  2.0
 
 julia> SparseArrays.dropstored!(x, 3)
-3-element SparseVector{Float64,Int64} with 1 stored entry:
+3-element SparseVector{Float64, Int64} with 1 stored entry:
   [1]  =  1.0
 
 julia> SparseArrays.dropstored!(x, 2)
-3-element SparseVector{Float64,Int64} with 1 stored entry:
+3-element SparseVector{Float64, Int64} with 1 stored entry:
   [1]  =  1.0
 ```
 """
@@ -391,7 +391,7 @@ Convert a vector `A` into a sparse vector of length `m`.
 # Examples
 ```jldoctest
 julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
-6-element SparseVector{Float64,Int64} with 3 stored entries:
+6-element SparseVector{Float64, Int64} with 3 stored entries:
   [1]  =  1.0
   [2]  =  2.0
   [5]  =  3.0
@@ -761,7 +761,7 @@ values in sparse vector `x` and `V` is a vector of the values.
 # Examples
 ```jldoctest
 julia> x = sparsevec([1 2 0; 0 0 3; 0 4 0])
-9-element SparseVector{Int64,Int64} with 4 stored entries:
+9-element SparseVector{Int64, Int64} with 4 stored entries:
   [1]  =  1
   [4]  =  2
   [6]  =  4
@@ -2018,13 +2018,13 @@ For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 # Examples
 ```jldoctest
 julia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])
-3-element SparseVector{Float64,Int64} with 3 stored entries:
+3-element SparseVector{Float64, Int64} with 3 stored entries:
   [1]  =  1.0
   [2]  =  0.0
   [3]  =  1.0
 
 julia> dropzeros(A)
-3-element SparseVector{Float64,Int64} with 2 stored entries:
+3-element SparseVector{Float64, Int64} with 2 stored entries:
   [1]  =  1.0
   [3]  =  1.0
 ```

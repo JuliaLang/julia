@@ -18,10 +18,10 @@ const REFCOUNT = Threads.Atomic{Int}(0)
 
 function ensure_initialized end
 
+include("error.jl")
 include("utils.jl")
 include("consts.jl")
 include("types.jl")
-include("error.jl")
 include("signature.jl")
 include("oid.jl")
 include("reference.jl")
@@ -785,7 +785,7 @@ function merge!(repo::GitRepo;
                merge_opts=merge_opts,
                checkout_opts=checkout_opts)
     finally
-        Base.map(close, upst_anns)
+        Base.foreach(close, upst_anns)
     end
 end
 

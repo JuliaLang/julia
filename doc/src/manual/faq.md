@@ -228,7 +228,7 @@ julia> function printargs(args...)
 printargs (generic function with 1 method)
 
 julia> printargs(1, 2, 3)
-Tuple{Int64,Int64,Int64}
+Tuple{Int64, Int64, Int64}
 Arg #1 = 1
 Arg #2 = 2
 Arg #3 = 3

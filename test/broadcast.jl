@@ -938,3 +938,9 @@ ret =  @macroexpand @.([Int, Number] <: Real)
 
 ret =  @macroexpand @.([Int, Number] >: Real)
 @test ret == :([Int, Number] .>: Real)
+
+# Threw mapany not defined
+p = rand(4,4); r = rand(2,4);
+p0 = copy(p)
+@views @. p[1:2, :] += r
+@test p[1:2, :] ≈ p0[1:2, :] + r

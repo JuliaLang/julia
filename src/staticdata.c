@@ -1476,9 +1476,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     JL_SIGATOMIC_END();
 }
 
-extern void jl_init_int32_int64_cache(void);
-extern void jl_gc_set_permalloc_region(void *start, void *end);
-
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 {

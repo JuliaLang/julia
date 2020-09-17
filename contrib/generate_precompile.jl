@@ -15,11 +15,18 @@ UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
-precompile(Tuple{typeof(Base.stale_cachefile), String, String})
-precompile(Tuple{typeof(push!), Set{Module}, Module})
-precompile(Tuple{typeof(push!), Set{Method}, Method})
-precompile(Tuple{typeof(push!), Set{Base.PkgId}, Base.PkgId})
-precompile(Tuple{typeof(setindex!), Dict{String,Base.PkgId}, Base.PkgId, String})
+# used by Revise.jl
+@assert precompile(Tuple{typeof(Base.parse_cache_header), String})
+@assert precompile(Tuple{typeof(pushfirst!), Vector{Any}, Function})
+# used by Requires.jl
+@assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(push!), Vector{Function}, Function})
+# miscellaneous
+@assert precompile(Tuple{typeof(Base.require), Base.PkgId})
+@assert precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
+@assert precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
 """
 
 precompile_script = """
@@ -38,12 +45,24 @@ f(x) = x03
 f(1,2)
 [][1]
 cd("complet_path\t\t$CTRL_C
+# Used by JuliaInterpreter
+push!(Set{Module}(), Main)
+push!(Set{Method}(), first(methods(collect)))
+# Used by Revise
+(setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
+(setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
+get(Base.pkgorigins, Base.PkgId(Base), nothing)
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+if have_repl
+    hardcoded_precompile_statements *= """
+    @assert precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+    """
+end
 
 Distributed = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
@@ -57,12 +76,46 @@ if Distributed !== nothing
     """
 end
 
+Artifacts = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
+          nothing)
+if Artifacts !== nothing
+    precompile_script *= """
+    using Artifacts, Base.BinaryPlatforms
+    artifacts_toml = abspath($(repr(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))))
+    cd(() -> @artifact_str("c_simple"), dirname(artifacts_toml))
+    artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
+    platforms = [Artifacts.unpack_platform(e, "c_simple", artifacts_toml) for e in artifacts["c_simple"]]
+    best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
+    """
+end
+
+
 Pkg = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
           nothing)
 
 if Pkg !== nothing
     precompile_script *= Pkg.precompile_script
+end
+
+FileWatching = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching"),
+          nothing)
+if FileWatching !== nothing
+    hardcoded_precompile_statements *= """
+    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
+    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+    """
+end
+
+Libdl = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"),
+          nothing)
+if Libdl !== nothing
+    hardcoded_precompile_statements *= """
+    precompile(Tuple{typeof(Libc.Libdl.dlopen), String})
+    """
 end
 
 function generate_precompile_statements()
@@ -145,7 +198,7 @@ function generate_precompile_statements()
                 write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
-                # NOTE: this is rather innaccurate because the Pkg REPL mode is a special flower
+                # NOTE: this is rather inaccurate because the Pkg REPL mode is a special flower
                 readuntil(output_copy, "\n")
                 readuntil(output_copy, "> ")
             end
@@ -194,7 +247,7 @@ function generate_precompile_statements()
         if have_repl
             # Seems like a reasonable number right now, adjust as needed
             # comment out if debugging script
-            @assert n_succeeded > 1500
+            @assert n_succeeded > 1200
         end
 
         tot_time = time_ns() - start_time

@@ -19,5 +19,6 @@ include("values.jl")
 include("invalids.jl")
 include("error_printing.jl")
 include("print.jl")
+include("parse.jl")
 
 @inferred TOML.parse("foo = 3")

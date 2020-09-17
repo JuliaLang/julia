@@ -18,7 +18,6 @@ export @test, @test_throws, @test_broken, @test_skip,
     @test_logs, @test_deprecated
 
 export @testset
-# Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
@@ -1321,7 +1320,7 @@ Int64
 
 julia> @code_warntype f(2)
 Variables
-  #self#::Core.Const(f, false)
+  #self#::Core.Const(f)
   a::Int64
 
 Body::UNION{FLOAT64, INT64}

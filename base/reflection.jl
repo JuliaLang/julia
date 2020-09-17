@@ -170,7 +170,7 @@ julia> fieldnames(Rational)
 ```
 """
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
-                           (_fieldnames(t)...,))
+                           (_fieldnames(t)...,))::Tuple{Vararg{Symbol}}
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames(::Core.TypeofBottom) =
     throw(ArgumentError("The empty type does not have field names since it does not have instances."))
@@ -254,7 +254,7 @@ variables defined as of the call site.
 julia> let x = 1, y = 2
            Base.@locals
        end
-Dict{Symbol,Any} with 2 entries:
+Dict{Symbol, Any} with 2 entries:
   :y => 2
   :x => 1
 
@@ -270,9 +270,9 @@ julia> function f(x)
        end;
 
 julia> f(42)
-Dict{Symbol,Any}(:x => 42)
-Dict{Symbol,Any}(:i => 1,:x => 42)
-Dict{Symbol,Any}(:y => 2,:x => 42)
+Dict{Symbol, Any}(:x => 42)
+Dict{Symbol, Any}(:i => 1, :x => 42)
+Dict{Symbol, Any}(:y => 2, :x => 42)
 ```
 """
 macro locals()
@@ -408,6 +408,9 @@ false
 julia> ismutable([1,2])
 true
 ```
+
+!!! compat "Julia 1.5"
+    This function requires at least Julia 1.5.
 """
 ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
 
@@ -571,7 +574,7 @@ use it in the following manner to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-12-element Vector{Tuple{UInt64,Symbol,DataType}}:
+12-element Vector{Tuple{UInt64, Symbol, DataType}}:
  (0x0000000000000000, :device, UInt64)
  (0x0000000000000008, :inode, UInt64)
  (0x0000000000000010, :mode, UInt64)
@@ -698,7 +701,7 @@ julia> fieldtypes(Foo)
 (Int64, String)
 ```
 """
-fieldtypes(T::Type) = ntuple(i -> fieldtype(T, i), fieldcount(T))
+fieldtypes(T::Type) = ntupleany(i -> fieldtype(T, i), fieldcount(T))
 
 # return all instances, for types that can be enumerated
 
@@ -871,8 +874,8 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     max = UInt[typemax(UInt)]
     has_ambig = Int32[0]
     ms = _methods_by_ftype(tt, -1, world, true, min, max, has_ambig)
-    ms === false && return false
-    return MethodList(Method[m.method for m in ms], typeof(f).name.mt)
+    isa(ms, Bool) && return ms
+    return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
 end
 
 function methods(@nospecialize(f),
@@ -962,12 +965,6 @@ struct CodegenParams
     gnu_pubnames::Cint
     debug_info_kind::Cint
 
-    module_setup::Any
-    module_activation::Any
-    raise_exception::Any
-    emit_function::Any
-    emitted_function::Any
-
     lookup::Ptr{Cvoid}
 
     generic_context::Any
@@ -975,17 +972,13 @@ struct CodegenParams
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
-                   module_setup=nothing, module_activation=nothing, raise_exception=nothing,
-                   emit_function=nothing, emitted_function=nothing,
                    lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
                    generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
-            module_setup, module_activation, raise_exception,
-            emit_function, emitted_function, lookup,
-            generic_context)
+            lookup, generic_context)
     end
 end
 
@@ -1138,6 +1131,45 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.
     end
     return rt
 end
+
+"""
+    print_statement_costs(io::IO, f, types)
+
+Print type-inferred and optimized code for `f` given argument types `types`,
+prepending each line with its cost as estimated by the compiler's inlining engine.
+"""
+function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwargs...)
+    if isa(f, Core.Builtin)
+        throw(ArgumentError("argument is not a generic function"))
+    end
+    tt = signature_type(f, t)
+    print_statement_costs(io, tt; kwargs...)
+end
+
+function print_statement_costs(io::IO, @nospecialize(tt::Type);
+                               world = get_world_counter(),
+                               interp = Core.Compiler.NativeInterpreter(world))
+    matches = _methods_by_ftype(tt, -1, world)
+    if matches === false
+        error("signature does not correspond to a generic function")
+    end
+    params = Core.Compiler.OptimizationParams(interp)
+    cst = Int[]
+    for match in matches
+        meth = func_for_method_checked(match.method, tt, match.sparams)
+        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
+        code === nothing && error("inference not successful") # inference disabled?
+        empty!(cst)
+        resize!(cst, length(code.code))
+        maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
+        nd = ndigits(maxcost)
+        println(io, meth)
+        IRShow.show_ir(io, code, (io, linestart, idx) -> (print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " "); return ""))
+        println()
+    end
+end
+
+print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 """
     which(f, types)
@@ -1347,7 +1379,7 @@ foo (generic function with 2 methods)
 julia> m1, m2 = collect(methods(foo));
 
 julia> typeintersect(m1.sig, m2.sig)
-Tuple{typeof(foo),Complex{Union{}}}
+Tuple{typeof(foo), Complex{Union{}}}
 
 julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
 true

@@ -19,7 +19,7 @@ call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods::Int = InferenceParams(interp).MAX_METHODS)
-    if sv.currpc in sv.throw_blocks
+    if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
         return CallMeta(Any, false)
     end
     valid_worlds = WorldRange()
@@ -95,7 +95,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
         val = pure_eval_call(f, argtypes)
         if val !== false
-            return CallMeta(val, info)
+            # TODO: add some sort of edge(s)
+            return CallMeta(val, MethodResultPure())
         end
     end
 
@@ -749,8 +750,7 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any})
     args = Any[ (a = widenconditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
     try
         value = Core._apply_pure(f, args)
-        # TODO: add some sort of edge(s)
-        return Const(value, true)
+        return Const(value)
     catch
         return false
     end
@@ -997,7 +997,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)
         val = pure_eval_call(f, argtypes)
-        return CallMeta(val === false ? Type : val, false)
+        return CallMeta(val === false ? Type : val, MethodResultPure())
     end
     atype = argtypes_to_type(argtypes)
     return abstract_call_gf_by_type(interp, f, argtypes, atype, sv, max_methods)
@@ -1175,10 +1175,10 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
             if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val) &&
-                    _all(i->at.val[i] isa fieldtype(t, i), 1:n)
+                let t = t, at = at; _all(i->at.val[i] isa fieldtype(t, i), 1:n); end
                 t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
             elseif isa(at, PartialStruct) && at ⊑ Tuple && n == length(at.fields) &&
-                    _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n)
+                let t = t, at = at; _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n); end
                 t = PartialStruct(t, at.fields)
             end
         end
@@ -1330,8 +1330,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
-                elseif isa(rt, Const) && rt.actual
-                    rt = Const(rt.val)
                 end
                 if tchanged(rt, frame.bestguess)
                     # new (wider) return type for frame

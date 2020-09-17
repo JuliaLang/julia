@@ -259,7 +259,7 @@ end
             end
             return pos
         end
-        while precision > 1
+        while hash && precision > 1
             buf[pos] = UInt8('0')
             pos += 1
             precision -= 1

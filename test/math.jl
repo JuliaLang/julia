@@ -450,7 +450,7 @@ end
     @test ismissing(scdm[2])
 end
 
-@testset "Integer args to sinpi/cospi/sinc/cosc" begin
+@testset "Integer and Inf args for sinpi/cospi/sinc/cosc" begin
     for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
         @test sinpi(1) == 0
         @test sinpi(-1) == -0
@@ -466,6 +466,44 @@ end
     @test cosc(0) == 0
     @test cosc(complex(1,0)) == -1
     @test cosc(Inf) == 0
+
+    @test sinc(Inf + 3im) == 0
+    @test cosc(Inf + 3im) == 0
+
+    @test isequal(sinc(Inf + Inf*im), NaN + NaN*im)
+    @test isequal(cosc(Inf + Inf*im), NaN + NaN*im)
+end
+
+# issue #37227
+@testset "sinc/cosc accuracy" begin
+    setprecision(256) do
+        for R in (BigFloat, Float16, Float32, Float64)
+            for T in (R, Complex{R})
+                for x in (0, 1e-5, 1e-20, 1e-30, 1e-40, 1e-50, 1e-60, 1e-70, 5.07138898934e-313)
+                    if x < eps(R)
+                        @test sinc(T(x)) == 1
+                    end
+                    @test cosc(T(x)) ≈ pi*(-R(x)*pi)/3 rtol=max(eps(R)*100, (pi*R(x))^2)
+                end
+            end
+        end
+    end
+    @test @inferred(sinc(0//1)) === 1.0
+    @test @inferred(cosc(0//1)) === -0.0
+
+    # test right before/after thresholds of Taylor series
+    @test sinc(0.001) ≈ 0.999998355066745 rtol=1e-15
+    @test sinc(0.00099) ≈ 0.9999983878009009 rtol=1e-15
+    @test sinc(0.05f0) ≈ 0.9958927352435614 rtol=1e-7
+    @test sinc(0.0499f0) ≈ 0.9959091277049384 rtol=1e-7
+    @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
+    @test cosc(0.1399) ≈ -0.45142306168781854 rtol=1e-14
+    @test cosc(0.26f0) ≈ -0.7996401373462212 rtol=5e-7
+    @test cosc(0.2599f0) ≈ -0.7993744054401625 rtol=5e-7
+    setprecision(256) do
+        @test cosc(big"0.5") ≈ big"-1.273239544735162686151070106980114896275677165923651589981338752471174381073817" rtol=1e-76
+        @test cosc(big"0.499") ≈ big"-1.272045747741181369948389133250213864178198918667041860771078493955590574971317" rtol=1e-76
+    end
 end
 
 @testset "Irrational args to sinpi/cospi/sinc/cosc" begin

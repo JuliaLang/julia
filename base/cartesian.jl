@@ -239,8 +239,8 @@ function inlineanonymous(ex::Expr, val)
     if !isa(ex.args[1], Symbol)
         throw(ArgumentError("not a single-argument anonymous function"))
     end
-    sym = ex.args[1]
-    ex = ex.args[2]
+    sym = ex.args[1]::Symbol
+    ex = ex.args[2]::Expr
     exout = lreplace(ex, sym, val)
     exout = poplinenum(exout)
     exprresolve(exout)
@@ -262,7 +262,7 @@ struct LReplace{S<:AbstractString}
 end
 LReplace(sym::Symbol, val::Integer) = LReplace(sym, string(sym), val)
 
-lreplace(ex, sym::Symbol, val) = lreplace!(copy(ex), LReplace(sym, val))
+lreplace(ex::Expr, sym::Symbol, val) = lreplace!(copy(ex), LReplace(sym, val))
 
 function lreplace!(sym::Symbol, r::LReplace)
     sym == r.pat_sym && return r.val

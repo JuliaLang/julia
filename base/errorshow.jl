@@ -225,7 +225,7 @@ function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
     is_arg_types = isa(ex.args, DataType)
-    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
     if length(meth) > 1
@@ -782,7 +782,7 @@ function show_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    frames = (first.(filtered))::Vector{StackFrame}
+    frames = map(x->first(x)::StackFrame, filtered)
     show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
     return
 end
@@ -879,11 +879,11 @@ function show_exception_stack(io::IO, stack::Vector)
     nexc = length(stack)
     for i = nexc:-1:1
         if nexc != i
-            printstyled(io, "\ncaused by:\n", color=error_color())
+            printstyled(io, "\ncaused by: ", color=error_color())
         end
         exc, bt = stack[i]
         showerror(io, exc, bt, backtrace = bt!==nothing)
-        println(io)
+        i == 1 || println(io)
     end
 end
 

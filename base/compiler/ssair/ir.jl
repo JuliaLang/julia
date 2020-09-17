@@ -561,7 +561,7 @@ mutable struct IncrementalCompact
                     succs[j] = bb_rename[succs[j]]
                 end
             end
-            let blocks = blocks
+            let blocks = blocks, bb_rename = bb_rename
                 result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
             end
         else
@@ -978,6 +978,11 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         pi_val = stmt.val
         if isa(pi_val, SSAValue)
             if stmt.typ === compact.result[pi_val.id][:type]
+                ssa_rename[idx] = pi_val
+                return result_idx
+            end
+        elseif isa(pi_val, Argument)
+            if stmt.typ === compact.ir.argtypes[pi_val.n]
                 ssa_rename[idx] = pi_val
                 return result_idx
             end

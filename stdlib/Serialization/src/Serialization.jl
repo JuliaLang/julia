@@ -9,7 +9,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall, require_one_based_indexing
+using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -930,7 +930,7 @@ function deserialize_symbol(s::AbstractSerializer, len::Int)
     return sym
 end
 
-deserialize_tuple(s::AbstractSerializer, len) = ntuple(i->deserialize(s), len)
+deserialize_tuple(s::AbstractSerializer, len) = ntupleany(i->deserialize(s), len)
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
@@ -1038,12 +1038,15 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
-    _meth = deserialize(s)
-    if _meth isa Module
-        # pre v1.2, skip
-        _meth = deserialize(s)
+    mod = deserialize(s)
+    if mod isa Module
+        method = deserialize(s)
+    else
+        # files post v1.2 and pre v1.6 are broken
+        method = mod
+        mod = Main
     end
-    return Core.LineInfoNode(_meth::Symbol, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
 end
 
 function deserialize(s::AbstractSerializer, ::Type{PhiNode})

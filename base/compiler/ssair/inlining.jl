@@ -30,7 +30,6 @@ struct InliningTodo
     sparams::Vector{Any} # The static parameters we computed for this call site
     metharg # ::Type
     # The LineTable and IR of the inlinee
-    linetable::Vector{LineInfoNode}
     ir::IRCode
     # If the function being inlined is a single basic block we can use a
     # simpler inlining algorithm. This flag determines whether that's allowed
@@ -307,8 +306,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
     inlined_at = Int(compact.result[idx][:line])
-    for entry in item.linetable
-        push!(linetable, LineInfoNode(entry.method, entry.file, entry.line,
+    for entry in item.ir.linetable
+        push!(linetable, LineInfoNode(entry.module, entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
     end
     if item.isva
@@ -735,15 +734,15 @@ function analyze_method!(idx::Int, atypes::Vector{Any}, match::MethodMatch,
 
     @timeit "inline IR inflation" begin
         ir2 = inflate_ir(src, mi)
-        # prepare inlining linetable with method instance information
-        inline_linetable = Vector{LineInfoNode}(undef, length(src.linetable))
-        for i = 1:length(src.linetable)
-            entry = src.linetable[i]
-            if entry.inlined_at === 0 && entry.method === method
-                entry = LineInfoNode(mi, entry.file, entry.line, entry.inlined_at)
-            end
-            inline_linetable[i] = entry
-        end
+        # #optional: prepare inlining linetable with method instance information
+        # inline_linetable = ir2.linetable
+        # for i = 1:length(inline_linetable)
+        #     entry = inline_linetable[i]
+        #     if entry.inlined_at === 0 && entry.method === method
+        #         entry = LineInfoNode(entry.module, mi, entry.file, entry.line, entry.inlined_at)
+        #         inline_linetable[i] = entry
+        #     end
+        # end
     end
     #verify_ir(ir2)
 
@@ -751,7 +750,7 @@ function analyze_method!(idx::Int, atypes::Vector{Any}, match::MethodMatch,
         na > 0 && method.isva,
         isinvoke, na,
         method, Any[match.sparams...], match.spec_types,
-        inline_linetable, ir2, linear_inline_eligible(ir2))
+        ir2, linear_inline_eligible(ir2))
 end
 
 # Neither the product iterator not CartesianIndices are available
@@ -1126,9 +1125,11 @@ end
 function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Any[]
-    skip = find_throw_blocks(ir.stmts.inst, RefValue(ir))
+    if sv.params.unoptimize_throw_blocks
+        skip = find_throw_blocks(ir.stmts.inst, RefValue(ir))
+    end
     for idx in 1:length(ir.stmts)
-        idx in skip && continue
+        sv.params.unoptimize_throw_blocks && idx in skip && continue
         r = process_simple!(ir, todo, idx, sv.params, sv.world, sv)
         r === nothing && continue
 
@@ -1143,10 +1144,11 @@ function assemble_inline_todo!(ir::IRCode, sv::OptimizationState)
         (sig, invoke_data) = r
 
         # Check whether this call was @pure and evaluates to a constant
-        if isa(sig.f, widenconst(sig.ft)) &&
-                isa(calltype, Const) && calltype.actual && is_inlineable_constant(calltype.val)
-            ir.stmts[idx][:inst] = quoted(calltype.val)
-            continue
+        if calltype isa Const && info isa MethodResultPure
+            if is_inlineable_constant(calltype.val)
+                ir.stmts[idx][:inst] = quoted(calltype.val)
+                continue
+            end
         end
 
         # Ok, now figure out what method to call
@@ -1353,7 +1355,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     return urs[]
 end
 
-function find_inferred(mi::MethodInstance, @nospecialize(atypes), sv::OptimizationState, @nospecialize(rettype))
+function find_inferred(mi::MethodInstance, atypes::Vector{Any}, sv::OptimizationState, @nospecialize(rettype))
     # see if the method has a InferenceResult in the current cache
     # or an existing inferred code info store in `.inferred`
     haveconst = false

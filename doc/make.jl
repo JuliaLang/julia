@@ -1,4 +1,5 @@
 # Install dependencies needed to build the documentation.
+Base.ACTIVE_PROJECT[] = nothing
 empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)
@@ -181,6 +182,7 @@ DocMeta.setdocmeta!(SuiteSparse, :DocTestSetup, :(using SparseArrays, LinearAlge
 DocMeta.setdocmeta!(UUIDs, :DocTestSetup, :(using UUIDs, Random), recursive=true, warn=false)
 DocMeta.setdocmeta!(Pkg, :DocTestSetup, :(using Pkg, Pkg.Artifacts), recursive=true, warn=false)
 DocMeta.setdocmeta!(Pkg.BinaryPlatforms, :DocTestSetup, :(using Pkg, Pkg.BinaryPlatforms), recursive=true, warn=false)
+DocMeta.setdocmeta!(Base.BinaryPlatforms, :DocTestSetup, :(using Base.BinaryPlatforms), recursive=true, warn=false)
 
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
     global const buildroot = i === nothing ? (@__DIR__) : first(match(r, ARGS[i]).captures)

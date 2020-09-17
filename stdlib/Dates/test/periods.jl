@@ -460,6 +460,21 @@ end
         @test hash(y) == hash(z)
     end
 end
+@testset "Equality and hashing between FixedPeriod/OtherPeriod/CompoundPeriod (#37459)" begin
+    function test_hash_equality(x, y)
+        @test x == y
+        @test y == x
+        @test isequal(x, y)
+        @test isequal(y, x)
+        @test hash(x) == hash(y)
+    end
+    for FP = (Dates.Week, Dates.Day, Dates.Hour, Dates.Minute,
+              Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond)
+        for OP = (Dates.Year, Dates.Quarter, Dates.Month)
+            test_hash_equality(FP(0), OP(0))
+        end
+    end
+end
 
 @testset "#30832" begin
     @test Dates.toms(Dates.Second(1) + Dates.Nanosecond(1)) == 1e3

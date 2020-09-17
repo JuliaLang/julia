@@ -8,7 +8,7 @@ AST. This form had most syntactic abstractions removed, but still looked a lot l
 Over time, in order to facilitate optimizations, SSA values were introduced to this IR and the IR was
 linearized (i.e. a form where function arguments may only be SSA values or constants). However, non-SSA values
 (slots) remained in the IR due to the lack of Phi nodes in the IR (necessary for back-edges and re-merging of
-conditional control flow), negating much of the usefulfulness of the SSA form representation to perform
+conditional control flow), negating much of the usefulness of the SSA form representation to perform
 middle end optimizations. Some heroic effort was put into making these optimizations work without a complete SSA
 form representation, but the lack of such a representation ultimately proved prohibitive.
 
@@ -90,7 +90,7 @@ catch:
 However, this is problematic in a language like julia where at the start of the optimization
 pipeline, we do not know which calls throw. We would have to conservatively assume that every
 call (which in julia is every statement) throws. This would have several negative effects.
-On the one hand, it would essentially recuce the scope of every basic block to a single call,
+On the one hand, it would essentially reduce the scope of every basic block to a single call,
 defeating the purpose of having operations be performed at the basic block level. On the other
 hand, every catch basic block would have `n*m` phi node arguments (`n`, the number of statements
 in the critical region, `m` the number of live values through the catch block). To work around
@@ -143,7 +143,7 @@ The corresponding IR (with irrelevant types stripped) is:
 └──       $(Expr(:unreachable))::Union{}
 4 ┄ %13 = φᶜ (%3, %6, %9)::Bool
 │   %14 = φᶜ (%4, %7, %10)::Core.Compiler.MaybeUndef(Int64)
-│   %15 = φᶜ (%5)::Core.Const(1, false)
+│   %15 = φᶜ (%5)::Core.Const(1)
 └──       $(Expr(:leave, 1))
 5 ─       $(Expr(:pop_exception, :(%2)))::Any
 │         $(Expr(:throw_undef_if_not, :y, :(%13)))::Any
@@ -174,7 +174,7 @@ Instead, we do the following:
 
 - We keep a separate buffer of nodes to insert (including the position to insert them at, the type of the
   corresponding value and the node itself). These nodes are numbered by their occurrence in the insertion
-  buffer, allowing their values to be immediately used elesewhere in the IR (i.e. if there are 12 statements in
+  buffer, allowing their values to be immediately used elsewhere in the IR (i.e. if there are 12 statements in
   the original statement list, the first new statement will be accessible as `SSAValue(13)`).
 - RAUW style operations are performed by setting the corresponding statement index to the replacement
   value.

@@ -9,7 +9,9 @@ using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, 
 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
-using Base: with_output_color
+using Base: with_output_color, mapany
+
+import REPL
 
 using InteractiveUtils: subtypes
 
@@ -184,7 +186,7 @@ function doc(binding::Binding, sig::Type = Union{})
             end
         end
         # Get parsed docs and concatenate them.
-        md = catdoc(map(parsedoc, results)...)
+        md = catdoc(mapany(parsedoc, results)...)
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
             md.meta[:results] = results
@@ -323,7 +325,8 @@ repl_corrections(s) = repl_corrections(stdout, s)
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
     if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
-        for (k,v) in Base.REPL_MODULE_REF[].REPLCompletions.latex_symbols
+        for (k,v) in Iterators.flatten((REPLCompletions.latex_symbols,
+                                        REPLCompletions.emoji_symbols))
             symbols_latex[v] = k
         end
     end
@@ -388,7 +391,7 @@ function _repl(x, brief::Bool=true)
         pargs = Any[]
         for arg in x.args[2:end]
             if isexpr(arg, :parameters)
-                kwargs = map(arg.args) do kwarg
+                kwargs = mapany(arg.args) do kwarg
                     if kwarg isa Symbol
                         kwarg = :($kwarg::Any)
                     elseif isexpr(kwarg, :kw)

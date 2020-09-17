@@ -435,7 +435,7 @@ See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 # Examples
 ```jldoctest
 julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
-Base.Iterators.Filter{typeof(isodd),Vector{Int64}}(isodd, [1, 2, 3, 4, 5])
+Base.Iterators.Filter{typeof(isodd), Vector{Int64}}(isodd, [1, 2, 3, 4, 5])
 
 julia> foreach(println, f)
 1
@@ -922,7 +922,7 @@ changes the fastest.
 # Examples
 ```jldoctest
 julia> collect(Iterators.product(1:2, 3:5))
-2×3 Matrix{Tuple{Int64,Int64}}:
+2×3 Matrix{Tuple{Int64, Int64}}:
  (1, 3)  (1, 4)  (1, 5)
  (2, 3)  (2, 4)  (2, 5)
 ```
@@ -1111,7 +1111,7 @@ Iterate over a collection `n` elements at a time.
 # Examples
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
-3-element Vector{SubArray{Int64,1,Vector{Int64},Tuple{UnitRange{Int64}},true}}:
+3-element Vector{SubArray{Int64, 1, Vector{Int64}, Tuple{UnitRange{Int64}}, true}}:
  [1, 2]
  [3, 4]
  [5]

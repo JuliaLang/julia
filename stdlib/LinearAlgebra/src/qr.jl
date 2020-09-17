@@ -271,9 +271,9 @@ julia> a = [1. 2.; 3. 4.]
  3.0  4.0
 
 julia> qr!(a)
-LinearAlgebra.QRCompactWY{Float64,Matrix{Float64}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64,Matrix{Float64}}:
+2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.316228  -0.948683
  -0.948683   0.316228
 R factor:
@@ -355,9 +355,9 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
  0.0   1.0
 
 julia> F = qr(A)
-LinearAlgebra.QRCompactWY{Float64,Matrix{Float64}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64,Matrix{Float64}}:
+3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.6   0.0   0.8
  -0.8   0.0  -0.6
   0.0  -1.0   0.0

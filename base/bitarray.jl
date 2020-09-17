@@ -1163,8 +1163,8 @@ end
 
 # TODO some of this could be optimized
 
-reverse(A::BitArray; dims::Integer) = _reverse_int(A, Int(dims))
-function _reverse_int(A::BitArray, d::Int)
+_reverse(A::BitArray, d::Tuple{Integer}) = _reverse(A, d[1])
+function _reverse(A::BitArray, d::Int)
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
@@ -1210,7 +1210,7 @@ function _reverse_int(A::BitArray, d::Int)
     return B
 end
 
-function reverse!(B::BitVector)
+function _reverse!(B::BitVector, ::Colon)
     # Basic idea: each chunk is divided into two blocks of size k = n % 64, and
     # h = 64 - k. Walk from either end (with indices i and j) reversing chunks
     # and separately ORing their two blocks into place.
@@ -1263,9 +1263,6 @@ function reverse!(B::BitVector)
 
     return B
 end
-
-reverse(v::BitVector) = reverse!(copy(v))
-
 
 function (<<)(B::BitVector, i::UInt)
     n = length(B)
@@ -1810,7 +1807,12 @@ end
 
 function vcat(A::BitMatrix...)
     nargs = length(A)
-    nrows = sum(a->size(a, 1), A)::Int
+    nrows, nrowsA = 0, sizehint!(Int[], nargs)
+    for a in A
+        sz1 = size(a, 1)
+        nrows += sz1
+        push!(nrowsA, sz1)
+    end
     ncols = size(A[1], 2)
     for j = 2:nargs
         size(A[j], 2) == ncols ||
@@ -1818,12 +1820,10 @@ function vcat(A::BitMatrix...)
     end
     B = BitMatrix(undef, nrows, ncols)
     Bc = B.chunks
-    nrowsA = [size(a, 1) for a in A]
-    Ac = [a.chunks for a in A]
     pos_d = 1
     pos_s = fill(1, nargs)
     for j = 1:ncols, k = 1:nargs
-        copy_chunks!(Bc, pos_d, Ac[k], pos_s[k], nrowsA[k])
+        copy_chunks!(Bc, pos_d, A[k].chunks, pos_s[k], nrowsA[k])
         pos_s[k] += nrowsA[k]
         pos_d += nrowsA[k]
     end

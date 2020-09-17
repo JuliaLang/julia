@@ -169,7 +169,7 @@ julia> push!(a, 1); push!(a, 2.0); push!(a, π)
  π = 3.1415926535897...
 ```
 
-Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
+Because `a` is an array of abstract type [`Real`](@ref), it must be able to hold any
 `Real` value. Since `Real` objects can be of arbitrary size and structure, `a` must be
 represented as an array of pointers to individually allocated `Real` objects. However, if we instead
 only allow numbers of the same type, e.g. [`Float64`](@ref), to be stored in `a` these can be stored more
@@ -1101,6 +1101,17 @@ julia> @time begin
 Provided there is enough memory for the copies, the cost of copying the view to an array is
 far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
 
+## Consider StaticArrays.jl for small fixed-size vector/matrix operations
+
+If your application involves many small (`< 100` element) arrays of fixed sizes (i.e. the size is
+known prior to execution), then you might want to consider using the [StaticArrays.jl package](https://github.com/JuliaArrays/StaticArrays.jl).
+This package allows you to represent such arrays in a way that avoids unnecessary heap allocations and allows the compiler to
+specialize code for the *size* of the array, e.g. by completely unrolling vector operations (eliminating the loops) and storing elements in CPU registers.
+
+For example, if you are doing computations with 2d geometries, you might have many computations with 2-component vectors.  By
+using the `SVector` type from StaticArrays.jl, you can use convenient vector notation and operations like `norm(3v - w)` on
+vectors `v` and `w`, while allowing the compiler to unroll the code to a minimal computation equivalent to `@inbounds hypot(3v[1]-w[1], 3v[2]-w[2])`.
+
 ## Avoid string interpolation for I/O
 
 When writing data to a file (or other I/O device), forming extra intermediate strings is a source
@@ -1436,7 +1447,7 @@ julia> function f(x)
 
 julia> @code_warntype f(3.2)
 Variables
-  #self#::Core.Const(f, false)
+  #self#::Core.Const(f)
   x::Float64
   y::UNION{FLOAT64, INT64}
 
