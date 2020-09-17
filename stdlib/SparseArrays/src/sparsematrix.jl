@@ -3580,16 +3580,17 @@ passing `m` and `n` as the first arguments.
 # Examples
 ```jldoctest
 julia> spdiagm([1,2,3])
-3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
-  [1, 1]  =  1
-  [2, 2]  =  2
-  [3, 3]  =  3
+3×3 SparseMatrixCSC{Int64, Int64} with 3 stored entries:
+ 1  ⋅  ⋅
+ ⋅  2  ⋅
+ ⋅  ⋅  3
 
 julia> spdiagm(sparse([1,0,3]))
-3×3 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
-  [1, 1]  =  1
-  [3, 3]  =  3
-```
+3×3 SparseMatrixCSC{Int64, Int64} with 2 stored entries:
+ 1  ⋅  ⋅
+ ⋅  ⋅  ⋅
+ ⋅  ⋅  3
+ ```
 """
 spdiagm(v::AbstractVector) = _spdiagm(nothing, 0 => v)
 spdiagm(m::Integer, n::Integer, v::AbstractVector) = _spdiagm((Int(m), Int(n)), 0 => v)
