@@ -250,7 +250,9 @@ to get the file name part of the path.
 function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
-    return Base.locate_package(pkgid)
+    origin = get(Base.pkgorigins, pkgid, nothing)
+    origin === nothing && return nothing
+    return origin.path
 end
 
 """
@@ -824,18 +826,19 @@ function require(into::Module, mod::Symbol)
     return require(uuidkey, cache)
 end
 
-struct PkgOrigin
+mutable struct PkgOrigin
     # version::VersionNumber
-    # path::String
+    path::Union{String,Nothing}
     cachepath::Union{String,Nothing}
 end
+PkgOrigin() = PkgOrigin(nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 function require(uuidkey::PkgId, cache::TOMLCache=TOMLCache())
     if !root_module_exists(uuidkey)
         cachefile = _require(uuidkey, cache)
         if cachefile !== nothing
-            pkgorigins[uuidkey] = PkgOrigin(cachefile)
+            get!(PkgOrigin, pkgorigins, uuidkey).cachepath = cachefile
         end
         # After successfully loading, notify downstream consumers
         for callback in package_callbacks
@@ -907,6 +910,7 @@ function _require(pkg::PkgId, cache::TOMLCache)
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
         path = locate_package(pkg, cache)
+        get!(PkgOrigin, pkgorigins, pkg).path = path
         if path === nothing
             throw(ArgumentError("""
                 Package $pkg is required but does not seem to be installed:
@@ -1441,6 +1445,7 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
                 end
             else
                 path = locate_package(req_key, cache)
+                get!(PkgOrigin, pkgorigins, req_key).path = path
                 if path === nothing
                     @debug "Rejecting cache file $cachefile because dependency $req_key not found."
                     return true # Won't be able to fulfill dependency
@@ -1496,7 +1501,7 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
         end
 
         if isa(id, PkgId)
-            pkgorigins[id] = PkgOrigin(cachefile)
+            get!(PkgOrigin, pkgorigins, id).cachepath = cachefile
         end
 
         return depmods # fresh cachefile

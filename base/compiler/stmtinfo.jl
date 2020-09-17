@@ -19,7 +19,6 @@ by calling an `@pure` function).
 """
 struct MethodResultPure end
 
-
 """
     struct UnionSplitInfo
 
@@ -36,8 +35,8 @@ end
 """
     struct CallMeta
 
-A simple struct that captures both the return type any any additional `info`
-for a given generic call.
+A simple struct that captures both the return type (`rt`) and any additional information
+(`info`) for a given generic call.
 """
 struct CallMeta
     rt::Any
@@ -57,12 +56,12 @@ end
 """
     struct ApplyCallInfo
 
-This info applies to any call of _apply_iterate(...) and captures both the
+This info applies to any call of `_apply_iterate(...)` and captures both the
 info of the actual call being applied and the info for any implicit call
 to the `iterate` function. Note that it is possible for the call itself
 to be yet another `_apply_iterate`, in which case the `.call` field will
-be another ApplyCallInfo. This info is illegal on any statement that is
-not an _apply_iterate call.
+be another `ApplyCallInfo`. This info is illegal on any statement that is
+not an `_apply_iterate` call.
 """
 struct ApplyCallInfo
     # The info for the call itself
@@ -75,10 +74,8 @@ end
     struct UnionSplitApplyCallInfo
 
 Like `UnionSplitInfo`, but for `ApplyCallInfo` rather than MethodMatchInfo.
-This info is illegal on any statement that is not an _apply_iterate call.
+This info is illegal on any statement that is not an `_apply_iterate` call.
 """
 struct UnionSplitApplyCallInfo
     infos::Vector{ApplyCallInfo}
 end
-
-

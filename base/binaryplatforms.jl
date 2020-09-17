@@ -131,7 +131,11 @@ end
 
 # Other `Platform` types can override this (I'm looking at you, `AnyPlatform`)
 tags(p::Platform) = p.tags
+
+# Make it act more like a dict
+Base.getindex(p::AbstractPlatform, k::String) = getindex(tags(p), k)
 Base.haskey(p::AbstractPlatform, k::String) = haskey(tags(p), k)
+Base.setindex!(p::AbstractPlatform, v::String, k::String) = (setindex!(tags(p), v, k); p)
 
 # Allow us to easily serialize Platform objects
 function Base.repr(p::Platform; context=nothing)

@@ -35,6 +35,7 @@ struct CFG
     index::Vector{Int} # map from instruction => basic-block number
                        # TODO: make this O(1) instead of O(log(n_blocks))?
 end
+copy(c::CFG) = CFG(BasicBlock[copy(b) for b in c.blocks], copy(c.index))
 
 function block_for_inst(index::Vector{Int}, inst::Int)
     return searchsortedfirst(index, inst, lt=(<=))
@@ -180,13 +181,14 @@ function add!(is::InstructionStream)
     resize!(is, ninst)
     return ninst
 end
-#function copy(is::InstructionStream) # unused
-#    return InstructionStream(
-#        copy_exprargs(is.insts),
-#        copy(is.types),
-#        copy(is.lines),
-#        copy(is.flags))
-#end
+function copy(is::InstructionStream)
+    return InstructionStream(
+        copy_exprargs(is.inst),
+        copy(is.type),
+        copy(is.info),
+        copy(is.line),
+        copy(is.flag))
+end
 function resize!(stmts::InstructionStream, len)
     old_length = length(stmts)
     resize!(stmts.inst, len)
@@ -248,6 +250,7 @@ function add!(new::NewNodeStream, pos::Int, attach_after::Bool)
     push!(new.info, NewNodeInfo(pos, attach_after))
     return Instruction(new.stmts)
 end
+copy(nns::NewNodeStream) = NewNodeStream(copy(nns.stmts), copy(nns.info))
 
 struct IRCode
     stmts::InstructionStream
@@ -264,6 +267,9 @@ struct IRCode
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
         return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
     end
+    global copy
+    copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
+        copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
 end
 
 function getindex(x::IRCode, s::SSAValue)
