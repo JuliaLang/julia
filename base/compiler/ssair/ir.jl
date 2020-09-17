@@ -232,6 +232,13 @@ end
 copy(code::IRCode) = IRCode(code, copy_exprargs(code.stmts), copy(code.types),
     copy(code.lines), copy(code.flags), copy(code.cfg), copy(code.new_nodes))
 
+function block_for_inst(ir::IRCode, inst::Int)
+    if inst > length(ir.stmts)
+        inst = ir.new_nodes.info[inst - length(ir.stmts)].pos
+    end
+    block_for_inst(ir.cfg, inst)
+end
+
 function getindex(x::IRCode, s::SSAValue)
     if s.id <= length(x.stmts)
         return x.stmts[s.id]

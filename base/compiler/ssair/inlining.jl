@@ -118,12 +118,12 @@ function inline_into_block!(state::CFGInliningState, block::Int)
     return
 end
 
-function cfg_inline_item!(item::InliningTodo, state::CFGInliningState, from_unionsplit::Bool=false)
+function cfg_inline_item!(ir::IRCode, item::InliningTodo, state::CFGInliningState, from_unionsplit::Bool=false)
     inlinee_cfg = item.ir.cfg
     # Figure out if we need to split the BB
     need_split_before = false
     need_split = true
-    block = block_for_inst(state.cfg, item.idx)
+    block = block_for_inst(ir, item.idx)
     inline_into_block!(state, block)
 
     if !isempty(inlinee_cfg.blocks[1].preds)
@@ -212,7 +212,7 @@ function cfg_inline_item!(item::InliningTodo, state::CFGInliningState, from_unio
     end
 end
 
-function cfg_inline_unionsplit!(item::UnionSplit, state::CFGInliningState)
+function cfg_inline_unionsplit!(ir::IRCode, item::UnionSplit, state::CFGInliningState)
     block = block_for_inst(state.cfg, item.idx)
     inline_into_block!(state, block)
     from_bbs = Int[]
@@ -227,7 +227,7 @@ function cfg_inline_unionsplit!(item::UnionSplit, state::CFGInliningState)
         push!(state.new_cfg_blocks[end].preds, cond_bb)
         push!(state.new_cfg_blocks[cond_bb].succs, cond_bb+1)
         if isa(case, InliningTodo) && !case.linear_inline_eligible
-            cfg_inline_item!(case, state, true)
+            cfg_inline_item!(ir, case, state, true)
         end
         bb = length(state.new_cfg_blocks)
         push!(from_bbs, bb)
@@ -501,12 +501,12 @@ function batch_inline!(todo::Vector{Any}, ir::IRCode, linetable::Vector{LineInfo
     state = CFGInliningState(ir)
     for item in todo
         if isa(item, UnionSplit)
-            cfg_inline_unionsplit!(item::UnionSplit, state)
+            cfg_inline_unionsplit!(ir, item::UnionSplit, state)
         else
             item = item::InliningTodo
             # A linear inline does not modify the CFG
             item.linear_inline_eligible && continue
-            cfg_inline_item!(item, state)
+            cfg_inline_item!(ir, item, state)
         end
     end
     finish_cfg_inline!(state)
