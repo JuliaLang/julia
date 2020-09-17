@@ -1395,10 +1395,9 @@ end
         a::Int
     end
     d = Dict([Bar(1), Bar(2)] => [Foo(1), Foo(2)])
-    m = string(@__MODULE__)
-    @test showstr(d) == "Dict{Vector{$m.Bar}, Vector{$m.Foo}}([$m.Bar(1), $m.Bar(2)] => [$m.Foo(1), $m.Foo(2)])"
+    @test showstr(d) == "Dict{Vector{$(curmod_prefix)Bar}, Vector{$(curmod_prefix)Foo}}([$(curmod_prefix)Bar(1), $(curmod_prefix)Bar(2)] => [$(curmod_prefix)Foo(1), $(curmod_prefix)Foo(2)])"
     @test sprint(show, MIME("text/plain"), d) == """
-        Dict{Vector{$m.Bar}, Vector{$m.Foo}} with 1 entry:
+        Dict{Vector{$(curmod_prefix)Bar}, Vector{$(curmod_prefix)Foo}} with 1 entry:
           [Bar(1), Bar(2)] => [Foo(1), Foo(2)]"""
 end
 
