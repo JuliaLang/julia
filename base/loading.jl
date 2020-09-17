@@ -1445,6 +1445,7 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
                 end
             else
                 path = locate_package(req_key, cache)
+                get!(PkgOrigin, pkgorigins, req_key).path = path
                 if path === nothing
                     @debug "Rejecting cache file $cachefile because dependency $req_key not found."
                     return true # Won't be able to fulfill dependency
