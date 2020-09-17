@@ -16,10 +16,10 @@ ifneq (,$(findstring $(OS),Linux FreeBSD))
 MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-$(SRCCACHE)/$(MBEDTLS_SRC).tgz: | $(SRCCACHE)
+$(SRCCACHE)/$(MBEDTLS_SRC).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(MBEDTLS_URL)
 
-$(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tgz
+$(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
@@ -71,12 +71,12 @@ clean-mbedtls:
 	-$(MAKE) -C $(BUILDDIR)/$(MBEDTLS_SRC) clean
 
 distclean-mbedtls:
-	-rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tgz \
+	-rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
 		$(SRCCACHE)/$(MBEDTLS_SRC) \
 		$(BUILDDIR)/$(MBEDTLS_SRC)
 
 
-get-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tgz
+get-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 extract-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 configure-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured
 compile-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
