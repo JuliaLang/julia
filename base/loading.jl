@@ -484,21 +484,26 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId, cache::TO
         uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
         uuid === nothing && continue
         if UUID(uuid) === pkg.uuid
-            path = get(entry, "path", nothing)::Union{Nothing, String}
-            if path !== nothing
-                path = normpath(abspath(dirname(manifest_file), path))
-                return path
-            end
-            hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
-            hash === nothing && return nothing
-            hash = SHA1(hash)
-            # Keep the 4 since it used to be the default
-            for slug in (version_slug(pkg.uuid, hash, 4), version_slug(pkg.uuid, hash))
-                for depot in DEPOT_PATH
-                    path = abspath(depot, "packages", pkg.name, slug)
-                    ispath(path) && return path
-                end
-            end
+            return explicit_manifest_entry_path(manifest_file, pkg, entry)
+        end
+    end
+    return nothing
+end
+
+function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::Dict{String,Any})
+    path = get(entry, "path", nothing)::Union{Nothing, String}
+    if path !== nothing
+        path = normpath(abspath(dirname(manifest_file), path))
+        return path
+    end
+    hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
+    hash === nothing && return nothing
+    hash = SHA1(hash)
+    # Keep the 4 since it used to be the default
+    for slug in (version_slug(pkg.uuid, hash, 4), version_slug(pkg.uuid, hash))
+        for depot in DEPOT_PATH
+            path = abspath(depot, "packages", pkg.name, slug)
+            ispath(path) && return path
         end
     end
     return nothing
