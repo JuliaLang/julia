@@ -1223,6 +1223,7 @@ end
 
 const MAX_NUM_PRECOMPILE_FILES = 10
 
+# `show_errors` is an "internal" interface for Pkg.precompile
 function compilecache(pkg::PkgId, path::String, show_errors::Bool = true)
     # decide where to put the resulting cache file
     cachefile = compilecache_path(pkg)
