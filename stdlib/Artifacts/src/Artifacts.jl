@@ -426,17 +426,17 @@ exists), otherwise return `nothing`.
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-function find_artifacts_toml(path::String)
+function find_path_in_project(path::String, names)
     if !isdir(path)
         path = dirname(path)
     end
 
     # Run until we hit the root directory.
     while dirname(path) != path
-        for f in artifact_names
-            artifacts_toml_path = joinpath(path, f)
-            if isfile(artifacts_toml_path)
-                return abspath(artifacts_toml_path)
+        for f in names
+            file_path = joinpath(path, f)
+            if isfile(file_path)
+                return abspath(file_path)
             end
         end
 
@@ -455,6 +455,11 @@ function find_artifacts_toml(path::String)
 
     # We never found anything, just return `nothing`
     return nothing
+end
+
+find_artifacts_toml(path::String) = find_path_in_project(path, artifact_names)
+function find_platform_augmentation_hook(path::String)
+    return find_path_in_project(path, [joinpath(".pkg", "platform_augmentation_hook.jl")])
 end
 
 # We do this to avoid doing the `joinpath()` work if we don't have to, and also to
@@ -535,12 +540,13 @@ Returns `artifact_name`, `artifact_path_tail`, and `hash` by looking the results
 the given `artifacts_toml`, first extracting the name and path tail from the given `name`
 to support slash-indexing within the given artifact.
 """
-function artifact_slash_lookup(name::String, artifact_dict::Dict, artifacts_toml::String)
+function artifact_slash_lookup(name::String, artifact_dict::Dict, artifacts_toml::String;
+                               platform::AbstractPlatform = HostPlatform())
     artifact_name, artifact_path_tail = split_artifact_slash(name)
 
-    meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml)
+    meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml; platform)
     if meta === nothing
-        error("Cannot locate artifact '$(name)' in '$(artifacts_toml)'")
+        error("Cannot locate artifact '$(name)' in '$(artifacts_toml)' for platform '$(triplet(platform))'")
     end
     hash = SHA1(meta["git-tree-sha1"])
     return artifact_name, artifact_path_tail, hash
@@ -591,18 +597,60 @@ macro artifact_str(name)
     # Invalidate calling .ji file if Artifacts.toml file changes
     Base.include_dependency(artifacts_toml)
 
-    # If `name` is a constant, we can actually load and parse the `Artifacts.toml` file now,
-    # saving the work from runtime.
-    if isa(name, AbstractString)
+    # Check to see if this package has registered any platform augmentation hooks
+    plataug_path = find_platform_augmentation_hook(dirname(artifacts_toml))
+    hook_func = identity
+    if plataug_path !== nothing
+        # This code cribbed from Pkg.Operations.load_pkg_hook()
+        m = Module(:__anon__)
+        orig_project = Base.ACTIVE_PROJECT[]
+        Base.ACTIVE_PROJECT[] = dirname(dirname(plataug_path))
+        try
+            func = Base.include(m, plataug_path)::Function
+            # invokelatest to deal with world-age issues from having just include()'ed
+            hook_func = p -> Base.invokelatest(func, p)
+        finally
+            Base.ACTIVE_PROJECT[] = orig_project
+        end
+    end
+
+    # If `name` is a constant, and we're not using a platform augmentation hook, we can actually
+    # load and parse the `Artifacts.toml` file now, saving the work from runtime.  If the user
+    # is using a platform augmentation hook however, we can't prove that the hook is idempotent,
+    # so we must do things at runtime. SAD.
+    if isa(name, AbstractString) && plataug_path === nothing
         # To support slash-indexing, we need to split the artifact name from the path tail:
-        local artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml)
+        local artifact_name, artifact_path_tail, hash = artifact_slash_lookup(
+            name,
+            artifact_dict,
+            artifacts_toml
+        )
         return quote
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash))
+            Base.invokelatest(_artifact_str,
+                $(__module__),
+                $(artifacts_toml),
+                $(artifact_name),
+                $(artifact_path_tail),
+                $(artifact_dict),
+                $(hash)
+            )
         end
     else
         return quote
-            local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml))
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash)
+            local artifact_name, artifact_path_tail, hash = artifact_slash_lookup(
+                $(esc(name)),
+                $(artifact_dict),
+                $(artifacts_toml);
+                platform=$(hook_func)(HostPlatform())
+            )
+            Base.invokelatest(_artifact_str,
+                $(__module__),
+                $(artifacts_toml),
+                artifact_name,
+                artifact_path_tail,
+                $(artifact_dict),
+                hash
+            )
         end
     end
 end

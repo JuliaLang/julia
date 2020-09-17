@@ -1,4 +1,4 @@
-using Artifacts, Test, Base.BinaryPlatforms
+using Artifacts, Test, Base.BinaryPlatforms, TOML
 using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform
 
 @testset "Artifact Paths" begin
@@ -103,6 +103,43 @@ end
             generate_bin_path(pathsep) = "c_simple$(pathsep)bin$(pathsep)c_simple$(exeext)"
             @test isfile(@artifact_str(generate_bin_path("/")))
             @test isfile(@artifact_str(generate_bin_path("\\")))
+        end
+    end
+end
+
+@testset "Hook Testing" begin
+    mktempdir() do dir
+        mkpath(joinpath(dir, "artifacts"))
+        Artifacts.with_artifacts_directory(joinpath(dir, "artifacts")) do
+            cp(joinpath(@__DIR__, "hook_testing"), joinpath(dir, "hook_testing"))
+            bar_hash = "0000000000000000000000000000000000000000"
+            baz_hash = "1111111111111111111111111111111111111111"
+            bar_path = joinpath(dir, "artifacts", bar_hash)
+            baz_path = joinpath(dir, "artifacts", baz_hash)
+            mkpath(bar_path)
+            mkpath(baz_path)
+
+            p = HostPlatform()
+            open(joinpath(dir, "hook_testing", "Artifacts.toml"), write=true) do io
+                TOML.print(io, Dict(
+                    "arty" => [
+                        Dict("os" => os(p), "arch" => arch(p), "foo" => "bar", "git-tree-sha1" => bar_hash),
+                        Dict("os" => os(p), "arch" => arch(p), "foo" => "baz", "git-tree-sha1" => baz_hash),
+                    ],
+                ))
+            end
+
+            # Now, include `hook_testing.jl` to test if `@artifact_str` compiled properly
+            HookTesting = Module(:HookTesting)
+            Base.include(HookTesting, joinpath(dir, "hook_testing", "hook_testing.jl"))
+            @test Base.invokelatest(HookTesting.get_artifact_compiletime) == bar_path
+            @test Base.invokelatest(HookTesting.get_artifact_runtime) == bar_path
+
+            # Ensure that both paths get rewritten
+            withenv("PLATAUG_VAL" => "baz") do
+                @test Base.invokelatest(HookTesting.get_artifact_compiletime) == baz_path
+                @test Base.invokelatest(HookTesting.get_artifact_runtime) == baz_path
+            end
         end
     end
 end
