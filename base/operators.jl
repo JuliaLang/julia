@@ -878,7 +878,11 @@ function ∘ end
 """
     Base.ComposedFunction{Outer,Inner} <: Function
 
-Represents the composition of two callable objects `outer::Outer` and `inner::Inner`.
+Represents the composition of two callable objects `outer::Outer` and `inner::Inner`. That is
+```julia
+ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...))
+```
+The preferred way to construct instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
 ```jldoctest
 julia> sin ∘ cos === Base.ComposedFunction(sin, cos)
 true
