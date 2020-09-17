@@ -4,21 +4,45 @@
 # OptimizationState #
 #####################
 
-mutable struct OptimizationState
+struct EdgeTracker
+    edges::Vector{Any}
+    valid_worlds::RefValue{WorldRange}
+    EdgeTracker(edges::Vector{Any}, range::WorldRange) =
+        new(edges, RefValue{WorldRange}(range))
+end
+EdgeTracker() = EdgeTracker(Any[], 0:typemax(UInt))
+
+intersect!(et::EdgeTracker, range::WorldRange) =
+    et.valid_worlds[] = intersect(et.valid_worlds[], range)
+
+push!(et::EdgeTracker, mi::MethodInstance) = push!(et.edges, mi)
+function push!(et::EdgeTracker, ci::CodeInstance)
+    intersect!(et, WorldRange(min_world(li), max_world(li)))
+    push!(et, ci.def)
+end
+
+struct InferenceCaches{T, S}
+    inf_cache::T
+    mi_cache::S
+end
+
+struct InliningState{S <: Union{EdgeTracker, Nothing}, T <: Union{InferenceCaches, Nothing}, V <: Union{Nothing, MethodTableView}}
     params::OptimizationParams
+    et::S
+    caches::T
+    method_table::V
+end
+
+mutable struct OptimizationState
     linfo::MethodInstance
-    calledges::Vector{Any}
     src::CodeInfo
     stmt_info::Vector{Any}
     mod::Module
     nargs::Int
-    world::UInt
-    valid_worlds::WorldRange
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
-    # TODO: This will be eliminated once optimization no longer needs to do method lookups
-    interp::AbstractInterpreter
+    inlining::InliningState
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
         s_edges = frame.stmt_edges[1]
         if s_edges === nothing
@@ -26,12 +50,16 @@ mutable struct OptimizationState
             frame.stmt_edges[1] = s_edges
         end
         src = frame.src
-        return new(params, frame.linfo,
-                   s_edges::Vector{Any},
+        inlining = InliningState(params,
+            EdgeTracker(s_edges::Vector{Any}, frame.valid_worlds),
+            InferenceCaches(
+                get_inference_cache(interp),
+                WorldView(code_cache(interp), frame.world)),
+            method_table(interp))
+        return new(frame.linfo,
                    src, frame.stmt_info, frame.mod, frame.nargs,
-                   frame.world, frame.valid_worlds,
                    frame.sptypes, frame.slottypes, false,
-                   interp)
+                   inlining)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
         # prepare src for running optimization passes
@@ -45,7 +73,6 @@ mutable struct OptimizationState
         if slottypes === nothing
             slottypes = Any[ Any for i = 1:nslots ]
         end
-        s_edges = []
         stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
         toplevel = !isa(linfo.def, Method)
@@ -57,12 +84,18 @@ mutable struct OptimizationState
             inmodule = linfo.def::Module
             nargs = 0
         end
-        return new(params, linfo,
-                   s_edges::Vector{Any},
+        # Allow using the global MI cache, but don't track edges.
+        # This method is mostly used for unit testing the optimizer
+        inlining = InliningState(params,
+            nothing,
+            InferenceCaches(
+                get_inference_cache(interp),
+                WorldView(code_cache(interp), get_world_counter())),
+            method_table(interp))
+        return new(linfo,
                    src, stmt_info, inmodule, nargs,
-                   get_world_counter(), WorldRange(UInt(1), get_world_counter()),
                    sptypes_from_meth_instance(linfo), slottypes, false,
-                   interp)
+                   inlining)
         end
 end
 
@@ -105,25 +138,6 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 #########
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
-
-function update_valid_age!(sv::OptimizationState, valid_worlds::WorldRange)
-    sv.valid_worlds = intersect(sv.valid_worlds, valid_worlds)
-    @assert(sv.world in sv.valid_worlds, "invalid age range update")
-    nothing
-end
-
-function add_backedge!(li::MethodInstance, caller::OptimizationState)
-    #TODO: deprecate this?
-    isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    push!(caller.calledges, li)
-    nothing
-end
-
-function add_backedge!(li::CodeInstance, caller::OptimizationState)
-    update_valid_age!(caller, WorldRange(min_world(li), max_world(li)))
-    add_backedge!(li.def, caller)
-    nothing
-end
 
 function isinlineable(m::Method, me::OptimizationState, params::OptimizationParams, union_penalties::Bool, bonus::Int=0)
     # compute the cost (size) of inlining this code
