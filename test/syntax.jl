@@ -2341,6 +2341,8 @@ else
     @test false
 end
 
+@test :(a +ꜝ b) == Expr(:call, :+ꜝ, :a, :b)
+
 function ncalls_in_lowered(ex, fname)
     lowered_exprs = Meta.lower(Main, ex).args[1].code
     return count(lowered_exprs) do ex

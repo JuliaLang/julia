@@ -106,6 +106,15 @@ end
     @test all(haskey.(Ref(t), ("arch", "os", "libc")))
     @test haskey(tags(P("x86_64", "linux"; customtag="foo")), "customtag")
     @test tags(HostPlatform())["julia_version"] == string(VERSION.major, ".", VERSION.minor, ".", VERSION.patch)
+
+    # Test that we can modify tags at will using the dict-like interface:
+    p = P("x86_64", "linux")
+    p["foo"] = "bar"
+    @test tags(p)["foo"] == "bar"
+    @test p["foo"] == "bar"
+    @test p["os"] == "linux"
+    p["os"] = "JuliaOS"
+    @test p["os"] == "JuliaOS"
 end
 
 @testset "Triplet parsing" begin

@@ -38,8 +38,8 @@ Base.string(f::Spec{T}; modifier::String="") where {T} =
         f.precision == 0 ? ".0" : f.precision > 0 ? ".$(f.precision)" : "", modifier, char(T))
 Base.show(io::IO, f::Spec) = print(io, string(f))
 
-nonfinitefmt(s::Spec{T}) where {T} =
-    Spec{Val{'g'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.width, s.precision)
+floatfmt(s::Spec{T}) where {T} =
+    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.width, 0)
 ptrfmt(s::Spec{T}, x) where {T} =
     Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.width, sizeof(x) == 8 ? 16 : 8)
 
@@ -266,18 +266,15 @@ end
 # integers
 toint(x) = x
 toint(x::Rational) = Integer(x)
-toint(x::AbstractFloat) = !isfinite(x) ? x : x > typemax(Int128) ?
-                            BigInt(round(x)) : x > typemax(Int64) ?
-                            Int128(round(x)) : Int64(round(x))
+
+fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
+    fmt(buf, pos, arg, floatfmt(spec))
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     bs = base(T)
     arg2 = toint(arg)
-    if !isfinite(arg2)
-        return fmt(buf, pos, arg, nonfinitefmt(spec))
-    end
     n = i = ndigits(arg2, base=bs, pad=1)
     x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
     arglen = n + (neg || (plus | space)) +
@@ -687,15 +684,13 @@ end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
-    if !isfinite(x2)
-        return plength(nonfinitefmt(f), x)
-    end
     return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
 end
 
-function plength(f::Spec{T}, x) where {T <: Floats}
-    return max(f.width, f.precision + 309 + 17 + f.hash + 5)
-end
+plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
+    max(f.width, 0 + 309 + 17 + f.hash + 5)
+plength(f::Spec{T}, x) where {T <: Floats} =
+    max(f.width, f.precision + 309 + 17 + f.hash + 5)
 
 @inline function computelen(substringranges, formats, args)
     len = sum(length, substringranges)

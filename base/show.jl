@@ -740,8 +740,9 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     if !print_without_params(x) && get(io, :compact, true)
         properx = makeproper(io, x)
         if make_typealias(properx) !== nothing || x <: make_typealiases(properx)[2]
-            print(io, " = ")
+            print(io, " (alias for ")
             show(IOContext(io, :compact => false), x)
+            print(io, ")")
         end
     end
 
