@@ -3560,6 +3560,31 @@ julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
 """
 spdiagm(kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm(nothing, kv...)
 spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm((Int(m),Int(n)), kv...)
+
+"""
+    spdiagm(v::AbstractVector)
+    spdiagm(m::Integer, n::Integer, v::AbstractVector)
+
+Construct a sparse matrix with elements of the vector as diagonal elements. By default (no given `m` and `n`),
+the matrix is square and its size is given by `length(v)`, but a non-square size `m`×`n` can be specified by
+passing `m` and `n` as the first arguments.
+
+## Examples
+```jldoctest
+julia> spdiagm([1,2,3])
+3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [1, 1]  =  1
+  [2, 2]  =  2
+  [3, 3]  =  3
+
+julia> spdiagm(sparse([1,0,3]))
+3×3 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
+  [1, 1]  =  1
+  [3, 3]  =  3
+```
+"""
+spdiagm(v::AbstractVector) = _spdiagm(nothing, 0 => v)
+spdiagm(m::Integer, n::Integer, v::AbstractVector) = _spdiagm((Int(m), Int(n)), 0 => v)
 function _spdiagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
     I, J, V, mmax, nmax = spdiagm_internal(kv...)
     mnmax = max(mmax, nmax)
