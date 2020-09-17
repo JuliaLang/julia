@@ -76,7 +76,7 @@ the override: overriding to an on-disk location through an absolutet path, and
 overriding to another artifact by its content-hash.
 """
 const ARTIFACT_OVERRIDES = Ref{Union{Dict{Symbol,Any},Nothing}}(nothing)
-function load_overrides(;force::Bool = false)
+function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
     if ARTIFACT_OVERRIDES[] !== nothing && !force
         return ARTIFACT_OVERRIDES[]
     end
@@ -176,8 +176,7 @@ function load_overrides(;force::Bool = false)
 end
 
 # Helpers to map an override to an actual path
-map_override_path(x::String) = x
-map_override_path(x::AbstractString) = string(x)
+map_override_path(x::AbstractString) = String(x)::String
 map_override_path(x::SHA1) = artifact_path(x)
 map_override_path(x::Nothing) = nothing
 
@@ -187,10 +186,10 @@ map_override_path(x::Nothing) = nothing
 Query the loaded `<DEPOT>/artifacts/Overrides.toml` settings for artifacts that should be
 redirected to a particular path or another content-hash.
 """
-function query_override(hash::SHA1; overrides::Dict{Symbol} = load_overrides())
+function query_override(hash::SHA1; overrides::Dict{Symbol,Any} = load_overrides())
     return map_override_path(get(overrides[:hash], hash, nothing))
 end
-function query_override(pkg::Base.UUID, artifact_name::String; overrides::Dict{Symbol} = load_overrides())
+function query_override(pkg::Base.UUID, artifact_name::String; overrides::Dict{Symbol,Any} = load_overrides())
     if haskey(overrides[:UUID], pkg)
         return map_override_path(get(overrides[:UUID][pkg], artifact_name, nothing))
     end
@@ -259,7 +258,7 @@ end
 Given an `entry` for the artifact named `name`, located within the file `artifacts_toml`,
 returns the `Platform` object that this entry specifies.  Returns `nothing` on error.
 """
-function unpack_platform(entry::Dict{Union{String,SubString{String}}}, name::String,
+function unpack_platform(entry::Dict{String,Any}, name::String,
                          artifacts_toml::String)::Union{Nothing,Platform}
     if !haskey(entry, "os")
         @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entry '$name' missing 'os' key")
@@ -622,10 +621,10 @@ end
 # of these functions in case a user defines a new type that is `<: AbstractString`
 with_artifacts_directory(f::Function, artifacts_dir::AbstractString) =
     with_artifacts_directory(f, String(artifacts_dir)::String)
-query_override(pkg::Base.UUID, artifact_name::AbstractString; kwargs...) =
-    query_override(pkg, String(artifact_name)::String; kwargs...)
+query_override(pkg::Base.UUID, artifact_name::AbstractString; overrides::Dict=load_overrides()) =
+    query_override(pkg, String(artifact_name)::String; overrides=convert(Dict{Symbol, Any}(overrides)))
 unpack_platform(entry::Dict, name::AbstractString, artifacts_toml::AbstractString) =
-    unpack_platform(entry, String(name)::String, String(artifacts_toml)::String)
+    unpack_platform(convert(Dict{String, Any}, entry), String(name)::String, String(artifacts_toml)::String)
 load_artifacts_toml(artifacts_toml::AbstractString; kwargs...) =
     load_artifacts_toml(String(artifacts_toml)::String; kwargs...)
 artifact_meta(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
