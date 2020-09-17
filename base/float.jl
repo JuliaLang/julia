@@ -725,6 +725,8 @@ function issubnormal(x::T) where {T<:IEEEFloat}
     (y & exponent_mask(T) == 0) & (y & significand_mask(T) != 0)
 end
 
+ispow2(x::AbstractFloat) = !iszero(x) && frexp(x)[1] == 0.5
+
 @eval begin
     typemin(::Type{Float16}) = $(bitcast(Float16, 0xfc00))
     typemax(::Type{Float16}) = $(Inf16)

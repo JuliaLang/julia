@@ -368,9 +368,9 @@ _prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
 _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
-    ispow2(n::Integer) -> Bool
+    ispow2(n::Number) -> Bool
 
-Test whether `n` is a power of two.
+Test whether `n` is an integer power of two.
 
 # Examples
 ```jldoctest
@@ -379,8 +379,19 @@ true
 
 julia> ispow2(5)
 false
+
+julia> ispow2(4.5)
+false
+
+julia> ispow2(0.25)
+true
+
+julia> ispow2(1//8)
+true
 ```
 """
+ispow2(x::Number) = isreal(x) && ispow2(real(x))
+
 ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
 """

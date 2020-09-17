@@ -262,6 +262,7 @@ typemin(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, zero(T), on
 typemax(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, one(T), zero(T))
 
 isinteger(x::Rational) = x.den == 1
+ispow2(x::Rational) = (x.den == 1 && ispow2(x.num)) || (x.num == 1 && ispow2(x.den))
 
 +(x::Rational) = unsafe_rational(+x.num, x.den)
 -(x::Rational) = unsafe_rational(-x.num, x.den)
