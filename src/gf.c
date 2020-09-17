@@ -523,27 +523,6 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
     }
 }
 
-//JL_DLLEXPORT void jl_set_typeinf_inner_func(jl_value_t *f)
-//{
-//    jl_typeinf_inner_func = (jl_function_t*)f;
-//    //jl_typeinf_world = jl_get_tls_world_age();
-//    //++jl_world_counter; // make type-inference the only thing in this world
-//    //if (jl_typeinf_world == 0) {
-//    //    // give type inference a chance to see all of these
-//    //    // TODO: also reinfer if max_world != ~(size_t)0
-//    //    jl_array_t *unspec = jl_alloc_vec_any(0);
-//    //    JL_GC_PUSH1(&unspec);
-//    //    jl_foreach_reachable_mtable(reset_mt_caches, (void*)unspec);
-//    //    size_t i, l;
-//    //    for (i = 0, l = jl_array_len(unspec); i < l; i++) {
-//    //        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
-//    //        if (jl_rettype_inferred(mi, jl_world_counter, jl_world_counter) == jl_nothing)
-//    //            jl_type_infer(mi, jl_world_counter, 1);
-//    //    }
-//    //    JL_GC_POP();
-//    //}
-//}
-
 static int very_general_type(jl_value_t *t)
 {
     return (t == (jl_value_t*)jl_any_type || jl_types_equal(t, (jl_value_t*)jl_type_type));

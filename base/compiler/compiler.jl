@@ -125,7 +125,6 @@ include("compiler/optimize.jl") # TODO: break this up further + extract utilitie
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
-#ccall(:jl_set_typeinf_inner_func, Cvoid, (Any,), typeinf)
 
 include("compiler/parsing.jl")
 Core.eval(Core, :(_parse = Compiler.fl_parse))
