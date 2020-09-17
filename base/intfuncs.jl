@@ -389,6 +389,9 @@ true
 julia> ispow2(1//8)
 true
 ```
+
+!!! compat "Julia 1.6"
+    Support for non-`Integer` arguments was added in Julia 1.6.
 """
 ispow2(x::Number) = isreal(x) && ispow2(real(x))
 
