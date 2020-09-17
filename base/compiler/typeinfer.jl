@@ -19,48 +19,6 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     #return _typeinf_function[1](interp, frame)
 end
 
-#function typeinf(interp::AbstractInterpreter, frame::InferenceState)
-#    if __collect_inference_callees__[]
-#        str = Core._apply_latest(print, frame.linfo)
-#
-#        #Main.TimerOutputs.@timeit Main._to_ str begin
-#        #    _typeinf(interp, frame)
-#        #end
-#        #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:182 =#
-#        local var"#16#to" = Main._to_::TimerOutputs.TimerOutput
-#        #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:183 =#
-#        local var"#17#enabled" = (var"#16#to").enabled
-#        #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:184 =#
-#        if var"#17#enabled"
-#            #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:185 =#
-#            local var"#18#accumulated_data" = (push!)(var"#16#to", str)
-#        end
-#        #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:187 =#
-#        local var"#19#b₀" = (TimerOutputs.gc_bytes)()
-#        #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:188 =#
-#        local var"#20#t₀" = (time_ns)()
-#        #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:189 =#
-#        local var"#21#val"
-#        #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:190 =#
-#        try
-#            var"#21#val" = begin
-#                _typeinf(interp, frame)
-#            end
-#        finally
-#            #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:193 =#
-#            if var"#17#enabled"
-#                #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:194 =#
-#                (TimerOutputs.do_accumulate!)(var"#18#accumulated_data", var"#20#t₀", var"#19#b₀")
-#                #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:195 =#
-#                (pop!)(var"#16#to")
-#            end
-#            #= /Users/nathandaly/.julia/packages/TimerOutputs/dVnaw/src/TimerOutput.jl:198 =#
-#            var"#21#val"
-#        end
-#    else
-#        _typeinf(interp, frame)
-#    end
-#end
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
@@ -550,9 +508,6 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
     return false
 end
 
-#const __inference_callee_edges4__ = Vector{Tuple{MethodInstance, Vector{Tuple{MethodInstance,MethodInstance}}}}()
-#const __seen_set__ = Vector{MethodInstance}()
-
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, caller::InferenceState)
     mi = specialize_method(method, atypes, sparams)::MethodInstance
@@ -589,11 +544,6 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         if caller.cached || caller.limited # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
-        #if __collect_inference_callees__[]
-        #    #Core.println("edge!")
-        #    #Core.println(__inference_callee_edges4__)
-        #    push!(__inference_callee_edges4__[end][2], (caller.linfo, frame.linfo))
-        #end
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
         return widenconst_bestguess(frame.bestguess), frame.inferred ? mi : nothing
