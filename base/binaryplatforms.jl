@@ -152,21 +152,8 @@ struct Platform <: AbstractPlatform
                 value = normver(value)
             end
 
-            # I know we said only alphanumeric and dots, but let's be generous so that we can expand
-            # our support in the future while remaining as backwards-compatible as possible.  The
-            # only characters that are absolutely disallowed right now are `-`, `+`, ` ` and things
-            # that are illegal in filenames:
-            nonos = raw"""+- /<>:"'\|?*"""
-            if any(occursin(nono, tag) for nono in nonos)
-                throw(ArgumentError("Invalid character in tag name \"$(tag)\"!"))
-            end
-
-            # Normalize and reject nonos
-            value = lowercase(string(value))
-            if any(occursin(nono, value) for nono in nonos)
-                throw(ArgumentError("Invalid character in tag value \"$(value)\"!"))
-            end
-            tags[tag] = value
+            # Use `add_tag!()` to add the tag to our collection of tags
+            add_tag!(tags, tag, string(value)::String)
         end
 
         # Auto-map call_abi and libc where necessary:
@@ -197,13 +184,36 @@ struct Platform <: AbstractPlatform
     end
 end
 
+# Simple tag insertion that performs a little bit of validation
+function add_tag!(tags::Dict{String,String}, tag::String, value::String)
+    # I know we said only alphanumeric and dots, but let's be generous so that we can expand
+    # our support in the future while remaining as backwards-compatible as possible.  The
+    # only characters that are absolutely disallowed right now are `-`, `+`, ` ` and things
+    # that are illegal in filenames:
+    nonos = raw"""+- /<>:"'\|?*"""
+    if any(occursin(nono, tag) for nono in nonos)
+        throw(ArgumentError("Invalid character in tag name \"$(tag)\"!"))
+    end
+
+    # Normalize and reject nonos
+    value = lowercase(value)
+    if any(occursin(nono, value) for nono in nonos)
+        throw(ArgumentError("Invalid character in tag value \"$(value)\"!"))
+    end
+    tags[tag] = value
+    return value
+end
+
 # Other `Platform` types can override this (I'm looking at you, `AnyPlatform`)
 tags(p::Platform) = p.tags
 
 # Make it act more like a dict
 Base.getindex(p::AbstractPlatform, k::String) = getindex(tags(p), k)
 Base.haskey(p::AbstractPlatform, k::String) = haskey(tags(p), k)
-Base.setindex!(p::AbstractPlatform, v::String, k::String) = (setindex!(tags(p), v, k); p)
+function Base.setindex!(p::AbstractPlatform, v::String, k::String)
+    add_tag!(tags(p), k, v)
+    return p
+end
 
 # Allow us to easily serialize Platform objects
 function Base.repr(p::Platform; context=nothing)
