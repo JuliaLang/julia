@@ -3574,7 +3574,10 @@ Construct a sparse matrix with elements of the vector as diagonal elements. By d
 the matrix is square and its size is given by `length(v)`, but a non-square size `m`×`n` can be specified by
 passing `m` and `n` as the first arguments.
 
-## Examples
+!!! compat "Julia 1.6"
+     These functions require at least Julia 1.6.
+
+# Examples
 ```jldoctest
 julia> spdiagm([1,2,3])
 3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
