@@ -616,6 +616,52 @@ function test_cat(::Type{TestAbstractArray})
     @test cat([1], [1], dims=[1, 2]) == I(2)
 end
 
+module TestOffsetArraysCats
+    using Test
+    isdefined(Main, :OffsetArrays) || @eval Main include(joinpath(@__DIR__, "testhelpers", "OffsetArrays.jl"))
+    using .Main.OffsetArrays
+
+    # `cat`s on OffsetArrays ignore their offsets and treat them as normal list
+
+    # 1d
+    v1 = collect(1:4)
+    v2 = collect(5:8)
+    ov1 = OffsetArray(v1, -1)
+    ov2 = OffsetArray(v2, 1)
+    @test hcat(ov1, v1, ov2, v2) == hcat(v1, v1, v2, v2)
+    @test vcat(ov1, v1, ov2, v2) == vcat(v1, v1, v2, v2)
+    @test hvcat((2, 2), ov1, v2, v1, ov2) == hvcat((2, 2), v1, v2, v1, v2)
+    # 37628
+    @test reduce(hcat, (v1, v2)) == hcat(v1, v2)
+    @test reduce(vcat, (v1, v2)) == vcat(v1, v2)
+    @test reduce(hcat, OffsetVector([1:2, 1:2],10)) == [1 1;2 2]
+
+    # 2d
+    a1 = reshape(collect(1:6), 2, 3)
+    a2 = reshape(collect(7:12), 2, 3)
+    oa1 = OffsetArray(a1, -1, -1)
+    oa2 = OffsetArray(a2, 1, 1)
+    @test hcat(oa1, a1, oa2, a2) == hcat(a1, a1, a2, a2)
+    @test vcat(oa1, a1, oa2, a2) == vcat(a1, a1, a2, a2)
+    @test hvcat((2, 2), oa1, a2, a1, oa2) == hvcat((2, 2), a1, a2, a1, a2)
+
+    # 3d
+    a1 = reshape(collect(1:12), 2, 3, 2)
+    a2 = reshape(collect(13:24), 2, 3, 2)
+    oa1 = OffsetArray(a1, -1, -1, -1)
+    oa2 = OffsetArray(a2, 1, 1, 1)
+    @test hcat(oa1, a1, oa2, a2) == hcat(a1, a1, a2, a2)
+    @test vcat(oa1, a1, oa2, a2) == vcat(a1, a1, a2, a2)
+    @test hvcat((2, 2), oa1, a2, a1, oa2) == hvcat((2, 2), a1, a2, a1, a2)
+    # https://github.com/JuliaArrays/OffsetArrays.jl/issues/63
+    form=OffsetArray(reshape(zeros(Int8,0),0,0,2),0:-1,0:-1,0:1)
+    exp=OffsetArray(reshape(zeros(Int8,0),0,16,2),0:-1,0:15,0:1)
+    @test size(hcat(form,exp)) == (0, 16, 2)
+    # 37493
+    @test hcat(zeros(2, 1:1, 2), zeros(2, 2:3, 2)) == zeros(2, 3, 2)
+    @test vcat(zeros(1:1, 2, 2), zeros(2:3, 2, 2)) == zeros(3, 2, 2)
+end
+
 function test_ind2sub(::Type{TestAbstractArray})
     n = rand(2:5)
     dims = tuple(rand(1:5, n)...)

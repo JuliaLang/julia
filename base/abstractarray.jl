@@ -1442,13 +1442,13 @@ function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     for Vk in V
         n += Int(length(Vk))::Int
     end
-    a = similar(V[1], T, n)
-    pos = 1
-    for k=1:Int(length(V))::Int
+    a = similar(first(V), T, n)
+    pos = first(axes(a, 1))
+    for k = eachindex(V)
         Vk = V[k]
-        p1 = pos + Int(length(Vk))::Int - 1
-        a[pos:p1] = Vk
-        pos = p1+1
+        n = length(Vk)
+        copyto!(a, pos, Vk, first(axes(Vk, 1)), n)
+        pos += n
     end
     a
 end
@@ -1459,11 +1459,10 @@ hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
 function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
-    nrows = size(A[1], 1)
+    nrows = size(first(A), 1)
     ncols = 0
     dense = true
-    for j = 1:nargs
+    for j = eachindex(A)
         Aj = A[j]
         if size(Aj, 1) != nrows
             throw(ArgumentError("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
@@ -1472,17 +1471,17 @@ function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
     end
-    B = similar(A[1], T, nrows, ncols)
-    pos = 1
+    B = similar(first(A), T, nrows, ncols)
+    pos = first(axes(B, 1))
     if dense
-        for k=1:nargs
+        for k=eachindex(A)
             Ak = A[k]
             n = length(Ak)
             copyto!(B, pos, Ak, 1, n)
             pos += n
         end
     else
-        for k=1:nargs
+        for k=eachindex(A)
             Ak = A[k]
             p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
             B[:, pos:p1] = Ak
@@ -1496,17 +1495,16 @@ vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
 vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
 function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
-    nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
-    ncols = size(A[1], 2)
-    for j = 2:nargs
+    ncols = size(first(A), 2)
+    for j = first(axes(A))[2:end]
         if size(A[j], 2) != ncols
             throw(ArgumentError("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
         end
     end
-    B = similar(A[1], T, nrows, ncols)
-    pos = 1
-    for k=1:nargs
+    B = similar(first(A), T, nrows, ncols)
+    pos = first(axes(B, 1))
+    for k=eachindex(A)
         Ak = A[k]
         p1 = pos+size(Ak,1)::Int-1
         B[pos:p1, :] = Ak
@@ -1589,7 +1587,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
     shape = cat_shape(catdims, map(cat_size, X)::Tuple{Vararg{Union{Int,Dims}}})::Dims
-    A = cat_similar(X[1], T, shape)
+    A = cat_similar(first(X), T, shape)
     if count(!iszero, catdims)::Int > 1
         fill!(A, zero(T))
     end
@@ -1604,7 +1602,7 @@ function __cat(A, shape::NTuple{M,Int}, catdims, X...) where M
     for x in X
         for i = 1:N
             if concat[i]
-                inds[i] = offsets[i] .+ cat_indices(x, i)
+                inds[i] = offsets[i] .+ parent(cat_indices(x, i))
                 offsets[i] += cat_size(x, i)
             else
                 inds[i] = 1:shape[i]
