@@ -505,9 +505,32 @@ end
     @test_throws ArgumentError("Windows clipboard strings cannot contain NUL character") clipboard("abc\0")
 end
 
-# buildbot path updating
-file, ln = functionloc(versioninfo, Tuple{})
-@test isfile(file)
+@testset "buildbot path updating" begin
+    file, ln = functionloc(versioninfo, Tuple{})
+    @test isfile(file)
+
+    e = try versioninfo("wat")
+    catch e
+        e
+    end
+    @test e isa MethodError
+    s = sprint(showerror, e)
+    m = match(r"at (.*?):[0-9]*", s)
+    @show s
+    @show m.captures[1]
+    @show expanduser(m.captures[1])
+    @test isfile(expanduser(m.captures[1]))
+
+    g() = x
+    e, bt = try code_llvm(g, Tuple{Int})
+    catch e
+        e, catch_backtrace()
+    end
+    @test e isa Exception
+    s = sprint(showerror, e, bt)
+    m = match(r"(\S*InteractiveUtils[\/\\]src\S*):", s)
+    @test isfile(expanduser(m.captures[1]))
+end
 
 @testset "Issue #34434" begin
     io = IOBuffer()

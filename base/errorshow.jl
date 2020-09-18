@@ -371,6 +371,20 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
 end
 
+stacktrace_expand_basepaths()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
+stacktrace_contract_userdir()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_HOMEDIR", "true")) === true
+stacktrace_linebreaks()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
+
+function replaceuserpath(str::String)
+    str = replace(str, homedir() => "~")
+    # seems to be necessary for some paths with small letter drive c:// etc
+    str = replace(str, lowercasefirst(homedir()) => "~")
+    return str
+end
+
 function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
@@ -498,7 +512,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
                 print(iob, ")")
                 show_method_params(iob0, tv)
-                print(iob, " at ", method.file, ":", method.line)
+                file, line = functionloc(method)
+                if file === nothing
+                    file = string(method.file)
+                end
+                stacktrace_contract_userdir() && (file = replaceuserpath(file))
+                print(iob, " at ", file, ":", line)
                 if !isempty(kwargs)::Bool
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
@@ -555,22 +574,9 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
-function replaceuserpath(str)
-    str = replace(str, homedir() => "~")
-    # seems to be necessary for some paths with small letter drive c:// etc
-    str = replace(str, lowercasefirst(homedir()) => "~")
-    return str
-end
-
 const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow,
         :light_magenta, :light_green, :light_cyan, :light_red,
         :blue, :yellow, :magenta, :green, :cyan, :red]
-stacktrace_expand_basepaths()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
-stacktrace_contract_userdir()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_HOMEDIR", "true")) === true
-stacktrace_linebreaks()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     n = length(trace)
@@ -700,6 +706,7 @@ end
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
+    file = updated_methodfile(file)
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = replaceuserpath(file))
 
