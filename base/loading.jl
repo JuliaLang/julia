@@ -612,6 +612,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
             modpath === nothing && return nothing
         end
         mod = _require_search_from_serialized(modkey, String(modpath), cache)
+        get!(PkgOrigin, pkgorigins, modkey).path = modpath
         if !isa(mod, Bool)
             for callback in package_callbacks
                 invokelatest(callback, modkey)
