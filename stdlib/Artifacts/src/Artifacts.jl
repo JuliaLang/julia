@@ -478,7 +478,7 @@ function jointail(dir, tail)
     end
 end
 
-function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash)
+function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform)
     if haskey(Base.module_keys, __module__)
         # Process overrides for this UUID, if we know what it is
         process_overrides(artifact_dict, Base.module_keys[__module__].uuid)
@@ -495,7 +495,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     # If not, we need to download it.  We look up the Pkg module through `Base.loaded_modules()`
     # then invoke `ensure_artifact_installed()`:
     Pkg = first(filter(p-> p[1].name == "Pkg", Base.loaded_modules))[2]
-    return jointail(Pkg.Artifacts.ensure_artifact_installed(string(name), artifacts_toml), path_tail)
+    return jointail(Pkg.Artifacts.ensure_artifact_installed(string(name), artifacts_toml; platform), path_tail)
 end
 
 """
@@ -539,16 +539,19 @@ function split_artifact_slash(name::String)
 end
 
 """
-    artifact_slash_lookup(name::String, artifacts_toml::String)
+    artifact_slash_lookup(name::String, atifact_dict::Dict,
+                          artifacts_toml::String, platform::Platform)
 
 Returns `artifact_name`, `artifact_path_tail`, and `hash` by looking the results up in
 the given `artifacts_toml`, first extracting the name and path tail from the given `name`
 to support slash-indexing within the given artifact.
 """
-function artifact_slash_lookup(name::String, artifact_dict::Dict, artifacts_toml::String)
+function artifact_slash_lookup(name::String, artifact_dict::Dict,
+                               artifacts_toml::String, platform::Platform)
     artifact_name, artifact_path_tail = split_artifact_slash(name)
 
-    meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml)
+    @show platform
+    meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml; platform)
     if meta === nothing
         error("Cannot locate artifact '$(name)' in '$(artifacts_toml)'")
     end
@@ -577,7 +580,7 @@ access a single file/directory within an artifact.  Example:
 !!! compat "Julia 1.6"
     Slash-indexing requires at least Julia 1.6.
 """
-macro artifact_str(name)
+macro artifact_str(name, platform=nothing)
     # Find Artifacts.toml file we're going to load from
     srcfile = string(__source__.file)
     if ((isinteractive() && startswith(srcfile, "REPL[")) || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
@@ -601,18 +604,23 @@ macro artifact_str(name)
     # Invalidate calling .ji file if Artifacts.toml file changes
     Base.include_dependency(artifacts_toml)
 
-    # If `name` is a constant, we can actually load and parse the `Artifacts.toml` file now,
-    # saving the work from runtime.
-    if isa(name, AbstractString)
+    # If `name` is a constant, (and we're using the default `Platform`) we can actually load
+    # and parse the `Artifacts.toml` file now, saving the work from runtime.
+    if isa(name, AbstractString) && platform === nothing
         # To support slash-indexing, we need to split the artifact name from the path tail:
-        local artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml)
+        platform = HostPlatform()
+        local artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
         return quote
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash))
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform))
         end
     else
+        if platform === nothing
+            platform = :($(HostPlatform)())
+        end
         return quote
-            local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml))
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash)
+            local platform = $(esc(platform))
+            local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform)
         end
     end
 end
