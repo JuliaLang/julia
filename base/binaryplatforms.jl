@@ -904,12 +904,13 @@ function detect_libgfortran_version()
 end
 
 """
-    detect_libstdcxx_version()
+    detect_libstdcxx_version(max_minor_version::Int=30)
 
 Inspects the currently running Julia process to find out what version of libstdc++
-it is linked against (if any).
+it is linked against (if any).  `max_minor_version` is the latest version in the
+3.4 series of GLIBCXX where the search is performed.
 """
-function detect_libstdcxx_version()
+function detect_libstdcxx_version(max_minor_version::Int=30)
     libstdcxx_paths = filter(x -> occursin("libstdc++", x), Libdl.dllist())
     if isempty(libstdcxx_paths)
         # This can happen if we were built by clang, so we don't link against
@@ -919,7 +920,9 @@ function detect_libstdcxx_version()
 
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
     hdl = Libdl.dlopen(first(libstdcxx_paths))
-    for minor_version in 26:-1:18
+    # Try all GLIBCXX versions down to GCC v4.8:
+    # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
+    for minor_version in max_minor_version:-1:18
         if Libdl.dlsym(hdl, "GLIBCXX_3.4.$(minor_version)"; throw_error=false) !== nothing
             Libdl.dlclose(hdl)
             return VersionNumber("3.4.$(minor_version)")
