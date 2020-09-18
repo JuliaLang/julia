@@ -628,3 +628,66 @@ end
     @test last(v, 100) !== v
     @test last(v, 1) == [v[end]]
 end
+
+@testset "issue #37199: offset range indices" begin
+    # https://github.com/JuliaArrays/OffsetArrays.jl/issues/133
+    A0 = [1 3; 2 4]
+    A = OffsetArray(A0, (-1,2))
+
+    r = OffsetArrays.IdOffsetRange(1:2, -1)
+    v1 = view(A, r, 3)
+    @test v1[0] == 1
+    @test v1[1] == 2
+    @test axes(v1, 1) == axes(r, 1)
+    v2 = view(A, UnitRange(r), 3)
+    for (indflat, indoffset) in enumerate(r)
+        @test v1[indoffset] == v2[indflat]
+    end
+
+    r = OffsetArrays.IdOffsetRange(1:2, 2)
+    v1 = view(A, 1, r)
+    @test v1[3] == 2
+    @test v1[4] == 4
+    @test axes(v1, 1) == axes(r, 1)
+    v2 = view(A, 1, UnitRange(r))
+    for (indflat, indoffset) in enumerate(r)
+        @test v1[indoffset] == v2[indflat]
+    end
+
+    a12 = zeros(3:8, 3:4)
+    r = OffsetArrays.IdOffsetRange(Base.OneTo(3), 5)
+    a12[r, 4] .= 3
+    @test all(a12[r, 4] .== 3)
+    @test all(a12[UnitRange(r), 4] .== 3)
+
+    # https://github.com/JuliaArrays/OffsetArrays.jl/issues/100
+    S = view(A, axes(A)...)
+    @test S == A
+    @test S[0,3] == S[1] == 1
+    @test S[1,3] == S[2] == 2
+    @test S[0,4] == S[3] == 3
+    @test S[1,4] == S[4] == 4
+    @test_throws BoundsError S[1,1]
+    @test axes(S) == OffsetArrays.IdOffsetRange.((0:1, 3:4))
+    S = view(A, axes(A, 1), 3)
+    @test S == A[:, 3]
+    @test S[0] == 1
+    @test S[1] == 2
+    @test_throws BoundsError S[length(S)]
+    @test axes(S) == (OffsetArrays.IdOffsetRange(0:1), )
+    S = view(A, 1, axes(A, 2))
+    @test S == A[1, :]
+    @test S[3] == 2
+    @test S[4] == 4
+    @test_throws BoundsError S[1]
+    @test axes(S) == (OffsetArrays.IdOffsetRange(3:4), )
+
+    A0 = collect(reshape(1:24, 2, 3, 4))
+    A = OffsetArray(A0, (-1,2,1))
+    S = view(A, axes(A, 1), 3:4, axes(A, 3))
+    @test S == A[:, 3:4, :]
+    @test S[0, 1, 2] == A[0, 3, 2]
+    @test S[0, 2, 2] == A[0, 4, 2]
+    @test S[1, 1, 2] == A[1, 3, 2]
+    @test axes(S) == (OffsetArrays.IdOffsetRange(0:1), Base.OneTo(2), OffsetArrays.IdOffsetRange(2:5))
+end
