@@ -130,6 +130,7 @@ Standard library changes
 #### SparseArrays
 
 * Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns, and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
+* `issparse` now applies consistently to all wrapper arrays, including nested, by checking `issparse` on the wrapped parent array ([#37644]).
 
 #### Dates
 * `Quarter` period is defined ([#35519]).
