@@ -252,7 +252,8 @@ function pathof(m::Module)
     pkgid === nothing && return nothing
     origin = get(Base.pkgorigins, pkgid, nothing)
     origin === nothing && return nothing
-    return origin.path
+    origin.path === nothing && return nothing
+    return fixup_stdlib_path(origin.path)
 end
 
 """

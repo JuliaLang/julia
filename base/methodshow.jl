@@ -124,6 +124,16 @@ end
 # (Used by Revise and perhaps other packages.)
 const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
 
+function fixup_stdlib_path(path::String)
+    # The file defining Base.Sys gets included after this file is included so make sure
+    # this function is valid even in this intermediary state
+    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB
+        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+        path = replace(path, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+    end
+    return path
+end
+
 # This function does the method location updating
 function updated_methodloc(m::Method)::Tuple{String, Int32}
     file, line = m.file, m.line
@@ -133,13 +143,8 @@ function updated_methodloc(m::Method)::Tuple{String, Int32}
         catch
         end
     end
-    # The file defining Base.Sys gets included after this file is included so make sure
-    # this function is valid even in this intermediary state
-    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB
-        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-        file = replace(string(file), normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
-    end
-    return string(file), line
+    file = fixup_stdlib_path(string(file))
+    return file, line
 end
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
