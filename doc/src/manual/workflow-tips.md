@@ -83,35 +83,36 @@ the following modifications:
 1. Put your code in a module somewhere on your load path. There are
    several options for achieving this, of which two recommended choices are:
 
-   a. For long-term projects, use
-      [PkgTemplates](https://github.com/invenia/PkgTemplates.jl):
+   - For long-term projects, use
+     [PkgTemplates](https://github.com/invenia/PkgTemplates.jl):
 
-      ```julia
-      using PkgTemplates
-      t = Template()
-      t("MyPkg")
-      ```
-      This will create a blank package, `"MyPkg"`, in your `.julia/dev` directory.
-      Note that PkgTemplates allows you to control many different options
-      through its `Template` constructor.
+     ```julia
+     using PkgTemplates
+     t = Template()
+     t("MyPkg")
+     ```
 
-      In step 2 below, edit `MyPkg/src/MyPkg.jl` to change the source code, and
-      `MyPkg/test/runtests.jl` for the tests.
+     This will create a blank package, `"MyPkg"`, in your `.julia/dev` directory.
+     Note that PkgTemplates allows you to control many different options
+     through its `Template` constructor.
 
-   b. For "throw-away" projects, you can avoid any need for cleanup
-      by doing your work in your temporary directory (e.g., `/tmp`).
+     In step 2 below, edit `MyPkg/src/MyPkg.jl` to change the source code, and
+     `MyPkg/test/runtests.jl` for the tests.
 
-      Navigate to your temporary directory and launch Julia, then do the following:
+   - For "throw-away" projects, you can avoid any need for cleanup
+     by doing your work in your temporary directory (e.g., `/tmp`).
 
-      ```julia
-      pkg> generate MyPkg              # type ] to enter pkg mode
-      julia> push!(LOAD_PATH, pwd())   # hit backspace to exit pkg mode
-      ```
-      If you restart your Julia session you'll have to re-issue that command
-      modifying `LOAD_PATH`.
+     Navigate to your temporary directory and launch Julia, then do the following:
 
-      In step 2 below, edit `MyPkg/src/MyPkg.jl` to change the source code, and create any
-      test file of your choosing.
+     ```julia
+     pkg> generate MyPkg            # type ] to enter pkg mode
+     julia> push!(LOAD_PATH, pwd())   # hit backspace to exit pkg mode
+     ```
+     If you restart your Julia session you'll have to re-issue that command
+     modifying `LOAD_PATH`.
+
+     In step 2 below, edit `MyPkg/src/MyPkg.jl` to change the source code, and create any
+     test file of your choosing.
 
 2. Develop your package
 
