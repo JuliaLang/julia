@@ -106,3 +106,14 @@ end
         end
     end
 end
+
+@testset "@artifact_str Platform passing" begin
+    mktempdir() do tempdir
+        with_artifacts_directory(tempdir) do
+            win64 = Platform("x86_64", "windows")
+            mac64 = Platform("x86_64", "macos")
+            @test basename(@artifact_str("c_simple", win64)) == "444cecb70ff39e8961dd33e230e151775d959f37"
+            @test basename(@artifact_str("c_simple", mac64)) == "7ba74e239348ea6c060f994c083260be3abe3095"
+        end
+    end
+end
