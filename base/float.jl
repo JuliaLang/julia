@@ -537,20 +537,6 @@ isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
 isnan(x::Real) = false
 
-"""
-    isfinite(f) -> Bool
-
-Test whether a number is finite.
-
-# Examples
-```jldoctest
-julia> isfinite(5)
-true
-
-julia> isfinite(NaN32)
-false
-```
-"""
 isfinite(x::AbstractFloat) = x - x == 0
 isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
