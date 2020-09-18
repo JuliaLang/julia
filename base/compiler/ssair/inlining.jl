@@ -1145,11 +1145,7 @@ end
 function assemble_inline_todo!(ir::IRCode, state::InliningState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Pair{Int, Any}[]
-    if state.params.unoptimize_throw_blocks
-        skip = find_throw_blocks(ir.stmts.inst, RefValue(ir))
-    end
     for idx in 1:length(ir.stmts)
-        state.params.unoptimize_throw_blocks && idx in skip && continue
         r = process_simple!(ir, todo, idx, state)
         r === nothing && continue
 
