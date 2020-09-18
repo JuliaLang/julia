@@ -408,7 +408,7 @@ function __init__()
     init_depot_path()
     init_load_path()
     init_active_project()
-    append!(_sysimage_modules, keys(loaded_modules))
+    append!(empty!(_sysimage_modules), keys(loaded_modules))
     nothing
 end
 
