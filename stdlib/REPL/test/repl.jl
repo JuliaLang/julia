@@ -1056,7 +1056,7 @@ for (line, expr) in Pair[
 end
 
 # PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
-for line in ["′", "abstract", "type"]
+for line in ["′", "type"]
     @test occursin("No documentation found.",
         sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
