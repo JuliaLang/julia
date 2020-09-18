@@ -633,7 +633,7 @@ static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t
         jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
         if (val == NULL)
             return NULL;
-        if (val->hash == hv && typekey_eq(val, key, n))
+        if ((jl_value_t*)val != jl_nothing && val->hash == hv && typekey_eq(val, key, n))
             return val;
         index = (index + 1) & (sz - 1);
         iter++;
@@ -656,7 +656,7 @@ static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, j
         jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
         if (val == NULL)
             return NULL;
-        if (val->hash == hv && typekeyvalue_eq(val, key1, key, n, leaf))
+        if ((jl_value_t*)val != jl_nothing && val->hash == hv && typekeyvalue_eq(val, key1, key, n, leaf))
             return val;
         index = (index + 1) & (sz - 1);
         iter++;
@@ -744,7 +744,8 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv)
     orig = index;
     size_t maxprobe = max_probe(sz);
     do {
-        if (tab[index] == NULL) {
+        jl_value_t *tab_i = (jl_value_t*)tab[index];
+        if (tab_i == NULL || tab_i == jl_nothing) {
             jl_atomic_store_release(&tab[index], val);
             jl_gc_wb(a, val);
             return 1;
@@ -794,7 +795,7 @@ static jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
         JL_GC_PUSH1(&newa);
         for (i = 0; i < sz; i += 1) {
             jl_datatype_t *val = ol[i];
-            if (val != NULL) {
+            if (val != NULL && (jl_value_t*)val != jl_nothing) {
                 uint_t hv = val->hash;
                 if (!cache_insert_type_set_(newa, val, hv)) {
                     break;

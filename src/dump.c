@@ -78,7 +78,6 @@ static jl_value_t *jl_idtable_type = NULL;
 static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
-static arraylist_t builtin_typenames;
 
 static void write_uint64(ios_t *s, uint64_t i) JL_NOTSAFEPOINT
 {
@@ -2677,17 +2676,6 @@ void jl_init_serializer(void)
         i += 1;
     }
     assert(i <= 256);
-
-    arraylist_new(&builtin_typenames, 0);
-    arraylist_push(&builtin_typenames, jl_array_typename);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_ref_type->body)->name);
-    arraylist_push(&builtin_typenames, jl_pointer_typename);
-    arraylist_push(&builtin_typenames, jl_type_typename);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name);
-    arraylist_push(&builtin_typenames, jl_tuple_typename);
-    arraylist_push(&builtin_typenames, jl_vararg_typename);
-    arraylist_push(&builtin_typenames, jl_namedtuple_typename);
 }
 
 #ifdef __cplusplus
