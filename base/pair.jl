@@ -47,7 +47,7 @@ Pair, =>
 
 eltype(p::Type{Pair{A, B}}) where {A, B} = Union{A, B}
 iterate(p::Pair, i=1) = i > 2 ? nothing : (getfield(p, i), i + 1)
-indexed_iterate(p::Pair, i::Int, state=1) = (getfield(p, i), i + 1)
+indexed_iterate(p::Pair, i::Int, state=1) = (@_inline_meta; (getfield(p, i), i + 1))
 
 hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
 

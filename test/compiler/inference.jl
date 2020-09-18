@@ -2813,3 +2813,14 @@ f_apply_cglobal(args...) = cglobal(args...)
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}}) == Ptr
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Vararg{Type{Int}}}) == Ptr{Int}
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}}) == Union{}
+
+# issue #37610
+function f37610(a, i)
+    y = iterate(a, i)
+    if y !== nothing
+        (k, v), st = y
+        return k, v
+    end
+    return y
+end
+@test Base.return_types(f37610, (typeof(("foo" => "bar", "baz" => nothing)), Int)) == Any[Union{Nothing, Tuple{String, Union{Nothing, String}}}]

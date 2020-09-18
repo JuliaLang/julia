@@ -29,9 +29,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     fullmatch = Bool[]
     if splitunions
         splitsigs = switchtupleunion(atype)
+        split_argtypes = switchtupleunion(argtypes)
         applicable = Any[]
+        # arrays like `argtypes`, including constants, for each match
+        applicable_argtypes = Vector{Any}[]
         infos = MethodMatchInfo[]
-        for sig_n in splitsigs
+        for j in 1:length(splitsigs)
+            sig_n = splitsigs[j]
             mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
             if mt === nothing
                 add_remark!(interp, sv, "Could not identify method table for call")
@@ -45,6 +49,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
             push!(infos, MethodMatchInfo(matches))
             append!(applicable, matches)
+            for _ in 1:length(matches)
+                push!(applicable_argtypes, split_argtypes[j])
+            end
             valid_worlds = intersect(valid_worlds, matches.valid_worlds)
             thisfullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
             found = false
@@ -80,6 +87,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         info = MethodMatchInfo(matches)
         applicable = matches.matches
         valid_worlds = matches.valid_worlds
+        applicable_argtypes = nothing
     end
     update_valid_age!(sv, valid_worlds)
     applicable = applicable::Array{Any,1}
@@ -136,6 +144,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         if this_rt !== Bottom
             if nonbot === 0
                 nonbot = i
+            elseif nonbot === -1
+            elseif method === (applicable[nonbot]::MethodMatch).method
+                # another entry from the same method, due to union splitting
             else
                 nonbot = -1
             end
@@ -147,12 +158,23 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     # try constant propagation if only 1 method is inferred to non-Bottom
     # this is in preparation for inlining, or improving the return result
     is_unused = call_result_unused(sv)
-    if nonbot > 0 && seen == napplicable && (!edgecycle || !is_unused) && isa(rettype, Type) && InferenceParams(interp).ipo_constant_propagation
+    if nonbot > 0 && seen == napplicable && (!edgecycle || !is_unused) &&
+        (isa(rettype, Type) || isa(rettype, PartialStruct)) && InferenceParams(interp).ipo_constant_propagation
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
-        const_rettype = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::MethodMatch, sv, edgecycle)
-        if const_rettype ⊑ rettype
+        const_rettype = Bottom
+        for i in 1:napplicable
+            mm = applicable[i]::MethodMatch
+            if i === nonbot || mm.method === (applicable[nonbot]::MethodMatch).method
+                this_argtypes = applicable_argtypes === nothing ? argtypes : applicable_argtypes[i]
+                one_rettype = abstract_call_method_with_const_args(interp, rettype, f, this_argtypes, mm, sv, edgecycle)
+                const_rettype = tmerge(const_rettype, one_rettype)
+                const_rettype ⊑ rettype || (const_rettype = Any)
+                const_rettype === Any && break
+            end
+        end
+        if const_rettype !== Any
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
         end
