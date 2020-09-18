@@ -508,6 +508,8 @@ end
 # buildbot path updating
 file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(file)
+@test isfile(pathof(InteractiveUtils))
+@test isdir(pkgdir(InteractiveUtils))
 
 @testset "Issue #34434" begin
     io = IOBuffer()
