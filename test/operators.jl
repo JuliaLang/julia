@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base: Fix1, Fix2
 using Random: randstring
 
 @testset "ifelse" begin
@@ -229,6 +230,7 @@ end
 end
 
 @testset "curried comparisons" begin
+    isnot5 = (!==)(5)
     eql5 = (==)(5)
     neq5 = (!=)(5)
     gte5 = (>=)(5)
@@ -236,10 +238,32 @@ end
     gt5  = (>)(5)
     lt5  = (<)(5)
 
+    @test isnot5(5.0) && !isnot5(5)
     @test eql5(5) && !eql5(0)
     @test neq5(6) && !neq5(5)
     @test gte5(5) && gte5(6)
     @test lte5(5) && lte5(4)
     @test gt5(6) && !gt5(5)
     @test lt5(4) && !lt5(5)
+end
+
+@testset "curried comparisons (builtins)" begin
+    isaSymbol = isa(Symbol)
+    is5 = (===)(5)
+
+    @test isaSymbol(:yes) && !isaSymbol("no")
+    @test is5(5) && !is5(5.0)
+
+    # Make sure they are dispatchable:
+    @test isaSymbol isa Fix2{typeof(isa),Type{Symbol}}
+    @test is5 isa Fix2{typeof(===),Int}
+end
+
+@testset "Fix1 and Fix2 on types" begin
+    @test Fix1(tuple, Fix1) isa Fix1{typeof(tuple),Type{Fix1}}
+    @test Fix1(Fix1, tuple) isa Fix1{Type{Fix1},typeof(tuple)}
+    @test Fix1(Fix1, Fix1) isa Fix1{Type{Fix1},Type{Fix1}}
+    @test Fix2(tuple, Fix2) isa Fix2{typeof(tuple),Type{Fix2}}
+    @test Fix2(Fix2, tuple) isa Fix2{Type{Fix2},typeof(tuple)}
+    @test Fix2(Fix2, Fix2) isa Fix2{Type{Fix2},Type{Fix2}}
 end
