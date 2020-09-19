@@ -250,7 +250,9 @@ to get the file name part of the path.
 function pathof(m::Module)
     pkgid = get(Base.module_keys, m, nothing)
     pkgid === nothing && return nothing
-    return Base.locate_package(pkgid)
+    origin = get(Base.pkgorigins, pkgid, nothing)
+    origin === nothing && return nothing
+    return origin.path
 end
 
 """
@@ -482,21 +484,26 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId, cache::TO
         uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
         uuid === nothing && continue
         if UUID(uuid) === pkg.uuid
-            path = get(entry, "path", nothing)::Union{Nothing, String}
-            if path !== nothing
-                path = normpath(abspath(dirname(manifest_file), path))
-                return path
-            end
-            hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
-            hash === nothing && return nothing
-            hash = SHA1(hash)
-            # Keep the 4 since it used to be the default
-            for slug in (version_slug(pkg.uuid, hash, 4), version_slug(pkg.uuid, hash))
-                for depot in DEPOT_PATH
-                    path = abspath(depot, "packages", pkg.name, slug)
-                    ispath(path) && return path
-                end
-            end
+            return explicit_manifest_entry_path(manifest_file, pkg, entry)
+        end
+    end
+    return nothing
+end
+
+function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::Dict{String,Any})
+    path = get(entry, "path", nothing)::Union{Nothing, String}
+    if path !== nothing
+        path = normpath(abspath(dirname(manifest_file), path))
+        return path
+    end
+    hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
+    hash === nothing && return nothing
+    hash = SHA1(hash)
+    # Keep the 4 since it used to be the default
+    for slug in (version_slug(pkg.uuid, hash, 4), version_slug(pkg.uuid, hash))
+        for depot in DEPOT_PATH
+            path = abspath(depot, "packages", pkg.name, slug)
+            ispath(path) && return path
         end
     end
     return nothing
@@ -824,18 +831,19 @@ function require(into::Module, mod::Symbol)
     return require(uuidkey, cache)
 end
 
-struct PkgOrigin
+mutable struct PkgOrigin
     # version::VersionNumber
-    # path::String
+    path::Union{String,Nothing}
     cachepath::Union{String,Nothing}
 end
+PkgOrigin() = PkgOrigin(nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 function require(uuidkey::PkgId, cache::TOMLCache=TOMLCache())
     if !root_module_exists(uuidkey)
         cachefile = _require(uuidkey, cache)
         if cachefile !== nothing
-            pkgorigins[uuidkey] = PkgOrigin(cachefile)
+            get!(PkgOrigin, pkgorigins, uuidkey).cachepath = cachefile
         end
         # After successfully loading, notify downstream consumers
         for callback in package_callbacks
@@ -907,6 +915,7 @@ function _require(pkg::PkgId, cache::TOMLCache)
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
         path = locate_package(pkg, cache)
+        get!(PkgOrigin, pkgorigins, pkg).path = path
         if path === nothing
             throw(ArgumentError("""
                 Package $pkg is required but does not seem to be installed:
@@ -1441,6 +1450,7 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
                 end
             else
                 path = locate_package(req_key, cache)
+                get!(PkgOrigin, pkgorigins, req_key).path = path
                 if path === nothing
                     @debug "Rejecting cache file $cachefile because dependency $req_key not found."
                     return true # Won't be able to fulfill dependency
@@ -1496,7 +1506,7 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
         end
 
         if isa(id, PkgId)
-            pkgorigins[id] = PkgOrigin(cachefile)
+            get!(PkgOrigin, pkgorigins, id).cachepath = cachefile
         end
 
         return depmods # fresh cachefile

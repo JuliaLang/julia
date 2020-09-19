@@ -15,16 +15,18 @@ UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
-@assert precompile(Tuple{typeof(Base.stale_cachefile), String, String})
-@assert precompile(Tuple{typeof(push!), Set{Module}, Module})
-@assert precompile(Tuple{typeof(push!), Set{Method}, Method})
-@assert precompile(Tuple{typeof(push!), Set{Base.PkgId}, Base.PkgId})
-@assert precompile(Tuple{typeof(getindex),  Dict{Base.PkgId,String}, Base.PkgId})
-@assert precompile(Tuple{typeof(setindex!), Dict{String,Base.PkgId}, Base.PkgId, String})
-@assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
-@assert precompile(Tuple{typeof(pushfirst!), Vector{Any}, Function})
+# used by Revise.jl
 @assert precompile(Tuple{typeof(Base.parse_cache_header), String})
+@assert precompile(Tuple{typeof(pushfirst!), Vector{Any}, Function})
+# used by Requires.jl
+@assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(push!), Vector{Function}, Function})
+# miscellaneous
+@assert precompile(Tuple{typeof(Base.require), Base.PkgId})
+@assert precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
+@assert precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
 """
 
 precompile_script = """
@@ -43,6 +45,13 @@ f(x) = x03
 f(1,2)
 [][1]
 cd("complet_path\t\t$CTRL_C
+# Used by JuliaInterpreter
+push!(Set{Module}(), Main)
+push!(Set{Method}(), first(methods(collect)))
+# Used by Revise
+(setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
+(setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
+get(Base.pkgorigins, Base.PkgId(Base), nothing)
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -72,12 +81,13 @@ Artifacts = get(Base.loaded_modules,
           nothing)
 if Artifacts !== nothing
     precompile_script *= """
-    using Artifacts, Base.BinaryPlatforms
-    artifacts_toml = abspath($(repr(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))))
+    using Artifacts, Base.BinaryPlatforms, Libdl
+    artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
     cd(() -> @artifact_str("c_simple"), dirname(artifacts_toml))
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
     platforms = [Artifacts.unpack_platform(e, "c_simple", artifacts_toml) for e in artifacts["c_simple"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
+    dlopen("libjulia", RTLD_LAZY | RTLD_DEEPBIND)
     """
 end
 
@@ -97,6 +107,15 @@ if FileWatching !== nothing
     hardcoded_precompile_statements *= """
     @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
     @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+    """
+end
+
+Libdl = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"),
+          nothing)
+if Libdl !== nothing
+    hardcoded_precompile_statements *= """
+    precompile(Tuple{typeof(Libc.Libdl.dlopen), String})
     """
 end
 

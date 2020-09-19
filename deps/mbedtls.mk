@@ -1,12 +1,8 @@
 ## mbedtls
 
 ifneq ($(USE_BINARYBUILDER_MBEDTLS), 1)
-ifeq ($(USE_GPL_LIBS), 1)
-MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)-gpl
-else
-MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)-apache
-endif
-MBEDTLS_URL = https://tls.mbed.org/download/$(MBEDTLS_SRC).tgz
+MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)
+MBEDTLS_URL = https://github.com/ARMmbed/mbedtls/archive/v$(MBEDTLS_VER).tar.gz
 
 MBEDTLS_OPTS := $(CMAKE_COMMON) -DUSE_SHARED_MBEDTLS_LIBRARY=ON \
     -DUSE_STATIC_MBEDTLS_LIBRARY=OFF -DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release
@@ -20,10 +16,10 @@ ifneq (,$(findstring $(OS),Linux FreeBSD))
 MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-$(SRCCACHE)/$(MBEDTLS_SRC).tgz: | $(SRCCACHE)
+$(SRCCACHE)/$(MBEDTLS_SRC).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(MBEDTLS_URL)
 
-$(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tgz
+$(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
@@ -75,12 +71,12 @@ clean-mbedtls:
 	-$(MAKE) -C $(BUILDDIR)/$(MBEDTLS_SRC) clean
 
 distclean-mbedtls:
-	-rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tgz \
+	-rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
 		$(SRCCACHE)/$(MBEDTLS_SRC) \
 		$(BUILDDIR)/$(MBEDTLS_SRC)
 
 
-get-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tgz
+get-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 extract-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 configure-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured
 compile-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled

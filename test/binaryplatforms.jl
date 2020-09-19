@@ -1,4 +1,16 @@
-using Test, Base.BinaryPlatforms
+using Test, Base.BinaryPlatforms, Base.BinaryPlatforms.CPUID
+
+@testset "CPUID" begin
+    @test CPUID.cpu_isa() isa CPUID.ISA
+
+    get_x86_64(n) = (CPUID.ISAs_by_family["x86_64"][n].second)
+    @test get_x86_64(2) <  get_x86_64(4)
+    @test get_x86_64(5) <= get_x86_64(5)
+    @test get_x86_64(3) >= get_x86_64(3)
+    @test get_x86_64(7) >= get_x86_64(1)
+    @test sort([get_x86_64(6), get_x86_64(4), get_x86_64(2), get_x86_64(4)]) ==
+        [get_x86_64(2), get_x86_64(4), get_x86_64(4), get_x86_64(6)]
+end
 
 # Helper constructor to create a Platform with `validate_strict` set to `true`.
 P(args...; kwargs...) = Platform(args...; validate_strict=true, kwargs...)
@@ -100,12 +112,29 @@ end
     # Now test libgfortran/cxxstring ABIs
     @test triplet(P("x86_64", "linux"; libgfortran_version=v"3", cxxstring_abi="cxx11")) == "x86_64-linux-gnu-libgfortran3-cxx11"
     @test triplet(P("armv7l", "linux"; libc="musl", cxxstring_abi="cxx03")) == "armv7l-linux-musleabihf-cxx03"
+    if !isnothing(detect_libgfortran_version())
+        # When `libgfortran` can be detected at runtime, make sure
+        # `HostPlatform` has the appropriate key.
+        @test tags(HostPlatform())["libgfortran_version"] == string(detect_libgfortran_version())
+    end
 
     # Test tags()
     t = tags(P("x86_64", "linux"))
     @test all(haskey.(Ref(t), ("arch", "os", "libc")))
     @test haskey(tags(P("x86_64", "linux"; customtag="foo")), "customtag")
     @test tags(HostPlatform())["julia_version"] == string(VERSION.major, ".", VERSION.minor, ".", VERSION.patch)
+
+    # Test that we can modify tags at will using the dict-like interface:
+    p = P("x86_64", "linux")
+    p["foo"] = "bar"
+    @test tags(p)["foo"] == "bar"
+    @test p["foo"] == "bar"
+    @test p["os"] == "linux"
+    p["os"] = "JuliaOS"
+    @test p["os"] == "juliaos"
+
+    # Test that trying to set illegal tags fails
+    @test_throws ArgumentError p["os"] = "a+b"
 end
 
 @testset "Triplet parsing" begin

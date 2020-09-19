@@ -433,6 +433,8 @@ end
     # 37552
     @test @sprintf("%d", 1.0e100) == "10000000000000000159028911097599180468360808563945281389781327557747838772170381060813469985856815104"
     @test @sprintf("%d", 3//1) == "3"
+    @test @sprintf("%d", Inf) == "Inf"
+    @test @sprintf(" %d", NaN) == " NaN"
 end
 
 @testset "integers" begin
