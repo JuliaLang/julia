@@ -550,7 +550,6 @@ function artifact_slash_lookup(name::String, artifact_dict::Dict,
                                artifacts_toml::String, platform::Platform)
     artifact_name, artifact_path_tail = split_artifact_slash(name)
 
-    @show platform
     meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml; platform)
     if meta === nothing
         error("Cannot locate artifact '$(name)' in '$(artifacts_toml)'")
