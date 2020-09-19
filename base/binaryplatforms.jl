@@ -694,8 +694,7 @@ const libgfortran_version_mapping = Dict(
 )
 const libstdcxx_version_mapping = Dict{String,String}(
     "libstdcxx_nothing" => "",
-    # This is sadly easier than parsing out the digit directly
-    ("libstdcxx$(idx)" => "-libstdcxx$(idx)" for idx in 18:26)...,
+    "libstdcxx" => "-libstdcxx\\d+",
 )
 const cxxstring_abi_mapping = Dict(
     "cxxstring_nothing" => "",
@@ -745,7 +744,7 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
                     if startswith(k, "libgfortran")
                         return VersionNumber(parse(Int,k[12:end]))
                     elseif startswith(k, "libstdcxx")
-                        return VersionNumber(3, 4, parse(Int,k[10:end]))
+                        return VersionNumber(3, 4, parse(Int,m[k][11:end]))
                     else
                         return k
                     end
