@@ -9,25 +9,37 @@ BUILD_LLVM_CLANG := 1
 # because it's a build requirement
 endif
 
-ifeq ($(USE_POLLY),1)
+ifeq ($(USE_RV),1)
+BUILD_LLVM_CLANG := 1
+# because it's a build requirement
+endif
+
+
 ifeq ($(USE_SYSTEM_LLVM),0)
 ifneq ($(LLVM_VER),svn)
+ifeq ($(USE_POLLY),1)
 $(error USE_POLLY=1 requires LLVM_VER=svn)
+endif
+
+ifeq ($(USE_MLIR),1)
+$(error USE_MLIR=1 requires LLVM_VER=svn)
+endif
+
+ifeq ($(USE_RV),1)
+$(error USE_RV=1 requires LLVM_VER=svn)
 endif
 endif
 endif
 
-ifeq ($(USE_MLIR),1)
-ifeq ($(USE_SYSTEM_LLVM),0)
-ifneq ($(LLVM_VER),svn)
-$(error USE_MLIR=1 requires LLVM_VER=svn)
-endif
-endif
+ifneq ($(USE_RV),)
+LLVM_RV_GIT_URL ?= https://github.com/cdl-saarland/rv
+LLVM_RV_GIT_VER ?= release_90
 endif
 
 
 # for Monorepo
 LLVM_ENABLE_PROJECTS :=
+LLVM_EXTERNAL_PROJECTS :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang;compiler-rt
 endif
@@ -39,6 +51,9 @@ LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lldb
 endif
 ifeq ($(USE_MLIR), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);mlir
+endif
+ifeq ($(USE_RV), 1)
+LLVM_EXTERNAL_PROJECTS := $(LLVM_EXTERNAL_PROJECTS);rv
 endif
 
 include $(SRCDIR)/llvm-options.mk
@@ -79,6 +94,12 @@ LLVM_CMAKE :=
 # MONOREPO
 ifeq ($(LLVM_VER),svn)
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
+LLVM_CMAKE += -DLLVM_EXTERNAL_PROJECTS="$(LLVM_EXTERNAL_PROJECTS)"
+
+ifeq ($(USE_RV),1)
+LLVM_CMAKE += -DLLVM_EXTERNAL_RV_SOURCE_DIR=$(LLVM_MONOSRC_DIR)/rv
+LLVM_CMAKE += -DLLVM_CXX_STD=c++14
+endif
 endif
 
 # Allow adding LLVM specific flags
@@ -362,6 +383,11 @@ endif # LLVM_GIT_VER
 	# Debug output only. Disable pager and ignore error.
 	(cd $(LLVM_SRC_DIR) && \
 		git show HEAD --stat | cat) || true
+ifneq ($(USE_RV),)
+	git clone -b $(LLVM_RV_GIT_VER) $(LLVM_RV_GIT_URL) $(LLVM_MONOSRC_DIR)/rv
+	(cd $(LLVM_MONOSRC_DIR)/rv && \
+		git submodule update --init) || true
+endif
 endif # LLVM_VER
 ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
