@@ -147,7 +147,7 @@ Recommended Julia practices for short calculations amortize this compilation cos
 tools like Revise.jl, within-module re-evalulation of IDEs like Juno and VS Code, or by keeping REPL sessions alive over 
 multiple analyses. It is inadvisable and not a recommended practice to repeatedly run short scripts directly from the 
 command line if compilation is a significant factor in the runtime and performance is necessary. Direct running of small 
-single scripts will not result in the highest performance is thus not recommended in any context where performance is 
+single scripts will not result in the highest performance and is thus not recommended in any context where performance is 
 required or measured. If such a usage is required, the recommended approach is to use  PackageCompiler.jl to precompile 
 the functionality into the sysimage, giving a usage that is similar to shared libraries of other compiled languages like C.
 
