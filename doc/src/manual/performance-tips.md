@@ -139,7 +139,7 @@ its algorithmic aspects (see [Pre-allocating outputs](@ref)).
 Due to Julia's JIT compilation, the first run of a new function or a new Julia environment will include the compilation 
 time of a function in its first call. Compilation time is determined by the code of a function and the input types and
 is not dependent on the input values. Thus compile times for a given function are essentially constant with respect to 
-the runtime costs which very with respect to runtime values like array size and required calculation tolerances.
+the runtime costs which vary with respect to runtime values like array size and required calculation tolerances.
 This means that for large complex analyses compilation time is dwarfed by runtime. However, when inputs are simpler, like
 in microbenchmarks or short calculations in a new REPL session, compilation time matters for performance.
 
