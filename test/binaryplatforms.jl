@@ -112,6 +112,11 @@ end
     # Now test libgfortran/cxxstring ABIs
     @test triplet(P("x86_64", "linux"; libgfortran_version=v"3", cxxstring_abi="cxx11")) == "x86_64-linux-gnu-libgfortran3-cxx11"
     @test triplet(P("armv7l", "linux"; libc="musl", cxxstring_abi="cxx03")) == "armv7l-linux-musleabihf-cxx03"
+    if !isnothing(detect_libgfortran_version())
+        # When `libgfortran` can be detected at runtime, make sure
+        # `HostPlatform` has the appropriate key.
+        @test tags(HostPlatform())["libgfortran_version"] == string(detect_libgfortran_version())
+    end
 
     # Test tags()
     t = tags(P("x86_64", "linux"))

@@ -1004,8 +1004,6 @@ function host_triplet()
     return str
 end
 
-# Cache the host platform value, and return it if someone asks for just `HostPlatform()`.
-default_host_platform = HostPlatform(parse(Platform, host_triplet()))
 """
     HostPlatform()
 
@@ -1015,7 +1013,7 @@ relevant comparison strategies set to host platform mode.  This is equivalent to
     HostPlatform(parse(Platform, Base.BinaryPlatforms.host_triplet()))
 """
 function HostPlatform()
-    return default_host_platform::Platform
+    return HostPlatform(parse(Platform, host_triplet()))::Platform
 end
 
 """
