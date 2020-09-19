@@ -134,6 +134,23 @@ its algorithmic aspects (see [Pre-allocating outputs](@ref)).
     For more serious benchmarking, consider the [BenchmarkTools.jl](https://github.com/JuliaCI/BenchmarkTools.jl)
     package which among other things evaluates the function multiple times in order to reduce noise.
 
+## [Avoid Compilation Time in Performance-Sensitive Calculations](@id compilation_time)
+
+Due to Julia's JIT compilation, the first run of a new function or a new Julia environment will include the compilation 
+time of a function in its first call. Compilation time is determined by the code of a function and the input types and
+is not dependent on the input values. Thus compile times for a given function are essentially constant with respect to 
+the runtime costs which very with respect to runtime values like array size and required calculation tolerances.
+This means that for large complex analyses compilation time is dwarfed by runtime. However, when inputs are simpler, like
+in microbenchmarks or short calculations in a new REPL session, compilation time matters for performance.
+
+Recommended Julia practices for short calculations amortize this compilation cost over the lifetime of the program, using 
+tools like Revise.jl, within-module re-evalulation of IDEs like Juno and VS Code, or by keeping REPL sessions alive over 
+multiple analyses. It is inadvisable and not a recommended practice to repeatedly run short scripts directly from the 
+command line if compilation is a significant factor in the runtime and performance is necessary. Direct running of small 
+single scripts will not result in the highest performance is thus not recommended in any context where performance is 
+required or measured. If such a usage is required, the recommended approach is to use  PackageCompiler.jl to precompile 
+the functionality into the sysimage, giving a usage that is similar to shared libraries of other compiled languages like C.
+
 ## [Tools](@id tools)
 
 Julia and its package ecosystem includes tools that may help you diagnose problems and improve
