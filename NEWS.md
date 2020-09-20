@@ -58,6 +58,7 @@ Build system changes
 
 Library functions
 -----------------
+
 * The `Base.Grisu` code has been officially removed (float printing was switched to the ryu algorithm code in 1.4)
 
 
@@ -81,6 +82,7 @@ New library features
 
 Standard library changes
 ------------------------
+
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
 * The `reverse(A; dims)` function for multidimensional `A` can now reverse multiple dimensions at once
   by passing a tuple for `dims`, and defaults to reversing all dimensions; there is also a multidimensional
@@ -107,6 +109,7 @@ Standard library changes
   all of `Pkg` alongside. ([#37320])
 
 #### LinearAlgebra
+
 * New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
 * `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
 * New function `LinearAlgebra.BLAS.get_num_threads()` for getting the number of BLAS threads. ([#36360])
@@ -153,9 +156,13 @@ Standard library changes
 
 #### SparseArrays
 
-* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns, and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
+* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns,
+  and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
+* New convenient `spdiagm([m, n,] v::AbstractVector)` methods which call
+  `spdiagm([m, n,] 0 => v)`, consistently with their dense `diagm` counterparts.
 
 #### Dates
+
 * `Quarter` period is defined ([#35519]).
 * Zero-valued `FixedPeriod`s and `OtherPeriod`s now compare equal, e.g.,
   `Year(0) == Day(0)`. The behavior of non-zero `Period`s is not changed. ([#37486])
@@ -170,6 +177,7 @@ Standard library changes
 
 
 #### UUIDs
+
 * Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
 * Added `parse(::Type{UUID}, ::AbstractString)` method
 
