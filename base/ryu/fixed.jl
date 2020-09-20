@@ -2,6 +2,7 @@
     precision=-1, plus=false, space=false, hash=false,
     decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     @assert 0 < pos <= length(buf)
+    startpos = pos
     x = Float64(v)
     neg = signbit(x)
     # special cases
@@ -165,7 +166,7 @@
             dotPos = 1
             while true
                 roundPos -= 1
-                if roundPos == 0 || (buf[roundPos] == UInt8('-'))
+                if roundPos == (startpos - 1) || (buf[roundPos] == UInt8('-'))
                     buf[roundPos + 1] = UInt8('1')
                     if dotPos > 1
                         buf[dotPos] = UInt8('0')

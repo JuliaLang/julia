@@ -1788,7 +1788,7 @@ function findfirst(A)
 end
 
 # Needed for bootstrap, and allows defining only an optimized findnext method
-findfirst(A::Union{AbstractArray, AbstractString}) = findnext(A, first(keys(A)))
+findfirst(A::AbstractArray) = findnext(A, first(keys(A)))
 
 """
     findnext(predicate::Function, A, i)
@@ -1976,7 +1976,7 @@ function findlast(A)
 end
 
 # Needed for bootstrap, and allows defining only an optimized findprev method
-findlast(A::Union{AbstractArray, AbstractString}) = findprev(A, last(keys(A)))
+findlast(A::AbstractArray) = findprev(A, last(keys(A)))
 
 """
     findprev(predicate::Function, A, i)

@@ -152,13 +152,13 @@ Numeric types only need to implement it if they have special values such as `NaN
 Types with a partial order should implement [`<`](@ref).
 
 # Examples
- ```jldoctest
- julia> isless(1, 3)
- true
+```jldoctest
+julia> isless(1, 3)
+true
 
- julia> isless("Red", "Blue")
- false
- ```
+julia> isless("Red", "Blue")
+false
+```
 """
 function isless end
 

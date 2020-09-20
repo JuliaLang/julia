@@ -1387,6 +1387,18 @@ end
 
     d = Dict("+"=>1)
     @test showstr(d) == "Dict(\"+\" => 1)"
+
+    struct Foo
+        a::Int
+    end
+    struct Bar
+        a::Int
+    end
+    d = Dict([Bar(1), Bar(2)] => [Foo(1), Foo(2)])
+    @test showstr(d) == "Dict{Vector{$(curmod_prefix)Bar}, Vector{$(curmod_prefix)Foo}}([$(curmod_prefix)Bar(1), $(curmod_prefix)Bar(2)] => [$(curmod_prefix)Foo(1), $(curmod_prefix)Foo(2)])"
+    @test sprint(show, MIME("text/plain"), d) == """
+        Dict{Vector{$(curmod_prefix)Bar}, Vector{$(curmod_prefix)Foo}} with 1 entry:
+          [Bar(1), Bar(2)] => [Foo(1), Foo(2)]"""
 end
 
 @testset "alignment for pairs" begin  # (#22899)
@@ -1710,8 +1722,8 @@ end
 end
 
 @testset "Tuple summary" begin
-    @test summary((1,2,3)) == "(1, 2, 3)"
-    @test summary((:a, "b", 'c')) == "(:a, \"b\", 'c')"
+    @test summary((1,2,3)) == "Tuple{$Int, $Int, $Int}"
+    @test summary((:a, "b", 'c')) == "Tuple{Symbol, String, Char}"
 end
 
 # Tests for code_typed linetable annotations

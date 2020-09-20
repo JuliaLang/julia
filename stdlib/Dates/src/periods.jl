@@ -54,6 +54,7 @@ Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)
 Base.one(::Union{Type{P},P}) where {P<:Period} = 1  # see #16116
 Base.typemin(::Type{P}) where {P<:Period} = P(typemin(Int64))
 Base.typemax(::Type{P}) where {P<:Period} = P(typemax(Int64))
+Base.isfinite(::Union{Type{P}, P}) where {P<:Period} = true
 
 # Default values (as used by TimeTypes)
 """
@@ -456,19 +457,20 @@ Base.convert(::Type{Quarter}, x::Month) = Quarter(divexact(value(x), 3))
 Base.promote_rule(::Type{Quarter}, ::Type{Month}) = Month
 
 
-# fixed is not comparable to other periods, as per discussion in issue #21378
-(==)(x::FixedPeriod, y::OtherPeriod) = false
-(==)(x::OtherPeriod, y::FixedPeriod) = false
+# fixed is not comparable to other periods, except when both are zero (#37459)
+(==)(x::FixedPeriod, y::OtherPeriod) = iszero(x) & iszero(y)
+(==)(x::OtherPeriod, y::FixedPeriod) = y == x
 
-const fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
-const otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
+const zero_or_fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
+const nonzero_otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
+otherperiod_seed(x::OtherPeriod) = iszero(value(x)) ? zero_or_fixedperiod_seed : nonzero_otherperiod_seed
 # tons() will overflow for periods longer than ~300,000 years, implying a hash collision
 # which is relatively harmless given how infrequent such periods should appear
-Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + fixedperiod_seed)
+Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + zero_or_fixedperiod_seed)
 # Overflow can also happen here for really long periods (~8e17 years)
-Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed)
-Base.hash(x::Quarter, h::UInt) = hash(3 * value(x), h + otherperiod_seed)
-Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed)
+Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed(x))
+Base.hash(x::Quarter, h::UInt) = hash(3 * value(x), h + otherperiod_seed(x))
+Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed(x))
 
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
 Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
