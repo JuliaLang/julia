@@ -307,3 +307,11 @@ let ci = code_typed(f_29115, Tuple{Pair{Int64, Int64}})[1].first
     @test length(ci.code) == 4 && isexpr(ci.code[1], :call) &&
         ci.code[end-1].args[1] === GlobalRef(Core, :tuple)
 end
+
+# Issue #37182 & #37555 - Inlining of pending nodes
+function f37555(x::Int; kwargs...)
+    @assert x < 10
+    +(x, kwargs...)
+end
+@test f37555(1) == 1
+

@@ -13,6 +13,9 @@ New language features
 * The library name passed to `ccall` or `@ccall` can now be an expression involving
   global variables and function calls. The expression will be evaluated the first
   time the `ccall` executes ([#36458]).
+* `ꜛ` (U+A71B), `ꜜ` (U+A71C) and `ꜝ` (U+A71D) can now also be used as operator
+  suffixes. They can be tab-completed from `\^uparrow`, `\^downarrow` and `\^!` in the REPL
+  ([#37542]).
 
 Language changes
 ----------------
@@ -59,8 +62,8 @@ Build system changes
 Library functions
 -----------------
 
+* The `Base.download` function has been deprecated (silently, by default) in favor of the new `Downloads.download` standard library function ([#37340]).
 * The `Base.Grisu` code has been officially removed (float printing was switched to the ryu algorithm code in 1.4)
-
 
 New library functions
 ---------------------
@@ -101,6 +104,7 @@ Standard library changes
 * `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
 * For consistency `haskey(r::RegexMatch, i::Integer)` has also been added and returns if the capture group for `i` exists ([#37300]).
 * A new standard library `TOML` has been added for parsing and printing [TOML files](https://toml.io) ([#37034]).
+* A new standard library `Downloads` has been added, which replaces the old `Base.download` function with `Downloads.download`, providing cross-platform, multi-protocol, in-process download functionality implemented with [libcurl](https://curl.haxx.se/libcurl/) ([#37340]).
 * The `Pkg.BinaryPlatforms` module has been moved into `Base` as `Base.BinaryPlatforms` and heavily reworked.
   Applications that want to be compatible with the old API should continue to import `Pkg.BinaryPlatforms`,
   however new users should use `Base.BinaryPlatforms` directly. ([#37320])
@@ -159,7 +163,7 @@ Standard library changes
 * Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns,
   and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
 * New convenient `spdiagm([m, n,] v::AbstractVector)` methods which call
-  `spdiagm([m, n,] 0 => v)`, consistently with their dense `diagm` counterparts.
+  `spdiagm([m, n,] 0 => v)`, consistently with their dense `diagm` counterparts. ([#37254])
 
 #### Dates
 

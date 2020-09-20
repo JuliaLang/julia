@@ -226,6 +226,8 @@ end
     @test Dates.string(Dates.Year(1)) == "1 year"
     @test Dates.string(Dates.Year(-1)) == "-1 year"
     @test Dates.string(Dates.Year(2)) == "2 years"
+    @test isfinite(Dates.Year)
+    @test isfinite(Dates.Year(0))
     @test zero(Dates.Year) == Dates.Year(0)
     @test zero(Dates.Year(10)) == Dates.Year(0)
     @test zero(Dates.Month) == Dates.Month(0)
