@@ -3491,25 +3491,25 @@ function istril(A::AbstractSparseMatrixCSC)
     return true
 end
 
-_numel(vect::AbstractSparseVector) = nnz(vect)
-_numel(vect::AbstractVector) = length(vect)
+_nnz(v::AbstractSparseVector) = nnz(v)
+_nnz(v::AbstractVector) = length(v)
 
-function _inds(vect::AbstractSparseVector, row, col)
-    ix = nonzeroinds(vect)
+function _indices(v::AbstractSparseVector, row, col)
+    ix = nonzeroinds(v)
     return (row .+ ix, col .+ ix)
 end
-function _inds(vect::AbstractVector, row, col)
-    veclen = length(vect)
+function _indices(v::AbstractVector, row, col)
+    veclen = length(v)
     return (row+1:row+veclen, col+1:col+veclen)
 end
 
-_elems(vect::AbstractSparseVector) = nonzeros(vect)
-_elems(vect::AbstractVector) = vect
+_nzvals(v::AbstractSparseVector) = nonzeros(v)
+_nzvals(v::AbstractVector) = v
 
 function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
     for p in kv
-        ncoeffs += _numel(p.second)
+        ncoeffs += _nnz(p.second)
     end
     I = Vector{Int}(undef, ncoeffs)
     J = Vector{Int}(undef, ncoeffs)
@@ -3518,23 +3518,23 @@ function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     m = 0
     n = 0
     for p in kv
-        dia = p.first
-        vect = p.second
-        numel = _numel(vect)
-        if dia < 0
-            row = -dia
+        k = p.first
+        v = p.second
+        if k < 0
+            row = -k
             col = 0
-        elseif dia > 0
+        elseif k > 0
             row = 0
-            col = dia
+            col = k
         else
             row = 0
             col = 0
         end
+        numel = _nnz(v)
         r = 1+i:numel+i
-        I[r], J[r] = _inds(vect, row, col)
-        copyto!(view(V, r), _elems(vect))
-        veclen = length(vect)
+        I[r], J[r] = _indices(v, row, col)
+        copyto!(view(V, r), _nzvals(v))
+        veclen = length(v)
         m = max(m, row + veclen)
         n = max(n, col + veclen)
         i += numel
