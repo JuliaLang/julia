@@ -809,7 +809,7 @@ static std::set<CPUID> get_cpuinfo(void)
 static CPU get_cpu_name(CPUID cpuid)
 {
     switch (cpuid.implementer) {
-    case 0x41: // ARM
+    case 0x41: // 'A': ARM
         switch (cpuid.part) {
         case 0xb02: return CPU::arm_mpcore;
         case 0xb36: return CPU::arm_1136jf_s;
@@ -856,13 +856,14 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0xd4a: return CPU::arm_neoverse_e1;
         default: return CPU::generic;
         }
-    case 0x42: // Broadcom (Cavium)
+    case 0x42: // 'B': Broadcom (Cavium)
         switch (cpuid.part) {
+            // case 0x00f: return CPU::broadcom_brahma_b15;
             // case 0x100: return CPU::broadcom_brahma_b53;
         case 0x516: return CPU::cavium_thunderx2t99p1;
         default: return CPU::generic;
         }
-    case 0x43: // Cavium
+    case 0x43: // 'C': Cavium
         switch (cpuid.part) {
         case 0xa0: return CPU::cavium_thunderx;
         case 0xa1:
@@ -881,31 +882,32 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0xb8: return CPU::marvell_thunderx3t110;
         default: return CPU::generic;
         }
-    case 0x46: // Fujitsu
+    case 0x46: // 'F': Fujitsu
         switch (cpuid.part) {
         case 0x1: return CPU::fujitsu_a64fx;
         default: return CPU::generic;
         }
-    case 0x48: // HiSilicon
+    case 0x48: // 'H': HiSilicon
         switch (cpuid.part) {
         case 0xd01: return CPU::hisilicon_tsv110;
+        case 0xd40: return CPU::arm_cortex_a76; // Kirin 980
         default: return CPU::generic;
         }
-    case 0x4e: // NVIDIA
+    case 0x4e: // 'N': NVIDIA
         switch (cpuid.part) {
         case 0x000: return CPU::nvidia_denver1;
         case 0x003: return CPU::nvidia_denver2;
         case 0x004: return CPU::nvidia_carmel;
         default: return CPU::generic;
         }
-    case 0x50: // AppliedMicro
+    case 0x50: // 'P': AppliedMicro
         // x-gene 2
         // x-gene 3
         switch (cpuid.part) {
         case 0x000: return CPU::apm_xgene1;
         default: return CPU::generic;
         }
-    case 0x51: // Qualcomm
+    case 0x51: // 'Q': Qualcomm
         switch (cpuid.part) {
         case 0x00f:
         case 0x02d:
@@ -913,41 +915,54 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0x04d:
         case 0x06f:
             return CPU::qualcomm_krait;
-        case 0x201:
-        case 0x205:
-        case 0x211:
+        case 0x201: // silver
+        case 0x205: // gold
+        case 0x211: // silver
             return CPU::qualcomm_kyro;
-        case 0x800:
-        case 0x801:
-        case 0x802:
-        case 0x803:
-        case 0x804:
-        case 0x805:
-            return CPU::arm_cortex_a73; // second-generation Kryo
+            // kryo 2xx
+        case 0x800: // gold
+            return CPU::arm_cortex_a73;
+        case 0x801: // silver
+            return CPU::arm_cortex_a53;
+            // kryo 3xx
+        case 0x802: // gold
+            return CPU::arm_cortex_a75;
+        case 0x803: // silver
+            return CPU::arm_cortex_a55;
+            // kryo 4xx
+        case 0x804: // gold
+            return CPU::arm_cortex_a76;
+        case 0x805: // silver
+            return CPU::arm_cortex_a55;
+            // kryo 5xx seems to be using ID for cortex-a77 directly
         case 0xc00:
             return CPU::qualcomm_falkor;
         case 0xc01:
             return CPU::qualcomm_saphira;
         default: return CPU::generic;
         }
-    case 0x53: // Samsung
-        if (cpuid.part == 1)
+    case 0x53: // 'S': Samsung
+        if (cpuid.part == 1) {
+            if (cpuid.variant == 4)
+                return CPU::samsung_exynos_m2;
             return CPU::samsung_exynos_m1;
+        }
         if (cpuid.variant != 1)
             return CPU::generic;
         switch (cpuid.part) {
         case 0x2: return CPU::samsung_exynos_m3;
         case 0x3: return CPU::samsung_exynos_m4;
+        case 0x4: return CPU::samsung_exynos_m5;
         default: return CPU::generic;
         }
-    case 0x56: // Marvell
+    case 0x56: // 'V': Marvell
         switch (cpuid.part) {
         case 0x581:
         case 0x584:
             return CPU::marvell_pj4;
         default: return CPU::generic;
         }
-    case 0x61: // Apple
+    case 0x61: // 'a': Apple
         // https://opensource.apple.com/source/xnu/xnu-6153.81.5/osfmk/arm/cpuid.h.auto.html
         switch (cpuid.part) {
         case 0x0: // Swift
@@ -978,12 +993,12 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::apple_a13;
         default: return CPU::generic;
         }
-    case 0x68: // Huaxintong Semiconductor
+    case 0x68: // 'h': Huaxintong Semiconductor
         switch (cpuid.part) {
         case 0x0: return CPU::hxt_phecda;
         default: return CPU::generic;
         }
-    case 0x69: // Intel
+    case 0x69: // 'i': Intel
         switch (cpuid.part) {
         case 0x001: return CPU::intel_3735d;
         default: return CPU::generic;
