@@ -428,10 +428,10 @@ try
     end
     error("unexpected")
 catch ex
-    @test typeof(ex) == CompositeException
+    @test typeof(ex) === CompositeException
     @test length(ex) == 5
-    @test typeof(ex.exceptions[1]) == TaskFailedException
-    @test typeof(ex.exceptions[1].task.exception) == ErrorException
+    @test typeof(ex.exceptions[1]) === TaskFailedException
+    @test typeof(ex.exceptions[1].task.exception) === ErrorException
     # test start, next, and done
     for (i, i_ex) in enumerate(ex)
         @test i == parse(Int, i_ex.task.exception.msg)
@@ -448,9 +448,9 @@ function test_remoteexception_thrown(expr)
         expr()
         error("unexpected")
     catch ex
-        @test typeof(ex) == RemoteException
-        @test typeof(ex.captured) == CapturedException
-        @test typeof(ex.captured.ex) == ErrorException
+        @test typeof(ex) === RemoteException
+        @test typeof(ex.captured) === CapturedException
+        @test typeof(ex.captured.ex) === ErrorException
         @test ex.captured.ex.msg == "foobar"
     end
 end
@@ -490,7 +490,7 @@ let ex
     bt = ex.captured.processed_bt::Array{Any,1}
     @test length(bt) > 1
     frame, repeated = bt[1]::Tuple{Base.StackTraces.StackFrame, Int}
-    @test frame.func == :foo
+    @test frame.func === :foo
     @test frame.linfo === nothing
     @test repeated == 1
 end
@@ -834,7 +834,7 @@ remote_do(fut->put!(fut, myid()), id_other, f)
 
 # Github issue #29932
 rc_unbuffered = RemoteChannel(()->Channel{Vector{Float64}}(0))
-@test eltype(rc_unbuffered) == Vector{Float64}
+@test eltype(rc_unbuffered) === Vector{Float64}
 
 @async begin
     # Trigger direct write (no buffering) of largish array

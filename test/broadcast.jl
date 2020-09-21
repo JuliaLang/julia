@@ -165,9 +165,9 @@ end
 
 @test @inferred(broadcast(+,[0,1.2],reshape([0,-2],1,1,2))) == reshape([0 -2; 1.2 -0.8],2,1,2)
 rt = Base.return_types(broadcast, Tuple{typeof(+), Array{Float64, 3}, Array{Int, 1}})
-@test length(rt) == 1 && rt[1] == Array{Float64, 3}
+@test length(rt) == 1 && rt[1] === Array{Float64, 3}
 rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}})
-@test length(rt) == 1 && rt[1] == Array{Float64, 3}
+@test length(rt) == 1 && rt[1] === Array{Float64, 3}
 
 # f.(args...) syntax (#15032)
 let x = [1, 3.2, 4.7],
@@ -185,18 +185,18 @@ end
 
 # issue 14725
 let a = Number[2, 2.0, 4//2, 2+0im] / 2
-    @test eltype(a) == Number
+    @test eltype(a) === Number
 end
 let a = Real[2, 2.0, 4//2] / 2
-    @test eltype(a) == Real
+    @test eltype(a) === Real
 end
 let a = Real[2, 2.0, 4//2] / 2.0
-    @test eltype(a) == Float64
+    @test eltype(a) === Float64
 end
 
 # issue 16164
 let a = broadcast(Float32, [3, 4, 5])
-    @test eltype(a) == Float32
+    @test eltype(a) === Float32
 end
 
 # broadcasting scalars:
@@ -577,7 +577,7 @@ end
 # Test that broadcast's promotion mechanism handles closures accepting more than one argument.
 # (See issue #19641 and referenced issues and pull requests.)
 let f() = (a = 1; Broadcast.combine_eltypes((x, y) -> x + y + a, (1.0, 1.0)))
-    @test @inferred(f()) == Float64
+    @test @inferred(f()) === Float64
 end
 
 @testset "broadcast resulting in BitArray" begin

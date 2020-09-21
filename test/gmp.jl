@@ -18,7 +18,7 @@ ee = typemax(Int64)
         @test_throws MethodError convert(Unsigned, x) # could change in the future
     end
     @test a+BigInt(1) == b
-    @test typeof(a+1) == BigInt
+    @test typeof(a+1) === BigInt
     @test a+1 == b
     @test isequal(a+1, b)
     @test b == a+1
@@ -28,17 +28,17 @@ ee = typemax(Int64)
     @test !(b < a)
     @test !(b <= a)
 
-    @test typeof(a * 2) == BigInt
+    @test typeof(a * 2) === BigInt
     @test a*2 == c
     @test c-a == a
     @test c == a + a
     @test c+1 == a+b
 
 
-    @test typeof(d) == BigInt
+    @test typeof(d) === BigInt
     @test d == -c
 
-    @test typeof(BigInt(ee)) == BigInt
+    @test typeof(BigInt(ee)) === BigInt
     @test BigInt(ee)+1 == parse(BigInt,"9223372036854775808")
     @testset "printing" begin
         #Multiple calls for sanity check, since we're doing direct memory manipulation
@@ -49,24 +49,24 @@ ee = typemax(Int64)
         @test string(a) == "123456789012345678901234567890"
     end
     @testset "constructors" begin
-        @test typeof(BigInt(typemax(Int8))) == BigInt
-        @test typeof(BigInt(typemax(Int16))) == BigInt
-        @test typeof(BigInt(typemax(Int32))) == BigInt
-        @test typeof(BigInt(typemax(Int64))) == BigInt
-        @test typeof(BigInt(typemax(Int128))) == BigInt
+        @test typeof(BigInt(typemax(Int8))) === BigInt
+        @test typeof(BigInt(typemax(Int16))) === BigInt
+        @test typeof(BigInt(typemax(Int32))) === BigInt
+        @test typeof(BigInt(typemax(Int64))) === BigInt
+        @test typeof(BigInt(typemax(Int128))) === BigInt
 
-        @test typeof(BigInt(true)) == BigInt
-        @test typeof(BigInt(typemax(UInt8))) == BigInt
-        @test typeof(BigInt(typemax(UInt16))) == BigInt
-        @test typeof(BigInt(typemax(UInt32))) == BigInt
-        @test typeof(BigInt(typemax(UInt64))) == BigInt
-        @test typeof(BigInt(typemax(UInt128))) == BigInt
+        @test typeof(BigInt(true)) === BigInt
+        @test typeof(BigInt(typemax(UInt8))) === BigInt
+        @test typeof(BigInt(typemax(UInt16))) === BigInt
+        @test typeof(BigInt(typemax(UInt32))) === BigInt
+        @test typeof(BigInt(typemax(UInt64))) === BigInt
+        @test typeof(BigInt(typemax(UInt128))) === BigInt
 
-        @test typeof(BigInt(BigInt(1))) == BigInt
+        @test typeof(BigInt(BigInt(1))) === BigInt
 
         for x in (Int16(0), 1, 3//4, big(5//6), big(9))
-            @test big(typeof(x)) == typeof(big(x))
-            @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
+            @test big(typeof(x)) === typeof(big(x))
+            @test big(typeof(complex(x, x))) === typeof(big(complex(x, x)))
         end
     end
 end
@@ -403,20 +403,20 @@ end
 
 @testset "math ops returning BigFloat" begin
     # operations that when applied to Int64 give Float64, should give BigFloat
-    @test typeof(exp(a)) == BigFloat
-    @test typeof(exp2(a)) == BigFloat
-    @test typeof(exp10(a)) == BigFloat
-    @test typeof(expm1(a)) == BigFloat
-    @test typeof(cosh(a)) == BigFloat
-    @test typeof(sinh(a)) == BigFloat
-    @test typeof(tanh(a)) == BigFloat
-    @test typeof(sech(a)) == BigFloat
-    @test typeof(csch(a)) == BigFloat
-    @test typeof(coth(a)) == BigFloat
-    @test typeof(cbrt(a)) == BigFloat
-    @test typeof(tan(a)) == BigFloat
-    @test typeof(cos(a)) == BigFloat
-    @test typeof(sin(a)) == BigFloat
+    @test typeof(exp(a)) === BigFloat
+    @test typeof(exp2(a)) === BigFloat
+    @test typeof(exp10(a)) === BigFloat
+    @test typeof(expm1(a)) === BigFloat
+    @test typeof(cosh(a)) === BigFloat
+    @test typeof(sinh(a)) === BigFloat
+    @test typeof(tanh(a)) === BigFloat
+    @test typeof(sech(a)) === BigFloat
+    @test typeof(csch(a)) === BigFloat
+    @test typeof(coth(a)) === BigFloat
+    @test typeof(cbrt(a)) === BigFloat
+    @test typeof(tan(a)) === BigFloat
+    @test typeof(cos(a)) === BigFloat
+    @test typeof(sin(a)) === BigFloat
 end
 
 # Issue #24298

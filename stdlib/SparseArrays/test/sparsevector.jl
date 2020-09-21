@@ -1072,7 +1072,7 @@ end
                         @test \(transpose(mat), spvec) ≈ \(transpose(mat), fspvec)
                     end
                     # test in-place left-division methods not involving quotients
-                    if eltypevec == typeof(zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))
+                    if eltypevec === typeof(zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))
                         for mat in unittrimats
                             @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
                             @test ldiv!(adjoint(mat), copy(spvec)) ≈ ldiv!(adjoint(mat), copy(fspvec))
@@ -1080,7 +1080,7 @@ end
                         end
                     end
                     # test in-place left-division methods involving quotients
-                    if eltypevec == typeof((zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))/one(eltypemat))
+                    if eltypevec === typeof((zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))/one(eltypemat))
                         for mat in trimats
                             @test ldiv!(mat, copy(spvec)) ≈ ldiv!(mat, copy(fspvec))
                             @test ldiv!(adjoint(mat), copy(spvec)) ≈ ldiv!(adjoint(mat), copy(fspvec))
@@ -1322,7 +1322,7 @@ end
     A = SparseVector(10, Int[1, 3, 5, 7], Float64[1.0, 3.0, 5.0, 7.0])
     # test similar without specifications (preserves stored-entry structure)
     simA = similar(A)
-    @test typeof(simA) == typeof(A)
+    @test typeof(simA) === typeof(A)
     @test size(simA) == size(A)
     @test nonzeroinds(simA) == nonzeroinds(A)
     @test length(nonzeros(simA)) == length(nonzeros(A))
@@ -1340,7 +1340,7 @@ end
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with Dims{1} specification (preserves nothing)
     simA = similar(A, (6,))
-    @test typeof(simA) == typeof(A)
+    @test typeof(simA) === typeof(A)
     @test size(simA) == (6,)
     @test length(nonzeroinds(simA)) == 0
     @test length(nonzeros(simA)) == 0
@@ -1453,7 +1453,7 @@ end
     ty = typeof
     @testset "matvec multiplication $(ty(X)) * $(ty(v))" for X in (U, L), v in (x, y, z)
         @test X * v ≈ Matrix(X) * Vector(v)
-        @test typeof(X * v) == typeof(x)
+        @test typeof(X * v) === typeof(x)
     end
 end
 

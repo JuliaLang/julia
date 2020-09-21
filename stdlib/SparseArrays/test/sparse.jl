@@ -2408,7 +2408,7 @@ end
     local A = sparse(1.0I, 5, 5)
     # test similar without specifications (preserves stored-entry structure)
     simA = similar(A)
-    @test typeof(simA) == typeof(A)
+    @test typeof(simA) === typeof(A)
     @test size(simA) == size(A)
     @test getcolptr(simA) == getcolptr(A)
     @test rowvals(simA) == rowvals(A)
@@ -2429,7 +2429,7 @@ end
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with Dims{2} specification (preserves storage space only, not stored-entry structure)
     simA = similar(A, (6,6))
-    @test typeof(simA) == typeof(A)
+    @test typeof(simA) === typeof(A)
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == length(rowvals(A))
@@ -3012,28 +3012,28 @@ end
     LM = Matrix(L)
     Y = A * U
     @test Y ≈ AM * UM
-    @test typeof(Y) == typeof(A)
+    @test typeof(Y) === typeof(A)
     Y = A * L
     @test Y ≈ AM * LM
-    @test typeof(Y) == typeof(A)
+    @test typeof(Y) === typeof(A)
     Y = U * A
     @test Y ≈ UM * AM
-    @test typeof(Y) == typeof(A)
+    @test typeof(Y) === typeof(A)
     Y = L * A
     @test Y ≈ LM * AM
-    @test typeof(Y) == typeof(A)
+    @test typeof(Y) === typeof(A)
     Y = U * U
     @test Y ≈ UM * UM
-    @test typeof(Y) == typeof(U)
+    @test typeof(Y) === typeof(U)
     Y = L * L
     @test Y ≈ LM * LM
-    @test typeof(Y) == typeof(L)
+    @test typeof(Y) === typeof(L)
     Y = L * U
     @test Y ≈ LM * UM
-    @test typeof(Y) == typeof(A)
+    @test typeof(Y) === typeof(A)
     Y = U * L
     @test Y ≈ UM * LM
-    @test typeof(Y) == typeof(A)
+    @test typeof(Y) === typeof(A)
 end
 
 #testing the sparse matrix/vector access functions nnz, nzrange, rowvals, nonzeros

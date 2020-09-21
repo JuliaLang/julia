@@ -285,7 +285,7 @@ function summarize(io::IO, T::DataType, binding::Binding)
         end
         println(io, "```")
     end
-    if supertype(T) != Any
+    if supertype(T) !== Any
         println(io, "# Supertype Hierarchy")
         println(io, "```")
         Base.show_supertypes(io, T)

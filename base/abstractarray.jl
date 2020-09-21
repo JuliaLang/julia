@@ -2171,7 +2171,7 @@ function mapslices(f, A::AbstractArray; dims)
         r1 = tmp
     end
     nextra = max(0, length(dims)-ndims(r1))
-    if eltype(Rsize) == Int
+    if eltype(Rsize) === Int
         Rsize[dims] = [size(r1)..., ntuple(d->1, nextra)...]
     else
         Rsize[dims] = [axes(r1)..., ntuple(d->OneTo(1), nextra)...]

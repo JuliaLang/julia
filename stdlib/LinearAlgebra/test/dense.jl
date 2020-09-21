@@ -49,21 +49,21 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 @testset "For A containing $eltya" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
-    ainit = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    ainit2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
+    ainit = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    ainit2 = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     ε = εa = eps(abs(float(one(eltya))))
 
     apd  = ainit'*ainit # symmetric positive-definite
     @testset "Positive definiteness" begin
         @test !isposdef(ainit)
         @test isposdef(apd)
-        if eltya != Int # cannot perform cholesky! for Matrix{Int}
+        if eltya !== Int # cannot perform cholesky! for Matrix{Int}
             @test !isposdef!(copy(ainit))
             @test isposdef!(copy(apd))
         end
     end
     @testset "For b containing $eltyb" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-        binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+        binit = eltyb === Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
         for (a, b) in ((copy(ainit), copy(binit)), (view(ainit, 1:n, 1:n), view(binit, 1:n, 1:2)))
@@ -709,13 +709,13 @@ end
     @test exp(log(A11)) ≈ A11
 
     A12 = convert(Matrix{elty}, [1 -1; 1 -1])
-    @test typeof(log(A12)) == Array{ComplexF64, 2}
+    @test typeof(log(A12)) === Array{ComplexF64, 2}
 
     A13 = convert(Matrix{elty}, [2 0; 0 2])
-    @test typeof(log(A13)) == Array{elty, 2}
+    @test typeof(log(A13)) === Array{elty, 2}
 
-    T = elty == Float64 ? Symmetric : Hermitian
-    @test typeof(log(T(A13))) == T{elty, Array{elty, 2}}
+    T = elty === Float64 ? Symmetric : Hermitian
+    @test typeof(log(T(A13))) === T{elty, Array{elty, 2}}
 
     A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
     logA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;
@@ -869,11 +869,11 @@ end
 
 function test_rdiv_pinv_consistency(a, b)
     @test (a*b)/b ≈ a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
-    @test typeof((a*b)/b) == typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
+    @test typeof((a*b)/b) === typeof(a*(b/b)) === typeof((a*b)*pinv(b)) === typeof(a*(b*pinv(b)))
 end
 function test_ldiv_pinv_consistency(a, b)
     @test a\(a*b) ≈ (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
-    @test typeof(a\(a*b)) == typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
+    @test typeof(a\(a*b)) === typeof((a\a)*b) === typeof((pinv(a)*a)*b) === typeof(pinv(a)*(a*b))
 end
 function test_div_pinv_consistency(a, b)
     test_rdiv_pinv_consistency(a, b)

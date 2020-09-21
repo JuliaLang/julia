@@ -75,7 +75,7 @@ end
     @test factorial(Int64(20)) == 2432902008176640000
     # issue #6579
     @test_throws OverflowError factorial(Int64(21))
-    @test typeof(factorial(Int8(2))) == typeof(factorial(Int8(1)))
+    @test typeof(factorial(Int8(2))) === typeof(factorial(Int8(1)))
     if Int === Int32
         @test factorial(Int32(12)) === Int32(479001600)
         @test_throws OverflowError factorial(Int32(13))

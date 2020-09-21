@@ -16,12 +16,12 @@ zero(::Type{TestQuaternion{T}}) where {T} =
 real(quaternion::TestQuaternion) = quaternion.scalar
 
 for T in (Int64, Float64)
-    @test real(T) == T
-    @test real(Complex{T}) == T
+    @test real(T) === T
+    @test real(Complex{T}) === T
     # TestQuaternions are neither real or complex
-    @test real(TestQuaternion{T}) == T
-    @test complex(T) == Complex{T}
-    @test complex(Complex{T}) == Complex{T}
+    @test real(TestQuaternion{T}) === T
+    @test complex(T) === Complex{T}
+    @test complex(Complex{T}) === Complex{T}
 end
 
 #show
@@ -887,15 +887,15 @@ end
 @testset "sign" begin
     for T in (Float32, Float64)
         z = Complex{T}(1)
-        @test typeof(sign(z)) == typeof(z)
+        @test typeof(sign(z)) === typeof(z)
         z = Complex{T}(0)
-        @test typeof(sign(z)) == typeof(z)
+        @test typeof(sign(z)) === typeof(z)
     end
     for T in (Int32, Int64)
         z = Complex{T}(1)
-        @test typeof(sign(z)) == typeof(float(z))
+        @test typeof(sign(z)) === typeof(float(z))
         z = Complex{T}(0)
-        @test typeof(sign(z)) == typeof(float(z))
+        @test typeof(sign(z)) === typeof(float(z))
     end
 
     @test sign(0 + 0im) == 0
@@ -955,10 +955,10 @@ end
 end
 
 # issue/PR #10148
-@test typeof(Int8(1) - im) == Complex{Int8}
+@test typeof(Int8(1) - im) === Complex{Int8}
 
 # issue #10926
-@test typeof(π - 1im) == ComplexF64
+@test typeof(π - 1im) === ComplexF64
 
 @testset "issue #15969" begin
     # specialized muladd for complex types
@@ -991,7 +991,7 @@ end
 @testset "Complex Irrationals, issue #21204" begin
     for x in (pi, ℯ, Base.MathConstants.catalan) # No need to test all of them
         z = Complex(x, x)
-        @test typeof(z) == Complex{typeof(x)}
+        @test typeof(z) === Complex{typeof(x)}
         @test exp(z) ≈ exp(x) * cis(x)
         @test log1p(z) ≈ log(1 + z)
         @test exp2(z) ≈ exp(z * log(2))
@@ -1071,10 +1071,10 @@ end
         @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
 
         # divide complex by complex Inf
-        if T == Float64
+        if T === Float64
             @test_broken isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
             @test_broken isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
-        elseif T == Float32
+        elseif T === Float32
             @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
             @test_broken isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
         else
@@ -1183,7 +1183,7 @@ end
 end
 
 # real(C) with C a Complex Unionall
-@test real(Complex{<:AbstractFloat}) == AbstractFloat
+@test real(Complex{<:AbstractFloat}) === AbstractFloat
 
 # complex with non-concrete eltype
 @test_throws ErrorException complex(Union{Complex{Int}, Nothing}[])

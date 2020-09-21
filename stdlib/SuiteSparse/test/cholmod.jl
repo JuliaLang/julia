@@ -133,9 +133,9 @@ Random.seed!(123)
     @test size(chmal, 1) == size(A, 1)
 
     @testset "eltype" begin
-        @test eltype(Dense(fill(1., 3))) == Float64
-        @test eltype(A) == Float64
-        @test eltype(chma) == Float64
+        @test eltype(Dense(fill(1., 3))) === Float64
+        @test eltype(A) === Float64
+        @test eltype(chma) === Float64
     end
 end
 
@@ -280,7 +280,7 @@ end
 
 @testset "High level interface" for elty in (Float64, ComplexF64)
     local A, b
-    if elty == Float64
+    if elty === Float64
         A = randn(5, 5)
         b = randn(5)
     else
@@ -326,8 +326,8 @@ end
 end
 
 @testset "Core functionality" for elty in (Float64, ComplexF64)
-    A1 = sparse([1:5; 1], [1:5; 2], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
-    A2 = sparse([1:5; 1], [1:5; 2], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
+    A1 = sparse([1:5; 1], [1:5; 2], elty === Float64 ? randn(6) : complex.(randn(6), randn(6)))
+    A2 = sparse([1:5; 1], [1:5; 2], elty === Float64 ? randn(6) : complex.(randn(6), randn(6)))
     A1pd = A1'A1
     A1Sparse = CHOLMOD.Sparse(A1)
     A2Sparse = CHOLMOD.Sparse(A2)
@@ -679,8 +679,8 @@ end
 end
 
 @testset "Issue #28985" begin
-    @test typeof(cholesky(sparse(I, 4, 4))'\rand(4)) == Array{Float64, 1}
-    @test typeof(cholesky(sparse(I, 4, 4))'\rand(4,1)) == Array{Float64, 2}
+    @test typeof(cholesky(sparse(I, 4, 4))'\rand(4)) === Array{Float64, 1}
+    @test typeof(cholesky(sparse(I, 4, 4))'\rand(4,1)) === Array{Float64, 2}
 end
 
 @testset "Issue with promotion during conversion to CHOLMOD.Dense" begin

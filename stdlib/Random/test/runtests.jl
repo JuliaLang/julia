@@ -87,10 +87,10 @@ end
 for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
           Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
-    @test typeof(r) == T
+    @test typeof(r) === T
     @test 97 <= r <= 122
     r = rand(convert(T, 97):convert(T,2):convert(T, 122),2)[1]
-    @test typeof(r) == T
+    @test typeof(r) === T
     @test 97 <= r <= 122
     @test mod(r,2)==1
 
@@ -109,7 +109,7 @@ end
 
 if sizeof(Int32) < sizeof(Int)
     local r = rand(Int32(-1):typemax(Int32))
-    @test typeof(r) == Int32
+    @test typeof(r) === Int32
     @test -1 <= r <= typemax(Int32)
     for U = (Int64, UInt64)
         @test all(div(one(UInt128) << 52, k)*k - 1 == SamplerRangeInt(map(U, 1:k)).u
@@ -129,7 +129,7 @@ for T in [UInt32, UInt64, UInt128, Int128]
     @test big(typemax(T)-1000) <= rand(s) <= big(typemax(T)) + 10000
     r = rand(s, 1, 2)
     @test size(r) == (1, 2)
-    @test typeof(r) == Matrix{BigInt}
+    @test typeof(r) === Matrix{BigInt}
     guardseed() do
         Random.seed!(0)
         r = rand(s)
@@ -374,7 +374,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     end
     for f! in [rand!, randn!, randexp!]
         for T in functypes[f!]
-            X = T == Bool ? T[0,1] : T[0,1,2]
+            X = T === Bool ? T[0,1] : T[0,1,2]
             for A in (Vector{T}(undef, 5),
                       Matrix{T}(undef, 2, 3),
                       GenericArray{T}(undef, 5),
@@ -430,7 +430,7 @@ end
 # test uniform distribution of floats
 for rng in [MersenneTwister(), RandomDevice()],
     T in [Float16, Float32, Float64, BigFloat],
-        prec in (T == BigFloat ? [3, 53, 64, 100, 256, 1000] : [256])
+        prec in (T === BigFloat ? [3, 53, 64, 100, 256, 1000] : [256])
     setprecision(BigFloat, prec) do
         # array version
         counts = hist(rand(rng, T, 2000), 4)
@@ -646,7 +646,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
                 len = [8, 20]
             s = len == 8 ? randstring(rng..., c) : randstring(rng..., c, len)
             @test length(s) == len
-            if eltype(c) == Char
+            if eltype(c) === Char
                 @test issubset(s, c)
             else # UInt8
                 @test issubset(s, Set(Char(v) for v in c))
@@ -713,9 +713,9 @@ end
 end
 
 @testset "gentype for UniformBits" begin
-    @test Random.gentype(Random.UInt52()) == UInt64
-    @test Random.gentype(Random.UInt52(UInt128)) == UInt128
-    @test Random.gentype(Random.UInt104()) == UInt128
+    @test Random.gentype(Random.UInt52()) === UInt64
+    @test Random.gentype(Random.UInt52(UInt128)) === UInt128
+    @test Random.gentype(Random.UInt104()) === UInt128
 end
 
 @testset "shuffle[!]" begin

@@ -88,14 +88,14 @@ function checked_neg(x::T) where T<:Integer
 end
 throw_overflowerr_negation(x) = (@_noinline_meta;
     throw(OverflowError(Base.invokelatest(string, "checked arithmetic: cannot compute -x for x = ", x, "::", typeof(x)))))
-if BrokenSignedInt != Union{}
+if BrokenSignedInt !== Union{}
 function checked_neg(x::BrokenSignedInt)
     r = -x
     (x<0) & (r<0) && throw_overflowerr_negation(x)
     r
 end
 end
-if BrokenUnsignedInt != Union{}
+if BrokenUnsignedInt !== Union{}
 function checked_neg(x::T) where T<:BrokenUnsignedInt
     x != 0 && throw_overflowerr_negation(x)
     T(0)
@@ -133,7 +133,7 @@ add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x+y, false)
 
-if BrokenSignedInt != Union{}
+if BrokenSignedInt !== Union{}
 function add_with_overflow(x::T, y::T) where T<:BrokenSignedInt
     r = x + y
     # x and y have the same sign, and the result has a different sign
@@ -141,7 +141,7 @@ function add_with_overflow(x::T, y::T) where T<:BrokenSignedInt
     r, f
 end
 end
-if BrokenUnsignedInt != Union{}
+if BrokenUnsignedInt !== Union{}
 function add_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
     # x + y > typemax(T)
     # Note: ~y == -y-1
@@ -195,7 +195,7 @@ sub_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_ssub_int(x, y)
 sub_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_usub_int(x, y)
 sub_with_overflow(x::Bool, y::Bool) = (x-y, false)
 
-if BrokenSignedInt != Union{}
+if BrokenSignedInt !== Union{}
 function sub_with_overflow(x::T, y::T) where T<:BrokenSignedInt
     r = x - y
     # x and y have different signs, and the result has a different sign than x
@@ -203,7 +203,7 @@ function sub_with_overflow(x::T, y::T) where T<:BrokenSignedInt
     r, f
 end
 end
-if BrokenUnsignedInt != Union{}
+if BrokenUnsignedInt !== Union{}
 function sub_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
     # x - y < 0
     x - y, x < y
@@ -235,14 +235,14 @@ mul_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_smul_int(x, y)
 mul_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_umul_int(x, y)
 mul_with_overflow(x::Bool, y::Bool) = (x*y, false)
 
-if BrokenSignedIntMul != Union{} && BrokenSignedIntMul != Int128
+if BrokenSignedIntMul !== Union{} && BrokenSignedIntMul !== Int128
 function mul_with_overflow(x::T, y::T) where T<:BrokenSignedIntMul
     r = widemul(x, y)
     f = r % T != r
     r % T, f
 end
 end
-if BrokenUnsignedIntMul != Union{} && BrokenUnsignedIntMul != UInt128
+if BrokenUnsignedIntMul !== Union{} && BrokenUnsignedIntMul !== UInt128
 function mul_with_overflow(x::T, y::T) where T<:BrokenUnsignedIntMul
     r = widemul(x, y)
     f = r % T != r

@@ -62,7 +62,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test Array(qra) ≈ a
                 sq = size(q.factors, 2)
                 @test *(Matrix{eltyb}(I, sq, sq), adjoint(q)) * squareQ(q) ≈ Matrix(I, sq, sq) atol=5000ε
-                if eltya != Int
+                if eltya !== Int
                     @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab}, q)
                     ac = copy(a)
                     @test qr!(a[:, 1:5])\b == qr!(view(ac, :, 1:5))\b
@@ -87,14 +87,14 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*r ≈ a[:, 1:n1]
                 @test q*b[1:n1] ≈ rectangularQ(q)*b[1:n1] atol=100ε
                 @test q*b ≈ squareQ(q)*b atol=100ε
-                if eltya != Int
+                if eltya !== Int
                     @test Array{eltya}(q) ≈ Matrix(q)
                 end
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
                 sq = size(q.factors, 2)
                 @test *(UpperTriangular(Matrix{eltyb}(I, sq, sq)), adjoint(q))*squareQ(q) ≈ Matrix(I, n1, a_1) atol=5000ε
-                if eltya != Int
+                if eltya !== Int
                     @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
                 # iterate
@@ -119,12 +119,12 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*r*transpose(qrpa.P) ≈ a[1:n1,:]
                 @test a[1:n1,:]*(qrpa\b[1:n1]) ≈ b[1:n1] atol=5000ε
                 @test Array(qrpa) ≈ a[1:5,:]
-                if eltya != Int
+                if eltya !== Int
                     @test Array{eltya}(q) ≈ Matrix(q)
                 end
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
-                if eltya != Int
+                if eltya !== Int
                     @test Matrix{eltyb}(I, n1, n1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
                 # iterate
@@ -143,14 +143,14 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*r ≈ a[:,p]
                 @test q*r[:,invperm(p)] ≈ a[:,1:n1]
                 @test Array(qrpa) ≈ a[:,1:5]
-                if eltya != Int
+                if eltya !== Int
                     @test Array{eltya}(q) ≈ Matrix(q)
                 end
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
                 sq = size(q.factors, 2)
                 @test *(UpperTriangular(Matrix{eltyb}(I, sq, sq)), adjoint(q))*squareQ(q) ≈ Matrix(I, n1, a_1) atol=5000ε
-                if eltya != Int
+                if eltya !== Int
                     @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
                 qrstring = sprint((t, s) -> show(t, "text/plain", s), qrpa)
@@ -165,7 +165,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test Base.propertynames(qrpa)       == (:R, :Q, :p, :P)
             end
         end
-        if eltya != Int
+        if eltya !== Int
             @testset "Matmul with QR factorizations" begin
                 a = raw_a
                 qrpa = factorize(a[:,1:n1])

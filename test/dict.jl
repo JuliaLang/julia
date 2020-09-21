@@ -28,7 +28,7 @@ using Random
     @test_throws InexactError p[2.3]
     @test first(p) == 10
     @test last(p) == 20
-    @test eltype(p) == Int
+    @test eltype(p) === Int
     @test eltype(4 => 5.6) == Union{Int,Float64}
     @test vcat(1 => 2.0, 1.0 => 2) == [1.0 => 2.0, 1.0 => 2.0]
 end
@@ -79,14 +79,14 @@ end
     @test h["a","b","c"] == h[("a","b","c")] == 4
 
     @testset "eltype, keytype and valtype" begin
-        @test eltype(h) == Pair{Any,Any}
-        @test keytype(h) == Any
-        @test valtype(h) == Any
+        @test eltype(h) === Pair{Any,Any}
+        @test keytype(h) === Any
+        @test valtype(h) === Any
 
         td = Dict{AbstractString,Float64}()
-        @test eltype(td) == Pair{AbstractString,Float64}
-        @test keytype(td) == AbstractString
-        @test valtype(td) == Float64
+        @test eltype(td) === Pair{AbstractString,Float64}
+        @test keytype(td) === AbstractString
+        @test valtype(td) === Float64
         @test keytype(Dict{AbstractString,Float64}) === AbstractString
         @test valtype(Dict{AbstractString,Float64}) === Float64
     end
@@ -122,7 +122,7 @@ _d = Dict("a"=>0)
     d2 = Dict(1 => 2, 3 => 4)
     d3 = Dict((1 => 2, 3 => 4))
     @test d == d2 == d3
-    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Int,Int}
+    @test typeof(d) === typeof(d2) === typeof(d3) === Dict{Int,Int}
 
     d = Dict(((1, 2), (3, "b")))
     @test d[1] === 2
@@ -130,7 +130,7 @@ _d = Dict("a"=>0)
     d2 = Dict(1 => 2, 3 => "b")
     d3 = Dict((1 => 2, 3 => "b"))
     @test d == d2 == d3
-    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Int,Any}
+    @test typeof(d) === typeof(d2) === typeof(d3) === Dict{Int,Any}
 
     d = Dict(((1, 2), ("a", 4)))
     @test d[1] === 2
@@ -138,7 +138,7 @@ _d = Dict("a"=>0)
     d2 = Dict(1 => 2, "a" => 4)
     d3 = Dict((1 => 2, "a" => 4))
     @test d == d2 == d3
-    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Int}
+    @test typeof(d) === typeof(d2) === typeof(d3) === Dict{Any,Int}
 
     d = Dict(((1, 2), ("a", "b")))
     @test d[1] === 2
@@ -146,7 +146,7 @@ _d = Dict("a"=>0)
     d2 = Dict(1 => 2, "a" => "b")
     d3 = Dict((1 => 2, "a" => "b"))
     @test d == d2 == d3
-    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Any}
+    @test typeof(d) === typeof(d2) === typeof(d3) === Dict{Any,Any}
 end
 
 @test_throws ArgumentError first(Dict())
@@ -525,7 +525,7 @@ end
     d = @inferred IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
     @test isa(d, IdDict)
     @test d == IdDict(1=>1, 2=>2, 3=>3)
-    @test eltype(d) == Pair{Int,Int}
+    @test eltype(d) === Pair{Int,Int}
     @test_throws KeyError d[:a]
     @test_throws ArgumentError d[:a] = 1
     @test_throws MethodError d[1] = :a
@@ -536,10 +536,10 @@ end
     @test_throws ArgumentError IdDict{Float64,Int}(d)
 
     # misc constructors
-    @test typeof(IdDict(1=>1, :a=>2)) == IdDict{Any,Int}
-    @test typeof(IdDict(1=>1, 1=>:a)) == IdDict{Int,Any}
-    @test typeof(IdDict(:a=>1, 1=>:a)) == IdDict{Any,Any}
-    @test typeof(IdDict(())) == IdDict{Any,Any}
+    @test typeof(IdDict(1=>1, :a=>2)) === IdDict{Any,Int}
+    @test typeof(IdDict(1=>1, 1=>:a)) === IdDict{Int,Any}
+    @test typeof(IdDict(:a=>1, 1=>:a)) === IdDict{Any,Any}
+    @test typeof(IdDict(())) === IdDict{Any,Any}
 
     # check that returned values are inferred
     d = @inferred IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
@@ -880,7 +880,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     wkd = empty!(wkd)
     @test wkd == empty(wkd)
-    @test typeof(wkd) == typeof(empty(wkd))
+    @test typeof(wkd) === typeof(empty(wkd))
     @test length(wkd) == 0
     @test isempty(wkd)
     @test isa(wkd, WeakKeyDict)

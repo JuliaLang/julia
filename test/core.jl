@@ -126,7 +126,7 @@ Type{Integer}  # cache this
 @test typejoin(Tuple{Int8,UInt8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
     Tuple{Int8,Vararg{Integer}}
 @test typejoin(Union{Int,AbstractString}, Int) == Union{Int,AbstractString}
-@test typejoin(Union{Int,AbstractString}, Int8) == Any
+@test typejoin(Union{Int,AbstractString}, Int8) === Any
 @test typejoin(Tuple{}, Tuple{Int}) == Tuple{Vararg{Int}}
 
 # typejoin associativity
@@ -1246,7 +1246,7 @@ let
    b = C_NULL + 1
    c = C_NULL - 1
    d = 1 + C_NULL
-   @test eltype(a) == Nothing
+   @test eltype(a) === Nothing
 
    @test a != b != c
    @test b == d
@@ -2326,8 +2326,8 @@ f7652() = fieldtype(t_a7652, :a) <: Int
 @test f7652() == (fieldtype(A7652, :a) <: Int) == true
 
 g7652() = fieldtype(DataType, :types)
-@test g7652() == fieldtype(DataType, :types) == Core.SimpleVector
-@test fieldtype(t_a7652, 1) == Int
+@test g7652() == fieldtype(DataType, :types) === Core.SimpleVector
+@test fieldtype(t_a7652, 1) === Int
 
 h7652() = setfield!(a7652, 1, 2)
 @test h7652() === 2
@@ -2592,7 +2592,7 @@ end
 x9634 = 3
 @test_throws BoundsError(1 + 2im, 3) getfield(1 + 2im, x9634)
 @test try; throw(BoundsError()); catch ex; !isdefined((ex::BoundsError), :a) && !isdefined((ex::BoundsError), :i); end
-@test try; throw(BoundsError(Int)); catch ex; (ex::BoundsError).a == Int && !isdefined((ex::BoundsError), :i); end
+@test try; throw(BoundsError(Int)); catch ex; (ex::BoundsError).a === Int && !isdefined((ex::BoundsError), :i); end
 @test_throws BoundsError(Int, typemin(Int)) throw(BoundsError(Int, typemin(Int)))
 @test_throws BoundsError(Int, (:a,)) throw(BoundsError(Int, (:a,)))
 f9534g(a, b, c...) = c[0]
@@ -2670,7 +2670,7 @@ let
     g(x::T...) where {T} = T
     g(x...) = 0
     @test g((),Int) == 0
-    @test g((),()) == Tuple{}
+    @test g((),()) === Tuple{}
 end
 
 # TODO: hopefully this issue is obsolete after the tuple type change
@@ -3317,7 +3317,7 @@ mutable struct Type11243{A, B}
     y::B
 end
 let a = [Type11243(1,2), Type11243("a","b")]
-    @test typeof(a) == Vector{Type11243}
+    @test typeof(a) === Vector{Type11243}
     @test typeof(a) <: Vector{Type11243}
 end
 
@@ -3502,8 +3502,8 @@ let
     catch err
         @test isa(err, TypeError)
         @test err.func == :Vararg
-        @test err.expected == Int
-        @test err.got == Int
+        @test err.expected === Int
+        @test err.got === Int
     end
 
     try
@@ -3512,7 +3512,7 @@ let
     catch err
         @test isa(err, TypeError)
         @test err.func == :Vararg
-        @test err.expected == Int
+        @test err.expected === Int
         @test err.got == 0x1
     end
 end
@@ -5360,7 +5360,7 @@ end
 end
 
 let a = Vector{Core.TypeofBottom}(undef, 2)
-    @test a[1] == Union{}
+    @test a[1] === Union{}
     @test a == [Union{}, Union{}]
 end
 
@@ -5389,7 +5389,7 @@ f21271(x) = x::Tuple{Type{Int}, Type{Float64}}
 # issue #21397
 bar21397(x::T) where {T} = T
 foo21397(x) = bar21397(x)
-@test foo21397(Tuple) == DataType
+@test foo21397(Tuple) === DataType
 
 # issue 21216
 primitive type FP128test <: AbstractFloat 128 end
@@ -6891,7 +6891,7 @@ end
 struct FooFieldType; x::Int; end
 f_fieldtype(b) = fieldtype(b ? Int : FooFieldType, 1)
 
-@test @inferred(f_fieldtype(false)) == Int
+@test @inferred(f_fieldtype(false)) === Int
 @test_throws BoundsError f_fieldtype(true)
 
 # Issue #28224
@@ -7097,7 +7097,7 @@ TupleOf31406(cols::Union{Shape31406,Type}...) = TupleOf31406(collect(Shape31406,
 struct LL31783{T}
     x::T
 end
-foo31783(tv::TypeVar) = tv.ub == Any ? Union{tv,LL31783{tv}} : tv
+foo31783(tv::TypeVar) = tv.ub === Any ? Union{tv,LL31783{tv}} : tv
 @test isa(foo31783(TypeVar(:T)),Union)
 
 # Issue #31649

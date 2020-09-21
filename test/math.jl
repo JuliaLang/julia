@@ -387,7 +387,7 @@ end
             @test sind(convert(T,0.0))::fT === zero(fT)
             @test sind(convert(T,180.0))::fT === zero(fT)
             @test sind(convert(T,360.0))::fT === zero(fT)
-            T != Rational{Int} && @test sind(convert(T,-0.0))::fT === -zero(fT)
+            T !== Rational{Int} && @test sind(convert(T,-0.0))::fT === -zero(fT)
             @test sind(convert(T,-180.0))::fT === -zero(fT)
             @test sind(convert(T,-360.0))::fT === -zero(fT)
         end
@@ -420,7 +420,7 @@ end
             @test sinpi(convert(T,0.0))::fT === zero(fT)
             @test sinpi(convert(T,1.0))::fT === zero(fT)
             @test sinpi(convert(T,2.0))::fT === zero(fT)
-            T != Rational{Int} && @test sinpi(convert(T,-0.0))::fT === -zero(fT)
+            T !== Rational{Int} && @test sinpi(convert(T,-0.0))::fT === -zero(fT)
             @test sinpi(convert(T,-1.0))::fT === -zero(fT)
             @test sinpi(convert(T,-2.0))::fT === -zero(fT)
             @test_throws DomainError sinpi(convert(T,Inf))
@@ -439,10 +439,10 @@ end
             @test sincospi(one(T)/convert(T,6))[1] == 0.5
             @test_throws DomainError sind(convert(T,Inf))
             @test_throws DomainError cosd(convert(T,Inf))
-            T != Float32 && @test cospi(one(T)/convert(T,3)) == 0.5
-            T != Float32 && @test sincospi(one(T)/convert(T,3))[2] == 0.5
-            T == Rational{Int} && @test sinpi(5//6) == 0.5
-            T == Rational{Int} && @test sincospi(5//6)[1] == 0.5
+            T !== Float32 && @test cospi(one(T)/convert(T,3)) == 0.5
+            T !== Float32 && @test sincospi(one(T)/convert(T,3))[2] == 0.5
+            T === Rational{Int} && @test sinpi(5//6) == 0.5
+            T === Rational{Int} && @test sincospi(5//6)[1] == 0.5
         end
     end
     scdm = sincosd(missing)

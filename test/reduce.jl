@@ -166,14 +166,14 @@ for f in (sum2, sum5, sum6, sum9, sum10)
     @test sum(z) == f(z)
     @test sum(Int[]) == f(Int[]) == 0
     @test sum(Int[7]) == f(Int[7]) == 7
-    @test typeof(f(Int8[])) == typeof(f(Int8[1])) == typeof(f(Int8[1 7]))
+    @test typeof(f(Int8[])) === typeof(f(Int8[1])) === typeof(f(Int8[1 7]))
 end
 for f in (sum3, sum4, sum7, sum8)
     @test sum(z) == f(z)
     @test_throws ArgumentError f(Int[])
     @test sum(Int[7]) == f(Int[7]) == 7
 end
-@test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
+@test typeof(sum(Int8[])) === typeof(sum(Int8[1])) === typeof(sum(Int8[1 7]))
 
 @testset "`sum` of empty collections with `init`" begin
     function noncallable end  # should not be called
@@ -234,8 +234,8 @@ end
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test prod(Int[]) === prod2(Int[]) === 1
 @test prod(Int[7]) === prod2(Int[7]) === 7
-@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int
-@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int
+@test typeof(prod(Int8[])) === typeof(prod(Int8[1])) === typeof(prod(Int8[1, 7])) === Int
+@test typeof(prod2(Int8[])) === typeof(prod2(Int8[1])) === typeof(prod2(Int8[1 7])) === Int
 
 # maximum & minimum & extrema
 

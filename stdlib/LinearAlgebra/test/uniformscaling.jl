@@ -15,10 +15,10 @@ Random.seed!(123)
     @test ndims(I) == 2
     @test one(UniformScaling{Float32}) == UniformScaling(one(Float32))
     @test zero(UniformScaling{Float32}) == UniformScaling(zero(Float32))
-    @test eltype(one(UniformScaling{Float32})) == Float32
+    @test eltype(one(UniformScaling{Float32})) === Float32
     @test zero(UniformScaling(rand(ComplexF64))) == zero(UniformScaling{ComplexF64})
     @test one(UniformScaling(rand(ComplexF64))) == one(UniformScaling{ComplexF64})
-    @test eltype(one(UniformScaling(rand(ComplexF64)))) == ComplexF64
+    @test eltype(one(UniformScaling(rand(ComplexF64)))) === ComplexF64
     @test -one(UniformScaling(2)) == UniformScaling(-1)
     @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
     @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
@@ -405,12 +405,12 @@ end
 @testset "operations involving I should preserve eltype" begin
     @test isa(Int8(1) + I, Int8)
     @test isa(Float16(1) + I, Float16)
-    @test eltype(Int8(1)I) == Int8
-    @test eltype(Float16(1)I) == Float16
-    @test eltype(fill(Int8(1), 2, 2)I) == Int8
-    @test eltype(fill(Float16(1), 2, 2)I) == Float16
-    @test eltype(fill(Int8(1), 2, 2) + I) == Int8
-    @test eltype(fill(Float16(1), 2, 2) + I) == Float16
+    @test eltype(Int8(1)I) === Int8
+    @test eltype(Float16(1)I) === Float16
+    @test eltype(fill(Int8(1), 2, 2)I) === Int8
+    @test eltype(fill(Float16(1), 2, 2)I) === Float16
+    @test eltype(fill(Int8(1), 2, 2) + I) === Int8
+    @test eltype(fill(Float16(1), 2, 2) + I) === Float16
 end
 
 @testset "test that UniformScaling is applied correctly for matrices of matrices" begin

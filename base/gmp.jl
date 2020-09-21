@@ -12,7 +12,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              sign, hastypemax, isodd, digits!
 
-if Clong == Int32
+if Clong === Int32
     const ClongMax = Union{Int8, Int16, Int32}
     const CulongMax = Union{UInt8, UInt16, UInt32}
 else
@@ -118,7 +118,7 @@ function __init__()
         ALLOC_OVERFLOW_FUNCTION[] = true
     catch ex
         # ErrorException("ccall: could not find function...")
-        if typeof(ex) != ErrorException
+        if typeof(ex) !== ErrorException
             rethrow()
         end
     end
@@ -389,14 +389,14 @@ function Float64(x::BigInt, ::RoundingMode{:Nearest})
         z = Inf64
     elseif xsize == 1
         z = Float64(unsafe_load(x.d))
-    elseif Limb == UInt32 && xsize == 2
+    elseif Limb === UInt32 && xsize == 2
         z = Float64((unsafe_load(x.d, 2) % UInt64) << BITS_PER_LIMB + unsafe_load(x.d))
     else
         y1 = unsafe_load(x.d, xsize) % UInt64
         n = 64 - leading_zeros(y1)
         # load first 54(1 + 52 bits of fraction + 1 for rounding)
         y = y1 >> (n - (precision(Float64)+1))
-        if Limb == UInt64
+        if Limb === UInt64
             y += n > precision(Float64) ? 0 : (unsafe_load(x.d, xsize-1) >> (10+n))
         else
             y += (unsafe_load(x.d, xsize-1) % UInt64) >> (n-22)

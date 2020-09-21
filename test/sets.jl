@@ -501,15 +501,15 @@ end
 @testset "convert" begin
     iset = Set([17, 4711])
     cfset = convert(Set{Float64}, iset)
-    @test typeof(cfset) == Set{Float64}
+    @test typeof(cfset) === Set{Float64}
     @test cfset == iset
     fset = Set([17.0, 4711.0])
     ciset = convert(Set{Int}, fset)
-    @test typeof(ciset) == Set{Int}
+    @test typeof(ciset) === Set{Int}
     @test ciset == fset
     ssset = Set(split("foo bar"))
     cssset = convert(Set{String}, ssset)
-    @test typeof(cssset) == Set{String}
+    @test typeof(cssset) === Set{String}
     @test cssset == Set(["foo", "bar"])
 end
 
@@ -571,7 +571,7 @@ end
         check("== as Bitset", asbitset(x1) == asbitset(x2))
         check("== as Set", asset(x1) == asset(x2))
         check("issubset", issubset(x1, x2))
-        if typeof(x1) == typeof(x2)
+        if typeof(x1) === typeof(x2)
             check("<", x1 < x2)
             check("<=", x1 > x2)
             check("union!", union!(copy(x1), x2))

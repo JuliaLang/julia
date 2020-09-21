@@ -71,8 +71,8 @@ end
 
 @testset "Types" begin
     for x in (Int16(0), 1, 2f0, pi, 3//4, big(5//6), 7.8, big(9), big(ℯ))
-        @test float(typeof(x)) == typeof(float(x))
-        @test float(typeof(complex(x, x))) == typeof(float(complex(x, x)))
+        @test float(typeof(x)) === typeof(float(x))
+        @test float(typeof(complex(x, x))) === typeof(float(complex(x, x)))
     end
 end
 

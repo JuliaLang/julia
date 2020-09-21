@@ -424,7 +424,7 @@ function typebound_nothrow(b)
     if isType(b)
         b = unwrap_unionall(b.parameters[1])
         b === Union{} && return true
-        return !isa(b, DataType) || b.name != _va_typename
+        return !isa(b, DataType) || b.name !== _va_typename
     end
     return false
 end
@@ -636,7 +636,7 @@ function fieldcount_noerror(@nospecialize t)
             return nothing
         end
         t = t::DataType
-    elseif t == Union{}
+    elseif t === Union{}
         return 0
     end
     if !(t isa DataType)
@@ -955,7 +955,7 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
     if isa(s0, Const) && (!(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union)) || s0.val === Module)
         return Bottom
     end
-    if (s0 isa Type && (s0 == Type{Module} || s0 == Type{Union{}})) || isa(s0, Conditional)
+    if (s0 isa Type && (s0 === Type{Module} || s0 === Type{Union{}})) || isa(s0, Conditional)
         return Bottom
     end
 

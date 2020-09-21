@@ -1293,10 +1293,10 @@ end
             @test 0 <= r < y
             @test x == y*d + r
 
-            @test typeof(d2) == typeof(d)
-            @test typeof(r2) == typeof(r)
-            @test typeof(f2) == typeof(f)
-            @test typeof(m2) == typeof(m)
+            @test typeof(d2) === typeof(d)
+            @test typeof(r2) === typeof(r)
+            @test typeof(f2) === typeof(f)
+            @test typeof(m2) === typeof(m)
 
             @test d2 == d
             @test r2 == r
@@ -1326,10 +1326,10 @@ end
                 @test sx == sy*sd + sr
                 @test sx == sy*sf + sm
 
-                @test typeof(sd2) == typeof(sd)
-                @test typeof(sr2) == typeof(sr)
-                @test typeof(sf2) == typeof(sf)
-                @test typeof(sm2) == typeof(sm)
+                @test typeof(sd2) === typeof(sd)
+                @test typeof(sr2) === typeof(sr)
+                @test typeof(sf2) === typeof(sf)
+                @test typeof(sm2) === typeof(sm)
 
                 @test sd2 == sd
                 @test sr2 == sr

@@ -763,7 +763,7 @@ mktempdir() do dir
                 LibGit2.GitRepo(path)
                 error("unexpected")
             catch e
-                @test typeof(e) == LibGit2.GitError
+                @test typeof(e) === LibGit2.GitError
                 @test startswith(
                     lowercase(sprint(show, e)),
                     lowercase("GitError(Code:ENOTFOUND, Class:OS, failed to resolve path"))
@@ -2716,7 +2716,7 @@ mktempdir() do dir
             cache = p.cache
             @test err == git_ok
             @test auth_attempts == 1
-            @test typeof(cache) == LibGit2.CachedCredentials
+            @test typeof(cache) === LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => valid_cred)
             @test p.credential == valid_cred
 
@@ -2730,7 +2730,7 @@ mktempdir() do dir
             cache = p.cache
             @test err == git_ok
             @test auth_attempts == 2
-            @test typeof(cache) == LibGit2.CachedCredentials
+            @test typeof(cache) === LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => valid_cred)
             @test p.credential == valid_cred
 
@@ -2745,7 +2745,7 @@ mktempdir() do dir
             cache = p.cache
             @test err == abort_prompt
             @test auth_attempts == 3
-            @test typeof(cache) == LibGit2.CachedCredentials
+            @test typeof(cache) === LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => invalid_cred)
             @test p.credential != invalid_cred
 
@@ -2755,7 +2755,7 @@ mktempdir() do dir
             cache = p.cache
             @test err == exhausted_error
             @test auth_attempts == 2
-            @test typeof(cache) == LibGit2.CachedCredentials
+            @test typeof(cache) === LibGit2.CachedCredentials
             @test cache.cred == Dict()
             @test p.credential != invalid_cred
 

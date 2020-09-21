@@ -22,8 +22,8 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 @testset "$eltya argument A" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
+    a = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    a2 = eltya === Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = transpose(a) + a                  # symmetric indefinite
     aher = a' + a                  # Hermitian indefinite
     apd  = a' * a                  # Positive-definite
@@ -90,7 +90,7 @@ bimg  = randn(n,2)/2
         end
 
         @testset "$eltyb argument B" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-            b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+            b = eltyb === Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
             for b in (b, view(b, 1:n, 1:2))
                 εb = eps(abs(float(one(eltyb))))
                 ε = max(εa,εb)
