@@ -224,8 +224,11 @@ STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
 {
     if (jl_is_datatype_make_singleton(st)) {
-        st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
-        jl_gc_wb(st, st->instance);
+        // It's possible for st to already have an ->instance if it was redefined
+        if (!st->instance) {
+            st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
+            jl_gc_wb(st, st->instance);
+        }
     }
 }
 
@@ -453,11 +456,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     zeroinit = 1;
                 }
                 else {
+                    uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->haspadding)
                         haspadding = 1;
+                    if (i >= st->ninitialized && fld_npointers &&
+                        fld_npointers * sizeof(void*) != fsz) {
+                        // field may be undef (may be uninitialized and contains pointer),
+                        // and contains non-pointer fields of non-zero sizes.
+                        haspadding = 1;
+                    }
                     if (!zeroinit)
                         zeroinit = ((jl_datatype_t*)fld)->zeroinit;
-                    npointers += ((jl_datatype_t*)fld)->layout->npointers;
+                    npointers += fld_npointers;
                 }
             }
             else {

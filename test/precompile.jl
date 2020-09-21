@@ -264,9 +264,9 @@ try
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
-        discard_module = mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3])
+        discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) ]
-        @test map(x -> x[2], deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
+        @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
                             Base.PkgId(Foo) => Base.PkgId(Test),
@@ -288,17 +288,19 @@ try
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
+                [:Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, :TOML]),
+                 :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,]),
                 # Plus precompilation module generated at build time
                 let id = Base.PkgId("__PackagePrecompilationStatementModule")
                     Dict(id => Base.module_build_id(Base.root_module(id)))
                 end
            )
         @test discard_module.(deps) == deps1
+        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
+        @test map(x -> x.filename, deps) == [Foo_file]
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
         @test sin(0x01, 0x4000, 0x30031234) == 52
@@ -338,6 +340,55 @@ try
         @test PV === ft(ft(PV)[1].parameters[1])[1]
         @test pointer_from_objref(PV) === pointer_from_objref(ft(ft(PV)[1].parameters[1])[1])
     end
+
+    Nest_module = :Nest4b3a94a1a081a8cb
+    Nest_file = joinpath(dir, "$Nest_module.jl")
+    NestInner_file = joinpath(dir, "$(Nest_module)Inner.jl")
+    NestInner2_file = joinpath(dir, "$(Nest_module)Inner2.jl")
+    write(Nest_file,
+        """
+        module $Nest_module
+        include("$(escape_string(NestInner_file))")
+        end
+        """)
+    write(NestInner_file,
+        """
+        module NestInner
+        include("$(escape_string(NestInner2_file))")
+        end
+        """)
+    write(NestInner2_file,
+        """
+        f() = 22
+        """)
+    Nest = Base.require(Main, Nest_module)
+    cachefile = joinpath(cachedir, "$Nest_module.ji")
+    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    @test last(deps).modpath == ["NestInner"]
+
+    UsesB_module = :UsesB4b3a94a1a081a8cb
+    B_module     = :UsesB4b3a94a1a081a8cb_B
+    UsesB_file = joinpath(dir, "$UsesB_module.jl")
+    B_file = joinpath(dir, "$(B_module).jl")
+    write(UsesB_file,
+        """
+        module $UsesB_module
+        using $B_module
+        end
+        """)
+    write(B_file,
+        """
+        module $B_module
+        export bfunc
+        bfunc() = 33
+        end
+        """)
+    UsesB = Base.require(Main, UsesB_module)
+    cachefile = joinpath(cachedir, "$UsesB_module.ji")
+    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    id1, id2 = only(requires)
+    @test Base.pkgorigins[id1].cachepath == cachefile
+    @test Base.pkgorigins[id2].cachepath == joinpath(cachedir, "$B_module.ji")
 
     Baz_file = joinpath(dir, "Baz.jl")
     write(Baz_file,

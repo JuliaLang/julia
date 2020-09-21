@@ -660,13 +660,13 @@ function push!!(v::Vector, el)
         return v
     else
         if typeof(T) === Union
-            newT = Base.typejoin(T, typeof(el))
+            newT = Any
         else
             newT = Union{T, typeof(el)}
         end
         new = Array{newT}(undef, length(v))
         copy!(new, v)
-        return push!!(new, el)
+        return push!(new, el)
     end
 end
 

@@ -1195,17 +1195,41 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 
     std::set<uint32_t> cpus;
     std::vector<std::pair<uint32_t,CPUID>> list;
+    // Ideally the feature detection above should be enough.
+    // However depending on the kernel version not all features are available
+    // and it's also impossible to detect the ISA version which contains
+    // some features not yet exposed by the kernel.
+    // We therefore try to get a more complete feature list from the CPU name.
+    // Since it is possible to pair cores that have different feature set
+    // (Observed for exynos 9810 with exynos-m3 + cortex-a55) we'll compute
+    // an intersection of the known features from each core.
+    // If there's a core that we don't recognize, treat it as generic.
+    bool extra_initialized = false;
+    FeatureList<feature_sz> extra_features = {};
     for (auto info: cpuinfo) {
         auto name = (uint32_t)get_cpu_name(info);
-        if (name == 0)
+        if (name == 0) {
+            // no need to clear the feature set if it wasn't initialized
+            if (extra_initialized)
+                extra_features = FeatureList<feature_sz>{};
+            extra_initialized = true;
             continue;
+        }
         if (!check_cpu_arch_ver(name, arch))
             continue;
         if (cpus.insert(name).second) {
-            features = features | find_cpu(name)->features;
+            if (extra_initialized) {
+                extra_features = extra_features & find_cpu(name)->features;
+            }
+            else {
+                extra_initialized = true;
+                extra_features = find_cpu(name)->features;
+            }
             list.emplace_back(name, info);
         }
     }
+    features = features | extra_features;
+
     // Not all elements/pairs are valid
     static constexpr CPU v8order[] = {
         CPU::arm_cortex_a35,
