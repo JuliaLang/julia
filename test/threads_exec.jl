@@ -377,6 +377,28 @@ let atomictypes = intersect((Int8, Int16, Int32, Int64, Int128,
     end
 end
 
+#Test that atomic operations work (at all) on pointers
+#Since code is shared with ops on Atomic{T}, there is no need to test atomicity separately.
+let atomictypes = intersect((Int8, Int16, Int32, Int64, Int128,
+    UInt8, UInt16, UInt32, UInt64, UInt128,
+    Float16, Float32, Float64), Base.Threads.atomictypes)
+
+    for T in atomictypes
+    arr = [zero(T)]
+    ptr = pointer(arr)
+    GC.@preserve arr begin
+        @test T(0) == atomic_add!(ptr, T(1))
+        @test T(1) == atomic_xchg!(ptr, T(4))
+        @test T(4) == atomic_sub!(ptr, T(1))
+        @test T(3) == atomic_max!(ptr, T(7))
+        @test T(7) == atomic_min!(ptr, T(10))
+        @test T(7) == atomic_cas!(ptr, T(7), T(5))
+        @test T(5) == atomic_cas!(ptr, T(7), T(6))
+        @test arr[1] == T(5)
+    end
+   end
+end
+
 # Test atomic_cas! and atomic_xchg!
 function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
     for i in range

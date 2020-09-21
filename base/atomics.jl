@@ -350,27 +350,28 @@ import ..Base.gc_alignment
 # All atomic operations have acquire and/or release semantics, depending on
 # whether the load or store values. Most of the time, this is what one wants
 # anyway, and it's only moderately expensive on most hardware.
-for typ in atomictypes
+for typ in atomictypes, container in [Atomic, Ptr]
     lt = llvmtypes[typ]
     ilt = llvmtypes[inttype(typ)]
     rt = "$lt, $lt*"
     irt = "$ilt, $ilt*"
-    @eval getindex(x::Atomic{$typ}) =
-        llvmcall($"""
-                 %ptr = inttoptr i$WORD_SIZE %0 to $lt*
-                 %rv = load atomic $rt %ptr acquire, align $(gc_alignment(typ))
-                 ret $lt %rv
-                 """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
-    @eval setindex!(x::Atomic{$typ}, v::$typ) =
-        llvmcall($"""
-                 %ptr = inttoptr i$WORD_SIZE %0 to $lt*
-                 store atomic $lt %1, $lt* %ptr release, align $(gc_alignment(typ))
-                 ret void
-                 """, Cvoid, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
-
+    if container == Atomic
+        @eval getindex(x::Atomic{$typ}) =
+            llvmcall($"""
+                    %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                    %rv = load atomic $rt %ptr acquire, align $(gc_alignment(typ))
+                    ret $lt %rv
+                    """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
+        @eval setindex!(x::Atomic{$typ}, v::$typ) =
+            llvmcall($"""
+                    %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                    store atomic $lt %1, $lt* %ptr release, align $(gc_alignment(typ))
+                    ret void
+                    """, Cvoid, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
+    end
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
     if typ <: Integer
-        @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
+        @eval atomic_cas!(x::$container{$typ}, cmp::$typ, new::$typ) =
             llvmcall($"""
                      %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                      %rs = cmpxchg $lt* %ptr, $lt %1, $lt %2 acq_rel acquire
@@ -379,7 +380,7 @@ for typ in atomictypes
                      """, $typ, Tuple{Ptr{$typ},$typ,$typ},
                      unsafe_convert(Ptr{$typ}, x), cmp, new)
     else
-        @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
+        @eval atomic_cas!(x::$container{$typ}, cmp::$typ, new::$typ) =
             llvmcall($"""
                      %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                      %icmp = bitcast $lt %1 to $ilt
@@ -402,14 +403,14 @@ for typ in atomictypes
         end
         if rmwop in arithmetic_ops && !(typ <: ArithmeticTypes) continue end
         if typ <: Integer
-            @eval $fn(x::Atomic{$typ}, v::$typ) =
+            @eval $fn(x::$container{$typ}, v::$typ) =
                 llvmcall($"""
                          %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                          %rv = atomicrmw $rmw $lt* %ptr, $lt %1 acq_rel
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
         else if rmwop === :xchg
-            @eval $fn(x::Atomic{$typ}, v::$typ) =
+            @eval $fn(x::$container{$typ}, v::$typ) =
                 llvmcall($"""
                          %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                          %ival = bitcast $lt %1 to $ilt
@@ -419,7 +420,7 @@ for typ in atomictypes
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
         else if rmwop === :add || rmwop == :sub
             rmw = (rmwop === :add ? "fadd" : "fsub")
-            @eval $fn(x::Atomic{$typ}, v::$typ) =
+            @eval $fn(x::$container{$typ}, v::$typ) =
                 llvmcall($"""
                         %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                         %rv = atomicrmw $rmw $lt* %ptr, $lt %1 acq_rel
@@ -431,10 +432,10 @@ end
 
 # Provide atomic floating-point operations via atomic_cas! for those who lack support by llvm
 const opnames = Dict{Symbol, Symbol}(:+ => :add, :- => :sub)
-for op in [:+, :-, :max, :min]
+for op in [:+, :-, :max, :min], container in [Atomic, Ptr]
     fT = (op == :+ || op == :-) ? Float16 : FloatTypes
     opname = get(opnames, op, op)
-    @eval function $(Symbol("atomic_", opname, "!"))(var::Atomic{T}, val::T) where T<:fT
+    @eval function $(Symbol("atomic_", opname, "!"))(var::$container{T}, val::T) where T<:fT
         IT = inttype(T)
         old = var[]
         while true
