@@ -314,6 +314,12 @@ event listener for just-in-time (JIT) profiling.
     * [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
       in the build configuration).
 
+### `ENABLE_GDBLISTENER`
+
+If set to anything besides `0` enables GDB registration of Julia code on release builds.
+On debug builds of Julia this is always enabled. Recommended to use with `-g 2`.
+
+
 ### `JULIA_LLVM_ARGS`
 
 Arguments to be passed to the LLVM backend.

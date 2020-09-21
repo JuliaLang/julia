@@ -595,6 +595,7 @@ extern char jl_using_oprofile_jitevents;
 #ifdef JL_USE_PERF_JITEVENTS
 extern char jl_using_perf_jitevents;
 #endif
+extern char jl_using_gdb_jitevents;
 extern size_t jl_arr_xtralloc_limit;
 
 // -- init.c -- //
