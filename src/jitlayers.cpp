@@ -75,11 +75,6 @@ uint64_t jl_cumulative_compile_time_ns() {
     return cumulative_compile_time;
 }
 
-extern "C" JL_DLLEXPORT
-void jl_reset_cumulative_compile_time() {
-    cumulative_compile_time = 0;
-}
-
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module),

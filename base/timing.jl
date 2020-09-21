@@ -57,7 +57,6 @@ end
 
 # cumulative total time spent on compilation
 cumulative_compile_time_ns() = ccall(:jl_cumulative_compile_time_ns, UInt64, ())
-reset_cumulative_compile_time() = ccall(:jl_reset_cumulative_compile_time, Cvoid, ())
 
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
@@ -175,7 +174,6 @@ julia> @time begin
 macro time(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
-        reset_cumulative_compile_time() # reduce risk of overflow on cumulative counter
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns()
         local elapsedtime = time_ns()
@@ -212,7 +210,6 @@ malloc() calls:    1
 macro timev(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
-        reset_cumulative_compile_time() # reduce risk of overflow on cumulative counter
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns()
         local elapsedtime = time_ns()
