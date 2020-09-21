@@ -1152,7 +1152,7 @@ end
 @assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),Nothing))
 @assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),String))
 
-function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies))
+function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), show_errors::Bool = true)
     rm(output, force=true)   # Remove file if it exists
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
@@ -1178,7 +1178,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
                        --output-ji $output --output-incremental=yes
                        --startup-file=no --history-file=no --warn-overwrite=yes
                        --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
-                       --eval 'eval(Meta.parse(read(stdin,String)))'`, stderr=stderr),
+                       --eval 'eval(Meta.parse(read(stdin,String)))'`, stderr=show_errors ? stderr : devnull),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
@@ -1189,8 +1189,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     return io
 end
 
-@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies)))
-@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies)))
+@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), Bool))
+@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), Bool))
 
 function compilecache_path(pkg::PkgId)::String
     entrypath, entryfile = cache_file_entry(pkg)
@@ -1223,7 +1223,8 @@ end
 
 const MAX_NUM_PRECOMPILE_FILES = 10
 
-function compilecache(pkg::PkgId, path::String)
+# `show_errors` is an "internal" interface for Pkg.precompile
+function compilecache(pkg::PkgId, path::String, show_errors::Bool = true)
     # decide where to put the resulting cache file
     cachefile = compilecache_path(pkg)
     cachepath = dirname(cachefile)
@@ -1253,7 +1254,7 @@ function compilecache(pkg::PkgId, path::String)
     local p
     try
         close(tmpio)
-        p = create_expr_cache(pkg, path, tmppath, concrete_deps)
+        p = create_expr_cache(pkg, path, tmppath, concrete_deps, show_errors)
         if success(p)
             # append checksum to the end of the .ji file:
             open(tmppath, "a+") do f
