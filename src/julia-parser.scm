@@ -1162,7 +1162,7 @@
   (let loop ((ex ex))
     (let ((t (peek-token s)))
       (if (or (and space-sensitive (ts:space? s)
-                   (memv t '(#\( #\[ #\{ #\' #\" #\`)))
+                   (memv t '(#\( #\[ #\{ |'| #\" #\`)))
               (and (or (number? ex)  ;; 2(...) is multiply, not call
                        (large-number? ex))
                    (eqv? t #\()))
