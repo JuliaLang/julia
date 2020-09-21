@@ -9,14 +9,18 @@ function typeinf(interp::AbstractInterpreter, result::InferenceResult, cached::B
 end
 
 function _typeinf end
-const _typeinf_function = Function[_typeinf]
-function _set_typeinf_func(f::Function)
-    _typeinf_function[1] = f
+const _typeinf_function = let a = Array{Function,0}(undef, ())  # Boostrap: Array{Function,0}(fill(typeinf))
+    a[] = _typeinf
+    a
 end
+function _set_typeinf_func(f::Function)
+    _typeinf_function[] = f
+end
+_set_typeinf_func(_typeinf)  # to ensure `_set_typeinf_func()` is precompiled
 
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
-    Core._apply_latest(_typeinf_function[1], (interp, frame))
-    #return _typeinf_function[1](interp, frame)
+    Core._apply_latest(_typeinf_function[], (interp, frame))
+    #return _typeinf_function[](interp, frame)
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
