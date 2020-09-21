@@ -67,6 +67,19 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
     }
 }
 
+static uint64_t cumulative_compile_time = 0;
+static uint64_t compiler_start_time = 0;
+
+extern "C" JL_DLLEXPORT
+uint64_t jl_cumulative_compile_time_ns() {
+    return cumulative_compile_time;
+}
+
+extern "C" JL_DLLEXPORT
+void jl_reset_cumulative_compile_time() {
+    cumulative_compile_time = 0;
+}
+
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module),
@@ -200,6 +213,7 @@ static jl_callptr_t _jl_compile_codeinst(
             jl_printf(dump_compiles_stream, "\"\n");
         }
     }
+    cumulative_compile_time = cumulative_compile_time + (jl_hrtime() - compiler_start_time);
     return fptr;
 }
 
@@ -210,6 +224,7 @@ extern "C" JL_DLLEXPORT
 void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&codegen_lock);
+    compiler_start_time = jl_hrtime();
     jl_codegen_params_t params;
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     if (pparams == NULL)
@@ -281,6 +296,7 @@ extern "C"
 jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    compiler_start_time = jl_hrtime();
     // if we don't have any decls already, try to generate it now
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
@@ -329,6 +345,7 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&codegen_lock);
+    compiler_start_time = jl_hrtime();
     if (unspec->invoke == NULL) {
         jl_code_info_t *src = NULL;
         JL_GC_PUSH1(&src);

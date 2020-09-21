@@ -55,6 +55,9 @@ function gc_alloc_count(diff::GC_Diff)
     diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
 end
 
+# cumulative total time spent on compilation
+cumulative_compile_time_ns() = ccall(:jl_cumulative_compile_time_ns, UInt64, ())
+reset_cumulative_compile_time() = ccall(:jl_reset_cumulative_compile_time, Cvoid, ())
 
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
@@ -102,7 +105,7 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     length(timestr) < 10 && print(" "^(10 - length(timestr)))
     print(timestr, " seconds")
@@ -117,6 +120,9 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
     end
     if gctime > 0
         print(", ", Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
+    end
+    if compile_time > 0
+        print(", ", Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
     end
     if bytes != 0 || allocs != 0
         print(")")
@@ -170,12 +176,15 @@ macro time(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
+        local compile_elapsedtime = cumulative_compile_time_ns()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
+        compile_elapsedtime = cumulative_compile_time_ns() - compile_elapsedtime
         local diff = GC_Diff(gc_num(), stats)
+        reset_cumulative_compile_time() # reduce risk of overflow on cumulative counter
         time_print(elapsedtime, diff.allocd, diff.total_time,
-                   gc_alloc_count(diff))
+                   gc_alloc_count(diff), compile_elapsedtime)
         println()
         val
     end
