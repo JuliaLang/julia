@@ -871,12 +871,12 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 ```
-See also [`Base.ComposedFunction`](@ref).
+See also [`ComposedFunction`](@ref).
 """
 function ∘ end
 
 """
-    Base.ComposedFunction{Outer,Inner} <: Function
+    ComposedFunction{Outer,Inner} <: Function
 
 Represents the composition of two callable objects `outer::Outer` and `inner::Inner`. That is
 ```julia
@@ -884,11 +884,11 @@ ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...))
 ```
 The preferred way to construct instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
 ```jldoctest
-julia> sin ∘ cos === Base.ComposedFunction(sin, cos)
+julia> sin ∘ cos === ComposedFunction(sin, cos)
 true
 
 julia> typeof(sin∘cos)
-Base.ComposedFunction{typeof(sin), typeof(cos)}
+ComposedFunction{typeof(sin), typeof(cos)}
 ```
 The composed pieces are stored in the fields of `ComposedFunction` and can be retrieved as follows:
 ```jldoctest
