@@ -594,3 +594,10 @@ end
     @test -1//5 * 0x3//0x2 == 0x3//0x2 * -1//5 == -3//10
     @test -2//3 * 0x1 == 0x1 * -2//3 == -2//3
 end
+
+@testset "ispow2" begin
+    @test ispow2(4//1)
+    @test ispow2(1//8)
+    @test !ispow2(3//8)
+    @test !ispow2(0//1)
+end

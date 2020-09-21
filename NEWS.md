@@ -91,6 +91,7 @@ Standard library changes
   by passing a tuple for `dims`, and defaults to reversing all dimensions; there is also a multidimensional
   in-place `reverse!(A; dims)` ([#37367]).
 * The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array) arguments `x` and `y` ([#35883]).
+* `ispow2(x)` now supports non-`Integer` arguments `x` ([#37635]).
 * `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
 * All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
 * `sum`, `prod`, `maximum`, and `minimum` now support `init` keyword argument ([#36188], [#35839]).
