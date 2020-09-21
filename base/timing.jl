@@ -130,9 +130,9 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0)
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff)
+function timev_print(elapsedtime, diff::GC_Diff, compile_time)
     allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs)
+    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time)
     print("\nelapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -175,6 +175,7 @@ julia> @time begin
 macro time(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        reset_cumulative_compile_time() # reduce risk of overflow on cumulative counter
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns()
         local elapsedtime = time_ns()
@@ -182,7 +183,6 @@ macro time(ex)
         elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns() - compile_elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        reset_cumulative_compile_time() # reduce risk of overflow on cumulative counter
         time_print(elapsedtime, diff.allocd, diff.total_time,
                    gc_alloc_count(diff), compile_elapsedtime)
         println()
@@ -212,11 +212,14 @@ malloc() calls:    1
 macro timev(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        reset_cumulative_compile_time() # reduce risk of overflow on cumulative counter
         local stats = gc_num()
+        local compile_elapsedtime = cumulative_compile_time_ns()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
-        timev_print(elapsedtime, GC_Diff(gc_num(), stats))
+        compile_elapsedtime = cumulative_compile_time_ns() - compile_elapsedtime
+        timev_print(elapsedtime, GC_Diff(gc_num(), stats), compile_elapsedtime)
         val
     end
 end
