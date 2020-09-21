@@ -57,6 +57,9 @@ let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
     @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
 
+@test Base.in_sysimage(Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"))
+@test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
+
 # Issue #5789 and PR #13542:
 mktempdir() do dir
     cd(dir) do
