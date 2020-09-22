@@ -11,8 +11,6 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
-using LinearAlgebra, SparseArrays
-
 # For curmod_*
 include("testenv.jl")
 
@@ -149,21 +147,45 @@ end
 ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
+
+using LinearAlgebra, SparseArrays, SuiteSparse
+
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
-@test detect_ambiguities(Core, Base; imported=true, recursive=true, ambiguous_bottom=false) == []
-# some ambiguities involving Union{} type parameters are expected, but not required
-@test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
+@testset "detect_ambiguities" begin
+    let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false)))
+        @test isempty(ambig)
+        expect = []
+        good = true
+        while !isempty(ambig)
+            sigs = pop!(ambig)
+            i = findfirst(==(sigs), expect)
+            if i === nothing
+                println(stderr, "push!(expect, (", sigs[1], ", ", sigs[2], "))")
+                good = false
+                continue
+            end
+            deleteat!(expect, i)
+        end
+        @test isempty(expect)
+        @test good
+    end
 
-module AmbigStdlib
-using Test
+    # some ambiguities involving Union{} type parameters are expected, but not required
+    let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
+        @test !isempty(ambig)
+    end
 
-# List standard libraries.  Exclude modules such as Main.
-modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing]
+    STDLIB_DIR = Sys.STDLIB
+    STDLIBS = filter!(x -> x != "LinearAlgebra" && x != "SparseArrays" && # Some packages run this test themselves
+                           isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")),
+                      readdir(STDLIB_DIR))
 
-# not using isempty so this prints more information when it fails
-@test detect_ambiguities(modules...; imported=true, recursive=true) == []
-end  # module
+    # List standard libraries. Exclude modules such as Main, Base, and Core.
+    let modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing && String(pkg.name) in STDLIBS]
+        @test isempty(detect_ambiguities(modules...; recursive=true))
+    end
+end
 
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2
@@ -252,7 +274,7 @@ end
 for f in (Ambig8.f, Ambig8.g)
     @test length(methods(f, (Integer,))) == 2 # 1 is also acceptable
     @test length(methods(f, (Signed,))) == 1 # 2 is also acceptable
-    @test length(Base.methods_including_ambiguous(f, (Signed,))) == 3
+    @test length(Base.methods_including_ambiguous(f, (Signed,))) == 2
     @test f(0x00) == 1
     @test f(Ambig8.Irrational2()) == 2
     @test f(MathConstants.γ) == 3
@@ -298,7 +320,6 @@ end
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
-        pop!(need_to_handle_undef_sparam, which(Base._cat, (Any, SparseArrays._TypedDenseConcatGroup{T} where T)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
@@ -324,8 +345,18 @@ f35983(::Type, ::Type) = 2
 @test first(Base.methods_including_ambiguous(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 @test length(Base.methods(f35983, (Any, Any))) == 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
+let ambig = Int32[0]
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    @test length(ms) == 1
+    @test ambig[1] == 0
+end
 f35983(::Type{Int16}, ::Any) = 3
-@test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 3
+@test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
 @test length(Base.methods(f35983, (Type, Type))) == 2
+let ambig = Int32[0]
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    @test length(ms) == 2
+    @test ambig[1] == 1
+end
 
-nothing # don't return a module from the remote include
+nothing
