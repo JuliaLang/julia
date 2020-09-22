@@ -63,20 +63,22 @@ end
 
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
-function typesubtract(@nospecialize(a), @nospecialize(b))
+function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::Int)
     if a <: b && isnotbrokensubtype(a, b)
         return Bottom
     end
-    if isa(a, Union)
-        return Union{typesubtract(a.a, b),
-                     typesubtract(a.b, b)}
+    ua = unwrap_unionall(a)
+    if isa(ua, Union)
+        return Union{typesubtract(rewrap_unionall(ua.a, a), b, MAX_UNION_SPLITTING),
+                     typesubtract(rewrap_unionall(ua.b, a), b, MAX_UNION_SPLITTING)}
     elseif a isa DataType
-        if b isa DataType
-            if a.name === b.name === Tuple.name && length(a.types) == length(b.types)
+        ub = unwrap_unionall(b)
+        if ub isa DataType
+            if a.name === ub.name === Tuple.name &&
+                    length(a.parameters) == length(ub.parameters) &&
+                    1 < unionsplitcost(a.parameters) <= MAX_UNION_SPLITTING
                 ta = switchtupleunion(a)
-                if length(ta) > 1
-                    return typesubtract(Union{ta...}, b)
-                end
+                return typesubtract(Union{ta...}, b, 0)
             end
         end
     end

@@ -28,7 +28,7 @@ import Distributed: myid
 using Random
 using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
-using Core.Compiler: typesubtract
+using Base: typesplit
 
 const DISPLAY_FAILED = (
     :isequal,
@@ -1393,7 +1393,7 @@ function _inferred(ex, mod, allow = :(Union{}))
             end)
             @assert length(inftypes) == 1
             rettype = result isa Type ? Type{result} : typeof(result)
-            rettype <: allow || rettype == typesubtract(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            rettype <: allow || rettype == typesplit(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
             result
         end
     end)
