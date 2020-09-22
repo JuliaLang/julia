@@ -277,7 +277,9 @@ constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a, i8mm, bf16);
 //     .DIT: dit
 //     .BT: bti
 
-// ID_AA64PFR1_EL1.SSBS: ssbs
+// ID_AA64PFR1_EL1
+//     .SSBS: ssbs
+//     .MTE: mte
 
 // ID_AA64MMFR2_EL1.AT: uscat
 
@@ -1762,7 +1764,7 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 #  if JL_LLVM_VERSION > 100000
                 "+tme,"
 #  endif
-                "+am,+specrestrict,+predres,+mte,+lor,+perfmon,+spe,+tracev8.4",
+                "+am,+specrestrict,+predres,+lor,+perfmon,+spe,+tracev8.4",
 #else
                 "+dotprod",
 #endif
