@@ -418,7 +418,7 @@ for typ in atomictypes, container in [Atomic, Ptr]
                          %rv = bitcast $ilt %irv to $lt
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
-        elseif rmwop === :add || rmwop == :sub
+        elseif (rmwop === :add || rmwop === :sub) && (typ == Float32 || typ == Float64)
             rmw = (rmwop === :add ? "fadd" : "fsub")
             @eval $fn(x::$container{$typ}, v::$typ) =
                 llvmcall($"""
