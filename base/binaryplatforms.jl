@@ -33,7 +33,7 @@ include("features_h.jl")
 
 # Keep in sync with `arch_march_isa_mapping`.
 const ISAs_by_family = Dict(
-    "x86_64" => (
+    "x86_64" => [
         # Source: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html.
         # Implicit in all sets, because always required: mmx, sse, sse2
         "x86_64" => ISA(Set{UInt32}()),
@@ -43,19 +43,19 @@ const ISAs_by_family = Dict(
         "haswell" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c))),
         "skylake" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c, JL_X86_rdseed, JL_X86_adx, JL_X86_prfchw, JL_X86_clflushopt, JL_X86_xsavec, JL_X86_xsaves))),
         "skylake_avx512" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_pku, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c, JL_X86_rdseed, JL_X86_adx, JL_X86_prfchw, JL_X86_clflushopt, JL_X86_xsavec, JL_X86_xsaves, JL_X86_avx512f, JL_X86_clwb, JL_X86_avx512vl, JL_X86_avx512bw, JL_X86_avx512dq, JL_X86_avx512cd))),
-    ),
-    "arm" => (
+    ],
+    "arm" => [
         "armv7l" => ISA(Set{UInt32}()),
         "armv7l_neon" => ISA(Set((JL_AArch32_neon,))),
         "armv7l_neon_vfp4" => ISA(Set((JL_AArch32_neon, JL_AArch32_vfp4))),
-    ),
-    "aarch64" => (
+    ],
+    "aarch64" => [
         # Implicit in all sets, because always required: fp, asimd
         "armv8.0_a" => ISA(Set{UInt32}()),
         "armv8.1_a" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm))),
         "armv8.2_a_crypto" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_aes, JL_AArch64_sha2))),
         "armv8.4_a_crypto_sve" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_fp16fml, JL_AArch64_dotprod, JL_AArch64_aes, JL_AArch64_sha2, JL_AArch64_dotprod, JL_AArch64_sve))),
-    ),
+    ],
 )
 
 test_cpu_feature(feature::UInt32) = ccall(:jl_test_cpu_feature, Bool, (UInt32,), feature)
@@ -652,22 +652,22 @@ const arch_march_isa_mapping = let
         return all[findfirst(x -> x.first == name, all)].second
     end
     Dict(
-        "x86_64" => Dict{String,CPUID.ISA}(
+        "x86_64" => [
             "x86_64" => get_set("x86_64", "x86_64"),
             "avx" => get_set("x86_64", "sandybridge"),
             "avx2" => get_set("x86_64", "haswell"),
             "avx512" => get_set("x86_64", "skylake_avx512"),
-        ),
-        "armv7l" => Dict{String,CPUID.ISA}(
+        ],
+        "armv7l" => [
             "armv7l" => get_set("arm", "armv7l"),
             "neon" => get_set("arm", "armv7l_neon"),
             "vfp4" => get_set("arm", "armv7l_neon_vfp4"),
-        ),
-        "aarch64" => Dict{String,CPUID.ISA}(
+        ],
+        "aarch64" => [
             "armv8" => get_set("aarch64", "armv8.0_a"),
             "thunderx2" => get_set("aarch64", "armv8.1_a"),
             "carmel" => get_set("aarch64", "armv8.2_a_crypto"),
-        ),
+        ],
     )
 end
 const os_mapping = Dict(
