@@ -409,7 +409,7 @@ for typ in atomictypes, container in [Atomic, Ptr]
                          %rv = atomicrmw $rmw $lt* %ptr, $lt %1 acq_rel
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
-        else if rmwop === :xchg
+        elseif rmwop === :xchg
             @eval $fn(x::$container{$typ}, v::$typ) =
                 llvmcall($"""
                          %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
@@ -418,7 +418,7 @@ for typ in atomictypes, container in [Atomic, Ptr]
                          %rv = bitcast $ilt %irv to $lt
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
-        else if rmwop === :add || rmwop == :sub
+        elseif rmwop === :add || rmwop == :sub
             rmw = (rmwop === :add ? "fadd" : "fsub")
             @eval $fn(x::$container{$typ}, v::$typ) =
                 llvmcall($"""
@@ -435,7 +435,7 @@ const opnames = Dict{Symbol, Symbol}(:+ => :add, :- => :sub)
 for op in [:+, :-, :max, :min], container in [Atomic, Ptr]
     fT = (op == :+ || op == :-) ? Float16 : FloatTypes
     opname = get(opnames, op, op)
-    @eval function $(Symbol("atomic_", opname, "!"))(var::$container{T}, val::T) where T<:fT
+    @eval function $(Symbol("atomic_", opname, "!"))(var::$container{T}, val::T) where T<:$fT
         IT = inttype(T)
         old = var[]
         while true
