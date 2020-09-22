@@ -304,8 +304,8 @@ end
                 UInt8, UInt16, UInt32, UInt64, UInt128,
                 Float16, Float32, Float64, BigInt, BigFloat]
 
-    @test insorted(1, [1:10;], by=(x -> x >= 5)) == true
-    @test insorted(10, [1:10;], by=(x -> x >= 5)) == true
+    @test insorted(1, collect(1:10), by=(x -> x >= 5)) == true
+    @test insorted(10, collect(1:10), by=(x -> x >= 5)) == true
 
     for R in numTypes, T in numTypes
         @test insorted(T(0), R[1, 1, 2, 2, 3, 3]) === false
@@ -319,13 +319,13 @@ end
         @test insorted(T(2), 1:3) == true
         @test insorted(T(4), 1:3) === false
 
-        @test insorted(T(1), R[1:10;], by=(x -> x >= 5)) == true
-        @test insorted(T(10), R[1:10;], by=(x -> x >= 5)) == true
+        @test insorted(T(1), R(collect(1:10)), by=(x -> x >= 5)) == true
+        @test insorted(T(10), R(collect(1:10)), by=(x -> x >= 5)) == true
     end
 
     for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
         rg_r = reverse(rg)
-        rgv, rgv_r = [rg;], [rg_r;]
+        rgv, rgv_r = collect(rg), collect(rg_r)
         for i = I
             @test insorted(i,rg) === insorted(i,rgv)
             @test insorted(i,rg_r) === insorted(i,rgv_r,rev=true)
@@ -346,8 +346,8 @@ end
         @test insorted(nextfloat(rg_r[i]), rg_r) === false
     end
 
-    @test insorted(1, 1:10) == insorted(1, [1:10;], by=(x -> x >= 5))
-    @test insorted(10, 1:10) == insorted(10, [1:10;], by=(x -> x >= 5))
+    @test insorted(1, 1:10) == insorted(1, collect(1:10), by=(x -> x >= 5))
+    @test insorted(10, 1:10) == insorted(10, collect(1:10), by=(x -> x >= 5))
 
     @test insorted(0, []) === false
     @test insorted(0, [1,2,3]) === false
