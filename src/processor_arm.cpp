@@ -89,7 +89,8 @@ enum class CPU : uint32_t {
     arm_cortex_x1,
     arm_neoverse_e1,
     arm_neoverse_n1,
-    arm_zeus,
+    arm_neoverse_v1,
+    arm_neoverse_n2,
 
     // Cavium
     // aarch64
@@ -307,7 +308,9 @@ constexpr auto arm_cortex_a78 = armv8_2a | get_feature_masks(dotprod, rcpc, full
 constexpr auto arm_cortex_x1 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs); // spe
 constexpr auto arm_neoverse_e1 = armv8_2a | get_feature_masks(rcpc, fullfp16, ssbs);
 constexpr auto arm_neoverse_n1 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
-constexpr auto arm_zeus = armv8_4a | get_feature_masks(sve, i8mm, bf16, fullfp16, ssbs, rand);
+constexpr auto arm_neoverse_v1 = armv8_4a | get_feature_masks(sve, i8mm, bf16, fullfp16, ssbs, rand);
+constexpr auto arm_neoverse_n2 = armv8_5a | get_feature_masks(sve, i8mm, bf16, fullfp16, sve2,
+                                                              sve2_bitperm, rand, mte);
 constexpr auto cavium_thunderx = armv8a_crc_crypto;
 constexpr auto cavium_thunderx88 = armv8a_crc_crypto;
 constexpr auto cavium_thunderx88p1 = armv8a_crc_crypto;
@@ -369,7 +372,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, 110000, Feature::arm_cortex_x1},
     {"neoverse-e1", CPU::arm_neoverse_e1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_e1},
     {"neoverse-n1", CPU::arm_neoverse_n1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_n1},
-    {"zeus", CPU::arm_zeus, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_zeus},
+    {"neoverse-v1", CPU::arm_neoverse_v1, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_neoverse_v1},
+    {"neoverse-n2", CPU::arm_neoverse_n2, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_neoverse_n2},
     {"thunderx", CPU::cavium_thunderx, CPU::generic, 0, Feature::cavium_thunderx},
     {"thunderxt88", CPU::cavium_thunderx88, CPU::generic, 0, Feature::cavium_thunderx88},
     {"thunderxt88p1", CPU::cavium_thunderx88p1, CPU::cavium_thunderx88, UINT32_MAX,
@@ -560,6 +564,8 @@ constexpr auto arm_cortex_a77 = armv8_2a;
 constexpr auto arm_cortex_a78 = armv8_2a;
 constexpr auto arm_cortex_x1 = armv8_2a;
 constexpr auto arm_neoverse_n1 = armv8_2a;
+constexpr auto arm_neoverse_v1 = armv8_4a;
+constexpr auto arm_neoverse_n2 = armv8_5a;
 constexpr auto nvidia_denver1 = armv8a; // TODO? (crc, crypto)
 constexpr auto nvidia_denver2 = armv8a_crc_crypto;
 constexpr auto apm_xgene1 = armv8a;
@@ -642,6 +648,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, 110000, Feature::arm_cortex_a78},
     {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, 110000, Feature::arm_cortex_x1},
     {"neoverse-n1", CPU::arm_neoverse_n1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_n1},
+    {"neoverse-v1", CPU::arm_neoverse_v1, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_neoverse_v1},
+    {"neoverse-n2", CPU::arm_neoverse_n2, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_neoverse_n2},
     {"denver1", CPU::nvidia_denver1, CPU::arm_cortex_a53, UINT32_MAX, Feature::nvidia_denver1},
     {"denver2", CPU::nvidia_denver2, CPU::arm_cortex_a57, UINT32_MAX, Feature::nvidia_denver2},
     {"xgene1", CPU::apm_xgene1, CPU::armv8_a, UINT32_MAX, Feature::apm_xgene1},
@@ -851,10 +859,11 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0xd20: return CPU::arm_cortex_m23;
         case 0xd21: return CPU::arm_cortex_m33;
             // case 0xd22: return CPU::arm_cortex_m55;
-        case 0xd40: return CPU::arm_zeus;
+        case 0xd40: return CPU::arm_neoverse_v1;
         case 0xd41: return CPU::arm_cortex_a78;
         case 0xd43: return CPU::arm_cortex_a65ae;
         case 0xd44: return CPU::arm_cortex_x1;
+        case 0xd49: return CPU::arm_neoverse_n2;
         case 0xd4a: return CPU::arm_neoverse_e1;
         default: return CPU::generic;
         }
@@ -1258,6 +1267,8 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
         CPU::arm_cortex_a75,
         CPU::arm_cortex_a76,
         CPU::arm_neoverse_n1,
+        CPU::arm_neoverse_n2,
+        CPU::arm_neoverse_v1,
         CPU::nvidia_denver2,
         CPU::nvidia_carmel,
         CPU::samsung_exynos_m1,
@@ -1344,6 +1355,8 @@ static inline const char *normalize_cpu_name(llvm::StringRef name)
 {
     if (name == "ares")
         return "neoverse-n1";
+    if (name == "zeus")
+        return "neoverse-v1";
     if (name == "cyclone")
         return "apple-a7";
     if (name == "typhoon")
