@@ -2342,3 +2342,6 @@ else
 end
 
 @test :(a +ꜝ b) == Expr(:call, :+ꜝ, :a, :b)
+
+# issue #37656
+@test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
