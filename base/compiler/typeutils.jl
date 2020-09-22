@@ -70,6 +70,15 @@ function typesubtract(@nospecialize(a), @nospecialize(b))
     if isa(a, Union)
         return Union{typesubtract(a.a, b),
                      typesubtract(a.b, b)}
+    elseif a isa DataType
+        if b isa DataType
+            if a.name === b.name === Tuple.name && length(a.types) == length(b.types)
+                ta = switchtupleunion(a)
+                if length(ta) > 1
+                    return typesubtract(Union{ta...}, b)
+                end
+            end
+        end
     end
     return a # TODO: improve this bound?
 end
