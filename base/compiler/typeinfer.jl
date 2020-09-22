@@ -19,7 +19,8 @@ end
 _set_typeinf_func(_typeinf)  # to ensure `_set_typeinf_func()` is precompiled
 
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
-    Core._apply_latest(_typeinf_function[], (interp, frame))
+    # TODO: we're not actually pure though so .... :/
+    Core._apply_pure(_typeinf_function[], (interp, frame))
     #return _typeinf_function[](interp, frame)
 end
 
