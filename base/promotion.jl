@@ -121,6 +121,23 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     return Any
 end
 
+# return an upper-bound on type `a` with type `b` removed
+# such that `return <: a` && `Union{return, b} == Union{a, b}`
+# WARNING: this is wrong for some objects for which subtyping is broken
+#          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
+function typesplit(@nospecialize(a), @nospecialize(b))
+    @_pure_meta
+    if a <: b
+        return Bottom
+    end
+    if isa(a, Union)
+        return Union{typesplit(a.a, b),
+                     typesplit(a.b, b)}
+    end
+    return a
+end
+
+
 """
     promote_typejoin(T, S)
 
@@ -132,7 +149,7 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
     return Union{a, b, c}::Type
 end
-_promote_typesubtract(@nospecialize(a)) = Core.Compiler.typesubtract(a, Union{Nothing, Missing})
+_promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
 
 
 # Returns length, isfixed
