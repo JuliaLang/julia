@@ -537,20 +537,6 @@ isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
 isnan(x::Real) = false
 
-"""
-    isfinite(f) -> Bool
-
-Test whether a number is finite.
-
-# Examples
-```jldoctest
-julia> isfinite(5)
-true
-
-julia> isfinite(NaN32)
-false
-```
-"""
 isfinite(x::AbstractFloat) = x - x == 0
 isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
@@ -724,6 +710,8 @@ function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)
     (y & exponent_mask(T) == 0) & (y & significand_mask(T) != 0)
 end
+
+ispow2(x::AbstractFloat) = !iszero(x) && frexp(x)[1] == 0.5
 
 @eval begin
     typemin(::Type{Float16}) = $(bitcast(Float16, 0xfc00))

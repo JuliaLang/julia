@@ -381,6 +381,9 @@ include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexp
 
 end_base_include = time_ns()
 
+const _sysimage_modules = PkgId[]
+in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
+
 if is_primary_base_module
 function __init__()
     # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
@@ -405,6 +408,7 @@ function __init__()
     init_depot_path()
     init_load_path()
     init_active_project()
+    append!(empty!(_sysimage_modules), keys(loaded_modules))
     nothing
 end
 

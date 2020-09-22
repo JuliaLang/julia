@@ -13,21 +13,52 @@ Creation of a `Ref` to a value `x` of type `T` is usually written `Ref(x)`.
 Additionally, for creating interior pointers to containers (such as Array or Ptr),
 it can be written `Ref(a, i)` for creating a reference to the `i`-th element of `a`.
 
-When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
-converted to a native pointer to the data it references.
+`Ref{T}()` creates a reference to a value of type `T` without initialization.
+For a bitstype `T`, the value will be whatever currently resides in the memory
+allocated. For a non-bitstype `T`, the reference will be undefined and attempting to
+dereference it will result in an error, "UndefRefError: access to undefined reference".
 
-There is no invalid (NULL) `Ref` in Julia, but a `C_NULL` instance of `Ptr` can be passed to
-a `ccall` Ref argument.
+To check if a `Ref` is an undefined reference, use [`isassigned(ref::RefValue)`](@ref).
+For example, `isassigned(Ref{T}())` is `false` if `T` is not a bitstype.
+If `T` is a bitstype, `isassigned(Ref{T}())` will always be true.
+
+When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref`
+object will be converted to a native pointer to the data it references.
+
+A `C_NULL` instance of `Ptr` can be passed to a `ccall` `Ref` argument to initialize it.
 
 # Use in broadcasting
-`Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar:
+`Ref` is sometimes used in broadcasting in order to treat the referenced values as a scalar.
+
+# Examples
 
 ```jldoctest
-julia> isa.(Ref([1,2,3]), [Array, Dict, Int])
+julia> Ref(5)
+Base.RefValue{Int64}(5)
+
+julia> isa.(Ref([1,2,3]), [Array, Dict, Int]) # Treat reference values as scalar during broadcasting
 3-element BitVector:
  1
  0
  0
+
+julia> Ref{Function}()  # Undefined reference to a non-bitstype, Function
+Base.RefValue{Function}(#undef)
+
+julia> try
+           Ref{Function}()[] # Dereferencing an undefined reference will result in an error
+       catch e
+           println(e)
+       end
+UndefRefError()
+
+julia> Ref{Int64}()[]; # A reference to a bitstype refers to an undetermined value if not given
+
+julia> isassigned(Ref{Int64}()) # A reference to a bitstype is always assigned
+true
+
+julia> Ref{Int64}(0)[] == 0 # Explicitly give a value for a bitstype reference
+true
 ```
 """
 Ref

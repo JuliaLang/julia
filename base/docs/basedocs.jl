@@ -70,7 +70,7 @@ abstract type Real <: Number end
 ```
 [`Number`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
 """
-kw"abstract type"
+kw"abstract type", kw"abstract"
 
 """
     module

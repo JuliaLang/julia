@@ -1492,8 +1492,6 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
-    @test opt.valid_worlds.max_world === Core.Compiler.get_world_counter()
-    @test opt.valid_worlds.min_world === Core.Compiler.min_world(opt.src) === UInt(1)
     @test opt.nargs == 3
 end
 
@@ -2587,47 +2585,6 @@ end
 
 @test map(>:, [Int], [Int]) == [true]
 
-# issue 35566
-module Issue35566
-function step(acc, x)
-    xs, = acc
-    y = x > 0.0 ? x : missing
-    if y isa eltype(xs)
-        ys = push!(xs, y)
-    else
-        ys = vcat(xs, [y])
-    end
-    return (ys,)
-end
-
-function probe(y)
-    if y isa Tuple{Vector{Missing}}
-        return Val(:missing)
-    else
-        return Val(:expected)
-    end
-end
-
-function _foldl_iter(rf, val::T, iter, state) where {T}
-    while true
-        ret = iterate(iter, state)
-        ret === nothing && break
-        x, state = ret
-        y = rf(val, x)
-        if y isa T
-            val = y
-        else
-            return probe(y)
-        end
-    end
-    return Val(:expected)
-end
-
-f() = _foldl_iter(step, (Missing[],), [0.0], 1)
-end
-@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
-@test Base.return_types(Issue35566.f) == [Val{:expected}]
-
 # constant prop through keyword arguments
 _unstable_kw(;x=1,y=2) = x == 1 ? 0 : ""
 _use_unstable_kw_1() = _unstable_kw(x = 2)
@@ -2776,3 +2733,40 @@ for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     @test code[end] === Core.ReturnNode()
     @test_throws TypeError badf()
 end
+
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), Vararg{DataType}}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), DataType, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), DataType, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Symbol
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Vararg}) == Expr
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Vararg}) == Expr
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Any, Vararg}) == Expr
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Any, Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Any, Any, Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Any, Vararg}) == Type
+f_apply_cglobal(args...) = cglobal(args...)
+@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Vararg{Type{Int}}}) == Ptr
+@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}}) == Ptr
+@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Vararg{Type{Int}}}) == Ptr{Int}
+@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}}) == Union{}

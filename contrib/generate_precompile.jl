@@ -81,12 +81,13 @@ Artifacts = get(Base.loaded_modules,
           nothing)
 if Artifacts !== nothing
     precompile_script *= """
-    using Artifacts, Base.BinaryPlatforms
-    artifacts_toml = abspath($(repr(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))))
+    using Artifacts, Base.BinaryPlatforms, Libdl
+    artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
     cd(() -> @artifact_str("c_simple"), dirname(artifacts_toml))
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
     platforms = [Artifacts.unpack_platform(e, "c_simple", artifacts_toml) for e in artifacts["c_simple"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
+    dlopen("libjulia$(ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
 end
 

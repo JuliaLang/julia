@@ -1139,6 +1139,7 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
 
 static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_value_t **loc) JL_GC_DISABLED
 {
+    assert(pos == backref_list.len - 1 && "nothing should have been deserialized since assigning pos");
     int tag = read_uint8(s->s);
     if (tag == 6 || tag == 7) {
         jl_typename_t *name = (jl_typename_t*)jl_deserialize_value(s, NULL);
@@ -1154,18 +1155,17 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         backref_list.items[pos] = dtv;
         return dtv;
     }
-    size_t size = read_int32(s->s);
-    uint8_t flags = read_uint8(s->s);
-    uint8_t memflags = read_uint8(s->s);
-    jl_datatype_t *dt = NULL;
-    if (tag == 0 || tag == 5 || tag == 10 || tag == 11 || tag == 12)
-        dt = jl_new_uninitialized_datatype();
-    else {
+    if (!(tag == 0 || tag == 5 || tag == 10 || tag == 11 || tag == 12)) {
         assert(0 && "corrupt deserialization state");
         abort();
     }
-    assert(pos == backref_list.len - 1 && "nothing should have been deserialized since assigning pos");
+    jl_datatype_t *dt = jl_new_uninitialized_datatype();
     backref_list.items[pos] = dt;
+    if (loc != NULL && loc != HT_NOTFOUND)
+        *loc = (jl_value_t*)dt;
+    size_t size = read_int32(s->s);
+    uint8_t flags = read_uint8(s->s);
+    uint8_t memflags = read_uint8(s->s);
     dt->size = size;
     dt->abstract = flags & 1;
     dt->mutabl = (flags >> 1) & 1;
@@ -1179,11 +1179,6 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->isinlinealloc = (memflags >> 5) & 1;
     dt->has_concrete_subtype = (memflags >> 6) & 1;
     dt->cached_by_hash = (memflags >> 7) & 1;
-    dt->types = NULL;
-    dt->parameters = NULL;
-    dt->name = NULL;
-    dt->super = NULL;
-    dt->layout = NULL;
     if (!dt->abstract)
         dt->ninitialized = read_uint16(s->s);
     else
@@ -1247,14 +1242,16 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     return (jl_value_t*)dt;
 }
 
-static jl_value_t *jl_deserialize_value_svec(jl_serializer_state *s, uint8_t tag) JL_GC_DISABLED
+static jl_value_t *jl_deserialize_value_svec(jl_serializer_state *s, uint8_t tag, jl_value_t **loc) JL_GC_DISABLED
 {
     size_t i, len;
     if (tag == TAG_SVEC)
         len = read_uint8(s->s);
     else
         len = read_int32(s->s);
-    jl_svec_t *sv = jl_alloc_svec_uninit(len);
+    jl_svec_t *sv = jl_alloc_svec(len);
+    if (loc != NULL)
+        *loc = (jl_value_t*)sv;
     arraylist_push(&backref_list, (jl_value_t*)sv);
     jl_value_t **data = jl_svec_data(sv);
     for (i = 0; i < len; i++) {
@@ -1689,7 +1686,7 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
         }
         return (jl_value_t*)bp;
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
-        return jl_deserialize_value_svec(s, tag);
+        return jl_deserialize_value_svec(s, tag, loc);
     case TAG_COMMONSYM:
         return deser_symbols[read_uint8(s->s)];
     case TAG_SYMBOL: JL_FALLTHROUGH; case TAG_LONG_SYMBOL:

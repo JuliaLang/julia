@@ -7,6 +7,74 @@ export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
        select_platform, platforms_match, platform_name
 import .Libc.Libdl
 
+### Submodule with information about CPU features
+module CPUID
+
+export cpu_isa
+
+"""
+    ISA(features::Set{UInt32})
+
+A structure which represents the Instruction Set Architecture (ISA) of a
+computer.  It holds the `Set` of features of the CPU.
+
+The numerical values of the features are automatically generated from the C
+source code of Julia and stored in the `features_h.jl` Julia file.
+"""
+struct ISA
+    features::Set{UInt32}
+end
+
+Base.:<=(a::ISA, b::ISA) = a.features <= b.features
+Base.:<(a::ISA,  b::ISA) = a.features <  b.features
+Base.isless(a::ISA,  b::ISA) = a < b
+
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "features_h.jl"))  # include($BUILDROOT/base/features_h.jl)
+
+# Keep in sync with `arch_march_isa_mapping`.
+const ISAs_by_family = Dict(
+    "x86_64" => (
+        # Source: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html.
+        # Implicit in all sets, because always required: mmx, sse, sse2
+        "x86_64" => ISA(Set{UInt32}()),
+        "core2" => ISA(Set((JL_X86_sse3, JL_X86_ssse3))),
+        "nehalem" => ISA(Set((JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt))),
+        "sandybridge" => ISA(Set((JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_aes, JL_X86_pclmul))),
+        "haswell" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c))),
+        "skylake" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c, JL_X86_rdseed, JL_X86_adx, JL_X86_prfchw, JL_X86_clflushopt, JL_X86_xsavec, JL_X86_xsaves))),
+        "skylake_avx512" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_pku, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c, JL_X86_rdseed, JL_X86_adx, JL_X86_prfchw, JL_X86_clflushopt, JL_X86_xsavec, JL_X86_xsaves, JL_X86_avx512f, JL_X86_clwb, JL_X86_avx512vl, JL_X86_avx512bw, JL_X86_avx512dq, JL_X86_avx512cd))),
+    ),
+    "arm" => (
+        "armv7l" => ISA(Set{UInt32}()),
+        "armv7l_neon" => ISA(Set((JL_AArch32_neon,))),
+        "armv7l_neon_vfp4" => ISA(Set((JL_AArch32_neon, JL_AArch32_vfp4))),
+    ),
+    "aarch64" => (
+        # Implicit in all sets, because always required: fp, asimd
+        "armv8.0_a" => ISA(Set{UInt32}()),
+        "armv8.1_a" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm))),
+        "armv8.2_a_crypto" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_aes, JL_AArch64_sha2))),
+        "armv8.4_a_crypto_sve" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_fp16fml, JL_AArch64_dotprod, JL_AArch64_aes, JL_AArch64_sha2, JL_AArch64_dotprod, JL_AArch64_sve))),
+    ),
+)
+
+test_cpu_feature(feature::UInt32) = ccall(:jl_test_cpu_feature, Bool, (UInt32,), feature)
+cpu_family() = String(Sys.ARCH)
+
+"""
+    cpu_isa()
+
+Return the [`ISA`](@ref) (instruction set architecture) of the current CPU.
+"""
+function cpu_isa()
+    all_features = last(last(get(ISAs_by_family, cpu_family(), "" => [ISA(Set{UInt32}())]))).features
+    return ISA(Set{UInt32}(feat for feat in all_features if test_cpu_feature(feat)))
+end
+
+end # module CPUID
+
+using .CPUID
+
 # This exists to ease compatibility with old-style Platform objects
 abstract type AbstractPlatform; end
 
@@ -84,21 +152,8 @@ struct Platform <: AbstractPlatform
                 value = normver(value)
             end
 
-            # I know we said only alphanumeric and dots, but let's be generous so that we can expand
-            # our support in the future while remaining as backwards-compatible as possible.  The
-            # only characters that are absolutely disallowed right now are `-`, `+`, ` ` and things
-            # that are illegal in filenames:
-            nonos = raw"""+- /<>:"'\|?*"""
-            if any(occursin(nono, tag) for nono in nonos)
-                throw(ArgumentError("Invalid character in tag name \"$(tag)\"!"))
-            end
-
-            # Normalize and reject nonos
-            value = lowercase(string(value))
-            if any(occursin(nono, value) for nono in nonos)
-                throw(ArgumentError("Invalid character in tag value \"$(value)\"!"))
-            end
-            tags[tag] = value
+            # Use `add_tag!()` to add the tag to our collection of tags
+            add_tag!(tags, tag, string(value)::String)
         end
 
         # Auto-map call_abi and libc where necessary:
@@ -129,13 +184,36 @@ struct Platform <: AbstractPlatform
     end
 end
 
+# Simple tag insertion that performs a little bit of validation
+function add_tag!(tags::Dict{String,String}, tag::String, value::String)
+    # I know we said only alphanumeric and dots, but let's be generous so that we can expand
+    # our support in the future while remaining as backwards-compatible as possible.  The
+    # only characters that are absolutely disallowed right now are `-`, `+`, ` ` and things
+    # that are illegal in filenames:
+    nonos = raw"""+- /<>:"'\|?*"""
+    if any(occursin(nono, tag) for nono in nonos)
+        throw(ArgumentError("Invalid character in tag name \"$(tag)\"!"))
+    end
+
+    # Normalize and reject nonos
+    value = lowercase(value)
+    if any(occursin(nono, value) for nono in nonos)
+        throw(ArgumentError("Invalid character in tag value \"$(value)\"!"))
+    end
+    tags[tag] = value
+    return value
+end
+
 # Other `Platform` types can override this (I'm looking at you, `AnyPlatform`)
 tags(p::Platform) = p.tags
 
 # Make it act more like a dict
 Base.getindex(p::AbstractPlatform, k::String) = getindex(tags(p), k)
 Base.haskey(p::AbstractPlatform, k::String) = haskey(tags(p), k)
-Base.setindex!(p::AbstractPlatform, v::String, k::String) = (setindex!(tags(p), v, k); p)
+function Base.setindex!(p::AbstractPlatform, v::String, k::String)
+    add_tag!(tags(p), k, v)
+    return p
+end
 
 # Allow us to easily serialize Platform objects
 function Base.repr(p::Platform; context=nothing)
@@ -567,6 +645,31 @@ const arch_mapping = Dict(
     "armv6l" => "armv6l",
     "powerpc64le" => "p(ower)?pc64le",
 )
+# Keep this in sync with `CPUID.ISAs_by_family`
+const arch_march_isa_mapping = let
+    function get_set(arch, name)
+        all = CPUID.ISAs_by_family[arch]
+        return all[findfirst(x -> x.first == name, all)].second
+    end
+    Dict(
+        "x86_64" => Dict{String,CPUID.ISA}(
+            "x86_64" => get_set("x86_64", "x86_64"),
+            "avx" => get_set("x86_64", "sandybridge"),
+            "avx2" => get_set("x86_64", "haswell"),
+            "avx512" => get_set("x86_64", "skylake_avx512"),
+        ),
+        "armv7l" => Dict{String,CPUID.ISA}(
+            "armv7l" => get_set("arm", "armv7l"),
+            "neon" => get_set("arm", "armv7l_neon"),
+            "vfp4" => get_set("arm", "armv7l_neon_vfp4"),
+        ),
+        "aarch64" => Dict{String,CPUID.ISA}(
+            "armv8" => get_set("aarch64", "armv8.0_a"),
+            "thunderx2" => get_set("aarch64", "armv8.1_a"),
+            "carmel" => get_set("aarch64", "armv8.2_a_crypto"),
+        ),
+    )
+end
 const os_mapping = Dict(
     "macos" => "-apple-darwin[\\d\\.]*",
     "freebsd" => "-(.*-)?freebsd[\\d\\.]*",
@@ -591,8 +694,7 @@ const libgfortran_version_mapping = Dict(
 )
 const libstdcxx_version_mapping = Dict{String,String}(
     "libstdcxx_nothing" => "",
-    # This is sadly easier than parsing out the digit directly
-    ("libstdcxx$(idx)" => "-libstdcxx$(idx)" for idx in 18:26)...,
+    "libstdcxx" => "-libstdcxx\\d+",
 )
 const cxxstring_abi_mapping = Dict(
     "cxxstring_nothing" => "",
@@ -642,7 +744,7 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
                     if startswith(k, "libgfortran")
                         return VersionNumber(parse(Int,k[12:end]))
                     elseif startswith(k, "libstdcxx")
-                        return VersionNumber(3, 4, parse(Int,k[10:end]))
+                        return VersionNumber(3, 4, parse(Int,m[k][11:end]))
                     else
                         return k
                     end
@@ -801,12 +903,13 @@ function detect_libgfortran_version()
 end
 
 """
-    detect_libstdcxx_version()
+    detect_libstdcxx_version(max_minor_version::Int=30)
 
 Inspects the currently running Julia process to find out what version of libstdc++
-it is linked against (if any).
+it is linked against (if any).  `max_minor_version` is the latest version in the
+3.4 series of GLIBCXX where the search is performed.
 """
-function detect_libstdcxx_version()
+function detect_libstdcxx_version(max_minor_version::Int=30)
     libstdcxx_paths = filter(x -> occursin("libstdc++", x), Libdl.dllist())
     if isempty(libstdcxx_paths)
         # This can happen if we were built by clang, so we don't link against
@@ -816,7 +919,9 @@ function detect_libstdcxx_version()
 
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
     hdl = Libdl.dlopen(first(libstdcxx_paths))
-    for minor_version in 26:-1:18
+    # Try all GLIBCXX versions down to GCC v4.8:
+    # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
+    for minor_version in max_minor_version:-1:18
         if Libdl.dlsym(hdl, "GLIBCXX_3.4.$(minor_version)"; throw_error=false) !== nothing
             Libdl.dlclose(hdl)
             return VersionNumber("3.4.$(minor_version)")
@@ -901,8 +1006,6 @@ function host_triplet()
     return str
 end
 
-# Cache the host platform value, and return it if someone asks for just `HostPlatform()`.
-default_host_platform = HostPlatform(parse(Platform, host_triplet()))
 """
     HostPlatform()
 
@@ -912,7 +1015,7 @@ relevant comparison strategies set to host platform mode.  This is equivalent to
     HostPlatform(parse(Platform, Base.BinaryPlatforms.host_triplet()))
 """
 function HostPlatform()
-    return default_host_platform::Platform
+    return HostPlatform(parse(Platform, host_triplet()))::Platform
 end
 
 """

@@ -97,6 +97,9 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->isinlinealloc = 0;
     t->has_concrete_subtype = 1;
     t->cached_by_hash = 0;
+    t->name = NULL;
+    t->super = NULL;
+    t->parameters = NULL;
     t->layout = NULL;
     t->names = NULL;
     t->types = NULL;
@@ -224,8 +227,11 @@ STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
 {
     if (jl_is_datatype_make_singleton(st)) {
-        st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
-        jl_gc_wb(st, st->instance);
+        // It's possible for st to already have an ->instance if it was redefined
+        if (!st->instance) {
+            st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
+            jl_gc_wb(st, st->instance);
+        }
     }
 }
 
@@ -373,7 +379,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             st->layout = &opaque_byte_layout;
             return;
         }
-        else if (st == jl_simplevector_type || st->name == jl_array_typename) {
+        else if (st == jl_simplevector_type || st == jl_module_type || st->name == jl_array_typename) {
             static const jl_datatype_layout_t opaque_ptr_layout = {0, 1, -1, sizeof(void*), 0, 0};
             st->layout = &opaque_ptr_layout;
             return;
