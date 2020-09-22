@@ -24,7 +24,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
     valid_worlds = WorldRange()
     atype_params = unwrap_unionall(atype).parameters
-    splitunions = 1 < countunionsplit(atype_params) <= InferenceParams(interp).MAX_UNION_SPLITTING
+    splitunions = 1 < unionsplitcost(atype_params) <= InferenceParams(interp).MAX_UNION_SPLITTING
     mts = Core.MethodTable[]
     fullmatch = Bool[]
     if splitunions
@@ -113,7 +113,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         sigtuple = unwrap_unionall(sig)::DataType
         splitunions = false
         this_rt = Bottom
-        # TODO: splitunions = 1 < countunionsplit(sigtuple.parameters) * napplicable <= InferenceParams(interp).MAX_UNION_SPLITTING
+        # TODO: splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).MAX_UNION_SPLITTING
         # currently this triggers a bug in inference recursion detection
         if splitunions
             splitsigs = switchtupleunion(sig)
@@ -654,7 +654,7 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
     end
     res = Union{}
     nargs = length(aargtypes)
-    splitunions = 1 < countunionsplit(aargtypes) <= InferenceParams(interp).MAX_APPLY_UNION_ENUM
+    splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).MAX_APPLY_UNION_ENUM
     ctypes = Any[Any[aft]]
     infos = [Union{Nothing, AbstractIterationInfo}[]]
     for i = 1:nargs
