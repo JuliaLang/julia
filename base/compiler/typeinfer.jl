@@ -9,10 +9,7 @@ function typeinf(interp::AbstractInterpreter, result::InferenceResult, cached::B
 end
 
 function _typeinf end
-const _typeinf_function = let a = Array{Function,0}(undef, ())  # Boostrap: Array{Function,0}(fill(typeinf))
-    a[] = _typeinf
-    a
-end
+const _typeinf_function = Array{Function,0}(undef, ())  # Boostrap: Array{Function,0}(fill(typeinf))
 function _set_typeinf_func(f::Function)
     _typeinf_function[] = f
 end
