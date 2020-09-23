@@ -2777,3 +2777,10 @@ f_apply_cglobal(args...) = cglobal(args...)
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}}) == Ptr
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Vararg{Type{Int}}}) == Ptr{Int}
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}}) == Union{}
+
+# issue #37532
+@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{Int}}, Int])
+@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{T}} where T, Ptr])
+@test !Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr}, Ptr])
+f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
+@test Base.return_types(f37532, Tuple{Any, Int}) == Any[Int]
