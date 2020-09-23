@@ -115,8 +115,12 @@ $(BUILDDIR)/host/Makefile:
 	@echo 'BUILDING_HOST_TOOLS=1' >> $@
 	@echo 'include $(SRCDIR)/Makefile' >> $@
 
-$(BUILDDIR)/host/$(EXENAME): $(BUILDDIR)/host/Makefile
+$(BUILDDIR)/host/$(EXENAME): $(BUILDDIR)/host/Makefile | ${BUILDDIR}/host/flisp.boot
 	make -C $(BUILDDIR)/host $(EXENAME)
+
+
+$(BUILDDIR)/host/flisp.boot: $(SRCDIR)/flisp.boot | $(BUILDDIR)/host/Makefile
+	cp $< $@
 
 ifneq ($(BUILDDIR),.)
 ifneq ($(BUILDDIR),$(SRCDIR))
