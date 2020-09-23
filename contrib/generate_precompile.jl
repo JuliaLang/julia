@@ -235,6 +235,9 @@ function generate_precompile_statements()
         n_succeeded = 0
         include_time = @elapsed for statement in sort(collect(statements))
             # println(statement)
+            # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
+            # N with a large number seems to work around it.
+            statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
             try
                 Base.include_string(PrecompileStagingArea, statement)
                 n_succeeded += 1
