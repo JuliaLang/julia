@@ -231,18 +231,10 @@ end
 # Simple equality definition; for compatibility testing, use `platforms_match()`
 Base.:(==)(a::AbstractPlatform, b::AbstractPlatform) = tags(a) == tags(b)
 
-const ARCHITECTURE_FLAGS = Dict(
-    "x86_64" => ["x86_64", "avx", "avx2", "avx512"],
-    "i686" => ["prescott"],
-    "armv7l" => ["armv7l", "neon", "vfp4"],
-    "armv6l" => ["generic"],
-    "aarch64" => ["armv8", "thunderx2", "carmel"],
-    "powerpc64le" => ["generic"],
-)
 function validate_tags(tags::Dict)
     throw_invalid_key(k) = throw(ArgumentError("Key \"$(k)\" cannot have value \"$(tags[k])\""))
     # Validate `arch`
-    if tags["arch"] ∉ keys(ARCHITECTURE_FLAGS)
+    if tags["arch"] ∉ ("x86_64", "i686", "armv7l", "armv6l", "aarch64", "powerpc64le")
         throw_invalid_key("arch")
     end
     # Validate `os`
@@ -300,16 +292,6 @@ function validate_tags(tags::Dict)
     # Validate `cxxstring_abi` is one of the two valid options:
     if "cxxstring_abi" in keys(tags) && tags["cxxstring_abi"] ∉ ("cxx03", "cxx11")
         throw_invalid_key("cxxstring_abi")
-    end
-
-    # Validate `march` is one of our recognized microarchitectures for the architecture we're advertising
-    if "march" in keys(tags) && tags["march"] ∉ ARCHITECTURE_FLAGS[tags["arch"]]
-        throw(ArgumentError("\"march\" cannot have value \"$(tags["march"])\" for arch $(tags["arch"])"))
-    end
-
-    # Validate `cuda` is a parsable `VersionNumber`
-    if "cuda" in keys(tags) && tryparse(VersionNumber, tags["cuda"]) === nothing
-        throw_version_number("cuda")
     end
 end
 
