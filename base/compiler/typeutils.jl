@@ -75,10 +75,29 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
         ub = unwrap_unionall(b)
         if ub isa DataType
             if a.name === ub.name === Tuple.name &&
-                    length(a.parameters) == length(ub.parameters) &&
-                    1 < unionsplitcost(a.parameters) <= MAX_UNION_SPLITTING
-                ta = switchtupleunion(a)
-                return typesubtract(Union{ta...}, b, 0)
+                    length(a.parameters) == length(ub.parameters)
+                if 1 < unionsplitcost(a.parameters) <= MAX_UNION_SPLITTING
+                    ta = switchtupleunion(a)
+                    return typesubtract(Union{ta...}, b, 0)
+                elseif b isa DataType
+                    # if exactly one element is not bottom after calling typesubtract
+                    # then the result is all of the elements as normal except that one
+                    notbottom = fill(false, length(a.parameters))
+                    for i = 1:length(notbottom)
+                        ap = a.parameters[i]
+                        bp = b.parameters[i]
+                        notbottom[i] = !(ap <: bp && isnotbrokensubtype(ap, bp))
+                    end
+                    let i = findfirst(notbottom)
+                        if i !== nothing && findnext(notbottom, i + 1) === nothing
+                            ta = collect(a.parameters)
+                            ap = a.parameters[i]
+                            bp = b.parameters[i]
+                            ta[i] = typesubtract(ap, bp, min(2, MAX_UNION_SPLITTING))
+                            return Tuple{ta...}
+                        end
+                    end
+                end
             end
         end
     end
