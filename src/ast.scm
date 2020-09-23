@@ -67,7 +67,7 @@
                         (string #\( (deparse (caddr e)) #\))))))
         ((memq (car e) '(... |'|))
          (string (deparse (cadr e)) (car e)))
-        ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
+        ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|) (eq? (car e) '-->))
          (if (length= e 2)
              (string (car e) (deparse (cadr e)))
              (string (deparse (cadr e)) " " (car e) " " (deparse (caddr e)))))
@@ -87,7 +87,9 @@
                    (string #\( (deparse (caddr e)) " " (cadr e) " " (deparse (cadddr e)) #\) ))
                   (else
                    (deparse-prefix-call (cadr e) (cddr e) #\( #\)))))
-           (($ &)          (if (and (pair? (cadr e)) (not (memq (caadr e) '(outerref null true false))))
+           (($ &)          (if (and (pair? (cadr e))
+                                    (not (memq (caadr e)
+                                               '(outerref null true false tuple $ vect braces))))
                                (string (car e) "(" (deparse (cadr e)) ")")
                                (string (car e) (deparse (cadr e)))))
            ((|::|)         (if (length= e 2)
@@ -281,8 +283,12 @@
       (cadr e)
       e))
 
+(define (quoted-sym? e)
+  (and (length= e 2) (memq (car e) '(quote inert))
+       (symbol? (cadr e))))
+
 (define (lam:args x) (cadr x))
-(define (lam:vars x) (llist-vars (lam:args x)))
+(define (lam:argnames x) (llist-vars (lam:args x)))
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 (define (lam:sp x) (cadddr (lam:vinfo x)))
@@ -349,15 +355,24 @@
 (define (ssavalue? e)
   (and (pair? e) (eq? (car e) 'ssavalue)))
 
+(define (slot? e)
+  (and (pair? e) (eq? (car e) 'slot)))
+
 (define (globalref? e)
   (and (pair? e) (eq? (car e) 'globalref)))
+
+(define (outerref? e)
+  (and (pair? e) (eq? (car e) 'outerref)))
+
+(define (nothing? e)
+  (and (pair? e) (eq? (car e) 'null)))
 
 (define (symbol-like? e)
   (or (symbol? e) (ssavalue? e)))
 
 (define (simple-atom? x)
   (or (number? x) (string? x) (char? x)
-      (and (pair? x) (memq (car x) '(ssavalue null true false)))
+      (and (pair? x) (memq (car x) '(ssavalue null true false thismodule)))
       (eq? (typeof x) 'julia_value)))
 
 ;; identify some expressions that are safe to repeat
@@ -426,6 +441,11 @@
 (define (complex-return? e) (and (return? e)
                                  (let ((x (cadr e)))
                                    (not (simple-atom? x)))))
+
+(define (tuple-call? e)
+  (and (length> e 1)
+       (eq? (car e) 'call)
+       (equal? (cadr e) '(core tuple))))
 
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))

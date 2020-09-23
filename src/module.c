@@ -35,6 +35,9 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->primary_world = 0;
     m->counter = 1;
     m->nospecialize = 0;
+    m->optlevel = -1;
+    m->compile = -1;
+    m->infer = -1;
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -72,6 +75,54 @@ JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on)
     self->nospecialize = (on ? -1 : 0);
 }
 
+JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl)
+{
+    self->optlevel = lvl;
+}
+
+JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m)
+{
+    int lvl = m->optlevel;
+    while (lvl == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        lvl = m->optlevel;
+    }
+    return lvl;
+}
+
+JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value)
+{
+    self->compile = value;
+}
+
+JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m)
+{
+    int value = m->compile;
+    while (value == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->compile;
+    }
+    return value;
+}
+
+JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value)
+{
+    self->infer = value;
+    // no reason to specialize if inference is off
+    if (!value)
+        jl_set_module_nospecialize(self, 1);
+}
+
+JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m)
+{
+    int value = m->infer;
+    while (value == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->infer;
+    }
+    return value;
+}
+
 JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)
 {
     self->istopmod = 1;
@@ -102,7 +153,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
 }
 
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var, int error)
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int error)
 {
     JL_LOCK_NOGC(&m->lock);
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
@@ -298,8 +349,6 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
     return jl_get_binding_(m, var, NULL);
 }
-
-void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var)
 {
@@ -551,24 +600,23 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    // In a release build, simply ignore conflicting assignments (for backwards compatibility).
-    // However, we want to start asserting that they do not occur, since that can cause `val`
-    // not to be rooted when the caller expected it to be.
-    assert(!bp->constp);
-    if (!bp->constp) {
-        bp->value = val;
-        jl_gc_wb(m, val);
-    }
+    JL_GC_PROMISE_ROOTED(bp);
+    jl_checked_assignment(bp, val);
 }
 
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    assert(!bp->constp);
-    if (jl_atomic_compare_exchange(&bp->constp, 0, 1) == 0) {
-        bp->value = val;
-        jl_gc_wb(m, val);
+    if (bp->value == NULL) {
+        if (jl_atomic_bool_compare_exchange(&bp->constp, 0, 1)) {
+            if (jl_atomic_bool_compare_exchange(&bp->value, NULL, val)) {
+                jl_gc_wb_binding(bp, val);
+                return;
+            }
+        }
     }
+    jl_errorf("invalid redefinition of constant %s",
+              jl_symbol_name(bp->name));
 }
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
@@ -597,9 +645,9 @@ JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 extern const char *jl_filename;
 extern int jl_lineno;
 
-char dep_message_prefix[] = "_dep_message_";
+static char const dep_message_prefix[] = "_dep_message_";
 
-jl_binding_t *jl_get_dep_message_binding(jl_module_t *m, jl_binding_t *deprecated_binding)
+static jl_binding_t *jl_get_dep_message_binding(jl_module_t *m, jl_binding_t *deprecated_binding)
 {
     size_t prefix_len = strlen(dep_message_prefix);
     size_t name_len = strlen(jl_symbol_name(deprecated_binding->name));
@@ -682,20 +730,26 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
     }
 }
 
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
-    if (b->constp && b->value != NULL) {
-        if (!jl_egal(rhs, b->value)) {
-            if (jl_typeof(rhs) != jl_typeof(b->value) ||
-                jl_is_type(rhs) /*|| jl_is_function(rhs)*/ || jl_is_module(rhs)) {
-                jl_errorf("invalid redefinition of constant %s",
-                          jl_symbol_name(b->name));
-            }
-            jl_printf(JL_STDERR, "WARNING: redefining constant %s\n",
-                      jl_symbol_name(b->name));
+    if (b->constp) {
+        jl_value_t *old = jl_atomic_compare_exchange(&b->value, NULL, rhs);
+        if (old == NULL) {
+            jl_gc_wb_binding(b, rhs);
+            return;
         }
+        if (jl_egal(rhs, old))
+            return;
+        if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs)) {
+#ifndef __clang_analyzer__
+            jl_errorf("invalid redefinition of constant %s",
+                      jl_symbol_name(b->name));
+#endif
+        }
+        jl_safe_printf("WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
+                       jl_symbol_name(b->name));
     }
-    b->value = rhs;
+    jl_atomic_store_relaxed(&b->value, rhs);
     jl_gc_wb_binding(b, rhs);
 }
 
@@ -766,6 +820,25 @@ int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
             return 0;
         child = child->parent;
     }
+}
+
+// Remove implicitly imported identifiers, effectively resetting all the binding
+// resolution decisions for a module. This is dangerous, and should only be
+// done for modules that are essentially empty anyway. The only use case for this
+// is to leave `Main` as empty as possible in the default system image.
+JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
+{
+    size_t i;
+    JL_LOCK(&m->lock);
+    void **table = m->bindings.table;
+    for (i = 1; i < m->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->owner != m && !b->imported)
+                table[i] = HT_NOTFOUND;
+        }
+    }
+    JL_UNLOCK(&m->lock);
 }
 
 #ifdef __cplusplus

@@ -69,7 +69,7 @@ the specified dimensions is equal to the length of the original array
 # Examples
 ```jldoctest
 julia> A = Vector(1:16)
-16-element Array{Int64,1}:
+16-element Vector{Int64}:
   1
   2
   3
@@ -88,14 +88,14 @@ julia> A = Vector(1:16)
  16
 
 julia> reshape(A, (4, 4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
 julia> reshape(A, 2, :)
-2×8 Array{Int64,2}:
+2×8 Matrix{Int64}:
  1  3  5  7   9  11  13  15
  2  4  6  8  10  12  14  16
 
@@ -279,3 +279,15 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
 unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, parent(a))
+
+# Add a few handy specializations to further speed up views of reshaped ranges
+const ReshapedUnitRange{T,N,A<:AbstractUnitRange} = ReshapedArray{T,N,A,Tuple{}}
+viewindexing(I::Tuple{Slice, ReshapedUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
+compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
+compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
+    (@_inline_meta; first(I[1]) - first(axes1(I[1]))*stride1)
+substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
+    (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
+unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} =
+    unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)

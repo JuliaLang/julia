@@ -3,7 +3,7 @@
 #############################################
 # Create some temporary files & directories #
 #############################################
-starttime = time()
+starttime = time_ns() / 1e9
 pwd_ = pwd()
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
@@ -15,7 +15,7 @@ subdir = joinpath(dir, "adir")
 mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
-@test_throws Base.IOError mkdir(file)
+@test_throws Base._UVError("mkdir", Base.UV_EEXIST) mkdir(file)
 let err = nothing
     try
         mkdir(file)
@@ -268,6 +268,20 @@ no_error_logging(f::Function) =
     end
 end
 
+@testset "mktempdir() permissions correction" begin
+    # Test that `mktempdir()` with children with weird permissions get cleared
+    # before we would delete the directory
+    local temp_dir_path
+    mktempdir() do dir
+        temp_dir_path = dir
+        mkdir(joinpath(dir, "foo"))
+        touch(joinpath(dir, "foo", "bar"))
+        chmod(joinpath(dir, "foo"), 0o444)
+        @test isdir(temp_dir_path)
+    end
+    @test !isdir(temp_dir_path)
+end
+
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
@@ -394,12 +408,14 @@ if Sys.iswindows()
 else
     @test filesize(dir) > 0
 end
-nowtime = time()
+# We need both: one to check passed time, one to comapare file's mtime()
+nowtime = time_ns() / 1e9
+nowwall = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
 let skew = 10 + (nowtime - starttime)
     mfile = mtime(file)
     mdir  = mtime(dir)
-    @test abs(nowtime - mfile) <= skew && abs(nowtime - mdir) <= skew && abs(mfile - mdir) <= skew
+    @test abs(nowwall - mfile) <= skew && abs(nowwall - mdir) <= skew && abs(mfile - mdir) <= skew
 end
 #@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
@@ -443,9 +459,9 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
-@test_throws Base.IOError rm(c_tmpdir)
+@test_throws Base._UVError(Sys.iswindows() ? "chmod" : "unlink", Base.UV_ENOENT) rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
-@test_throws Base.IOError rm(c_tmpdir, recursive=true)
+@test_throws Base._UVError(Sys.iswindows() ? "chmod" : "unlink", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 if !Sys.iswindows()
@@ -460,8 +476,8 @@ if !Sys.iswindows()
         @test stat(file).gid == 0
         @test stat(file).uid == 0
     else
-        @test_throws Base.IOError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base.IOError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test_throws Base._UVError("chown", Base.UV_EPERM) chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        @test_throws Base._UVError("chown", Base.UV_EPERM) chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
     end
 else
     # test that chown doesn't cause any errors for Windows
@@ -518,20 +534,21 @@ end
     @test my_tempdir[end] != '\\'
 
     var =  Sys.iswindows() ? "TMP" : "TMPDIR"
-    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/"
+    PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/" * "x"^255   # we want a long path on UNIX so that we test buffer resizing in `tempdir`
     # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
     # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
-    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars) and
-    # subtract 9 to account for i = 0:9.
-    MAX_PATH = (Sys.iswindows() ? 260-9 : 1024) - length(PATH_PREFIX)
+    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars)
+    # NOTE: not the actual max path on UNIX, but true in the Windows case for this function.
+    # NOTE: we subtract 9 to account for i = 0:9.
+    MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:8
-        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
         @test withenv(var => tmp) do
             tempdir()
         end == (tmp)
     end
     for i = 9
-        local tmp = PATH_PREFIX * "x"^MAX_PATH * "123456789"[1:i]
+        local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
         if Sys.iswindows()
             # libuv bug
             @test_broken withenv(var => tmp) do
@@ -901,29 +918,31 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         for src in dirs
             for dst in dirs
                 # cptree
-                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=false)
-                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=true)
+                @test_throws ArgumentError Base.cptree(src, dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError Base.cptree(src, dst; force=true, follow_symlinks=true)
                 # cp
-                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=false)
-                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=true)
+                @test_throws ArgumentError cp(src, dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError cp(src, dst; force=true, follow_symlinks=true)
                 # mv
-                @test_throws ArgumentError mv(src,dst; force=true)
+                @test_throws ArgumentError mv(src, dst; force=true)
             end
         end
     end
     # None existing src
     mktempdir() do tmpdir
-        none_existing_src = joinpath(tmpdir, "none_existing_src")
+        nonexisting_src = joinpath(tmpdir, "nonexisting_src")
         dst = joinpath(tmpdir, "dst")
-        @test !ispath(none_existing_src)
+        @test !ispath(nonexisting_src)
         # cptree
-        @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=false)
-        @test_throws ArgumentError Base.cptree(none_existing_src,dst; force=true, follow_symlinks=true)
+        @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
+                     Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=false))
+        @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
+                     Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=true))
         # cp
-        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=false)
-        @test_throws Base.IOError cp(none_existing_src,dst; force=true, follow_symlinks=true)
+        @test_throws Base._UVError("open", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
+        @test_throws Base._UVError("open", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base.IOError mv(none_existing_src,dst; force=true)
+        @test_throws Base._UVError("open", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
 end
 
@@ -1127,13 +1146,13 @@ if !Sys.iswindows()
         for src in files
             for dst in files
                 # cptree
-                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=false)
-                @test_throws ArgumentError Base.cptree(src,dst; force=true, follow_symlinks=true)
+                @test_throws ArgumentError Base.cptree(src, dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError Base.cptree(src, dst; force=true, follow_symlinks=true)
                 # cp
-                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=false)
-                @test_throws ArgumentError cp(src,dst; force=true, follow_symlinks=true)
+                @test_throws ArgumentError cp(src, dst; force=true, follow_symlinks=false)
+                @test_throws ArgumentError cp(src, dst; force=true, follow_symlinks=true)
                 # mv
-                @test_throws ArgumentError mv(src,dst; force=true)
+                @test_throws ArgumentError mv(src, dst; force=true)
             end
         end
     end
@@ -1186,6 +1205,7 @@ if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
 else
     @test_throws ErrorException symlink(file, "ba\0d")
 end
+using Downloads: download
 @test_throws ArgumentError download("good", "ba\0d")
 @test_throws ArgumentError download("ba\0d", "good")
 
@@ -1208,15 +1228,25 @@ cd(dirwalk) do
     has_symlinks && symlink(abspath("sub_dir2"), joinpath("sub_dir1", "link"))
     for follow_symlinks in follow_symlink_vec
         chnl = walkdir(".", follow_symlinks=follow_symlinks)
-        root, dirs, files = take!(chnl)
+        root, dirs, files = @inferred(take!(chnl))
         @test root == "."
         @test dirs == ["sub_dir1", "sub_dir2"]
         @test files == ["file1", "file2"]
 
         root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir1")
-        @test dirs == (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
-        @test files == ["file1", "file2"]
+        if has_symlinks
+            if follow_symlinks
+                @test dirs ==  ["link", "subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2"]
+            else
+                @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2", "link"]
+            end
+        else
+            @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+            @test files == ["file1", "file2"]
+        end
 
         root, dirs, files = take!(chnl)
         if follow_symlinks
@@ -1253,8 +1283,18 @@ cd(dirwalk) do
             root, dirs, files = take!(chnl)
         end
         @test root == joinpath(".", "sub_dir1")
-        @test dirs ==  (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
-        @test files == ["file1", "file2"]
+        if has_symlinks
+            if follow_symlinks
+                @test dirs ==  ["link", "subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2"]
+            else
+                @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+                @test files == ["file1", "file2", "link"]
+            end
+        else
+            @test dirs ==  ["subsub_dir1", "subsub_dir2"]
+            @test files == ["file1", "file2"]
+        end
 
         root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir2")
@@ -1275,7 +1315,8 @@ cd(dirwalk) do
     @test files == ["file1", "file2"]
 
     rm(joinpath("sub_dir1"), recursive=true)
-    @test_throws SystemError take!(chnl_error) # throws an error because sub_dir1 do not exist
+    @test_throws(Base._UVError("readdir", Base.UV_ENOENT, "with ", repr(joinpath(".", "sub_dir1"))),
+                 take!(chnl_error)) # throws an error because sub_dir1 do not exist
 
     root, dirs, files = take!(chnl_noerror)
     @test root == "."
@@ -1286,6 +1327,21 @@ cd(dirwalk) do
     @test root == joinpath(".", "sub_dir2")
     @test dirs == []
     @test files == ["file_dir2"]
+
+    # Test that symlink loops don't cause errors
+    if has_symlinks
+        mkdir(joinpath(".", "sub_dir3"))
+        foo = joinpath(".", "sub_dir3", "foo")
+        symlink("foo", foo)
+
+        let files = walkdir(joinpath(".", "sub_dir3"); follow_symlinks=true)
+            @test_throws Base._UVError("stat", Base.UV_ELOOP, "for file ", repr(foo)) take!(files)
+        end
+        root, dirs, files = take!(walkdir(joinpath(".", "sub_dir3"); follow_symlinks=false))
+        @test root == joinpath(".", "sub_dir3")
+        @test dirs == []
+        @test files == ["foo"]
+    end
 end
 rm(dirwalk, recursive=true)
 
@@ -1469,9 +1525,33 @@ end
                 rm(d, recursive=true)
                 @test !ispath(d)
                 @test isempty(readdir())
-                @test_throws SystemError readdir(d)
-                @test_throws Base.IOError readdir(join=true)
+                @test_throws Base._UVError("readdir", Base.UV_ENOENT, "with ", repr(d)) readdir(d)
+                @test_throws Base._UVError("cwd", Base.UV_ENOENT) readdir(join=true)
             end
         end
+    end
+end
+
+@testset "chmod/isexecutable" begin
+    mktempdir() do dir
+        mkdir(joinpath(dir, "subdir"))
+        fpath = joinpath(dir, "subdir", "foo")
+
+        # Test that we can actually set the executable bit on all platforms.
+        touch(fpath)
+        chmod(fpath, 0o644)
+        @test !Sys.isexecutable(fpath)
+        chmod(fpath, 0o755)
+        @test Sys.isexecutable(fpath)
+
+        # Ensure that, on Windows, where inheritance is default,
+        # chmod still behaves as we expect.
+        if Sys.iswindows()
+            chmod(joinpath(dir, "subdir"), 0o666)
+            @test Sys.isexecutable(fpath)
+        end
+
+        # Reset permissions to all at the end, so it can be deleted properly.
+        chmod(dir, 0o777; recursive=true)
     end
 end

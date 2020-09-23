@@ -253,7 +253,7 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 rand(rng::AbstractRNG, X)                                           = rand(rng, Sampler(rng, X, Val(1)))
 # this is needed to disambiguate
 rand(rng::AbstractRNG, X::Dims)                                     = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))
+rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))::X
 
 rand(X)                   = rand(default_rng(), X)
 rand(::Type{X}) where {X} = rand(default_rng(), X)
@@ -310,7 +310,7 @@ Pick a random element or array of random elements from the set of values specifi
 * a string (considered as a collection of characters), or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), to ``[0, 1)`` for floating
-  point numbers and to ``[0, 1)+i[0, 1)]`` for complex floating point numbers;
+  point numbers and to ``[0, 1)+i[0, 1)`` for complex floating point numbers;
 
 `S` defaults to [`Float64`](@ref).
 When only one argument is passed besides the optional `rng` and is a `Tuple`, it is interpreted
@@ -365,7 +365,7 @@ but without allocating a new array.
 julia> rng = MersenneTwister(1234);
 
 julia> rand!(rng, zeros(5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  0.5908446386657102
  0.7667970365022592
  0.5662374165061859

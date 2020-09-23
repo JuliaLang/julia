@@ -231,76 +231,9 @@ mutable struct TestAbstractArray end
 
 ## Tests for the abstract array interfaces with minimally defined array types
 
-# A custom linear fast array type with 24 elements that doesn't rely upon Array storage
-mutable struct T24Linear{T,N,dims} <: AbstractArray{T,N}
-    v1::T;  v2::T;  v3::T;  v4::T;  v5::T;  v6::T;  v7::T;  v8::T
-    v9::T;  v10::T; v11::T; v12::T; v13::T; v14::T; v15::T; v16::T
-    v17::T; v18::T; v19::T; v20::T; v21::T; v22::T; v23::T; v24::T
-    T24Linear{T,N,d}() where {T,N,d} =
-        (prod(d) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements")); new())
-    function T24Linear{T,N,d}(v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,
-                              v13,v14,v15,v16,v17,v18,v19,v20,v21,v22,v23,v24) where {T,N,d}
-        prod(d) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements"))
-        new(v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,v13,v14,v15,v16,v17,v18,v19,v20,v21,v22,v23,v24)
-    end
+if !isdefined(@__MODULE__, :T24Linear)
+    include("testhelpers/arrayindexingtypes.jl")
 end
-
-T24Linear(::Type{T}, dims::Int...) where T = T24Linear(T, dims)
-T24Linear(::Type{T}, dims::NTuple{N,Int}) where {T,N} = T24Linear{T,N,dims}()
-
-T24Linear(     X::AbstractArray{T,N}) where {T,N  } = T24Linear{T,N}(X)
-T24Linear{T  }(X::AbstractArray{_,N}) where {T,N,_} = T24Linear{T,N}(X)
-T24Linear{T,N}(X::AbstractArray     ) where {T,N  } = T24Linear{T,N,size(X)}(X...)
-
-Base.size(::T24Linear{T,N,dims}) where {T,N,dims} = dims
-import Base: IndexLinear
-Base.IndexStyle(::Type{A}) where {A<:T24Linear} = IndexLinear()
-Base.getindex(A::T24Linear, i::Int) = getfield(A, i)
-Base.setindex!(A::T24Linear{T}, v, i::Int) where {T} = setfield!(A, i, convert(T, v))
-
-# A custom linear slow sparse-like array that relies upon Dict for its storage
-struct TSlow{T,N} <: AbstractArray{T,N}
-    data::Dict{NTuple{N,Int}, T}
-    dims::NTuple{N,Int}
-end
-TSlow(::Type{T}, dims::Int...) where {T} = TSlow(T, dims)
-TSlow(::Type{T}, dims::NTuple{N,Int}) where {T,N} = TSlow{T,N}(Dict{NTuple{N,Int}, T}(), dims)
-
-TSlow{T,N}(X::TSlow{T,N})         where {T,N  } = X
-TSlow(     X::AbstractArray{T,N}) where {T,N  } = TSlow{T,N}(X)
-TSlow{T  }(X::AbstractArray{_,N}) where {T,N,_} = TSlow{T,N}(X)
-TSlow{T,N}(X::AbstractArray     ) where {T,N  } = begin
-    A = TSlow(T, size(X))
-    for I in CartesianIndices(size(X))
-        A[I.I...] = X[I.I...]
-    end
-    A
-end
-
-Base.size(A::TSlow) = A.dims
-Base.similar(A::TSlow, ::Type{T}, dims::Dims) where {T} = TSlow(T, dims)
-import Base: IndexCartesian
-Base.IndexStyle(::Type{A}) where {A<:TSlow} = IndexCartesian()
-# Until #11242 is merged, we need to define each dimension independently
-Base.getindex(A::TSlow{T,0}) where {T} = get(A.data, (), zero(T))
-Base.getindex(A::TSlow{T,1}, i1::Int) where {T} = get(A.data, (i1,), zero(T))
-Base.getindex(A::TSlow{T,2}, i1::Int, i2::Int) where {T} = get(A.data, (i1,i2), zero(T))
-Base.getindex(A::TSlow{T,3}, i1::Int, i2::Int, i3::Int) where {T} =
-    get(A.data, (i1,i2,i3), zero(T))
-Base.getindex(A::TSlow{T,4}, i1::Int, i2::Int, i3::Int, i4::Int) where {T} =
-    get(A.data, (i1,i2,i3,i4), zero(T))
-Base.getindex(A::TSlow{T,5}, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int) where {T} =
-    get(A.data, (i1,i2,i3,i4,i5), zero(T))
-
-Base.setindex!(A::TSlow{T,0}, v) where {T} = (A.data[()] = v)
-Base.setindex!(A::TSlow{T,1}, v, i1::Int) where {T} = (A.data[(i1,)] = v)
-Base.setindex!(A::TSlow{T,2}, v, i1::Int, i2::Int) where {T} = (A.data[(i1,i2)] = v)
-Base.setindex!(A::TSlow{T,3}, v, i1::Int, i2::Int, i3::Int) where {T} =
-    (A.data[(i1,i2,i3)] = v)
-Base.setindex!(A::TSlow{T,4}, v, i1::Int, i2::Int, i3::Int, i4::Int) where {T} =
-    (A.data[(i1,i2,i3,i4)] = v)
-Base.setindex!(A::TSlow{T,5}, v, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int) where {T} =
-    (A.data[(i1,i2,i3,i4,i5)] = v)
 
 const can_inline = Base.JLOptions().can_inline != 0
 function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where T
@@ -677,6 +610,10 @@ function test_cat(::Type{TestAbstractArray})
     # 29172
     @test_throws ArgumentError cat([1], [2], dims=0)
     @test_throws ArgumentError cat([1], [2], dims=[5, -3])
+
+    # 36041
+    @test_throws MethodError cat(["a"], ["b"], dims=[1, 2])
+    @test cat([1], [1], dims=[1, 2]) == I(2)
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -755,6 +692,7 @@ test_ind2sub(TestAbstractArray)
 
 include("generic_map_tests.jl")
 generic_map_tests(map, map!)
+@test_throws ArgumentError map!(-, [1])
 
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
@@ -944,6 +882,10 @@ end
             @test s === copy!(s, Vector(a)) == Vector(a)
             @test s === copy!(s, SparseVector(a)) == Vector(a)
         end
+        # issue #35649
+        s = [1, 2, 3, 4]
+        s2 = reshape(s, 2, 2) # shared data
+        @test s === copy!(s, 11:14) == 11:14
     end
     @testset "AbstractArray" begin
         @test_throws ArgumentError copy!(zeros(2, 3), zeros(3, 2))
@@ -998,4 +940,204 @@ end
 
 @testset "vcat with mixed elements" begin
     @test vcat(Nothing[], [missing], [1.0], [Int8(1)]) isa Vector{Union{Missing, Nothing, Float64}}
+end
+
+@testset "sizeof" begin
+    let arrUInt8 = zeros(UInt8, 10)
+        @test sizeof(arrUInt8) == 10
+        @test Core.sizeof(arrUInt8) == 10
+    end
+
+    let arrUInt32 = zeros(UInt32, 10)
+        @test sizeof(arrUInt32) == 40
+        @test Core.sizeof(arrUInt32) == 40
+    end
+
+    let arrFloat64 = zeros(Float64, 10, 10)
+        @test sizeof(arrFloat64) == 800
+        @test Core.sizeof(arrFloat64) == 800
+    end
+
+    # Test union arrays (Issue #23321)
+    let arrUnion = Union{Int64, Cvoid}[rand(Bool) ? k : nothing for k = 1:10]
+        @test sizeof(arrUnion) == 80
+        @test Core.sizeof(arrUnion) == 80
+    end
+
+    # Test non-power of 2 types (Issue #35884)
+    primitive type UInt48 48 end
+    UInt48(x::UInt64) = Core.Intrinsics.trunc_int(UInt48, x)
+    UInt48(x::UInt32) = Core.Intrinsics.zext_int(UInt48, x)
+
+    a = UInt48(0x00000001);
+    b = UInt48(0x00000002);
+    c = UInt48(0x00000003);
+    let arrayOfUInt48 = [a, b, c]
+        f35884(x) = sizeof(x)
+        @test f35884(arrayOfUInt48) == 24
+        @test Core.sizeof(arrayOfUInt48) == 24
+    end
+end
+
+struct Strider{T,N} <: AbstractArray{T,N}
+    data::Vector{T}
+    offset::Int
+    strides::NTuple{N,Int}
+    size::NTuple{N,Int}
+end
+function Strider{T}(strides::NTuple{N}, size::NTuple{N}) where {T,N}
+    offset = 1-sum(strides .* (strides .< 0) .* (size .- 1))
+    data = Array{T}(undef, sum(abs.(strides) .* (size .- 1)) + 1)
+    return Strider{T, N, Vector{T}}(data, offset, strides, size)
+end
+function Strider(vec::AbstractArray{T}, strides::NTuple{N}, size::NTuple{N}) where {T,N}
+    offset = 1-sum(strides .* (strides .< 0) .* (size .- 1))
+    @assert length(vec) >= sum(abs.(strides) .* (size .- 1)) + 1
+    return Strider{T, N}(vec, offset, strides, size)
+end
+Base.size(S::Strider) = S.size
+function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
+    return S.data[sum(S.strides .* (I .- 1)) + S.offset]
+end
+Base.strides(S::Strider) = S.strides
+Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
+Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S.offset)
+
+@testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
+    A = collect(reshape(1:prod(sz), sz))
+    S = Strider(vec(A), strides(A), sz)
+    @test pointer(A) == pointer(S)
+    for i in 1:prod(sz)
+        @test pointer(A, i) == pointer(S, i)
+        @test A[i] == S[i]
+    end
+    for idxs in ((1:sz[1], 1:sz[2], 1:sz[3]),
+                 (1:sz[1], 2:2:sz[2], sz[3]:-1:1),
+                 (2:2:sz[1]-1, sz[2]:-1:1, sz[3]:-2:2),
+                 (sz[1]:-1:1, sz[2]:-1:1, sz[3]:-1:1),
+                 (sz[1]-1:-3:1, sz[2]:-2:3, 1:sz[3]),)
+        Ai = A[idxs...]
+        Av = view(A, idxs...)
+        Sv = view(S, idxs...)
+        Ss = Strider{Int, 3}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Av), length.(idxs))
+        @test pointer(Av) == pointer(Sv) == pointer(Ss)
+        for i in 1:length(Av)
+            @test pointer(Av, i) == pointer(Sv, i) == pointer(Ss, i)
+            @test Ai[i] == Av[i] == Sv[i] == Ss[i]
+        end
+        for perm in ((3, 2, 1), (2, 1, 3), (3, 1, 2))
+            P = permutedims(A, perm)
+            Ap = Base.PermutedDimsArray(A, perm)
+            Sp = Base.PermutedDimsArray(S, perm)
+            Ps = Strider{Int, 3}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
+            @test pointer(Ap) == pointer(Sp) == pointer(Ps)
+            for i in 1:length(Ap)
+                # This is intentionally disabled due to ambiguity
+                @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i)
+                @test P[i] == Ap[i] == Sp[i] == Ps[i]
+            end
+            Pv = view(P, idxs[collect(perm)]...)
+            Pi = P[idxs[collect(perm)]...]
+            Apv = view(Ap, idxs[collect(perm)]...)
+            Spv = view(Sp, idxs[collect(perm)]...)
+            Pvs = Strider{Int, 3}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Apv), size(Apv))
+            @test pointer(Apv) == pointer(Spv) == pointer(Pvs)
+            for i in 1:length(Apv)
+                @test pointer(Apv, i) == pointer(Spv, i) == pointer(Pvs, i)
+                @test Pi[i] == Pv[i] == Apv[i] == Spv[i] == Pvs[i]
+            end
+            Vp = permutedims(Av, perm)
+            Ip = permutedims(Ai, perm)
+            Avp = Base.PermutedDimsArray(Av, perm)
+            Svp = Base.PermutedDimsArray(Sv, perm)
+            @test pointer(Avp) == pointer(Svp)
+            for i in 1:length(Avp)
+                # This is intentionally disabled due to ambiguity
+                @test_broken pointer(Avp, i) == pointer(Svp, i)
+                @test Ip[i] == Vp[i] == Avp[i] == Svp[i]
+            end
+        end
+    end
+end
+
+@testset "simple 2d strided views, permutes, transposes" for sz in ((5, 3), (7, 11))
+    A = collect(reshape(1:prod(sz), sz))
+    S = Strider(vec(A), strides(A), sz)
+    @test pointer(A) == pointer(S)
+    for i in 1:prod(sz)
+        @test pointer(A, i) == pointer(S, i)
+        @test A[i] == S[i]
+    end
+    for idxs in ((1:sz[1], 1:sz[2]),
+                 (1:sz[1], 2:2:sz[2]),
+                 (2:2:sz[1]-1, sz[2]:-1:1),
+                 (sz[1]:-1:1, sz[2]:-1:1),
+                 (sz[1]-1:-3:1, sz[2]:-2:3),)
+        Av = view(A, idxs...)
+        Sv = view(S, idxs...)
+        Ss = Strider{Int, 2}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Av), length.(idxs))
+        @test pointer(Av) == pointer(Sv) == pointer(Ss)
+        for i in 1:length(Av)
+            @test pointer(Av, i) == pointer(Sv, i) == pointer(Ss, i)
+            @test Av[i] == Sv[i] == Ss[i]
+        end
+        perm = (2, 1)
+        P = permutedims(A, perm)
+        Ap = Base.PermutedDimsArray(A, perm)
+        At = transpose(A)
+        Aa = adjoint(A)
+        St = transpose(A)
+        Sa = adjoint(A)
+        Sp = Base.PermutedDimsArray(S, perm)
+        Ps = Strider{Int, 2}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
+        @test pointer(Ap) == pointer(Sp) == pointer(Ps) == pointer(At) == pointer(Aa)
+        for i in 1:length(Ap)
+            # This is intentionally disabled due to ambiguity
+            @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
+            @test pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
+            @test P[i] == Ap[i] == Sp[i] == Ps[i] == At[i] == Aa[i] == St[i] == Sa[i]
+        end
+        Pv = view(P, idxs[collect(perm)]...)
+        Apv = view(Ap, idxs[collect(perm)]...)
+        Atv = view(At, idxs[collect(perm)]...)
+        Ata = view(Aa, idxs[collect(perm)]...)
+        Stv = view(St, idxs[collect(perm)]...)
+        Sta = view(Sa, idxs[collect(perm)]...)
+        Spv = view(Sp, idxs[collect(perm)]...)
+        Pvs = Strider{Int, 2}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Apv), size(Apv))
+        @test pointer(Apv) == pointer(Spv) == pointer(Pvs) == pointer(Atv) == pointer(Ata)
+        for i in 1:length(Apv)
+            @test pointer(Apv, i) == pointer(Spv, i) == pointer(Pvs, i) == pointer(Atv, i) == pointer(Ata, i) == pointer(Stv, i) == pointer(Sta, i)
+            @test Pv[i] == Apv[i] == Spv[i] == Pvs[i] == Atv[i] == Ata[i] == Stv[i] == Sta[i]
+        end
+        Vp = permutedims(Av, perm)
+        Avp = Base.PermutedDimsArray(Av, perm)
+        Avt = transpose(Av)
+        Ava = adjoint(Av)
+        Svt = transpose(Sv)
+        Sva = adjoint(Sv)
+        Svp = Base.PermutedDimsArray(Sv, perm)
+        @test pointer(Avp) == pointer(Svp) == pointer(Avt) == pointer(Ava)
+        for i in 1:length(Avp)
+            # This is intentionally disabled due to ambiguity
+            @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
+            @test pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
+            @test Vp[i] == Avp[i] == Svp[i] == Avt[i] == Ava[i] == Svt[i] == Sva[i]
+        end
+    end
+end
+
+@testset "first/last n elements of $(typeof(itr))" for itr in (collect(1:9),
+                                                               [1 4 7; 2 5 8; 3 6 9],
+                                                               ntuple(identity, 9))
+    @test first(itr, 6) == [itr[1:6]...]
+    @test first(itr, 25) == [itr[:]...]
+    @test first(itr, 25) !== itr
+    @test first(itr, 1) == [itr[1]]
+    @test_throws ArgumentError first(itr, -6)
+    @test last(itr, 6) == [itr[end-5:end]...]
+    @test last(itr, 25) == [itr[:]...]
+    @test last(itr, 25) !== itr
+    @test last(itr, 1) == [itr[end]]
+    @test_throws ArgumentError last(itr, -6)
 end

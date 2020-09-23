@@ -52,7 +52,7 @@ You can also specify to build a debug version of LLVM, by setting either `LLVM_D
 `LLVM_DEBUG = Release` in your `Make.user` file. The former will be a fully unoptimized build
 of LLVM and the latter will produce an optimized build of LLVM. Depending on your needs the
 latter will suffice and it quite a bit faster. If you use `LLVM_DEBUG = Release` you will also
-want to set `LLVM_ASSERTIONS = 1` to enable diagonstics for different passes. Only `LLVM_DEBUG = 1`
+want to set `LLVM_ASSERTIONS = 1` to enable diagnostics for different passes. Only `LLVM_DEBUG = 1`
 implies that option by default.
 
 ## Passing options to LLVM
@@ -97,7 +97,7 @@ using:
 fun, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
 open("plus.ll", "w") do file
-    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize))
+    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize, :default))
 end
 ```
 These files can be processed the same way as the unoptimized sysimg IR shown

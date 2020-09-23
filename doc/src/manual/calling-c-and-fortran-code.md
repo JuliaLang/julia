@@ -71,7 +71,7 @@ julia> t = ccall(:clock, Int32, ())
 julia> t
 2292761
 
-julia> typeof(ans)
+julia> typeof(t)
 Int32
 ```
 
@@ -142,19 +142,24 @@ function gethostname()
                 hostname, sizeof(hostname))
     Base.systemerror("gethostname", err != 0)
     hostname[end] = 0 # ensure null-termination
-    return unsafe_string(pointer(hostname))
+    return GC.@preserve hostname unsafe_string(pointer(hostname))
 end
 ```
 
 This example first allocates an array of bytes. It then calls the C library function `gethostname`
-to populate the array with the hostname. Finally, it takes a pointer to the hostname buffer, and converts the
-pointer to a Julia string, assuming that it is a NUL-terminated C string. It is common for C libraries
-to use this pattern of requiring the caller to allocate memory to be passed to the callee and
-populated. Allocation of memory from Julia like this is generally accomplished by creating an
-uninitialized array and passing a pointer to its data to the C function. This is why we don't
-use the `Cstring` type here: as the array is uninitialized, it could contain NUL bytes. Converting
-to a `Cstring` as part of the [`ccall`](@ref) checks for contained NUL bytes and could therefore
-throw a conversion error.
+to populate the array with the hostname. Finally, it takes a pointer to the hostname buffer, and
+converts the pointer to a Julia string, assuming that it is a NUL-terminated C string.
+
+It is common for C libraries to use this pattern of requiring the caller to allocate memory to be
+passed to the callee and populated. Allocation of memory from Julia like this is generally
+accomplished by creating an uninitialized array and passing a pointer to its data to the C function.
+This is why we don't use the `Cstring` type here: as the array is uninitialized, it could contain
+NUL bytes. Converting to a `Cstring` as part of the [`ccall`](@ref) checks for contained NUL bytes
+and could therefore throw a conversion error.
+
+Deferencing `pointer(hostname)` with `unsafe_string` is an unsafe operation as it requires access to
+the memory allocated for `hostname` that may have been in the meanwhile garbage collected. The macro
+[`GC.@preserve`](@ref) prevents this from happening and therefore accessing an invalid memory location.
 
 ## Creating C-Compatible Julia Function Pointers
 
@@ -204,8 +209,8 @@ julia> function mycompare(a, b)::Cint
 mycompare (generic function with 1 method)
 ```
 
-``qsort`` expects a comparison function that return a C ``int``, so we annotate the return type
-to be ``Cint``.
+`qsort` expects a comparison function that return a C `int`, so we annotate the return type
+to be `Cint`.
 
 In order to pass this function to C, we obtain its address using the macro `@cfunction`:
 
@@ -221,7 +226,7 @@ The final call to `qsort` looks like this:
 
 ```jldoctest mycompare
 julia> A = [1.3, -2.7, 4.4, 3.1]
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
   1.3
  -2.7
   4.4
@@ -231,7 +236,7 @@ julia> ccall(:qsort, Cvoid, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Cvoid}),
              A, length(A), sizeof(eltype(A)), mycompare_c)
 
 julia> A
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
  -2.7
   1.3
   3.1
@@ -873,7 +878,15 @@ it must be handled in other ways.
 
 ## Non-constant Function Specifications
 
-A `(name, library)` function specification must be a constant expression. However, it is possible
+In some cases, the exact name or path of the needed library is not known in advance and must
+be computed at run time. To handle such cases, the library component of a `(name, library)`
+specification can be a function call, e.g. `(:dgemm_, find_blas())`. The call expression will
+be executed when the `ccall` itself is executed. However, it is assumed that the library
+location does not change once it is determined, so the result of the call can be cached and
+reused. Therefore, the number of times the expression executes is unspecified, and returning
+different values for multiple calls results in unspecified behavior.
+
+If even more flexibility is needed, it is possible
 to use computed values as function names by staging through [`eval`](@ref) as follows:
 
 ```
@@ -962,8 +975,8 @@ and load in the new changes. One can either restart Julia or use the
 ```julia
 lib = Libdl.dlopen("./my_lib.so") # Open the library explicitly.
 sym = Libdl.dlsym(lib, :my_fcn)   # Get a symbol for the function to call.
-ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the
-same).  Libdl.dlclose(lib) # Close the library explicitly.
+ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the same).
+Libdl.dlclose(lib) # Close the library explicitly.
 ```
 
 Note that when using `ccall` with the tuple input

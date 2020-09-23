@@ -169,7 +169,7 @@ char *tostring(fl_context_t *fl_ctx, value_t v, const char *fname);
 /* error handling */
 #if defined(_OS_WINDOWS_)
 #define fl_jmp_buf jmp_buf
-#if defined(_COMPILER_MINGW_)
+#if defined(_COMPILER_GCC_)
 int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
 __declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #else
@@ -465,7 +465,7 @@ struct _fl_context_t {
     unsigned char *tospace;
     unsigned char *curheap;
     unsigned char *lim;
-    uint32_t heapsize;//bytes
+    size_t heapsize;//bytes
     uint32_t *consflags;
 
     // error utilities --------------------------------------------------

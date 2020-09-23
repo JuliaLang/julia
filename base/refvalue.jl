@@ -8,6 +8,31 @@ mutable struct RefValue{T} <: Ref{T}
     RefValue{T}(x) where {T} = new(x)
 end
 RefValue(x::T) where {T} = RefValue{T}(x)
+"""
+    isassigned(ref::RefValue) -> Bool
+
+Test whether the given [`Ref`](@ref) is associated with a value.
+This is always true for a [`Ref`](@ref) of a bitstype object.
+Return `false` if the reference is undefined.
+
+# Examples
+```jldoctest
+julia> ref = Ref{Function}()
+Base.RefValue{Function}(#undef)
+
+julia> isassigned(ref)
+false
+
+julia> ref[] = (foobar(x) = x)
+foobar (generic function with 1 method)
+
+julia> isassigned(ref)
+true
+
+julia> isassigned(Ref{Int}())
+true
+```
+"""
 isassigned(x::RefValue) = isdefined(x, :x)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
@@ -22,12 +47,12 @@ function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
         # which also ensures this returns same pointer as the one rooted in the `RefValue` object.
         p = pointerref(Ptr{Ptr{Cvoid}}(pointer_from_objref(b)), 1, Core.sizeof(Ptr{Cvoid}))
     end
-    return convert(P, p)
+    return convert(P, p)::Ptr{T}
 end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
-    return convert(P, pointer_from_objref(b))
+    return convert(P, pointer_from_objref(b))::Ptr{Any}
 end
-unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
+unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))::Ptr{Cvoid}
 
 getindex(b::RefValue) = b.x
 setindex!(b::RefValue, x) = (b.x = x; b)

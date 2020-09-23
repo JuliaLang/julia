@@ -103,14 +103,23 @@ function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
     return Vararg{widenconst(t)}
 end
 
-function countunionsplit(atypes::Union{SimpleVector,Vector{Any}})
+# Gives a cost function over the effort to switch a tuple-union representation
+# as a cartesian product, relative to the size of the original representation.
+# Thus, we count the longest element as being roughly invariant to being inside
+# or outside of the Tuple/Union nesting, though somewhat more expensive to be
+# outside than inside because the representation is larger (because and it
+# informs the callee whether any splitting is possible).
+function unionsplitcost(atypes::Union{SimpleVector,Vector{Any}})
     nu = 1
+    max = 2
     for ti in atypes
         if isa(ti, Union)
-            nu, ovf = Core.Intrinsics.checked_smul_int(nu, unionlen(ti::Union))
-            if ovf
-                return typemax(Int)
+            nti = unionlen(ti)
+            if nti > max
+                max, nti = nti, max
             end
+            nu, ovf = Core.Intrinsics.checked_smul_int(nu, nti)
+            ovf && return typemax(Int)
         end
     end
     return nu
@@ -146,17 +155,13 @@ end
 # unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
 function unioncomplexity(u::Union)
-    inner = max(unioncomplexity(u.a), unioncomplexity(u.b))
-    return inner == 0 ? 0 : 1 + inner
+    return unioncomplexity(u.a) + unioncomplexity(u.b) + 1
 end
 function unioncomplexity(t::DataType)
-    t.name === Tuple.name || return 0
-    c = 1
+    t.name === Tuple.name || isvarargtype(t) || return 0
+    c = 0
     for ti in t.parameters
-        ci = unioncomplexity(ti)
-        if ci > c
-            c = ci
-        end
+        c = max(c, unioncomplexity(ti))
     end
     return c
 end

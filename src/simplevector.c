@@ -89,3 +89,21 @@ JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
         jl_svecset(v, i, x);
     return v;
 }
+
+JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT
+{
+    return jl_svec_len(t);
+}
+
+JL_DLLEXPORT int8_t jl_svec_isassigned(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i) JL_NOTSAFEPOINT
+{
+    return jl_svecref(t, (size_t)i) != NULL;
+}
+
+JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i)
+{
+    jl_value_t *v = jl_svecref(t, (size_t)i);
+    if (__unlikely(v == NULL))
+        jl_throw(jl_undefref_exception);
+    return v;
+}

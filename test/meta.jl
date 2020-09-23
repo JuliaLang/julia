@@ -210,3 +210,6 @@ let a = 1
     @test !macroexpand(@__MODULE__, :(@is_dollar_expr $a))
     @test @macroexpand @is_dollar_expr $a
 end
+
+@test Meta.parseatom("@foo", 1, filename=:bar)[1].args[2].file == :bar
+@test Meta.parseall("@foo", filename=:bar).args[1].file == :bar

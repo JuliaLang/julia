@@ -160,16 +160,16 @@ Consider the following:
 
 ```jldoctest
 julia> a = Real[]
-0-element Array{Real,1}
+Real[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a, π)
-3-element Array{Real,1}:
+3-element Vector{Real}:
  1
  2.0
- π
+ π = 3.1415926535897...
 ```
 
-Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
+Because `a` is an array of abstract type [`Real`](@ref), it must be able to hold any
 `Real` value. Since `Real` objects can be of arbitrary size and structure, `a` must be
 represented as an array of pointers to individually allocated `Real` objects. However, if we instead
 only allow numbers of the same type, e.g. [`Float64`](@ref), to be stored in `a` these can be stored more
@@ -177,10 +177,10 @@ efficiently:
 
 ```jldoctest
 julia> a = Float64[]
-0-element Array{Float64,1}
+Float64[]
 
 julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.0
  2.0
  3.141592653589793
@@ -188,6 +188,10 @@ julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 
 Assigning numbers into `a` will now convert them to `Float64` and `a` will be stored as
 a contiguous block of 64-bit floating-point values that can be manipulated efficiently.
+
+If you cannot avoid containers with abstract value types, it is sometimes better to
+parametrize with `Any` to avoid runtime type checking. E.g. `IdDict{Any, Any}` performs
+better than `IdDict{Type, Vector}`
 
 See also the discussion under [Parametric Types](@ref).
 
@@ -356,7 +360,7 @@ MySimpleContainer{UnitRange{Int64}}
 julia> c = MySimpleContainer([1:3;]);
 
 julia> typeof(c)
-MySimpleContainer{Array{Int64,1}}
+MySimpleContainer{Vector{Int64}}
 
 julia> b = MyAmbiguousContainer(1:3);
 
@@ -453,9 +457,9 @@ annotation in this context in order to achieve type stability. This is because t
 cannot deduce the type of the return value of a function, even `convert`, unless the types of
 all the function's arguments are known.
 
-Type annotation will not enhance (and can actually hinder) performance if the type is constructed
-at run-time. This is because the compiler cannot use the annotation to specialize the subsequent
-code, and the type-check itself takes time. For example, in the code:
+Type annotation will not enhance (and can actually hinder) performance if the type is abstract,
+or constructed at run-time. This is because the compiler cannot use the annotation to specialize
+the subsequent code, and the type-check itself takes time. For example, in the code:
 
 ```julia
 function nr(a, prec)
@@ -532,6 +536,11 @@ but this will:
 
 ```julia
 g_vararg(x::Vararg{Int, N}) where {N} = tuple(x...)
+```
+
+One only needs to introduce a single type parameter to force specialization, even if the other types are unconstrained. For example, this will also specialize, and is useful when the arguments are not all of the same type:
+```julia
+h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
 ```
 
 Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
@@ -611,8 +620,8 @@ number (the result of [`/`](@ref) operator). This makes it more difficult for th
 optimize the body of the loop. There are several possible fixes:
 
   * Initialize `x` with `x = 1.0`
-  * Declare the type of `x`: `x::Float64 = 1`
-  * Use an explicit conversion: `x = oneunit(Float64)`
+  * Declare the type of `x` explicitly as `x::Float64 = 1`
+  * Use an explicit conversion by `x = oneunit(Float64)`
   * Initialize with the first loop iteration, to `x = 1 / rand()`, then loop `for i = 2:10`
 
 ## [Separate kernel functions (aka, function barriers)](@id kernel-functions)
@@ -632,7 +641,7 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.0
  2.0
  2.0
@@ -654,7 +663,7 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  2.0
  2.0
  2.0
@@ -681,7 +690,7 @@ can be created like this:
 
 ```jldoctest
 julia> A = fill(5.0, (3, 3))
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
@@ -702,7 +711,7 @@ julia> function array3(fillval, N)
 array3 (generic function with 1 method)
 
 julia> array3(5.0, 2)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
@@ -726,7 +735,7 @@ julia> function array3(fillval, ::Val{N}) where N
 array3 (generic function with 1 method)
 
 julia> array3(5.0, Val(2))
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
@@ -819,12 +828,12 @@ as shown below (notice that the array is ordered `[1 3 2 4]`, not `[1 2 3 4]`):
 
 ```jldoctest
 julia> x = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> x[:]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  3
  2
@@ -837,6 +846,7 @@ adopted by C and Python (`numpy`) among other languages. Remembering the orderin
 have significant performance effects when looping over arrays. A rule of thumb to keep in mind
 is that with column-major arrays, the first index changes most rapidly. Essentially this means
 that looping will be faster if the inner-most loop index is the first to appear in a slice expression.
+Keep in mind that indexing an array with `:` is an implicit loop that iteratively accesses all elements within a particular dimension; it can be faster to extract columns than rows, for example.
 
 Consider the following contrived example. Imagine we wanted to write a function that accepts a
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
@@ -1041,10 +1051,10 @@ julia> @views fview(x) = sum(x[2:end-1]);
 julia> x = rand(10^6);
 
 julia> @time fcopy(x);
-  0.003051 seconds (7 allocations: 7.630 MB)
+  0.003051 seconds (3 allocations: 7.629 MB)
 
 julia> @time fview(x);
-  0.001020 seconds (6 allocations: 224 bytes)
+  0.001020 seconds (1 allocation: 16 bytes)
 ```
 
 Notice both the 3× speedup and the decreased memory allocation
@@ -1090,6 +1100,17 @@ julia> @time begin
 
 Provided there is enough memory for the copies, the cost of copying the view to an array is
 far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
+
+## Consider StaticArrays.jl for small fixed-size vector/matrix operations
+
+If your application involves many small (`< 100` element) arrays of fixed sizes (i.e. the size is
+known prior to execution), then you might want to consider using the [StaticArrays.jl package](https://github.com/JuliaArrays/StaticArrays.jl).
+This package allows you to represent such arrays in a way that avoids unnecessary heap allocations and allows the compiler to
+specialize code for the *size* of the array, e.g. by completely unrolling vector operations (eliminating the loops) and storing elements in CPU registers.
+
+For example, if you are doing computations with 2d geometries, you might have many computations with 2-component vectors.  By
+using the `SVector` type from StaticArrays.jl, you can use convenient vector notation and operations like `norm(3v - w)` on
+vectors `v` and `w`, while allowing the compiler to unroll the code to a minimal computation equivalent to `@inbounds hypot(3v[1]-w[1], 3v[2]-w[2])`.
 
 ## Avoid string interpolation for I/O
 
@@ -1188,7 +1209,7 @@ Sometimes you can enable better optimization by promising certain program proper
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
 and may cause a segmentation fault if bounds checking is turned off. Use `LinearIndices(x)` or `eachindex(x)`
-instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays/)).
+instead (see also [Arrays with custom indices](@ref man-custom-indices)).
 
 !!! note
     While `@simd` needs to be placed directly in front of an innermost `for` loop, both `@inbounds` and `@fastmath`
@@ -1426,9 +1447,9 @@ julia> function f(x)
 
 julia> @code_warntype f(3.2)
 Variables
-  #self#::Core.Compiler.Const(f, false)
+  #self#::Core.Const(f)
   x::Float64
-  y::Union{Float64, Int64}
+  y::UNION{FLOAT64, INT64}
 
 Body::Float64
 1 ─      (y = Main.pos(x))
@@ -1443,8 +1464,8 @@ Interpreting the output of [`@code_warntype`](@ref), like that of its cousins [`
 Your code is being presented in form that has been heavily digested on its way to generating
 compiled machine code. Most of the expressions are annotated by a type, indicated by the `::T`
 (where `T` might be [`Float64`](@ref), for example). The most important characteristic of [`@code_warntype`](@ref)
-is that non-concrete types are displayed in red; in the above example, such output is shown in
-uppercase.
+is that non-concrete types are displayed in red; since this document is written in Markdown, which has no color,
+in this document, red text is denoted by uppercase.
 
 At the top, the inferred return type of the function is shown as `Body::Float64`.
 The next lines represent the body of `f` in Julia's SSA IR form.
@@ -1573,7 +1594,7 @@ In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
 
-# Checking for equality with a singleton
+## Checking for equality with a singleton
 
 When checking if a value is equal to some singleton it can be
 better for performance to check for identicality (`===`) instead of

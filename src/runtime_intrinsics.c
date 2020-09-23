@@ -80,7 +80,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     JL_TYPECHK(cglobal, type, ty);
     JL_GC_PUSH1(&v);
     jl_value_t *rt =
-        ty == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
+        ty == (jl_value_t*)jl_nothing_type ? (jl_value_t*)jl_voidpointer_type : // a common case
             (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
     JL_GC_PROMISE_ROOTED(rt); // (JL_ALWAYS_LEAFTYPE)
 
@@ -131,7 +131,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 }
 
 JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
-    return jl_cglobal(v, (jl_value_t*)jl_void_type);
+    return jl_cglobal(v, (jl_value_t*)jl_nothing_type);
 }
 
 static inline char signbitbyte(void *a, unsigned bytes) JL_NOTSAFEPOINT
@@ -248,7 +248,7 @@ static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *pr
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
     *(c_type*)pr = (c_type)OP(a, b); \
-    return CHECK_OP(a, b); \
+    return CHECK_OP(c_type, a, b);    \
 }
 
 // float inputs
@@ -855,37 +855,35 @@ un_fintrinsic_withtype(fpext,fpext)
 // checked arithmetic
 /**
  * s_typemin = - s_typemax - 1
- * s_typemax = ((typeof a)1 << (runtime_nbits - 1)) - 1
+ * s_typemax = ((t)1 << (runtime_nbits - 1)) - 1
  * u_typemin = 0
- * u_typemax = ((typeof a)1 << runtime_nbits) - 1
- * where (a - a) == (typeof(a)0
+ * u_typemax = ((t)1 << runtime_nbits) - 1
  **/
-#define sTYPEMIN(a) -sTYPEMAX(a) - 1
-#define sTYPEMAX(a)                                                \
-    (8 * sizeof(a) == runtime_nbits                                \
-         ? (((((a - a + 1) << (8 * sizeof(a) - 2)) - 1) << 1) + 1) \
-         : (  ((a - a + 1) << (runtime_nbits - 1)) - 1))
+#define sTYPEMIN(t) -sTYPEMAX(t) - 1
+#define sTYPEMAX(t)                                                \
+    ((t)(8 * sizeof(a) == runtime_nbits                            \
+         ? ((((((t)1) << (8 * sizeof(t) - 2)) - 1) << 1) + 1)      \
+         : (  (((t)1) << (runtime_nbits - 1)) - 1)))
 
-#define uTYPEMIN(a) (0)
-#define uTYPEMAX(a) \
-    (8 * sizeof(~a) == runtime_nbits \
-     ? (~(a - a)) \
-     : (~((~(a - a)) << runtime_nbits)))
-#define check_sadd_int(a,b) \
+#define uTYPEMIN(t) ((t)0)
+#define uTYPEMAX(t)                                             \
+    ((t)(8 * sizeof(t) == runtime_nbits                         \
+         ? (~((t)0)) : (~(((t)~((t)0)) << runtime_nbits))))
+#define check_sadd_int(t, a, b)                                         \
         /* this test checks for (b >= 0) ? (a + b > typemax) : (a + b < typemin) ==> overflow */ \
-        (b >= 0) ? (a > sTYPEMAX(a) - b) : (a < sTYPEMIN(a) - b)
+        (b >= 0) ? (a > sTYPEMAX(t) - b) : (a < sTYPEMIN(t) - b)
 checked_iintrinsic_fast(LLVMAdd_sov, check_sadd_int, add, checked_sadd_int,  )
-#define check_uadd_int(a,b) \
-        /* this test checks for (a + b) > typemax(a) ==> overflow */ \
-        a > uTYPEMAX(a) - b
+#define check_uadd_int(t, a, b)                                       \
+    /* this test checks for (a + b) > typemax(a) ==> overflow */      \
+    a > uTYPEMAX(t) - b
 checked_iintrinsic_fast(LLVMAdd_uov, check_uadd_int, add, checked_uadd_int, u)
-#define check_ssub_int(a,b) \
-        /* this test checks for (b >= 0) ? (a - b < typemin) : (a - b > typemax) ==> overflow */ \
-        (b >= 0) ? (a < sTYPEMIN(a) + b) : (a > sTYPEMAX(a) + b)
+#define check_ssub_int(t, a, b)                                         \
+    /* this test checks for (b >= 0) ? (a - b < typemin) : (a - b > typemax) ==> overflow */ \
+    (b >= 0) ? (a < sTYPEMIN(t) + b) : (a > sTYPEMAX(t) + b)
 checked_iintrinsic_fast(LLVMSub_sov, check_ssub_int, sub, checked_ssub_int,  )
-#define check_usub_int(a,b) \
-        /* this test checks for (a - b) < typemin ==> overflow */ \
-        a < uTYPEMIN(a) + b
+#define check_usub_int(t, a, b)                                   \
+    /* this test checks for (a - b) < typemin ==> overflow */     \
+    a < uTYPEMIN(t) + b
 checked_iintrinsic_fast(LLVMSub_uov, check_usub_int, sub, checked_usub_int, u)
 checked_iintrinsic_slow(LLVMMul_sov, checked_smul_int,  )
 checked_iintrinsic_slow(LLVMMul_uov, checked_umul_int, u)

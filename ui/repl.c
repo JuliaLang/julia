@@ -21,12 +21,22 @@
 
 #include "uv.h"
 #include "../src/julia.h"
+#include "../src/options.h"
 #include "../src/julia_assert.h"
 
 JULIA_DEFINE_FAST_TLS()
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifdef JL_ASAN_ENABLED
+JL_DLLEXPORT const char* __asan_default_options() {
+    return "allow_user_segv_handler=1:detect_leaks=0";
+    // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
+    //        or defining __lsan_default_options = exitcode=0 once publicly available
+    //        (here and in flisp/flmain.c)
+}
 #endif
 
 static int exec_program(char *program)

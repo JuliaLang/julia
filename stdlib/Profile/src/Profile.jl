@@ -41,7 +41,7 @@ end
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of
 instruction pointers that may be stored. Each instruction pointer corresponds to a single
-line of code; backtraces generally consist of a long list of instruction pointers. Default
+line of code; backtraces generally consist of a long list of instruction pointers. Current
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
 """
@@ -271,7 +271,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                     for proj in Base.project_names
                         project_file = joinpath(root, proj)
                         if Base.isfile_casesensitive(project_file)
-                            pkgid = Base.project_file_name_uuid(project_file, "")
+                            pkgid = Base.project_file_name_uuid(project_file, "", Base.TOMLCache())
                             isempty(pkgid.name) && return path # bad Project file
                             # return the joined the module name prefix and path suffix
                             path = path[nextind(path, sizeof(root)):end]
@@ -543,7 +543,9 @@ function indent(depth::Int)
     depth < 1 && return ""
     depth <= length(indent_z) && return indent_s[1:indent_z[depth]]
     div, rem = divrem(depth, length(indent_z))
-    return (indent_s^div) * SubString(indent_s, 1, indent_z[rem])
+    indent = indent_s^div
+    rem != 0 && (indent *= SubString(indent_s, 1, indent_z[rem]))
+    return indent
 end
 
 function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,String}, showpointer::Bool)

@@ -210,8 +210,9 @@ Base.keys
 Base.values
 Base.pairs
 Base.merge
-Base.merge!(::AbstractDict, ::AbstractDict...)
-Base.merge!(::Function, ::AbstractDict, ::AbstractDict...)
+Base.mergewith
+Base.merge!
+Base.mergewith!
 Base.sizehint!
 Base.keytype
 Base.valtype
@@ -268,6 +269,7 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
+Base.popat!
 Base.pushfirst!
 Base.popfirst!
 Base.insert!

@@ -23,8 +23,6 @@
 
 using namespace llvm;
 
-using llvm_file_magic = file_magic;
-
 #include "julia.h"
 #include "julia_internal.h"
 #include "debuginfo.h"
@@ -34,12 +32,9 @@ using llvm_file_magic = file_magic;
 #include "processor.h"
 
 #include <string>
-#include <sstream>
-#include <fstream>
 #include <map>
 #include <vector>
 #include <set>
-#include <cstdio>
 #include "julia_assert.h"
 
 #ifdef _OS_DARWIN_
@@ -55,10 +50,40 @@ typedef object::SymbolRef SymRef;
 // and cannot have any interaction with the julia runtime
 static uv_rwlock_t threadsafe;
 
-extern "C" void jl_init_debuginfo()
+extern "C" void jl_init_debuginfo(void)
 {
     uv_rwlock_init(&threadsafe);
 }
+
+extern "C" void jl_lock_profile(void)
+{
+    uv_rwlock_rdlock(&threadsafe);
+}
+
+extern "C" void jl_unlock_profile(void)
+{
+    uv_rwlock_rdunlock(&threadsafe);
+}
+
+// some actions aren't signal (especially profiler) safe so we acquire a lock
+// around them to establish a mutual exclusion with unwinding from a signal
+template <typename T>
+static void jl_profile_atomic(T f)
+{
+    uv_rwlock_wrlock(&threadsafe);
+#ifndef _OS_WINDOWS_
+    sigset_t sset;
+    sigset_t oset;
+    sigfillset(&sset);
+    pthread_sigmask(SIG_BLOCK, &sset, &oset);
+#endif
+    f();
+#ifndef _OS_WINDOWS_
+    pthread_sigmask(SIG_SETMASK, &oset, NULL);
+#endif
+    uv_rwlock_wrunlock(&threadsafe);
+}
+
 
 // --- storing and accessing source location metadata ---
 
@@ -73,8 +98,8 @@ struct ObjectInfo {
 // Maintain a mapping of unrealized function names -> linfo objects
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
-static StringMap<jl_code_instance_t*> ncode_in_flight;
-static std::string mangle(const std::string &Name, const DataLayout &DL)
+static StringMap<jl_code_instance_t*> codeinst_in_flight;
+static std::string mangle(StringRef Name, const DataLayout &DL)
 {
     std::string MangledName;
     {
@@ -85,7 +110,7 @@ static std::string mangle(const std::string &Name, const DataLayout &DL)
 }
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
-    ncode_in_flight[mangle(name, DL)] = codeinst;
+    codeinst_in_flight[mangle(name, DL)] = codeinst;
 }
 
 
@@ -111,8 +136,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
     mod_size = Size;
 #endif
     if (0) {
-        assert(!jl_in_stackwalk);
-        jl_in_stackwalk = 1;
+        JL_LOCK_NOGC(&jl_in_stackwalk);
         if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
             static int warned = 0;
             if (!warned) {
@@ -132,16 +156,18 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
                 jl_printf(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %lu\n", name, GetLastError());
             }
         }
-        jl_in_stackwalk = 0;
+        JL_UNLOCK_NOGC(&jl_in_stackwalk);
     }
 #if defined(_CPU_X86_64_)
-    if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
-        static int warned = 0;
-        if (!warned) {
-            jl_printf(JL_STDERR, "WARNING: failed to insert function stack unwind info: %lu\n", GetLastError());
-            warned = 1;
+    jl_profile_atomic([&]() {
+        if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
+            static int warned = 0;
+            if (!warned) {
+                jl_printf(JL_STDERR, "WARNING: failed to insert function stack unwind info: %lu\n", GetLastError());
+                warned = 1;
+            }
         }
-    }
+    });
 #endif
 }
 #endif
@@ -195,10 +221,10 @@ public:
 
         auto SavedObject = L.getObjectForDebug(Object).takeBinary();
         // If the debug object is unavailable, save (a copy of) the original object
-        // for our backtraces
+        // for our backtraces.
+        // This copy seems unfortunate, but there doesn't seem to be a way to take
+        // ownership of the original buffer.
         if (!SavedObject.first) {
-            // This is unfortunate, but there doesn't seem to be a way to take
-            // ownership of the original buffer
             auto NewBuffer = MemoryBuffer::getMemBufferCopy(
                     Object.getData(), Object.getFileName());
             auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
@@ -246,14 +272,17 @@ public:
                 auto sName = section.getName();
                 if (!sName)
                     continue;
+                if (sName.get() != ".ARM.exidx") {
+                    continue;
+                }
 #else
                 StringRef sName;
                 if (section.getName(sName))
                     continue;
-#endif
                 if (sName != ".ARM.exidx") {
                     continue;
                 }
+#endif
             }
             uint64_t loadaddr = L.getSectionLoadAddress(section);
             size_t seclen = section.getSize();
@@ -279,7 +308,9 @@ public:
             di->u.rti.name_ptr = 0;
             di->u.rti.table_data = arm_exidx_addr;
             di->u.rti.table_len = arm_exidx_len;
-            _U_dyn_register(di);
+            jl_profile_atomic([&]() {
+                _U_dyn_register(di);
+            });
             break;
         }
 #endif
@@ -399,26 +430,26 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_code_instance_t*>::iterator linfo_it = ncode_in_flight.find(sName);
+            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
             jl_code_instance_t *codeinst = NULL;
-            if (linfo_it != ncode_in_flight.end()) {
-                codeinst = linfo_it->second;
-                ncode_in_flight.erase(linfo_it);
+            if (codeinst_it != codeinst_in_flight.end()) {
+                codeinst = codeinst_it->second;
+                codeinst_in_flight.erase(codeinst_it);
             }
-            uv_rwlock_wrlock(&threadsafe);
-            if (codeinst)
-                linfomap[Addr] = std::make_pair(Size, codeinst->def);
-            if (first) {
-                ObjectInfo tmp = {&debugObj,
-                    (size_t)SectionSize,
-                    (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-                    *Section,
-                    nullptr,
-                    };
-                objectmap[SectionLoadAddr] = tmp;
-                first = false;
-            }
-            uv_rwlock_wrunlock(&threadsafe);
+            jl_profile_atomic([&]() {
+                if (codeinst)
+                    linfomap[Addr] = std::make_pair(Size, codeinst->def);
+                if (first) {
+                    ObjectInfo tmp = {&debugObj,
+                        (size_t)SectionSize,
+                        (ptrdiff_t)(SectionAddr - SectionLoadAddr),
+                        *Section,
+                        nullptr,
+                        };
+                    objectmap[SectionLoadAddr] = tmp;
+                    first = false;
+                }
+            });
         }
         jl_gc_safe_leave(ptls, gc_state);
     }
@@ -475,7 +506,7 @@ done:
 }
 
 static JuliaJITEventListener *jl_jit_events;
-JITEventListener *CreateJuliaJITEventListener()
+JITEventListener *CreateJuliaJITEventListener(void)
 {
     jl_jit_events = new JuliaJITEventListener();
     return jl_jit_events;
@@ -715,7 +746,7 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
 
     auto error_splitobj = object::ObjectFile::createObjectFile(
             SplitFile.get().get()->getMemBufferRef(),
-            llvm_file_magic::unknown);
+            file_magic::unknown);
     if (!error_splitobj) {
         return error_splitobj.takeError();
     }
@@ -824,12 +855,12 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
         PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)frame_info_func;
         pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
         pSymbol->MaxNameLen = MAX_SYM_NAME;
-        jl_in_stackwalk = 1;
+        JL_LOCK_NOGC(&jl_in_stackwalk);
         if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
             // errors are ignored
             jl_copy_str(name, pSymbol->Name);
         }
-        jl_in_stackwalk = 0;
+        JL_UNLOCK_NOGC(&jl_in_stackwalk);
     }
 #endif
 }
@@ -866,7 +897,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
         std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
                 StringRef((const char *)fbase, msize), "", false);
         auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
-            membuf->getMemBufferRef(), llvm_file_magic::unknown);
+            membuf->getMemBufferRef(), file_magic::unknown);
         if (!origerrorobj)
             return entry;
 
@@ -937,7 +968,7 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
         if (objpath.empty()) {
             // Fall back to simple path relative to the dynamic library.
             size_t sep = fname.rfind('/');
-            debuginfopath = fname;
+            debuginfopath = fname.str();
             debuginfopath += ".dSYM/Contents/Resources/DWARF/";
             debuginfopath += fname.substr(sep + 1);
             objpath = debuginfopath;
@@ -969,12 +1000,12 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
                 // that can be ignored.
                 ignoreError(DebugInfo);
                 if (fname.substr(sep + 1) != info.filename) {
-                    debuginfopath = fname.substr(0, sep + 1);
+                    debuginfopath = fname.substr(0, sep + 1).str();
                     debuginfopath += info.filename;
                     DebugInfo = openDebugInfo(debuginfopath, info);
                 }
                 if (!DebugInfo) {
-                    debuginfopath = fname.substr(0, sep + 1);
+                    debuginfopath = fname.substr(0, sep + 1).str();
                     debuginfopath += ".debug/";
                     debuginfopath += info.filename;
                     ignoreError(DebugInfo);
@@ -1044,7 +1075,6 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
 }
 
 
-extern "C" void jl_refresh_dbg_module_list(void);
 bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *slide, llvm::DIContext **context,
     bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
 {
@@ -1069,11 +1099,12 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
 #ifdef _OS_WINDOWS_
     IMAGEHLP_MODULE64 ModuleInfo;
     ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
+    JL_LOCK_NOGC(&jl_in_stackwalk);
     jl_refresh_dbg_module_list();
-    jl_in_stackwalk = 1;
     bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
-    jl_in_stackwalk = 0;
-    if (!isvalid) return false;
+    JL_UNLOCK_NOGC(&jl_in_stackwalk);
+    if (!isvalid)
+        return false;
 
     StringRef fname = ModuleInfo.LoadedImageName;
     if (fname.empty()) // empirically, LoadedImageName might be missing
@@ -1139,16 +1170,12 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
 static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables if noInline
-    // since it can be called from an unmanaged thread on OSX.
+    // since it can be called from an unmanaged thread (the segfault handler)
     jl_frame_t *frame0 = *frames;
 #ifdef _OS_WINDOWS_
     static IMAGEHLP_LINE64 frame_info_line;
     DWORD dwDisplacement = 0;
-    if (jl_in_stackwalk) {
-        frame0->fromC = 1;
-        return 1;
-    }
-    jl_in_stackwalk = 1;
+    JL_LOCK_NOGC(&jl_in_stackwalk);
     DWORD64 dwAddress = pointer;
     frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
     if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
@@ -1158,7 +1185,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
             jl_copy_str(&frame0->file_name, frame_info_line.FileName);
         frame0->line = frame_info_line.LineNumber;
     }
-    jl_in_stackwalk = 0;
+    JL_UNLOCK_NOGC(&jl_in_stackwalk);
 #endif
     object::SectionRef Section;
     llvm::DIContext *context = NULL;
@@ -1287,11 +1314,13 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
   processFDEs((char*)Addr, Size, [](const char *Entry) {
         if (!libc_register_frame) {
-          libc_register_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__register_frame");
+          libc_register_frame = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
         }
         assert(libc_register_frame);
-        libc_register_frame(const_cast<char *>(Entry));
-        __register_frame(const_cast<char *>(Entry));
+        jl_profile_atomic([&]() {
+            libc_register_frame(const_cast<char *>(Entry));
+            __register_frame(const_cast<char *>(Entry));
+        });
     });
 }
 
@@ -1299,16 +1328,19 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
    processFDEs((char*)Addr, Size, [](const char *Entry) {
         if (!libc_deregister_frame) {
-          libc_deregister_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__deregister_frame");
+          libc_deregister_frame = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
         }
         assert(libc_deregister_frame);
-        libc_deregister_frame(const_cast<char *>(Entry));
-        __deregister_frame(const_cast<char *>(Entry));
+        jl_profile_atomic([&]() {
+            libc_deregister_frame(const_cast<char *>(Entry));
+            __deregister_frame(const_cast<char *>(Entry));
+        });
     });
 }
 
 #elif defined(_OS_LINUX_) && \
-    defined(JL_UNW_HAS_FORMAT_IP) && !defined(_CPU_ARM_)
+    defined(JL_UNW_HAS_FORMAT_IP) && \
+    !defined(_CPU_ARM_) // ARM does not have/use .eh_frame, so we handle this elsewhere
 #include <type_traits>
 
 struct unw_table_entry
@@ -1494,7 +1526,9 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
 void register_eh_frames(uint8_t *Addr, size_t Size)
 {
     // System unwinder
-    __register_frame(Addr);
+    jl_profile_atomic([&]() {
+        __register_frame(Addr);
+    });
     // Our unwinder
     unw_dyn_info_t *di = new unw_dyn_info_t;
     // In a shared library, this is set to the address of the PLT.
@@ -1605,7 +1639,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
             start_ips[cur_entry] = start;
             cur_entry++;
         });
-    for (size_t i = 0;i < nentries;i++) {
+    for (size_t i = 0; i < nentries; i++) {
         table[i].start_ip_offset =
             safe_trunc<int32_t>((intptr_t)start_ips[i] - (intptr_t)start_ip);
     }
@@ -1616,25 +1650,19 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     di->start_ip = start_ip;
     di->end_ip = end_ip;
 
-    _U_dyn_register(di);
+    jl_profile_atomic([&]() {
+        _U_dyn_register(di);
+    });
 }
 
 void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
-    __deregister_frame(Addr);
-    // Deregistering with our unwinder requires a lookup table to find the
-    // the allocated entry above (or we could look in libunwind's internal
+    jl_profile_atomic([&]() {
+        __deregister_frame(Addr);
+    });
+    // Deregistering with our unwinder (_U_dyn_cancel) requires a lookup table
+    // to find the allocated entry above (or looking into libunwind's internal
     // data structures).
-}
-
-#elif defined(_CPU_ARM_)
-
-void register_eh_frames(uint8_t *Addr, size_t Size)
-{
-}
-
-void deregister_eh_frames(uint8_t *Addr, size_t Size)
-{
 }
 
 #else
