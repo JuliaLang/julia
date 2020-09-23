@@ -653,8 +653,6 @@ suffice for conditions to be convertible to `Bool`.
 julia> if 1 end
 ERROR: TypeError: non-boolean (Int64) used in boolean context
 ```
-
-See also [`?`](@ref).
 """
 kw"if", kw"elseif", kw"else"
 
