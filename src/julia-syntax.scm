@@ -1450,7 +1450,9 @@
                    (loop (cdr lhss)
                          (cons L assigned)
                          (cdr rhss)
-                         (cons (make-assignment temp R) stmts)
+                         (if (symbol? temp)
+                             (list* (make-assignment temp R) `(local-def ,temp) stmts)
+                             (cons  (make-assignment temp R) stmts))
                          (cons (make-assignment L temp) after)
                          (cons temp elts)))))))))
 
@@ -1468,6 +1470,7 @@
                         ;; issue #22032
                         (let ((temp (gensy)))
                           `(block
+                            (local-def ,temp)
                             (= ,temp (call (core getfield) ,t ,i))
                             (= ,(car lhs) ,temp)))
                         `(= ,(car lhs)
@@ -1664,6 +1667,7 @@
                              ,body))
                          `(scope-block ,body))))
                `(block (= ,coll ,(car itrs))
+                       (local ,next)
                        (= ,next (call (top iterate) ,coll))
                        ;; TODO avoid `local declared twice` error from this
                        ;;,@(if outer `((local ,lhs)) '())
@@ -2694,8 +2698,7 @@
                 (implicit-globals (if toplevel? nonloc-assigned '()))
                 (implicit-locals
                  (filter (if toplevel?
-                             ;; make only assigned gensyms implicitly local at top level
-                             some-gensym?
+                             (lambda (v) #f)  ;; no implicit locals at top level
                              (lambda (v) (and (memq (var-kind v scope #t) '(none static-parameter))
                                               (not (and soft?
                                                         (or (memq v (scope:implicit-globals scope))
