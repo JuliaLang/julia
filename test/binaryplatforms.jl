@@ -181,8 +181,6 @@ end
     # Test extended attributes
     @test R("x86_64-linux-gnu-march+avx2") == P("x86_64", "linux"; march="avx2")
     @test R("x86_64-linux-gnu-march+x86_64-cuda+10.1") == P("x86_64", "linux"; march="x86_64", cuda="10.1")
-    @test_throws ArgumentError R("x86_64-linux-gnu-march+generic";)
-    @test_throws ArgumentError R("x86_64-linux-gnu-cuda+version")
 
     # Round-trip our little homie through `triplet()`
     @test parse(Platform, triplet(HostPlatform())) == HostPlatform()
