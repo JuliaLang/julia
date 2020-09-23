@@ -372,8 +372,12 @@ ifneq ($(LLVM_VER),svn)
 	mkdir -p $(LLVM_SRC_DIR)
 	$(TAR) -C $(LLVM_SRC_DIR) --strip-components 1 -xf $(LLVM_TAR)
 else
+	([ ! -d $(LLVM_BARESRC_DIR) ] && \
+		git clone --bare $(LLVM_GIT_URL) $(LLVM_BARESRC_DIR) ) || \
+		(cd $(LLVM_BARESRC_DIR) && \
+		git fetch)
 	([ ! -d $(LLVM_MONOSRC_DIR) ] && \
-		git clone $(LLVM_GIT_URL) $(LLVM_MONOSRC_DIR) ) || \
+		git clone --local $(LLVM_BARESRC_DIR) $(LLVM_MONOSRC_DIR) ) || \
 		(cd $(LLVM_MONOSRC_DIR) && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER),)
@@ -574,8 +578,10 @@ check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:
-	cd $(LLVM_MONOSRC_DIR) && \
-		git pull --ff-only
+	(cd $(LLVM_BARESRC_DIR) && \
+		git fetch)
+	(cd $(LLVM_MONOSRC_DIR) && \
+		git pull --ff-only)
 endif
 else # USE_BINARYBUILDER_LLVM
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
