@@ -122,11 +122,12 @@ end
 function generate_precompile_statements()
     start_time = time_ns()
     debug_output = devnull # or stdout
+    sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
     # Precompile a package
     global hardcoded_precompile_statements
+
     mktempdir() do prec_path
-        push!(DEPOT_PATH, prec_path)
         pkgname = "__PackagePrecompilationStatementModule"
         mkpath(joinpath(prec_path, pkgname, "src"))
         path = joinpath(prec_path, pkgname, "src", "$pkgname.jl")
@@ -136,11 +137,17 @@ function generate_precompile_statements()
               end
               """)
         tmp = tempname()
-        Base.PRECOMPILE_TRACE_COMPILE[] = tmp
-        Base.compilecache(Base.PkgId(pkgname), path)
+        # Running compilecache on buildbots fails with
+        # `More than one command line CPU targets specified without a `--output-` flag specified`
+        # so start a new process without a CPU target specified
+        s = """
+            push!(DEPOT_PATH, $(repr(prec_path)));
+            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
+            Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
+            """
+        run(`$(julia_exepath()) -O0 --sysimage $sysimg -Cnative -e $s`)
         t = read(tmp, String)
         hardcoded_precompile_statements *= "\n" * read(tmp, String)
-        empty!(DEPOT_PATH)
     end
 
     mktemp() do precompile_file, precompile_file_h
@@ -158,7 +165,6 @@ function generate_precompile_statements()
                     "JULIA_PROJECT" => nothing, # remove from environment
                     "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib",
                     "TERM" => "") do
-            sysimg = Base.unsafe_string(Base.JLOptions().image_file)
             run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
                    --cpu-target=native --startup-file=no --color=yes
                    -e 'import REPL; REPL.Terminals.is_precompiling[] = true'

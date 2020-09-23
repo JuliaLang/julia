@@ -1176,7 +1176,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     deps = repr(eltype(concrete_deps)) * "[" * join(deps_strs, ",") * "]"
 
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
-    io = open(pipeline(`$(julia_cmd()::Cmd) -O0 -Cnative
+    io = open(pipeline(`$(julia_cmd()::Cmd) -O0
                        --output-ji $output --output-incremental=yes
                        --startup-file=no --history-file=no --warn-overwrite=yes
                        --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
