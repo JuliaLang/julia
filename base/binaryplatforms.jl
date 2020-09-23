@@ -155,6 +155,17 @@ function Base.repr(p::Platform; context=nothing)
     )
 end
 
+# Make showing the platform a bit more palatable
+function Base.show(io::IO, p::Platform)
+    str = string(platform_name(p), " ", arch(p))
+    # Add on all the other tags not covered by os/arch:
+    other_tags = sort(collect(filter(kv -> kv[1] ∉ ("os", "arch"), tags(p))))
+    if !isempty(other_tags)
+        str = string(str, " {", join([string(k, "=", v) for (k, v) in other_tags], ", "), "}")
+    end
+    print(io, str)
+end
+
 # Simple equality definition; for compatibility testing, use `platforms_match()`
 Base.:(==)(a::AbstractPlatform, b::AbstractPlatform) = tags(a) == tags(b)
 
@@ -577,7 +588,7 @@ const arch_march_isa_mapping = let
         ],
         "armv7l" => [
             "armv7l" => get_set("armv7l", "armv7l"),
-            "neonvfp4" => get_set("armv7l", "armv7l+neon+vfp4"),
+            "neonvfpv4" => get_set("armv7l", "armv7l+neon+vfpv4"),
         ],
         "aarch64" => [
             "armv8_0" => get_set("aarch64", "armv8.0-a"),

@@ -48,7 +48,7 @@ const ISAs_by_family = Dict(
     "armv7l" => [
         "armv7l" => ISA(Set{UInt32}()),
         "armv7l+neon" => ISA(Set((JL_AArch32_neon,))),
-        "armv7l+neon+vfp4" => ISA(Set((JL_AArch32_neon, JL_AArch32_vfp4))),
+        "armv7l+neon+vfpv4" => ISA(Set((JL_AArch32_neon, JL_AArch32_vfp4))),
     ],
     "aarch64" => [
         # Implicit in all sets, because always required: fp, asimd
@@ -91,7 +91,7 @@ end
 Return the [`ISA`](@ref) (instruction set architecture) of the current CPU.
 """
 function cpu_isa()
-    all_features = last(last(get(ISAs_by_family, normalize_arch(Sys.ARCH), "" => [ISA(Set{UInt32}())]))).features
+    all_features = last(last(get(ISAs_by_family, normalize_arch(String(Sys.ARCH)), "" => [ISA(Set{UInt32}())]))).features
     return ISA(Set{UInt32}(feat for feat in all_features if test_cpu_feature(feat)))
 end
 
