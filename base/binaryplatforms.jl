@@ -44,16 +44,7 @@ struct Platform <: AbstractPlatform
                       kwargs...)
         # A wee bit of normalization
         os = lowercase(os)
-        arch = lowercase(arch)
-        if arch ∈ ("amd64",)
-            arch = "x86_64"
-        elseif arch ∈ ("i386", "i586")
-            arch = "i686"
-        elseif arch ∈ ("arm",)
-            arch = "armv7l"
-        elseif arch ∈ ("ppc64le",)
-            arch = "powerpc64le"
-        end
+        arch = CPUID.normalize_arch(arch)
 
         tags = Dict{String,String}(
             "arch" => arch,

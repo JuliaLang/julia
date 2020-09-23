@@ -63,8 +63,27 @@ const ISAs_by_family = Dict(
     ]
 )
 
+# Test a CPU feature exists on the currently-running host
 test_cpu_feature(feature::UInt32) = ccall(:jl_test_cpu_feature, Bool, (UInt32,), feature)
-cpu_family() = String(Sys.ARCH)
+
+# Normalize some variation in ARCH values (which typically come from `uname -m`)
+function normalize_arch(arch::String)
+    arch = lowercase(arch)
+    if arch ∈ ("amd64",)
+        arch = "x86_64"
+    elseif arch ∈ ("i386", "i486", "i586")
+        arch = "i686"
+    elseif arch ∈ ("armv6",)
+        arch = "armv6l"
+    elseif arch ∈ ("arm", "armv7", "armv8", "armv8l")
+        arch = "armv7l"
+    elseif arch ∈ ("arm64",)
+        arch = "aarch64"
+    elseif arch ∈ ("ppc64le",)
+        arch = "powerpc64le"
+    end
+    return arch
+end
 
 """
     cpu_isa()
@@ -72,7 +91,7 @@ cpu_family() = String(Sys.ARCH)
 Return the [`ISA`](@ref) (instruction set architecture) of the current CPU.
 """
 function cpu_isa()
-    all_features = last(last(get(ISAs_by_family, cpu_family(), "" => [ISA(Set{UInt32}())]))).features
+    all_features = last(last(get(ISAs_by_family, normalize_arch(Sys.ARCH), "" => [ISA(Set{UInt32}())]))).features
     return ISA(Set{UInt32}(feat for feat in all_features if test_cpu_feature(feat)))
 end
 
