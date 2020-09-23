@@ -1205,6 +1205,7 @@ if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
 else
     @test_throws ErrorException symlink(file, "ba\0d")
 end
+using Downloads: download
 @test_throws ArgumentError download("good", "ba\0d")
 @test_throws ArgumentError download("ba\0d", "good")
 
