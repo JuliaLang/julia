@@ -124,18 +124,22 @@ function generate_precompile_statements()
     debug_output = devnull # or stdout
 
     # Precompile a package
+    global hardcoded_precompile_statements
     mktempdir() do prec_path
         push!(DEPOT_PATH, prec_path)
-        push!(LOAD_PATH, prec_path)
         pkgname = "__PackagePrecompilationStatementModule"
         mkpath(joinpath(prec_path, pkgname, "src"))
-        write(joinpath(prec_path, pkgname, "src", "$pkgname.jl"),
+        path = joinpath(prec_path, pkgname, "src", "$pkgname.jl")
+        write(path,
               """
               module $pkgname
               end
               """)
-        @eval using __PackagePrecompilationStatementModule
-        empty!(LOAD_PATH)
+        tmp = tempname()
+        Base.PRECOMPILE_TRACE_COMPILE[] = tmp
+        Base.compilecache(Base.PkgId(pkgname), path)
+        t = read(tmp, String)
+        hardcoded_precompile_statements *= "\n" * read(tmp, String)
         empty!(DEPOT_PATH)
     end
 
