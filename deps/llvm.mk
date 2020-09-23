@@ -383,7 +383,7 @@ endif # LLVM_GIT_VER
 	# Debug output only. Disable pager and ignore error.
 	(cd $(LLVM_SRC_DIR) && \
 		git show HEAD --stat | cat) || true
-ifneq ($(USE_RV),)
+ifeq ($(USE_RV),1)
 	git clone -b $(LLVM_RV_GIT_VER) $(LLVM_RV_GIT_URL) $(LLVM_MONOSRC_DIR)/rv
 	(cd $(LLVM_MONOSRC_DIR)/rv && \
 		git submodule update --init) || true
