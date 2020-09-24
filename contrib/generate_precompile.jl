@@ -146,7 +146,6 @@ function generate_precompile_statements()
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             """
         run(`$(julia_exepath()) -O0 --sysimage $sysimg -Cnative -e $s`)
-        t = read(tmp, String)
         hardcoded_precompile_statements *= "\n" * read(tmp, String)
     end
 
