@@ -507,7 +507,7 @@ function triplet(p::AbstractPlatform)
 
     # Tack on all extra tags
     for (tag, val) in tags(p)
-        if tag ∈ ("os", "arch", "libc", "call_abi", "libgfortran_version", "libstdcxx_version", "cxxstring_abi")
+        if tag ∈ ("os", "arch", "libc", "call_abi", "libgfortran_version", "libstdcxx_version", "cxxstring_abi", "os_version")
             continue
         end
         str = string(str, "-", tag, "+", val)
