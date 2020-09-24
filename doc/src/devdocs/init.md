@@ -4,9 +4,11 @@ How does the Julia runtime execute `julia -e 'println("Hello World!")'` ?
 
 ## `main()`
 
-Execution starts at [`main()` in `ui/repl.c`](https://github.com/JuliaLang/julia/blob/master/ui/repl.c).
+Execution starts at [`main()` in `cli/loader_exe.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_exe.c),
+which calls `load_repl()` in [`cli/loader_lib.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_lib.c)
+which loads a few libraries, eventually calling [`repl_entrypoint()` in `src/jlapi.c`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c).
 
-`main()` calls [`libsupport_init()`](https://github.com/JuliaLang/julia/blob/master/src/support/libsupportinit.c)
+`repl_entrypoint()` calls [`libsupport_init()`](https://github.com/JuliaLang/julia/blob/master/src/support/libsupportinit.c)
 to set the C library locale and to initialize the "ios" library (see [`ios_init_stdstreams()`](https://github.com/JuliaLang/julia/blob/master/src/support/ios.c)
 and [Legacy `ios.c` library](@ref)).
 
@@ -123,8 +125,8 @@ each deserialized module to run the `__init__()` function.
 Finally [`sigint_handler()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c)
 is hooked up to `SIGINT` and calls `jl_throw(jl_interrupt_exception)`.
 
-`_julia_init()` then returns [back to `main()` in `ui/repl.c`](https://github.com/JuliaLang/julia/blob/master/ui/repl.c)
-and `main()` calls `true_main(argc, (char**)argv)`.
+`_julia_init()` then returns [back to `main()` in `cli/loader_exe.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_exe.c)
+and `main()` calls `repl_entrypoint(argc, (char**)argv)`.
 
 !!! sidebar "sysimg"
     If there is a sysimg file, it contains a pre-cooked image of the `Core` and `Main` modules (and
@@ -137,12 +139,12 @@ and `main()` calls `true_main(argc, (char**)argv)`.
     Note: [`jl_restore_system_image()` (and `staticdata.c` in general)](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c)
     uses the [Legacy `ios.c` library](@ref).
 
-## `true_main()`
+## `repl_entrypoint()`
 
-[`true_main()`](https://github.com/JuliaLang/julia/blob/master/ui/repl.c) loads the contents of
+[`repl_entrypoint()`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c) loads the contents of
 `argv[]` into [`Base.ARGS`](@ref).
 
-If a `.jl` "program" file was supplied on the command line, then [`exec_program()`](https://github.com/JuliaLang/julia/blob/master/ui/repl.c)
+If a `.jl` "program" file was supplied on the command line, then [`exec_program()`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c)
 calls [`jl_load(program,len)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which
 calls [`jl_parse_eval_all`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) which repeatedly
 calls [`jl_toplevel_eval_flex()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)

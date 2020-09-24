@@ -293,20 +293,6 @@ else
 CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
 
-# If we're on windows, don't do versioned shared libraries.  If we're on OSX,
-# put the version number before the .dylib.  Otherwise, put it after.
-ifeq ($(OS), WINNT)
-JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT)
-else
-ifeq ($(OS), Darwin)
-JL_MAJOR_MINOR_SHLIB_EXT := $(SOMAJOR).$(SOMINOR).$(SHLIB_EXT)
-JL_MAJOR_SHLIB_EXT := $(SOMAJOR).$(SHLIB_EXT)
-else
-JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR).$(SOMINOR)
-JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
-endif
-endif
-
 ifeq ($(SHLIB_EXT), so)
   SONAME       := -Wl,-soname=libjulia.$(JL_MAJOR_SHLIB_EXT)
   SONAME_DEBUG := -Wl,-soname=libjulia-debug.$(JL_MAJOR_SHLIB_EXT)
