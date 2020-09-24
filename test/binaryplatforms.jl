@@ -106,6 +106,7 @@ end
     @test triplet(P("x86_64", "linux")) == "x86_64-linux-gnu"
     @test triplet(P("armv6l", "linux")) == "armv6l-linux-gnueabihf"
     @test triplet(P("x86_64", "macos")) == "x86_64-apple-darwin"
+    @test triplet(P("x86_64", "macos"; os_version=v"16")) == "x86_64-apple-darwin16"
     @test triplet(P("x86_64", "freebsd")) == "x86_64-unknown-freebsd"
     @test triplet(P("i686", "freebsd")) == "i686-unknown-freebsd"
 
@@ -182,8 +183,13 @@ end
     @test R("x86_64-linux-gnu-march+avx2") == P("x86_64", "linux"; march="avx2")
     @test R("x86_64-linux-gnu-march+x86_64-cuda+10.1") == P("x86_64", "linux"; march="x86_64", cuda="10.1")
 
-    # Round-trip our little homie through `triplet()`
-    @test parse(Platform, triplet(HostPlatform())) == HostPlatform()
+    # Round-trip our little homie through `triplet()`, with some bending
+    # of the rules for MacOS and FreeBSD, who have incomplete `os_version`
+    # numbers embedded within their triplets.
+    p = HostPlatform()
+    if !Sys.isbsd(p)
+        @test parse(Platform, triplet(p)) == p
+    end
 
     # Also test round-tripping through `repr()`:
     @test eval(Meta.parse(repr(HostPlatform()))) == HostPlatform()
