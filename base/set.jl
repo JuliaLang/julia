@@ -570,7 +570,7 @@ promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
 # Subtract singleton types which are going to be replaced
 function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
     if issingletontype(K)
-        Core.Compiler.typesubtract(T, K)
+        typesplit(T, K)
     else
         T
     end

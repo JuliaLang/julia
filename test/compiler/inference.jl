@@ -2592,6 +2592,60 @@ end
 
 @test map(>:, [Int], [Int]) == [true]
 
+# issue 35566
+module Issue35566
+function step(acc, x)
+    xs, = acc
+    y = x > 0.0 ? x : missing
+    if y isa eltype(xs)
+        ys = push!(xs, y)
+    else
+        ys = vcat(xs, [y])
+    end
+    return (ys,)
+end
+
+function probe(y)
+    if y isa Tuple{Vector{Missing}}
+        return Val(:missing)
+    else
+        return Val(:expected)
+    end
+end
+
+function _foldl_iter(rf, val::T, iter, state) where {T}
+    while true
+        ret = iterate(iter, state)
+        ret === nothing && break
+        x, state = ret
+        y = rf(val, x)
+        if y isa T
+            val = y
+        else
+            return probe(y)
+        end
+    end
+    return Val(:expected)
+end
+
+f() = _foldl_iter(step, (Missing[],), [0.0], 1)
+end
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}, 0) == Tuple{Int}
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}, 1) == Tuple{Int}
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}, 2) == Tuple{Int}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, Tuple{Char, Any, Any}, 0) ==
+        Tuple{Int, Union{Char, Int}, Union{Char, Int}}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, Tuple{Char, Any, Any}, 10) ==
+        Union{Tuple{Int, Char, Char}, Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, NTuple{3, Char}, 0) ==
+        NTuple{3, Union{Int, Char}}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, NTuple{3, Char}, 10) ==
+        Union{Tuple{Char, Char, Int}, Tuple{Char, Int, Char}, Tuple{Char, Int, Int}, Tuple{Int, Char, Char},
+              Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
+
+
+@test Base.return_types(Issue35566.f) == [Val{:expected}]
+
 # constant prop through keyword arguments
 _unstable_kw(;x=1,y=2) = x == 1 ? 0 : ""
 _use_unstable_kw_1() = _unstable_kw(x = 2)
