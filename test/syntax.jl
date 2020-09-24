@@ -2345,3 +2345,42 @@ end
 
 # issue #37656
 @test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
+
+# issue #37664
+@test_throws ParseError("extra token \"b\" after end of expression") Meta.parse("a b")
+@test_throws ParseError("extra token \"b\" after end of expression") Meta.parse("a#==#b")
+@test_throws ParseError("extra token \"b\" after end of expression") Meta.parse("a #==#b")
+@test_throws ParseError("extra token \"b\" after end of expression") Meta.parse("a#==# b")
+
+@test_throws ParseError("extra token \"2\" after end of expression") Meta.parse("1 2")
+@test_throws ParseError("extra token \"2\" after end of expression") Meta.parse("1#==#2")
+@test_throws ParseError("extra token \"2\" after end of expression") Meta.parse("1 #==#2")
+@test_throws ParseError("extra token \"2\" after end of expression") Meta.parse("1#==# 2")
+
+@test size([1#==#2#==#3]) == size([1 2 3])
+@test size([1#==#2#==#3]) == size([1	2	3]) # tabs
+@test size([1#==#2#==#3]) == size([1	2 3]) # tabs and spaces
+@test size([1#==#2#==#3]) == size([1 2	3]) # tabs and spaces
+@test [zeros(Int,2,2)#==#[1;2]
+       [3#==#4]#==#5]          == [zeros(Int,2,2) [1; 2]
+                                   [3 4]          5     ] == [0 0 1
+                                                              0 0 2
+                                                              3 4 5]
+
+@test Meta.parse("for x in 1:10 g(x) end") ==
+  Meta.parse("for#==#x#==#in#==#1:10#==#g(x)#==#end")
+@test Meta.parse("(f->f(1))() do x x+1 end") ==
+  Meta.parse("(f->f(1))()#==#do#==#x#==#x+1#==#end")
+@test Meta.parse("while i < 10 i += 1 end") ==
+  Meta.parse("while#==#i#==#<#==#10#==#i#==#+=#==#1#==#end")
+@test Meta.parse("begin x=1 end") == Meta.parse("begin#==#x=1#==#end")
+@test Meta.parse("if x<y x+1 elseif y>0 y+1 else z end") ==
+  Meta.parse("if#==#x<y#==#x+1#==#elseif#==#y>0#==#y+1#==#else#==#z#==#end")
+@test Meta.parse("function(x) x end") == Meta.parse("function(x)#==#x#==#end")
+@test Meta.parse("a ? b : c") == Meta.parse("a#==#?#==#b#==#:#==#c")
+@test_throws ParseError("space before \"(\" not allowed in \"f (\" at none:1") begin
+  Meta.parse("f#==#(x)=x")
+end
+@test Meta.parse("try f() catch e g() finally h() end") ==
+  Meta.parse("try#==#f()#==#catch#==#e#==#g()#==#finally#==#h()#==#end")
+@test Meta.parse("@m a b") == Meta.parse("@m#==#a#==#b")
