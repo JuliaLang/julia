@@ -1325,6 +1325,29 @@ for i in 1:3
     ccall((:test_echo_p, libccalltest), Ptr{Cvoid}, (Any,), f17413())
 end
 
+let r = Ref{Any}(10)
+    @GC.preserve r begin
+        pa = Base.unsafe_convert(Ptr{Any}, r) # pointer to value
+        pv = Base.unsafe_convert(Ptr{Cvoid}, r) # pointer to data
+        @test Ptr{Cvoid}(pa) != pv
+        @test unsafe_load(pa) === 10
+        @test unsafe_load(Ptr{Ptr{Cvoid}}(pa)) === pv
+        @test unsafe_load(Ptr{Int}(pv)) === 10
+    end
+end
+
+let r = Ref{Any}("123456789")
+    @GC.preserve r begin
+        pa = Base.unsafe_convert(Ptr{Any}, r) # pointer to value
+        pv = Base.unsafe_convert(Ptr{Cvoid}, r) # pointer to data
+        @test Ptr{Cvoid}(pa) != pv
+        @test unsafe_load(pa) === r[]
+        @test unsafe_load(Ptr{Ptr{Cvoid}}(pa)) === pv
+        @test unsafe_load(Ptr{Int}(pv)) === length(r[])
+    end
+end
+
+
 struct SpillPint
     a::Ptr{Cint}
     b::Ptr{Cint}

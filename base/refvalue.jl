@@ -35,7 +35,7 @@ true
 """
 isassigned(x::RefValue) = isdefined(x, :x)
 
-function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
+function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefValue{T})::P where T
     if allocatedinline(T)
         p = pointer_from_objref(b)
     elseif isconcretetype(T) && T.mutable
@@ -47,12 +47,11 @@ function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
         # which also ensures this returns same pointer as the one rooted in the `RefValue` object.
         p = pointerref(Ptr{Ptr{Cvoid}}(pointer_from_objref(b)), 1, Core.sizeof(Ptr{Cvoid}))
     end
-    return convert(P, p)::Ptr{T}
+    return p
 end
-function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
-    return convert(P, pointer_from_objref(b))::Ptr{Any}
+function unsafe_convert(::Type{Ptr{Any}}, b::RefValue{Any})::Ptr{Any}
+    return pointer_from_objref(b)
 end
-unsafe_convert(::Type{Ptr{Cvoid}}, b::RefValue{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))::Ptr{Cvoid}
 
 getindex(b::RefValue) = b.x
 setindex!(b::RefValue, x) = (b.x = x; b)

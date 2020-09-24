@@ -416,7 +416,7 @@ function _show_default(io::IO, @nospecialize(x))
         end
     else
         print(io, "0x")
-        r = Ref(x)
+        r = Ref{Any}(x)
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
             for i in (nb - 1):-1:0
