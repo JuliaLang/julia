@@ -105,6 +105,7 @@ Standard library changes
 * `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
 * For consistency `haskey(r::RegexMatch, i::Integer)` has also been added and returns if the capture group for `i` exists ([#37300]).
 * A new standard library `TOML` has been added for parsing and printing [TOML files](https://toml.io) ([#37034]).
+* The composition operator `∘` now returns a `Base.ComposedFunction` instead of an anonymous function ([#37517]).
 * A new standard library `Downloads` has been added, which replaces the old `Base.download` function with `Downloads.download`, providing cross-platform, multi-protocol, in-process download functionality implemented with [libcurl](https://curl.haxx.se/libcurl/) ([#37340]).
 * The `Pkg.BinaryPlatforms` module has been moved into `Base` as `Base.BinaryPlatforms` and heavily reworked.
   Applications that want to be compatible with the old API should continue to import `Pkg.BinaryPlatforms`,

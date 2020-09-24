@@ -38,6 +38,7 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
+    ComposedFunction,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
