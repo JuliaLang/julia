@@ -293,10 +293,6 @@ try
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
                  :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,]),
-                # Plus precompilation module generated at build time
-                let id = Base.PkgId("__PackagePrecompilationStatementModule")
-                    Dict(id => Base.module_build_id(Base.root_module(id)))
-                end
            )
         @test discard_module.(deps) == deps1
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
