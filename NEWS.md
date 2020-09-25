@@ -102,6 +102,8 @@ New library features
   inserting or consuming the first dimension depending on the ratio of `sizeof(T)` and `sizeof(S)`.
 * New `append!(vector, collections...)` and `prepend!(vector, collections...)` methods accept multiple
   collections to be appended or prepended ([#36227]).
+* `keys(io::IO)` has been added, which returns all keys of `io` if `io` is an `IOContext` and an empty
+  `Base.KeySet` otherwise ([#37753]).
 
 Standard library changes
 ------------------------

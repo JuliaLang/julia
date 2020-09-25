@@ -20,6 +20,9 @@ showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :d
     @test ioc.io == io
     @test ioc.dict == Base.ImmutableDict(Base.ImmutableDict{Symbol, Any}(:x, 1),
                                          :y => 2)
+    @test Base.ImmutableDict((key => ioc[key] for key in keys(ioc))...) == ioc.dict
+    @test keys(IOBuffer()) isa Base.KeySet
+    @test length(keys(IOBuffer())) == 0
 end
 
 @test replstr(Array{Any}(undef, 2)) == "2-element Vector{Any}:\n #undef\n #undef"

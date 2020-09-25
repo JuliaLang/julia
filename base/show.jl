@@ -341,6 +341,8 @@ getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
 get(io::IOContext, key, default) = get(io.dict, key, default)
 get(io::IO, key, default) = default
+keys(io::IOContext) = keys(io.dict)
+keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
 
