@@ -3228,7 +3228,7 @@ f(x) = yt(x)
                    (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))
 
 (define lambda-opt-ignored-exprs
-  (Set '(quote top core line inert local local-def unnecessary copyast
+  (Set '(quote top core line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
@@ -3256,6 +3256,7 @@ f(x) = yt(x)
   ;; are never used undef.
   (let ((vi     (car (lam:vinfo lam)))
         (args   (lam:argnames lam))
+        (decl   (table))
         (unused (table))  ;; variables not (yet) used (read from) in the current block
         (live   (table))  ;; variables that have been set in the current block
         (seen   (table))) ;; all variables we've seen assignments to
@@ -3290,6 +3291,17 @@ f(x) = yt(x)
           (begin (put! live var #t)
                  (put! seen var #t)
                  (del! unused var))))
+    (define (declare! var)
+      (if (has? unused var)
+          (put! decl var #t)))
+    (define (leave-loop! old-decls)
+      ;; at the end of a loop, remove live variables that were declared outside,
+      ;; since those might be assigned multiple times (issue #37690)
+      (for-each (lambda (k)
+                  (if (has? old-decls k)
+                      (del! live k)))
+                (table.keys live))
+      (set! decl old-decls))
     (define (visit e)
       ;; returns whether e contained a symboliclabel
       (cond ((atom? e) (if (symbol? e) (mark-used e))
@@ -3298,7 +3310,7 @@ f(x) = yt(x)
              #f)
             ((eq? (car e) 'scope-block)
              (visit (cadr e)))
-            ((memq (car e) '(block call new splatnew _do_while))
+            ((memq (car e) '(block call new splatnew))
              (eager-any visit (cdr e)))
             ((eq? (car e) 'break-block)
              (visit (caddr e)))
@@ -3311,7 +3323,7 @@ f(x) = yt(x)
             ((eq? (car e) 'symboliclabel)
              (kill)
              #t)
-            ((memq (car e) '(if elseif _while trycatch tryfinally))
+            ((memq (car e) '(if elseif trycatch tryfinally))
              (let ((prev (table.clone live)))
                (if (eager-any (lambda (e) (begin0 (visit e)
                                                   (kill)))
@@ -3320,9 +3332,22 @@ f(x) = yt(x)
                    ;; variable initialization
                    (begin (kill) #t)
                    (begin (restore prev) #f))))
+            ((or (eq? (car e) '_while) (eq? (car e) '_do_while))
+             (let ((prev  (table.clone live))
+                   (decl- (table.clone decl)))
+               (let ((result (eager-any visit (cdr e))))
+                 (if (eq? (car e) '_while)
+                     (kill))  ;; body might not have run
+                 (leave-loop! decl-)
+                 (if result
+                     #t
+                     (begin (restore prev) #f)))))
             ((eq? (car e) '=)
              (begin0 (visit (caddr e))
                      (assign! (cadr e))))
+            ((eq? (car e) 'local)
+             (declare! (cadr e))
+             #f)
             ((eq? (car e) 'method)
              (if (length> e 2)
                  (let* ((mn          (method-expr-name e))
