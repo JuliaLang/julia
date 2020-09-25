@@ -12,8 +12,11 @@ module Timings
 
 struct Timing
     name::Any
+    start_time::UInt64
     time::UInt64
     children::Core.Array{Timing,1}
+    Timing(name, start_time, time, children) = new(name, start_time, time, children)
+    Timing(name, start_time, children) = new(name, start_time, UInt64(0), children)
 end
 const _timings = Timing[]
 function reset_timings()
@@ -46,7 +49,12 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
         v = _typeinf(interp, frame)
 
         # Record the final timing
-        cur_timer.children[i] = Timings.Timing(new_timer.name, Timings.time_ns() - new_timer.time, new_timer.children)
+        cur_timer.children[i] = Timings.Timing(
+            new_timer.name,
+            new_timer.start_time,
+            Timings.time_ns() - new_timer.start_time,
+            new_timer.children
+        )
         pop!(_timings)
 
         return v
