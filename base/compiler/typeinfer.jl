@@ -16,12 +16,12 @@ struct Timing
     time::UInt64
     children::Core.Array{Timing,1}
     Timing(name, start_time, time, children) = new(name, start_time, time, children)
-    Timing(name, start_time, children) = new(name, start_time, UInt64(0), children)
+    Timing(name, start_time) = new(name, start_time, UInt64(0), Timing[])
 end
 const _timings = Timing[]
 function reset_timings()
     Core.Compiler.empty!(_timings)
-    Core.Compiler.push!(_timings, Timing("root", UInt64(0), Timing[]))
+    Core.Compiler.push!(_timings, Timing("root", UInt64(0)))
     nothing
 end
 reset_timings()
@@ -40,7 +40,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
         _timings = Timings._timings
         cur_timer = _timings[end]
         # Start the new timer
-        new_timer = Timings.Timing(frame.linfo.specTypes, Timings.time_ns(), Timings.Timing[])
+        new_timer = Timings.Timing(frame.linfo.specTypes, Timings.time_ns())
         push!(_timings, new_timer)
         # register it in cur_timer
         push!(cur_timer.children, new_timer)
