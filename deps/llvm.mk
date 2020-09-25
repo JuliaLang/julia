@@ -83,7 +83,7 @@ endif
 endif # LLVM_VER != svn
 
 # Figure out which targets to build
-LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly
+LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
