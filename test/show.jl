@@ -2018,3 +2018,23 @@ end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
+
+@testset "method printing with non-standard identifiers" for _show in (
+    show,
+    (io, x) -> show(io, MIME("text/html"), x),
+)
+    @eval var","(x) = x
+    @test occursin("var\",\"(x)", sprint(_show, methods(var",")))
+
+    @eval f1(var"a.b") = 3
+    @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
+
+    @eval f2(; var"123") = 5
+    @test occursin("f2(; var\"123\")", sprint(_show, methods(f2)))
+
+    @eval f3(; var"%!"...) = 7
+    @test occursin("f3(; var\"%!\"...)", sprint(_show, methods(f3)))
+
+    @eval f4(; var"...") = 9
+    @test_broken occursin("f4(; var\"...\")", sprint(_show, methods(f4)))
+end
