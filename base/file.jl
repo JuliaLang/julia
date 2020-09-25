@@ -187,7 +187,8 @@ end
     mkpath(path::AbstractString; mode::Unsigned = 0o777)
 
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
-`0o777`, modified by the current file creation mask.
+`0o777`, modified by the current file creation mask. Unlike [`mkdir`](@ref), `mkpath`
+does not error if `path` (or parts of it) already exists.
 Return `path`.
 
 # Examples
