@@ -36,8 +36,9 @@ fi
 CONTRIB_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 # Get the source hash for each project
-for proj in ${BB_PROJECTS}; do
+for proj in ${BB_PROJECTS} ${BB_GCC_EXPANDED_PROJECTS} ${BB_CXX_EXPANDED_PROJECTS}; do
     PROJ="$(echo ${proj} | tr [a-z] [A-Z])"
+    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 uninstall-${proj}
     make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=0 DEPS_GIT=0 extract-${proj}
 done
 
@@ -64,4 +65,10 @@ for triplet in ${TRIPLETS}; do
 		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${cxx} BB_TRIPLET_CXXABI=${triplet} install-${proj}
         done
     done
+done
+
+# Reset and cleanup
+for proj in ${BB_PROJECTS} ${BB_GCC_EXPANDED_PROJECTS} ${BB_CXX_EXPANDED_PROJECTS}; do
+    PROJ="$(echo ${proj} | tr [a-z] [A-Z])"
+    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 uninstall-${proj}
 done
