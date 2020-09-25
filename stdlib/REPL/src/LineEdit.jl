@@ -97,7 +97,7 @@ mutable struct PromptState <: ModeState
     # indentation of lines which do not include the prompt
     # if negative, the width of the prompt is used
     indent::Int
-    refresh_lock::Threads.AbstractLock
+    refresh_lock::Threads.SpinLock
     # this would better be Threads.Atomic{Float64}, but not supported on some platforms
     beeping::Float64
     # this option is to detect when code is pasted in non-"bracketed paste mode" :

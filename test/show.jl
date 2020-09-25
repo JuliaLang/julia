@@ -757,7 +757,7 @@ else
 end
 
 # Method location correction (Revise integration)
-dummyloc(m::Method) = :nofile, 123456789
+dummyloc(m::Method) = :nofile, Int32(123456789)
 Base.methodloc_callback[] = dummyloc
 let repr = sprint(show, "text/plain", methods(Base.inbase))
     @test occursin("nofile:123456789", repr)
