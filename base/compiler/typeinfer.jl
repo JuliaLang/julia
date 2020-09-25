@@ -8,17 +8,51 @@ function typeinf(interp::AbstractInterpreter, result::InferenceResult, cached::B
     return typeinf(interp, frame)
 end
 
-function _typeinf end
-const _typeinf_function = Array{Function,0}(undef, ())  # Boostrap: Array{Function,0}(fill(typeinf))
-function _set_typeinf_func(f::Function)
-    _typeinf_function[] = f
+module Timings
+
+struct Timing
+    name::Any
+    time::UInt64
+    children::Core.Array{Timing,1}
 end
-_set_typeinf_func(_typeinf)  # to ensure `_set_typeinf_func()` is precompiled
+const _timings = Timing[]
+function reset_timings()
+    Core.Compiler.empty!(_timings)
+    Core.Compiler.push!(_timings, Timing("root", UInt64(0), Timing[]))
+    nothing
+end
+reset_timings()
+
+time_ns() = ccall(:jl_hrtime, UInt64, ())
+
+end  # module Timings
+
+# TODO(PR): What's the right way to do a global const mutable boolean in Core.Compiler?
+const __measure_typeinf__ = Array{Bool,0}(undef, ())
+__toggle_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
+__toggle_measure_typeinf(false)
 
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
-    # TODO: we're not actually pure though so .... :/
-    Core._apply_pure(_typeinf_function[], (interp, frame))
-    #return _typeinf_function[](interp, frame)
+    if __measure_typeinf__[]
+        _timings = Timings._timings
+        cur_timer = _timings[end]
+        # Start the new timer
+        new_timer = Timings.Timing(frame.linfo.specTypes, Timings.time_ns(), Timings.Timing[])
+        push!(_timings, new_timer)
+        # register it in cur_timer
+        push!(cur_timer.children, new_timer)
+        i = length(cur_timer.children)
+
+        v = _typeinf(interp, frame)
+
+        # Record the final timing
+        cur_timer.children[i] = Timings.Timing(new_timer.name, Timings.time_ns() - new_timer.time, new_timer.children)
+        pop!(_timings)
+
+        return v
+    else
+        return _typeinf(interp, frame)
+    end
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
