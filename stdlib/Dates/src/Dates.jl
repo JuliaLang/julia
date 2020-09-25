@@ -33,6 +33,7 @@ for more information.
 module Dates
 
 import Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
+import Base.Broadcast: broadcastable
 using Printf: @sprintf
 
 using Base.Iterators

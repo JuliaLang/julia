@@ -95,5 +95,5 @@ end
 (-)(x::AbstractRange{T}, y::AbstractRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
 
 # Allow dates, times, and time zones to broadcast as unwrapped scalars
-Base.Broadcast.broadcastable(x::AbstractTime) = Ref(x)
-Base.Broadcast.broadcastable(x::TimeZone) = Ref(x)
+broadcastable(x::AbstractTime) = Ref(x)
+broadcastable(x::TimeZone) = Ref(x)
