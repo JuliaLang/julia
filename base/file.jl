@@ -188,7 +188,7 @@ end
 
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
 `0o777`, modified by the current file creation mask. Unlike [`mkdir`](@ref), `mkpath`
-ignores any errors if a directory in the given `path` already exists.
+does not error if `path` (or parts of it) already exists.
 Return `path`.
 
 # Examples
