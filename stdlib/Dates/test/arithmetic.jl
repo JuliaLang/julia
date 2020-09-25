@@ -508,4 +508,27 @@ end
     end
 end
 
+@testset "Broadcasted range" begin
+    @testset "Date" begin
+        result = (Date(2020):Week(1):Date(2021)) .+ Day(1)
+
+        @test result == Date(2020,1,2):Week(1):Date(2021,1,2)
+        @test result isa StepRange
+    end
+
+    @testset "DateTime" begin
+        result = (DateTime(2020):Hour(1):DateTime(2021)) .+ Minute(1)
+
+        @test result == DateTime(2020,1,1,0,1):Hour(1):DateTime(2021,1,1,0,1)
+        @test result isa StepRange
+    end
+
+    @testset "Time" begin
+        result = (Time(18):Hour(1):Time(22)) .+ Hour(4)
+
+        @test result == [Time.(22:23); Time.(0:2)]
+        @test result isa Vector
+    end
+end
+
 end
