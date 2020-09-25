@@ -377,7 +377,7 @@ else
 		(cd $(LLVM_BARESRC_DIR) && \
 		git fetch)
 	([ ! -d $(LLVM_MONOSRC_DIR) ] && \
-		git clone --local $(LLVM_BARESRC_DIR) $(LLVM_MONOSRC_DIR) ) || \
+		git clone --dissociate --reference $(LLVM_BARESRC_DIR) $(LLVM_GIT_URL) $(LLVM_MONOSRC_DIR) ) || \
 		(cd $(LLVM_MONOSRC_DIR) && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER),)
@@ -581,6 +581,7 @@ update-llvm:
 	(cd $(LLVM_BARESRC_DIR) && \
 		git fetch)
 	(cd $(LLVM_MONOSRC_DIR) && \
+		git fetch $(LLVM_BARESRC_DIR) +refs/remotes/*:refs/remotes/* && \
 		git pull --ff-only)
 endif
 else # USE_BINARYBUILDER_LLVM
