@@ -145,7 +145,7 @@ function generate_precompile_statements()
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             """
-        run(`$(julia_exepath()) -O0 --sysimage $sysimg -Cnative -e $s`)
+        run(`$(julia_exepath()) -O0 --sysimage $sysimg --startup-file=no -Cnative -e $s`)
         hardcoded_precompile_statements *= "\n" * read(tmp, String)
     end
 
