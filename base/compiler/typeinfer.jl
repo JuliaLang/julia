@@ -19,15 +19,16 @@ struct Timing
     Timing(name, start_time, cur_start_time, time, children) = new(name, start_time, cur_start_time, time, children)
     Timing(name, start_time) = new(name, start_time, start_time, UInt64(0), Timing[])
 end
+
+time_ns() = ccall(:jl_hrtime, UInt64, ())
+
 const _timings = Timing[]
 function reset_timings()
     Core.Compiler.empty!(_timings)
-    Core.Compiler.push!(_timings, Timing("root", UInt64(0)))
+    Core.Compiler.push!(_timings, Timing("root", time_ns()))
     nothing
 end
 reset_timings()
-
-time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 end  # module Timings
 
@@ -39,22 +40,22 @@ __toggle_measure_typeinf(false)
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     if __measure_typeinf__[]
         _timings = Timings._timings
-        # Stop the current timer before recursing into the child
-        stop_time = Timings.time_ns()
-        parent_timer = _timings[end]
-        accum_time = stop_time - parent_timer.cur_start_time
-
-        # Add in accum_time ("modify" the immutable struct)
-        _timings[end] = Timings.Timing(
-            parent_timer.name,
-            parent_timer.start_time,
-            parent_timer.cur_start_time,
-            parent_timer.time + accum_time,
-            parent_timer.children,
-        )
-
-        # Start the new timer
         let
+            # Stop the current timer before recursing into the child
+            stop_time = Timings.time_ns()
+            parent_timer = _timings[end]
+            accum_time = stop_time - parent_timer.cur_start_time
+
+            # Add in accum_time ("modify" the immutable struct)
+            _timings[end] = Timings.Timing(
+                parent_timer.name,
+                parent_timer.start_time,
+                parent_timer.cur_start_time,
+                parent_timer.time + accum_time,
+                parent_timer.children,
+            )
+
+            # Start the new timer
             push!(_timings, Timings.Timing("empty", UInt64(0)))
             # Set the current time _after_ appending the node, to try to exclude the
             # overhead from measurement.
@@ -63,36 +64,38 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
 
         v = _typeinf(interp, frame)
 
-        # Finish the new timer
-        stop_time = Timings.time_ns()
+        let
+            # Finish the new timer
+            stop_time = Timings.time_ns()
 
-        # Grab the new timer again because it might have been modified in _timings
-        # (since it's an immutable struct)
-        # And remove it from the current timings stack
-        new_timer = pop!(_timings)
-        @assert new_timer.name === frame.linfo.specTypes
+            # Grab the new timer again because it might have been modified in _timings
+            # (since it's an immutable struct)
+            # And remove it from the current timings stack
+            new_timer = pop!(_timings)
+            @assert new_timer.name === frame.linfo.specTypes
 
-        accum_time = stop_time - new_timer.cur_start_time
-        # Add in accum_time ("modify" the immutable struct)
-        new_timer = Timings.Timing(
-            new_timer.name,
-            new_timer.start_time,
-            new_timer.cur_start_time,
-            new_timer.time + accum_time,
-            new_timer.children
-        )
-        # Record the final timing with the original parent timer
-        parent_timer = _timings[end]
-        push!(parent_timer.children, new_timer)
+            accum_time = stop_time - new_timer.cur_start_time
+            # Add in accum_time ("modify" the immutable struct)
+            new_timer = Timings.Timing(
+                new_timer.name,
+                new_timer.start_time,
+                new_timer.cur_start_time,
+                new_timer.time + accum_time,
+                new_timer.children
+            )
+            # Record the final timing with the original parent timer
+            parent_timer = _timings[end]
+            push!(parent_timer.children, new_timer)
 
-        # And finally restart the parent timer:
-        _timings[end] = Timings.Timing(
-            parent_timer.name,
-            parent_timer.start_time,
-            Timings.time_ns(),
-            parent_timer.time,
-            parent_timer.children,
-        )
+            # And finally restart the parent timer:
+            _timings[end] = Timings.Timing(
+                parent_timer.name,
+                parent_timer.start_time,
+                Timings.time_ns(),
+                parent_timer.time,
+                parent_timer.children,
+            )
+        end
 
         return v
     else
