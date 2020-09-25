@@ -454,3 +454,5 @@ end
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
 Base.ArithmeticStyle(::Type{<:AbstractTime}) = Base.ArithmeticWraps()
+
+Base.isnan(::AbstractTime) = false
