@@ -698,3 +698,16 @@ import InteractiveUtils
     @test M*v == copy(M)*v
     @test (InteractiveUtils.@which M*v) == (InteractiveUtils.@which copy(M)*v)
 end
+
+
+isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
+using .Main.InfiniteArrays
+
+@testset "PR #37741: non-Int sizes" begin
+    r = BigInt(1):BigInt(100_000_000)^100
+    v = SubArray(r, (r,))
+    @test size(v) == (last(r),)
+
+    v = SubArray(OneToInf(), (OneToInf(),))
+    @test size(v) == (Infinity(),)
+end
