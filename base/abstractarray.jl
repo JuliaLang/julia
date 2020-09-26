@@ -1437,12 +1437,11 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
-    n = 0
-    for Vk in V
-        n += Int(length(Vk))::Int
-    end
-    a = similar(V[1], T, n)
+_typed_vcat_similar(V, T, n) = similar(V[1], T, n)
+_typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
+    _typed_vcat!(_typed_vcat_similar(V, T, mapreduce(length, +, V)), V)
+
+function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
     for k=1:Int(length(V))::Int
         Vk = V[k]
