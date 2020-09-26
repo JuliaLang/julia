@@ -701,7 +701,7 @@ end
 
 
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
-using .Main.InfiniteArrays
+using .Main.InfiniteArrays, Base64
 
 @testset "PR #37741: non-Int sizes" begin
     r = BigInt(1):BigInt(100_000_000)^100
@@ -710,4 +710,5 @@ using .Main.InfiniteArrays
 
     v = SubArray(OneToInf(), (OneToInf(),))
     @test size(v) == (Infinity(),)
+    @test stringmime("text/plain", v; context=(:limit => true)) == "Infinity()-element view(::OneToInf{$Int}, 1:1:Infinity()) with eltype $Int with indices 1:1:Infinity():\n  1\n  2\n  3\n  4\n  5\n  6\n  7\n  8\n  9\n 10\n  ⋮"
 end

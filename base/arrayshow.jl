@@ -58,9 +58,9 @@ Alignment is reported as a vector of (left,right) tuples, one for each
 column going across the screen.
 """
 function alignment(io::IO, X::AbstractVecOrMat,
-        rows::AbstractVector, cols::AbstractVector,
-        cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer)
-    a = Tuple{Int, Int}[]
+        rows::AbstractVector{T}, cols::AbstractVector{V},
+        cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer) where {T,V}
+    a = Tuple{T, V}[]
     for j in cols # need to go down each column one at a time
         l = r = 0
         for i in rows # plumb down and see what largest element sizes are
@@ -178,7 +178,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     postsp = ""
     @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)::Int
-    rowsA, colsA = UnitRange{Int}(axes(X,1)), UnitRange{Int}(axes(X,2))
+    rowsA, colsA = axes(X,1), axes(X,2)
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.

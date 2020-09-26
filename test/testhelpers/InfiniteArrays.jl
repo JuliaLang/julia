@@ -17,6 +17,16 @@ being treated as an index.
 """
 struct Infinity <: Integer end
 
+Base.:(==)(::Infinity, ::Int) = false
+Base.:(==)(::Int, ::Infinity) = false
+Base.:(<)(::Int, ::Infinity) = true
+Base.:(≤)(::Int, ::Infinity) = true
+Base.:(≤)(::Infinity, ::Int) = false
+Base.:(≤)(::Infinity, ::Infinity) = true
+Base.:(-)(::Infinity, ::Int) = Infinity()
+Base.:(+)(::Infinity, ::Int) = Infinity()
+Base.:(:)(::Infinity, ::Infinity) = 1:0
+
 """
     OneToInf(n)
 
@@ -33,5 +43,7 @@ Base.unsafe_indices(r::OneToInf) = (r,)
 Base.unsafe_length(r::OneToInf) = Infinity()
 Base.size(r::OneToInf) = (Infinity(),)
 Base.first(r::OneToInf{T}) where {T} = oneunit(T)
+Base.length(r::OneToInf{T}) where {T} = Infinity()
+Base.last(r::OneToInf{T}) where {T} = Infinity()
 
 end
