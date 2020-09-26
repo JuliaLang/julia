@@ -280,6 +280,31 @@ macro allocated(ex)
 end
 
 """
+    @compiletime
+
+A macro to evaluate an expression, discarding the resulting value, instead returning the
+total time in seconds of code generation during evaluation of the expression.
+
+See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
+and [`@elapsed`](@ref).
+
+```julia-repl
+julia> x = rand(10,10);
+
+julia> @compiletime x * x
+0.54208595
+```
+"""
+macro compiletime(ex)
+    quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        local t0 = cumulative_compile_time_ns()
+        local val = $(esc(ex))
+        (cumulative_compile_time_ns() - t0) / 1e9
+    end
+end
+
+"""
     @timed
 
 A macro to execute an expression, and return the value of the expression, elapsed time,
