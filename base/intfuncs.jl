@@ -616,7 +616,7 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 ## integer to string functions ##
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
-    m = 8sizeof(x) - leading_zeros(x)
+    m = 8 * sizeof(x) - leading_zeros(x)
     n = neg + max(pad, m)
     a = StringVector(n)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
@@ -643,7 +643,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
-    m = div(8sizeof(x) - leading_zeros(x) + 2, 3)
+    m = div(8 * sizeof(x) - leading_zeros(x) + 2, 3)
     n = neg + max(pad, m)
     a = StringVector(n)
     i = n
@@ -679,7 +679,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
-    m = 2sizeof(x) - (leading_zeros(x) >> 2)
+    m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
     n = neg + max(pad, m)
     a = StringVector(n)
     i = n
