@@ -65,7 +65,7 @@ function dsfmt_init_gen_rand(s::DSFMT_state, seed::UInt32)
           s.val, seed)
 end
 
-function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
+function dsfmt_init_by_array(s::DSFMT_state, seed::AbstractVector{UInt32})
     ccall((:dsfmt_init_by_array,:libdSFMT),
           Cvoid,
           (Ptr{Cvoid}, Ptr{UInt32}, Int32),

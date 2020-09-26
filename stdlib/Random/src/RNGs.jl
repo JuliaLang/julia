@@ -278,9 +278,17 @@ end
 
 #### seed!()
 
-function seed!(r::MersenneTwister, seed::Vector{UInt32})
+function seed!(r::MersenneTwister, seed::Vector{UInt32}; hash=true)
     copyto!(resize!(r.seed, length(seed)), seed)
-    dsfmt_init_by_array(r.state, r.seed)
+    if hash # hash the seed to make it defensively more robust
+        c = SHA.SHA2_512_CTX()
+        # hash VERSION to help people not rely on stream stability between minor releases
+        SHA.update!(c, reinterpret(UInt8, [VERSION.major, VERSION.minor]))
+        SHA.update!(c, reinterpret(UInt8, seed))
+        dsfmt_init_by_array(r.state, reinterpret(UInt32, SHA.digest!(c)))
+    else
+        dsfmt_init_by_array(r.state, r.seed)
+    end
     mt_setempty!(r)
     mt_setempty!(r, UInt128)
     fillcache_zeros!(r)
