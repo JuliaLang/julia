@@ -142,6 +142,20 @@ function Base.setindex!(p::AbstractPlatform, v::String, k::String)
     return p
 end
 
+# Hash definitino to ensure that it's stable
+function Base.hash(p::Platform, h::UInt)
+    h += 0x506c6174666f726d % UInt
+    h = hash(p.tags, h)
+    h = hash(p.compare_strategies, h)
+    return h
+end
+
+# Simple equality definition; for compatibility testing, use `platforms_match()`
+function Base.:(==)(a::Platform, b::Platform)
+    return a.tags == b.tags && a.compare_strategies == b.compare_strategies
+end
+
+
 # Allow us to easily serialize Platform objects
 function Base.repr(p::Platform; context=nothing)
     str = string(
@@ -165,9 +179,6 @@ function Base.show(io::IO, p::Platform)
     end
     print(io, str)
 end
-
-# Simple equality definition; for compatibility testing, use `platforms_match()`
-Base.:(==)(a::AbstractPlatform, b::AbstractPlatform) = tags(a) == tags(b)
 
 function validate_tags(tags::Dict)
     throw_invalid_key(k) = throw(ArgumentError("Key \"$(k)\" cannot have value \"$(tags[k])\""))
