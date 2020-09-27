@@ -109,7 +109,8 @@ JL_DLLEXPORT void JL_NORETURN jl_too_many_args(const char *fname, int max)
 
 // with function name / location description, plus extra context
 JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *context,
-                                               jl_value_t *expected, jl_value_t *got)
+                                               jl_value_t *expected JL_MAYBE_UNROOTED,
+                                               jl_value_t *got JL_MAYBE_UNROOTED)
 {
     jl_value_t *ctxt=NULL;
     JL_GC_PUSH3(&ctxt, &expected, &got);
@@ -119,8 +120,9 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *co
 }
 
 // with function name or description only
-JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expected,
-                                            jl_value_t *got)
+JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
+                                            jl_value_t *expected JL_MAYBE_UNROOTED,
+                                            jl_value_t *got JL_MAYBE_UNROOTED)
 {
     jl_type_error_rt(fname, "", expected, got);
 }
@@ -162,7 +164,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v, size_t i)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTED, size_t i)
 {
     jl_value_t *t = NULL;
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
@@ -170,7 +172,8 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v, size_t i)
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t nidxs)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOTED,
+                                                   size_t *idxs, size_t nidxs)
 {
     size_t i;
     jl_value_t *t = NULL;
@@ -194,10 +197,7 @@ JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
 // get kwsorter field, with appropriate error check and message
 JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f)
 {
-    jl_methtable_t *mt = jl_gf_mtable(f);
-    if (mt->kwsorter == NULL)
-        jl_errorf("function %s does not accept keyword arguments", jl_symbol_name(mt->name));
-    return mt->kwsorter;
+    return jl_get_kwsorter(jl_typeof(f));
 }
 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
@@ -216,7 +216,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     eh->prev = current_task->eh;
     eh->gcstack = ptls->pgcstack;
     eh->gc_state = ptls->gc_state;
-    eh->locks_len = current_task->locks.len;
+    eh->locks_len = ptls->locks.len;
     eh->defer_signal = ptls->defer_signal;
     eh->finalizers_inhibited = ptls->finalizers_inhibited;
     eh->world_age = ptls->world_age;
@@ -248,7 +248,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     int8_t old_gc_state = ptls->gc_state;
     current_task->eh = eh->prev;
     ptls->pgcstack = eh->gcstack;
-    arraylist_t *locks = &current_task->locks;
+    small_arraylist_t *locks = &ptls->locks;
     if (locks->len > eh->locks_len) {
         for (size_t i = locks->len;i > eh->locks_len;i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
@@ -256,10 +256,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
     ptls->world_age = eh->world_age;
     ptls->defer_signal = eh->defer_signal;
-    ptls->gc_state = eh->gc_state;
     ptls->finalizers_inhibited = eh->finalizers_inhibited;
-    if (old_gc_state && !eh->gc_state) {
-        jl_gc_safepoint_(ptls);
+    if (old_gc_state != eh->gc_state) {
+        jl_atomic_store_release(&ptls->gc_state, eh->gc_state);
+        if (old_gc_state) {
+            jl_gc_safepoint_(ptls);
+        }
     }
     if (old_defer_signal && !eh->defer_signal) {
         jl_sigint_safepoint(ptls);
@@ -277,14 +279,14 @@ JL_DLLEXPORT void jl_pop_handler(int n)
     jl_eh_restore_state(eh);
 }
 
-JL_DLLEXPORT size_t jl_excstack_state(void)
+JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_excstack_t *s = ptls->current_task->excstack;
     return s ? s->top : 0;
 }
 
-JL_DLLEXPORT void jl_restore_excstack(size_t state)
+JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_excstack_t *s = ptls->current_task->excstack;
@@ -294,15 +296,15 @@ JL_DLLEXPORT void jl_restore_excstack(size_t state)
     }
 }
 
-void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT
+static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT
 {
     assert(dest->reserved_size >= src->top);
-    memcpy(jl_excstack_raw(dest), jl_excstack_raw(src), sizeof(uintptr_t)*src->top);
+    memcpy(jl_excstack_raw(dest), jl_excstack_raw(src), sizeof(jl_bt_element_t)*src->top);
     dest->top = src->top;
 }
 
-void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
-                          size_t reserved_size)
+static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                                size_t reserved_size)
 {
     jl_excstack_t *s = *stack;
     if (s && s->reserved_size >= reserved_size)
@@ -317,15 +319,16 @@ void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
 }
 
 void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
-                       jl_value_t *exception JL_ROOTED_ARGUMENT,
-                       uintptr_t *bt_data, size_t bt_size)
+                      jl_value_t *exception JL_ROOTED_ARGUMENT,
+                      jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_reserve_excstack(stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
     jl_excstack_t *s = *stack;
-    memcpy(jl_excstack_raw(s) + s->top, bt_data, sizeof(uintptr_t)*bt_size);
+    jl_bt_element_t *rawstack = jl_excstack_raw(s);
+    memcpy(rawstack + s->top, bt_data, sizeof(jl_bt_element_t)*bt_size);
     s->top += bt_size + 2;
-    jl_excstack_raw(s)[s->top-2] = bt_size;
-    jl_excstack_raw(s)[s->top-1] = (uintptr_t)exception;
+    rawstack[s->top-2].uintptr = bt_size;
+    rawstack[s->top-1].jlvalue = exception;
 }
 
 // conversion -----------------------------------------------------------------
@@ -345,22 +348,27 @@ JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
     return a;
 }
 
-// parsing --------------------------------------------------------------------
-
-int substr_isspace(char *p, char *pend)
+// optimization of setfield which bypasses boxing of the idx (and checking field type validity)
+JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
 {
-    while (p != pend) {
-        if (!isspace((unsigned char)*p)) {
-            return 0;
-        }
-        p++;
-    }
-    return 1;
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    if (!st->mutabl)
+        jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
+    if (idx0 >= jl_datatype_nfields(st))
+        jl_bounds_error_int(v, idx0 + 1);
+    //jl_value_t *ft = jl_field_type(st, idx0);
+    //if (!jl_isa(rhs, ft)) {
+    //    jl_type_error("setfield!", ft, rhs);
+    //}
+    set_nth_field(st, (void*)v, idx0, rhs);
 }
 
-int str_isspace(char *p)
+
+// parsing --------------------------------------------------------------------
+
+static int substr_isspace(char *p, char *pend)
 {
-    while (*p != '\0') {
+    while (p != pend) {
         if (!isspace((unsigned char)*p)) {
             return 0;
         }
@@ -385,7 +393,7 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
             newstr = (char*)alloca(len + 1);
         }
         else {
-            newstr = tofree = (char*)malloc(len + 1);
+            newstr = tofree = (char*)malloc_s(len + 1);
         }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
@@ -444,14 +452,14 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
             newstr = (char*)alloca(len + 1);
         }
         else {
-            newstr = tofree = (char*)malloc(len + 1);
+            newstr = tofree = (char*)malloc_s(len + 1);
         }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
         pend = bstr+len;
     }
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
     float out = (float)jl_strtod_c(bstr, &p);
 #else
     float out = jl_strtof_c(bstr, &p);
@@ -635,26 +643,24 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_method_type) {
         jl_method_t *m = (jl_method_t*)v;
-        n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
-        n += jl_printf(out, ".%s(...)", jl_symbol_name(m->name));
+        n += jl_static_show_func_sig(out, m->sig);
     }
     else if (vt == jl_method_instance_type) {
         jl_method_instance_t *li = (jl_method_instance_t*)v;
         if (jl_is_method(li->def.method)) {
-            if (li->specTypes) {
-                n += jl_static_show_func_sig(out, li->specTypes);
-            }
-            else {
-                jl_method_t *m = li->def.method;
-                n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
-                n += jl_printf(out, ".%s(?)", jl_symbol_name(m->name));
-            }
+            n += jl_static_show_func_sig(out, li->specTypes);
+            n += jl_printf(out, " from ");
+            n += jl_static_show_func_sig(out, li->def.method->sig);
         }
         else {
             n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth);
             n += jl_printf(out, ".<toplevel thunk> -> ");
             n += jl_static_show_x(out, li->uninferred, depth);
         }
+    }
+    else if (vt == jl_typename_type) {
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_printf(out, ".name");
     }
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
@@ -798,6 +804,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, ua->body, depth);
         n += jl_printf(out, " where ");
         n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev);
+    }
+    else if (vt == jl_typename_type) {
+        n += jl_printf(out, "typename(");
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_printf(out, ")");
     }
     else if (vt == jl_tvar_type) {
         // show type-var bounds only if they aren't going to be printed by UnionAll later
@@ -1228,6 +1239,7 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
     JL_GC_POP();
 }
 
+#if 0
 void jl_depwarn(const char *msg, jl_value_t *sym)
 {
     static jl_value_t *depwarn_func = NULL;
@@ -1246,6 +1258,7 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     jl_apply(depwarn_args, 3);
     JL_GC_POP();
 }
+#endif
 
 #ifdef __cplusplus
 }

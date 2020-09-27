@@ -6,7 +6,7 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 ## Learning Julia
 
-[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org/en/latest) covers the language and core library features, and is searchable.
+[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org) covers the language and core library features, and is searchable.
 
 ## Before filing an issue
 
@@ -43,7 +43,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
   - Try some simple debugging techniques to help isolate the problem.
     - Try running the code with the debug build of Julia with `make debug`, which produces the `usr/bin/julia-debug`.
     - Consider running `julia-debug` with a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
-    - If Julia segfaults, try following [these debugging tips](https://docs.julialang.org/en/latest/devdocs/backtraces#Reporting-and-analyzing-crashes-(segfaults)-1) to help track down the specific origin of the bug.
+    - If Julia segfaults, try following [these debugging tips](https://docs.julialang.org/en/v1/devdocs/backtraces/) to help track down the specific origin of the bug.
 
 2. If the problem is caused by a Julia package rather than core Julia, file a bug report with the relevant package author rather than here.
 
@@ -56,28 +56,6 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ## Submitting contributions
 
-### Contributing a Julia package
-
-Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) based on `git`. A number of [packages](https://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The manual provides instructions on [creating Julia packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/).
-
-For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
-
-### Package Compatibility Across Releases
-
-Sometimes, you might find that while your package works
-on the current release, it might not work on the upcoming release or nightly.
-This is due to the fact that some Julia functions (after some discussion)
-could be deprecated or removed altogether. This may cause your package to break or
-throw a number of deprecation warnings on usage. Therefore it is highly recommended
-to port your package to latest Julia release.
-
-However, porting a package to the latest release may cause the package to break on
-earlier Julia releases. To maintain compatibility across releases, use
-[`Compat.jl`](https://github.com/JuliaLang/Compat.jl). Find the fix for your package
-from the README, and specify the minimum version of Compat that provides the fix
-in your REQUIRE file. To find the correct minimum version, refer to
-[this guide](https://github.com/JuliaLang/Compat.jl/#tagging-the-correct-minimum-version-of-compat).
-
 ### Writing tests
 
 There are never enough tests. Track [code coverage at Coveralls](https://coveralls.io/r/JuliaLang/julia), and help improve it.
@@ -86,7 +64,7 @@ There are never enough tests. Track [code coverage at Coveralls](https://coveral
 
 2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
 
-3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/latest/stdlib/Test/ may be helpful in explaining how the testing infrastructure works.
+3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/v1/stdlib/Test/ may be helpful in explaining how the testing infrastructure works.
 
 4. Run `make test-all` to rebuild Julia and run your new test(s). If you had to fix a bug or add functionality in `base`, this will ensure that your test passes and that you have not introduced extraneous whitespace.
 
@@ -211,7 +189,7 @@ Note: These instructions are for adding to or improving functionality in the bas
 
 Add new code to Julia's base libraries as follows (this is the "basic" approach; see a more efficient approach in the next section):
 
- 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `ui/`.
+ 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `cli/`.
 
  2. Add any new files to `sysimg.jl` in order to build them into the Julia system image.
 
@@ -264,6 +242,12 @@ If you need to restart your Julia session, just start at step 2 above.
 built and incorporate them automatically. You only need to rebuild
 Julia if you made code-changes that Revise cannot handle.
 
+For convenience, there are also `test-revise-*` targets for every `test-*`
+target that use Revise to load any modifications to Base into the current
+process before running the corresponding test. This can be useful as a shortcut
+on the command line (since tests aren't always designed to be run outside the
+runtest harness).
+
 ### Code Formatting Guidelines
 
 #### General Formatting Guidelines for Julia code contributions
@@ -282,11 +266,11 @@ Julia if you made code-changes that Revise cannot handle.
 #### General Formatting Guidelines For C code contributions
 
  - 4 spaces per indentation level, no tabs
- - space between if and ( (if (x) ...)
- - newline before opening { in function definitions
- - f(void) for 0-argument function declarations
- - newline between } and else instead of } else {
- - if one part of an if..else chain uses { } then all should
+ - space between `if` and `(` (`if (x) ...`)
+ - newline before opening `{` in function definitions
+ - `f(void)` for 0-argument function declarations
+ - newline between `}` and `else` instead of `} else {`
+ - if one part of an `if..else` chain uses `{ }` then all should
  - no whitespace at the end of a line
 
 ### Git Recommendations For Pull Requests
@@ -311,7 +295,7 @@ Julia if you made code-changes that Revise cannot handle.
   - **Homepage:** <https://julialang.org>
   - **Community:** <https://julialang.org/community/>
   - **Source code:** <https://github.com/JuliaLang/julia>
-  - **Documentation:** <https://docs.julialang.org/>
+  - **Documentation:** <https://docs.julialang.org>
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia

@@ -17,6 +17,7 @@ export
     blascopy!,
     dotc,
     dotu,
+    rot!,
     scal!,
     scal,
     nrm2,
@@ -28,8 +29,10 @@ export
     gemv,
     hemv!,
     hemv,
+    hpmv!,
     sbmv!,
     sbmv,
+    spmv!,
     symv!,
     symv,
     trsv!,
@@ -91,7 +94,7 @@ end
 const _vendor = determine_vendor()
 vendor() = _vendor
 
-if vendor() == :openblas64
+if vendor() === :openblas64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
@@ -103,34 +106,108 @@ end
 
 openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), libblas), Ptr{UInt8}, () )))
 
-"""
-    set_num_threads(n)
+function guess_vendor()
+    # like determine_vendor, but guesses blas in some cases
+    # where determine_vendor returns :unknown
+    ret = vendor()
+    if Sys.isapple() && (ret == :unknown)
+        ret = :osxblas
+    end
+    ret
+end
 
-Set the number of threads the BLAS library should use.
+
 """
-function set_num_threads(n::Integer)
-    blas = vendor()
-    if blas == :openblas
-        return ccall((:openblas_set_num_threads, libblas), Cvoid, (Int32,), n)
-    elseif blas == :openblas64
-        return ccall((:openblas_set_num_threads64_, libblas), Cvoid, (Int32,), n)
-    elseif blas == :mkl
+    set_num_threads(n::Integer)
+    set_num_threads(::Nothing)
+
+Set the number of threads the BLAS library should use equal to `n::Integer`.
+
+Also accepts `nothing`, in which case julia tries to guess the default number of threads.
+Passing `nothing` is discouraged and mainly exists for the following reason:
+
+On exotic variants of BLAS, `nothing` may be returned by `get_num_threads()`.
+Thus on exotic variants of BLAS, the following pattern may fail to set the number of threads:
+
+```julia
+old = get_num_threads()
+set_num_threads(1)
+@threads for i in 1:10
+    # single-threaded BLAS calls
+end
+set_num_threads(old)
+```
+Because `set_num_threads` accepts `nothing`, this code can still run
+on exotic variants of BLAS without error. Warnings will be raised instead.
+
+!!! compat "Julia 1.6"
+    `set_num_threads(::Nothing)` requires at least Julia 1.6.
+"""
+set_num_threads(n)::Nothing = _set_num_threads(n)
+
+function _set_num_threads(n::Integer; _blas = guess_vendor())
+    if _blas === :openblas || _blas == :openblas64
+        return ccall((@blasfunc(openblas_set_num_threads), libblas), Cvoid, (Cint,), n)
+    elseif _blas === :mkl
         # MKL may let us set the number of threads in several ways
         return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
-    end
-
-    # OSX BLAS looks at an environment variable
-    @static if Sys.isapple()
+    elseif _blas === :osxblas
+        # OSX BLAS looks at an environment variable
         ENV["VECLIB_MAXIMUM_THREADS"] = n
+    else
+        @assert _blas === :unknown
+        @warn "Failed to set number of BLAS threads." maxlog=1
     end
+    return nothing
+end
 
+_tryparse_env_int(key) = tryparse(Int, get(ENV, key, ""))
+
+function _set_num_threads(::Nothing; _blas = guess_vendor())
+    n = something(
+        _tryparse_env_int("OPENBLAS_NUM_THREADS"),
+        _tryparse_env_int("OMP_NUM_THREADS"),
+        max(1, Sys.CPU_THREADS ÷ 2),
+    )
+    _set_num_threads(n; _blas)
+end
+
+"""
+    get_num_threads()
+
+Get the number of threads the BLAS library is using.
+
+On exotic variants of `BLAS` this function can fail, which is indicated by returning `nothing`.
+
+!!! compat "Julia 1.6"
+    `get_num_threads` requires at least Julia 1.6.
+"""
+get_num_threads(;_blas=guess_vendor())::Union{Int, Nothing} = _get_num_threads()
+
+function _get_num_threads(; _blas = guess_vendor())::Union{Int, Nothing}
+    if _blas === :openblas || _blas === :openblas64
+        return Int(ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ()))
+    elseif _blas === :mkl
+        return Int(ccall((:mkl_get_max_threads, libblas), Cint, ()))
+    elseif _blas === :osxblas
+        key = "VECLIB_MAXIMUM_THREADS"
+        nt = _tryparse_env_int(key)
+        if nt === nothing
+            @warn "Failed to read environment variable $key" maxlog=1
+        else
+            return nt
+        end
+    else
+        @assert _blas === :unknown
+    end
+    @warn "Could not get number of BLAS threads. Returning `nothing` instead." maxlog=1
     return nothing
 end
 
 const _testmat = [1.0 0.0; 0.0 -1.0]
 function check()
     blas = vendor()
-    if blas == :openblas || blas == :openblas64
+    if blas === :openblas || blas === :openblas64
         openblas_config = openblas_get_config()
         openblas64 = occursin(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64
@@ -148,7 +225,7 @@ function check()
             println("Quitting.")
             exit()
         end
-    elseif blas == :mkl
+    elseif blas === :mkl
         if Base.USE_BLAS64
             ENV["MKL_INTERFACE_LAYER"] = "ILP64"
         end
@@ -192,6 +269,37 @@ for (fname, elty) in ((:dcopy_,:Float64),
                 (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
                  n, DX, incx, DY, incy)
             DY
+        end
+    end
+end
+
+
+## rot
+
+"""
+    rot!(n, X, incx, Y, incy, c, s)
+
+Overwrite `X` with `c*X + s*Y` and `Y` with `-conj(s)*X + c*Y` for the first `n` elements of array `X` with stride `incx` and
+first `n` elements of array `Y` with stride `incy`. Returns `X` and `Y`.
+
+!!! compat "Julia 1.5"
+    `rot!` requires at least Julia 1.5.
+"""
+function rot! end
+
+for (fname, elty, cty, sty, lib) in ((:drot_, :Float64, :Float64, :Float64, libblas),
+                                     (:srot_, :Float32, :Float32, :Float32, libblas),
+                                     (:zdrot_, :ComplexF64, :Float64, :Float64, libblas),
+                                     (:csrot_, :ComplexF32, :Float32, :Float32, libblas),
+                                     (:zrot_, :ComplexF64, :Float64, :ComplexF64, liblapack),
+                                     (:crot_, :ComplexF32, :Float32, :ComplexF32, liblapack))
+    @eval begin
+        # SUBROUTINE DROT(N,DX,INCX,DY,INCY,C,S)
+        function rot!(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer, C::$cty, S::$sty)
+            ccall((@blasfunc($fname), $lib), Cvoid,
+                (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$cty}, Ref{$sty}),
+                 n, DX, incx, DY, incy, C, S)
+            DX, DY
         end
     end
 end
@@ -332,7 +440,7 @@ function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T}
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    GC.@preserve DX DY dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    return dot(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
     require_one_based_indexing(DX, DY)
@@ -340,7 +448,7 @@ function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    GC.@preserve DX DY dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    return dotc(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
     require_one_based_indexing(DX, DY)
@@ -348,7 +456,7 @@ function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    GC.@preserve DX DY dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    return dotu(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 
 ## nrm2
@@ -382,14 +490,18 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::Union{AbstractVector,DenseArray}) = GC.@preserve x nrm2(length(x), pointer(x), stride1(x))
+nrm2(x::Union{AbstractVector,DenseArray}) = nrm2(length(x), x, stride1(x))
 
 ## asum
 
 """
     asum(n, X, incx)
 
-Sum of the absolute values of the first `n` elements of array `X` with stride `incx`.
+Sum of the magnitudes of the first `n` elements of array `X` with stride `incx`.
+
+For a real array, the magnitude is the absolute value. For a complex array, the
+magnitude is the sum of the absolute value of the real part and the absolute value
+of the imaginary part.
 
 # Examples
 ```jldoctest
@@ -415,14 +527,14 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::Union{AbstractVector,DenseArray}) = GC.@preserve x asum(length(x), pointer(x), stride1(x))
+asum(x::Union{AbstractVector,DenseArray}) = asum(length(x), x, stride1(x))
 
 ## axpy
 
 """
     axpy!(a, X, Y)
 
-Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Return `Y`.
+Overwrite `Y` with `X*a + Y`, where `a` is a scalar. Return `Y`.
 
 # Examples
 ```jldoctest
@@ -431,7 +543,7 @@ julia> x = [1; 2; 3];
 julia> y = [4; 5; 6];
 
 julia> BLAS.axpy!(2, x, y)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   6
   9
  12
@@ -463,8 +575,7 @@ function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    GC.@preserve x y axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
-    y
+    return axpy!(length(x), convert(T,alpha), x, stride(x, 1), y, stride(y, 1))
 end
 
 function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange{Ti}},
@@ -478,8 +589,15 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
     end
-    GC.@preserve x y axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
-    y
+    GC.@preserve x y axpy!(
+        length(rx),
+        convert(T, alpha),
+        pointer(x) + (first(rx) - 1)*sizeof(T),
+        step(rx),
+        pointer(y) + (first(ry) - 1)*sizeof(T),
+        step(ry))
+
+    return y
 end
 
 """
@@ -494,7 +612,7 @@ julia> x = [1., 2, 3];
 julia> y = [4., 5, 6];
 
 julia> BLAS.axpby!(2., x, 3., y)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  14.0
  19.0
  24.0
@@ -528,8 +646,7 @@ function axpby!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, beta::
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    GC.@preserve x y axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
-    y
+    return axpby!(length(x), convert(T, alpha), x, stride(x, 1), convert(T, beta), y, stride(y, 1))
 end
 
 ## iamax
@@ -545,7 +662,7 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::Union{AbstractVector,DenseArray}) = GC.@preserve dx iamax(length(dx), pointer(dx), stride1(dx))
+iamax(dx::Union{AbstractVector,DenseArray}) = iamax(length(dx), dx, stride1(dx))
 
 """
     iamax(n, dx, incx)
@@ -760,6 +877,15 @@ Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 symv(ul, A, x)
 
 ### hemv
+"""
+    hemv!(ul, alpha, A, x, beta, y)
+
+Update the vector `y` as `alpha*A*x + beta*y`. `A` is assumed to be Hermitian.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+`alpha` and `beta` are scalars. Return the updated `y`.
+"""
+function hemv! end
+
 for (fname, elty) in ((:zhemv_,:ComplexF64),
                       (:chemv_,:ComplexF32))
     @eval begin
@@ -796,6 +922,107 @@ for (fname, elty) in ((:zhemv_,:ComplexF64),
         end
     end
 end
+
+"""
+    hemv(ul, alpha, A, x)
+
+Return `alpha*A*x`. `A` is assumed to be Hermitian.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+`alpha` is a scalar.
+"""
+hemv(ul, alpha, A, x)
+
+"""
+    hemv(ul, A, x)
+
+Return `A*x`. `A` is assumed to be Hermitian.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+"""
+hemv(ul, A, x)
+
+### hpmv!, (HP) Hermitian packed matrix-vector operation defined as y := alpha*A*x + beta*y.
+for (fname, elty) in ((:zhpmv_, :ComplexF64),
+                      (:chpmv_, :ComplexF32))
+    @eval begin
+        # SUBROUTINE ZHPMV(UPLO,N,ALPHA,AP,X,INCX,BETA,Y,INCY)
+        # Y <- ALPHA*AP*X + BETA*Y
+        # *     .. Scalar Arguments ..
+        #       DOUBLE PRECISION ALPHA,BETA
+        #       INTEGER INCX,INCY,N
+        #       CHARACTER UPLO
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION A(N,N),X(N),Y(N)
+        function hpmv!(uplo::AbstractChar,
+                       n::Integer,
+                       α::$elty,
+                       AP::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       x::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incx::Integer,
+                       β::$elty,
+                       y::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incy::Integer)
+
+            ccall((@blasfunc($fname), libblas), Cvoid,
+                  (Ref{UInt8},     # uplo,
+                   Ref{BlasInt},   # n,
+                   Ref{$elty},     # α,
+                   Ptr{$elty},     # AP,
+                   Ptr{$elty},     # x,
+                   Ref{BlasInt},   # incx,
+                   Ref{$elty},     # β,
+                   Ptr{$elty},     # y, output
+                   Ref{BlasInt}),  # incy
+                  uplo,
+                  n,
+                  α,
+                  AP,
+                  x,
+                  incx,
+                  β,
+                  y,
+                  incy)
+            return y
+        end
+    end
+end
+
+function hpmv!(uplo::AbstractChar,
+               α::Number, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
+               β::Number, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasComplex}
+    require_one_based_indexing(AP, x, y)
+    N = length(x)
+    if N != length(y)
+        throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
+    end
+    if 2*length(AP) < N*(N + 1)
+        throw(DimensionMismatch("Packed Hermitian matrix A has size smaller than length(x) =  $(N)."))
+    end
+    return hpmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
+end
+
+"""
+    hpmv!(uplo, α, AP, x, β, y)
+
+Update vector `y` as `α*A*x + β*y`, where `A` is a Hermitian matrix provided
+in packed format `AP`.
+
+With `uplo = 'U'`, the array AP must contain the upper triangular part of the
+Hermitian matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[1, 2]` and `A[2, 2]`
+respectively, and so on.
+
+With `uplo = 'L'`, the array AP must contain the lower triangular part of the
+Hermitian matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[2, 1]` and `A[3, 1]`
+respectively, and so on.
+
+The scalar inputs `α` and `β` must be complex or real numbers.
+
+The array inputs `x`, `y` and `AP` must all be of `ComplexF32` or `ComplexF64` type.
+
+Return the updated `y`.
+"""
+hpmv!
 
 ### sbmv, (SB) symmetric banded matrix-vector multiplication
 for (fname, elty) in ((:dsbmv_,:Float64),
@@ -851,7 +1078,7 @@ sbmv(uplo, k, A, x)
 """
     sbmv!(uplo, k, alpha, A, x, beta, y)
 
-Update vector `y` as `alpha*A*x + beta*y` where `A` is a a symmetric band matrix of order
+Update vector `y` as `alpha*A*x + beta*y` where `A` is a symmetric band matrix of order
 `size(A,2)` with `k` super-diagonals stored in the argument `A`. The storage layout for `A`
 is described the reference BLAS module, level-2 BLAS at
 <http://www.netlib.org/lapack/explore-html/>.
@@ -860,6 +1087,90 @@ Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 Return the updated `y`.
 """
 sbmv!
+
+### spmv!, (SP) symmetric packed matrix-vector operation defined as y := alpha*A*x + beta*y.
+for (fname, elty) in ((:dspmv_, :Float64),
+                      (:sspmv_, :Float32))
+    @eval begin
+        # SUBROUTINE DSPMV(UPLO,N,ALPHA,AP,X,INCX,BETA,Y,INCY)
+        # Y <- ALPHA*AP*X + BETA*Y
+        # *     .. Scalar Arguments ..
+        #       DOUBLE PRECISION ALPHA,BETA
+        #       INTEGER INCX,INCY,N
+        #       CHARACTER UPLO
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION A(N,N),X(N),Y(N)
+        function spmv!(uplo::AbstractChar,
+                       n::Integer,
+                       α::$elty,
+                       AP::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       x::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incx::Integer,
+                       β::$elty,
+                       y::Union{Ptr{$elty}, AbstractArray{$elty}},
+                       incy::Integer)
+
+            ccall((@blasfunc($fname), libblas), Cvoid,
+                  (Ref{UInt8},     # uplo,
+                   Ref{BlasInt},   # n,
+                   Ref{$elty},     # α,
+                   Ptr{$elty},     # AP,
+                   Ptr{$elty},     # x,
+                   Ref{BlasInt},   # incx,
+                   Ref{$elty},     # β,
+                   Ptr{$elty},     # y, out
+                   Ref{BlasInt}),  # incy
+                  uplo,
+                  n,
+                  α,
+                  AP,
+                  x,
+                  incx,
+                  β,
+                  y,
+                  incy)
+            return y
+        end
+    end
+end
+
+function spmv!(uplo::AbstractChar,
+               α::Real, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
+               β::Real, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
+    require_one_based_indexing(AP, x, y)
+    N = length(x)
+    if N != length(y)
+        throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
+    end
+    if 2*length(AP) < N*(N + 1)
+        throw(DimensionMismatch("Packed symmetric matrix A has size smaller than length(x) = $(N)."))
+    end
+    return spmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
+end
+
+"""
+    spmv!(uplo, α, AP, x, β, y)
+
+Update vector `y` as `α*A*x + β*y`, where `A` is a symmetric matrix provided
+in packed format `AP`.
+
+With `uplo = 'U'`, the array AP must contain the upper triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[1, 2]` and `A[2, 2]`
+respectively, and so on.
+
+With `uplo = 'L'`, the array AP must contain the lower triangular part of the
+symmetric matrix packed sequentially, column by column, so that `AP[1]`
+contains `A[1, 1]`, `AP[2]` and `AP[3]` contain `A[2, 1]` and `A[3, 1]`
+respectively, and so on.
+
+The scalar inputs `α` and `β` must be real.
+
+The array inputs `x`, `y` and `AP` must all be of `Float32` or `Float64` type.
+
+Return the updated `y`.
+"""
+spmv!
 
 ### hbmv, (HB) Hermitian banded matrix-vector multiplication
 for (fname, elty) in ((:zhbmv_,:ComplexF64),
@@ -1290,13 +1601,39 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
     end
 end
 
+"""
+    hemm(side, ul, alpha, A, B)
+
+Return `alpha*A*B` or `alpha*B*A` according to [`side`](@ref stdlib-blas-side).
+`A` is assumed to be Hermitian. Only the [`ul`](@ref stdlib-blas-uplo) triangle
+of `A` is used.
+"""
+hemm(side, ul, alpha, A, B)
+
+"""
+    hemm(side, ul, A, B)
+
+Return `A*B` or `B*A` according to [`side`](@ref stdlib-blas-side). `A` is assumed
+to be Hermitian. Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+"""
+hemm(side, ul, A, B)
+
+"""
+    hemm!(side, ul, alpha, A, B, beta, C)
+
+Update `C` as `alpha*A*B + beta*C` or `alpha*B*A + beta*C` according to
+[`side`](@ref stdlib-blas-side). `A` is assumed to be Hermitian. Only the
+[`ul`](@ref stdlib-blas-uplo) triangle of `A` is used. Return the updated `C`.
+"""
+hemm!
+
 ## syrk
 
 """
     syrk!(uplo, trans, alpha, A, beta, C)
 
-Rank-k update of the symmetric matrix `C` as `alpha*A*transpose(A) + beta*C` or `alpha*transpose(A)*A +
-beta*C` according to [`trans`](@ref stdlib-blas-trans).
+Rank-k update of the symmetric matrix `C` as `alpha*A*transpose(A) + beta*C` or
+`alpha*transpose(A)*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
 """
 function syrk! end
@@ -1354,19 +1691,17 @@ syrk(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat) = syrk(uplo, 
 """
     herk!(uplo, trans, alpha, A, beta, C)
 
-Methods for complex arrays only. Rank-k update of the Hermitian matrix `C` as `alpha*A*A' +
-beta*C` or `alpha*A'*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
-Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is updated.
-Returns `C`.
+Methods for complex arrays only. Rank-k update of the Hermitian matrix `C` as
+`alpha*A*A' + beta*C` or `alpha*A'*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is updated. Returns `C`.
 """
 function herk! end
 
 """
     herk(uplo, trans, alpha, A)
 
-Methods for complex arrays only.
-Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `alpha*A*A'` or `alpha*A'*A`,
-according to [`trans`](@ref stdlib-blas-trans).
+Methods for complex arrays only. Returns the [`uplo`](@ref stdlib-blas-uplo)
+triangle of `alpha*A*A'` or `alpha*A'*A`, according to [`trans`](@ref stdlib-blas-trans).
 """
 function herk end
 
@@ -1447,11 +1782,37 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
         end
     end
 end
+
+"""
+    syr2k!(uplo, trans, alpha, A, B, beta, C)
+
+Rank-2k update of the symmetric matrix `C` as
+`alpha*A*transpose(B) + alpha*B*transpose(A) + beta*C` or
+`alpha*transpose(A)*B + alpha*transpose(B)*A + beta*C`
+according to [`trans`](@ref stdlib-blas-trans).
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
+"""
+function syr2k! end
+
+"""
+    syr2k(uplo, trans, alpha, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of
+`alpha*A*transpose(B) + alpha*B*transpose(A)` or
+`alpha*transpose(A)*B + alpha*transpose(B)*A`,
+according to [`trans`](@ref stdlib-blas-trans).
+"""
 function syr2k(uplo::AbstractChar, trans::AbstractChar, alpha::Number, A::AbstractVecOrMat, B::AbstractVecOrMat)
     T = eltype(A)
     n = size(A, trans == 'N' ? 1 : 2)
     syr2k!(uplo, trans, convert(T,alpha), A, B, zero(T), similar(A, T, (n, n)))
 end
+"""
+    syr2k(uplo, trans, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*transpose(B) + B*transpose(A)`
+or `transpose(A)*B + transpose(B)*A`, according to [`trans`](@ref stdlib-blas-trans).
+"""
 syr2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat, B::AbstractVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
 
 for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:ComplexF32,:Float32))
@@ -1493,6 +1854,32 @@ for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:Comple
        her2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1}) = her2k(uplo, trans, one($elty1), A, B)
    end
 end
+
+"""
+    her2k!(uplo, trans, alpha, A, B, beta, C)
+
+Rank-2k update of the Hermitian matrix `C` as
+`alpha*A*B' + alpha*B*A' + beta*C` or `alpha*A'*B + alpha*B'*A + beta*C`
+according to [`trans`](@ref stdlib-blas-trans). The scalar `beta` has to be real.
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
+"""
+function her2k! end
+
+"""
+    her2k(uplo, trans, alpha, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `alpha*A*B' + alpha*B*A'`
+or `alpha*A'*B + alpha*B'*A`, according to [`trans`](@ref stdlib-blas-trans).
+"""
+her2k(uplo, trans, alpha, A, B)
+
+"""
+    her2k(uplo, trans, A, B)
+
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*B' + B*A'`
+or `A'*B + B'*A`, according to [`trans`](@ref stdlib-blas-trans).
+"""
+her2k(uplo, trans, A, B)
 
 ## (TR) Triangular matrix and vector multiplication and solution
 
@@ -1621,10 +2008,12 @@ function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
     if length(rdest) != length(rsrc)
         throw(DimensionMismatch("ranges must be of the same length"))
     end
-    GC.@preserve src dest BLAS.blascopy!(length(rsrc),
-                                              pointer(src) + (first(rsrc) - 1) * sizeof(T),
-                                              step(rsrc),
-                                              pointer(dest) + (first(rdest) - 1) * sizeof(T),
-                                              step(rdest))
-    dest
+    GC.@preserve src dest BLAS.blascopy!(
+        length(rsrc),
+        pointer(src) + (first(rsrc) - 1) * sizeof(T),
+        step(rsrc),
+        pointer(dest) + (first(rdest) - 1) * sizeof(T),
+        step(rdest))
+
+    return dest
 end

@@ -31,8 +31,14 @@
         @test isdirpath(S(".."))
     end
     @testset "joinpath" begin
+        @test joinpath(S("")) == ""
         @test joinpath(S("foo")) == "foo"
         @test joinpath(S("foo"), S("bar")) == "foo$(sep)bar"
+        @test joinpath(S("foo"), S("bar"), S("baz")) == "foo$(sep)bar$(sep)baz"
+        @test joinpath(S("foo"), S(""), S("baz")) == "foo$(sep)baz"
+        @test joinpath(S("foo"), S(""), S("")) == "foo$(sep)"
+        @test joinpath(S("foo"), S(""), S(""), S("bar")) == "foo$(sep)bar"
+
         @test joinpath(S("foo"), S(homedir())) == homedir()
         @test joinpath(S(abspath("foo")), S(homedir())) == homedir()
 
@@ -40,6 +46,18 @@
             @test joinpath(S("foo"),S("bar:baz")) == "bar:baz"
             @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "D:bar"
             @test joinpath(S("C:"),S("foo"),S("D:bar"),S("baz")) == "D:bar$(sep)baz"
+
+            # relative folders and case-insensitive drive letters
+            @test joinpath(S("C:\\a\\b"), S("c:c\\e")) == "C:\\a\\b\\c\\e"
+
+            # UNC paths
+            @test joinpath(S("\\\\server"), S("share")) == "\\\\server\\share"
+            @test joinpath(S("\\\\server"), S("share"), S("a")) == "\\\\server\\share\\a"
+            @test joinpath(S("\\\\server\\"), S("share"), S("a")) == "\\\\server\\share\\a"
+            @test joinpath(S("\\\\server"), S("share"), S("a"), S("b")) == "\\\\server\\share\\a\\b"
+            @test joinpath(S("\\\\server\\share"),S("a")) == "\\\\server\\share\\a"
+            @test joinpath(S("\\\\server\\share\\"), S("a")) == "\\\\server\\share\\a"
+
         elseif Sys.isunix()
             @test joinpath(S("foo"),S("bar:baz")) == "foo$(sep)bar:baz"
             @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "C:$(sep)foo$(sep)D:$(sep)bar"

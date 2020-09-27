@@ -255,6 +255,6 @@ let code = """
 
     bt_str = read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String)
     @test occursin("InterpreterIP in MethodInstance for foo", bt_str)
-    @test occursin("InterpreterIP in top-level CodeInfo", bt_str)
+    @test occursin("InterpreterIP in top-level CodeInfo for Main.A", bt_str)
 end
 

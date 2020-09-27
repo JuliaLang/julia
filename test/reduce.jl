@@ -4,6 +4,9 @@ using Random
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+==ₜ(::Any, ::Any) = false
+==ₜ(a::T, b::T) where {T} = isequal(a, b)
+
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
 @test foldl(+, Int16[]) === Int16(0) # In reference to issues #21536
@@ -46,6 +49,8 @@ end
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1:5; init=1000) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+, 1) == 1
+@test_throws ArgumentError reduce(*, ())
+@test_throws ArgumentError reduce(*, Union{}[])
 
 # mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
@@ -133,6 +138,7 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
+@test_throws ArgumentError sum(Union{}[])
 @test_throws ArgumentError sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
@@ -169,6 +175,20 @@ for f in (sum3, sum4, sum7, sum8)
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
+@testset "`sum` of empty collections with `init`" begin
+    function noncallable end  # should not be called
+    @testset for init in [0, 0.0]
+        @test sum([]; init = init) === init
+        @test sum((x for x in [123] if false); init = init) === init
+        @test sum(noncallable, []; init = init) === init
+        @test sum(noncallable, (x for x in [123] if false); init = init) === init
+        @test sum(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              zeros(typeof(init), 1, 2, 0)
+        @test sum(noncallable, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              zeros(typeof(init), 1, 2, 0)
+    end
+end
+
 # check sum(abs, ...) for support of empty collections
 @testset "sum(abs, [])" begin
     @test @inferred(sum(abs, Float64[])) === 0.0
@@ -196,6 +216,20 @@ end
 
 @test typeof(prod(Array(trues(10)))) == Bool
 
+@testset "`prod` of empty collections with `init`" begin
+    function noncallable end  # should not be called
+    @testset for init in [1, 1.0, ""]
+        @test prod([]; init = init) === init
+        @test prod((x for x in [123] if false); init = init) === init
+        @test prod(noncallable, []; init = init) === init
+        @test prod(noncallable, (x for x in [123] if false); init = init) === init
+        @test prod(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              ones(typeof(init), 1, 2, 0)
+        @test prod(noncallable, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              ones(typeof(init), 1, 2, 0)
+    end
+end
+
 # check type-stability
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test prod(Int[]) === prod2(Int[]) === 1
@@ -207,6 +241,9 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 @test_throws ArgumentError maximum(Int[])
 @test_throws ArgumentError minimum(Int[])
+
+@test maximum(Int[]; init=-1) == -1
+@test minimum(Int[]; init=-1) == -1
 
 @test maximum(5) == 5
 @test minimum(5) == 5
@@ -338,6 +375,18 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test size(extrema(A,dims=(1,2,3))) == size(maximum(A,dims=(1,2,3)))
 @test extrema(x->div(x, 2), A, dims=(2,3)) == reshape([(0,11),(1,12)],2,1,1)
 
+@testset "maximum/minimum/extrema with missing values" begin
+    for x in (Vector{Union{Int,Missing}}(missing, 10),
+              Vector{Union{Int,Missing}}(missing, 257))
+        @test maximum(x) === minimum(x) === missing
+        @test extrema(x) === (missing, missing)
+        fill!(x, 1)
+        x[1] = missing
+        @test maximum(x) === minimum(x) === missing
+        @test extrema(x) === (missing, missing)
+    end
+end
+
 # any & all
 
 @test @inferred any([]) == false
@@ -445,6 +494,11 @@ struct SomeFunctor end
 @test count(x->x>0, Int[]) == count(Bool[]) == 0
 @test count(x->x>0, -3:5) == count((-3:5) .> 0) == 5
 @test count([true, true, false, true]) == count(BitVector([true, true, false, true])) == 3
+let x = repeat([false, true, false, true, true, false], 7)
+    @test count(x) == 21
+    GC.@preserve x (unsafe_store!(Ptr{UInt8}(pointer(x)), 0xfe, 3))
+    @test count(x) == 21
+end
 @test_throws TypeError count(sqrt, [1])
 @test_throws TypeError count([1])
 let itr = (x for x in 1:10 if x < 7)
@@ -460,6 +514,11 @@ end
 @test count(!iszero, Int[1]) == 1
 @test count(!iszero, [1, 0, 2, 0, 3, 0, 4]) == 4
 
+struct NonFunctionIsZero end
+(::NonFunctionIsZero)(x) = iszero(x)
+@test count(NonFunctionIsZero(), []) == 0
+@test count(NonFunctionIsZero(), [0]) == 1
+@test count(NonFunctionIsZero(), [1]) == 0
 
 ## cumsum, cummin, cummax
 
@@ -535,3 +594,11 @@ x = [j^2 for j in i]
 i = Base.Slice(0:0)
 x = [j+7 for j in i]
 @test sum(x) == 7
+
+@testset "initial value handling with flatten" begin
+    @test mapfoldl(
+        x -> (x, x),
+        ((a, b), (c, d)) -> (min(a, c), max(b, d)),
+        Iterators.flatten((1:2, 3:4)),
+    ) == (1, 4)
+end

@@ -35,7 +35,8 @@ Julia includes code from the following projects, which have their own licenses:
 - [MUSL](https://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for getopt implementation on Windows) [MIT]
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](https://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
-- [Python](https://docs.python.org/2/license.html) (for strtod implementation on Windows) [BSD-3, effectively]
+- [Python](https://docs.python.org/3/license.html) (for strtod and joinpath implementation on Windows) [BSD-3, effectively]
+- [Google Benchmark](https://github.com/google/benchmark) (for cyclecount implementation) [Apache 2.0]
 
 The following components included in Julia `Base` have their own separate licenses:
 
@@ -51,11 +52,6 @@ own licenses:
 - [LIBUV](https://github.com/joyent/libuv/blob/master/LICENSE) [MIT]
 - [LLVM](https://releases.llvm.org/6.0.0/LICENSE.TXT) [BSD-3, effectively]
 - [UTF8PROC](https://github.com/JuliaStrings/utf8proc) [MIT]
-
-The following components included in `stdlib` have their own separate licenses:
-
-- stdlib/SuiteSparse/umfpack.jl (see [SUITESPARSE](http://suitesparse.com))
-- stdlib/SuiteSparse/cholmod.jl (see [SUITESPARSE](http://suitesparse.com))
 
 Julia's `stdlib` uses the following external libraries, which have their own licenses:
 

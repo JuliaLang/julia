@@ -12,12 +12,6 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
-ifneq ($(OS),WINNT)
-ifeq ($(USE_SYSTEM_CURL), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
-endif
-endif
-
 ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
 LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
@@ -34,8 +28,6 @@ else
 LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
-else
-LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="curl"
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
@@ -50,7 +42,7 @@ $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/so
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
@@ -97,7 +89,7 @@ $(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libg
 
 else # USE_BINARYBUILDER_LIBGIT2
 
-LIBGIT2_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
+LIBGIT2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
 LIBGIT2_BB_NAME := LibGit2.v$(LIBGIT2_VER)
 $(eval $(call bb-install,libgit2,LIBGIT2,false))
 

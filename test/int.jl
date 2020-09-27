@@ -63,6 +63,11 @@ end
     @test signed(true) == 1
     @test unsigned(true) isa Unsigned
     @test unsigned(true) == unsigned(1)
+
+    @test signed(Bool) == Int
+    @test signed(Bool) == typeof(signed(true))
+    @test unsigned(Bool) == UInt
+    @test unsigned(Bool) == typeof(unsigned(true))
 end
 @testset "bswap" begin
     @test bswap(Int8(3)) == 3
@@ -190,6 +195,22 @@ end
         end
     end
 end
+
+@testset "bit rotations" begin
+    val1 = 0b01100011
+    @test 0b00011011 === bitrotate(val1, 3)
+    @test 0b01101100 === bitrotate(val1, -3)
+    @test val1 === bitrotate(val1, 0)
+
+    for T in Base.BitInteger_types
+        @test val1 === bitrotate(val1, sizeof(T) * 8) === bitrotate(val1, sizeof(T) * -8)
+    end
+
+    val2 = 0xabcd
+    @test 0x5e6d == bitrotate(val2, 3)
+    @test 0xb579 == bitrotate(val2, -3)
+end
+
 @testset "widen/widemul" begin
     @test widen(UInt8(3)) === UInt16(3)
     @test widen(UInt16(3)) === UInt32(3)
@@ -249,6 +270,17 @@ end
 @testset "x % T returns a T, T = $T" for T in [Base.BitInteger_types..., BigInt],
     U in [Base.BitInteger_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
+end
+
+@testset "Signed, Unsigned, signed, unsigned for bitstypes" begin
+    for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
+        @test signed(U) === S
+        @test unsigned(S) === U
+        @test typemin(S) % Signed === typemin(S)
+        @test typemax(U) % Unsigned === typemax(U)
+        @test -one(S) % Unsigned % Signed === -one(S)
+        @test ~one(U) % Signed % Unsigned === ~one(U)
+    end
 end
 
 @testset "issue #15489" begin
@@ -351,4 +383,15 @@ end
             end
         end
     end
+end
+
+@testset "bitreverse" begin
+    for T in Base.BitInteger_types
+        x = rand(T)::T
+        @test bitreverse(x) isa T
+        @test reverse(bitstring(x)) == bitstring(bitreverse(x))
+    end
+    @test bitreverse(0x80) === 0x01
+    @test bitreverse(Int64(456618293)) === Int64(-6012608040035942400)
+    @test bitreverse(Int32(456618293)) === Int32(-1399919400)
 end

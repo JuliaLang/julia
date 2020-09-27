@@ -19,23 +19,24 @@ if Sys.iswindows()
     end
 else # !windows
     struct RandomDevice <: AbstractRNG
-        file::IOStream
         unlimited::Bool
 
-        RandomDevice(; unlimited::Bool=true) =
-            new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
+        RandomDevice(; unlimited::Bool=true) = new(unlimited)
     end
 
-    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read( rd.file, sp[])
+    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
+    rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
 
-    function serialize(s::AbstractSerializer, rd::RandomDevice)
-        Serialization.serialize_type(s, typeof(rd))
-        serialize(s, rd.unlimited)
+    function getfile(rd::RandomDevice)
+        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
+        # TODO: there is a data-race, this can leak up to nthreads() copies of the file descriptors,
+        # so use a "thread-once" utility once available
+        isassigned(devrandom) || (devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random"))
+        devrandom[]
     end
-    function deserialize(s::AbstractSerializer, t::Type{RandomDevice})
-        unlimited = deserialize(s)
-        return RandomDevice(unlimited=unlimited)
-    end
+
+    const DEV_RANDOM  = Ref{IOStream}()
+    const DEV_URANDOM = Ref{IOStream}()
 
 end # os-test
 
@@ -43,12 +44,13 @@ end # os-test
 for T in (Bool, BitInteger_types...)
     if Sys.iswindows()
         @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
-            ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-                  A, sizeof(A))
+            Base.windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
+                (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
+                  A, sizeof(A)))
             A
         end
     else
-        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(rd.file, A)
+        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(getfile(rd), A)
     end
 end
 
@@ -119,14 +121,14 @@ See the [`seed!`](@ref) function for reseeding an already existing
 julia> rng = MersenneTwister(1234);
 
 julia> x1 = rand(rng, 2)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  0.5908446386657102
  0.7667970365022592
 
 julia> rng = MersenneTwister(1234);
 
 julia> x2 = rand(rng, 2)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  0.5908446386657102
  0.7667970365022592
 
@@ -295,7 +297,7 @@ seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(default_rng(), seed)
 const THREAD_RNGs = MersenneTwister[]
 @inline default_rng() = default_rng(Threads.threadid())
 @noinline function default_rng(tid::Int)
-    @assert 0 < tid <= length(THREAD_RNGs)
+    0 < tid <= length(THREAD_RNGs) || _rng_length_assert()
     if @inbounds isassigned(THREAD_RNGs, tid)
         @inbounds MT = THREAD_RNGs[tid]
     else
@@ -304,6 +306,8 @@ const THREAD_RNGs = MersenneTwister[]
     end
     return MT
 end
+@noinline _rng_length_assert() =  @assert false "0 < tid <= length(THREAD_RNGs)"
+
 function __init__()
     resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
 end
@@ -582,8 +586,10 @@ function rand!(r::MersenneTwister, A::UnsafeView{UInt128}, ::SamplerType{UInt128
 end
 
 for T in BitInteger_types
-    @eval rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T}) =
-        (GC.@preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp); A)
+    @eval function rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T})
+        GC.@preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp)
+        A
+    end
 
     T == UInt128 && continue
 
@@ -598,11 +604,49 @@ for T in BitInteger_types
     end
 end
 
-#### from a range
 
-for T in BitInteger_types, R=(1, Inf) # eval because of ambiguity otherwise
-    @eval Sampler(::Type{MersenneTwister}, r::AbstractUnitRange{$T}, ::Val{$R}) =
-        SamplerRangeFast(r)
+#### arrays of Bool
+
+# similar to Array{UInt8}, but we need to mask the result so that only the LSB
+# in each byte can be non-zero
+
+function rand!(r::MersenneTwister, A1::Array{Bool}, sp::SamplerType{Bool})
+    n1 = length(A1)
+    n128 = n1 ÷ 16
+
+    if n128 == 0
+        bits = rand(r, UInt52Raw())
+    else
+        GC.@preserve A1 begin
+            A = UnsafeView{UInt128}(pointer(A1), n128)
+            rand!(r, UnsafeView{Float64}(A.ptr, 2*n128), CloseOpen12())
+            # without masking, non-zero bits could be observed in other
+            # positions than the LSB of each byte
+            mask = 0x01010101010101010101010101010101
+            # we need up to 15 bits of entropy in `bits` for the final loop,
+            # which we will extract from x = A[1] % UInt64;
+            # let y = x % UInt32; y contains 32 bits of entropy, but 4
+            # of them will be used for A[1] itself (the first of
+            # each byte). To compensate, we xor with (y >> 17),
+            # which gets the entropy from the second bit of each byte
+            # of the upper-half of y, and sets it in the first bit
+            # of each byte of the lower half; the first two bytes
+            # now contain 16 usable random bits
+            x = A[1] % UInt64
+            bits = x ⊻ x >> 17
+            for i = 1:n128
+                # << 5 to randomize the first bit of the 8th & 16th byte
+                # (i.e. we move bit 52 (resp. 52 + 64), which is unused,
+                # to position 57 (resp. 57 + 64))
+                A[i] = (A[i] ⊻ A[i] << 5) & mask
+            end
+        end
+    end
+    for i = 16*n128+1:n1
+        @inbounds A1[i] = bits % Bool
+        bits >>= 1
+    end
+    A1
 end
 
 

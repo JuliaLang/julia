@@ -13,7 +13,7 @@
 
 #include <errno.h>
 
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 #include <getopt.h>
 #endif
 
@@ -40,9 +40,6 @@ JL_DLLEXPORT char *dirname(char *);
 #endif
 
 #ifdef _OS_WINDOWS_
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <io.h>
 extern int needsSymRefreshModuleList;
 extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #else
@@ -52,15 +49,6 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
-
-#ifdef JL_ASAN_ENABLED
-JL_DLLEXPORT const char* __asan_default_options() {
-    return "allow_user_segv_handler=1:detect_leaks=0";
-    // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
-    //        or defining __lsan_default_options = exitcode=0 once publicly available
-    //        (here and in flisp/flmain.c)
-}
-#endif
 
 size_t jl_page_size;
 
@@ -153,7 +141,7 @@ struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutd
 
 static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue *queue)
 {
-    struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc(sizeof(struct uv_shutdown_queue_item));
+    struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc_s(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
     if (queue->last)
@@ -168,20 +156,12 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
     jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
-void jl_write_coverage_data(const char*);
-void jl_write_malloc_log(void);
-void jl_write_compiler_output(void);
-
 static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
 {
     struct uv_shutdown_queue_item *rv = item->next;
     free(item);
     return rv;
 }
-
-void jl_init_timing(void);
-void jl_destroy_timing(void);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 static void jl_close_item_atexit(uv_handle_t *handle)
 {
@@ -302,6 +282,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 #ifdef ENABLE_TIMINGS
     jl_print_timings();
 #endif
+
+    jl_teardown_codegen();
 }
 
 static void post_boot_hooks(void);
@@ -319,7 +301,7 @@ void *jl_winsock_handle;
 uv_loop_t *jl_io_loop;
 
 #ifdef _OS_WINDOWS_
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     HANDLE current_process;
 
     if (fd == UV_STDIN_FD || fd == UV_STDOUT_FD || fd == UV_STDERR_FD)
@@ -353,7 +335,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     return 0;
 }
 #else
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     if ((*dupfd = fcntl(fd, F_DUPFD_CLOEXEC, 3)) == -1)
         return -errno;
     return 0;
@@ -371,7 +353,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         jl_errorf("error initializing %s in uv_dup: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
     switch(uv_guess_handle(fd)) {
     case UV_TTY:
-        handle = malloc(sizeof(uv_tty_t));
+        handle = malloc_s(sizeof(uv_tty_t));
         if ((err = uv_tty_init(jl_io_loop, (uv_tty_t*)handle, fd, 0))) {
             jl_errorf("error initializing %s in uv_tty_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -401,7 +383,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         // ...and continue on as in the UV_FILE case
         JL_FALLTHROUGH;
     case UV_FILE:
-        handle = malloc(sizeof(jl_uv_file_t));
+        handle = malloc_s(sizeof(jl_uv_file_t));
         {
             jl_uv_file_t *file = (jl_uv_file_t*)handle;
             file->loop = jl_io_loop;
@@ -411,7 +393,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         }
         break;
     case UV_NAMED_PIPE:
-        handle = malloc(sizeof(uv_pipe_t));
+        handle = malloc_s(sizeof(uv_pipe_t));
         if ((err = uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, 0))) {
             jl_errorf("error initializing %s in uv_pipe_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -421,7 +403,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
         ((uv_pipe_t*)handle)->data = NULL;
         break;
     case UV_TCP:
-        handle = malloc(sizeof(uv_tcp_t));
+        handle = malloc_s(sizeof(uv_tcp_t));
         if ((err = uv_tcp_init(jl_io_loop, (uv_tcp_t*)handle))) {
             jl_errorf("error initializing %s in uv_tcp_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
@@ -434,7 +416,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     return handle;
 }
 
-void init_stdio(void)
+static void init_stdio(void)
 {
     JL_STDIN  = (uv_stream_t*)init_stdio_handle("stdin", UV_STDIN_FD, 1);
     JL_STDOUT = (uv_stream_t*)init_stdio_handle("stdout", UV_STDOUT_FD, 0);
@@ -454,7 +436,7 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-int isabspath(const char *in)
+int isabspath(const char *in) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];
@@ -479,9 +461,7 @@ static char *abspath(const char *in, int nprefix)
     if (out) {
         if (nprefix > 0) {
             size_t sz = strlen(out) + 1;
-            char *cpy = (char*)malloc(sz + nprefix);
-            if (!cpy)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            char *cpy = (char*)malloc_s(sz + nprefix);
             memcpy(cpy, in, nprefix);
             memcpy(cpy + nprefix, out, sz);
             free(out);
@@ -491,22 +471,16 @@ static char *abspath(const char *in, int nprefix)
     else {
         size_t sz = strlen(in + nprefix) + 1;
         if (in[nprefix] == PATHSEPSTRING[0]) {
-            out = (char*)malloc(sz + nprefix);
-            if (!out)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            out = (char*)malloc_s(sz + nprefix);
             memcpy(out, in, sz + nprefix);
         }
         else {
             size_t path_size = PATH_MAX;
-            char *path = (char*)malloc(PATH_MAX);
-            if (!path)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            char *path = (char*)malloc_s(PATH_MAX);
             if (uv_cwd(path, &path_size)) {
                 jl_error("fatal error: unexpected error while retrieving current working directory");
             }
-            out = (char*)malloc(path_size + 1 + sz + nprefix);
-            if (!out)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            out = (char*)malloc_s(path_size + 1 + sz + nprefix);
             memcpy(out, in, nprefix);
             memcpy(out + nprefix, path, path_size);
             out[nprefix + path_size] = PATHSEPSTRING[0];
@@ -519,9 +493,7 @@ static char *abspath(const char *in, int nprefix)
     if (n <= 0) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
-    char *out = (char*)malloc(n + nprefix);
-    if (!out)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    char *out = (char*)malloc_s(n + nprefix);
     DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
     if (n != m + 1) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
@@ -548,9 +520,7 @@ static const char *absformat(const char *in)
     size_t i, fmt_size = 0;
     for (i = 0; i < path_size; i++)
         fmt_size += (path[i] == '%' ? 2 : 1);
-    char *out = (char*)malloc(fmt_size + 1 + sz);
-    if (!out)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    char *out = (char*)malloc_s(fmt_size + 1 + sz);
     fmt_size = 0;
     for (i = 0; i < path_size; i++) { // copy-replace pwd portion
         char c = path[i];
@@ -571,19 +541,15 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     // note: if you care about lost memory, you should call the appropriate `free()` function
     // on the original pointer for each `char*` you've inserted into `jl_options`, after
     // calling `julia_init()`
-    char *free_path = (char*)malloc(PATH_MAX);
+    char *free_path = (char*)malloc_s(PATH_MAX);
     size_t path_size = PATH_MAX;
-    if (!free_path)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
     if (uv_exepath(free_path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving exepath");
     }
     if (path_size >= PATH_MAX) {
         jl_error("fatal error: jl_options.julia_bin path too long");
     }
-    jl_options.julia_bin = (char*)malloc(path_size+1);
-    if (!jl_options.julia_bin)
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    jl_options.julia_bin = (char*)malloc_s(path_size + 1);
     memcpy((char*)jl_options.julia_bin, free_path, path_size);
     ((char*)jl_options.julia_bin)[path_size] = '\0';
     if (!jl_options.julia_bindir) {
@@ -599,9 +565,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (jl_options.image_file) {
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
-            free_path = (char*)malloc(PATH_MAX);
-            if (!free_path)
-                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            free_path = (char*)malloc_s(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
                              jl_options.julia_bindir, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {
@@ -622,6 +586,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.outputji = abspath(jl_options.outputji, 0);
     if (jl_options.outputbc)
         jl_options.outputbc = abspath(jl_options.outputbc, 0);
+    if (jl_options.outputasm)
+        jl_options.outputasm = abspath(jl_options.outputasm, 0);
     if (jl_options.machine_file)
         jl_options.machine_file = abspath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
@@ -644,6 +610,8 @@ static void jl_set_io_wait(int v)
     ptls->io_wait = v;
 }
 
+extern jl_mutex_t jl_modules_mutex;
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
@@ -654,6 +622,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_safepoint_init();
     libsupport_init();
     htable_new(&jl_current_modules, 0);
+    JL_MUTEX_INIT(&jl_modules_mutex);
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
@@ -663,6 +632,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_page_size = jl_getpagesize();
     uint64_t total_mem = uv_get_total_memory();
+    uint64_t constrained_mem = uv_get_constrained_memory();
+    if (constrained_mem > 0 && constrained_mem < total_mem)
+        total_mem = constrained_mem;
     if (total_mem >= (size_t)-1) {
         total_mem = (size_t)-1;
     }
@@ -681,6 +653,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #endif
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
     jl_exe_handle = GetModuleHandleA(NULL);
+    JL_MUTEX_INIT(&jl_in_stackwalk);
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
     if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
@@ -719,21 +692,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 #endif
 
-#if defined(__linux__)
-    int ncores = jl_cpu_threads();
-    if (ncores > 1) {
-        cpu_set_t cpumask;
-        CPU_ZERO(&cpumask);
-        for(int i=0; i < ncores; i++) {
-            CPU_SET(i, &cpumask);
-        }
-        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
-    }
-#endif
-
-    if ((jl_options.outputo || jl_options.outputbc) &&
+    if ((jl_options.outputo || jl_options.outputbc || jl_options.outputasm) &&
         (jl_options.code_coverage || jl_options.malloc_log)) {
-        jl_error("cannot generate code-coverage or track allocation information while generating a .o or .bc output file");
+        jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
     }
 
     jl_gc_init();
@@ -750,7 +711,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    arraylist_new(&partial_inst, 0);
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
     }
@@ -764,13 +724,13 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #ifdef ENABLE_TIMINGS
     jl_root_task->timing_stack = jl_root_timing;
 #endif
-    jl_init_frontend();
-
-    jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used by ml_matches
+    jl_init_common_symbols();
+    jl_init_flisp();
     jl_init_serializer();
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module->parent = jl_core_module;
         jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
@@ -780,16 +740,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         post_boot_hooks();
     }
 
-    // the Main module is the one which is always open, and set as the
-    // current module for bare (non-module-wrapped) toplevel expressions.
-    // it does "using Base" if Base is available.
     if (jl_base_module != NULL) {
-        jl_add_standard_imports(jl_main_module);
-        jl_value_t *maininclude = jl_get_global(jl_base_module, jl_symbol("MainInclude"));
-        if (maininclude && jl_is_module(maininclude)) {
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("include"));
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("eval"));
-        }
         // Do initialization needed before starting child threads
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
         if (f) {

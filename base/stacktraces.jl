@@ -7,6 +7,7 @@ module StackTraces
 
 
 import Base: hash, ==, show
+import Core: CodeInfo, MethodInstance
 
 export StackTrace, StackFrame, stacktrace
 
@@ -52,7 +53,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     "the line number in the file containing the execution context"
     line::Int
     "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{Core.MethodInstance, Core.CodeInfo, Nothing}
+    linfo::Union{MethodInstance, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -103,12 +104,12 @@ up stack frame context information. Returns an array of frame information for al
 inlined at that point, innermost function first.
 """
 function lookup(pointer::Ptr{Cvoid})
-    infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)
+    infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
     res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
-        info = infos[i]
+        info = infos[i]::Core.SimpleVector
         @assert(length(info) == 6)
         res[i] = StackFrame(info[1], info[2], info[3], info[4], info[5], info[6], pointer)
     end
@@ -118,7 +119,7 @@ end
 const top_level_scope_sym = Symbol("top-level scope")
 
 function lookup(ip::Base.InterpreterIP)
-    if ip.code isa Core.MethodInstance && ip.code.def isa Method
+    if ip.code isa MethodInstance && ip.code.def isa Method
         codeinfo = ip.code.uninferred
         func = ip.code.def.name
         file = ip.code.def.file
@@ -127,7 +128,7 @@ function lookup(ip::Base.InterpreterIP)
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     else
-        @assert ip.code isa Core.CodeInfo
+        @assert ip.code isa CodeInfo
         codeinfo = ip.code
         func = top_level_scope_sym
         file = empty_sym
@@ -206,64 +207,76 @@ function remove_frames!(stack::StackTrace, m::Module)
     return stack
 end
 
-is_top_level_frame(f::StackFrame) = f.linfo isa Core.CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
+is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
 
 function show_spec_linfo(io::IO, frame::StackFrame)
-    if frame.linfo === nothing
+    linfo = frame.linfo
+    if linfo === nothing
         if frame.func === empty_sym
             print(io, "ip:0x", string(frame.pointer, base=16))
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
-            color = get(io, :color, false) && get(io, :backtrace, false) ?
-                        Base.stackframe_function_color() :
-                        :nothing
-            printstyled(io, Base.demangle_function_name(string(frame.func)), color=color)
+            print(io, Base.demangle_function_name(string(frame.func)))
         end
-    elseif frame.linfo isa Core.MethodInstance
-        def = frame.linfo.def
+    elseif linfo isa MethodInstance
+        def = linfo.def
         if isa(def, Method)
-            sig = frame.linfo.specTypes
+            sig = linfo.specTypes
+            argnames = Base.method_argnames(def)
             if def.nkw > 0
                 # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
                 kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
-                uw = Base.unwrap_unionall(sig)
+                uw = Base.unwrap_unionall(sig)::DataType
                 pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
-                kwnames = Base.method_argnames(def)[2:(def.nkw+1)]
+                kwnames = argnames[2:(def.nkw+1)]
                 for i = 1:length(kwnames)
-                    str = string(kwnames[i])
+                    str = string(kwnames[i])::String
                     if endswith(str, "...")
                         kwnames[i] = Symbol(str[1:end-3])
                     end
                 end
-                Base.show_tuple_as_call(io, def.name, pos_sig, true, zip(kwnames, kwarg_types))
+                Base.show_tuple_as_call(io, def.name, pos_sig, true, zip(kwnames, kwarg_types), argnames[def.nkw+2:end])
             else
-                Base.show_tuple_as_call(io, def.name, sig, true)
+                Base.show_tuple_as_call(io, def.name, sig, true, nothing, argnames)
             end
         else
-            Base.show(io, frame.linfo)
+            Base.show(io, linfo)
         end
-    elseif frame.linfo isa Core.CodeInfo
+    elseif linfo isa CodeInfo
         print(io, "top-level scope")
     end
 end
 
-function show(io::IO, frame::StackFrame; full_path::Bool=false)
+function show(io::IO, frame::StackFrame)
     show_spec_linfo(io, frame)
     if frame.file !== empty_sym
-        file_info = full_path ? string(frame.file) : basename(string(frame.file))
+        file_info = basename(string(frame.file))
         print(io, " at ")
-        Base.with_output_color(get(io, :color, false) && get(io, :backtrace, false) ? Base.stackframe_lineinfo_color() : :nothing, io) do io
-            print(io, file_info, ":")
-            if frame.line >= 0
-                print(io, frame.line)
-            else
-                print(io, "?")
-            end
+        print(io, file_info, ":")
+        if frame.line >= 0
+            print(io, frame.line)
+        else
+            print(io, "?")
         end
     end
     if frame.inlined
         print(io, " [inlined]")
+    end
+end
+
+function Base.parentmodule(frame::StackFrame)
+    if frame.linfo isa MethodInstance
+        def = frame.linfo.def
+        if def isa Module
+            return def
+        else
+            return (def::Method).module
+        end
+    else
+        # The module is not always available (common reasons include inlined
+        # frames and frames arising from the interpreter)
+        nothing
     end
 end
 
@@ -273,16 +286,7 @@ end
 Returns whether the `frame` is from the provided `Module`
 """
 function from(frame::StackFrame, m::Module)
-    finfo = frame.linfo
-    result = false
-
-    if finfo isa Core.MethodInstance
-        frame_m = finfo.def
-        isa(frame_m, Method) && (frame_m = frame_m.module)
-        result = nameof(frame_m) === nameof(m)
-    end
-
-    return result
+    return parentmodule(frame) === m
 end
 
 end

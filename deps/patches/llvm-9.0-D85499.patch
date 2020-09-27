@@ -1,0 +1,425 @@
+commit ac8729e23232d0fd3933b76093a40b7c65332aff
+Author: Keno Fischer <keno@juliacomputing.com>
+Date:   Fri Aug 7 00:31:43 2020 -0400
+
+    [X86] Canonicalize andnp for bitmask arithmetic
+    
+    We have a DAG combine that tries to fold (vselect cond, 0000..., X) -> (andnp cond, x).
+    However, it does so by attempting to create an i64 vector with the number
+    of elements obtained by truncating division by 64 from the bitwidth. This is
+    bad for mask vectors like v8i1, since that division is just zero. Besides,
+    we don't want i64 vectors anyway. The easy change is just to avoid changing
+    the VT, but this is slightly problematic because the canonical pattern for
+    `kandn` is `(and (vnot a) b)` rather than `(x86andnp a b)`, so this fails
+    to select. Rather than playing games here with having the mask vectors
+    use a different canonical representation, the bulk of this commit switches
+    the canonical ISD representation for `kandn` to `(x86andnp a b)` such
+    that all vector types may be handled equally here. To avoid regressing
+    other tests, we need to extend a few other folds to handle `x86andnp` in
+    addition to plain `and`. However, that should be generally a good
+    improvement, since x86andnp is already canonical for non-i1 vectors
+    prior to this commit, and said folds were just missing.
+    
+    When all is said and done, fixes the issue reported in
+    https://github.com/JuliaLang/julia/issues/36955.
+    
+    Differential Revision: https://reviews.llvm.org/D85499
+
+diff --git a/lib/Target/X86/X86ISelDAGToDAG.cpp b/lib/Target/X86/X86ISelDAGToDAG.cpp
+index 34ad589d205..eb21b0de89d 100644
+--- a/lib/Target/X86/X86ISelDAGToDAG.cpp
++++ b/lib/Target/X86/X86ISelDAGToDAG.cpp
+@@ -503,7 +503,7 @@ namespace {
+     bool isMaskZeroExtended(SDNode *N) const;
+     bool tryShiftAmountMod(SDNode *N);
+     bool tryShrinkShlLogicImm(SDNode *N);
+-    bool tryVPTESTM(SDNode *Root, SDValue Setcc, SDValue Mask);
++    bool tryVPTESTM(SDNode *Root, SDValue Setcc, SDValue Mask, bool Invert);
+ 
+     MachineSDNode *emitPCMPISTR(unsigned ROpc, unsigned MOpc, bool MayFoldLoad,
+                                 const SDLoc &dl, MVT VT, SDNode *Node);
+@@ -2998,7 +2998,7 @@ bool X86DAGToDAGISel::foldLoadStoreIntoMemOperand(SDNode *Node) {
+       bool IsNegOne = isAllOnesConstant(StoredVal.getOperand(1));
+       // ADD/SUB with 1/-1 and carry flag isn't used can use inc/dec.
+       if ((IsOne || IsNegOne) && hasNoCarryFlagUses(StoredVal.getValue(1))) {
+-        unsigned NewOpc = 
++        unsigned NewOpc =
+           ((Opc == X86ISD::ADD) == IsOne)
+               ? SelectOpcode(X86::INC64m, X86::INC32m, X86::INC16m, X86::INC8m)
+               : SelectOpcode(X86::DEC64m, X86::DEC32m, X86::DEC16m, X86::DEC8m);
+@@ -3999,8 +3999,8 @@ static unsigned getVPTESTMOpc(MVT TestVT, bool IsTestN, bool FoldedLoad,
+ 
+ // Try to create VPTESTM instruction. If InMask is not null, it will be used
+ // to form a masked operation.
+-bool X86DAGToDAGISel::tryVPTESTM(SDNode *Root, SDValue Setcc,
+-                                 SDValue InMask) {
++bool X86DAGToDAGISel::tryVPTESTM(SDNode *Root, SDValue Setcc, SDValue InMask,
++                                 bool Invert) {
+   assert(Subtarget->hasAVX512() && "Expected AVX512!");
+   assert(Setcc.getSimpleValueType().getVectorElementType() == MVT::i1 &&
+          "Unexpected VT!");
+@@ -4140,6 +4140,9 @@ bool X86DAGToDAGISel::tryVPTESTM(SDNode *Root, SDValue Setcc,
+   }
+ 
+   bool IsTestN = CC == ISD::SETEQ;
++  if (Invert)
++    IsTestN = !IsTestN;
++
+   unsigned Opc = getVPTESTMOpc(CmpVT, IsTestN, FoldedLoad, FoldedBCast,
+                                IsMasked);
+ 
+@@ -4309,16 +4312,27 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
+       return;
+     break;
+ 
++  case X86ISD::ANDNP:
++    if (NVT.isVector() && NVT.getVectorElementType() == MVT::i1) {
++      SDValue N0 = Node->getOperand(0);
++      SDValue N1 = Node->getOperand(1);
++      // Try to form a masked VPTESTM
++      if (N0.getOpcode() == ISD::SETCC && N0.hasOneUse() &&
++          tryVPTESTM(Node, N0, N1, true))
++        return;
++    }
++    break;
++
+   case ISD::AND:
+     if (NVT.isVector() && NVT.getVectorElementType() == MVT::i1) {
+       // Try to form a masked VPTESTM. Operands can be in either order.
+       SDValue N0 = Node->getOperand(0);
+       SDValue N1 = Node->getOperand(1);
+       if (N0.getOpcode() == ISD::SETCC && N0.hasOneUse() &&
+-          tryVPTESTM(Node, N0, N1))
++          tryVPTESTM(Node, N0, N1, false))
+         return;
+       if (N1.getOpcode() == ISD::SETCC && N1.hasOneUse() &&
+-          tryVPTESTM(Node, N1, N0))
++          tryVPTESTM(Node, N1, N0, false))
+         return;
+     }
+ 
+@@ -5000,7 +5014,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
+   }
+ 
+   case ISD::SETCC: {
+-    if (NVT.isVector() && tryVPTESTM(Node, SDValue(Node, 0), SDValue()))
++    if (NVT.isVector() && tryVPTESTM(Node, SDValue(Node, 0), SDValue(), false))
+       return;
+ 
+     break;
+diff --git a/lib/Target/X86/X86ISelLowering.cpp b/lib/Target/X86/X86ISelLowering.cpp
+index 920cdd7e625..6b9738074c7 100644
+--- a/lib/Target/X86/X86ISelLowering.cpp
++++ b/lib/Target/X86/X86ISelLowering.cpp
+@@ -196,7 +196,7 @@ X86TargetLowering::X86TargetLowering(const X86TargetMachine &TM,
+   // Integer absolute.
+   if (Subtarget.hasCMov()) {
+     setOperationAction(ISD::ABS            , MVT::i16  , Custom);
+-    setOperationAction(ISD::ABS            , MVT::i32  , Custom); 
++    setOperationAction(ISD::ABS            , MVT::i32  , Custom);
+   }
+   setOperationAction(ISD::ABS              , MVT::i64  , Custom);
+ 
+@@ -26053,7 +26053,7 @@ X86TargetLowering::lowerIdempotentRMWIntoFencedLoad(AtomicRMWInst *AI) const {
+ 
+   // If this is a canonical idempotent atomicrmw w/no uses, we have a better
+   // lowering available in lowerAtomicArith.
+-  // TODO: push more cases through this path. 
++  // TODO: push more cases through this path.
+   if (auto *C = dyn_cast<ConstantInt>(AI->getValOperand()))
+     if (AI->getOperation() == AtomicRMWInst::Or && C->isZero() &&
+         AI->use_empty())
+@@ -26111,7 +26111,7 @@ X86TargetLowering::lowerIdempotentRMWIntoFencedLoad(AtomicRMWInst *AI) const {
+ /// Emit a locked operation on a stack location which does not change any
+ /// memory location, but does involve a lock prefix.  Location is chosen to be
+ /// a) very likely accessed only by a single thread to minimize cache traffic,
+-/// and b) definitely dereferenceable.  Returns the new Chain result.  
++/// and b) definitely dereferenceable.  Returns the new Chain result.
+ static SDValue emitLockedStackOp(SelectionDAG &DAG,
+                                  const X86Subtarget &Subtarget,
+                                  SDValue Chain, SDLoc DL) {
+@@ -26120,22 +26120,22 @@ static SDValue emitLockedStackOp(SelectionDAG &DAG,
+   // operations issued by the current processor.  As such, the location
+   // referenced is not relevant for the ordering properties of the instruction.
+   // See: Intel® 64 and IA-32 ArchitecturesSoftware Developer’s Manual,
+-  // 8.2.3.9  Loads and Stores Are Not Reordered with Locked Instructions 
++  // 8.2.3.9  Loads and Stores Are Not Reordered with Locked Instructions
+   // 2) Using an immediate operand appears to be the best encoding choice
+   // here since it doesn't require an extra register.
+   // 3) OR appears to be very slightly faster than ADD. (Though, the difference
+   // is small enough it might just be measurement noise.)
+   // 4) When choosing offsets, there are several contributing factors:
+   //   a) If there's no redzone, we default to TOS.  (We could allocate a cache
+-  //      line aligned stack object to improve this case.) 
++  //      line aligned stack object to improve this case.)
+   //   b) To minimize our chances of introducing a false dependence, we prefer
+-  //      to offset the stack usage from TOS slightly.  
++  //      to offset the stack usage from TOS slightly.
+   //   c) To minimize concerns about cross thread stack usage - in particular,
+   //      the idiomatic MyThreadPool.run([&StackVars]() {...}) pattern which
+   //      captures state in the TOS frame and accesses it from many threads -
+   //      we want to use an offset such that the offset is in a distinct cache
+   //      line from the TOS frame.
+-  // 
++  //
+   // For a general discussion of the tradeoffs and benchmark results, see:
+   // https://shipilev.net/blog/2014/on-the-fence-with-dependencies/
+ 
+@@ -26188,7 +26188,7 @@ static SDValue LowerATOMIC_FENCE(SDValue Op, const X86Subtarget &Subtarget,
+     if (Subtarget.hasMFence())
+       return DAG.getNode(X86ISD::MFENCE, dl, MVT::Other, Op.getOperand(0));
+ 
+-    SDValue Chain = Op.getOperand(0); 
++    SDValue Chain = Op.getOperand(0);
+     return emitLockedStackOp(DAG, Subtarget, Chain, dl);
+   }
+ 
+@@ -26677,12 +26677,12 @@ static SDValue lowerAtomicArith(SDValue N, SelectionDAG &DAG,
+     // seq_cst which isn't SingleThread, everything just needs to be preserved
+     // during codegen and then dropped. Note that we expect (but don't assume),
+     // that orderings other than seq_cst and acq_rel have been canonicalized to
+-    // a store or load. 
++    // a store or load.
+     if (AN->getOrdering() == AtomicOrdering::SequentiallyConsistent &&
+         AN->getSyncScopeID() == SyncScope::System) {
+       // Prefer a locked operation against a stack location to minimize cache
+       // traffic.  This assumes that stack locations are very likely to be
+-      // accessed only by the owning thread. 
++      // accessed only by the owning thread.
+       SDValue NewChain = emitLockedStackOp(DAG, Subtarget, Chain, DL);
+       assert(!N->hasAnyUseOfValue(0));
+       // NOTE: The getUNDEF is needed to give something for the unused result 0.
+@@ -35620,7 +35620,7 @@ static SDValue scalarizeExtEltFP(SDNode *ExtElt, SelectionDAG &DAG) {
+   }
+ 
+   // TODO: This switch could include FNEG and the x86-specific FP logic ops
+-  // (FAND, FANDN, FOR, FXOR). But that may require enhancements to avoid 
++  // (FAND, FANDN, FOR, FXOR). But that may require enhancements to avoid
+   // missed load folding and fma+fneg combining.
+   switch (Vec.getOpcode()) {
+   case ISD::FMA: // Begin 3 operands
+@@ -35935,10 +35935,8 @@ combineVSelectWithAllOnesOrZeros(SDNode *N, SelectionDAG &DAG,
+ 
+   // vselect Cond, 000..., X -> andn Cond, X
+   if (TValIsAllZeros) {
+-    MVT AndNVT = MVT::getVectorVT(MVT::i64, CondVT.getSizeInBits() / 64);
+-    SDValue CastCond = DAG.getBitcast(AndNVT, Cond);
+-    SDValue CastRHS = DAG.getBitcast(AndNVT, RHS);
+-    SDValue AndN = DAG.getNode(X86ISD::ANDNP, DL, AndNVT, CastCond, CastRHS);
++    SDValue CastRHS = DAG.getBitcast(CondVT, RHS);
++    SDValue AndN = DAG.getNode(X86ISD::ANDNP, DL, CondVT, Cond, CastRHS);
+     return DAG.getBitcast(VT, AndN);
+   }
+ 
+@@ -38147,12 +38145,17 @@ static SDValue IsNOT(SDValue V, SelectionDAG &DAG) {
+   return SDValue();
+ }
+ 
+-/// Try to fold: (and (xor X, -1), Y) -> (andnp X, Y).
+-static SDValue combineANDXORWithAllOnesIntoANDNP(SDNode *N, SelectionDAG &DAG) {
++
++/// Try to fold:
++///   (and (not X), Y) -> (andnp X, Y)
++///   (and (xor X, -1), Y) -> (andnp X, Y).
++static SDValue combineANDXORWithAllOnesIntoANDNP(SDNode *N, SelectionDAG &DAG,
++                                                 const X86Subtarget &Subtarget) {
+   assert(N->getOpcode() == ISD::AND);
+ 
+   MVT VT = N->getSimpleValueType(0);
+-  if (!VT.is128BitVector() && !VT.is256BitVector() && !VT.is512BitVector())
++  if (!VT.is128BitVector() && !VT.is256BitVector() && !VT.is512BitVector() &&
++      !(VT.isVector() && VT.getVectorElementType() == MVT::i1 && Subtarget.hasAVX512()))
+     return SDValue();
+ 
+   SDValue X, Y;
+@@ -38558,7 +38561,7 @@ static SDValue combineAnd(SDNode *N, SelectionDAG &DAG,
+   if (SDValue FPLogic = convertIntLogicToFPLogic(N, DAG, Subtarget))
+     return FPLogic;
+ 
+-  if (SDValue R = combineANDXORWithAllOnesIntoANDNP(N, DAG))
++  if (SDValue R = combineANDXORWithAllOnesIntoANDNP(N, DAG, Subtarget))
+     return R;
+ 
+   if (SDValue ShiftRight = combineAndMaskToShift(N, DAG, Subtarget))
+diff --git a/lib/Target/X86/X86InstrAVX512.td b/lib/Target/X86/X86InstrAVX512.td
+index 54eddeacaa1..91027fa903f 100644
+--- a/lib/Target/X86/X86InstrAVX512.td
++++ b/lib/Target/X86/X86InstrAVX512.td
+@@ -2978,7 +2978,6 @@ multiclass avx512_mask_binop_all<bits<8> opc, string OpcodeStr,
+ def andn : PatFrag<(ops node:$i0, node:$i1), (and (not node:$i0), node:$i1)>;
+ def xnor : PatFrag<(ops node:$i0, node:$i1), (not (xor node:$i0, node:$i1))>;
+ // These nodes use 'vnot' instead of 'not' to support vectors.
+-def vandn : PatFrag<(ops node:$i0, node:$i1), (and (vnot node:$i0), node:$i1)>;
+ def vxnor : PatFrag<(ops node:$i0, node:$i1), (vnot (xor node:$i0, node:$i1))>;
+ 
+ // TODO - do we need a X86SchedWriteWidths::KMASK type?
+@@ -2986,7 +2985,7 @@ defm KAND  : avx512_mask_binop_all<0x41, "kand",  and,     SchedWriteVecLogic.XM
+ defm KOR   : avx512_mask_binop_all<0x45, "kor",   or,      SchedWriteVecLogic.XMM, 1>;
+ defm KXNOR : avx512_mask_binop_all<0x46, "kxnor", vxnor,   SchedWriteVecLogic.XMM, 1>;
+ defm KXOR  : avx512_mask_binop_all<0x47, "kxor",  xor,     SchedWriteVecLogic.XMM, 1>;
+-defm KANDN : avx512_mask_binop_all<0x42, "kandn", vandn,   SchedWriteVecLogic.XMM, 0>;
++defm KANDN : avx512_mask_binop_all<0x42, "kandn", X86andnp,   SchedWriteVecLogic.XMM, 0>;
+ defm KADD  : avx512_mask_binop_all<0x4A, "kadd",  X86kadd, SchedWriteVecLogic.XMM, 1, HasDQI>;
+ 
+ multiclass avx512_binop_pat<SDPatternOperator VOpNode, SDPatternOperator OpNode,
+@@ -3015,7 +3014,7 @@ multiclass avx512_binop_pat<SDPatternOperator VOpNode, SDPatternOperator OpNode,
+ }
+ 
+ defm : avx512_binop_pat<and,   and,  KANDWrr>;
+-defm : avx512_binop_pat<vandn, andn, KANDNWrr>;
++defm : avx512_binop_pat<X86andnp, X86andnp, KANDNWrr>;
+ defm : avx512_binop_pat<or,    or,   KORWrr>;
+ defm : avx512_binop_pat<vxnor, xnor, KXNORWrr>;
+ defm : avx512_binop_pat<xor,   xor,  KXORWrr>;
+@@ -11570,7 +11569,7 @@ multiclass avx512_fixupimm_scalar<bits<8> opc, string OpcodeStr,
+ }
+ 
+ multiclass avx512_fixupimm_packed_all<X86SchedWriteWidths sched,
+-                                      AVX512VLVectorVTInfo _Vec, 
++                                      AVX512VLVectorVTInfo _Vec,
+                                       AVX512VLVectorVTInfo _Tbl> {
+   let Predicates = [HasAVX512] in
+     defm Z    : avx512_fixupimm_packed_sae<0x54, "vfixupimm", sched.ZMM,
+@@ -11687,7 +11686,7 @@ multiclass AVX512_scalar_math_fp_patterns<SDNode Op, string OpcPrefix, SDNode Mo
+                             (Op (_.EltVT
+                                  (extractelt (_.VT VR128X:$src1), (iPTR 0))),
+                                 _.FRC:$src2), (_.EltVT ZeroFP)))),
+-      (!cast<I>("V"#OpcPrefix#Zrr_Intkz) 
++      (!cast<I>("V"#OpcPrefix#Zrr_Intkz)
+           VK1WM:$mask, _.VT:$src1,
+           (_.VT (COPY_TO_REGCLASS _.FRC:$src2, VR128X)))>;
+     def : Pat<(MoveNode (_.VT VR128X:$src1),
+diff --git a/test/CodeGen/X86/avx512-select.ll b/test/CodeGen/X86/avx512-select.ll
+index 1ed7b408baf..64320d63eac 100644
+--- a/test/CodeGen/X86/avx512-select.ll
++++ b/test/CodeGen/X86/avx512-select.ll
+@@ -595,3 +595,74 @@ define <16 x i64> @narrowExtractedVectorSelect_crash(<16 x i64> %arg, <16 x i16>
+   %tmp3 = zext <16 x i16> %tmp2 to <16 x i64>
+   ret <16 x i64> %tmp3
+ }
++
++; Regression test from https://github.com/JuliaLang/julia/issues/36955
++define i8 @julia_issue36955(<8 x i1> %mask, <8 x double> %a) {
++; X86-AVX512F-LABEL: julia_issue36955:
++; X86-AVX512F:       # %bb.0:
++; X86-AVX512F-NEXT:    vpmovsxwq %xmm0, %zmm0
++; X86-AVX512F-NEXT:    vpsllq $63, %zmm0, %zmm0
++; X86-AVX512F-NEXT:    vptestmq %zmm0, %zmm0, %k0
++; X86-AVX512F-NEXT:    vpxor %xmm0, %xmm0, %xmm0
++; X86-AVX512F-NEXT:    vcmpnlepd %zmm0, %zmm1, %k1
++; X86-AVX512F-NEXT:    kandnw %k0, %k1, %k0
++; X86-AVX512F-NEXT:    kandw %k1, %k0, %k0
++; X86-AVX512F-NEXT:    knotw %k1, %k1
++; X86-AVX512F-NEXT:    korw %k1, %k0, %k0
++; X86-AVX512F-NEXT:    kmovw %k0, %eax
++; X86-AVX512F-NEXT:    # kill: def $al killed $al killed $eax
++; X86-AVX512F-NEXT:    vzeroupper
++; X86-AVX512F-NEXT:    retl
++;
++; X64-AVX512F-LABEL: julia_issue36955:
++; X64-AVX512F:       # %bb.0:
++; X64-AVX512F-NEXT:    vpmovsxwq %xmm0, %zmm0
++; X64-AVX512F-NEXT:    vpsllq $63, %zmm0, %zmm0
++; X64-AVX512F-NEXT:    vptestmq %zmm0, %zmm0, %k0
++; X64-AVX512F-NEXT:    vpxor %xmm0, %xmm0, %xmm0
++; X64-AVX512F-NEXT:    vcmpnlepd %zmm0, %zmm1, %k1
++; X64-AVX512F-NEXT:    kandnw %k0, %k1, %k0
++; X64-AVX512F-NEXT:    kandw %k1, %k0, %k0
++; X64-AVX512F-NEXT:    knotw %k1, %k1
++; X64-AVX512F-NEXT:    korw %k1, %k0, %k0
++; X64-AVX512F-NEXT:    kmovw %k0, %eax
++; X64-AVX512F-NEXT:    # kill: def $al killed $al killed $eax
++; X64-AVX512F-NEXT:    vzeroupper
++; X64-AVX512F-NEXT:    retq
++;
++; X86-AVX512BW-LABEL: julia_issue36955:
++; X86-AVX512BW:       # %bb.0:
++; X86-AVX512BW-NEXT:    vpsllw $15, %xmm0, %xmm0
++; X86-AVX512BW-NEXT:    vpmovw2m %zmm0, %k0
++; X86-AVX512BW-NEXT:    vpxor %xmm0, %xmm0, %xmm0
++; X86-AVX512BW-NEXT:    vcmpnlepd %zmm0, %zmm1, %k1
++; X86-AVX512BW-NEXT:    kandnw %k0, %k1, %k0
++; X86-AVX512BW-NEXT:    kandw %k1, %k0, %k0
++; X86-AVX512BW-NEXT:    knotw %k1, %k1
++; X86-AVX512BW-NEXT:    korw %k1, %k0, %k0
++; X86-AVX512BW-NEXT:    kmovd %k0, %eax
++; X86-AVX512BW-NEXT:    # kill: def $al killed $al killed $eax
++; X86-AVX512BW-NEXT:    vzeroupper
++; X86-AVX512BW-NEXT:    retl
++;
++; X64-AVX512BW-LABEL: julia_issue36955:
++; X64-AVX512BW:       # %bb.0:
++; X64-AVX512BW-NEXT:    vpsllw $15, %xmm0, %xmm0
++; X64-AVX512BW-NEXT:    vpmovw2m %zmm0, %k0
++; X64-AVX512BW-NEXT:    vpxor %xmm0, %xmm0, %xmm0
++; X64-AVX512BW-NEXT:    vcmpnlepd %zmm0, %zmm1, %k1
++; X64-AVX512BW-NEXT:    kandnw %k0, %k1, %k0
++; X64-AVX512BW-NEXT:    kandw %k1, %k0, %k0
++; X64-AVX512BW-NEXT:    knotw %k1, %k1
++; X64-AVX512BW-NEXT:    korw %k1, %k0, %k0
++; X64-AVX512BW-NEXT:    kmovd %k0, %eax
++; X64-AVX512BW-NEXT:    # kill: def $al killed $al killed $eax
++; X64-AVX512BW-NEXT:    vzeroupper
++; X64-AVX512BW-NEXT:    retq
++  %fcmp = fcmp ugt <8 x double> %a, zeroinitializer
++  %xor = xor <8 x i1> %fcmp, <i1 true, i1 true, i1 true, i1 true, i1 true, i1 true, i1 true, i1 true>
++  %select1 = select <8 x i1> %fcmp, <8 x i1> zeroinitializer, <8 x i1> %mask
++  %select2 = select <8 x i1> %xor, <8 x i1> <i1 true, i1 true, i1 true, i1 true, i1 true, i1 true, i1 true, i1 true>, <8 x i1> %select1
++  %ret = bitcast <8 x i1> %select2 to i8
++  ret i8 %ret
++}
+diff --git a/test/CodeGen/X86/combine-bitselect.ll b/test/CodeGen/X86/combine-bitselect.ll
+index 8cb6a4dca09..3c08a871c86 100644
+--- a/test/CodeGen/X86/combine-bitselect.ll
++++ b/test/CodeGen/X86/combine-bitselect.ll
+@@ -616,13 +616,13 @@ define <4 x i1> @bitselect_v4i1_loop(<4 x i32> %a0, <4 x i32> %a1) {
+ ; AVX512F:       # %bb.0: # %bb
+ ; AVX512F-NEXT:    # kill: def $xmm1 killed $xmm1 def $zmm1
+ ; AVX512F-NEXT:    # kill: def $xmm0 killed $xmm0 def $zmm0
+-; AVX512F-NEXT:    vpbroadcastd {{.*#+}} xmm2 = [12,12,12,12]
+-; AVX512F-NEXT:    vpcmpeqd %zmm2, %zmm1, %k1
++; AVX512F-NEXT:    vptestmd %zmm0, %zmm0, %k1
++; AVX512F-NEXT:    vpbroadcastd {{.*#+}} xmm0 = [12,12,12,12]
+ ; AVX512F-NEXT:    vpbroadcastd {{.*#+}} xmm2 = [15,15,15,15]
+-; AVX512F-NEXT:    vpcmpeqd %zmm2, %zmm1, %k2
+-; AVX512F-NEXT:    vptestnmd %zmm0, %zmm0, %k0 {%k2}
+-; AVX512F-NEXT:    vptestmd %zmm0, %zmm0, %k1 {%k1}
+-; AVX512F-NEXT:    korw %k0, %k1, %k1
++; AVX512F-NEXT:    vpcmpeqd %zmm2, %zmm1, %k0
++; AVX512F-NEXT:    vpcmpeqd %zmm0, %zmm1, %k2 {%k1}
++; AVX512F-NEXT:    kandnw %k0, %k1, %k0
++; AVX512F-NEXT:    korw %k0, %k2, %k1
+ ; AVX512F-NEXT:    vpternlogd $255, %zmm0, %zmm0, %zmm0 {%k1} {z}
+ ; AVX512F-NEXT:    # kill: def $xmm0 killed $xmm0 killed $zmm0
+ ; AVX512F-NEXT:    vzeroupper
+diff --git a/test/CodeGen/X86/vec_ssubo.ll b/test/CodeGen/X86/vec_ssubo.ll
+index 515dc5c5aa2..dfb1e7c4dee 100644
+--- a/test/CodeGen/X86/vec_ssubo.ll
++++ b/test/CodeGen/X86/vec_ssubo.ll
+@@ -1640,7 +1640,7 @@ define <4 x i32> @ssubo_v4i1(<4 x i1> %a0, <4 x i1> %a1, <4 x i1>* %p2) nounwind
+ ; AVX512-NEXT:    vptestmd %xmm1, %xmm1, %k0
+ ; AVX512-NEXT:    vpslld $31, %xmm0, %xmm0
+ ; AVX512-NEXT:    vptestmd %xmm0, %xmm0, %k1
+-; AVX512-NEXT:    vptestnmd %xmm1, %xmm1, %k2 {%k1}
++; AVX512-NEXT:    kandnw %k1, %k0, %k2
+ ; AVX512-NEXT:    kxorw %k0, %k1, %k0
+ ; AVX512-NEXT:    kxorw %k2, %k0, %k1
+ ; AVX512-NEXT:    vpcmpeqd %xmm0, %xmm0, %xmm0
+diff --git a/test/CodeGen/X86/vec_usubo.ll b/test/CodeGen/X86/vec_usubo.ll
+index c5a7b19cf14..367c491d25a 100644
+--- a/test/CodeGen/X86/vec_usubo.ll
++++ b/test/CodeGen/X86/vec_usubo.ll
+@@ -1244,10 +1244,10 @@ define <4 x i32> @usubo_v4i1(<4 x i1> %a0, <4 x i1> %a1, <4 x i1>* %p2) nounwind
+ ; AVX512:       # %bb.0:
+ ; AVX512-NEXT:    vpslld $31, %xmm0, %xmm0
+ ; AVX512-NEXT:    vptestmd %xmm0, %xmm0, %k0
+-; AVX512-NEXT:    vpslld $31, %xmm1, %xmm1
+-; AVX512-NEXT:    vptestmd %xmm1, %xmm1, %k1
++; AVX512-NEXT:    vpslld $31, %xmm1, %xmm0
++; AVX512-NEXT:    vptestmd %xmm0, %xmm0, %k1
+ ; AVX512-NEXT:    kxorw %k1, %k0, %k1
+-; AVX512-NEXT:    vptestnmd %xmm0, %xmm0, %k2 {%k1}
++; AVX512-NEXT:    kandnw %k1, %k0, %k2
+ ; AVX512-NEXT:    vpcmpeqd %xmm0, %xmm0, %xmm0
+ ; AVX512-NEXT:    vmovdqa32 %xmm0, %xmm0 {%k2} {z}
+ ; AVX512-NEXT:    kmovd %k1, %eax

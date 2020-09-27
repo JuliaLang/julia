@@ -25,6 +25,9 @@ checknonsingular(info) = checknonsingular(info, Val{true}())
 
 Test that a factorization of a matrix succeeded.
 
+!!! compat "Julia 1.6"
+    `issuccess(::CholeskyPivoted)` requires Julia 1.6 or later.
+
 ```jldoctest
 julia> F = cholesky([1 0; 0 1]);
 
@@ -138,15 +141,6 @@ function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
     else
         return ldiv!(A, copyto!(Y, view(B, 1:m, :)))
     end
-end
-
-function ldiv!(Y::AbstractVecOrMat, adjA::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
-    checksquare(adjA)
-    return ldiv!(adjA, copyto!(Y, B))
-end
-function ldiv!(Y::AbstractVecOrMat, transA::Transpose{<:Any,<:Factorization}, B::AbstractVecOrMat)
-    checksquare(transA)
-    return ldiv!(transA, copyto!(Y, B))
 end
 
 # fallback methods for transposed solves

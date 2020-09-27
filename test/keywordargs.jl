@@ -7,6 +7,11 @@ kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
     @test kwf1(2, tens=6) == 62
     @test kwf1(1, hundreds=2, tens=7) == 271
     @test kwf1(3, tens=7, hundreds=2) == 273
+    let tens = 2, hundreds = 4
+        @test kwf1(8; tens, hundreds) == 428
+        nt = (hundreds = 5,)
+        @test kwf1(7; nt.hundreds) == 507
+    end
 
     @test_throws MethodError kwf1()             # no method, too few args
     @test_throws MethodError kwf1(1, z=0)       # unsupported keyword
@@ -282,9 +287,17 @@ end
     @test g21147(((1,),), 2) === Int
 end
 @testset "issue #21510" begin
-    f21510(; Base.@nospecialize a = 2) = a
+    f21510(; @nospecialize a = 2) = a
     @test f21510(a=:b) == :b
     @test f21510() == 2
+end
+@testset "issue #34516" begin
+    f34516(; @nospecialize(x)) = 0
+    f34516(y; @nospecialize(x::Any)) = 1
+    @test_throws UndefKeywordError f34516()
+    @test_throws UndefKeywordError f34516(1)
+    g34516(@nospecialize(x); k=0) = 0
+    @test first(methods(Core.kwfunc(g34516))).nospecialize != 0
 end
 @testset "issue #21518" begin
     a = 0
@@ -357,3 +370,7 @@ end
 # issue #33026
 using InteractiveUtils
 @test (@which kwf1(1, tens=2)).line > 0
+
+no_kw_args(x::Int) = 0
+@test_throws MethodError no_kw_args(1, k=1)
+@test_throws MethodError no_kw_args("", k=1)

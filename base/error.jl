@@ -62,25 +62,39 @@ rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 struct InterpreterIP
     code::Union{CodeInfo,Core.MethodInstance,Nothing}
     stmt::Csize_t
+    mod::Union{Module,Nothing}
 end
 
-# convert dual arrays (ips, interpreter_frames) to a single array of locations
-function _reformat_bt(bt, bt2)
+# convert dual arrays (raw bt buffer, array of GC managed values) to a single
+# array of locations
+function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
     ret = Vector{Union{InterpreterIP,Ptr{Cvoid}}}()
     i, j = 1, 1
     while i <= length(bt)
         ip = bt[i]::Ptr{Cvoid}
-        if UInt(ip) == (-1 % UInt)
-            # The next one is really a CodeInfo
-            push!(ret, InterpreterIP(
-                bt2[j],
-                bt[i+2]))
-            j += 1
-            i += 3
-        else
-            push!(ret, Ptr{Cvoid}(ip))
+        if UInt(ip) != (-1 % UInt) # See also jl_bt_is_native
+            # native frame
+            push!(ret, ip)
             i += 1
+            continue
         end
+        # Extended backtrace entry
+        entry_metadata = reinterpret(UInt, bt[i+1])::UInt
+        njlvalues =  entry_metadata & 0x7
+        nuintvals = (entry_metadata >> 3) & 0x7
+        tag       = (entry_metadata >> 6) & 0xf
+        header    =  entry_metadata >> 10
+        if tag == 1 # JL_BT_INTERP_FRAME_TAG
+            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Nothing}
+            mod = njlvalues == 2 ? bt2[j+1]::Union{Module,Nothing} : nothing
+            push!(ret, InterpreterIP(code, header, mod))
+        else
+            # Tags we don't know about are an error
+            throw(ArgumentError("Unexpected extended backtrace entry tag $tag at bt[$i]"))
+        end
+        # See jl_bt_entry_size
+        j += Int(njlvalues)
+        i += 2 + Int(njlvalues + nuintvals)
     end
     ret
 end
@@ -127,7 +141,7 @@ uncaught exceptions.
     future release (see https://github.com/JuliaLang/julia/pull/29901).
 """
 function catch_stack(task=current_task(); include_bt=true)
-    raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, include_bt, typemax(Cint))
+    raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, include_bt, typemax(Cint))::Vector{Any}
     formatted = Any[]
     stride = include_bt ? 3 : 1
     for i = reverse(1:stride:length(raw))
@@ -145,12 +159,13 @@ end
 
 ## system error handling ##
 """
-    systemerror(sysfunc, iftrue)
+    systemerror(sysfunc[, errno::Cint=Libc.errno()])
+    systemerror(sysfunc, iftrue::Bool)
 
 Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`
 """
-systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
-
+systemerror(p, b::Bool; extrainfo=nothing) = b ? systemerror(p, extrainfo=extrainfo) : nothing
+systemerror(p, errno::Cint=Libc.errno(); extrainfo=nothing) = throw(Main.Base.SystemError(string(p), errno, extrainfo))
 
 ## system errors from Windows API functions
 struct WindowsErrorInfo
@@ -158,12 +173,14 @@ struct WindowsErrorInfo
     extrainfo
 end
 """
-    windowserror(sysfunc, iftrue)
+    windowserror(sysfunc[, code::UInt32=Libc.GetLastError()])
+    windowserror(sysfunc, iftrue::Bool)
 
-Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref) instead
-of setting [`errno`](@ref).
+Like [`systemerror`](@ref), but for Windows API functions that use [`GetLastError`](@ref Base.Libc.GetLastError) to
+return an error code instead of setting [`errno`](@ref Base.Libc.errno).
 """
-windowserror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), WindowsErrorInfo(Libc.GetLastError(), extrainfo))) : nothing
+windowserror(p, b::Bool; extrainfo=nothing) = b ? windowserror(p, extrainfo=extrainfo) : nothing
+windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Main.Base.SystemError(string(p), 0, WindowsErrorInfo(code, extrainfo)))
 
 
 ## assertion macro ##

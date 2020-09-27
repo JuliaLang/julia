@@ -168,6 +168,13 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
+haskey(m::RegexMatch, idx::Integer) = idx in eachindex(m.captures)
+function haskey(m::RegexMatch, name::Symbol)
+    idx = PCRE.substring_number_from_name(m.regex.regex, name)
+    return idx > 0
+end
+haskey(m::RegexMatch, name::AbstractString) = haskey(m, Symbol(name))
+
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
@@ -259,7 +266,7 @@ julia> m = match(rx, "cabac")
 RegexMatch("aba", 1="b")
 
 julia> m.captures
-1-element Array{Union{Nothing, SubString{String}},1}:
+1-element Vector{Union{Nothing, SubString{String}}}:
  "b"
 
 julia> m.match
@@ -340,6 +347,23 @@ matching sequence is found, like the return value of [`findnext`](@ref).
 
 If `overlap=true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from disjoint character ranges.
+
+# Examples
+```jldoctest
+julia> findall("a", "apple")
+1-element Vector{UnitRange{Int64}}:
+ 1:1
+
+julia> findall("nana", "banana")
+1-element Vector{UnitRange{Int64}}:
+ 3:6
+
+julia> findall("a", "banana")
+3-element Vector{UnitRange{Int64}}:
+ 2:2
+ 4:4
+ 6:6
+```
 """
 function findall(t::Union{AbstractString,Regex}, s::AbstractString; overlap::Bool=false)
     found = UnitRange{Int}[]
@@ -405,11 +429,11 @@ struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
-ncodeunits(s::SubstitutionString) = ncodeunits(s.string)
-codeunit(s::SubstitutionString) = codeunit(s.string)
-codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)
-isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)
-iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)
+ncodeunits(s::SubstitutionString) = ncodeunits(s.string)::Int
+codeunit(s::SubstitutionString) = codeunit(s.string)::CodeunitType
+codeunit(s::SubstitutionString, i::Integer) = codeunit(s.string, i)::Union{UInt8, UInt16, UInt32}
+isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)::Bool
+iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)::Union{Nothing,Tuple{AbstractChar,Int}}
 
 function show(io::IO, s::SubstitutionString)
     print(io, "s")
@@ -565,8 +589,8 @@ end
 """
     eachmatch(r::Regex, s::AbstractString; overlap::Bool=false)
 
-Search for all matches of a the regular expression `r` in `s` and return a iterator over the
-matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
+Search for all matches of the regular expression `r` in `s` and return an iterator over the
+matches. If `overlap` is `true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from distinct character ranges.
 
 # Examples
@@ -578,12 +602,12 @@ julia> m = eachmatch(rx, "a1a2a3a")
 Base.RegexMatchIterator(r"a.a", "a1a2a3a", false)
 
 julia> collect(m)
-2-element Array{RegexMatch,1}:
+2-element Vector{RegexMatch}:
  RegexMatch("a1a")
  RegexMatch("a3a")
 
 julia> collect(eachmatch(rx, "a1a2a3a", overlap = true))
-3-element Array{RegexMatch,1}:
+3-element Vector{RegexMatch}:
  RegexMatch("a1a")
  RegexMatch("a2a")
  RegexMatch("a3a")
@@ -643,7 +667,7 @@ function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,Abstrac
     shared = mask
     for r in (r1, rs...)
         r isa Regex || continue
-        if match_opts == nothing
+        if match_opts === nothing
             match_opts = r.match_options
             compile_opts = r.compile_options & ~mask
         else
@@ -669,7 +693,7 @@ regex_opts_str(opts) = (isassigned(_regex_opts_str) ? _regex_opts_str[] : init_r
 # UInt32 to String mapping for some compile options
 const _regex_opts_str = Ref{ImmutableDict{UInt32,String}}()
 
-init_regex() = _regex_opts_str[] = foldl(0:15, init=ImmutableDict{UInt32,String}()) do d, o
+@noinline init_regex() = _regex_opts_str[] = foldl(0:15, init=ImmutableDict{UInt32,String}()) do d, o
     opt = UInt32(0)
     str = ""
     if o & 1 != 0

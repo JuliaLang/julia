@@ -33,7 +33,8 @@ isvalid(value)
 
 Returns `true` if the given value is valid for that type. Types currently can
 be either `AbstractChar` or `String`. Values for `AbstractChar` can be of type `AbstractChar` or [`UInt32`](@ref).
-Values for `String` can be of that type, or `Vector{UInt8}` or `SubString{String}`.
+Values for `String` can be of that type, `SubString{String}`, `Vector{UInt8}`,
+or a contiguous subarray thereof.
 
 # Examples
 ```jldoctest
@@ -46,6 +47,9 @@ true
 julia> isvalid(Char, 0xd799)
 true
 ```
+
+!!! compat "Julia 1.6"
+    Support for subarray values was added in Julia 1.6.
 """
 isvalid(T,value)
 
@@ -198,11 +202,11 @@ function normalize(
 end
 
 function normalize(s::AbstractString, nf::Symbol)
-    utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
-                    nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
-                    nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
+    utf8proc_map(s, nf === :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
+                    nf === :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
+                    nf === :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
                                    | UTF8PROC_COMPAT) :
-                    nf == :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
+                    nf === :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
                                    | UTF8PROC_COMPAT) :
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
@@ -280,6 +284,8 @@ Tests whether a character is a lowercase letter.
 A character is classified as lowercase if it belongs to Unicode category Ll,
 Letter: Lowercase.
 
+See also: [`isuppercase`](@ref).
+
 # Examples
 ```jldoctest
 julia> islowercase('α')
@@ -303,6 +309,8 @@ Tests whether a character is an uppercase letter.
 A character is classified as uppercase if it belongs to Unicode category Lu,
 Letter: Uppercase, or Lt, Letter: Titlecase.
 
+See also: [`islowercase`](@ref).
+
 # Examples
 ```jldoctest
 julia> isuppercase('γ')
@@ -324,6 +332,8 @@ end
     iscased(c::AbstractChar) -> Bool
 
 Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
+
+See also: [`islowercase`](@ref), [`isuppercase`](@ref).
 """
 function iscased(c::AbstractChar)
     cat = category_code(c)
@@ -509,6 +519,8 @@ isxdigit(c::AbstractChar) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 
 Return `s` with all characters converted to uppercase.
 
+See also: [`lowercase`](@ref), [`titlecase`](@ref), [`uppercasefirst`](@ref).
+
 # Examples
 ```jldoctest
 julia> uppercase("Julia")
@@ -521,6 +533,8 @@ uppercase(s::AbstractString) = map(uppercase, s)
     lowercase(s::AbstractString)
 
 Return `s` with all characters converted to lowercase.
+
+See also: [`uppercase`](@ref), [`titlecase`](@ref), [`lowercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -541,6 +555,8 @@ a predicate can be passed as the `wordsep` keyword to determine
 which characters should be considered as word separators.
 See also [`uppercasefirst`](@ref) to capitalize only the first
 character in `s`.
+
+See also: [`uppercase`](@ref), [`lowercase`](@ref), [`uppercasefirst`](@ref).
 
 # Examples
 ```jldoctest

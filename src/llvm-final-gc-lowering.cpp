@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -9,16 +11,12 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
 
 #define DEBUG_TYPE "final_gc_lowering"
-#if JL_LLVM_VERSION < 70000
-#define LLVM_DEBUG DEBUG
-#endif
 
 using namespace llvm;
 
@@ -75,7 +73,8 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     AllocaInst *gcframe = new AllocaInst(
         T_prjlvalue,
         0,
-        ConstantInt::get(T_int32, nRoots + 2));
+        ConstantInt::get(T_int32, nRoots + 2),
+        Align(16));
     gcframe->insertAfter(target);
     gcframe->takeName(target);
 
@@ -84,21 +83,13 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     tempSlot_i8->insertAfter(gcframe);
     Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
     Function *memset = Intrinsic::getDeclaration(F.getParent(), Intrinsic::memset, makeArrayRef(argsT));
-#if JL_LLVM_VERSION >= 70000
-        Value *args[4] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(nRoots+2)), // len
-            ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-#else
-        Value *args[5] = {
-            tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-            ConstantInt::get(T_int32, sizeof(jl_value_t*)*(nRoots+2)), // len
-            ConstantInt::get(T_int32, 0), // align
-            ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
-#endif
+    Value *args[4] = {
+        tempSlot_i8, // dest
+        ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
+        ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
+        ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
     CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
+    cast<MemSetInst>(zeroing)->setDestAlignment(16);
     zeroing->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     zeroing->insertAfter(tempSlot_i8);
 
@@ -113,22 +104,25 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(&*(++BasicBlock::iterator(target)));
-    Instruction *inst =
-        builder.CreateStore(
-            ConstantInt::get(T_size, nRoots << 1),
-            builder.CreateBitCast(
-                builder.CreateConstGEP1_32(gcframe, 0),
-                T_size->getPointerTo()));
+    StoreInst *inst = builder.CreateAlignedStore(
+                ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
+                builder.CreateBitCast(
+                        builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0),
+                        T_size->getPointerTo()),
+                Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     Value *pgcstack = builder.Insert(getPgcstack(ptlsStates));
-    inst = builder.CreateStore(
-        builder.CreateLoad(pgcstack),
-        builder.CreatePointerCast(
-            builder.CreateConstGEP1_32(gcframe, 1),
-            PointerType::get(T_ppjlvalue, 0)));
+    inst = builder.CreateAlignedStore(
+            builder.CreateAlignedLoad(pgcstack, Align(sizeof(void*))),
+            builder.CreatePointerCast(
+                    builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1),
+                    PointerType::get(T_ppjlvalue, 0)),
+            Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    builder.CreateStore(gcframe, builder.CreateBitCast(pgcstack,
-        PointerType::get(PointerType::get(T_prjlvalue, 0), 0)));
+    inst = builder.CreateAlignedStore(
+            gcframe,
+            builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
+            Align(sizeof(void*)));
 }
 
 void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
@@ -139,14 +133,15 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(target);
     Instruction *gcpop =
-        cast<Instruction>(builder.CreateConstGEP1_32(gcframe, 1));
-    Instruction *inst = builder.CreateLoad(gcpop);
+        cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
+    Instruction *inst = builder.CreateAlignedLoad(gcpop, Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    inst = builder.CreateStore(
+    inst = builder.CreateAlignedStore(
         inst,
         builder.CreateBitCast(
             builder.Insert(getPgcstack(ptlsStates)),
-            PointerType::get(T_prjlvalue, 0)));
+            PointerType::get(T_prjlvalue, 0)),
+        Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
 }
 
@@ -164,7 +159,7 @@ Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
     index = builder.CreateAdd(index, ConstantInt::get(T_int32, 2));
 
     // Lower the intrinsic as a GEP.
-    auto gep = builder.CreateGEP(gcframe, index);
+    auto gep = builder.CreateInBoundsGEP(T_prjlvalue, gcframe, index);
     gep->takeName(target);
     return gep;
 }
@@ -179,8 +174,8 @@ Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 Instruction *FinalLowerGC::getPgcstack(Instruction *ptlsStates)
 {
     Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
-    return GetElementPtrInst::Create(
-        nullptr,
+    return GetElementPtrInst::CreateInBounds(
+        T_ppjlvalue,
         ptlsStates,
         ArrayRef<Value*>(offset),
         "jl_pgcstack");
@@ -312,7 +307,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
                 continue;
             }
 
-            auto callee = CI->getCalledValue();
+            Value *callee = CI->getCalledOperand();
 
             if (callee == newGCFrameFunc) {
                 replaceInstruction(CI, lowerNewGCFrame(CI, F), it);

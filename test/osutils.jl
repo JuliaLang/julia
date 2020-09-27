@@ -49,7 +49,7 @@ end
 if Sys.iswindows()
     @testset "path variables use correct path delimiters on windows" begin
         for path in (Base.SYSCONFDIR, Base.DATAROOTDIR, Base.DOCDIR,
-                     Base.LIBDIR, Base.PRIVATE_LIBDIR, Base.INCLUDEDIR)
+                     Base.LIBDIR, Base.PRIVATE_LIBDIR, Base.INCLUDEDIR, Base.LIBEXECDIR)
             @test !occursin("/", path)
             @test !occursin("\\\\", path)
         end

@@ -3,6 +3,8 @@
 Julia installation is straightforward, whether using precompiled binaries or compiling from source.
 Download and install Julia by following the instructions at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 
+If you are coming to Julia from one of the following languages, then you should start by reading the section on noteworthy differences from [MATLAB](@ref Noteworthy-differences-from-MATLAB), [R](@ref Noteworthy-differences-from-R), [Python](@ref Noteworthy-differences-from-Python), [C/C++](@ref Noteworthy-differences-from-C/C) or [Common Lisp](@ref Noteworthy-differences-from-Common-Lisp). This will help you avoid some common pitfalls since Julia differs from those languages in many subtle ways.
+
 The easiest way to learn and experiment with Julia is by starting an interactive session (also
 known as a read-eval-print loop or "REPL") by double-clicking the Julia executable or running
 `julia` from the command line:
@@ -84,6 +86,10 @@ Greetings! 你好! 안녕하세요?
 ...
 ```
 
+Note that although you should have a `~/.julia` directory once you've run Julia for the
+first time, you may need to create the `~/.julia/config` folder and the
+`~/.julia/config/startup.jl` file if you use it.
+
 There are various ways to run Julia code and provide options, similar to those available for the
 `perl` and `ruby` programs:
 
@@ -105,6 +111,7 @@ julia [switches] -- [programfile] [args...]
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
+|`-t`, `--threads {N\|auto`}            |Enable N threads; `auto` currently sets N to the number of local CPU threads but this might change in the future|
 |`-p`, `--procs {N\|auto`}              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|
