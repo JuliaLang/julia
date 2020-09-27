@@ -303,7 +303,6 @@ Base.@timev
 Base.@timed
 Base.@elapsed
 Base.@allocated
-Base.@compiletime
 Base.EnvDict
 Base.ENV
 Base.Sys.isunix

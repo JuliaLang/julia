@@ -970,7 +970,6 @@ export
     @timev,
     @elapsed,
     @allocated,
-    @compiletime,
 
     # tasks
     @sync,

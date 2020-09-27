@@ -186,16 +186,6 @@ let
     @test gcstats === stats.gcstats
 end
 
-let
-    struct NewType
-        x::Array{Float64,2}
-    end
-    nt = NewType(rand(4,4))
-    foo(nt::NewType) = nt.x * nt.x
-    @test (@compiletime foo(x)) > 0     # given NewType, this must include compilation
-    @test (@compiletime foo(x)) == 0    # given repeat, this must be compiled already
-end
-
 # problem after #11801 - at global scope
 t11801 = @elapsed 1+1
 @test isa(t11801,Real) && t11801 >= 0
