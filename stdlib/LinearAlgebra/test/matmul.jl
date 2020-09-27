@@ -307,11 +307,13 @@ end
 
     @test muladd(A23, v3, 100) == A23 * v3 .+ 100
     @test muladd(A23, v3, u2) == A23 * v3 .+ u2
+    @test muladd(A23, v3, im) isa Vector{Complex{Int}}
     @test_throws DimensionMismatch muladd(A23, v3, ones(2,2))
 
     @test muladd(v3', B34, 0) isa Adjoint
     @test muladd(v3', B34, 2im) == v3' * B34 .+ 2im
     @test muladd(v3', B34, w4') == v3' * B34 .+ w4'
+    @test_throws DimensionMismatch muladd(v3', B34, ones(1,4))
 
     @test muladd(u2, v3', 0) isa Matrix
     @test muladd(u2, v3', 99) == u2 * v3' .+ 99
