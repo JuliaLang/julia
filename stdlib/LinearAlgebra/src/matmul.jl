@@ -202,18 +202,37 @@ julia> muladd(A, B, C)
  107.0  107.0
 ```
 """
-function Base.muladd(A::AbstractMatrix{TA}, y::AbstractVector{Ty}, z::AbstractVector{Tz}) where {TA, Ty, Tz}
-    T = promote_type(TA, Ty, Tz)
-    C = similar(A, T, size(A,1))
+function Base.muladd(A::AbstractMatrix{TA}, y::AbstractVector{Ty}, z) where {TA, Ty}
+    T = promote_type(TA, Ty, z isa AbstractArray ? eltype(z) : typeof(z))
+    C = similar(A, T, axes(A,1))
     C .= z
     mul!(C, A, y, true, true)
 end
 
-function Base.muladd(A::AbstractMatrix{TA}, y::AbstractMatrix{Ty}, z::AbstractVecOrMat{Tz}) where {TA, Ty, Tz}
-    T = promote_type(TA, Ty, Tz)
-    C = similar(A, T, size(A,1), size(y,2))
+function Base.muladd(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}, z) where {TA, TB}
+    T = promote_type(TA, TB, z isa AbstractArray ? eltype(z) : typeof(z))
+    C = similar(A, T, axes(A,1), axes(B,2))
     C .= z
-    mul!(C, A, y, true, true)
+    mul!(C, A, B, true, true)
+end
+
+Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z) = muladd(A', x', z')'
+Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z) = transpose(muladd(transpose(A), transpose(x), transpose(z)))
+
+function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z)
+    if z isa AbstractArray
+        ndims(z) > 2 && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
+    end
+    (u .* v) .+ z
+end
+
+function Base.muladd(u::AdjOrTransAbsVec, v::AbstractVector, z)
+    uv = _dot_nonrecursive(u, v)
+    if z isa AbstractArray
+        uv isa AbstractArray && ndims(uv) <= ndims(z) ||
+            throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
+    end
+    uv .+ z
 end
 
 """
