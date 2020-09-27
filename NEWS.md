@@ -177,7 +177,7 @@ Standard library changes
 
 
 #### Distributed
-
+* `RemoteChannel` is now iterable ([#33555]).
 
 #### UUIDs
 * Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
