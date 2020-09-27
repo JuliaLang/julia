@@ -2366,6 +2366,16 @@ have_entry:
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
+    if (jl_has_free_typevars(F)) {
+        jl_array_t *free_typevars = jl_find_free_typevars(F);
+        JL_GC_PUSH1(&free_typevars);
+        assert(jl_array_len(free_typevars) >= 1);
+        char *typevar_name = jl_symbol_name(((jl_tvar_t*)jl_arrayref(free_typevars, 0))->name);
+        jl_errorf("Trying to call Type with free TypeVar \"%s\".\n"
+            "Did you accidentally call a type constructor inside a UnionAll, e.g. "
+            "\"A{B{T}()} where T\"?", typevar_name);
+        JL_GC_POP();
+    }
     size_t world = jl_get_ptls_states()->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
