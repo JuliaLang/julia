@@ -62,8 +62,6 @@ function getindex(g::Generator{<:AbstractArray}, I...)
     end
 end
 
-getindex(g::Generator, I...) = collect(g)[I...]
-
 firstindex(g::Generator) = firstindex(g.iter)
 lastindex(g::Generator) = lastindex(g.iter)
 
