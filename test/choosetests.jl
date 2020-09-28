@@ -37,7 +37,7 @@ function choosetests(choices = [])
         "keywordargs", "numbers", "subtype",
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
-        "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
+        "arrayops", "tuple", "reduce", "reducedim",
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",

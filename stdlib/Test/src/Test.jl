@@ -1114,6 +1114,7 @@ function testset_beginend(args, tests, source)
             end
         catch err
             err isa InterruptException && rethrow()
+            Base.display_error(Base.catch_stack())
             # something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
@@ -1188,6 +1189,7 @@ function testset_forloop(args, testloop, source)
             $(esc(tests))
         catch err
             err isa InterruptException && rethrow()
+            Base.display_error(Base.catch_stack())
             # Something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
