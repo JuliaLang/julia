@@ -149,7 +149,8 @@ end
 
 A macro to execute an expression, printing the time it took to execute, the number of
 allocations, and the total number of bytes its execution caused to be allocated, before
-returning the value of the expression.
+returning the value of the expression. If the time reported includes time spent doing 
+garbage collection (gc) or compilation, that will also be highlighted as a %.
 
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
@@ -160,8 +161,13 @@ See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
     reduce noise.
 
 ```julia-repl
-julia> @time rand(10^6);
-  0.001525 seconds (7 allocations: 7.630 MiB)
+julia> x = rand(10,10);
+
+julia> @time x * x;
+  0.606588 seconds (2.19 M allocations: 116.555 MiB, 3.75% gc time, 99.94% compilation time)
+
+julia> @time x * x;
+  0.000009 seconds (1 allocation: 896 bytes)
 
 julia> @time begin
            sleep(0.3)
