@@ -299,6 +299,61 @@ Base.step(r::ConstantRange) = 0
         end
     end
 end
+@testset "insorted" begin
+    numTypes = [Int8,  Int16,  Int32,  Int64,  Int128,
+                UInt8, UInt16, UInt32, UInt64, UInt128,
+                Float16, Float32, Float64, BigInt, BigFloat]
+
+    @test insorted(1, collect(1:10), by=(>=(5)))
+    @test insorted(10, collect(1:10), by=(>=(5)))
+
+    for R in numTypes, T in numTypes
+        @test !insorted(T(0), R[1, 1, 2, 2, 3, 3])
+        @test insorted(T(1), R[1, 1, 2, 2, 3, 3])
+        @test insorted(T(2), R[1, 1, 2, 2, 3, 3])
+        @test !insorted(T(4), R[1, 1, 2, 2, 3, 3])
+        @test !insorted(2.5, R[1, 1, 2, 2, 3, 3])
+
+        @test !insorted(T(0), 1:3)
+        @test insorted(T(1), 1:3)
+        @test insorted(T(2), 1:3)
+        @test !insorted(T(4), 1:3)
+
+        @test insorted(T(1), R.(collect(1:10)), by=(>=(5)))
+        @test insorted(T(10), R.(collect(1:10)), by=(>=(5)))
+    end
+
+    for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
+        rg_r = reverse(rg)
+        rgv, rgv_r = collect(rg), collect(rg_r)
+        for i = I
+            @test insorted(i,rg) === insorted(i,rgv)
+            @test insorted(i,rg_r) === insorted(i,rgv_r,rev=true)
+        end
+    end
+
+    rg = 0.0:0.01:1.0
+    for i = 2:101
+        @test insorted(rg[i], rg)
+        @test !insorted(prevfloat(rg[i]), rg)
+        @test !insorted(nextfloat(rg[i]), rg)
+    end
+
+    rg_r = reverse(rg)
+    for i = 1:100
+        @test insorted(rg_r[i], rg_r)
+        @test !insorted(prevfloat(rg_r[i]), rg_r)
+        @test !insorted(nextfloat(rg_r[i]), rg_r)
+    end
+
+    @test insorted(1, 1:10) == insorted(1, collect(1:10), by=(>=(5)))
+    @test insorted(10, 1:10) == insorted(10, collect(1:10), by=(>=(5)))
+
+    @test !insorted(0, [])
+    @test !insorted(0, [1,2,3])
+    @test !insorted(4, [1,2,3])
+    @test insorted(3, [10,8,6,9,4,7,2,5,3,1], by=(x -> iseven(x) ? x+5 : x), rev=true)
+end
 @testset "PartialQuickSort" begin
     a = rand(1:10000, 1000)
     # test PartialQuickSort only does a partial sort

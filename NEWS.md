@@ -76,6 +76,7 @@ New library functions
 * New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more
   efficiently ([#35816]).
 * New function `addenv` for adding environment mappings into a `Cmd` object, returning the new `Cmd` object.
+* New function `insorted` for determining whether an element is in a sorted collection or not ([#37490]).
 
 New library features
 --------------------

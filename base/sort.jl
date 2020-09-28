@@ -27,6 +27,7 @@ export # also exported by Base
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     # order & algorithm:
     sort,
     sort!,
@@ -407,6 +408,39 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 ```
 """ searchsortedlast
 
+"""
+    insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+
+Determine whether an item is in the given sorted collection, in the sense that
+it is [`==`](@ref) to one of the values of the collection according to the order
+specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
+sorted in that order, see [`sort`](@ref) for the keywords. See also
+[`in`](@ref). Returns a `Bool` value.
+
+# Examples
+```jldoctest
+julia> insorted(4, [1, 2, 4, 5, 5, 7]) # single match
+true
+
+julia> insorted(5, [1, 2, 4, 5, 5, 7]) # multiple matches
+true
+
+julia> insorted(3, [1, 2, 4, 5, 5, 7]) # no match
+false
+
+julia> insorted(9, [1, 2, 4, 5, 5, 7]) # no match
+false
+
+julia> insorted(0, [1, 2, 4, 5, 5, 7]) # no match
+false
+```
+
+!!! compat "Julia 1.6"
+     `insorted` was added in Julia 1.6.
+"""
+function insorted end
+insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
+insorted(x, r::AbstractRange) = in(x, r)
 
 ## sorting algorithms ##
 

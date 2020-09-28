@@ -125,6 +125,7 @@ Base.issorted
 Base.Sort.searchsorted
 Base.Sort.searchsortedfirst
 Base.Sort.searchsortedlast
+Base.Sort.insorted
 Base.Sort.partialsort!
 Base.Sort.partialsort
 Base.Sort.partialsortperm
