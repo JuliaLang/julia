@@ -2838,3 +2838,6 @@ f_apply_cglobal(args...) = cglobal(args...)
 @test !Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr}, Ptr])
 f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 @test Base.return_types(f37532, Tuple{Any, Int}) == Any[Int]
+
+# issue #37638
+@test !(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}) <: Vararg)
