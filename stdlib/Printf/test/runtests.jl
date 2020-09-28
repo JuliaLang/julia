@@ -421,7 +421,7 @@ end
 
     # escaped '%'
     @test_throws ArgumentError @sprintf("%s%%%s", "a")
-    @test @sprintf("%s%%%s", "a", "b") == "a%%b"
+    @test @sprintf("%s%%%s", "a", "b") == "a%b"
 
     # print float as %d uses round(x)
     @test @sprintf("%d", 25.5) == "26"
