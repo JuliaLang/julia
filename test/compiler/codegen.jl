@@ -473,3 +473,9 @@ end
     @test contains(llvmstr, str) || llvmstr
     @test f37262(Base.inferencebarrier(true)) === nothing
 end
+
+# issue #37671
+let d = Dict((:a,) => 1, (:a, :b) => 2)
+    @test d[(:a,)] == 1
+    @test d[(:a, :b)] == 2
+end
