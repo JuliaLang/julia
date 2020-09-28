@@ -131,8 +131,8 @@ const char * get_exe_dir()
     return exe_dir;
 }
 
-// Load libjulia and run the REPL with the given arguments (in UTF-8 format)
-int load_repl(const char * exe_dir, int argc, char * argv[])
+// Load libjulia after loading its dependencies
+void * load_libjulia(const char * exe_dir)
 {
     // Pre-load libraries that libjulia needs.
     int deps_len = strlen(dep_libs);
@@ -152,7 +152,13 @@ int load_repl(const char * exe_dir, int argc, char * argv[])
     }
 
     // Last dependency is `libjulia`, so load that and we're done with `dep_libs`!
-    void * libjulia = load_library(curr_dep, exe_dir);
+    return load_library(curr_dep, exe_dir);
+}
+
+// Load libjulia and run the REPL with the given arguments (in UTF-8 format)
+int load_repl(const char * exe_dir, int argc, char * argv[])
+{
+    void * libjulia = load_libjulia(exe_dir);
 
     // Next, if we're on Linux/FreeBSD, set up fast TLS.
 #if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_)

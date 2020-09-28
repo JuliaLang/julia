@@ -52,6 +52,7 @@
 
 // Declarations from `loader_lib.c` and `loader_win_utils.c`
 extern const char * get_exe_dir();
+extern void * load_libjulia(const char *);
 extern int load_repl(const char *, int, char **);
 void print_stderr(const char * msg);
 void print_stderr3(const char * msg1, const char * msg2, const char * msg3);
