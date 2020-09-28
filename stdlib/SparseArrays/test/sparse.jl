@@ -1306,7 +1306,9 @@ end
     for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
         @test m(S, dims=region) == m(A, dims=region)
     end
-
+    for m in [findmax, findmin]
+        @test_throws ArgumentError m(S, (4, 3))
+    end
     S = spzeros(10,8)
     A = Array(S)
     @test argmax(S) == argmax(A) == CartesianIndex(1,1)
