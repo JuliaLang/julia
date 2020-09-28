@@ -1123,6 +1123,31 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *
             write_int32(s, 0);
         }
         write_int32(s, 0); // terminator, for ease of reading
+
+        // Calculate Preferences hash for current package.
+        jl_value_t *prefs_hash = NULL;
+        if (jl_base_module) {
+            // Toplevel module is the module we're currently compiling, use it to get our preferences hash
+            jl_value_t * toplevel = (jl_value_t*)jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
+            jl_value_t * prefs_hash_func = jl_get_global(jl_base_module, jl_symbol("get_preferences_hash"));
+
+            if (toplevel && prefs_hash_func) {
+                // call get_preferences_hash(__toplevel__)
+                jl_value_t *prefs_hash_args[2] = {prefs_hash_func, (jl_value_t*)toplevel};
+                size_t last_age = jl_get_ptls_states()->world_age;
+                jl_get_ptls_states()->world_age = jl_world_counter;
+                prefs_hash = (jl_value_t*)jl_apply(prefs_hash_args, 2);
+                jl_get_ptls_states()->world_age = last_age;
+            }
+        }
+
+        // If we successfully got the preferences, write it out, otherwise write `0` for this `.ji` file.
+        if (prefs_hash != NULL) {
+            write_uint64(s, jl_unbox_uint64(prefs_hash));
+        } else {
+            write_uint64(s, 0);
+        }
+
         // write a dummy file position to indicate the beginning of the source-text
         pos = ios_pos(s);
         ios_seek(s, initial_pos);
