@@ -416,7 +416,7 @@ try
           """)
 
     cachefile = Base.compilecache(Base.PkgId("FooBar"))
-    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"))
+    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), Base.TOMLCache())
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)

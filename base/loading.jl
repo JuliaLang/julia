@@ -322,6 +322,31 @@ function manifest_deps_get(env::String, where::PkgId, name::String, cache::TOMLC
     return nothing
 end
 
+function uuid_in_environment(project_file::String, uuid::UUID, cache::TOMLCache)
+    # First, check to see if we're looking for the environment itself
+    proj_uuid = get(parsed_toml(cache, project_file), "uuid", nothing)
+    if proj_uuid !== nothing && UUID(proj_uuid) == uuid
+        return true
+    end
+
+    # Check to see if there's a Manifest.toml associated with this project
+    manifest_file = project_file_manifest_path(project_file, cache)
+    if manifest_file === nothing
+        return false
+    end
+    manifest = parsed_toml(cache, manifest_file)
+    for (dep_name, entries) in manifest
+        for entry in entries
+            entry_uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+            if uuid !== nothing && UUID(entry_uuid) == uuid
+                return true
+            end
+        end
+    end
+    # If all else fails, return `false`
+    return false
+end
+
 function manifest_uuid_path(env::String, pkg::PkgId, cache::TOMLCache)::Union{Nothing,String}
     project_file = env_project_file(env)
     if project_file isa String
@@ -950,7 +975,7 @@ function _require(pkg::PkgId, cache::TOMLCache)
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
                 # spawn off a new incremental pre-compile task for recursive `require` calls
                 # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
-                cachefile = compilecache(pkg, path)
+                cachefile = compilecache(pkg, path, cache)
                 if isa(cachefile, Exception)
                     if precompilableerror(cachefile)
                         verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
@@ -1195,7 +1220,7 @@ end
 @assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), Bool))
 @assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), Bool))
 
-function compilecache_path(pkg::PkgId)::String
+function compilecache_path(pkg::PkgId, cache::TOMLCache)::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
@@ -1205,6 +1230,7 @@ function compilecache_path(pkg::PkgId)::String
         crc = _crc32c(something(Base.active_project(), ""))
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
+        crc = _crc32c(get_preferences_hash(pkg.uuid, cache), crc)
         project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
@@ -1218,18 +1244,17 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, cache::TOMLCache = TOMLCache())
+function compilecache(pkg::PkgId, cache::TOMLCache = TOMLCache(), show_errors::Bool = true)
     path = locate_package(pkg, cache)
     path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
-    return compilecache(pkg, path)
+    return compilecache(pkg, path, cache, show_errors)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = 10
 
-# `show_errors` is an "internal" interface for Pkg.precompile
-function compilecache(pkg::PkgId, path::String, show_errors::Bool = true)
+function compilecache(pkg::PkgId, path::String, cache::TOMLCache = TOMLCache(), show_errors::Bool = true)
     # decide where to put the resulting cache file
-    cachefile = compilecache_path(pkg)
+    cachefile = compilecache_path(pkg, cache)
     cachepath = dirname(cachefile)
     # prune the directory with cache files
     if pkg.uuid !== nothing
@@ -1333,6 +1358,8 @@ function parse_cache_header(f::IO)
         end
         totbytes -= 4 + 4 + n2 + 8
     end
+    prefs_hash = read(f, UInt64)
+    totbytes -= 8
     @assert totbytes == 12 "header of cache file appears to be corrupt"
     srctextpos = read(f, Int64)
     # read the list of modules that are required to be present during loading
@@ -1345,7 +1372,7 @@ function parse_cache_header(f::IO)
         build_id = read(f, UInt64) # build id
         push!(required_modules, PkgId(uuid, sym) => build_id)
     end
-    return modules, (includes, requires), required_modules, srctextpos
+    return modules, (includes, requires), required_modules, srctextpos, prefs_hash
 end
 
 function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
@@ -1354,21 +1381,21 @@ function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
         !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
         ret = parse_cache_header(io)
         srcfiles_only || return ret
-        modules, (includes, requires), required_modules, srctextpos = ret
+        modules, (includes, requires), required_modules, srctextpos, prefs_hash = ret
         srcfiles = srctext_files(io, srctextpos)
         delidx = Int[]
         for (i, chi) in enumerate(includes)
             chi.filename ∈ srcfiles || push!(delidx, i)
         end
         deleteat!(includes, delidx)
-        return modules, (includes, requires), required_modules, srctextpos
+        return modules, (includes, requires), required_modules, srctextpos, prefs_hash
     finally
         close(io)
     end
 end
 
 function cache_dependencies(f::IO)
-    defs, (includes, requires), modules = parse_cache_header(f)
+    defs, (includes, requires), modules, srctextpos, prefs_hash = parse_cache_header(f)
     return modules, map(chi -> (chi.filename, chi.mtime), includes)  # return just filename and mtime
 end
 
@@ -1383,7 +1410,7 @@ function cache_dependencies(cachefile::String)
 end
 
 function read_dependency_src(io::IO, filename::AbstractString)
-    modules, (includes, requires), required_modules, srctextpos = parse_cache_header(io)
+    modules, (includes, requires), required_modules, srctextpos, prefs_hash = parse_cache_header(io)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
     return _read_dependency_src(io, filename)
@@ -1428,6 +1455,37 @@ function srctext_files(f::IO, srctextpos::Int64)
     return files
 end
 
+# Find the Project.toml that we should load/store to for Preferences
+function get_preferences_project_path(uuid::UUID, cache::TOMLCache = TOMLCache())
+    for env in load_path()
+        project_file = env_project_file(env)
+        if !isa(project_file, String)
+            continue
+        end
+        if uuid_in_environment(project_file, uuid, cache)
+            return project_file
+        end
+    end
+    return nothing
+end
+
+function get_preferences(uuid::UUID, cache::TOMLCache = TOMLCache();
+                         prefs_key::String = "compile-preferences")
+    project_path = get_preferences_project_path(uuid, cache)
+    if project_path !== nothing
+        preferences = get(parsed_toml(cache, project_path), prefs_key, Dict{String,Any}())
+        if haskey(preferences, string(uuid))
+            return preferences[string(uuid)]
+        end
+    end
+    # Fall back to default value of "no preferences".
+    return Dict{String,Any}()
+end
+get_preferences_hash(uuid::UUID, cache::TOMLCache = TOMLCache()) = UInt64(hash(get_preferences(uuid, cache)))
+get_preferences_hash(m::Module, cache::TOMLCache = TOMLCache()) = get_preferences_hash(PkgId(m).uuid, cache)
+get_preferences_hash(::Nothing, cache::TOMLCache = TOMLCache()) = UInt64(hash(Dict{String,Any}()))
+
+
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
 stale_cachefile(modpath::String, cachefile::String) = stale_cachefile(modpath, cachefile, TOMLCache())
@@ -1438,7 +1496,7 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-        (modules, (includes, requires), required_modules) = parse_cache_header(io)
+        modules, (includes, requires), required_modules, srctextpos, prefs_hash = parse_cache_header(io)
         id = isempty(modules) ? nothing : first(modules).first
         modules = Dict{PkgId, UInt64}(modules)
 
@@ -1514,6 +1572,12 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
         end
 
         if isa(id, PkgId)
+            curr_prefs_hash = get_preferences_hash(id.uuid, cache)
+            if prefs_hash != curr_prefs_hash
+                @debug "Rejecting cache file $cachefile because preferences hash does not match 0x$(string(prefs_hash, base=16)) != 0x$(string(curr_prefs_hash, base=16))"
+                return true
+            end
+
             get!(PkgOrigin, pkgorigins, id).cachepath = cachefile
         end
 
