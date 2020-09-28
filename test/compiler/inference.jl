@@ -2606,3 +2606,6 @@ for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     @test code[end] == Expr(:unreachable)
     @test_throws TypeError badf()
 end
+
+# issue #37638
+@test !(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}) <: Vararg)
