@@ -352,11 +352,11 @@ Named tuples are very similar to tuples, except that fields can additionally be 
 using dot syntax (`x.a`) in addition to the regular indexing syntax
 (`x[1]`).
 
-## Assignment destructuring and Multiple Return Values
+## Destructuring Assignment and Multiple Return Values
 
-A comma-separated list of variables (optionally wrapped in parentheses) can appear on the left
-side of an assignment: the value on the right side is _destructured_ by iterating over and
-assigned to each variable in turn:
+A comma-separated list of variables (optionally wrapped in parentheses) can appear on the
+left side of an assignment: the value on the right side is _destructured_ by iterating
+over and assigning to each variable in turn:
 
 ```jldoctest
 julia> (a,b,c) = 1:3
@@ -366,9 +366,11 @@ julia> b
 2
 ```
 
-The iterator needs to be at least as long as the number of variables, and any excess elements
-are ignored. Additionally a single underscore `_` (which is an otherwise invalid variable name)
-can be used on the left to avoid assigning specific elements:
+The value on the right should be an iterator (see [Iteration interface](@ref man-interface-iteration))
+at least as long as the number of variables on the left (any excess elements of the
+iterator are ignored). Additionally a single underscore `_` (which is an otherwise invalid
+variable name, see [Allowed Variable Names](@ref man-allowed-variable-names)) can be used
+on the left to avoid assigning specific elements:
 
 ```jldoctest
 julia> _,_,_,d = 1:10
@@ -379,7 +381,7 @@ julia> d
 ```
 
 This can be used to simulate returning multiple values from functions by returning a tuple or
-other iterable value. For example, the following function returns a pair of values:
+other iterable value. For example, the following function returns a two values:
 
 ```jldoctest foofunc
 julia> function foo(a,b)
@@ -396,8 +398,7 @@ julia> foo(2,3)
 (5, 6)
 ```
 
-A typical usage of such a pair of return values, however, extracts each value into a variable.
-Julia supports simple tuple "destructuring" that facilitates this:
+Destructuring assignment extracts each value into a variable:
 
 ```jldoctest foofunc
 julia> x, y = foo(2,3)
@@ -409,16 +410,6 @@ julia> x
 julia> y
 6
 ```
-
-You can also return multiple values using the `return` keyword:
-
-```julia
-function foo(a,b)
-    return a+b, a*b
-end
-```
-
-This has the exact same effect as the previous definition of `foo`.
 
 ## Argument destructuring
 

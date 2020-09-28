@@ -90,7 +90,7 @@ julia> sqrt = 4
 ERROR: cannot assign a value to variable Base.sqrt from module Main
 ```
 
-## Allowed Variable Names
+## [Allowed Variable Names](@id man-allowed-variable-names)
 
 Variable names must begin with a letter (A-Z or a-z), underscore, or a subset of Unicode code
 points greater than 00A0; in particular, [Unicode character categories](http://www.fileformat.info/info/unicode/category/index.htm)
@@ -139,6 +139,11 @@ are treated as equivalent (specifically, Julia identifiers are [NFC](http://www.
 The Unicode characters `ɛ` (U+025B: Latin small letter open e)
 and `µ` (U+00B5: micro sign) are treated as equivalent to the corresponding
 Greek letters, because the former are easily accessible via some input methods.
+
+A name consisting entirely of underscores (`_`) can only be used for assignment or as an
+argument in a function definition (known as an _lvalue_), but its bound value cannot be
+accessed.
+
 
 ## Stylistic Conventions
 
