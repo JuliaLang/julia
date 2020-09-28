@@ -72,11 +72,15 @@ LLVMLINK += -lPollyPPCG -lGPURuntime
 FLAGS += -DUSE_POLLY_ACC
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools # Required to find GPURuntime/GPUJIT.h
 endif
+endif # USE_POLLY
+ifeq ($(USE_RV), 1)
+LLVMLINK += -lRV
+FLAGS += -DUSE_RV
 endif
 else
 RUNTIME_SRCS += anticodegen
 LLVM_LIBS := support
-endif
+endif # JULIACODEGEN
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt

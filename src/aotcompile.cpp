@@ -34,6 +34,9 @@
 #include <polly/Support/LinkGPURuntime.h>
 #endif
 #endif
+#if defined(USE_RV)
+#include <rv/passes.h>
+#endif
 
 // for outputting assembly
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -740,6 +743,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createCFGSimplificationPass());
     PM->add(createLoopDeletionPass());
     PM->add(createInstructionCombiningPass());
+#ifdef USE_RV
+    rv::addRVPasses(*PM);
+#endif
     PM->add(createLoopVectorizePass());
     PM->add(createLoopLoadEliminationPass());
     PM->add(createCFGSimplificationPass());
