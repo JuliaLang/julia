@@ -703,8 +703,8 @@ function promote_typejoin_union(::Type{T}) where T
     end
 end
 
-@pure function typejoin_union_tuple(::Type{T}) where {T}
-    p = (Core.Compiler.unwrap_unionall(T)::DataType).parameters
+@pure function typejoin_union_tuple(T::Type)
+    p = (Base.unwrap_unionall(T)::DataType).parameters
     lr = length(p)::Int
     if lr == 0
         return Tuple{}
@@ -721,7 +721,7 @@ end
             ci = U
         end
         if i == lr && Core.Compiler.isvarargtype(pi)
-            N = (Core.Compiler.unwrap_unionall(pi)::DataType).parameters[2]
+            N = (Base.unwrap_unionall(pi)::DataType).parameters[2]
             c[i] = Vararg{ci, N}
         else
             c[i] = ci
@@ -919,7 +919,9 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     # Now handle the remaining values
     # The typeassert gives inference a helping hand on the element type and dimensionality
     # (work-around for #28382)
-    return copyto_nonleaf!(dest, bc′, iter, state, 1)::(dest isa AbstractArray ? AbstractArray{<:ElType, ndims(dest)} : Any)
+    ElType′ = ElType <: Type ? DataType : ElType
+    RT = dest isa AbstractArray ? AbstractArray{<:ElType′, ndims(dest)} : Any
+    return copyto_nonleaf!(dest, bc′, iter, state, 1)::RT
 end
 
 ## general `copyto!` methods

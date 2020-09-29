@@ -947,17 +947,29 @@ p0 = copy(p)
 
 @testset "Issue #28382: inferrability of broadcast with Union eltype" begin
     @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
+    @test_broken Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
+                                                            Vector{Union{Float64, Missing}}}) ==
+        Vector{<:Union{Float64, Missing}}
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
+        AbstractVector{<:Union{Float64, Missing}}
     @test isequal([1, 2] + [3.0, missing], [4.0, missing])
+    @test_broken Core.Compiler.return_type(+, Tuple{Vector{Int},
+                                                    Vector{Union{Float64, Missing}}}) ==
+        Vector{<:Union{Float64, Missing}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
+        AbstractVector{<:Union{Float64, Missing}}
+    @test_broken Core.Compiler.return_type(+, Tuple{Vector{Int},
+                                                    Vector{Union{Float64, Missing}}}) ==
         Vector{<:Union{Float64, Missing}}
     @test isequal(tuple.([1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
+    @test_broken Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
+                                                            Vector{Union{Float64, Missing}}}) ==
+        Vector{<:Tuple{Int, Any}}
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Tuple{Int, Any}}
+        AbstractVector{<:Tuple{Int, Any}}
     # Check that corner cases do not throw an error
     @test isequal(broadcast(x -> x === 1 ? nothing : x, [1, 2, missing]),
                   [nothing, 2, missing])
@@ -967,4 +979,6 @@ p0 = copy(p)
         [(1.0, "a") (2, "a") (3, "a")
          (1.0, "b") (2, "b") (3, "b")
          (1.0, "c") (2, "c") (3, "c")]
+    @test typeof.([iszero, isdigit]) == [typeof(iszero), typeof(isdigit)]
+    @test typeof.([iszero, iszero]) == [typeof(iszero), typeof(iszero)]
 end
