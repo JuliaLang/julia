@@ -708,7 +708,7 @@ end
     u isa Union && return typejoin(
             typejoin_union_tuple(rewrap_unionall(u.a, T)),
             typejoin_union_tuple(rewrap_unionall(u.b, T)))
-    p = (u::DataType).parameters    
+    p = (u::DataType).parameters
     lr = length(p)::Int
     if lr == 0
         return Tuple{}
