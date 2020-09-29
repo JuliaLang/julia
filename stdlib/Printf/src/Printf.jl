@@ -73,7 +73,7 @@ end
 base(T) = T <: HexBases ? 16 : T <: Val{'o'} ? 8 : 10
 char(::Type{Val{c}}) where {c} = c
 
-@inline function _detectFormat!(f, bytes, len, pos::Int64, fmts::Vector{Spec})
+@inline function _detectFormat!(f, bytes, len, pos::Int, fmts::Vector{Spec})
     leftalign = plus = space = zero = hash = false
     b = bytes[pos]
     pos += 1
