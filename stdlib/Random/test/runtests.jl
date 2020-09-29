@@ -801,3 +801,35 @@ end
 @testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
     @test length.(rand.(T(), 1:3)) == 1:3
 end
+
+@testset "generated scalar integers do not overlap" begin
+    m = MersenneTwister()
+    xs = reinterpret(UInt64, m.ints)
+    x = rand(m, UInt128)  # m.idxI % 16 == 0
+    @test x % UInt64 == xs[end-1]
+    x = rand(m, UInt64)
+    @test x == xs[end-2]
+    x = rand(m, UInt64)
+    @test x == xs[end-3]
+    x = rand(m, UInt64)
+    @test x == xs[end-4]
+    x = rand(m, UInt128) # m.idxI % 16 == 8
+    @test (x >> 64) % UInt64 == xs[end-6]
+    @test x % UInt64 == xs[end-7]
+    x = rand(m, UInt64)
+    @test x == xs[end-8] # should not be == xs[end-7]
+
+    s = Set{UInt64}()
+    n = 0
+    for _=1:2000
+        x = rand(m, rand((UInt64, UInt128, Int64, Int128)))
+        if sizeof(x) == 8
+            push!(s, x % UInt64)
+            n += 1
+        else
+            push!(s, x % UInt64, (x >> 64) % UInt64)
+            n += 2
+        end
+    end
+    @test length(s) == n
+end
