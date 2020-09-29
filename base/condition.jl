@@ -58,7 +58,7 @@ islocked(::AlwaysLockedST) = true
     GenericCondition
 
 Abstract implementation of a condition object
-for synchonizing tasks objects with a given lock.
+for synchronizing tasks objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
     waitq::InvasiveLinkedList{Task}

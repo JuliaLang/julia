@@ -9,7 +9,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall, require_one_based_indexing
+using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -78,7 +78,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 11 # do not make changes without bumping the version #!
+const ser_version = 12 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -235,12 +235,12 @@ function serialize_array_data(s::IO, a)
     require_one_based_indexing(a)
     isempty(a) && return 0
     if eltype(a) === Bool
-        last = a[1]
+        last = a[1]::Bool
         count = 1
         for i = 2:length(a)
-            if a[i] != last || count == 127
+            if a[i]::Bool != last || count == 127
                 write(s, UInt8((UInt8(last) << 7) | count))
-                last = a[i]
+                last = a[i]::Bool
                 count = 1
             else
                 count += 1
@@ -930,7 +930,7 @@ function deserialize_symbol(s::AbstractSerializer, len::Int)
     return sym
 end
 
-deserialize_tuple(s::AbstractSerializer, len) = ntuple(i->deserialize(s), len)
+deserialize_tuple(s::AbstractSerializer, len) = ntupleany(i->deserialize(s), len)
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
@@ -1038,12 +1038,24 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
-    _meth = deserialize(s)
-    if _meth isa Module
-        # pre v1.2, skip
-        _meth = deserialize(s)
+    mod = deserialize(s)
+    if mod isa Module
+        method = deserialize(s)
+    else
+        # files post v1.2 and pre v1.6 are broken
+        method = mod
+        mod = Main
     end
-    return Core.LineInfoNode(_meth::Symbol, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{PhiNode})
+    edges = deserialize(s)
+    if edges isa Vector{Any}
+        edges = Vector{Int32}(edges)
+    end
+    values = deserialize(s)::Vector{Any}
+    return PhiNode(edges, values)
 end
 
 function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
@@ -1155,7 +1167,7 @@ function deserialize_array(s::AbstractSerializer)
     end
     A = Array{elty, length(dims)}(undef, dims)
     s.table[slot] = A
-    sizehint!(s.table, s.counter + div(length(A),4))
+    sizehint!(s.table, s.counter + div(length(A)::Int,4))
     deserialize_fillarray!(A, s)
     return A
 end

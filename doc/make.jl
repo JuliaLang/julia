@@ -1,4 +1,5 @@
 # Install dependencies needed to build the documentation.
+Base.ACTIVE_PROJECT[] = nothing
 empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)
@@ -180,7 +181,7 @@ DocMeta.setdocmeta!(SparseArrays, :DocTestSetup, :(using SparseArrays, LinearAlg
 DocMeta.setdocmeta!(SuiteSparse, :DocTestSetup, :(using SparseArrays, LinearAlgebra, SuiteSparse), recursive=true, warn=false)
 DocMeta.setdocmeta!(UUIDs, :DocTestSetup, :(using UUIDs, Random), recursive=true, warn=false)
 DocMeta.setdocmeta!(Pkg, :DocTestSetup, :(using Pkg, Pkg.Artifacts), recursive=true, warn=false)
-DocMeta.setdocmeta!(Pkg.BinaryPlatforms, :DocTestSetup, :(using Pkg, Pkg.BinaryPlatforms), recursive=true, warn=false)
+DocMeta.setdocmeta!(Base.BinaryPlatforms, :DocTestSetup, :(using Base.BinaryPlatforms), recursive=true, warn=false)
 
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
     global const buildroot = i === nothing ? (@__DIR__) : first(match(r, ARGS[i]).captures)
@@ -194,7 +195,10 @@ else
     Documenter.HTML(
         prettyurls = ("deploy" in ARGS),
         canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
-        assets = ["assets/julia-manual.css", ],
+        assets = [
+            "assets/julia-manual.css",
+            "assets/julia.ico",
+        ],
         analytics = "UA-28835595-6",
         collapselevel = 1,
         sidebar_sitename = false,
@@ -203,7 +207,7 @@ end
 
 makedocs(
     build     = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en"),
-    modules   = [Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
+    modules   = [Main, Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
     doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=only" in ARGS) ? (:only) : ("doctest=true" in ARGS) ? true : false,
     linkcheck = "linkcheck=true" in ARGS,

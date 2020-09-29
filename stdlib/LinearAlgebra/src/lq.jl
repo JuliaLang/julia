@@ -22,7 +22,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64,Matrix{Float64}} with factors L and Q:
+LQ{Float64, Matrix{Float64}} with factors L and Q:
 [-8.60233 0.0; 4.41741 -0.697486]
 [-0.581238 -0.813733; -0.813733 0.581238]
 
@@ -92,7 +92,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64,Matrix{Float64}} with factors L and Q:
+LQ{Float64, Matrix{Float64}} with factors L and Q:
 [-8.60233 0.0; 4.41741 -0.697486]
 [-0.581238 -0.813733; -0.813733 0.581238]
 

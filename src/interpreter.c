@@ -71,8 +71,6 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel);
 
-int jl_is_toplevel_only_expr(jl_value_t *e);
-
 // method definition form
 
 static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
@@ -126,7 +124,7 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     JL_GC_PUSHARGS(argv, nargs - 1);
     size_t i;
     for (i = 1; i < nargs; i++)
-        argv[i - 1] = eval_value(args[i], s);
+        argv[i] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
     jl_value_t *result = jl_invoke(argv[1], &argv[2], nargs - 2, meth);
@@ -335,7 +333,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
             //   %3 = phi (1)[1 => %a], (2)[2 => %b]
             // from = 1, to = closest = 2, i = 1 --> edge = 2, edge_from = 2, from = 2
             for (unsigned j = 0; j < jl_array_len(edges); ++j) {
-                size_t edge_from = jl_unbox_long(jl_arrayref(edges, j)); // 1-indexed
+                size_t edge_from = ((int32_t*)jl_array_data(edges))[j]; // 1-indexed
                 if (edge_from == from + 1) {
                     if (edge == -1)
                         edge = j;
@@ -536,10 +534,22 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)specialize_sym) {
                         jl_set_module_nospecialize(s->module, 0);
                     }
-                    if (jl_expr_nargs(stmt) == 2 && jl_exprarg(stmt, 0) == (jl_value_t*)optlevel_sym) {
-                        if (jl_is_long(jl_exprarg(stmt, 1))) {
-                            int n = jl_unbox_long(jl_exprarg(stmt, 1));
-                            jl_set_module_optlevel(s->module, n);
+                    if (jl_expr_nargs(stmt) == 2) {
+                        if (jl_exprarg(stmt, 0) == (jl_value_t*)optlevel_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                int n = jl_unbox_long(jl_exprarg(stmt, 1));
+                                jl_set_module_optlevel(s->module, n);
+                            }
+                        }
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)compile_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                jl_set_module_compile(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            }
+                        }
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)infer_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                jl_set_module_infer(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            }
                         }
                     }
                 }

@@ -304,14 +304,15 @@ julia> lpad("March", 10)
 "     March"
 ```
 """
-lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = lpad(string(s), n, string(p))
+lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = lpad(string(s)::AbstractString, n, string(p))
 
 function lpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
-    m = signed(n) - length(s)
+    n = Int(n)::Int
+    m = signed(n) - Int(length(s))::Int
     m ≤ 0 && return string(s)
     l = length(p)
     q, r = divrem(m, l)
@@ -331,14 +332,15 @@ julia> rpad("March", 20)
 "March               "
 ```
 """
-rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = rpad(string(s), n, string(p))
+rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = rpad(string(s)::AbstractString, n, string(p))
 
 function rpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
-    m = signed(n) - length(s)
+    n = Int(n)::Int
+    m = signed(n) - Int(length(s))::Int
     m ≤ 0 && return string(s)
     l = length(p)
     q, r = divrem(m, l)
@@ -591,7 +593,7 @@ julia> hex2bytes(s)
  0x39
 
 julia> a = b"01abEF"
-6-element Base.CodeUnits{UInt8,String}:
+6-element Base.CodeUnits{UInt8, String}:
  0x30
  0x31
  0x61

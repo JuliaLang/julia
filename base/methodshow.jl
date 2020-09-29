@@ -2,7 +2,7 @@
 
 # Method and method table pretty-printing
 
-function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (argname, argtype)
+function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
     t = sig.parameters[i]
     if i == nargs && isva && !isvarargtype(t)
         t = Vararg{t,length(sig.parameters)-nargs+1}
@@ -10,10 +10,10 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
-    s = string(n)
+    s = string(n)::String
     i = findfirst(isequal('#'), s)
     if i !== nothing
-        s = s[1:prevind(s, i)]
+        s = s[1:prevind(s, i)::Int]
     end
     if t === Any && !isempty(s)
         return s, ""
@@ -37,7 +37,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
                 return s, string_with_env(env, tt) * "..."
             end
         end
-        return s, string_with_env(env, "Vararg{", tt, ",", tn, "}")
+        return s, string_with_env(env, "Vararg{", tt, ", ", tn, "}")
     end
     return s, string_with_env(env, t)
 end
@@ -80,7 +80,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)
-        sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
+        sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
@@ -88,7 +88,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
             kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
             # ensure the kwarg... is always printed last. The order of the arguments are not
             # necessarily the same as defined in the function
-            i = findfirst(x -> endswith(string(x), "..."), kws)
+            i = findfirst(x -> endswith(string(x)::String, "..."), kws)
             if i !== nothing
                 push!(kws, kws[i])
                 deleteat!(kws, i)
@@ -124,22 +124,27 @@ end
 # (Used by Revise and perhaps other packages.)
 const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
 
+function fixup_stdlib_path(path::String)
+    # The file defining Base.Sys gets included after this file is included so make sure
+    # this function is valid even in this intermediary state
+    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB
+        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+        path = replace(path, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+    end
+    return path
+end
+
 # This function does the method location updating
 function updated_methodloc(m::Method)::Tuple{String, Int32}
     file, line = m.file, m.line
     if methodloc_callback[] !== nothing
         try
-            file, line = invokelatest(methodloc_callback[], m)
+            file, line = invokelatest(methodloc_callback[], m)::Tuple{Symbol, Int32}
         catch
         end
     end
-    # The file defining Base.Sys gets included after this file is included so make sure
-    # this function is valid even in this intermediary state
-    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB
-        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-        file = replace(string(file), normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
-    end
-    return string(file), line
+    file = fixup_stdlib_path(string(file))
+    return file, line
 end
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)

@@ -68,6 +68,19 @@ registries, packages, etc. installed and managed by system administrators.
 `DEPOT_PATH` is populated based on the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH)
 environment variable if set.
 
+## DEPOT_PATH contents
+
+Each entry in `DEPOT_PATH` is a path to a directory which contains subdirectories used by Julia for various purposes.
+Here is an overview of some of the subdirectories that may exist in a depot:
+
+* `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
+* `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
+* `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
+* `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
+* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
+* `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
+* `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
+
 See also:
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 [Code Loading](@ref Code-Loading).
@@ -210,7 +223,7 @@ function init_load_path()
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
         paths = filter!(env -> env !== nothing,
-            [env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
+            String[env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
     end
     append!(empty!(LOAD_PATH), paths)
 end
@@ -234,7 +247,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
-        env == "@stdlib" && return Sys.STDLIB
+        env == "@stdlib" && return Sys.STDLIB::String
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)

@@ -38,6 +38,7 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
+    ComposedFunction,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -457,6 +458,7 @@ export
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     startswith,
 
 # linear algebra
@@ -914,6 +916,7 @@ export
     process_running,
     run,
     setenv,
+    addenv,
     success,
     withenv,
 

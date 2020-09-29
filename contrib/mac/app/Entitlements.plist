@@ -4,6 +4,8 @@
 <dict>
 	<key>com.apple.security.automation.apple-events</key>
 	<true/>
+	<key>com.apple.security.cs.get-task-allow</key>
+	<true/>
 	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
 	<true/>
 	<key>com.apple.security.cs.allow-jit</key>

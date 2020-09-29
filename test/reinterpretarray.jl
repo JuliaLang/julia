@@ -52,6 +52,14 @@ let A = collect(reshape(1:20, 5, 4))
     @test reshape(R, :) isa StridedArray
 end
 
+# and ensure a reinterpret array containing a strided array can have strides computed
+let A = view(reinterpret(Int16, collect(reshape(UnitRange{Int64}(1, 20), 5, 4))), :, 1:2)
+    R = reinterpret(Int32, A)
+    @test strides(R) == (1, 10)
+    @test stride(R, 1) == 1
+    @test stride(R, 2) == 10
+end
+
 @testset "strides" begin
     a = rand(10)
     b = view(a,2:2:10)
@@ -176,7 +184,7 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     offsetvt = (-2, 4)
     vt = OffsetArray(at, offsetvt)
     istr = string(Int)
-    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr,$istr}` array to `$istr` when the first axis is Base.IdentityUnitRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
+    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is Base.IdentityUnitRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
     vt = reshape(vt, 1:1, axes(vt)...)
     r = reinterpret(Int, vt)
     @test r == OffsetArray(reshape(1:8, 2, 2, 2), (0, offsetvt...))

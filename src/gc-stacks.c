@@ -23,7 +23,7 @@
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
 const size_t jl_guard_size = (4096 * 8);
-static volatile uint32_t num_stack_mappings = 0;
+static uint32_t num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
@@ -157,7 +157,8 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
         ssize = LLT_ALIGN(ssize, jl_page_size);
     }
     if (stk == NULL) {
-        if (num_stack_mappings >= MAX_STACK_MAPPINGS)
+        if (jl_atomic_load_relaxed(&num_stack_mappings) >= MAX_STACK_MAPPINGS)
+            // we accept that this can go over by as much as nthreads since it's not a CAS
             return NULL;
         // TODO: allocate blocks of stacks? but need to mprotect individually anyways
         stk = malloc_stack(ssize);

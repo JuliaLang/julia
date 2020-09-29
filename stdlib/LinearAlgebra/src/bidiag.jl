@@ -47,14 +47,14 @@ julia> ev = [7, 8, 9]
  9
 
 julia> Bu = Bidiagonal(dv, ev, :U) # ev is on the first superdiagonal
-4×4 Bidiagonal{Int64,Vector{Int64}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  7  ⋅  ⋅
  ⋅  2  8  ⋅
  ⋅  ⋅  3  9
  ⋅  ⋅  ⋅  4
 
 julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
-4×4 Bidiagonal{Int64,Vector{Int64}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  7  2  ⋅  ⋅
  ⋅  8  3  ⋅
@@ -66,6 +66,13 @@ function Bidiagonal(dv::V, ev::V, uplo::Symbol) where {T,V<:AbstractVector{T}}
 end
 function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
     Bidiagonal{T,V}(dv, ev, uplo)
+end
+
+#To allow Bidiagonal's where the "dv" is Vector{T} and "ev" Vector{S},
+#where T and S can be promoted
+function LinearAlgebra.Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Symbol) where {T,S}
+    TS = promote_type(T,S)
+    return Bidiagonal{TS,Vector{TS}}(dv, ev, uplo)
 end
 
 """
@@ -84,14 +91,14 @@ julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
  4  4  4  4
 
 julia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A
-4×4 Bidiagonal{Int64,Vector{Int64}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  1  ⋅  ⋅
  ⋅  2  2  ⋅
  ⋅  ⋅  3  3
  ⋅  ⋅  ⋅  4
 
 julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
-4×4 Bidiagonal{Int64,Vector{Int64}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  2  2  ⋅  ⋅
  ⋅  3  3  ⋅
@@ -879,7 +886,7 @@ eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
     Q = Matrix{T}(undef, n,n)
-    blks = [0; findall(x -> x == 0, M.ev); n]
+    blks = [0; findall(iszero, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector

@@ -174,10 +174,10 @@ The fields represent:
 
     notify_flags::Cuint          = Consts.CHECKOUT_NOTIFY_NONE
     notify_cb::Ptr{Cvoid}        = C_NULL
-    notify_payload::Ptr{Cvoid}   = C_NULL
+    notify_payload::Any          = nothing
 
     progress_cb::Ptr{Cvoid}      = C_NULL
-    progress_payload::Ptr{Cvoid} = C_NULL
+    progress_payload::Any        = nothing
 
     paths::StrArrayStruct        = StrArrayStruct()
 
@@ -190,14 +190,15 @@ The fields represent:
     their_label::Cstring         = Cstring(C_NULL)
 
     perfdata_cb::Ptr{Cvoid}      = C_NULL
-    perfdata_payload::Ptr{Cvoid} = C_NULL
+    perfdata_payload::Any        = Nothing
 end
+@assert CheckoutOptions.isinlinealloc
 
 """
     LibGit2.TransferProgress
 
 Transfer progress information used by the `transfer_progress` remote callback.
-Matches the [`git_transfer_progress`](https://libgit2.org/libgit2/#HEAD/type/git_transfer_progress) struct.
+Matches the [`git_indexer_progress`](https://libgit2.org/libgit2/#HEAD/type/git_indexer_progress) struct.
 """
 @kwdef struct TransferProgress
     total_objects::Cuint    = Cuint(0)
@@ -208,8 +209,15 @@ Matches the [`git_transfer_progress`](https://libgit2.org/libgit2/#HEAD/type/git
     indexed_deltas::Cuint   = Cuint(0)
     received_bytes::Csize_t = Csize_t(0)
 end
+@assert TransferProgress.isinlinealloc
 
-@kwdef struct RemoteCallbacksStruct
+"""
+    LibGit2.RemoteCallbacks
+
+Callback settings.
+Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_remote_callbacks) struct.
+"""
+@kwdef struct RemoteCallbacks
     version::Cuint                     = Cuint(1)
     sideband_progress::Ptr{Cvoid}      = C_NULL
     completion::Ptr{Cvoid}             = C_NULL
@@ -222,11 +230,12 @@ end
     push_update_reference::Ptr{Cvoid}  = C_NULL
     push_negotiation::Ptr{Cvoid}       = C_NULL
     transport::Ptr{Cvoid}              = C_NULL
-    payload::Ptr{Cvoid}                = C_NULL
+    payload::Any                       = nothing
     @static if LibGit2.VERSION >= v"0.99.0"
         resolve_url::Ptr{Cvoid}        = C_NULL
     end
 end
+@assert RemoteCallbacks.isinlinealloc
 
 """
     LibGit2.Callbacks
@@ -249,23 +258,6 @@ See [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_remote_c
 for details on supported callbacks.
 """
 const Callbacks = Dict{Symbol, Tuple{Ptr{Cvoid}, Any}}
-
-"""
-    LibGit2.RemoteCallbacks
-
-Callback settings.
-Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_remote_callbacks) struct.
-"""
-struct RemoteCallbacks
-    cb::RemoteCallbacksStruct
-    gcroot::Ref{Any}
-
-    function RemoteCallbacks(; version::Cuint=Cuint(1), payload=C_NULL, callbacks...)
-        p = Ref{Any}(payload)
-        pp = unsafe_load(Ptr{Ptr{Cvoid}}(Base.unsafe_convert(Ptr{Any}, p)))
-        return new(RemoteCallbacksStruct(; version=version, payload=pp, callbacks...), p)
-    end
-end
 
 function RemoteCallbacks(c::Callbacks)
     callbacks = Dict{Symbol, Ptr{Cvoid}}()
@@ -319,22 +311,9 @@ julia> fetch(remote, "master", options=fo)
     url::Cstring                 = Cstring(C_NULL)
     credential_cb::Ptr{Cvoid}    = C_NULL
     certificate_cb::Ptr{Cvoid}   = C_NULL
-    payload::Ptr{Cvoid}          = C_NULL
+    payload::Any                 = nothing
 end
-
-@kwdef struct FetchOptionsStruct
-    version::Cuint                     = Cuint(1)
-    callbacks::RemoteCallbacksStruct   = RemoteCallbacksStruct()
-    prune::Cint                        = Consts.FETCH_PRUNE_UNSPECIFIED
-    update_fetchhead::Cint             = Cint(1)
-    download_tags::Cint                = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions       = ProxyOptions()
-    end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct = StrArrayStruct()
-    end
-end
+@assert ProxyOptions.isinlinealloc
 
 """
     LibGit2.FetchOptions
@@ -355,27 +334,21 @@ The fields represent:
   * `custom_headers`: any extra headers needed for the fetch. Only present on libgit2 versions
      newer than or equal to 0.24.0.
 """
-struct FetchOptions
-    opts::FetchOptionsStruct
-    cb_gcroot::Ref{Any}
-    function FetchOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
-        return new(FetchOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
+@kwdef struct FetchOptions
+    version::Cuint                     = Cuint(1)
+    callbacks::RemoteCallbacks         = RemoteCallbacks()
+    prune::Cint                        = Consts.FETCH_PRUNE_UNSPECIFIED
+    update_fetchhead::Cint             = Cint(1)
+    download_tags::Cint                = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions       = ProxyOptions()
+    end
+    @static if LibGit2.VERSION >= v"0.24.0"
+        custom_headers::StrArrayStruct = StrArrayStruct()
     end
 end
+@assert FetchOptions.isinlinealloc
 
-
-@kwdef struct CloneOptionsStruct
-    version::Cuint                      = Cuint(1)
-    checkout_opts::CheckoutOptions      = CheckoutOptions()
-    fetch_opts::FetchOptionsStruct      = FetchOptionsStruct()
-    bare::Cint                          = Cint(0)
-    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
-    checkout_branch::Cstring            = Cstring(C_NULL)
-    repository_cb::Ptr{Cvoid}           = C_NULL
-    repository_cb_payload::Ptr{Cvoid}   = C_NULL
-    remote_cb::Ptr{Cvoid}               = C_NULL
-    remote_cb_payload::Ptr{Cvoid}       = C_NULL
-end
 
 """
     LibGit2.CloneOptions
@@ -399,13 +372,19 @@ The fields represent:
   * `remote_cb`: An optional callback used to create the [`GitRemote`](@ref) before making the clone from it.
   * `remote_cb_payload`: The payload for the remote callback.
 """
-struct CloneOptions
-    opts::CloneOptionsStruct
-    cb_gcroot::Ref{Any}
-    function CloneOptions(; fetch_opts::FetchOptions=FetchOptions(), kwargs...)
-        return new(CloneOptionsStruct(; kwargs..., fetch_opts=fetch_opts.opts), fetch_opts.cb_gcroot)
-    end
+@kwdef struct CloneOptions
+    version::Cuint                      = Cuint(1)
+    checkout_opts::CheckoutOptions      = CheckoutOptions()
+    fetch_opts::FetchOptions            = FetchOptions()
+    bare::Cint                          = Cint(0)
+    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
+    checkout_branch::Cstring            = Cstring(C_NULL)
+    repository_cb::Ptr{Cvoid}           = C_NULL
+    repository_cb_payload::Any          = nothing
+    remote_cb::Ptr{Cvoid}               = C_NULL
+    remote_cb_payload::Any              = nothing
 end
+@assert CloneOptions.isinlinealloc
 
 """
     LibGit2.DiffOptionsStruct
@@ -449,7 +428,7 @@ The fields represent:
     @static if LibGit2.VERSION >= v"0.24.0"
         progress_cb::Ptr{Cvoid}              = C_NULL
     end
-    payload::Ptr{Cvoid}                      = C_NULL
+    payload::Any                             = nothing
 
     # options controlling how the diff text is generated
     context_lines::UInt32                    = UInt32(3)
@@ -459,6 +438,7 @@ The fields represent:
     old_prefix::Cstring                      = Cstring(C_NULL)
     new_prefix::Cstring                      = Cstring(C_NULL)
 end
+@assert DiffOptionsStruct.isinlinealloc
 
 """
     LibGit2.DescribeOptions
@@ -488,6 +468,7 @@ The fields represent:
     only_follow_first_parent::Cint    = Cint(0)
     show_commit_oid_as_fallback::Cint = Cint(0)
 end
+@assert DescribeOptions.isinlinealloc
 
 """
     LibGit2.DescribeFormatOptions
@@ -506,6 +487,7 @@ The fields represent:
     always_use_long_format::Cint = Cint(0)
     dirty_suffix::Cstring        = Cstring(C_NULL)
 end
+@assert DescribeFormatOptions.isinlinealloc
 
 """
     LibGit2.DiffFile
@@ -635,6 +617,7 @@ The fields represent:
     file_favor::GIT_MERGE_FILE_FAVOR  = Consts.MERGE_FILE_FAVOR_NORMAL
     file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
 end
+@assert MergeOptions.isinlinealloc
 
 """
     LibGit2.BlameOptions
@@ -664,18 +647,8 @@ The fields represent:
     min_line::Csize_t                 = Csize_t(1)
     max_line::Csize_t                 = Csize_t(0)
 end
+@assert BlameOptions.isinlinealloc
 
-@kwdef struct PushOptionsStruct
-    version::Cuint                     = Cuint(1)
-    parallelism::Cint                  = Cint(1)
-    callbacks::RemoteCallbacksStruct   = RemoteCallbacksStruct()
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions       = ProxyOptions()
-    end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct = StrArrayStruct()
-    end
-end
 
 """
     LibGit2.PushOptions
@@ -694,13 +667,19 @@ The fields represent:
   * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
      Extra headers needed for the push operation.
 """
-struct PushOptions
-    opts::PushOptionsStruct
-    cb_gcroot::Ref{Any}
-    function PushOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
-        return new(PushOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
+@kwdef struct PushOptions
+    version::Cuint                     = Cuint(1)
+    parallelism::Cint                  = Cint(1)
+    callbacks::RemoteCallbacks         = RemoteCallbacks()
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions       = ProxyOptions()
+    end
+    @static if LibGit2.VERSION >= v"0.24.0"
+        custom_headers::StrArrayStruct = StrArrayStruct()
     end
 end
+@assert PushOptions.isinlinealloc
+
 
 """
     LibGit2.CherrypickOptions
@@ -722,6 +701,7 @@ The fields represent:
     merge_opts::MergeOptions = MergeOptions()
     checkout_opts::CheckoutOptions = CheckoutOptions()
 end
+@assert CherrypickOptions.isinlinealloc
 
 
 """
@@ -791,6 +771,7 @@ The fields represent:
     end
     checkout_opts::CheckoutOptions = CheckoutOptions()
 end
+@assert RebaseOptions.isinlinealloc
 
 """
     LibGit2.RebaseOperation
@@ -853,6 +834,7 @@ The fields represent:
         baseline::Ptr{Cvoid} = C_NULL
     end
 end
+@assert StatusOptions.isinlinealloc
 
 """
     LibGit2.StatusEntry
@@ -918,8 +900,9 @@ Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_conf
     value::Cstring      = Cstring(C_NULL)
     level::GIT_CONFIG   = Consts.CONFIG_LEVEL_DEFAULT
     free::Ptr{Cvoid}    = C_NULL
-    payload::Ptr{Cvoid} = C_NULL
+    payload::Any        = nothing
 end
+@assert ConfigEntry.isinlinealloc
 
 function Base.show(io::IO, ce::ConfigEntry)
     print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
@@ -1007,7 +990,7 @@ function Base.getproperty(obj::GitObject, name::Symbol)
     end
 end
 
-for (typ, owntyp, sup, cname) in [
+for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
     (:GitRepo,           nothing,                 :AbstractGitObject, :git_repository),
     (:GitConfig,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_config),
     (:GitIndex,          :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_index),
@@ -1153,6 +1136,7 @@ The fields represent:
 
     boundary::Char                        = '\0'
 end
+@assert BlameHunk.isinlinealloc
 
 """
     with(f::Function, obj)

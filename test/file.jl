@@ -268,6 +268,20 @@ no_error_logging(f::Function) =
     end
 end
 
+@testset "mktempdir() permissions correction" begin
+    # Test that `mktempdir()` with children with weird permissions get cleared
+    # before we would delete the directory
+    local temp_dir_path
+    mktempdir() do dir
+        temp_dir_path = dir
+        mkdir(joinpath(dir, "foo"))
+        touch(joinpath(dir, "foo", "bar"))
+        chmod(joinpath(dir, "foo"), 0o444)
+        @test isdir(temp_dir_path)
+    end
+    @test !isdir(temp_dir_path)
+end
+
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
@@ -445,9 +459,9 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
-@test_throws Base._UVError(Sys.iswindows() ? "chmod" : "unlink", Base.UV_ENOENT) rm(c_tmpdir)
+@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
-@test_throws Base._UVError(Sys.iswindows() ? "chmod" : "unlink", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
+@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 if !Sys.iswindows()
@@ -527,24 +541,11 @@ end
     # NOTE: not the actual max path on UNIX, but true in the Windows case for this function.
     # NOTE: we subtract 9 to account for i = 0:9.
     MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
-    for i = 0:8
+    for i = 0:9
         local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
         @test withenv(var => tmp) do
             tempdir()
-        end == (tmp)
-    end
-    for i = 9
-        local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
-        if Sys.iswindows()
-            # libuv bug
-            @test_broken withenv(var => tmp) do
-                tempdir()
-            end == tmp
-        else
-            @test withenv(var => tmp) do
-                tempdir()
-            end == tmp
-        end
+        end == tmp
     end
 end
 
@@ -1191,6 +1192,7 @@ if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
 else
     @test_throws ErrorException symlink(file, "ba\0d")
 end
+using Downloads: download
 @test_throws ArgumentError download("good", "ba\0d")
 @test_throws ArgumentError download("ba\0d", "good")
 
@@ -1213,7 +1215,7 @@ cd(dirwalk) do
     has_symlinks && symlink(abspath("sub_dir2"), joinpath("sub_dir1", "link"))
     for follow_symlinks in follow_symlink_vec
         chnl = walkdir(".", follow_symlinks=follow_symlinks)
-        root, dirs, files = take!(chnl)
+        root, dirs, files = @inferred(take!(chnl))
         @test root == "."
         @test dirs == ["sub_dir1", "sub_dir2"]
         @test files == ["file1", "file2"]

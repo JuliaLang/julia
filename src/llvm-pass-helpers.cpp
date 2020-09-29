@@ -76,7 +76,7 @@ llvm::CallInst *JuliaPassContext::getPtls(llvm::Function &F) const
     for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
          ptls_getter && I != E; ++I) {
         if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
-            if (callInst->getCalledValue() == ptls_getter) {
+            if (callInst->getCalledOperand() == ptls_getter) {
                 return callInst;
             }
         }

@@ -34,9 +34,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters, b.parameters
-        lar = length(ap)::Int
-        lbr = length(bp)::Int
+        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
+        lar = length(ap)
+        lbr = length(bp)
         if lar == 0
             return Tuple{Vararg{tailjoin(bp, 1)}}
         end
@@ -78,10 +78,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
+    a, b = a::DataType, b::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
-                a = supertype(a)
+                a = supertype(a)::DataType
             end
             if a.name === Type.body.name
                 ap = a.parameters[1]
@@ -115,10 +116,27 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             end
             return aprimary
         end
-        b = supertype(b)
+        b = supertype(b)::DataType
     end
     return Any
 end
+
+# return an upper-bound on type `a` with type `b` removed
+# such that `return <: a` && `Union{return, b} == Union{a, b}`
+# WARNING: this is wrong for some objects for which subtyping is broken
+#          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
+function typesplit(@nospecialize(a), @nospecialize(b))
+    @_pure_meta
+    if a <: b
+        return Bottom
+    end
+    if isa(a, Union)
+        return Union{typesplit(a.a, b),
+                     typesplit(a.b, b)}
+    end
+    return a
+end
+
 
 """
     promote_typejoin(T, S)
@@ -127,20 +145,12 @@ Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
 """
-promote_typejoin(@nospecialize(a), @nospecialize(b)) = _promote_typejoin(a, b)::Type
-_promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
-_promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-_promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-_promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-_promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-_promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
-_promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
-_promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
-_promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
+function promote_typejoin(@nospecialize(a), @nospecialize(b))
+    c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
+    return Union{a, b, c}::Type
+end
+_promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
+
 
 # Returns length, isfixed
 function full_va_len(p)
@@ -148,8 +158,8 @@ function full_va_len(p)
     last = p[end]
     if isvarargtype(last)
         N = unwrap_unionall(last).parameters[2]
-        if isa(N, Integer)
-            return (length(p) + N - 1)::Int, true
+        if isa(N, Int)
+            return length(p)::Int + N - 1, true
         end
         return length(p)::Int, false
     end

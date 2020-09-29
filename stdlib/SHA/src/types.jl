@@ -41,6 +41,21 @@ mutable struct SHA2_512_CTX <: SHA2_CTX
     buffer::Array{UInt8,1}
 end
 
+function Base.getproperty(ctx::SHA2_CTX, fieldname::Symbol)
+    if fieldname === :state
+        return getfield(ctx, :state)::Union{Vector{UInt32},Vector{UInt64}}
+    elseif fieldname === :bytecount
+        return getfield(ctx, :bytecount)::Union{UInt64,UInt128}
+    elseif fieldname === :buffer
+        return getfield(ctx, :buffer)::Vector{UInt8}
+    elseif fieldname === :W
+        return getfield(ctx, :W)::Vector{UInt32}
+    else
+        error("SHA2_CTX has no field ", fieldname)
+    end
+end
+
+
 # Typealias common nicknames for SHA2 family of functions
 const SHA224_CTX = SHA2_224_CTX
 const SHA256_CTX = SHA2_256_CTX
@@ -72,6 +87,20 @@ mutable struct SHA3_512_CTX <: SHA3_CTX
     bytecount::UInt128
     buffer::Array{UInt8,1}
     bc::Array{UInt64,1}
+end
+
+function Base.getproperty(ctx::SHA3_CTX, fieldname::Symbol)
+    if fieldname === :state
+        return getfield(ctx, :state)::Vector{UInt64}
+    elseif fieldname === :bytecount
+        return getfield(ctx, :bytecount)::UInt128
+    elseif fieldname === :buffer
+        return getfield(ctx, :buffer)::Vector{UInt8}
+    elseif fieldname === :bc
+        return getfield(ctx, :bc)::Vector{UInt64}
+    else
+        error("type ", typeof(ctx), " has no field ", fieldname)
+    end
 end
 
 # Define constants via functions so as not to bloat context objects.  Yay dispatch!

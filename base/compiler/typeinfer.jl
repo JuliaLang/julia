@@ -49,7 +49,9 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
                         caller.src = nothing
                     end
                 end
-                valid_worlds = intersect(valid_worlds, opt.valid_worlds)
+                # As a hack the et reuses frame_edges[1] to push any optimization
+                # edges into, so we don't need to handle them specially here
+                valid_worlds = intersect(valid_worlds, opt.inlining.et.valid_worlds[])
             end
         end
     end
@@ -513,6 +515,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             return code.rettype, mi
         end
     end
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
+        return Any, nothing
+    end
     if !caller.cached && caller.parent === nothing
         # this caller exists to return to the user
         # (if we asked resolve_call_cyle, it might instead detect that there is a cycle that it can't merge)
@@ -589,7 +594,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.slotflags = fill(0x00, nargs)
                 tree.ssavaluetypes = 1
                 tree.codelocs = Int32[1]
-                tree.linetable = [LineInfoNode(method, method.file, Int(method.line), 0)]
+                tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
                 tree.inferred = true
                 tree.ssaflags = UInt8[0]
                 tree.pure = true
@@ -616,6 +621,9 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 return inf
             end
         end
+    end
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
+        return retrieve_code_info(mi)
     end
     lock_mi_inference(interp, mi)
     frame = InferenceState(InferenceResult(mi), #=cached=#true, interp)

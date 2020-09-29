@@ -4860,7 +4860,7 @@ New language features
     shell. For example:
 
         julia> ;ls
-        CONTRIBUTING.md  Makefile           VERSION      deps/      julia@  ui/
+        CONTRIBUTING.md  Makefile           VERSION      cli/       deps/   julia@
         DISTRIBUTING.md  NEWS.md            Windows.inc  doc/       src/    usr/
         LICENSE.md       README.md          base/        etc/       test/
         Make.inc         README.windows.md  contrib/     examples/  tmp/

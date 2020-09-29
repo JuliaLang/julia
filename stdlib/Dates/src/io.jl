@@ -129,7 +129,7 @@ function tryparsenext(d::DatePart{'p'}, str, i, len)
     return ap == 'a' ? AM : PM, ii
 end
 
-for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
+for (tok, fn) in zip("uUeE", Any[monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         next = tryparsenext_word(str, i, len, locale, max_width(d))
         next === nothing && return nothing
@@ -161,13 +161,13 @@ end
 
 hour12(dt) = let h = hour(dt); h > 12 ? h - 12 : h == 0 ? 12 : h; end
 
-for (c, fn) in zip("YmdHIMS", [year, month, day, hour, hour12, minute, second])
+for (c, fn) in zip("YmdHIMS", Any[year, month, day, hour, hour12, minute, second])
     @eval function format(io, d::DatePart{$c}, dt)
         print(io, string($fn(dt), base = 10, pad = d.width))
     end
 end
 
-for (tok, fn) in zip("uU", [monthabbr, monthname])
+for (tok, fn) in zip("uU", Any[monthabbr, monthname])
     @eval function format(io, d::DatePart{$tok}, dt, locale)
         print(io, $fn(month(dt), locale))
     end
@@ -178,7 +178,7 @@ function format(io, d::DatePart{'p'}, dt, locale)
     print(io, ampm)
 end
 
-for (tok, fn) in zip("eE", [dayabbr, dayname])
+for (tok, fn) in zip("eE", Any[dayabbr, dayname])
     @eval function format(io, ::DatePart{$tok}, dt, locale)
         print(io, $fn(dayofweek(dt), locale))
     end

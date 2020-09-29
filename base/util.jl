@@ -385,6 +385,8 @@ _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+_crc32c(x::Integer, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Vector{UInt8}, Csize_t), crc, reinterpret(UInt8, [x]), sizeof(x))
 
 """
     @kwdef typedef
@@ -423,6 +425,7 @@ Stacktrace:
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
     expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
+    expr = expr::Expr
     T = expr.args[2]
     if T isa Expr && T.head === :<:
         T = T.args[1]
@@ -438,12 +441,13 @@ macro kwdef(expr)
         if T isa Symbol
             kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
         elseif T isa Expr && T.head === :curly
+            T = T::Expr
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = [U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
+            Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
             kwdefs = quote
                 ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
@@ -518,7 +522,7 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)

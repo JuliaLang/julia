@@ -190,29 +190,31 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
     # -t, --threads
     code = "print(Threads.nthreads())"
-    cpu_threads = ccall(:jl_cpu_threads, Int32, ())
-    @test string(cpu_threads) ==
+    cpu_threads = string(ccall(:jl_cpu_threads, Int32, ()))
+    @test cpu_threads ==
           read(`$exename --threads auto -e $code`, String) ==
           read(`$exename --threads=auto -e $code`, String) ==
           read(`$exename -tauto -e $code`, String) ==
-          read(`$exename -t auto -e $code`, String) ==
-          read(`$exename -t $(cpu_threads+1) -e $code`, String)
-    if cpu_threads > 1
-        for nt in (nothing, "1"); withenv("JULIA_NUM_THREADS"=>nt) do
-            @test read(`$exename --threads 2 -e $code`, String) ==
-                  read(`$exename --threads=2 -e $code`, String) ==
-                  read(`$exename -t2 -e $code`, String) ==
+          read(`$exename -t auto -e $code`, String)
+    for nt in (nothing, "1")
+        withenv("JULIA_NUM_THREADS" => nt) do
+            @test read(`$exename --threads=2 -e $code`, String) ==
                   read(`$exename -t 2 -e $code`, String) == "2"
-        end end
+        end
+    end
+    cpu_threads *= "0"
+    @test read(`$exename -t $cpu_threads -e $code`, String) == cpu_threads
+    withenv("JULIA_NUM_THREADS" => cpu_threads) do
+        @test read(`$exename -e $code`, String) == cpu_threads
     end
     @test !success(`$exename -t 0`)
     @test !success(`$exename -t -1`)
 
     # Combining --threads and --procs: --threads does propagate
-    if cpu_threads > 1; withenv("JULIA_NUM_THREADS"=>nothing) do
+    withenv("JULIA_NUM_THREADS" => nothing) do
         code = "print(sum(remotecall_fetch(Threads.nthreads, x) for x in procs()))"
         @test read(`$exename -p2 -t2 -e $code`, String) == "6"
-    end end
+    end
 
     # --procs
     @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
@@ -256,7 +258,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     mktempdir() do dir
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
-        expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
+        expected = replace(read(joinpath(helperdir, "coverage_file.info.bad"), String),
+            "<FILENAME>" => realpath(inputfile))
+        expected_good = replace(read(joinpath(helperdir, "coverage_file.info"), String),
             "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
@@ -274,18 +278,21 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
     end
 
     # --track-allocation

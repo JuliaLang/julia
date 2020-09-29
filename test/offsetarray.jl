@@ -199,7 +199,7 @@ str = String(take!(io))
 show(io, parent(v))
 @test str == String(take!(io))
 smry = summary(v)
-@test occursin("OffsetArray{Float64,1", smry)
+@test occursin("OffsetArray{Float64, 1", smry)
 @test occursin("with indices -1:1", smry)
 function cmp_showf(printfunc, io, A; options = ())
     ioc = IOContext(io, :limit => true, :compact => true, options...)
@@ -216,11 +216,11 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neithe
 cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop=2/11, length=3*29), 3, 29), (-2, -15)); options=(:displaysize=>(53,210),))
 cmp_showf(show, io, OffsetArray(collect(1:100), (100,)))   # issue #31641
 
-targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
-            "1-element $OAs_name.OffsetArray{Float64,1,Vector{Float64}} with indices 2:2:\n 1.0",
-            "1×1 $OAs_name.OffsetArray{Float64,2,Matrix{Float64}} with indices 2:2×3:3:\n 1.0",
-            "1×1×1 $OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
-            "1×1×1×1 $OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
+targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64, 0, Array{Float64, 0}}:\n1.0",
+            "1-element $OAs_name.OffsetArray{Float64, 1, Vector{Float64}} with indices 2:2:\n 1.0",
+            "1×1 $OAs_name.OffsetArray{Float64, 2, Matrix{Float64}} with indices 2:2×3:3:\n 1.0",
+            "1×1×1 $OAs_name.OffsetArray{Float64, 3, Array{Float64, 3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
+            "1×1×1×1 $OAs_name.OffsetArray{Float64, 4, Array{Float64, 4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
             "([1.0], [1.0])",
@@ -522,6 +522,12 @@ soa = OffsetArray([2,2,3], typemax(Int)-4)
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
 @test reverse(A, dims=1) == OffsetArray(reverse(parent(A), dims=1), A.offsets)
 @test reverse(A, dims=2) == OffsetArray(reverse(parent(A), dims=2), A.offsets)
+@test reverse(A) == reverse!(reverse(A, dims=1), dims=2)
+
+Aodd = OffsetArray(rand(3,5), (-3,5))
+@test reverse(Aodd, dims=1) == OffsetArray(reverse(parent(Aodd), dims=1), Aodd.offsets)
+@test reverse(Aodd, dims=2) == OffsetArray(reverse(parent(Aodd), dims=2), Aodd.offsets)
+@test reverse(Aodd) == reverse!(reverse(Aodd, dims=1), dims=2)
 
 @test A .+ 1 == OffsetArray(parent(A) .+ 1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)

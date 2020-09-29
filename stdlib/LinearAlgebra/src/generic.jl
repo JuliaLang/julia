@@ -1617,7 +1617,7 @@ julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
   Any[0 + 6im, [7.0, 8.0]]
 
 julia> LinearAlgebra.promote_leaf_eltypes(a)
-ComplexF64 = Complex{Float64}
+ComplexF64 (alias for Complex{Float64})
 ```
 """
 promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:Number} = T

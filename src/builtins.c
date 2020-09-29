@@ -102,6 +102,16 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
                     return 0;
                 ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
             }
+            else if (ft->layout->first_ptr >= 0) {
+                // If the field is a inline immutable that can be can be undef
+                // we need to check to check for undef first since undef struct
+                // may have fields that are different but should still be treated as equal.
+                jl_value_t *ptra = ((jl_value_t**)ao)[ft->layout->first_ptr];
+                jl_value_t *ptrb = ((jl_value_t**)bo)[ft->layout->first_ptr];
+                if (ptra == NULL && ptrb == NULL) {
+                    return 1;
+                }
+            }
             if (!ft->layout->haspadding) {
                 if (!bits_equal(ao, bo, ft->size))
                     return 0;
@@ -240,8 +250,6 @@ typedef struct _varidx {
     struct _varidx *prev;
 } jl_varidx_t;
 
-JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
-
 static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOINT
 {
     if (v == NULL)
@@ -316,7 +324,16 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
             }
             assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
-            u = immut_id_(fieldtype, (jl_value_t*)vo, 0);
+            int32_t first_ptr = fieldtype->layout->first_ptr;
+            if (first_ptr >= 0 && ((jl_value_t**)vo)[first_ptr] == NULL) {
+                // If the field is a inline immutable that can be can be undef
+                // we need to check to check for undef first since undef struct
+                // may have fields that are different but should still be treated as equal.
+                u = 0;
+            }
+            else {
+                u = immut_id_(fieldtype, (jl_value_t*)vo, 0);
+            }
         }
         h = bitmix(h, u);
     }
@@ -471,7 +488,7 @@ static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_
     return newheap;
 }
 
-void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
+STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
 {
     size_t oldalloc = *n_alloc;
     if (oldalloc >= newalloc)
@@ -791,12 +808,10 @@ JL_CALLABLE(jl_f_setfield)
 {
     JL_NARGS(setfield!, 3, 3);
     jl_value_t *v = args[0];
-    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
-    if (vt == (jl_value_t*)jl_module_type)
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    assert(jl_is_datatype(st));
+    if (st == jl_module_type)
         jl_error("cannot assign variables in other modules");
-    if (!jl_is_datatype(vt))
-        jl_type_error("setfield!", (jl_value_t*)jl_datatype_type, v);
-    jl_datatype_t *st = (jl_datatype_t*)vt;
     if (!st->mutabl)
         jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
     size_t idx;
@@ -809,7 +824,7 @@ JL_CALLABLE(jl_f_setfield)
         JL_TYPECHK(setfield!, symbol, args[1]);
         idx = jl_field_index(st, (jl_sym_t*)args[1], 1);
     }
-    jl_value_t *ft = jl_field_type(st, idx);
+    jl_value_t *ft = jl_field_type_concrete(st, idx);
     if (!jl_isa(args[2], ft)) {
         jl_type_error("setfield!", ft, args[2]);
     }
@@ -1025,8 +1040,6 @@ JL_CALLABLE(jl_f_invoke)
     return res;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f);
-
 JL_CALLABLE(jl_f_invoke_kwsorter)
 {
     JL_NARGSV(invoke, 3);
@@ -1239,7 +1252,7 @@ JL_CALLABLE(jl_f__primitivetype)
     return dt->name->wrapper;
 }
 
-void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
+static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
         tt->super != NULL ||
@@ -1264,8 +1277,6 @@ JL_CALLABLE(jl_f__setsuper)
     jl_set_datatype_super(dt, args[1]);
     return jl_nothing;
 }
-
-void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {

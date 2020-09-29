@@ -237,6 +237,7 @@ Base.invokelatest
 new
 Base.:(|>)
 Base.:(∘)
+Base.ComposedFunction
 ```
 
 ## Syntax

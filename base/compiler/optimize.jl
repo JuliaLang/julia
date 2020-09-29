@@ -4,21 +4,45 @@
 # OptimizationState #
 #####################
 
-mutable struct OptimizationState
+struct EdgeTracker
+    edges::Vector{Any}
+    valid_worlds::RefValue{WorldRange}
+    EdgeTracker(edges::Vector{Any}, range::WorldRange) =
+        new(edges, RefValue{WorldRange}(range))
+end
+EdgeTracker() = EdgeTracker(Any[], 0:typemax(UInt))
+
+intersect!(et::EdgeTracker, range::WorldRange) =
+    et.valid_worlds[] = intersect(et.valid_worlds[], range)
+
+push!(et::EdgeTracker, mi::MethodInstance) = push!(et.edges, mi)
+function push!(et::EdgeTracker, ci::CodeInstance)
+    intersect!(et, WorldRange(min_world(li), max_world(li)))
+    push!(et, ci.def)
+end
+
+struct InferenceCaches{T, S}
+    inf_cache::T
+    mi_cache::S
+end
+
+struct InliningState{S <: Union{EdgeTracker, Nothing}, T <: Union{InferenceCaches, Nothing}, V <: Union{Nothing, MethodTableView}}
     params::OptimizationParams
+    et::S
+    caches::T
+    method_table::V
+end
+
+mutable struct OptimizationState
     linfo::MethodInstance
-    calledges::Vector{Any}
     src::CodeInfo
     stmt_info::Vector{Any}
     mod::Module
     nargs::Int
-    world::UInt
-    valid_worlds::WorldRange
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
-    # TODO: This will be eliminated once optimization no longer needs to do method lookups
-    interp::AbstractInterpreter
+    inlining::InliningState
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
         s_edges = frame.stmt_edges[1]
         if s_edges === nothing
@@ -26,12 +50,16 @@ mutable struct OptimizationState
             frame.stmt_edges[1] = s_edges
         end
         src = frame.src
-        return new(params, frame.linfo,
-                   s_edges::Vector{Any},
+        inlining = InliningState(params,
+            EdgeTracker(s_edges::Vector{Any}, frame.valid_worlds),
+            InferenceCaches(
+                get_inference_cache(interp),
+                WorldView(code_cache(interp), frame.world)),
+            method_table(interp))
+        return new(frame.linfo,
                    src, frame.stmt_info, frame.mod, frame.nargs,
-                   frame.world, frame.valid_worlds,
                    frame.sptypes, frame.slottypes, false,
-                   interp)
+                   inlining)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
         # prepare src for running optimization passes
@@ -45,7 +73,6 @@ mutable struct OptimizationState
         if slottypes === nothing
             slottypes = Any[ Any for i = 1:nslots ]
         end
-        s_edges = []
         stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
         toplevel = !isa(linfo.def, Method)
@@ -57,12 +84,18 @@ mutable struct OptimizationState
             inmodule = linfo.def::Module
             nargs = 0
         end
-        return new(params, linfo,
-                   s_edges::Vector{Any},
+        # Allow using the global MI cache, but don't track edges.
+        # This method is mostly used for unit testing the optimizer
+        inlining = InliningState(params,
+            nothing,
+            InferenceCaches(
+                get_inference_cache(interp),
+                WorldView(code_cache(interp), get_world_counter())),
+            method_table(interp))
+        return new(linfo,
                    src, stmt_info, inmodule, nargs,
-                   get_world_counter(), WorldRange(UInt(1), get_world_counter()),
                    sptypes_from_meth_instance(linfo), slottypes, false,
-                   interp)
+                   inlining)
         end
 end
 
@@ -106,26 +139,7 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
-function update_valid_age!(sv::OptimizationState, valid_worlds::WorldRange)
-    sv.valid_worlds = intersect(sv.valid_worlds, valid_worlds)
-    @assert(sv.world in sv.valid_worlds, "invalid age range update")
-    nothing
-end
-
-function add_backedge!(li::MethodInstance, caller::OptimizationState)
-    #TODO: deprecate this?
-    isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    push!(caller.calledges, li)
-    nothing
-end
-
-function add_backedge!(li::CodeInstance, caller::OptimizationState)
-    update_valid_age!(caller, WorldRange(min_world(li), max_world(li)))
-    add_backedge!(li.def, caller)
-    nothing
-end
-
-function isinlineable(m::Method, me::OptimizationState, params::OptimizationParams, bonus::Int=0)
+function isinlineable(m::Method, me::OptimizationState, params::OptimizationParams, union_penalties::Bool, bonus::Int=0)
     # compute the cost (size) of inlining this code
     inlineable = false
     cost_threshold = params.inline_cost_threshold
@@ -143,7 +157,7 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
         end
     end
     if !inlineable
-        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, params, cost_threshold + bonus)
+        inlineable = inline_worthy(me.src.code, me.src, me.sptypes, me.slottypes, params, union_penalties, cost_threshold + bonus)
     end
     return inlineable
 end
@@ -219,15 +233,14 @@ function optimize(opt::OptimizationState, params::OptimizationParams, @nospecial
     replace_code_newstyle!(opt.src, ir, nargs)
 
     # determine and cache inlineability
+    union_penalties = false
     if !force_noinline
-        # don't keep ASTs for functions specialized on a Union argument
-        # TODO: this helps avoid a type-system bug mis-computing sparams during intersection
         sig = unwrap_unionall(opt.linfo.specTypes)
         if isa(sig, DataType) && sig.name === Tuple.name
             for P in sig.parameters
                 P = unwrap_unionall(P)
                 if isa(P, Union)
-                    force_noinline = true
+                    union_penalties = true
                     break
                 end
             end
@@ -245,14 +258,14 @@ function optimize(opt::OptimizationState, params::OptimizationParams, @nospecial
             # obey @inline declaration if a dispatch barrier would not help
         else
             bonus = 0
-            if result ⊑ Tuple && !isbitstype(widenconst(result))
+            if result ⊑ Tuple && !isconcretetype(widenconst(result))
                 bonus = params.inline_tupleret_bonus
             end
             if opt.src.inlineable
                 # For functions declared @inline, increase the cost threshold 20x
                 bonus += params.inline_cost_threshold*19
             end
-            opt.src.inlineable = isinlineable(def, opt, params, bonus)
+            opt.src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
         end
     end
     nothing
@@ -281,7 +294,9 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 # known return type
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
-function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any}, params::OptimizationParams, error_path::Bool = false)
+function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any},
+                        slottypes::Vector{Any}, union_penalties::Bool,
+                        params::OptimizationParams, error_path::Bool = false)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -314,6 +329,13 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
+            elseif f === Main.Core.isa
+                # If we're in a union context, we penalize type computations
+                # on union types. In such cases, it is usually better to perform
+                # union splitting on the outside.
+                if union_penalties && isa(argextype(ex.args[2],  src, sptypes, slottypes), Union)
+                    return params.inline_nonleaf_penalty
+                end
             elseif (f === Main.Core.arrayref || f === Main.Core.const_arrayref) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes, slottypes)
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
@@ -362,28 +384,49 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
     return 0
 end
 
+function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::CodeInfo, sptypes::Vector{Any},
+                                  slottypes::Vector{Any}, union_penalties::Bool, params::OptimizationParams,
+                                  throw_blocks::Union{Nothing,BitSet})
+    thiscost = 0
+    if stmt isa Expr
+        thiscost = statement_cost(stmt, line, src, sptypes, slottypes, union_penalties, params,
+                                  params.unoptimize_throw_blocks && line in throw_blocks)::Int
+    elseif stmt isa GotoNode
+        # loops are generally always expensive
+        # but assume that forward jumps are already counted for from
+        # summing the cost of the not-taken branch
+        thiscost = stmt.label < line ? 40 : 0
+    elseif stmt isa GotoIfNot
+        thiscost = stmt.dest < line ? 40 : 0
+    end
+    return thiscost
+end
+
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, sptypes::Vector{Any}, slottypes::Vector{Any},
-                       params::OptimizationParams, cost_threshold::Integer=params.inline_cost_threshold)
+                       params::OptimizationParams, union_penalties::Bool=false, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
-    throw_blocks = find_throw_blocks(body)
+    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
     for line = 1:length(body)
         stmt = body[line]
-        if stmt isa Expr
-            thiscost = statement_cost(stmt, line, src, sptypes, slottypes, params, line in throw_blocks)::Int
-        elseif stmt isa GotoNode
-            # loops are generally always expensive
-            # but assume that forward jumps are already counted for from
-            # summing the cost of the not-taken branch
-            thiscost = stmt.label < line ? 40 : 0
-        elseif stmt isa GotoIfNot
-            thiscost = stmt.dest < line ? 40 : 0
-        else
-            continue
-        end
+        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, slottypes, union_penalties, params, throw_blocks)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return false
     end
     return true
+end
+
+function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::CodeInfo, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
+    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
+    maxcost = 0
+    for line = 1:length(body)
+        stmt = body[line]
+        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, src.slottypes, unionpenalties, params, throw_blocks)
+        cost[line] = thiscost
+        if thiscost > maxcost
+            maxcost = thiscost
+        end
+    end
+    return maxcost
 end
 
 function is_known_call(e::Expr, @nospecialize(func), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)

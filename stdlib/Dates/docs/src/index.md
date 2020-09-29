@@ -671,7 +671,7 @@ Dates.Time(::Function, ::Any...)
 Dates.Time(::Dates.DateTime)
 Dates.now()
 Dates.now(::Type{Dates.UTC})
-Base.eps
+Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, TimeType})
 ```
 
 ### Accessor Functions
