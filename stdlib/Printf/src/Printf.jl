@@ -162,7 +162,7 @@ function Format(f::AbstractString)
     escaped = false
     processing = true
     b = 0x00
-    strs = UnitRange{Int64}[]
+    strs = UnitRange{Int}[]
     fmts = Spec[]
     while processing
         while true
