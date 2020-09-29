@@ -136,7 +136,7 @@ Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or
 
     read(io::IO, String)
 
-Read the entirety of `io`, as a `String`.
+Read the entirety of `io`, as a `String` (see also [`readchomp`](@ref)).
 
 # Examples
 ```jldoctest
