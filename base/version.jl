@@ -105,10 +105,18 @@ function split_idents(s::AbstractString)
     return tuple(pidents...)::VerTuple
 end
 
-function VersionNumber(v::AbstractString)
+VersionNumber(v::AbstractString) = parse(VersionNumber, v)
+
+function parse(::Type{VersionNumber}, v::AbstractString)
+    ver = tryparse(VersionNumber, v)
+    ver === nothing && throw(ArgumentError("invalid version string: $v"))
+    return ver
+end
+
+function tryparse(::Type{VersionNumber}, v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
     m = match(VERSION_REGEX, v)
-    m === nothing && throw(ArgumentError("invalid version string: $v"))
+    m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
     major = parse(VInt, major)
     minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
@@ -119,18 +127,6 @@ function VersionNumber(v::AbstractString)
     prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
     return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
-end
-
-parse(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
-function tryparse(::Type{VersionNumber}, v::AbstractString)
-    try
-        return VersionNumber(v)
-    catch e
-        if isa(e, InterruptException)
-            rethrow(e)
-        end
-        return nothing
-    end
 end
 
 """
