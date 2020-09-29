@@ -2310,6 +2310,14 @@ julia> a
  2.0
  4.0
  6.0
+
+julia> map!(x -> x * 2, a, a);  # in-place use
+
+julia> a
+3-element Array{Float64,1}:
+  4.0
+  8.0
+ 12.0
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
