@@ -13,6 +13,9 @@ export
     MathConstants,
 
 # Types
+UDict,
+OrderedRobinDict,
+RobinDict,
     AbstractChannel,
     AbstractIrrational,
     AbstractMatrix,

@@ -168,7 +168,21 @@ using .Multimedia
 # Some type
 include("some.jl")
 
-include("dict.jl")
+#TODO:
+include("dict.jl") # better named udict.jl?
+#include("udict.jl")
+#const AnyDict = UDict{Any,Any}
+#const UDict = Dict
+#include("robin_dict.jl")
+#include("ordered_robin_dict.jl")
+#const Dict = OrderedRobinDict
+#include("little_dict.jl")
+#const Dict = LittleDict
+include("ordered_dict.jl")
+const Dict = OrderedDict
+const AnyDict = Dict{Any,Any}
+#include("immutable-dict.jl")
+
 include("abstractset.jl")
 include("set.jl")
 
