@@ -179,64 +179,64 @@ end
 
 # For `reinterpret(reshape, T, a)` where we're adding a channel dimension and with
 # `IndexStyle(a) == IndexLinear()`, it's advantageous to retain pseudo-linear indexing.
-struct IndexSCartesian2{K,N} <: IndexStyle end   # K = sizeof(S) ÷ sizeof(T), a static-sized 2d cartesian iterator
+struct IndexSCartesian2{K} <: IndexStyle end   # K = sizeof(S) ÷ sizeof(T), a static-sized 2d cartesian iterator
 
 IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}} = IndexStyle(A)
 function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:AbstractArray{S}}
     if sizeof(T) < sizeof(S)
-        IndexStyle(A) === IndexLinear() && return IndexSCartesian2{sizeof(S) ÷ sizeof(T),N}()
+        IndexStyle(A) === IndexLinear() && return IndexSCartesian2{sizeof(S) ÷ sizeof(T)}()
         return IndexCartesian()
     end
     return IndexStyle(A)
 end
-IndexStyle(::IndexSCartesian2{K,N}, ::IndexSCartesian2{K,N}) where {K,N} = IndexSCartesian2{K,N}()
+IndexStyle(::IndexSCartesian2{K}, ::IndexSCartesian2{K}) where {K} = IndexSCartesian2{K}()
 
-struct SCartesianIndex2{K,N} <: AbstractCartesianIndex{N}
+struct SCartesianIndex2{K}   # can't make <:AbstractCartesianIndex without N, and 2 would be a bit misleading
     i::Int
     j::Int
 end
 to_index(i::SCartesianIndex2) = i
 
-struct SCartesianIndices2{K,N,R<:AbstractUnitRange{Int}} <: AbstractMatrix{SCartesianIndex2{K}}
+struct SCartesianIndices2{K,R<:AbstractUnitRange{Int}} <: AbstractMatrix{SCartesianIndex2{K}}
     indices2::R
 end
-SCartesianIndices2{K,N}(indices2::AbstractUnitRange{Int}) where {K,N} = (@assert K::Int > 1; SCartesianIndices2{K,N,typeof(indices2)}(indices2))
+SCartesianIndices2{K}(indices2::AbstractUnitRange{Int}) where {K} = (@assert K::Int > 1; SCartesianIndices2{K,typeof(indices2)}(indices2))
 
-eachindex(::IndexSCartesian2{K,N}, A::AbstractArray) where {K,N} = SCartesianIndices2{K,N}(eachindex(IndexLinear(), parent(A)))
+eachindex(::IndexSCartesian2{K}, A::AbstractArray) where {K} = SCartesianIndices2{K}(eachindex(IndexLinear(), parent(A)))
 
 size(iter::SCartesianIndices2{K}) where K = (K, length(iter.indices2))
 axes(iter::SCartesianIndices2{K}) where K = (Base.OneTo(K), iter.indices2)
 
-first(iter::SCartesianIndices2{K,N}) where {K,N} = SCartesianIndex2{K,N}(1, first(iter.indices2))
-last(iter::SCartesianIndices2{K,N}) where {K,N}  = SCartesianIndex2{K,N}(K, last(iter.indices2))
+first(iter::SCartesianIndices2{K}) where {K} = SCartesianIndex2{K}(1, first(iter.indices2))
+last(iter::SCartesianIndices2{K}) where {K}  = SCartesianIndex2{K}(K, last(iter.indices2))
 
-@inline function getindex(iter::SCartesianIndices2{K,N}, i::Int, j::Int) where {K,N}
+@inline function getindex(iter::SCartesianIndices2{K}, i::Int, j::Int) where {K}
     @boundscheck checkbounds(iter, i, j)
-    return SCartesianIndex2{K,N}(i, iter.indices2[j])
+    return SCartesianIndex2{K}(i, iter.indices2[j])
 end
 
-function iterate(iter::SCartesianIndices2{K,N}) where {K,N}
+function iterate(iter::SCartesianIndices2{K}) where {K}
     ret = iterate(iter.indices2)
     ret === nothing && return nothing
     item2, state2 = ret
-    return SCartesianIndex2{K,N}(1, item2), (1, item2, state2)
+    return SCartesianIndex2{K}(1, item2), (1, item2, state2)
 end
 
-function iterate(iter::SCartesianIndices2{K,N}, (state1, item2, state2)) where {K,N}
+function iterate(iter::SCartesianIndices2{K}, (state1, item2, state2)) where {K}
     if state1 < K
         item1 = state1 + 1
-        return SCartesianIndex2{K,N}(item1, item2), (item1, item2, state2)
+        return SCartesianIndex2{K}(item1, item2), (item1, item2, state2)
     end
     ret = iterate(iter.indices2, state2)
     ret === nothing && return nothing
     item2, state2 = ret
-    return SCartesianIndex2{K,N}(1, item2), (1, item2, state2)
+    return SCartesianIndex2{K}(1, item2), (1, item2, state2)
 end
 
 SimdLoop.simd_outer_range(iter::SCartesianIndices2) = iter.indices2
 SimdLoop.simd_inner_length(::SCartesianIndices2{K}, ::Any) where K = K
-@inline function SimdLoop.simd_index(::SCartesianIndices2{K,N}, Ilast::Int, I1::Int) where {K,N}
-    SCartesianIndex2{K,N}(I1+1, Ilast)
+@inline function SimdLoop.simd_index(::SCartesianIndices2{K}, Ilast::Int, I1::Int) where {K}
+    SCartesianIndex2{K}(I1+1, Ilast)
 end
 
 _maybe_reshape(::IndexSCartesian2, A::ReshapedReinterpretArray, I...) = A
