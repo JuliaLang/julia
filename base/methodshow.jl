@@ -139,7 +139,7 @@ function updated_methodloc(m::Method)::Tuple{String, Int32}
     file, line = m.file, m.line
     if methodloc_callback[] !== nothing
         try
-            file, line = invokelatest(methodloc_callback[], m)
+            file, line = invokelatest(methodloc_callback[], m)::Tuple{Symbol, Int32}
         catch
         end
     end
