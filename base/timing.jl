@@ -149,8 +149,8 @@ end
 
 A macro to execute an expression, printing the time it took to execute, the number of
 allocations, and the total number of bytes its execution caused to be allocated, before
-returning the value of the expression. If the time reported includes time spent doing 
-garbage collection (gc) or compilation, that will also be highlighted as a %.
+returning the value of the expression. Any time spent garbage collecting (gc) or
+compiling is shown as a percentage.
 
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
