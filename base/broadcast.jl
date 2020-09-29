@@ -706,8 +706,8 @@ end
 @pure function typejoin_union_tuple(T::Type)
     u = Base.unwrap_unionall(T)
     u isa Union && return typejoin(
-            typejoin_union_tuple(rewrap_unionall(u.a, T)),
-            typejoin_union_tuple(rewrap_unionall(u.b, T)))
+            typejoin_union_tuple(Base.rewrap_unionall(u.a, T)),
+            typejoin_union_tuple(Base.rewrap_unionall(u.b, T)))
     p = (u::DataType).parameters
     lr = length(p)::Int
     if lr == 0
@@ -720,7 +720,7 @@ end
         if U === Union{}
             ci = Union{}
         elseif U isa Union
-            ci = typejoin(rewrap_unionall(U.a, T), rewrap_unionall(U.b, T))
+            ci = typejoin(Base.rewrap_unionall(U.a, T), Base.rewrap_unionall(U.b, T))
         else
             ci = U
         end
@@ -731,7 +731,7 @@ end
             c[i] = ci
         end
     end
-    return rewrap_unionall(Tuple{c...}, T)
+    return Base.rewrap_unionall(Tuple{c...}, T)
 end
 
 # Inferred eltype of result of broadcast(f, args...)
