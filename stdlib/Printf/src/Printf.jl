@@ -758,9 +758,8 @@ julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
 """
 macro printf(io_or_fmt, args...)
     if io_or_fmt isa String
-        io = stdout
         fmt = Format(io_or_fmt)
-        return esc(:($Printf.format($io, $fmt, $(args...))))
+        return esc(:($Printf.format(stdout, $fmt, $(args...))))
     else
         io = io_or_fmt
         isempty(args) && throw(ArgumentError("must provide required format string"))
