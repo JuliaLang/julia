@@ -50,7 +50,10 @@ function deepcopy_internal(x::String, stackdict::IdDict)
     return y
 end
 
-function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
+# Hide `_deepcopy_internal` which is nospecialized from inference to not act as a
+# source of invalidations when new methods for deepcopy_internal are defined
+deepcopy_internal(x, stackdict::IdDict) = invokelatest(_deepcopy_internal, x, stackdict)
+function _deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
     nf = nfields(x)
     if T.mutable
