@@ -704,7 +704,7 @@ function promote_typejoin_union(::Type{T}) where T
 end
 
 @pure function typejoin_union_tuple(T::Type)
-    p = (Base.unwrap_unionall(T)::DataType).parameters
+    p = (Base.unwrap_unionall(T)::Union{DataType, Union}).parameters
     lr = length(p)::Int
     if lr == 0
         return Tuple{}
