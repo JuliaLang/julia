@@ -189,6 +189,11 @@ end
                 @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
             end
         end
+        @testset "issue ##34408" begin
+            r = 1f8-10:1f8
+            # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
+            @test_broken searchsorted(collect(r)) == searchsorted(r)
+        end
     end
     @testset "issue #35272" begin
         for v0 = (3:-1:1, 3.0:-1.0:1.0), v = (v0, collect(v0))
