@@ -73,115 +73,116 @@ end
 base(T) = T <: HexBases ? 16 : T <: Val{'o'} ? 8 : 10
 char(::Type{Val{c}}) where {c} = c
 
+@inline function _detectFormat!(f, bytes, len, pos::Int64, fmts::Vector{Spec})
+    leftalign = plus = space = zero = hash = false
+    b = bytes[pos]
+    pos += 1
+    while true
+        if b == UInt8('-')
+            leftalign = true
+        elseif b == UInt8('+')
+            plus = true
+        elseif b == UInt8(' ')
+            space = true
+        elseif b == UInt8('0')
+            zero = true
+        elseif b == UInt8('#')
+            hash = true
+        else
+            break
+        end
+        pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+        b = bytes[pos]
+        pos += 1
+    end
+    if leftalign
+        zero = false
+    end
+    # parse width
+    width = 0
+    while b - UInt8('0') < 0x0a
+        width = 10 * width + (b - UInt8('0'))
+        b = bytes[pos]
+        pos += 1
+        pos > len && break
+    end
+    # parse precision
+    precision = 0
+    parsedprecdigits = false
+    if b == UInt8('.')
+        pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+        parsedprecdigits = true
+        b = bytes[pos]
+        pos += 1
+        if pos <= len
+            while b - UInt8('0') < 0x0a
+                precision = 10precision + (b - UInt8('0'))
+                b = bytes[pos]
+                pos += 1
+                pos > len && break
+            end
+        end
+    end
+    # parse length modifier (ignored)
+    if b == UInt8('h') || b == UInt8('l')
+        prev = b
+        b = bytes[pos]
+        pos += 1
+        if b == prev
+            pos > len && throw(ArgumentError("invalid format string: '$f'"))
+            b = bytes[pos]
+            pos += 1
+        end
+    elseif b in b"Ljqtz"
+        b = bytes[pos]
+        pos += 1
+    end
+    # parse type
+    !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("invalid format string: '$f', invalid type specifier: '$(Char(b))'"))
+    type = Val{Char(b)}
+    if type <: Ints && precision > 0
+        zero = false
+    elseif (type <: Strings || type <: Chars) && !parsedprecdigits
+        precision = -1
+    elseif type <: Union{Val{'a'}, Val{'A'}} && !parsedprecdigits
+        precision = -1
+    elseif type <: Floats && !parsedprecdigits
+        precision = 6
+    end
+    push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision))
+    return pos
+end
+
 # parse format string
 function Format(f::AbstractString)
     isempty(f) && throw(ArgumentError("empty format string"))
     bytes = codeunits(f)
     len = length(bytes)
-    pos = 1
+    start = pos = 1
+    escaped = false
+    processing = true
     b = 0x00
-    while true
-        b = bytes[pos]
-        pos += 1
-        (pos > len || (b == UInt8('%') && pos <= len && bytes[pos] != UInt8('%'))) && break
-    end
-    strs = [1:pos - 1 - (b == UInt8('%'))]
-    fmts = []
-    while pos <= len
-        b = bytes[pos]
-        pos += 1
-        # positioned at start of first format str %
-        # parse flags
-        leftalign = plus = space = zero = hash = false
+    strs = UnitRange{Int64}[]
+    fmts = Spec[]
+    while processing
         while true
-            if b == UInt8('-')
-                leftalign = true
-            elseif b == UInt8('+')
-                plus = true
-            elseif b == UInt8(' ')
-                space = true
-            elseif b == UInt8('0')
-                zero = true
-            elseif b == UInt8('#')
-                hash = true
-            else
+            if pos > len
+                escaped && throw(ArgumentError("incomplete format string: '$f'"))
+                push!(strs, start:pos-1)
+                processing = false
                 break
             end
-            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
             b = bytes[pos]
-            pos += 1
-        end
-        if leftalign
-            zero = false
-        end
-        # parse width
-        width = 0
-        while b - UInt8('0') < 0x0a
-            width = 10 * width + (b - UInt8('0'))
-            b = bytes[pos]
-            pos += 1
-            pos > len && break
-        end
-        # parse precision
-        precision = 0
-        parsedprecdigits = false
-        if b == UInt8('.')
-            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
-            parsedprecdigits = true
-            b = bytes[pos]
-            pos += 1
-            if pos <= len
-                while b - UInt8('0') < 0x0a
-                    precision = 10precision + (b - UInt8('0'))
-                    b = bytes[pos]
-                    pos += 1
-                    pos > len && break
-                end
+            if escaped && b != UInt8('%')
+                push!(strs, start:pos-2)
+                pos = _detectFormat!(f, bytes, len, pos, fmts)
+                start = pos
+                escaped = false
+                continue
             end
-        end
-        # parse length modifier (ignored)
-        if b == UInt8('h') || b == UInt8('l')
-            prev = b
-            b = bytes[pos]
-            pos += 1
-            if b == prev
-                pos > len && throw(ArgumentError("invalid format string: '$f'"))
-                b = bytes[pos]
-                pos += 1
-            end
-        elseif b in b"Ljqtz"
-            b = bytes[pos]
+            escaped = xor(escaped, b == UInt8('%'))
             pos += 1
         end
-        # parse type
-        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("invalid format string: '$f', invalid type specifier: '$(Char(b))'"))
-        type = Val{Char(b)}
-        if type <: Ints && precision > 0
-            zero = false
-        elseif (type <: Strings || type <: Chars) && !parsedprecdigits
-            precision = -1
-        elseif type <: Union{Val{'a'}, Val{'A'}} && !parsedprecdigits
-            precision = -1
-        elseif type <: Floats && !parsedprecdigits
-            precision = 6
-        end
-        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision))
-        start = pos
-        while pos <= len
-            b = bytes[pos]
-            pos += 1
-            if b == UInt8('%')
-                pos > len && throw(ArgumentError("invalid format string: '$f'"))
-                if bytes[pos] == UInt8('%')
-                    # escaped '%'
-                    b = bytes[pos]
-                    pos += 1
-                else
-                    break
-                end
-            end
-        end
-        push!(strs, start:pos - 1 - (b == UInt8('%')))
     end
     return Format(bytes, strs, Tuple(fmts))
 end

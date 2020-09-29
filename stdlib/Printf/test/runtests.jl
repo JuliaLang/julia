@@ -435,6 +435,14 @@ end
     @test @sprintf("%d", 3//1) == "3"
     @test @sprintf("%d", Inf) == "Inf"
     @test @sprintf(" %d", NaN) == " NaN"
+
+    # 37784
+    @test Printf.@sprintf("1%%") == "1%"
+    @test Printf.@sprintf("%%1") == "%1"
+    @test Printf.@sprintf("1%%2") == "1%2"
+    @test Printf.@sprintf("1%%%d", 2) == "1%2"
+    @test Printf.@sprintf("1%%2%%3") == "1%2%3"
+
 end
 
 @testset "integers" begin
