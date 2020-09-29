@@ -276,7 +276,7 @@ const (∛)=cbrt
 delete_method(which(include, (Module, String)))
 let SOURCE_PATH = ""
     global function include(mod::Module, path::String)
-        prev = SOURCE_PATH
+        prev = SOURCE_PATH::String
         path = normpath(joinpath(dirname(prev), path))
         Core.println(path)
         ccall(:jl_uv_flush, Nothing, (Ptr{Nothing},), Core.io_pointer(Core.stdout))
@@ -335,15 +335,15 @@ using .MathConstants: ℯ, π, pi
 # metaprogramming
 include("meta.jl")
 
+# Stack frames and traces
+include("stacktraces.jl")
+using .StackTraces
+
 # utilities
 include("deepcopy.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
-
-# Stack frames and traces
-include("stacktraces.jl")
-using .StackTraces
 
 include("initdefs.jl")
 
