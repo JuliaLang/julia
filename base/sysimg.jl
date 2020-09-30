@@ -56,8 +56,6 @@ let
             :LibCURL_jll,
             :LibCURL,
             :Downloads,
-            :ArgTools,
-            :Tar,
         ]
 
     maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)

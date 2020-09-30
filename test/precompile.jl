@@ -292,8 +292,7 @@ try
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,
-                 :ArgTools, :Tar,]),
+                 :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,]),
            )
         @test discard_module.(deps) == deps1
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
