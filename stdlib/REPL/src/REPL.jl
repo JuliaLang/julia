@@ -284,7 +284,7 @@ struct REPLBackendRef
 end
 REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
 function destroy(ref::REPLBackendRef, state::Task)
-    if istaskfailed(state) && Base.task_result(state) isa Exception
+    if istaskfailed(state)
         close(ref.repl_channel, TaskFailedException(state))
         close(ref.response_channel, TaskFailedException(state))
     end
