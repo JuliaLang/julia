@@ -149,13 +149,13 @@ module IteratorsMD
     function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
         # might overflow
-        I = inc(i.I, first(iter).I, last(iter).I)
+        I = inc(i.I, first(iter).I, step.(iter.indices), last(iter).I)
         return I
     end
     function Base.prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
         # might underflow
-        I = dec(i.I, last(iter).I, first(iter).I)
+        I = dec(i.I, last(iter).I, step.(iter.indices), first(iter).I)
         return I
     end
 
@@ -169,15 +169,15 @@ module IteratorsMD
     # Iteration
     """
         CartesianIndices(sz::Dims) -> R
-        CartesianIndices((istart:istop, jstart:jstop, ...)) -> R
+        CartesianIndices((istart:[istep:]istop, jstart:[jstep:]jstop, ...)) -> R
 
     Define a region `R` spanning a multidimensional rectangular range
     of integer indices. These are most commonly encountered in the
     context of iteration, where `for I in R ... end` will return
     [`CartesianIndex`](@ref) indices `I` equivalent to the nested loops
 
-        for j = jstart:jstop
-            for i = istart:istop
+        for j = jstart:jstep:jstop
+            for i = istart:istep:istop
                 ...
             end
         end
@@ -189,6 +189,10 @@ module IteratorsMD
 
     As a convenience, constructing a `CartesianIndices` from an array makes a
     range of its indices.
+
+    !!! compat "Julia 1.6"
+        The step range method `CartesianIndices((istart:istep:istop, jstart:[jstep:]jstop, ...))`
+        requires at least Julia 1.6.
 
     # Examples
     ```jldoctest
@@ -222,6 +226,15 @@ module IteratorsMD
 
     julia> cartesian[4]
     CartesianIndex(1, 2)
+
+    julia> cartesian = CartesianIndices((1:2:5, 1:2))
+    3×2 CartesianIndices{2, Tuple{StepRange{Int64, Int64}, UnitRange{Int64}}}:
+     CartesianIndex(1, 1)  CartesianIndex(1, 2)
+     CartesianIndex(3, 1)  CartesianIndex(3, 2)
+     CartesianIndex(5, 1)  CartesianIndex(5, 2)
+
+    julia> cartesian[2, 2]
+    CartesianIndex(3, 2)
     ```
 
     ## Broadcasting
@@ -248,28 +261,35 @@ module IteratorsMD
 
     For cartesian to linear index conversion, see [`LinearIndices`](@ref).
     """
-    struct CartesianIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{CartesianIndex{N},N}
+    struct CartesianIndices{N,R<:NTuple{N,OrdinalRange{Int, Int}}} <: AbstractArray{CartesianIndex{N},N}
         indices::R
     end
 
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
-    CartesianIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
-        CartesianIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
+    function CartesianIndices(inds::NTuple{N,OrdinalRange{<:Integer, <:Integer}}) where {N}
+        indices = map(r->convert(OrdinalRange{Int, Int}, r), inds)
+        CartesianIndices{N, typeof(indices)}(indices)
+    end
 
     CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
-    CartesianIndices(sz::NTuple{N,<:Integer}) where {N} = CartesianIndices(map(Base.OneTo, sz))
-    CartesianIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
-        CartesianIndices(map(i->first(i):last(i), inds))
+    CartesianIndices(inds::NTuple{N,Union{<:Integer,OrdinalRange{<:Integer}}}) where {N} =
+        CartesianIndices(map(_range2ind, inds))
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
-    """
-        (:)(I::CartesianIndex, J::CartesianIndex)
+    _range2ind(sz::Integer) = Base.OneTo(sz)
+    _range2ind(ind::OrdinalRange) = ind
 
-    Construct [`CartesianIndices`](@ref) from two `CartesianIndex`.
+    """
+        (:)(start::CartesianIndex, [step::CartesianIndex], stop::CartesianIndex)
+
+    Construct [`CartesianIndices`](@ref) from two `CartesianIndex` and an optional step.
 
     !!! compat "Julia 1.1"
         This method requires at least Julia 1.1.
+
+    !!! compat "Julia 1.6"
+        The step range method start:step:stop requires at least Julia 1.6.
 
     # Examples
     ```jldoctest
@@ -281,17 +301,26 @@ module IteratorsMD
     2×3 CartesianIndices{2, Tuple{UnitRange{Int64}, UnitRange{Int64}}}:
      CartesianIndex(2, 1)  CartesianIndex(2, 2)  CartesianIndex(2, 3)
      CartesianIndex(3, 1)  CartesianIndex(3, 2)  CartesianIndex(3, 3)
+
+    julia> I:CartesianIndex(1, 2):J
+    2×2 CartesianIndices{2, Tuple{StepRange{Int64, Int64}, StepRange{Int64, Int64}}}:
+     CartesianIndex(2, 1)  CartesianIndex(2, 3)
+     CartesianIndex(3, 1)  CartesianIndex(3, 3)
     ```
     """
     (:)(I::CartesianIndex{N}, J::CartesianIndex{N}) where N =
         CartesianIndices(map((i,j) -> i:j, Tuple(I), Tuple(J)))
+    (:)(I::CartesianIndex{N}, S::CartesianIndex{N}, J::CartesianIndex{N}) where N =
+        CartesianIndices(map((i,s,j) -> i:s:j, Tuple(I), Tuple(S), Tuple(J)))
 
     promote_rule(::Type{CartesianIndices{N,R1}}, ::Type{CartesianIndices{N,R2}}) where {N,R1,R2} =
         CartesianIndices{N,Base.indices_promote_type(R1,R2)}
 
     convert(::Type{Tuple{}}, R::CartesianIndices{0}) = ()
-    convert(::Type{NTuple{N,AbstractUnitRange{Int}}}, R::CartesianIndices{N}) where {N} =
-        R.indices
+    for RT in (OrdinalRange{Int, Int}, StepRange{Int, Int}, AbstractUnitRange{Int})
+        @eval convert(::Type{NTuple{N,$RT}}, R::CartesianIndices{N}) where {N} =
+            R.indices
+    end
     convert(::Type{NTuple{N,AbstractUnitRange}}, R::CartesianIndices{N}) where {N} =
         convert(NTuple{N,AbstractUnitRange{Int}}, R)
     convert(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianIndices{N}) where {N} =
@@ -318,13 +347,9 @@ module IteratorsMD
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
-    @inline function Base.getindex(iter::CartesianIndices{N,<:NTuple{N,Base.OneTo}}, I::Vararg{Int, N}) where {N}
-        @boundscheck checkbounds(iter, I...)
-        CartesianIndex(I)
-    end
     @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
         @boundscheck checkbounds(iter, I...)
-        CartesianIndex(I .- first.(Base.axes1.(iter.indices)) .+ first.(iter.indices))
+        CartesianIndex(getindex.(iter.indices, I))
     end
 
     ndims(R::CartesianIndices) = ndims(typeof(R))
@@ -351,37 +376,39 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(iter::CartesianIndices, state)
-        valid, I = __inc(state.I, first(iter).I, last(iter).I)
+        valid, I = __inc(state.I, first(iter).I, step.(iter.indices), last(iter).I)
         valid || return nothing
         return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # increment & carry
-    @inline function inc(state, start, stop)
-        _, I = __inc(state, start, stop)
+    # TODO: optimize this; it adds up about 5ns overhead
+    @inline function inc(state, start, step, stop)
+        _, I = __inc(state, start, step, stop)
         return CartesianIndex(I...)
     end
 
     # increment post check to avoid integer overflow
-    @inline __inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __inc(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int})
-        valid = state[1] < stop[1]
-        return valid, (state[1]+1,)
+    @inline __inc(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
+    @inline function __inc(state::Tuple{Int}, start::Tuple{Int}, step::Tuple{Int}, stop::Tuple{Int})
+        I = state[1] + step[1]
+        valid = I <= stop[1]
+        return valid, (I, )
     end
 
-    @inline function __inc(state, start, stop)
-        if state[1] < stop[1]
-            return true, (state[1]+1, tail(state)...)
+    @inline function __inc(state, start, step, stop)
+        I = state[1] + step[1]
+        if I <= stop[1]
+            return true, (I, tail(state)...)
         end
-        valid, I = __inc(tail(state), tail(start), tail(stop))
+        valid, I = __inc(tail(state), tail(start), tail(step), tail(stop))
         return valid, (start[1], I...)
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
     iterate(iter::CartesianIndices{0}, done=false) = done ? nothing : (CartesianIndex(), true)
 
-    size(iter::CartesianIndices) = map(dimlength, first(iter).I, last(iter).I)
-    dimlength(start, stop) = stop-start+1
+    size(iter::CartesianIndices) = map(length, iter.indices)
 
     length(iter::CartesianIndices) = prod(size(iter))
 
@@ -395,11 +422,8 @@ module IteratorsMD
     @inline to_indices(A, inds, I::Tuple{CartesianIndices{0},Vararg{Any}}) =
         (first(I), to_indices(A, inds, tail(I))...)
 
-    @inline function in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N}
-        _in(true, i.I, first(r).I, last(r).I)
-    end
-    _in(b, ::Tuple{}, ::Tuple{}, ::Tuple{}) = b
-    @inline _in(b, i, start, stop) = _in(b & (start[1] <= i[1] <= stop[1]), tail(i), tail(start), tail(stop))
+    @inline in(i::CartesianIndex, r::CartesianIndices) = false
+    @inline in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N} = all(map(in, i.I, r.indices))
 
     simd_outer_range(iter::CartesianIndices{0}) = iter
     function simd_outer_range(iter::CartesianIndices)
@@ -448,36 +472,38 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(r::Reverse{<:CartesianIndices}, state)
-        valid, I = __dec(state.I, last(r.itr).I, first(r.itr).I)
+        valid, I = __dec(state.I, last(r.itr).I, step.(r.itr.indices), first(r.itr).I)
         valid || return nothing
         return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # decrement & carry
-    @inline function dec(state, start, stop)
-        _, I = __dec(state, start, stop)
+    @inline function dec(state, start, step, stop)
+        _, I = __dec(state, start, step, stop)
         return CartesianIndex(I...)
     end
 
     # decrement post check to avoid integer overflow
-    @inline __dec(::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __dec(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int})
-        valid = state[1] > stop[1]
-        return valid, (state[1]-1,)
+    @inline __dec(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
+    @inline function __dec(state::Tuple{Int}, start::Tuple{Int}, step::Tuple{Int}, stop::Tuple{Int})
+        I = state[1] - step[1]
+        valid = I >= stop[1]
+        return valid, (I,)
     end
 
-    @inline function __dec(state, start, stop)
-        if state[1] > stop[1]
-            return true, (state[1]-1, tail(state)...)
+    @inline function __dec(state, start, step, stop)
+        I = state[1] - step[1]
+        if I >= stop[1]
+            return true, (I, tail(state)...)
         end
-        valid, I = __dec(tail(state), tail(start), tail(stop))
+        valid, I = __dec(tail(state), tail(start), tail(step), tail(stop))
         return valid, (start[1], I...)
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
     iterate(iter::Reverse{<:CartesianIndices{0}}, state=false) = state ? nothing : (CartesianIndex(), true)
 
-    Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices{N,R}(inds.indices)
+    Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices(axes(inds))
 
     # array operations
     Base.intersect(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
@@ -501,7 +527,7 @@ module IteratorsMD
     end
     @inline function iterate(iter::CartesianPartition, (state, n))
         n >= length(iter) && return nothing
-        I = IteratorsMD.inc(state.I, first(iter.parent.parent).I, last(iter.parent.parent).I)
+        I = IteratorsMD.inc(state.I, first(iter.parent.parent).I, step.(iter.parent.parent.indices), last(iter.parent.parent).I)
         return I, (I, n+1)
     end
 
