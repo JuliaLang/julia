@@ -1709,6 +1709,7 @@ for p in procs()
 end
 
 include("splitrange.jl")
+include("threads.jl")
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
