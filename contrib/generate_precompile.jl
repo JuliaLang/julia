@@ -64,6 +64,9 @@ if have_repl
     """
 end
 
+# This is disabled because it doesn't give much benefit
+# and the code in Distributed is poorly typed causing many invalidations
+#=
 Distributed = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
           nothing)
@@ -75,6 +78,8 @@ if Distributed !== nothing
     @distributed (+) for i = 1:100 Int(rand(Bool)) end
     """
 end
+=#
+
 
 Artifacts = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
