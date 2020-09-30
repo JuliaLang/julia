@@ -480,12 +480,12 @@ function parse_toplevel(l::Parser)::Err{Nothing}
     end
 end
 
-function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
+function recurse_dict!(l::Parser, d::TOMLDict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
         key = dotted_keys[i]
-        d = get!(TOMLDict, d, key)
-        if d isa Vector
-            d = d[end]
+        d = get!(TOMLDict, d, key)::Union{Vector{Any}, TOMLDict}
+        if d isa Vector{Any}
+            d = d[end]::TOMLDict
         end
         check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
     end
