@@ -510,10 +510,26 @@ end
 
 @testset "Broadcasted range" begin
     @testset "Date" begin
-        result = (Date(2020):Week(1):Date(2021)) .+ Day(1)
+        @testset "basic" begin
+            result = (Date(2020):Week(1):Date(2021)) .+ Day(1)
 
-        @test result == Date(2020,1,2):Week(1):Date(2021,1,2)
-        @test result isa StepRange
+            @test result == Date(2020,1,2):Week(1):Date(2021,1,2)
+            @test result isa StepRange
+        end
+
+        @testset "end-of-month" begin
+            r = Date(2020,10,31):Month(1):Date(2021)
+
+            @test collect(r .- Day(1)) == [Date(2020,10,30), Date(2020,11,30), Date(2020,12,30)]
+            @test collect(r) .- Day(1) == [Date(2020,10,30), Date(2020,11,29), Date(2020,12,30)]
+        end
+
+        @testset "leap day" begin
+            r = Date(2020,2,28):Year(1):Date(2022)
+
+            @test collect(r .+ Day(1)) == [Date(2020,2,29), Date(2021,2,28)]
+            @test collect(r) .+ Day(1) == [Date(2020,2,29), Date(2021,3,1)]
+        end
     end
 
     @testset "DateTime" begin
