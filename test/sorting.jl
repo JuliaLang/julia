@@ -11,7 +11,7 @@ using .Main.OffsetArrays
 
 @testset "Order" begin
     @test Forward == ForwardOrdering()
-    @test ReverseOrdering(Forward) == ReverseOrdering() == Reverse
+    @test Reverse == ReverseOrdering() == ReverseOrdering(Forward) == ReverseOrdering{ForwardOrdering}() 
 end
 
 @testset "midpoint" begin
