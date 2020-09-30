@@ -7,7 +7,7 @@ Sys.__init_build()
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
-Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+Base.include(@__MODULE__, joinpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 
 CTRL_C = '\x03'
@@ -54,7 +54,7 @@ push!(Set{Method}(), first(methods(collect)))
 get(Base.pkgorigins, Base.PkgId(Base), nothing)
 """
 
-julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
+julia_exepath() = joinpath(Sys.BINDIR::String, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
@@ -195,7 +195,7 @@ function generate_precompile_statements()
         readavailable(output_copy)
         # Input our script
         if have_repl
-            precompile_lines = split(precompile_script, '\n'; keepempty=false)
+            precompile_lines = split(precompile_script::String, '\n'; keepempty=false)
             curr = 0
             for l in precompile_lines
                 sleep(0.1)
@@ -228,7 +228,7 @@ function generate_precompile_statements()
             push!(statements, statement)
         end
 
-        for statement in split(hardcoded_precompile_statements, '\n')
+        for statement in split(hardcoded_precompile_statements::String, '\n')
             push!(statements, statement)
         end
 

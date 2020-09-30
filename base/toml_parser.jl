@@ -278,7 +278,7 @@ const Err{T} = Union{T, ParserError}
 function format_error_message_for_err_type(error::ParserError)
     msg = err_message[error.type]
     if error.type == ErrInvalidBareKeyCharacter
-        c_escaped = escape_string(string(error.data))
+        c_escaped = escape_string(string(error.data)::String)
         msg *= ": '$c_escaped'"
     end
     return msg

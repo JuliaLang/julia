@@ -901,7 +901,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
-        on_done = respond(line->helpmode(outstream(repl), line), repl, julia_prompt,
+        on_done = respond(line::String->helpmode(outstream(repl), line), repl, julia_prompt,
                           pass_empty=true, suppress_on_semicolon=false))
 
 

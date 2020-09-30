@@ -391,7 +391,9 @@ function split(str::T, splitter::AbstractChar;
     _split(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 
-function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Vector)
+function _split(str::AbstractString, splitter::F, limit::Integer, keepempty::Bool, strs::Vector) where F
+    # Forcing specialization on `splitter` improves performance (roughly 30% decrease in runtime)
+    # and prevents a major invalidation risk (1550 MethodInstances)
     i = 1 # firstindex(str)
     n = lastindex(str)::Int
     r = findfirst(splitter,str)::Union{Nothing,Int,UnitRange{Int}}

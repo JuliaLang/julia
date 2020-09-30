@@ -146,7 +146,7 @@ mutable struct Error <: Result
     test_type::Symbol
     orig_expr
     value
-    backtrace
+    backtrace::String
     source::LineNumberNode
 
     function Error(test_type, orig_expr, value, bt, source)
