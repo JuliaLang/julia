@@ -642,13 +642,10 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     return pos
 end
 
-const UNROLL_UPTO = 16
-# if you have your own buffer + pos, write formatted args directly to it
-@inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
-    # write out first substring
+@inline function _formatsubstringrange!(buf::Vector{UInt8}, str, range, pos)
     escapechar = false
-    for i in f.substringranges[1]
-        b = f.str[i]
+    for i in range
+        b = str[i]
         if !escapechar
             buf[pos] = b
             pos += 1
@@ -657,38 +654,16 @@ const UNROLL_UPTO = 16
             escapechar = false
         end
     end
-    # for each format, write out arg and next substring
-    # unroll up to 16 formats
-    N = length(f.formats)
-    Base.@nexprs 16 i -> begin
-        if N >= i
-            pos = fmt(buf, pos, args[i], f.formats[i])
-            for j in f.substringranges[i + 1]
-                b = f.str[j]
-                if !escapechar
-                    buf[pos] = b
-                    pos += 1
-                    escapechar = b === UInt8('%')
-                else
-                    escapechar = false
-                end
-            end
-        end
-    end
-    if N > 16
-        for i = 17:length(f.formats)
-            pos = fmt(buf, pos, args[i], f.formats[i])
-            for j in f.substringranges[i + 1]
-                b = f.str[j]
-                if !escapechar
-                    buf[pos] = b
-                    pos += 1
-                    escapechar = b === UInt8('%')
-                else
-                    escapechar = false
-                end
-            end
-        end
+    return pos
+end
+
+# if you have your own buffer + pos, write formatted args directly to it
+@inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
+    # write out first substring
+    pos = _formatsubstringrange!(buf, f.str, f.substringranges[1], pos)
+    for i = 1:length(f.formats)
+        pos = fmt(buf, pos, args[i], f.formats[i])
+        pos = _formatsubstringrange!(buf, f.str, f.substringranges[i+1], pos)
     end
     return pos
 end
