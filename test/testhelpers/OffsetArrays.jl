@@ -10,7 +10,7 @@
 module OffsetArrays
 
 using Base: tail, @propagate_inbounds
-using IdentityUnitRange
+using Base: IdentityUnitRange
 
 export OffsetArray, OffsetMatrix, OffsetVector
 
