@@ -225,10 +225,12 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     tval = get(ENV, "JULIA_WORKER_TIMEOUT", "")
 
     # Julia process with passed in command line flag arguments
-    cmds = """
-        cd -- $(shell_escape_posixly(dir))
-        $(isempty(tval) ? "" : "export JULIA_WORKER_TIMEOUT=$(shell_escape_posixly(tval))")
-        $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"""
+    # join statement array into a single ;-separated command line
+    cmds = join([
+        "cd -- $(shell_escape_posixly(dir))"
+        """$(isempty(tval) ? "" : "export JULIA_WORKER_TIMEOUT=$(shell_escape_posixly(tval))")"""
+        "$(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
+                ], ";")
 
     # shell login (-l) with string command (-c) to launch julia process
     cmd = `sh -l -c $cmds`
