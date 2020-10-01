@@ -1072,6 +1072,16 @@ end
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) === Const(true)
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(2)) === Bool
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(3)) === Bool
+@testset "isdefined check for `NamedTuple`s" begin
+    # concrete `NamedTuple`s
+    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:x)) === Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:y)) === Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:z)) === Const(false)
+    # non-concrete `NamedTuple`s
+    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:x)) === Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:y)) === Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:z)) === Const(false)
+end
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
