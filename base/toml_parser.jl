@@ -482,6 +482,7 @@ end
 
 function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
+        d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector
@@ -489,7 +490,7 @@ function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, 
         end
         check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
     end
-    return d
+    return d::TOMLDict
 end
 
 function check_allowed_add_key(l::Parser, d, check_defined=true)::Err{Nothing}
