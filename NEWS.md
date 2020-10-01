@@ -150,6 +150,8 @@ Standard library changes
 * The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside ([#37320]).
+* To download artifacts lazily, `LazyArtifacts` now must be explicitly listed as a dependency, to avoid needing the
+  support machinery to be available when it is not commonly needed ([#37844]).
 * `@time` now reports if the time presented included any compilation time, which is shown as a percentage ([#37678]).
 * `@varinfo` can now report non-exported objects within modules, look recursively into submodules, and return a sorted
   results table ([#38042]).
