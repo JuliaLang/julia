@@ -287,6 +287,11 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             elseif a1.name === _NAMEDTUPLE_NAME
                 if isconcretetype(a1)
                     return Const(false)
+                else
+                    ns = a1.parameters[1]
+                    if isa(ns, Tuple)
+                        return Const(val in ns)
+                    end
                 end
             elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
