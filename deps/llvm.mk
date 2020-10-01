@@ -69,7 +69,11 @@ LLVM_LLDB_TAR:=$(SRCCACHE)/lldb-$(LLVM_TAR_EXT)
 endif # BUILD_LLDB
 
 ifeq ($(BUILD_LLVM_CLANG),1)
+ifeq ($(LLVM_VER_MAJ).$(LLVM_VER_MIN),9.0)
 LLVM_CLANG_TAR:=$(SRCCACHE)/cfe-$(LLVM_TAR_EXT)
+else
+LLVM_CLANG_TAR:=$(SRCCACHE)/clang-$(LLVM_TAR_EXT)
+endif
 LLVM_COMPILER_RT_TAR:=$(SRCCACHE)/compiler-rt-$(LLVM_TAR_EXT)
 else
 LLVM_CLANG_TAR:=
@@ -487,6 +491,9 @@ $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-r_aarch64_prel32)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-r_ppc_rel)) # remove for LLVM 12
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
+endif
 endif # LLVM_VER 10.0
 
 ifeq ($(LLVM_VER_SHORT),11.0)
@@ -501,6 +508,9 @@ $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 $(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
+endif
 endif # LLVM_VER 11.0
 
 
