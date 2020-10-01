@@ -108,24 +108,30 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     length(timestr) < 10 && print(" "^(10 - length(timestr)))
     print(timestr, " seconds")
+    parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+    parens && print(" (")
     if bytes != 0 || allocs != 0
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         if ma == 1
-            print(" (", Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
+            print(Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
         else
-            print(" (", Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
+            print(Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
         end
         print(format_bytes(bytes))
     end
     if gctime > 0
-        print(", ", Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
+        if bytes != 0 || allocs != 0
+            print(", ")
+        end
+        print(Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
     end
     if compile_time > 0
-        print(", ", Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        if bytes != 0 || allocs != 0 || gctime > 0
+            print(", ")
+        end
+        print(Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
     end
-    if bytes != 0 || allocs != 0
-        print(")")
-    end
+    parens && print(")")
     nothing
 end
 
