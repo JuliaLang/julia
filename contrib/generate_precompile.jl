@@ -119,6 +119,18 @@ if Libdl !== nothing
     """
 end
 
+Test = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"),
+          nothing)
+if Test !== nothing
+    hardcoded_precompile_statements *= """
+    @assert precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
+    @assert precompile(Tuple{typeof(Test.testset_beginend), Tuple{String, Expr}, Expr, LineNumberNode})
+    @assert precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
+    @assert precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
+    """
+end
+
 function generate_precompile_statements()
     start_time = time_ns()
     debug_output = devnull # or stdout
