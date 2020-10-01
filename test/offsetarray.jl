@@ -581,9 +581,21 @@ module SimilarUR
     end
     ur = MyURange(1,3)
     a = Vector{Int}(undef, 2)
-    @test_throws MethodError similar(a, ur)
-    @test_throws MethodError similar(a, Float64, ur)
-    @test_throws MethodError similar(a, Float64, (ur,))
+
+    function catch_exception(f, args...)
+        try
+            f(args...)
+        catch err
+            return err
+        end
+    end
+    # type-piracy https://github.com/JuliaArrays/OffsetArrays.jl/issues/87
+    @test_broken (catch_exception(similar, a, ur) isa MethodError)
+    @test_broken (catch_exception(similar, a, Float64, ur) isa MethodError)
+    @test_broken (catch_exception(similar, a, Float64, (ur,)) isa MethodError)
+    # @test_throws MethodError similar(a, ur)
+    # @test_throws MethodError similar(a, Float64, ur)
+    # @test_throws MethodError similar(a, Float64, (ur,))
     @test_throws MethodError similar(a, (2.0,3.0))
 end
 

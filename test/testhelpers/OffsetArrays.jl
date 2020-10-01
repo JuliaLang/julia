@@ -70,6 +70,9 @@ offset_coerce(::Type{I}, r::AbstractUnitRange) where I<:AbstractUnitRange{T} whe
 @inline Base.axes1(r::IdOffsetRange) = IdOffsetRange(Base.axes1(r.parent), r.offset)
 @inline Base.unsafe_indices(r::IdOffsetRange) = (r,)
 @inline Base.length(r::IdOffsetRange) = length(r.parent)
+Base.reduced_index(i::IdOffsetRange) = typeof(i)(first(i):first(i))
+# Workaround for #92 on Julia < 1.4
+Base.reduced_index(i::IdentityUnitRange{<:IdOffsetRange}) = typeof(i)(first(i):first(i))
 for f in [:firstindex, :lastindex]
     @eval Base.$f(r::IdOffsetRange) = $f(r.parent) .+ r.offset
 end
