@@ -1030,15 +1030,15 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
                                         const ValueState *OldValS,
                                         ProgramStateRef &State,
                                         CheckerContext &C) const {
+  QualType QT = Result->getType();
+  if (!QT->isPointerType() || QT->getPointeeType()->isVoidType())
+    return nullptr;
   auto ValLoc = State->getSVal(Result, C.getLocationContext()).getAs<Loc>();
   if (!ValLoc) {
     return nullptr;
   }
   SVal Loaded = State->getSVal(*ValLoc);
   if (Loaded.isUnknown() || !Loaded.getAsSymbol()) {
-    QualType QT = Result->getType();
-    if (!QT->isPointerType())
-      return nullptr;
     if (OldValS || GCChecker::isGCTracked(Result)) {
       Loaded = C.getSValBuilder().conjureSymbolVal(
           nullptr, Result, C.getLocationContext(), Result->getType(),
