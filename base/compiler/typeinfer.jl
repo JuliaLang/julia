@@ -10,7 +10,7 @@ end
 
 module Timings
 
-using Core.Compiler: -, +, length, push!, pop!
+using Core.Compiler: -, +, length, push!, pop!, @inline
 
 struct Timing
     name::Any
@@ -38,7 +38,7 @@ function close_current_timer()
     accum_time = Core.Compiler.:(-)(stop_time, parent_timer.cur_start_time)
 end
 
-function enter_new_timer(name)
+@inline function enter_new_timer(name)
     # Stop the current timer before recursing into the child
     stop_time = Timings.time_ns()
 
@@ -77,7 +77,7 @@ function enter_new_timer(name)
     # _timings_values[end] = Timings.time_ns()
 end
 
-function exit_current_timer(_expected_name_)
+@inline function exit_current_timer(_expected_name_)
     # Finish the new timer
     stop_time = Timings.time_ns()
 
@@ -118,9 +118,8 @@ end
 end  # module Timings
 
 # TODO(PR): What's the right way to do a global const mutable boolean in Core.Compiler?
-const __measure_typeinf__ = Array{Bool,0}(undef, ())
+const __measure_typeinf__ = fill(false)
 __toggle_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
-__toggle_measure_typeinf(false)
 
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     if __measure_typeinf__[]
