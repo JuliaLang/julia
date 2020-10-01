@@ -1509,7 +1509,7 @@ LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_bindir),$(build_private_shlibdi
 else
 LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_bindir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 endif
-LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(bindir),$(private_shlibdir)/$(LIBNAME).$(SHLIB_EXT))
+LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(bindir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 
 # We list:
 #  * libgcc_s, because FreeBSD needs to load ours, not the system one.
