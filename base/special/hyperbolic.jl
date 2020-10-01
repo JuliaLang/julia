@@ -43,20 +43,27 @@ H_LARGE_X(::Type{Float32}) = 88.72283f0
 H_OVERFLOW_X(::Type{Float32}) = 89.415985f0
 
 SINH_SMALL_X(::Type{Float64}) = 2.0
-SINH_SMALL_X(::Type{Float32}) = 4.0
+SINH_SMALL_X(::Type{Float32}) = 3.0f0
 
-function sinh_kernel(x2::Float64)
+# For Float64, use DoubleFloat scheme for extra accuracy
+function sinh_kernel(x::Float64)
+    x2 = x*x
     hi_order = evalpoly(x2, (8.333333333337979e-3, 1.984126984007895e-4,
                              2.755731937687675e-6, 2.5052097364218946e-8,
                              1.6059510146369204e-10, 7.635683932974871e-13,
                              2.9632282505934393e-15))
-    return exthorner(x2, (1.0, 0.16666666666666596, hi_order))
+    hi,lo = exthorner(x2, (1.0, 0.16666666666666596, hi_order))
+    return muladd(x, hi, x*lo)
+end
+# For Float32, using Float64 is simpler, faster, and doesn't require FMA
+function sinh_kernel(x::Float32)
+    x=Float64(x)
+    res = evalpoly(x*x, (1.0, 0.1666666779967941, 0.008333336726447933,
+                         0.00019841001151414065, 2.7555538207080807e-6,
+                         2.5143389765825282e-8, 1.6260094552031644e-10))
+    return Float32(res*x)
 end
 
-function sinh_kernel(x2::Float32)
-    hi_order = evalpoly(x2, (0.0001983419f0, 2.7681986f-6, 2.393391f-8, 2.093227f-10))
-    return exthorner(x2, (1.0f0, 0.16666648f0, 0.008333524f0, hi_order))
-end
 
 function sinh(x::T) where T<:Union{Float32,Float64}
     # Method
@@ -73,8 +80,7 @@ function sinh(x::T) where T<:Union{Float32,Float64}
 
     absx = abs(x)
     if absx <= SINH_SMALL_X(T)
-        hi, lo = sinh_kernel(x*x)
-        return muladd(x, hi, x*lo)
+        return sinh_kernel(x)
     elseif absx >= H_LARGE_X(T)
         E = exp(T(.5)*absx)
         return copysign(T(.5)*E*E, x)
