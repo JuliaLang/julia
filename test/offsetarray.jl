@@ -6,6 +6,7 @@ using DelimitedFiles
 using Random
 using LinearAlgebra
 using Statistics
+using Base: IdentityUnitRange
 
 if !isdefined(@__MODULE__, :T24Linear)
     include("testhelpers/arrayindexingtypes.jl")
@@ -641,6 +642,16 @@ end
     @test last(v, 1) == [v[end]]
 end
 
+@testset "Resizing OffsetVectors" begin
+    local a = OffsetVector(rand(5),-3)
+    axes(a,1) == -2:2
+    length(a) == 5
+    resize!(a,3)
+    length(a) == 3
+    axes(a,1) == -2:0
+    @test_throws ArgumentError resize!(a,-3)
+end
+
 @testset "issue #37199: offset range indices" begin
     # https://github.com/JuliaArrays/OffsetArrays.jl/issues/133
     A0 = [1 3; 2 4]
@@ -702,4 +713,29 @@ end
     @test S[0, 2, 2] == A[0, 4, 2]
     @test S[1, 1, 2] == A[1, 3, 2]
     @test axes(S) == (OffsetArrays.IdOffsetRange(0:1), Base.OneTo(2), OffsetArrays.IdOffsetRange(2:5))
+end
+
+@testset "IdentityUnitRange indexing" begin
+    a = OffsetVector(3:4, 2:3)
+    ax = IdentityUnitRange(2:3)
+    @test a[ax[2]] == a[ax][2]
+
+    s = -2:2:4
+    r = 5:8
+    y = OffsetArray(s, r)
+    @test axes(y) == (r,)
+    @test step(y) == step(s)
+
+    a = OffsetVector(3:4, 10:11)
+    ax = OffsetArrays.IdOffsetRange(5:6, 5)
+    @test axes(a[ax]) == axes(ax)
+    for i in axes(ax,1)
+        @test a[ax[i]] == a[ax][i]
+    end
+
+    ax = IdentityUnitRange(10:11)
+    @test axes(a[ax]) == axes(ax)
+    for i in axes(ax,1)
+        @test a[ax[i]] == a[ax][i]
+    end
 end
