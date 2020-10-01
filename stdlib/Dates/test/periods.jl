@@ -477,6 +477,14 @@ end
         end
     end
 end
+@testset "Hashing for CompoundPeriod (#37447)" begin
+    periods = [Dates.Year(0), Dates.Minute(0), Dates.Second(0), Dates.CompoundPeriod(),
+               Dates.Minute(2), Dates.Second(120), Dates.CompoundPeriod(Dates.Minute(2)),
+               Dates.CompoundPeriod(Dates.Second(120)), Dates.CompoundPeriod(Dates.Minute(1), Dates.Second(30))]
+    for x = periods, y = periods
+        @test isequal(x,y) == (hash(x) == hash(y))
+    end
+end
 
 @testset "#30832" begin
     @test Dates.toms(Dates.Second(1) + Dates.Nanosecond(1)) == 1e3
