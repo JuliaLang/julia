@@ -571,6 +571,10 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
+
+    # sparse matrix block diagonals
+    s = SparseArrays.sparse([[1 2; 3 4]])
+    @test eltype(Diagonal([s, s])) == Diagonal{SparseMatrixCSC{Int64,Int64},Vector{SparseMatrixCSC{Int64,Int64}}}
 end
 
 @testset "linear solve for block diagonal matrices" begin
