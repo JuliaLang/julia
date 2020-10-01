@@ -419,7 +419,8 @@ try
           """)
 
     cachefile = Base.compilecache(Base.PkgId("FooBar"))
-    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"))
+    empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
+    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
