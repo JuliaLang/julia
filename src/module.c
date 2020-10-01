@@ -258,6 +258,16 @@ typedef struct _modstack_t {
 
 static jl_binding_t *jl_get_binding_(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, modstack_t *st);
 
+static inline jl_module_t *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+
+#ifndef __clang_analyzer__
+// The analyzer doesn't like looking through the arraylist, so just model the
+// access for it using this function
+static inline jl_module_t *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
+    return (jl_module_t*)m->usings.items[i];
+}
+#endif
+
 // find a binding from a module's `usings` list
 // called while holding m->lock
 static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, modstack_t *st, int warn)
@@ -265,7 +275,7 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
     jl_binding_t *b = NULL;
     jl_module_t *owner = NULL;
     for(int i=(int)m->usings.len-1; i >= 0; --i) {
-        jl_module_t *imp = (jl_module_t*)m->usings.items[i];
+        jl_module_t *imp = module_usings_getidx(m, i);
         // TODO: make sure this can't deadlock
         JL_LOCK(&imp->lock);
         jl_binding_t *tempb = _jl_get_module_binding(imp, var);

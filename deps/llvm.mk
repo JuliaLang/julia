@@ -491,6 +491,7 @@ $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-r_aarch64_prel32)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-r_ppc_rel)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa))
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
 endif
@@ -508,6 +509,7 @@ $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 $(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa))
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
 endif
