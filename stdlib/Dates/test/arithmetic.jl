@@ -530,6 +530,13 @@ end
             @test collect(r .+ Day(1)) == [Date(2020,2,29), Date(2021,2,28)]
             @test collect(r) .+ Day(1) == [Date(2020,2,29), Date(2021,3,1)]
         end
+
+        @testset "round-trip" begin
+            r = Date(2020,2,27):Day(1):Date(2020,3,1)
+
+            @test r .+ Year(0) == r
+            @test (r .+ Year(1)) .- Year(1) == r
+        end
     end
 
     @testset "DateTime" begin
