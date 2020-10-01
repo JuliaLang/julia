@@ -1960,6 +1960,40 @@ function _mapreducecols!(f, op::typeof(+), R::AbstractArray, A::AbstractSparseMa
     R
 end
 
+# any(pred, A, dims = 1) => mapreduce(pred, |, A, dims = 1)
+# final argument `post` is to allow post-mapping each columnar mapreduce
+function _mapreducerows!(pred::P, ::typeof(|), R::AbstractMatrix{Bool}, A::AbstractSparseMatrixCSC{Tv},
+                         post::F = identity) where {P, F, Tv}
+    nzval = nonzeros(A)
+    colptr = getcolptr(A)
+    m, n = size(A)
+    @inbounds for ii in 1:n
+        bi, ei = colptr[ii], colptr[ii+1]
+        len = ei - bi
+        # An empty column is trivial
+        if len == 0
+            R[1, ii] = post(pred(zero(Tv)))
+            continue
+        end
+        # If predicate on zero is true, then sparse column can be short-circuited
+        if pred(zero(Tv)) && len < m
+            R[1, ii] = post(true)
+            continue
+        end
+        # Otherwise reduce over the stored values
+        r = false
+        for jj in bi:(ei - 1)
+            r = pred(nzval[jj])
+            r && break
+        end
+        R[1, ii] = post(r)
+    end
+    return R
+end
+# all(pred, A, dims = 1) => mapreduce(pred, &, A, dims = 1) == .!mapreduce(!pred, |, A, dims = 1)
+_mapreducerows!(pred::P, ::typeof(&), R::AbstractMatrix{Bool},
+                A::AbstractSparseMatrixCSC) where {P} = _mapreducerows!(!pred, |, R, A, !)
+
 # findmax/min and argmax/min methods
 # find first zero value in sparse matrix - return linear index in full matrix
 # non-structural zeros are identified by x == 0 in line with the sparse constructors.
