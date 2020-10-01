@@ -11,7 +11,6 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - csh
             - ccache
             - libssl1.0.0
             - bar
@@ -33,7 +32,6 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - csh
             - ccache
             - libssl1.0.0
             - bar
@@ -66,7 +64,6 @@ before_install:
         BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 USECCACHE=1 USE_BINARYBUILDER_LIBUV=0 USE_BINARYBUILDER_LIBUNWIND=0 USE_BINARYBUILDER_LLVM=0";
         echo "override ARCH=$ARCH" >> Make.user;
         sudo sh -c "echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6";
-        sudo usermod --shell=/usr/bin/csh travis
         export JULIA_CPU_THREADS=4;
         export JULIA_TEST_MAXRSS_MB=1200;
         TESTSTORUN="all";
