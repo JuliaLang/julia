@@ -290,7 +290,7 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
                 else
                     ns = a1.parameters[1]
                     if isa(ns, Tuple)
-                        return Const(val in ns)
+                        return Const(1 <= idx <= length(ns))
                     end
                 end
             elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
