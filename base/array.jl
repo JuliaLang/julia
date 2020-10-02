@@ -1112,7 +1112,7 @@ a general use case.
 2. `sizehint!` may control this preallocation. Again, it typically does this for types in
 `Base`.
 
-3. `empty!` is nearly early costless (and O(1)) for types that support this kind of preallocation.
+3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
 """
 function sizehint! end
 
