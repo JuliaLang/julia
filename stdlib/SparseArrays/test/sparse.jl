@@ -2285,6 +2285,8 @@ end
     A = sparse([1], [1], [Vector{Float64}(undef, 3)], 3, 3)
     A[1,1] = [1.0, 2.0, 3.0]
     @test A[1,1] == [1.0, 2.0, 3.0]
+    @test_throws BoundsError setindex!(A, [4.0, 5.0, 6.0], 4, 3)
+    @test_throws BoundsError setindex!(A, [4.0, 5.0, 6.0], 3, 4)
 end
 
 @testset "isstored" begin
