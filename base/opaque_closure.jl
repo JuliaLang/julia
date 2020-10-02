@@ -24,3 +24,6 @@ end
 
 
 # @opaque macro goes here
+macro opaque(ex)
+    Expr(:opaque_closure, esc(ex))
+end

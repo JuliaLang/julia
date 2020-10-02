@@ -94,3 +94,15 @@ let A = [1 2]
         @test Oc() == 2
     end
 end
+
+using Base: @opaque
+
+@test @opaque(x->2x)(8) == 16
+let f = @opaque (x::Int, y::Float64)->(2x, 3y)
+    @test_throws TypeError f(1, 1)
+    @test f(2, 3.0) === (4, 9.0)
+end
+function uses_frontend_opaque(x)
+    @opaque y->x+y
+end
+@test uses_frontend_opaque(10)(8) == 18

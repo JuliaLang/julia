@@ -65,6 +65,7 @@ jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
 jl_sym_t *optlevel_sym; jl_sym_t *thismodule_sym;
 jl_sym_t *atom_sym; jl_sym_t *statement_sym; jl_sym_t *all_sym;
 jl_sym_t *compile_sym; jl_sym_t *infer_sym;
+jl_sym_t *resolve_globals_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -404,6 +405,7 @@ void jl_init_common_symbols(void)
     atom_sym = jl_symbol("atom");
     statement_sym = jl_symbol("statement");
     all_sym = jl_symbol("all");
+    resolve_globals_sym = jl_symbol("resolve_globals");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -614,6 +616,18 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (iscons(e) && (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e)))))) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct(jl_quotenode_type, ex);
+        }
+        else if (sym == resolve_globals_sym) {
+            // For top-level lambdas (`thunk`), we do not want to eagerly resolve the
+            // modules of globals. For methods, we resolve globals when the method definition
+            // is executed. For OpaqueClosure, there is no method definition step, so we
+            // resolve globals early in the front end, as marked by this special expression head.
+            // TODO: This is a bit ugly, and we may want to move to early resolution for
+            // all non-top-level lambdas.
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            assert(jl_is_code_info(ex));
+            jl_resolve_globals_in_ir((jl_array_t*)((jl_code_info_t*)ex)->code, mod, NULL, 0);
+            temp = ex;
         }
         if (temp) {
             JL_GC_POP();

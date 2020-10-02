@@ -12,7 +12,9 @@ JL_DLLEXPORT jl_value_t *jl_invoke_opaque_closure(jl_opaque_closure_t *clos, jl_
     jl_value_t *ret;
     JL_GC_PUSH1(&ret);
     if (jl_is_method(clos->source)) {
-        ret = jl_gf_invoke_by_method((jl_method_t*)clos->source, (jl_value_t*)clos, args, nargs + 1);
+        // args[0] is implicitly the environment, not the closure object itself.
+        // N.B.: jl_interpret_opaque_closure handles this internally.
+        ret = jl_gf_invoke_by_method((jl_method_t*)clos->source, (jl_value_t*)clos->env, args, nargs + 1);
     } else {
         ret = jl_interpret_opaque_closure(clos, args, nargs);
     }

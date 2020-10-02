@@ -93,3 +93,12 @@
         any
         (loop (cdr lst)
               (or (pred (car lst)) any)))))
+
+;; construct a table mapping each element of `lst` to its index (1-indexed)
+(define (symbol-to-idx-map lst)
+  (let ((tbl (table)))
+    (let loop ((xs lst) (i 1))
+      (if (pair? xs)
+          (begin (put! tbl (car xs) i)
+                 (loop (cdr xs) (+ i 1)))))
+    tbl))
