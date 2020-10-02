@@ -1674,7 +1674,7 @@ function densemv(A::AbstractSparseMatrixCSC, x::AbstractSparseVector; trans::Abs
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
         mul!(y, transpose(A), x)
-    elseif trans == 'C' || trans == 'c'
+    else # trans == 'C' || trans == 'c'
         mul!(y, adjoint(A), x)
     end
     y
