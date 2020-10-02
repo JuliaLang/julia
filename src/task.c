@@ -247,6 +247,57 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
     return (void *)((char *)task->stkbuf + off);
 }
 
+JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
+                                       char **active_start, char **active_end,
+                                       char **total_start, char **total_end)
+{
+    if (!task->started) {
+        *total_start = *active_start = 0;
+        *total_end = *active_end = 0;
+        return;
+    }
+
+    int16_t tid = task->tid;
+    jl_ptls_t ptls2 = (tid != -1) ? jl_all_tls_states[tid] : 0;
+
+    if (task->copy_stack && ptls2 && task == ptls2->current_task) {
+        *total_start = *active_start = (char*)ptls2->stackbase - ptls2->stacksize;
+        *total_end = *active_end = (char*)ptls2->stackbase;
+    }
+    else if (task->stkbuf) {
+        *total_start = *active_start = (char*)task->stkbuf;
+#ifndef _OS_WINDOWS_
+        if (jl_all_tls_states[0]->root_task == task) {
+            // See jl_init_root_task(). The root task of the main thread
+            // has its buffer enlarged by an artificial 3000000 bytes, but
+            // that means that the start of the buffer usually points to
+            // inaccessible memory. We need to correct for this.
+            *active_start += ROOT_TASK_STACK_ADJUSTMENT;
+            *total_start += ROOT_TASK_STACK_ADJUSTMENT;
+        }
+#endif
+
+        *total_end = *active_end = (char*)task->stkbuf + task->bufsz;
+#ifdef COPY_STACKS
+        // save_stack stores the stack of an inactive task in stkbuf, and the
+        // actual number of used bytes in copy_stack.
+        if (task->copy_stack > 1)
+            *active_end = (char*)task->stkbuf + task->copy_stack;
+#endif
+    }
+    else {
+        // no stack allocated yet
+        *total_start = *active_start = 0;
+        *total_end = *active_end = 0;
+        return;
+    }
+
+    if (task == jl_current_task) {
+        // scan up to current `sp` for current thread and task
+        *active_start = (char*)jl_get_frame_addr();
+    }
+}
+
 // Marked noinline so we can consistently skip the associated frame.
 // `skip` is number of additional frames to skip.
 NOINLINE static void record_backtrace(jl_ptls_t ptls, int skip) JL_NOTSAFEPOINT
