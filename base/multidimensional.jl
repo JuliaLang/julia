@@ -320,7 +320,7 @@ module IteratorsMD
     convert(::Type{Tuple{}}, R::CartesianIndices{0}) = ()
     for RT in (OrdinalRange{Int, Int}, StepRange{Int, Int}, AbstractUnitRange{Int})
         @eval convert(::Type{NTuple{N,$RT}}, R::CartesianIndices{N}) where {N} =
-            R.indices
+            map($RT, R.indices)
     end
     convert(::Type{NTuple{N,AbstractUnitRange}}, R::CartesianIndices{N}) where {N} =
         convert(NTuple{N,AbstractUnitRange{Int}}, R)
@@ -348,8 +348,7 @@ module IteratorsMD
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
-    @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
-        @boundscheck checkbounds(iter, I...)
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
         CartesianIndex(getindex.(iter.indices, I))
     end
 
