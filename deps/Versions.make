@@ -39,8 +39,8 @@ ZLIB_VER = 1.2.11
 ZLIB_BB_REL = 10
 P7ZIP_VER = 16.2.0
 P7ZIP_BB_REL = 1
-COMPILER_SUPPORT_LIBRARIES_VER = 0.3.3
-COMPILER_SUPPORT_LIBRARIES_BB_REL = 0
+CSL_VER = 0.3.3
+CSL_BB_REL = 0
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
