@@ -320,7 +320,7 @@ module IteratorsMD
     convert(::Type{Tuple{}}, R::CartesianIndices{0}) = ()
     for RT in (OrdinalRange{Int, Int}, StepRange{Int, Int}, AbstractUnitRange{Int})
         @eval convert(::Type{NTuple{N,$RT}}, R::CartesianIndices{N}) where {N} =
-            map($RT, R.indices)
+            map(x->convert($RT, x), R.indices)
     end
     convert(::Type{NTuple{N,AbstractUnitRange}}, R::CartesianIndices{N}) where {N} =
         convert(NTuple{N,AbstractUnitRange{Int}}, R)
