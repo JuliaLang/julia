@@ -926,6 +926,8 @@ julia> push!([1, 2, 3], 4, 5, 6)
 If `collection` is ordered, use [`append!`](@ref) to add all the elements of another
 collection to it. The result of the preceding example is equivalent to `append!([1, 2, 3], [4,
 5, 6])`. For `AbstractSet` objects, [`union!`](@ref) can be used instead.
+
+See [`sizehint!`](@ref) for notes about the performance model.
 """
 function push! end
 
@@ -969,6 +971,8 @@ julia> append!([1, 2, 3], [4, 5, 6])
 Use [`push!`](@ref) to add individual items to `collection` which are not already
 themselves in another collection. The result of the preceding example is equivalent to
 `push!([1, 2, 3], 4, 5, 6)`.
+
+See [`sizehint!`](@ref) for notes about the performance model.
 """
 function append!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
@@ -1096,6 +1100,19 @@ end
     sizehint!(s, n)
 
 Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
+
+# Notes on the performance model
+
+For types that support `sizehint!`,
+
+1. `push!` and `append!` methods generally may (but are not required to) preallocate extra
+storage. For types implemented in `Base`, they typically do, using a heuristic optimized for
+a general use case.
+
+2. `sizehint!` may control this preallocation. Again, it typically does this for types in
+`Base`.
+
+3. `empty!` is nearly early costless (and O(1)) for types that support this kind of preallocation.
 """
 function sizehint! end
 
