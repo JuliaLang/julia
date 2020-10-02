@@ -205,24 +205,6 @@ endif
 endif
 endif
 
-# On FreeBSD, /lib/libgcc_s.so.1 is incompatible with Fortran; to use Fortran on FreeBSD,
-# we need to link to the libgcc_s that ships with the same GCC version used by libgfortran.
-# To work around this, we copy the GCC libraries we need, namely libgfortran, libgcc_s,
-# and libquadmath, into our build library directory, $(build_libdir). We also add them to
-# JL_PRIVATE_LIBS-0 so that they know where they need to live at install time.
-ifeq ($(OS),FreeBSD)
-define std_so
-julia-deps: | $$(build_libdir)/$(1).so
-$$(build_libdir)/$(1).so: | $$(build_libdir)
-	$$(INSTALL_M) $$(GCCPATH)/$(1).so* $$(build_libdir)
-JL_PRIVATE_LIBS-0 += $(1)
-endef
-
-$(eval $(call std_so,libgfortran))
-$(eval $(call std_so,libgcc_s))
-$(eval $(call std_so,libquadmath))
-endif # FreeBSD
-
 ifeq ($(OS),WINNT)
 # find the standard .dll folders
 ifeq ($(XC_HOST),)
@@ -270,17 +252,6 @@ endif
 define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
 endef
-
-# Run fixup-libgfortran on all platforms but Windows and FreeBSD. On FreeBSD we
-# pull in the GCC libraries earlier and use them for the build to make sure we
-# don't inadvertently link to /lib/libgcc_s.so.1, which is incompatible with
-# libgfortran, and on Windows we copy them in earlier as well.
-ifeq (,$(findstring $(OS),FreeBSD WINNT))
-julia-base: $(build_libdir)/libgfortran*.$(SHLIB_EXT)*
-$(build_libdir)/libgfortran*.$(SHLIB_EXT)*: | $(build_libdir) julia-deps
-	-$(CUSTOM_LD_LIBRARY_PATH) PATH="$(PATH):$(build_depsbindir)" PATCHELF="$(PATCHELF)" FC="$(FC)" $(JULIAHOME)/contrib/fixup-libgfortran.sh --verbose $(build_libdir)
-JL_PRIVATE_LIBS-0 += libgfortran libgcc_s libquadmath
-endif
 
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
@@ -445,12 +416,6 @@ endif
 
 ifeq ($(DARWIN_FRAMEWORK),1)
 	$(MAKE) -C $(JULIAHOME)/contrib/mac/framework frameworknoinstall
-endif
-ifeq ($(OS),Linux)
-ifeq ($(prefix),$(abspath julia-$(JULIA_COMMIT)))
-	# Only fixup libstdc++ if `prefix` is not set.
-	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(libdir) $(DESTDIR)$(private_libdir)
-endif
 endif
 
 distclean:

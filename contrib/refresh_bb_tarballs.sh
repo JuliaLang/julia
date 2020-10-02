@@ -13,7 +13,7 @@ TRIPLETS="i686-linux-gnu x86_64-linux-gnu aarch64-linux-gnu armv7l-linux-gnueabi
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
 BB_PROJECTS="mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind osxunwind dsfmt objconv p7zip zlib suitesparse openlibm"
-BB_GCC_EXPANDED_PROJECTS="openblas"
+BB_GCC_EXPANDED_PROJECTS="openblas csl"
 BB_CXX_EXPANDED_PROJECTS="gmp llvm"
 
 # If we've been given a project name, filter down to that one:
