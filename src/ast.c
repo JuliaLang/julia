@@ -603,6 +603,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             temp = (jl_value_t*)jl_exprn(sym, 1);
             jl_exprargset(temp, 0, ex);
         }
+        else if (sym == jl_symbol("anonymous_closure")) {
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            assert(jl_is_code_info(ex));
+            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, mod, (jl_value_t*)jl_symbol("opaque"));
+            jl_resolve_globals_in_ir((jl_array_t*)((jl_code_info_t*)ex)->code, mod, NULL, 0);
+            temp = ex;
+        }
         if (temp) {
             JL_GC_POP();
             return temp;
