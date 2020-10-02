@@ -11,6 +11,7 @@ module IteratorsMD
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail,
         ReshapedArray, ReshapedArrayLF, OneTo
     using .Base.Iterators: Reverse, PartitionIterator
+    using .Base: @propagate_inbounds
 
     export CartesianIndex, CartesianIndices
 
@@ -149,13 +150,13 @@ module IteratorsMD
     function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
         # might overflow
-        I = inc(i.I, first(iter).I, step.(iter.indices), last(iter).I)
+        I = inc(i.I, iter.indices)
         return I
     end
     function Base.prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
         # might underflow
-        I = dec(i.I, last(iter).I, step.(iter.indices), first(iter).I)
+        I = dec(i.I, iter.indices)
         return I
     end
 
@@ -376,33 +377,30 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(iter::CartesianIndices, state)
-        valid, I = __inc(state.I, first(iter).I, step.(iter.indices), last(iter).I)
+        valid, I = __inc(state.I, iter.indices)
         valid || return nothing
         return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # increment & carry
-    # TODO: optimize this; it adds up about 5ns overhead
-    @inline function inc(state, start, step, stop)
-        _, I = __inc(state, start, step, stop)
+    @inline function inc(state, indices)
+        _, I = __inc(state, indices)
         return CartesianIndex(I...)
     end
 
-    # increment post check to avoid integer overflow
-    @inline __inc(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __inc(state::Tuple{Int}, start::Tuple{Int}, step::Tuple{Int}, stop::Tuple{Int})
-        I = state[1] + step[1]
-        valid = I <= stop[1]
+    __inc(::Tuple{}, ::Tuple{}) = false, ()
+    @inline function __inc(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
+        I = state[1] + step(indices[1])
+        valid = I <= last(indices[1]) && typemax(Int) - step(indices[1]) >= state[1]
         return valid, (I, )
     end
-
-    @inline function __inc(state, start, step, stop)
-        I = state[1] + step[1]
-        if I <= stop[1]
+    @inline function __inc(state, indices)
+        I = state[1] + step(indices[1])
+        if I <= last(indices[1]) && typemax(Int) - step(indices[1]) >= state[1]
             return true, (I, tail(state)...)
         end
-        valid, I = __inc(tail(state), tail(start), tail(step), tail(stop))
-        return valid, (start[1], I...)
+        valid, I = __inc(tail(state), tail(indices))
+        return valid, (first(indices[1]), I...)
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
@@ -472,32 +470,32 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(r::Reverse{<:CartesianIndices}, state)
-        valid, I = __dec(state.I, last(r.itr).I, step.(r.itr.indices), first(r.itr).I)
+        valid, I = __dec(state.I, r.itr.indices)
         valid || return nothing
         return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # decrement & carry
-    @inline function dec(state, start, step, stop)
-        _, I = __dec(state, start, step, stop)
+    @inline function dec(state, indices)
+        _, I = __dec(state, indices)
         return CartesianIndex(I...)
     end
 
     # decrement post check to avoid integer overflow
-    @inline __dec(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __dec(state::Tuple{Int}, start::Tuple{Int}, step::Tuple{Int}, stop::Tuple{Int})
-        I = state[1] - step[1]
-        valid = I >= stop[1]
+    @inline __dec(::Tuple{}, ::Tuple{}) = false, ()
+    @inline function __dec(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
+        I = state[1] - step(indices[1])
+        valid = I >= first(indices[1]) && typemin(Int) + step(indices[1]) <= state[1]
         return valid, (I,)
     end
 
-    @inline function __dec(state, start, step, stop)
-        I = state[1] - step[1]
-        if I >= stop[1]
+    @inline function __dec(state, indices)
+        I = state[1] - step(indices[1])
+        if I >= first(indices[1]) && typemin(Int) + step(indices[1]) <= state[1]
             return true, (I, tail(state)...)
         end
-        valid, I = __dec(tail(state), tail(start), tail(step), tail(stop))
-        return valid, (start[1], I...)
+        valid, I = __dec(tail(state), tail(indices))
+        return valid, (last(indices[1]), I...)
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
@@ -527,7 +525,7 @@ module IteratorsMD
     end
     @inline function iterate(iter::CartesianPartition, (state, n))
         n >= length(iter) && return nothing
-        I = IteratorsMD.inc(state.I, first(iter.parent.parent).I, step.(iter.parent.parent.indices), last(iter.parent.parent).I)
+        I = IteratorsMD.inc(state.I, iter.parent.parent.indices)
         return I, (I, n+1)
     end
 
