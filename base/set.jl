@@ -411,13 +411,16 @@ allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
-function hash(s::AbstractSet, h::UInt)
+
+function hash(::Type{<:AbstractSet{T}}, s::AbstractSet{T}, h::UInt) where {T}
     hv = hashs_seed
     for x in s
-        hv ⊻= hash(x)
+        hv ⊻= hash(T, x, UInt(0))
     end
     hash(hv, h)
 end
+
+hash(s::AbstractSet, h::UInt) = hash(AbstractSet{Any}, s, h)
 
 convert(::Type{T}, s::T) where {T<:AbstractSet} = s
 convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)

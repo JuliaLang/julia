@@ -166,7 +166,9 @@ end
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
-hashindex(key, sz) = (((hash(key)::UInt % Int) & (sz-1)) + 1)::Int
+hashindex(h::Dict{K}, key, sz) where {K} = (((hash(K, key, UInt(0))::UInt % Int) & (sz-1)) + 1)::Int
+
+hash(::Type{T}, x, h::UInt) where {T} = hash(x, h)
 
 @propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 @propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
@@ -200,7 +202,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
         @inbounds if olds[i] == 0x1
             k = oldk[i]
             v = oldv[i]
-            index0 = index = hashindex(k, newsz)
+            index0 = index = hashindex(h, k, newsz)
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
@@ -281,7 +283,7 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    index = hashindex(key, sz)
+    index = hashindex(h, key, sz)
     keys = h.keys
 
     @inbounds while true
@@ -307,7 +309,7 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    index = hashindex(key, sz)
+    index = hashindex(h, key, sz)
     avail = 0
     keys = h.keys
 

@@ -170,6 +170,9 @@ Supertype for ranges with a step size of [`oneunit(T)`](@ref) with elements of t
 """
 abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
 
+hash(::Type{<:AbstractUnitRange{T}}, x, h::UInt) where {T} =
+    hash(T, last(x), hash(T, first(x), 0x7222d2d5c0db9f56 ⊻ h))
+
 """
     StepRange{T, S} <: OrdinalRange{T, S}
 
