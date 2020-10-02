@@ -313,6 +313,19 @@ B[] = Int32(5)
 @test Brs[] === Int32(5)
 @test A[] === UInt32(5)
 
+a = [(1.0,2.0)]
+af = @inferred(reinterpret(reshape, Float64, a))
+anew = @inferred(reinterpret(reshape, Tuple{Float64,Float64}, vec(af)))
+@test anew[1] == a[1]
+@test ndims(anew) == 0
+
+# re-reinterpret
+a0 = reshape([0x22, 0x44, 0x88, 0xf0, 0x01, 0x02, 0x03, 0x04], 4, 2)
+a = reinterpret(reshape, NTuple{4,UInt8}, a0)
+@test a == [(0x22, 0x44, 0x88, 0xf0), (0x01, 0x02, 0x03, 0x04)]
+@test reinterpret(UInt8, a) == [0x22, 0x44, 0x88, 0xf0, 0x01, 0x02, 0x03, 0x04]
+@test reinterpret(reshape, UInt8, a) === a0
+
 # reductions
 a = [(1,2,3), (4,5,6)]
 ars = reinterpret(reshape, Int, a)
