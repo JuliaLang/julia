@@ -132,7 +132,7 @@ struct macroctx_stack {
 
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
-static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel);
+static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel, int throw_load_error);
 
 static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
@@ -947,7 +947,7 @@ int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
     return 0;
 }
 
-static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx)
+static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, int throw_load_error)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TIMING(MACRO_INVOCATION);
@@ -983,7 +983,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
         result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }
     JL_CATCH {
-        if (jl_loaderror_type == NULL) {
+        if ((jl_loaderror_type == NULL) || !throw_load_error) {
             jl_rethrow();
         }
         else {
@@ -1003,7 +1003,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     return result;
 }
 
-static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel)
+static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel, int throw_load_error)
 {
     if (!expr || !jl_is_expr(expr))
         return expr;
@@ -1023,7 +1023,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
             jl_array_ptr_set(e2->args, 0, expr);
             expr = (jl_value_t*)e2;
         }
-        expr = jl_expand_macros(expr, inmodule, macroctx, onelevel);
+        expr = jl_expand_macros(expr, inmodule, macroctx, onelevel, throw_load_error);
         JL_GC_POP();
         return expr;
     }
@@ -1033,7 +1033,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         JL_TYPECHK(hygienic-scope, module, (jl_value_t*)newctx.m);
         newctx.parent = macroctx;
         jl_value_t *a = jl_exprarg(e, 0);
-        jl_value_t *a2 = jl_expand_macros(a, inmodule, &newctx, onelevel);
+        jl_value_t *a2 = jl_expand_macros(a, inmodule, &newctx, onelevel, throw_load_error);
         if (a != a2)
             jl_array_ptr_set(e->args, 0, a2);
         return expr;
@@ -1042,7 +1042,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         struct macroctx_stack newctx;
         newctx.m = macroctx ? macroctx->m : inmodule;
         newctx.parent = macroctx;
-        jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m);
+        jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m, throw_load_error);
         jl_value_t *wrap = NULL;
         JL_GC_PUSH3(&result, &wrap, &newctx.m);
         // copy and wrap the result in `(hygienic-scope ,result ,newctx)
@@ -1052,7 +1052,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
             wrap = (jl_value_t*)jl_exprn(hygienicscope_sym, 2);
         result = jl_copy_ast(result);
         if (!onelevel)
-            result = jl_expand_macros(result, inmodule, wrap ? &newctx : macroctx, onelevel);
+            result = jl_expand_macros(result, inmodule, wrap ? &newctx : macroctx, onelevel, throw_load_error);
         if (wrap) {
             jl_exprargset(wrap, 0, result);
             jl_exprargset(wrap, 1, newctx.m);
@@ -1074,7 +1074,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         for (j = 2; j < nm; j++) {
             jl_exprargset(mc2, j+1, jl_exprarg(mc, j));
         }
-        jl_value_t *ret = jl_expand_macros((jl_value_t*)mc2, inmodule, macroctx, onelevel);
+        jl_value_t *ret = jl_expand_macros((jl_value_t*)mc2, inmodule, macroctx, onelevel, throw_load_error);
         JL_GC_POP();
         return ret;
     }
@@ -1085,7 +1085,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     size_t i;
     for (i = 0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_array_ptr_ref(e->args, i);
-        jl_value_t *a2 = jl_expand_macros(a, inmodule, macroctx, onelevel);
+        jl_value_t *a2 = jl_expand_macros(a, inmodule, macroctx, onelevel, throw_load_error);
         if (a != a2)
             jl_array_ptr_set(e->args, i, a2);
     }
@@ -1097,7 +1097,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0, 0);
     expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
@@ -1108,7 +1108,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 1);
+    expr = jl_expand_macros(expr, inmodule, NULL, 1, 0);
     expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
@@ -1127,7 +1127,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmod
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0, 1);
     expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk", expr, inmodule, file, line);
     JL_GC_POP();
     return expr;
@@ -1140,7 +1140,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0, 1);
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     JL_AST_PRESERVE_PUSH(ctx, old_roots, inmodule);
@@ -1161,7 +1161,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0, 1);
     expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk-stmt", expr, inmodule, file, line);
     JL_GC_POP();
     return expr;
