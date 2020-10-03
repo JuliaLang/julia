@@ -1567,9 +1567,6 @@ reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}) =
 reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
     _typed_hcat(mapreduce(eltype, promote_type, A), A)
 
-reduce(::typeof(cat), A::AbstractArray{<:AbstractArray}) =
-    _typed_cat(mapreduce(eltype, promote_type, A), A)
-
 function _typed_cat(::Type{T}, A::AbstractArray{<:AbstractArray{<:Any,N},M}) where {T,N,M}
     ax1 = axes(first(A))
     dense = true
@@ -1834,6 +1831,9 @@ julia> cat([1 1; 1 1], fill(√2,2,2), [4 8; 16 32])
 @inline cat(A::AbstractArray{<:Any,N}...; dims=N+1) where {N} = _cat(dims, A...)
 
 _cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(T, A...; dims=catdims)
+
+reduce(::typeof(cat), A::AbstractArray{<:AbstractArray}) =
+    _typed_cat(mapreduce(eltype, promote_type, A), A)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
