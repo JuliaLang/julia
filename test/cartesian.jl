@@ -130,11 +130,34 @@ end
             SR = CartesianIndex(first.(oinds)):CartesianIndex(step.(oinds)):CartesianIndex(last.(oinds))
             @test A[oinds...] == A[SR]
             @test A[SR] == A[R[SR]]
+            # FIXME: A[SR] == A[Linearindices[SR]] should hold for StepRange CartesianIndices
+            @test_broken A[SR] == A[LinearIndices[SR]]
         end
     end
 end
 
-@testset "Cartesian simd" begin
+@testset "range interface" begin
+    for (I, i, i_next) in [
+        (CartesianIndices((1:2:5, )), CartesianIndex(2, ), CartesianIndex(4, )),
+        (1:2:5, 2, 4),
+    ]
+        # consistant to ranges
+        @test !(i in I)
+        @test iterate(I, i) == (i_next, i_next)
+    end
+
+    for R in [
+        CartesianIndices((1:-1:-1, 1:2:5)),
+        CartesianIndices((2, 3)),
+        CartesianIndex(1, 2) .- CartesianIndices((1:-1:-1, 1:2:5)),
+        CartesianIndex(1, 2) .- CartesianIndices((2, 3)),
+    ]
+        Rc = collect(R)
+        @test all(map(==, R, Rc))
+    end
+end
+
+@testset "Cartesian simd/broadcasting" begin
     @testset "AbstractUnitRange" begin
         A = rand(-5:5, 64, 64)
         @test abs.(A) == map(abs, A)
@@ -156,6 +179,18 @@ end
 
         test_simd(+, A)
     end
+
+    R = CartesianIndex(-1, -1):CartesianIndex(6, 7)
+    @test R .+ CartesianIndex(1, 2) == CartesianIndex(0, 1):CartesianIndex(7, 9)
+    @test R .- CartesianIndex(1, 2) == CartesianIndex(-2, -3):CartesianIndex(5, 5)
+    # 37867: collect is needed
+    @test collect(CartesianIndex(1, 2) .- R) == CartesianIndex(2, 3):CartesianIndex(-1, -1):CartesianIndex(-5, -5)
+
+    R = CartesianIndex(-1, -1):CartesianIndex(2, 3):CartesianIndex(6, 7)
+    @test R .+ CartesianIndex(2, 2) == CartesianIndex(1, 1):CartesianIndex(2, 3):CartesianIndex(8, 9)
+    @test R .- CartesianIndex(2, 2) == CartesianIndex(-3, -3):CartesianIndex(2, 3):CartesianIndex(4, 5)
+    # 37867: collect is needed
+    @test collect(CartesianIndex(1, 1) .- R) == CartesianIndex(2, 2):CartesianIndex(-2, -3):CartesianIndex(-4, -4)
 end
 
 @testset "Iterators" begin
@@ -195,25 +230,89 @@ end
 end
 
 @testset "CartesianIndices overflow" begin
-    I = CartesianIndices((1:typemax(Int),))
-    i = last(I)
-    @test iterate(I, i) === nothing
+    @testset "incremental" begin
+        I = CartesianIndices((1:typemax(Int),))
+        i = last(I)
+        @test iterate(I, i) === nothing
 
-    I = CartesianIndices((1:(typemax(Int)-1),))
-    i = CartesianIndex(typemax(Int))
-    @test iterate(I, i) === nothing
+        I = CartesianIndices((1:2:typemax(Int), ))
+        i = CartesianIndex(typemax(Int)-1)
+        @test iterate(I, i) === nothing
 
-    I = CartesianIndices((1:typemax(Int), 1:typemax(Int)))
-    i = last(I)
-    @test iterate(I, i) === nothing
+        I = CartesianIndices((1:(typemax(Int)-1),))
+        i = CartesianIndex(typemax(Int))
+        @test iterate(I, i) === nothing
 
-    i = CartesianIndex(typemax(Int), 1)
-    @test iterate(I, i) === (CartesianIndex(1, 2), CartesianIndex(1,2))
+        I = CartesianIndices((1:2:typemax(Int)-1, ))
+        i = CartesianIndex(typemax(Int)-1)
+        @test iterate(I, i) === nothing
 
-    # reverse cartesian indices
-    I = CartesianIndices((typemin(Int):(typemin(Int)+3),))
-    i = last(I)
-    @test iterate(I, i) === nothing
+        I = CartesianIndices((1:typemax(Int), 1:typemax(Int)))
+        i = last(I)
+        @test iterate(I, i) === nothing
+
+        I = CartesianIndices((1:2:typemax(Int), 1:2:typemax(Int)))
+        i = CartesianIndex(typemax(Int)-1, typemax(Int)-1)
+        @test iterate(I, i) === nothing
+
+        I = CartesianIndices((1:typemax(Int), 1:typemax(Int)))
+        i = CartesianIndex(typemax(Int), 1)
+        @test iterate(I, i) === (CartesianIndex(1, 2), CartesianIndex(1,2))
+
+        I = CartesianIndices((1:2:typemax(Int), 1:2:typemax(Int)))
+        i = CartesianIndex(typemax(Int)-1, 1)
+        @test iterate(I, i) === (CartesianIndex(1, 3), CartesianIndex(1, 3))
+
+        I = CartesianIndices((typemin(Int):(typemin(Int)+3),))
+        i = last(I)
+        @test iterate(I, i) === nothing
+
+        I = CartesianIndices(((typemin(Int):2:typemin(Int)+3), ))
+        i = CartesianIndex(typemin(Int)+2)
+        @test iterate(I, i) === nothing
+    end
+
+    @testset "decremental" begin
+        I = Iterators.Reverse(CartesianIndices((typemin(Int):typemin(Int)+10, )))
+        i = last(I)
+        @test iterate(I, i) === nothing
+
+        I = Iterators.Reverse(CartesianIndices((typemin(Int):2:typemin(Int)+10, )))
+        i = last(I)
+        @test iterate(I, i) === nothing
+
+        I = Iterators.Reverse(CartesianIndices((typemin(Int):typemin(Int)+10, )))
+        i = CartesianIndex(typemin(Int))
+        @test iterate(I, i) === nothing
+
+        I = Iterators.Reverse(CartesianIndices((typemin(Int):2:typemin(Int)+10, )))
+        i = CartesianIndex(typemin(Int))
+        @test iterate(I, i) === nothing
+
+        I = Iterators.Reverse(CartesianIndices((typemin(Int):typemin(Int)+10, typemin(Int):typemin(Int)+10)))
+        i = last(I)
+        @test iterate(I, i) === nothing
+
+        I = Iterators.Reverse(CartesianIndices((typemin(Int):2:typemin(Int)+10, typemin(Int):2:typemin(Int)+10)))
+        i = CartesianIndex(typemin(Int), typemin(Int))
+        @test iterate(I, i) === nothing
+
+        I = Iterators.Reverse(CartesianIndices((typemin(Int):typemin(Int)+10, typemin(Int):typemin(Int)+10)))
+        i = CartesianIndex(typemin(Int), typemin(Int)+1)
+        @test iterate(I, i) === (CartesianIndex(typemin(Int)+10, typemin(Int)), CartesianIndex(typemin(Int)+10, typemin(Int)))
+
+        I = Iterators.Reverse(CartesianIndices((typemin(Int):2:typemin(Int)+10, typemin(Int):2:typemin(Int)+10)))
+        i = CartesianIndex(typemin(Int), typemin(Int)+2)
+        @test iterate(I, i) === (CartesianIndex(typemin(Int)+10, typemin(Int)), CartesianIndex(typemin(Int)+10, typemin(Int)))
+
+        I = CartesianIndices((typemax(Int):-1:typemax(Int)-10, ))
+        i = last(I)
+        @test iterate(I, i) === nothing
+
+        I = CartesianIndices((typemax(Int):-2:typemax(Int)-10, ))
+        i = last(I)
+        @test iterate(I, i) === nothing
+    end
 end
 
 @testset "CartesianIndices iteration" begin

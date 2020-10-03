@@ -368,38 +368,69 @@ module IteratorsMD
     eltype(::Type{CartesianIndices{N,TT}}) where {N,TT} = CartesianIndex{N}
     IteratorSize(::Type{<:CartesianIndices{N}}) where {N} = Base.HasShape{N}()
 
-    @inline function iterate(iter::CartesianIndices)
-        iterfirst, iterlast = first(iter), last(iter)
-        if any(map(>, iterfirst.I, iterlast.I))
+    @propagate_inbounds function iterate(iter::CartesianIndices)
+        iterfirst = first(iter)
+        if !all(map(in, iterfirst.I, iter.indices))
             return nothing
         end
         iterfirst, iterfirst
     end
-    @inline function iterate(iter::CartesianIndices, state)
+    @propagate_inbounds function iterate(iter::CartesianIndices, state)
         valid, I = __inc(state.I, iter.indices)
         valid || return nothing
         return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # increment & carry
-    @inline function inc(state, indices)
+    @propagate_inbounds function inc(state, indices)
         _, I = __inc(state, indices)
         return CartesianIndex(I...)
     end
 
     __inc(::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __inc(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
-        I = state[1] + step(indices[1])
-        valid = I <= last(indices[1]) && typemax(Int) - step(indices[1]) >= state[1]
+    @propagate_inbounds function __inc(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
+        rng = indices[1]
+        I = state[1] + step(rng)
+        valid = __isvalid_inc_range(I, rng) && __has_inc_overflow(state[1], rng)
         return valid, (I, )
     end
-    @inline function __inc(state, indices)
-        I = state[1] + step(indices[1])
-        if I <= last(indices[1]) && typemax(Int) - step(indices[1]) >= state[1]
+    @propagate_inbounds function __inc(state, indices)
+        rng = indices[1]
+        I = state[1] + step(rng)
+        if __isvalid_inc_range(I, rng) && __has_inc_overflow(state[1], rng)
             return true, (I, tail(state)...)
         end
         valid, I = __inc(tail(state), tail(indices))
-        return valid, (first(indices[1]), I...)
+        return valid, (first(rng), I...)
+    end
+
+    @inline __isvalid_inc_range(I, rng) = __isvalid_range(I, rng)
+    @inline __isvalid_inc_range(I, rng::AbstractUnitRange) = I <= last(rng)
+
+    @propagate_inbounds __has_inc_overflow(I, rng) = __has_overflow(I, rng)
+    @inline function __has_inc_overflow(I::T, rng::AbstractUnitRange) where T
+        @boundscheck return I < last(rng)
+        return true
+    end
+
+    @inline function __isvalid_range(I, rng)
+        if step(rng) > 0
+            lo, hi = first(rng), last(rng)
+        elseif step(rng) < 0
+            lo, hi = last(rng), first(rng)
+        end
+        lo <= I <= hi
+    end
+    @inline function __has_overflow(I::T, rng) where T
+        @boundscheck begin
+            inc_step = step(rng)
+            if inc_step > 0 && I > typemax(T) - inc_step
+                return false
+            elseif inc_step < 0 && I < typemin(T) - inc_step
+                return false
+            end
+        end
+        return true
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
@@ -463,45 +494,57 @@ module IteratorsMD
 
     Base.reverse(iter::CartesianIndices) = CartesianIndices(reverse.(iter.indices))
 
-    @inline function iterate(r::Reverse{<:CartesianIndices})
-        iterfirst, iterlast = last(r.itr), first(r.itr)
-        if any(map(<, iterfirst.I, iterlast.I))
+    @propagate_inbounds function iterate(r::Reverse{<:CartesianIndices})
+        iterfirst = last(r.itr)
+        if !all(map(in, iterfirst.I, r.itr.indices))
             return nothing
         end
         iterfirst, iterfirst
     end
-    @inline function iterate(r::Reverse{<:CartesianIndices}, state)
+    @propagate_inbounds function iterate(r::Reverse{<:CartesianIndices}, state)
         valid, I = __dec(state.I, r.itr.indices)
         valid || return nothing
         return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # decrement & carry
-    @inline function dec(state, indices)
+    @propagate_inbounds function dec(state, indices)
         _, I = __dec(state, indices)
         return CartesianIndex(I...)
     end
 
     # decrement post check to avoid integer overflow
-    @inline __dec(::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __dec(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
-        I = state[1] - step(indices[1])
-        valid = I >= first(indices[1]) && typemin(Int) + step(indices[1]) <= state[1]
+    @propagate_inbounds __dec(::Tuple{}, ::Tuple{}) = false, ()
+    @propagate_inbounds function __dec(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
+        rng = indices[1]
+        I = state[1] - step(rng)
+        valid = __isvalid_dec_range(I, rng) && __has_dec_overflow(I, rng)
         return valid, (I,)
     end
 
-    @inline function __dec(state, indices)
-        I = state[1] - step(indices[1])
-        if I >= first(indices[1]) && typemin(Int) + step(indices[1]) <= state[1]
+    @propagate_inbounds function __dec(state, indices)
+        rng = indices[1]
+        I = state[1] - step(rng)
+        if __isvalid_dec_range(I, rng) && __has_dec_overflow(I, rng)
             return true, (I, tail(state)...)
         end
         valid, I = __dec(tail(state), tail(indices))
-        return valid, (last(indices[1]), I...)
+        return valid, (last(rng), I...)
+    end
+
+    @inline __isvalid_dec_range(I, rng) = __isvalid_range(I, rng)
+    @inline __isvalid_dec_range(I, rng::AbstractUnitRange) = I >= first(rng)
+
+    @propagate_inbounds __has_dec_overflow(I, rng) = __has_overflow(I, rng)
+    @inline function __has_dec_overflow(I::T, rng::AbstractUnitRange) where T
+        @boundscheck return I <= last(rng)
+        return true
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
     iterate(iter::Reverse{<:CartesianIndices{0}}, state=false) = state ? nothing : (CartesianIndex(), true)
 
+    # FIXME: A[SR] == A[Linearindices[SR]] should hold for StepRange CartesianIndices
     Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices(axes(inds))
 
     # array operations

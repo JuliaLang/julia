@@ -1112,7 +1112,8 @@ broadcasted(::typeof(+), j::CartesianIndex{N}, I::CartesianIndices{N}) where N =
 broadcasted(::typeof(-), I::CartesianIndices{N}, j::CartesianIndex{N}) where N =
     CartesianIndices(map((rng, offset)->rng .- offset, I.indices, Tuple(j)))
 function broadcasted(::typeof(-), j::CartesianIndex{N}, I::CartesianIndices{N}) where N
-    diffrange(offset, rng) = range(offset-last(rng), length=length(rng))
+    # TODO: 8ns overhead by adding step=step(rng)
+    diffrange(offset, rng) = range(offset-last(rng), length=length(rng), step=step(rng))
     Iterators.reverse(CartesianIndices(map(diffrange, Tuple(j), I.indices)))
 end
 
