@@ -368,6 +368,7 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
+promote_to_arrays_(n::Int, ::Type, a::Number) = a
 promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copyto!(Matrix{T}(undef, n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
@@ -378,11 +379,11 @@ promote_to_arrays(n,k, ::Type{T}, A, B, C) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays_(n[k+2], T, C))
 promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
-promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) = Matrix
+promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling,Number}}}) = Matrix
 
-for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
+for (f,dim,name,helper) in ((:hcat,1,"rows",:_det_row_size), (:vcat,2,"cols",:_det_col_size))
     @eval begin
-        function $f(A::Union{AbstractVecOrMat,UniformScaling}...)
+        function $helper(A...)
             n = -1
             for a in A
                 if !isa(a, UniformScaling)
@@ -395,13 +396,21 @@ for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
                 end
             end
             n == -1 && throw(ArgumentError($("$f of only UniformScaling objects cannot determine the matrix size")))
+            return n
+        end
+        function $f(A::Union{AbstractVecOrMat,UniformScaling}...)
+            n = $helper(A...)
             return $f(promote_to_arrays(fill(n,length(A)),1, promote_to_array_type(A), A...)...)
+        end
+        function $f(A::Union{AbstractVecOrMat,UniformScaling,Number}...)
+            n = $helper(A...)
+            return invoke($f, Tuple{Vararg{Any}}, A...)
         end
     end
 end
 
 
-function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...)
+function _det_size_hvcat(rows, A...)
     require_one_based_indexing(A...)
     nr = length(rows)
     sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
@@ -444,8 +453,8 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
         j = 0
         for i = 1:nr
             if rows[i] > 0 && n[j+1] == -1 # this row consists entirely of UniformScalings
-                nci = nc ÷ rows[i]
-                nci * rows[i] != nc && throw(DimensionMismatch("indivisible UniformScaling sizes"))
+                nci, r = divrem(nc, rows[i])
+                r != 0 && throw(DimensionMismatch("indivisible UniformScaling sizes"))
                 for k = 1:rows[i]
                     n[j+k] = nci
                 end
@@ -453,7 +462,16 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
             j += rows[i]
         end
     end
+    return n
+end
+
+function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...)
+    n = _det_size_hvcat(rows, A...)
     return hvcat(rows, promote_to_arrays(n,1, promote_to_array_type(A), A...)...)
+end
+function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling,Number}...)
+    n = _det_size_hvcat(rows, A...)
+    return invoke(hvcat, Tuple{Tuple{Vararg{Int}},Tuple{Vararg{Any}}}, rows, promote_to_arrays(n,1, promote_to_array_type(A), A...)...)
 end
 
 ## Matrix construction from UniformScaling
