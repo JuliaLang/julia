@@ -7,7 +7,7 @@ SRCDIR           := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME        := $(abspath $(SRCDIR)/..)
 SRCCACHE         := $(abspath $(JULIAHOME)/deps/srccache)
 include $(JULIAHOME)/Make.inc
-JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia) --startup-file=no
+JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia) --startup-file=no -g2
 
 .PHONY: help clean cleanall html pdf deps deploy
 

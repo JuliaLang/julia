@@ -1124,6 +1124,14 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *
         }
         write_int32(s, 0); // terminator, for ease of reading
 
+        // Julia debug mode
+        jl_value_t *julia_debug = (jl_value_t*)jl_get_global(jl_base_module, jl_symbol("julia_debug"));
+        if (julia_debug) {
+            write_int8(s, jl_unbox_bool(julia_debug));
+        } else {
+            write_int8(s, 0);
+        }
+
         // Calculate Preferences hash for current package.
         jl_value_t *prefs_hash = NULL;
         if (jl_base_module) {

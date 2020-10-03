@@ -780,6 +780,7 @@ export
     atreplinit,
     exit,
     ntuple,
+    isdebug,
 
 # I/O and events
     close,

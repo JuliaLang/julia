@@ -3,64 +3,8 @@
 isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
 
 # Tests that do not really go anywhere else
-
-# test @assert macro
-@test_throws AssertionError (@assert 1 == 2)
-@test_throws AssertionError (@assert false)
-@test_throws AssertionError (@assert false "this is a test")
-@test_throws AssertionError (@assert false "this is a test" "another test")
-@test_throws AssertionError (@assert false :a)
-let
-    try
-        @assert 1 == 2
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test occursin("1 == 2", ex.msg)
-    end
-end
-# test @assert message
-let
-    try
-        @assert 1 == 2 "this is a test"
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
-    end
-end
-# @assert only uses the first message string
-let
-    try
-        @assert 1 == 2 "this is a test" "this is another test"
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
-    end
-end
-# @assert calls string() on second argument
-let
-    try
-        @assert 1 == 2 :random_object
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test !occursin("1 == 2", ex.msg)
-        @test occursin("random_object", ex.msg)
-    end
-end
-# if the second argument is an expression, c
-let deepthought(x, y) = 42
-    try
-        @assert 1 == 2 string("the answer to the ultimate question: ",
-                              deepthought(6, 9))
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "the answer to the ultimate question: 42"
-    end
-end
+assert_file = joinpath(@__DIR__, "assert.jl")
+@test success(`$(Base.julia_cmd()) -g2 $assert_file`)
 
 let # test the process title functions, issue #9957
     oldtitle = Sys.get_process_title()
@@ -770,9 +714,9 @@ end
 
 @kwdef struct TestInnerConstructor
     a = 1
-    TestInnerConstructor(a::Int) = (@assert a>0; new(a))
+    TestInnerConstructor(a::Int) = (a>0 || error(); new(a))
     function TestInnerConstructor(a::String)
-        @assert length(a) > 0
+        length(a) > 0 || error()
         new(a)
     end
 end
@@ -780,9 +724,9 @@ end
 @testset "@kwdef inner constructor" begin
     @test TestInnerConstructor() == TestInnerConstructor(1)
     @test TestInnerConstructor(a=2) == TestInnerConstructor(2)
-    @test_throws AssertionError TestInnerConstructor(a=0)
+    @test_throws ErrorException TestInnerConstructor(a=0)
     @test TestInnerConstructor(a="2") == TestInnerConstructor("2")
-    @test_throws AssertionError TestInnerConstructor(a="")
+    @test_throws ErrorException TestInnerConstructor(a="")
 end
 
 const outsidevar = 7
@@ -819,7 +763,7 @@ end
 
 @testset "Pointer to unsigned/signed integer" begin
     # assuming UInt and Ptr have the same size
-    @assert sizeof(UInt) == sizeof(Ptr{Nothing})
+    @test sizeof(UInt) == sizeof(Ptr{Nothing})
     uint = UInt(0x12345678)
     sint = signed(uint)
     ptr = reinterpret(Ptr{Nothing}, uint)

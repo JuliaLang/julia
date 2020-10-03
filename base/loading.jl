@@ -1231,6 +1231,7 @@ function compilecache_path(pkg::PkgId, cache::TOMLCache)::String
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         crc = _crc32c(get_preferences_hash(pkg.uuid, cache), crc)
+        crc = _crc32c(isdebug(), crc)
         project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
@@ -1358,6 +1359,8 @@ function parse_cache_header(f::IO)
         end
         totbytes -= 4 + 4 + n2 + 8
     end
+    julia_debug = Bool(read(f, UInt8))
+    totbytes -= 1
     prefs_hash = read(f, UInt64)
     totbytes -= 8
     @assert totbytes == 12 "header of cache file appears to be corrupt"
@@ -1372,7 +1375,7 @@ function parse_cache_header(f::IO)
         build_id = read(f, UInt64) # build id
         push!(required_modules, PkgId(uuid, sym) => build_id)
     end
-    return modules, (includes, requires), required_modules, srctextpos, prefs_hash
+    return modules, (includes, requires), required_modules, srctextpos, prefs_hash, julia_debug
 end
 
 function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
@@ -1381,21 +1384,21 @@ function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
         !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
         ret = parse_cache_header(io)
         srcfiles_only || return ret
-        modules, (includes, requires), required_modules, srctextpos, prefs_hash = ret
+        modules, (includes, requires), required_modules, srctextpos, prefs_hash, julia_debug = ret
         srcfiles = srctext_files(io, srctextpos)
         delidx = Int[]
         for (i, chi) in enumerate(includes)
             chi.filename ∈ srcfiles || push!(delidx, i)
         end
         deleteat!(includes, delidx)
-        return modules, (includes, requires), required_modules, srctextpos, prefs_hash
+        return modules, (includes, requires), required_modules, srctextpos, prefs_hash, julia_debug
     finally
         close(io)
     end
 end
 
 function cache_dependencies(f::IO)
-    defs, (includes, requires), modules, srctextpos, prefs_hash = parse_cache_header(f)
+    defs, (includes, requires), modules, srctextpos, prefs_hash, julia_debug = parse_cache_header(f)
     return modules, map(chi -> (chi.filename, chi.mtime), includes)  # return just filename and mtime
 end
 
@@ -1410,7 +1413,7 @@ function cache_dependencies(cachefile::String)
 end
 
 function read_dependency_src(io::IO, filename::AbstractString)
-    modules, (includes, requires), required_modules, srctextpos, prefs_hash = parse_cache_header(io)
+    modules, (includes, requires), required_modules, srctextpos, prefs_hash, julia_debug = parse_cache_header(io)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
     return _read_dependency_src(io, filename)
@@ -1496,7 +1499,7 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-        modules, (includes, requires), required_modules, srctextpos, prefs_hash = parse_cache_header(io)
+        modules, (includes, requires), required_modules, srctextpos, prefs_hash, julia_debug = parse_cache_header(io)
         id = isempty(modules) ? nothing : first(modules).first
         modules = Dict{PkgId, UInt64}(modules)
 
@@ -1572,6 +1575,11 @@ function stale_cachefile(modpath::String, cachefile::String, cache::TOMLCache)
         end
 
         if isa(id, PkgId)
+            curr_debug = isdebug()
+            if julia_debug != curr_debug
+                @debug "Rejecting cache file $cachefile because julia debug mode does not match"
+                return true
+            end
             curr_prefs_hash = get_preferences_hash(id.uuid, cache)
             if prefs_hash != curr_prefs_hash
                 @debug "Rejecting cache file $cachefile because preferences hash does not match 0x$(string(prefs_hash, base=16)) != 0x$(string(curr_prefs_hash, base=16))"

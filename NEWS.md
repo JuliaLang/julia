@@ -84,6 +84,11 @@ New library functions
   efficiently ([#35816]).
 * New function `addenv` for adding environment mappings into a `Cmd` object, returning the new `Cmd` object.
 * New function `insorted` for determining whether an element is in a sorted collection or not ([#37490]).
+* New function `isdebug` for checking if julia is running in debug mode.
+  Packages use different precompile caches in debug and non-debug mode thus it
+  safe to use this function for compile time decisions. Also, note that
+  `@assert` now is a no-op unless `isdebug()` is true. Debug mode is activated
+  with the `-g2` flag.
 
 New library features
 --------------------
@@ -124,6 +129,8 @@ Standard library changes
 * The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside. ([#37320])
+* The `@assert` macro is now only active when julia is started with a debug
+  level of 2 (`julia -g2`).
 
 #### LinearAlgebra
 
