@@ -461,6 +461,8 @@ module IteratorsMD
 
     # reversed CartesianIndices iteration
 
+    Base.reverse(iter::CartesianIndices) = CartesianIndices(reverse.(iter.indices))
+
     @inline function iterate(r::Reverse{<:CartesianIndices})
         iterfirst, iterlast = last(r.itr), first(r.itr)
         if any(map(<, iterfirst.I, iterlast.I))

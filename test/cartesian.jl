@@ -162,6 +162,8 @@ end
     @testset "Reverse" begin
         R = CartesianIndices((0:5, 0:5))
         RR = Iterators.Reverse(R)
+        rR = reverse(R)
+        @test rR == collect(RR)
 
         @test eltype(RR) == CartesianIndex{2}
         @test size(RR) == size(R)
