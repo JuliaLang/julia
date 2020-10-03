@@ -431,7 +431,7 @@ module IteratorsMD
     simd_inner_length(iter::CartesianIndices, I::CartesianIndex) = Base.length(iter.indices[1])
 
     simd_index(iter::CartesianIndices{0}, ::CartesianIndex, I1::Int) = first(iter)
-    @inline function simd_index(iter::CartesianIndices, Ilast::CartesianIndex, I1::Int)
+    @propagate_inbounds function simd_index(iter::CartesianIndices, Ilast::CartesianIndex, I1::Int)
         CartesianIndex(getindex(iter.indices[1], I1+first(Base.axes1(iter.indices[1]))), Ilast.I...)
     end
 
