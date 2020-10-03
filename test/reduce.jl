@@ -593,6 +593,18 @@ test18695(r) = sum( t^2 for t in r )
     end
 end
 
+@testset "reduce(cat, A) for arrays" begin
+    for args in ([1:2], [[1, 2]], [1:2, 3:4], [[3, 4, 5], 1:3], [1:2, [3.5, 4.5]],
+                 [[1 2; 3 4], [5 6; 7 8]])
+        X = reduce(cat, args)
+        Y = cat(args...)
+        @test X == Y
+        @test typeof(X) === typeof(Y)
+    end
+    @test_throws ArgumentError reduce(cat, [1:2, [1, 2], 1:3])
+    @test_throws MethodError reduce(cat, [[5 6; 7 8], [1, 2]])
+end
+
 # offset axes
 i = Base.Slice(-3:3)
 x = [j^2 for j in i]

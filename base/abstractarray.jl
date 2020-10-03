@@ -1567,21 +1567,34 @@ reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}) =
 reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
     _typed_hcat(mapreduce(eltype, promote_type, A), A)
 
-function reduce(::typeof(cat), A::AbstractArray{<:AbstractVecOrMat})
-    B = _typed_hcat(mapreduce(eltype, promote_type, A), vec(A))
-    reshape(B, _cat_firstax(A)..., axes(A)...)
-end
-function reduce(::typeof(cat), A::AbstractArray{<:AbstractArray})
-    B = _typed_hcat(mapreduce(eltype, promote_type, A), vec(vec.(A))) # should probably be _typed_cat
-    reshape(B, _cat_firstax(A)..., axes(A)...)
-end
+reduce(::typeof(cat), A::AbstractArray{<:AbstractArray}) =
+    _typed_cat(mapreduce(eltype, promote_type, A), A)
 
-function _cat_firstax(A)
+function _typed_cat(::Type{T}, A::AbstractArray{<:AbstractArray{<:Any,N},M}) where {T,N,M}
     ax1 = axes(first(A))
-    for a in A
-        axes(a) == ax1 || throw(DimensionMismatch("expected arrays of consistent size")) # should maybe call _cs(d, a, b)
+    dense = true
+    for j in Iterators.drop(eachindex(A), 1)
+        Aj = A[j]
+        if axes(Aj) != ax1
+            throw(ArgumentError("expected arrays of consistent size, got $(axes(Aj)) for argument $j, compared to $ax1 for the first"))
+        end
+        dense &= isa(Aj,Array)
     end
-    ax1
+    B = similar(first(A), T, ax1..., axes(A)...)
+    if dense
+        off = 1
+        for a in A
+            copyto!(B, off, a, 1, length(a))
+            off += length(a)
+        end
+    else
+        colons = map(_->Colon(), ax1)
+        for J in CartesianIndices(A)
+            ints = Tuple(J)
+            @inbounds B[colons..., ints...] = A[J]
+        end
+    end
+    return B
 end
 
 ## cat: general case
