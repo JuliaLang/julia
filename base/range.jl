@@ -47,11 +47,31 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start[, stop]; length, stop, step=1)
+    range(start; stop)
+    range(start; length)
+    range(start, stop; length)
+    range(start, stop; step)
 
-Given a starting value, construct a range either by length or from `start` to `stop`,
-optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
-One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
+    # The following cause an ArgumentError to be thrown.
+    range(start, stop) # Must specify either length or step
+    range(start; step) # Cannot specify step alone
+    range(start, stop; length, step) # Cannot specify all of stop, length, and step
+    range(start; stop, length, step) # Cannot specify all of stop, length, and step
+
+Given a starting value, construct an iterable with the first element of `start`.
+One keyword argument of either `length`, `stop`, or `step` is required to avoid
+ambiguity.
+
+To specify a [`UnitRange`](@ref) where `step` is 1, use either
+* range(start, length=length)
+* `start:stop`
+* `(:)(start,stop)`
+
+`stop` may be included as the last element of the iterable depending on `step`.
+`stop` may be specified as either a positional or keyword argument.
+If `stop` is given as a positional argument, a keyword argument.
+of either `length` or `step` must be specified.
+If `stop` is given as the sole keyword argument, a `step` is assumed be 1.0.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
 automatically such that there are `length` linearly spaced elements in the range.
@@ -59,10 +79,10 @@ automatically such that there are `length` linearly spaced elements in the range
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
 automatically such that the elements are `step` spaced.
 
+`length`, `stop`, and `step` cannot be all specified.
+
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
-
-`stop` may be specified as either a positional or keyword argument.
 
 !!! compat "Julia 1.1"
     `stop` as a positional argument requires at least Julia 1.1.
@@ -75,6 +95,9 @@ julia> range(1, length=100)
 julia> range(1, stop=100)
 1:100
 
+julia> range(1, stop=3.3)
+1.0:1.0:3.0
+
 julia> range(1, step=5, length=100)
 1:5:496
 
@@ -86,6 +109,19 @@ julia> range(1, 10, length=101)
 
 julia> range(1, 100, step=5)
 1:5:96
+
+julia> try range(1, 5) catch e println(e) end
+ArgumentError("At least one of `length` or `step` must be specified")
+
+julia> try range(1, step=1) catch e println(e) end
+ArgumentError("At least one of `length` or `stop` must be specified")
+
+julia> try range(1, 5; length=5, step=1) catch e println(e) end
+ArgumentError("Too many arguments specified; try passing only one of `stop` or `length`")
+
+julia> try range(1; stop=5, length=5, step=1) catch e println(e) end
+ArgumentError("Too many arguments specified; try passing only one of `stop` or `length`")
+
 ```
 """
 range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing) =
