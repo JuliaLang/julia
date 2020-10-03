@@ -232,12 +232,11 @@ function mt_pop!(r::MersenneTwister, ::Type{T}) where T<:BitInteger
     (x128 >> (i128 * (sizeof(T) << 3))) % T
 end
 
-# not necessary, but very slightly more efficient
 function mt_pop!(r::MersenneTwister, ::Type{T}) where {T<:Union{Int128,UInt128}}
     reserve1(r, T)
-    @inbounds res = r.ints[r.idxI >> 4]
-    r.idxI -= 16
-    res % T
+    idx = r.idxI >> 4
+    r.idxI = idx << 4 - 16
+    @inbounds r.ints[idx] % T
 end
 
 
