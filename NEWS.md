@@ -16,10 +16,11 @@ New language features
 * `ꜛ` (U+A71B), `ꜜ` (U+A71C) and `ꜝ` (U+A71D) can now also be used as operator
   suffixes. They can be tab-completed from `\^uparrow`, `\^downarrow` and `\^!` in the REPL
   ([#37542]).
-
-* Standalone "dotted" operators now get lowered to `Base.BroadcastFunction(op)` and can be passed to
-  higher-order functions, i.e. `.op` is functionally equivalent to `(x...) -> (op).(x...)`.
-  ([#35706])
+* Standalone "dotted" operators now get parsed as `Expr(:., :op)`, which gets lowered to
+  `Base.BroadcastFunction(op)`. This means `.op` is functionally equivalent to
+  `(x...) -> (op).(x...)`, which can be useful for passing the broadcasted version of an
+  operator to higher-order functions, like for example `map(.*, A, B)` for an elementwise
+  product of two arrays of arrays. ([#37583])
 
 Language changes
 ----------------
