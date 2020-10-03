@@ -544,8 +544,26 @@ module IteratorsMD
     # 0-d cartesian ranges are special-cased to iterate once and only once
     iterate(iter::Reverse{<:CartesianIndices{0}}, state=false) = state ? nothing : (CartesianIndex(), true)
 
-    # FIXME: A[SR] == A[Linearindices[SR]] should hold for StepRange CartesianIndices
-    Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R} = LinearIndices(axes(inds))
+    Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R<:AbstractUnitRange} = LinearIndices{N,R}(inds.indices)
+    function Base.LinearIndices(inds::CartesianIndices{N}) where N
+        indices = inds.indices
+        if all(x->x==1, step.(indices))
+            indices = map(ind->convert(AbstractUnitRange, ind), indices)
+            LinearIndices{N, typeof(indices)}(indices)
+        else
+            throw(ArgumentError("LinearIndices for $typeof(inds) with non-1 step size is not supported."))
+        end
+    end
+
+    # This is needed because converting to LinearIndices is only available when steps are all 1
+    # TODO: this is only a temp patch, should have better solution
+    function Base.collect(inds::CartesianIndices)
+        dest = Array{eltype(inds)}(undef, size(inds))
+        @inbounds for i in eachindex(inds)
+            dest[i] = inds[i]
+        end
+        dest
+    end
 
     # array operations
     Base.intersect(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
