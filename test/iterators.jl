@@ -224,7 +224,7 @@ let i = 0
         i += 1
         i <= 10 || break
     end
-    @test Base.isdone(cycle(0:3)) === Base.isdone(0:3)
+    @test Base.isdone(cycle(0:3)) === Base.isdone(0:3) === missing
     @test !Base.isdone(cycle(0:3), 1)
 end
 
@@ -871,8 +871,8 @@ end
 
 @testset "Iterators.tail_if_any" begin
     @test Iterators.tail_if_any(()) == ()
-    @test Iterators.tail_if_any((1, 2)) == (2, )
-    @test Iterators.tail_if_any((1, )) == ()
+    @test Iterators.tail_if_any((1, 2)) == (2,)
+    @test Iterators.tail_if_any((1,)) == ()
 end
 
 @testset "IteratorSize trait for zip" begin
