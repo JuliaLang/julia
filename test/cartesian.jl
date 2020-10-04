@@ -141,7 +141,7 @@ end
         (CartesianIndices((1:2:5, )), CartesianIndex(2, ), CartesianIndex(4, )),
         (1:2:5, 2, 4),
     ]
-        # consistant to ranges
+        # consistent with ranges behavior
         @test !(i in I)
         @test iterate(I, i) == (i_next, i_next)
     end
@@ -230,7 +230,7 @@ end
 end
 
 @testset "CartesianIndices overflow" begin
-    @testset "incremental" begin
+    @testset "incremental steps" begin
         I = CartesianIndices((1:typemax(Int),))
         i = last(I)
         @test iterate(I, i) === nothing
@@ -272,7 +272,7 @@ end
         @test iterate(I, i) === nothing
     end
 
-    @testset "decremental" begin
+    @testset "decremental steps" begin
         I = Iterators.Reverse(CartesianIndices((typemin(Int):typemin(Int)+10, )))
         i = last(I)
         @test iterate(I, i) === nothing

@@ -391,29 +391,29 @@ module IteratorsMD
     @propagate_inbounds function __inc(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
         rng = indices[1]
         I = state[1] + step(rng)
-        valid = __isvalid_inc_range(I, rng) && __has_inc_overflow(state[1], rng)
+        valid = __is_valid_inc_range(I, rng) && __no_inc_overflow(state[1], rng)
         return valid, (I, )
     end
     @propagate_inbounds function __inc(state, indices)
         rng = indices[1]
         I = state[1] + step(rng)
-        if __isvalid_inc_range(I, rng) && __has_inc_overflow(state[1], rng)
+        if __is_valid_inc_range(I, rng) && __no_inc_overflow(state[1], rng)
             return true, (I, tail(state)...)
         end
         valid, I = __inc(tail(state), tail(indices))
         return valid, (first(rng), I...)
     end
 
-    @inline __isvalid_inc_range(I, rng) = __isvalid_range(I, rng)
-    @inline __isvalid_inc_range(I, rng::AbstractUnitRange) = I <= last(rng)
+    @inline __is_valid_inc_range(I, rng) = __is_valid_range(I, rng)
+    @inline __is_valid_inc_range(I, rng::AbstractUnitRange) = I <= last(rng)
 
-    @propagate_inbounds __has_inc_overflow(I, rng) = __has_overflow(I, rng)
-    @inline function __has_inc_overflow(I::T, rng::AbstractUnitRange) where T
+    @propagate_inbounds __no_inc_overflow(I, rng) = __no_overflow(I, rng)
+    @inline function __no_inc_overflow(I::T, rng::AbstractUnitRange) where T
         @boundscheck return I < last(rng)
         return true
     end
 
-    @inline function __isvalid_range(I, rng)
+    @inline function __is_valid_range(I, rng)
         if step(rng) > 0
             lo, hi = first(rng), last(rng)
         elseif step(rng) < 0
@@ -421,7 +421,7 @@ module IteratorsMD
         end
         lo <= I <= hi
     end
-    @inline function __has_overflow(I::T, rng) where T
+    @inline function __no_overflow(I::T, rng) where T
         @boundscheck begin
             inc_step = step(rng)
             if inc_step > 0 && I > typemax(T) - inc_step
@@ -518,25 +518,25 @@ module IteratorsMD
     @propagate_inbounds function __dec(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
         rng = indices[1]
         I = state[1] - step(rng)
-        valid = __isvalid_dec_range(I, rng) && __has_dec_overflow(I, rng)
+        valid = __is_valid_dec_range(I, rng) && __no_dec_overflow(I, rng)
         return valid, (I,)
     end
 
     @propagate_inbounds function __dec(state, indices)
         rng = indices[1]
         I = state[1] - step(rng)
-        if __isvalid_dec_range(I, rng) && __has_dec_overflow(I, rng)
+        if __is_valid_dec_range(I, rng) && __no_dec_overflow(I, rng)
             return true, (I, tail(state)...)
         end
         valid, I = __dec(tail(state), tail(indices))
         return valid, (last(rng), I...)
     end
 
-    @inline __isvalid_dec_range(I, rng) = __isvalid_range(I, rng)
-    @inline __isvalid_dec_range(I, rng::AbstractUnitRange) = I >= first(rng)
+    @inline __is_valid_dec_range(I, rng) = __is_valid_range(I, rng)
+    @inline __is_valid_dec_range(I, rng::AbstractUnitRange) = I >= first(rng)
 
-    @propagate_inbounds __has_dec_overflow(I, rng) = __has_overflow(I, rng)
-    @inline function __has_dec_overflow(I::T, rng::AbstractUnitRange) where T
+    @propagate_inbounds __no_dec_overflow(I, rng) = __no_overflow(I, rng)
+    @inline function __no_dec_overflow(I::T, rng::AbstractUnitRange) where T
         @boundscheck return I <= last(rng)
         return true
     end
