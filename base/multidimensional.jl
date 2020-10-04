@@ -559,8 +559,8 @@ module IteratorsMD
     # TODO: this is only a temp patch, should have better solution
     function Base.collect(inds::CartesianIndices)
         dest = Array{eltype(inds)}(undef, size(inds))
-        @inbounds for i in eachindex(inds)
-            dest[i] = inds[i]
+        @inbounds for (i, idx) in enumerate(inds)
+            dest[i] = idx
         end
         dest
     end

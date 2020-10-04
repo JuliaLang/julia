@@ -209,6 +209,14 @@ end
         RRR = collect(Iterators.Reverse(collect(RR)))
         @test R == RRR
     end
+
+    @testset "collect" begin
+        for oinds in [(0:5, ), (2:2:7, ), (2:-1:0, ),
+                      (0:5, 2:8), (2:2:7, 3:3:10), (2:-1:0, 2:7),]
+            R = CartesianIndices(oinds)
+            @test collect(R) == R
+        end
+    end
 end
 
 @testset "set operations" begin
