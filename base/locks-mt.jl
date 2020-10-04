@@ -27,7 +27,7 @@ contending threads. If you have more contention than that, different
 synchronization approaches should be considered.
 """
 mutable struct SpinLock <: AbstractLock
-    handle::Int
+    owned::Int
     SpinLock() = new(0)
 end
 
@@ -43,7 +43,7 @@ import Base.Sys.WORD_SIZE
 @eval _get(x::SpinLock) =
     llvmcall($"""
              %ptr = inttoptr i$WORD_SIZE %0 to i$WORD_SIZE*
-             %rv = load atomic i$WORD_SIZE, i$WORD_SIZE* %ptr acquire, align $(gc_alignment(Int))
+             %rv = load atomic i$WORD_SIZE, i$WORD_SIZE* %ptr monotonic, align $(gc_alignment(Int))
              ret i$WORD_SIZE %rv
              """, Int, Tuple{Ptr{Int}}, unsafe_convert(Ptr{Int}, pointer_from_objref(x)))
 

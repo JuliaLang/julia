@@ -37,6 +37,8 @@ the corresponding matrix factorization function.
 The triangular Cholesky factor can be obtained from the factorization `F::Cholesky`
 via `F.L` and `F.U`.
 
+Iterating the decomposition produces the components `L` and `U`.
+
 # Examples
 ```jldoctest
 julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
@@ -46,26 +48,31 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholesky(A)
-Cholesky{Float64,Matrix{Float64}}
+Cholesky{Float64, Matrix{Float64}}
 U factor:
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.U
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.L
-3×3 LowerTriangular{Float64,Matrix{Float64}}:
+3×3 LowerTriangular{Float64, Matrix{Float64}}:
   2.0   ⋅    ⋅
   6.0  1.0   ⋅
  -8.0  5.0  3.0
 
 julia> C.L * C.U == A
+true
+
+julia> l, u = C; # destructuring via iteration
+
+julia> l == C.L && u == C.U
 true
 ```
 """
@@ -84,6 +91,13 @@ Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::Integer) where {T} =
 Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, uplo, info)
 
+
+# iteration for destructuring into components
+Base.iterate(C::Cholesky) = (C.L, Val(:U))
+Base.iterate(C::Cholesky, ::Val{:U}) = (C.U, Val(:done))
+Base.iterate(C::Cholesky, ::Val{:done}) = nothing
+
+
 """
     CholeskyPivoted
 
@@ -94,6 +108,8 @@ the corresponding matrix factorization function.
 The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`
 via `F.L` and `F.U`.
 
+Iterating the decomposition produces the components `L` and `U`.
+
 # Examples
 ```jldoctest
 julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
@@ -103,9 +119,9 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholesky(A, Val(true))
-CholeskyPivoted{Float64,Matrix{Float64}}
+CholeskyPivoted{Float64, Matrix{Float64}}
 U factor with rank 3:
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  9.89949  -4.34366  -1.61624
   ⋅        4.25825   1.1694
   ⋅         ⋅        0.142334
@@ -114,6 +130,11 @@ permutation:
  3
  2
  1
+
+julia> l, u = C; # destructuring via iteration
+
+julia> l == C.L && u == C.U
+true
 ```
 """
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
@@ -134,6 +155,13 @@ function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{<
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
 
+
+# iteration for destructuring into components
+Base.iterate(C::CholeskyPivoted) = (C.L, Val(:U))
+Base.iterate(C::CholeskyPivoted, ::Val{:U}) = (C.U, Val(:done))
+Base.iterate(C::CholeskyPivoted, ::Val{:done}) = nothing
+
+
 # make a copy that allow inplace Cholesky factorization
 @inline choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
 @inline cholcopy(A) = copy_oftype(A, choltype(A))
@@ -153,12 +181,15 @@ end
 function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
     require_one_based_indexing(A)
     n = checksquare(A)
+    realdiag = eltype(A) <: Complex
     @inbounds begin
         for k = 1:n
+            Akk = realdiag ? real(A[k,k]) : A[k,k]
             for i = 1:k - 1
-                A[k,k] -= A[i,k]'A[i,k]
+                Akk -= realdiag ? abs2(A[i,k]) : A[i,k]'A[i,k]
             end
-            Akk, info = _chol!(A[k,k], UpperTriangular)
+            A[k,k] = Akk
+            Akk, info = _chol!(Akk, UpperTriangular)
             if info != 0
                 return UpperTriangular(A), info
             end
@@ -177,12 +208,15 @@ end
 function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
     require_one_based_indexing(A)
     n = checksquare(A)
+    realdiag = eltype(A) <: Complex
     @inbounds begin
         for k = 1:n
+            Akk = realdiag ? real(A[k,k]) : A[k,k]
             for i = 1:k - 1
-                A[k,k] -= A[k,i]*A[k,i]'
+                Akk -= realdiag ? abs2(A[k,i]) : A[k,i]*A[k,i]'
             end
-            Akk, info = _chol!(A[k,k], LowerTriangular)
+            A[k,k] = Akk
+            Akk, info = _chol!(Akk, LowerTriangular)
             if info != 0
                 return LowerTriangular(A), info
             end
@@ -317,21 +351,21 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
  -16.0  -43.0   98.0
 
 julia> C = cholesky(A)
-Cholesky{Float64,Matrix{Float64}}
+Cholesky{Float64, Matrix{Float64}}
 U factor:
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.U
-3×3 UpperTriangular{Float64,Matrix{Float64}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  2.0  6.0  -8.0
   ⋅   1.0   5.0
   ⋅    ⋅    3.0
 
 julia> C.L
-3×3 LowerTriangular{Float64,Matrix{Float64}}:
+3×3 LowerTriangular{Float64, Matrix{Float64}}:
   2.0   ⋅    ⋅
   6.0  1.0   ⋅
  -8.0  5.0  3.0

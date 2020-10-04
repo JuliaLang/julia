@@ -67,6 +67,13 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
     }
 }
 
+static uint64_t cumulative_compile_time = 0;
+
+extern "C" JL_DLLEXPORT
+uint64_t jl_cumulative_compile_time_ns() {
+    return cumulative_compile_time;
+}
+
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module),
@@ -156,7 +163,7 @@ static jl_callptr_t _jl_compile_codeinst(
                 this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
                 this_code->isspecsig = isspecsig;
             }
-            this_code->invoke = addr;
+            jl_atomic_store_release(&this_code->invoke, addr);
         }
         else if (this_code->invoke == jl_fptr_const_return && !decls.specFunctionObject.empty()) {
             // hack to export this pointer value to jl_dump_method_asm
@@ -210,6 +217,7 @@ extern "C" JL_DLLEXPORT
 void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&codegen_lock);
+    uint64_t compiler_start_time = jl_hrtime();
     jl_codegen_params_t params;
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     if (pparams == NULL)
@@ -228,6 +236,7 @@ void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declr
         if (llvmmod == NULL)
             jl_add_to_ee(std::unique_ptr<Module>(into));
     }
+    cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock);
 }
 
@@ -251,8 +260,10 @@ void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
     if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
         jl_error("@ccallable: return type must be concrete and correspond to a C type");
     JL_LOCK(&codegen_lock);
+    uint64_t compiler_start_time = jl_hrtime();
     if (!jl_type_mappable_to_c(declrt))
         jl_error("@ccallable: return type doesn't correspond to a C type");
+    cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock);
 
     // validate method signature
@@ -281,6 +292,7 @@ extern "C"
 jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    uint64_t compiler_start_time = jl_hrtime();
     // if we don't have any decls already, try to generate it now
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
@@ -317,6 +329,7 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
     else {
         codeinst = NULL;
     }
+    cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock);
     JL_GC_POP();
     return codeinst;
@@ -325,9 +338,11 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
 extern "C"
 void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
 {
-    if (unspec->invoke != NULL)
+    if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
         return;
+    }
     JL_LOCK(&codegen_lock);
+    uint64_t compiler_start_time = jl_hrtime();
     if (unspec->invoke == NULL) {
         jl_code_info_t *src = NULL;
         JL_GC_PUSH1(&src);
@@ -348,11 +363,13 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         }
         assert(src && jl_is_code_info(src));
         _jl_compile_codeinst(unspec, src, unspec->min_world);
-        if (unspec->invoke == NULL)
+        if (unspec->invoke == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
-            unspec->invoke = &jl_fptr_interpret_call;
+            jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
+        }
         JL_GC_POP();
     }
+    cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock); // Might GC
 }
 
@@ -371,8 +388,10 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
         uintptr_t specfptr = (uintptr_t)codeinst->specptr.fptr;
         if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
-            // so create an exception here so we can print pretty lies
+            // (using sentinel value `1` instead)
+            // so create an exception here so we can print pretty our lies
             JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+            uint64_t compiler_start_time = jl_hrtime();
             specfptr = (uintptr_t)codeinst->specptr.fptr;
             if (specfptr == 0) {
                 jl_code_info_t *src = jl_type_infer(mi, world, 0);
@@ -396,9 +415,10 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
                 }
                 JL_GC_POP();
             }
+            cumulative_compile_time += (jl_hrtime() - compiler_start_time);
             JL_UNLOCK(&codegen_lock);
         }
-        if (specfptr)
+        if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo);
     }
 

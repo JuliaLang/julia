@@ -17,6 +17,18 @@
 
 #include "julia_assert.h"
 
+// private keymgr stuff
+#define KEYMGR_GCC3_DW2_OBJ_LIST 302
+enum {
+  NM_ALLOW_RECURSION = 1,
+  NM_RECURSION_ILLEGAL = 2
+};
+extern void _keymgr_set_and_unlock_processwide_ptr(unsigned int key, void *ptr);
+extern int _keymgr_unlock_processwide_ptr(unsigned int key);
+extern void *_keymgr_get_and_lock_processwide_ptr(unsigned int key);
+extern int _keymgr_get_and_lock_processwide_ptr_2(unsigned int key, void **result);
+extern int _keymgr_set_lockmode_processwide_ptr(unsigned int key, unsigned int mode);
+
 static void attach_exception_port(thread_port_t thread, int segv_only);
 
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
@@ -24,7 +36,7 @@ static arraylist_t suspended_threads;
 void jl_mach_gc_end(void)
 {
     // Requires the safepoint lock to be held
-    for (size_t i = 0;i < suspended_threads.len;i++) {
+    for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
@@ -41,9 +53,10 @@ static int jl_mach_gc_wait(jl_ptls_t ptls2,
                            mach_port_t thread, int16_t tid)
 {
     jl_mutex_lock_nogc(&safepoint_lock);
-    if (!jl_gc_running) {
-        // GC is done before we get the message or the safepoint is enabled
-        // for SIGINT.
+    if (!jl_atomic_load_relaxed(&jl_gc_running)) {
+        // relaxed, since gets set to zero only while the safepoint_lock was held
+        // this means we can tell if GC is done before we got the message or
+        // the safepoint was enabled for SIGINT.
         jl_mutex_unlock_nogc(&safepoint_lock);
         return 0;
     }
@@ -78,6 +91,17 @@ void *mach_segv_listener(void *arg)
 
 static void allocate_segv_handler()
 {
+    // ensure KEYMGR_GCC3_DW2_OBJ_LIST is initialized, as this requires malloc
+    // and thus can deadlock when used without first initializing it.
+    // Apple caused this problem in their libunwind in 10.9 (circa keymgr-28)
+    // when they removed this part of the code from keymgr.
+    // Much thanks to Apple for providing source code, or this would probably
+    // have simply remained unsolved forever on their platform.
+    // This is similar to just calling checkKeyMgrRegisteredFDEs
+    // (this is quite thread-unsafe)
+    if (_keymgr_set_lockmode_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST, NM_ALLOW_RECURSION))
+        jl_error("_keymgr_set_lockmode_processwide_ptr failed");
+
     arraylist_new(&suspended_threads, jl_n_threads);
     pthread_t thread;
     pthread_attr_t attr;
@@ -462,6 +486,9 @@ void *mach_profile_listener(void *arg)
         HANDLE_MACH_ERROR("mach_msg", ret);
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
+        jl_lock_profile();
+        void *unused = NULL;
+        int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
         for (i = jl_n_threads; i-- > 0; ) {
             // if there is no space left, break early
             if (bt_size_cur >= bt_size_max - 1)
@@ -506,13 +533,17 @@ void *mach_profile_listener(void *arg)
 
                 // Mark the end of this block with 0
                 bt_data_prof[bt_size_cur++].uintptr = 0;
-
-                // Reset the alarm
-                kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
-                HANDLE_MACH_ERROR("clock_alarm", ret)
             }
             // We're done! Resume the thread.
             jl_thread_resume(i, 0);
+        }
+        if (keymgr_locked)
+            _keymgr_unlock_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST);
+        jl_unlock_profile();
+        if (running) {
+            // Reset the alarm
+            kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
+            HANDLE_MACH_ERROR("clock_alarm", ret)
         }
     }
 }
@@ -547,6 +578,7 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     timerprof.tv_nsec = nsecprof%GIGA;
 
     running = 1;
+    // ensure the alarm is running
     ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
     HANDLE_MACH_ERROR("clock_alarm", ret);
 

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
-Core.PhiNode() = Core.PhiNode(Any[], Any[])
+Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
 """
 Like UnitRange{Int}, but can handle the `last` field, being temporarily
@@ -35,6 +35,7 @@ struct CFG
     index::Vector{Int} # map from instruction => basic-block number
                        # TODO: make this O(1) instead of O(log(n_blocks))?
 end
+copy(c::CFG) = CFG(BasicBlock[copy(b) for b in c.blocks], copy(c.index))
 
 function block_for_inst(index::Vector{Int}, inst::Int)
     return searchsortedfirst(index, inst, lt=(<=))
@@ -71,7 +72,7 @@ function basic_blocks_starts(stmts::Vector{Any})
         end
         if isa(stmt, PhiNode)
             for edge in stmt.edges
-                if edge === idx - 1
+                if edge == idx - 1
                     push!(jump_dests, idx)
                 end
             end
@@ -180,13 +181,14 @@ function add!(is::InstructionStream)
     resize!(is, ninst)
     return ninst
 end
-#function copy(is::InstructionStream) # unused
-#    return InstructionStream(
-#        copy_exprargs(is.insts),
-#        copy(is.types),
-#        copy(is.lines),
-#        copy(is.flags))
-#end
+function copy(is::InstructionStream)
+    return InstructionStream(
+        copy_exprargs(is.inst),
+        copy(is.type),
+        copy(is.info),
+        copy(is.line),
+        copy(is.flag))
+end
 function resize!(stmts::InstructionStream, len)
     old_length = length(stmts)
     resize!(stmts.inst, len)
@@ -248,6 +250,7 @@ function add!(new::NewNodeStream, pos::Int, attach_after::Bool)
     push!(new.info, NewNodeInfo(pos, attach_after))
     return Instruction(new.stmts)
 end
+copy(nns::NewNodeStream) = NewNodeStream(copy(nns.stmts), copy(nns.info))
 
 struct IRCode
     stmts::InstructionStream
@@ -264,6 +267,16 @@ struct IRCode
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
         return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
     end
+    global copy
+    copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
+        copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+end
+
+function block_for_inst(ir::IRCode, inst::Int)
+    if inst > length(ir.stmts)
+        inst = ir.new_nodes.info[inst - length(ir.stmts)].pos
+    end
+    block_for_inst(ir.cfg, inst)
 end
 
 function getindex(x::IRCode, s::SSAValue)
@@ -561,7 +574,7 @@ mutable struct IncrementalCompact
                     succs[j] = bb_rename[succs[j]]
                 end
             end
-            let blocks = blocks
+            let blocks = blocks, bb_rename = bb_rename
                 result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
             end
         else
@@ -905,7 +918,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
                 stmt = compact.result[idx][:inst]
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
-                i = findfirst(x-> x === compact.bb_rename_pred[from], stmt.edges)
+                i = findfirst(x-> x == compact.bb_rename_pred[from], stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
                     deleteat!(stmt.values, i)
@@ -917,7 +930,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
             for stmt in CompactPeekIterator(compact, first(stmts), last(stmts))
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
-                i = findfirst(x-> x === from, stmt.edges)
+                i = findfirst(x-> x == from, stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
                     deleteat!(stmt.values, i)
@@ -981,6 +994,11 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 ssa_rename[idx] = pi_val
                 return result_idx
             end
+        elseif isa(pi_val, Argument)
+            if stmt.typ === compact.ir.argtypes[pi_val.n]
+                ssa_rename[idx] = pi_val
+                return result_idx
+            end
         elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef)
             valtyp = isa(pi_val, QuoteNode) ? typeof(pi_val.value) : typeof(pi_val)
             if valtyp === stmt.typ
@@ -1009,7 +1027,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             # not a value we can copy), we copy only the edges and (defined)
             # values we want to keep to new arrays initialized with undefined
             # elements.
-            edges = Vector{Any}(undef, length(stmt.edges))
+            edges = Vector{Int32}(undef, length(stmt.edges))
             values = Vector{Any}(undef, length(stmt.values))
             new_index = 1
             for old_index in 1:length(stmt.edges)

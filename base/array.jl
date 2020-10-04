@@ -450,7 +450,7 @@ julia> fill(1.0, (2,3))
  1.0  1.0  1.0
 
 julia> fill(42)
-0-dimensional Array{Int64,0}:
+0-dimensional Array{Int64, 0}:
 42
 ```
 
@@ -795,7 +795,7 @@ Retrieve the value(s) stored at the given key or index within a collection. The 
 # Examples
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
-Dict{String,Int64} with 2 entries:
+Dict{String, Int64} with 2 entries:
   "b" => 2
   "a" => 1
 
@@ -984,7 +984,7 @@ push!(a::AbstractVector, iter...) = append!(a, iter)
 function _append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
     i = lastindex(a)
-    resize!(a, n+length(iter))
+    resize!(a, n+Int(length(iter))::Int)
     @inbounds for (i, item) in zip(i+1:lastindex(a), iter)
         a[i] = item
     end
@@ -1589,22 +1589,33 @@ julia> reverse(A, 3, 5)
  3
 ```
 """
-function reverse(A::AbstractVector, s=first(LinearIndices(A)), n=last(LinearIndices(A)))
+function reverse(A::AbstractVector, start::Integer, stop::Integer=lastindex(A))
+    s, n = Int(start), Int(stop)
     B = similar(A)
-    for i = first(LinearIndices(A)):s-1
+    for i = firstindex(A):s-1
         B[i] = A[i]
     end
     for i = s:n
         B[i] = A[n+s-i]
     end
-    for i = n+1:last(LinearIndices(A))
+    for i = n+1:lastindex(A)
         B[i] = A[i]
     end
     return B
 end
 
-# to resolve ambiguity with reverse(A; dims)
-reverse(A::Vector) = invoke(reverse, Tuple{AbstractVector}, A)
+# 1d special cases of reverse(A; dims) and reverse!(A; dims):
+for (f,_f) in ((:reverse,:_reverse), (:reverse!,:_reverse!))
+    @eval begin
+        $f(A::AbstractVector; dims=:) = $_f(A, dims)
+        $_f(A::AbstractVector, ::Colon) = $f(A, firstindex(A), lastindex(A))
+        $_f(A::AbstractVector, dim::Tuple{Integer}) = $_f(A, first(dim))
+        function $_f(A::AbstractVector, dim::Integer)
+            dim == 1 || throw(ArgumentError("invalid dimension $dim ≠ 1"))
+            return $_f(A, :)
+        end
+    end
+end
 
 function reverseind(a::AbstractVector, i::Integer)
     li = LinearIndices(a)
@@ -1637,7 +1648,8 @@ julia> A
  1
 ```
 """
-function reverse!(v::AbstractVector, s=first(LinearIndices(v)), n=last(LinearIndices(v)))
+function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
+    s, n = Int(start), Int(stop)
     liv = LinearIndices(v)
     if n <= s  # empty case; ok
     elseif !(first(liv) ≤ s ≤ last(liv))
@@ -1776,7 +1788,7 @@ function findfirst(A)
 end
 
 # Needed for bootstrap, and allows defining only an optimized findnext method
-findfirst(A::Union{AbstractArray, AbstractString}) = findnext(A, first(keys(A)))
+findfirst(A::AbstractArray) = findnext(A, first(keys(A)))
 
 """
     findnext(predicate::Function, A, i)
@@ -1964,7 +1976,7 @@ function findlast(A)
 end
 
 # Needed for bootstrap, and allows defining only an optimized findprev method
-findlast(A::Union{AbstractArray, AbstractString}) = findprev(A, last(keys(A)))
+findlast(A::AbstractArray) = findprev(A, last(keys(A)))
 
 """
     findprev(predicate::Function, A, i)
@@ -2093,7 +2105,7 @@ julia> findall(!iszero, A)
  CartesianIndex(2, 2)
 
 julia> d = Dict(:A => 10, :B => -1, :C => 0)
-Dict{Symbol,Int64} with 3 entries:
+Dict{Symbol, Int64} with 3 entries:
   :A => 10
   :B => -1
   :C => 0

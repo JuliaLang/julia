@@ -219,6 +219,10 @@ timesofar("utils")
     # issue #24062
     @test_throws InexactError BitArray([0, 1, 2, 3])
     @test_throws MethodError BitArray([0, ""])
+
+    # construction with poor inference
+    f(c) = BitVector(c[1])
+    @test @inferred(f(AbstractVector[[0,1]])) == [false, true]
 end
 
 timesofar("constructors")

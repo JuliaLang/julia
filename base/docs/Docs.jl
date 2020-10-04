@@ -219,6 +219,13 @@ end
 Adds a new docstring `str` to the docsystem of `__module__` for `binding` and signature `sig`.
 """
 function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = Union{})
+    # Module docstrings are in the module itself
+    if defined(b)
+        obj = resolve(b)
+        if isa(obj, Module)
+            __module__ = obj
+        end
+    end
     initmeta(__module__)
     m = get!(meta(__module__), b, MultiDoc())
     if haskey(m.docs, sig)

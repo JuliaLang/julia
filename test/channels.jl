@@ -541,6 +541,11 @@ let t = @async nothing
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
 end
 
+@testset "push!(c, v) -> c" begin
+    c = Channel(Inf)
+    @test push!(c, nothing) === c
+end
+
 # Channel `show`
 let c = Channel(3)
     @test repr(c) == "Channel{Any}(3)"

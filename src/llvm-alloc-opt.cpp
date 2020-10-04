@@ -159,6 +159,7 @@ private:
     void removeAlloc(CallInst *orig_inst);
     void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref);
     void splitOnStack(CallInst *orig_inst);
+    void optimizeTag(CallInst *orig_inst);
 
     Function &F;
     AllocOpt &pass;
@@ -260,8 +261,9 @@ private:
         bool refload:1;
         // There are objects fields being stored
         bool refstore:1;
-        // There are memset call
-        bool hasmemset:1;
+        // There are typeof call
+        // This can be optimized without optimizing out the allocation itself
+        bool hastypeof:1;
         // There are store/load/memset on this object with offset or size (or value for memset)
         // that cannot be statically computed.
         // This is a weaker form of `addrescaped` since `hasload` can still be used
@@ -275,6 +277,7 @@ private:
             haspreserve = false;
             refload = false;
             refstore = false;
+            hastypeof = false;
             hasunknownmem = false;
             uses.clear();
             preserves.clear();
@@ -327,8 +330,11 @@ void Optimizer::optimizeAll()
         auto orig = item.first;
         size_t sz = item.second;
         checkInst(orig);
-        if (use_info.escaped)
+        if (use_info.escaped) {
+            if (use_info.hastypeof)
+                optimizeTag(orig);
             continue;
+        }
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
             // No one took the address, no one reads anything and there's no meaningful
@@ -358,6 +364,8 @@ void Optimizer::optimizeAll()
         if (has_ref) {
             if (use_info.memops.size() != 1 || has_refaggr ||
                 use_info.memops.begin()->second.size != sz) {
+                if (use_info.hastypeof)
+                    optimizeTag(orig);
                 continue;
             }
             // The object only has a single field that's a reference with only one kind of access.
@@ -572,7 +580,6 @@ void Optimizer::checkInst(Instruction *I)
                 if (auto id = II->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {
                         assert(call->getNumArgOperands() == 4);
-                        use_info.hasmemset = true;
                         if (cur.offset == UINT32_MAX ||
                             !isa<ConstantInt>(call->getArgOperand(2)) ||
                             !isa<ConstantInt>(call->getArgOperand(1)) ||
@@ -599,7 +606,12 @@ void Optimizer::checkInst(Instruction *I)
                 use_info.addrescaped = true;
                 return true;
             }
-            if (pass.typeof_func == callee || pass.write_barrier_func == callee)
+            if (pass.typeof_func == callee) {
+                use_info.hastypeof = true;
+                assert(use->get() == I);
+                return true;
+            }
+            if (pass.write_barrier_func == callee)
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
@@ -1145,6 +1157,25 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
     }
 }
 
+// Unable to optimize out the allocation, do store to load forwarding on the tag instead.
+void Optimizer::optimizeTag(CallInst *orig_inst)
+{
+    auto tag = orig_inst->getArgOperand(2);
+    // `julia.typeof` is only legal on the original pointer, no need to scan recursively
+    for (auto user: orig_inst->users()) {
+        if (auto call = dyn_cast<CallInst>(user)) {
+            auto callee = call->getCalledOperand();
+            if (pass.typeof_func == callee) {
+                call->replaceAllUsesWith(tag);
+                // Push to the removed instructions to trigger `finalize` to
+                // return the correct result.
+                // Also so that we don't have to worry about iterator invalidation...
+                removed.push_back(call);
+            }
+        }
+    }
+}
+
 void Optimizer::splitOnStack(CallInst *orig_inst)
 {
     auto tag = orig_inst->getArgOperand(2);
@@ -1318,6 +1349,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
+            assert(callee); // makes it clear for clang analyser that `callee` is not NULL
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
                 if (Intrinsic::ID id = intrinsic->getIntrinsicID()) {
                     if (id == Intrinsic::memset) {

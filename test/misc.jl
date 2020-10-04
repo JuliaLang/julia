@@ -840,7 +840,7 @@ end
 end
 
 @testset "fieldtypes Module" begin
-    @test fieldtypes(Module) isa Tuple
+    @test fieldtypes(Module) === ()
 end
 
 

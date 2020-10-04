@@ -383,3 +383,18 @@ function f36527()
 end
 
 @test f36527()
+
+# accessing an undefined var in tail position in a catch block
+function undef_var_in_catch()
+    try
+        error("first error")
+    catch
+        __probably_n0t_defined__
+    end
+end
+@test length(try
+    undef_var_in_catch()
+    []
+catch
+    catch_stack()
+end) == 2

@@ -76,12 +76,12 @@ macro deprecate(old, new, ex=true)
     end
 end
 
-function depwarn(msg, funcsym)
+function depwarn(msg, funcsym; force::Bool=false)
     opts = JLOptions()
     if opts.depwarn == 2
         throw(ErrorException(msg))
     end
-    deplevel = opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
+    deplevel = force || opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
     @logmsg(
         deplevel,
         msg,
@@ -228,6 +228,10 @@ tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
     @_pure_meta
     Tuple{S, T.parameters...}
+end
+function parameter_upper_bound(t::UnionAll, idx)
+    @_pure_meta
+    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 end
 
 # these were internal functions, but some packages seem to be relying on them

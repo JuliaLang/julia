@@ -109,7 +109,8 @@ JL_DLLEXPORT void JL_NORETURN jl_too_many_args(const char *fname, int max)
 
 // with function name / location description, plus extra context
 JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *context,
-                                               jl_value_t *expected, jl_value_t *got)
+                                               jl_value_t *expected JL_MAYBE_UNROOTED,
+                                               jl_value_t *got JL_MAYBE_UNROOTED)
 {
     jl_value_t *ctxt=NULL;
     JL_GC_PUSH3(&ctxt, &expected, &got);
@@ -119,8 +120,9 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *co
 }
 
 // with function name or description only
-JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expected,
-                                            jl_value_t *got)
+JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
+                                            jl_value_t *expected JL_MAYBE_UNROOTED,
+                                            jl_value_t *got JL_MAYBE_UNROOTED)
 {
     jl_type_error_rt(fname, "", expected, got);
 }
@@ -162,7 +164,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v, size_t i)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTED, size_t i)
 {
     jl_value_t *t = NULL;
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
@@ -170,7 +172,8 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v, size_t i)
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t nidxs)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOTED,
+                                                   size_t *idxs, size_t nidxs)
 {
     size_t i;
     jl_value_t *t = NULL;
@@ -253,10 +256,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
     ptls->world_age = eh->world_age;
     ptls->defer_signal = eh->defer_signal;
-    ptls->gc_state = eh->gc_state;
     ptls->finalizers_inhibited = eh->finalizers_inhibited;
-    if (old_gc_state && !eh->gc_state) {
-        jl_gc_safepoint_(ptls);
+    if (old_gc_state != eh->gc_state) {
+        jl_atomic_store_release(&ptls->gc_state, eh->gc_state);
+        if (old_gc_state) {
+            jl_gc_safepoint_(ptls);
+        }
     }
     if (old_defer_signal && !eh->defer_signal) {
         jl_sigint_safepoint(ptls);
@@ -274,14 +279,14 @@ JL_DLLEXPORT void jl_pop_handler(int n)
     jl_eh_restore_state(eh);
 }
 
-JL_DLLEXPORT size_t jl_excstack_state(void)
+JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_excstack_t *s = ptls->current_task->excstack;
     return s ? s->top : 0;
 }
 
-JL_DLLEXPORT void jl_restore_excstack(size_t state)
+JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_excstack_t *s = ptls->current_task->excstack;
@@ -291,15 +296,15 @@ JL_DLLEXPORT void jl_restore_excstack(size_t state)
     }
 }
 
-void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT
+static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFEPOINT
 {
     assert(dest->reserved_size >= src->top);
     memcpy(jl_excstack_raw(dest), jl_excstack_raw(src), sizeof(jl_bt_element_t)*src->top);
     dest->top = src->top;
 }
 
-void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
-                          size_t reserved_size)
+static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                                size_t reserved_size)
 {
     jl_excstack_t *s = *stack;
     if (s && s->reserved_size >= reserved_size)
@@ -361,20 +366,9 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
 
 // parsing --------------------------------------------------------------------
 
-int substr_isspace(char *p, char *pend)
+static int substr_isspace(char *p, char *pend)
 {
     while (p != pend) {
-        if (!isspace((unsigned char)*p)) {
-            return 0;
-        }
-        p++;
-    }
-    return 1;
-}
-
-int str_isspace(char *p)
-{
-    while (*p != '\0') {
         if (!isspace((unsigned char)*p)) {
             return 0;
         }
@@ -1245,6 +1239,7 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
     JL_GC_POP();
 }
 
+#if 0
 void jl_depwarn(const char *msg, jl_value_t *sym)
 {
     static jl_value_t *depwarn_func = NULL;
@@ -1263,6 +1258,7 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     jl_apply(depwarn_args, 3);
     JL_GC_POP();
 }
+#endif
 
 #ifdef __cplusplus
 }

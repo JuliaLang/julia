@@ -106,13 +106,13 @@ Rational(x::Rational) = x
 
 Bool(x::Rational) = x==0 ? false : x==1 ? true :
     throw(InexactError(:Bool, Bool, x)) # to resolve ambiguity
-(::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
+(::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num)::T :
     throw(InexactError(nameof(T), T, x)))
 
-AbstractFloat(x::Rational) = float(x.num)/float(x.den)
+AbstractFloat(x::Rational) = (float(x.num)/float(x.den))::AbstractFloat
 function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
-    convert(T, convert(P,x.num)/convert(P,x.den))
+    convert(T, convert(P,x.num)/convert(P,x.den))::T
 end
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
@@ -262,6 +262,7 @@ typemin(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, zero(T), on
 typemax(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, one(T), zero(T))
 
 isinteger(x::Rational) = x.den == 1
+ispow2(x::Rational) = ispow2(x.num) & ispow2(x.den)
 
 +(x::Rational) = unsafe_rational(+x.num, x.den)
 -(x::Rational) = unsafe_rational(-x.num, x.den)

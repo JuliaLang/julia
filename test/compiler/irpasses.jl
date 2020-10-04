@@ -15,17 +15,17 @@ let m = Meta.@lower 1 + 1
         Expr(:call, :opaque),
         GotoIfNot(Core.SSAValue(1), 10),
         # block 2
-        Core.PhiNode(Any[8], Any[Core.SSAValue(7)]), # <- This phi must not get replaced by %7
-        Core.PhiNode(Any[2, 8], Any[true, false]),
+        Core.PhiNode(Int32[8], Any[Core.SSAValue(7)]), # <- This phi must not get replaced by %7
+        Core.PhiNode(Int32[2, 8], Any[true, false]),
         GotoIfNot(Core.SSAValue(1), 7),
         # block 3
         Expr(:call, :+, Core.SSAValue(3), 1),
         # block 4
-        Core.PhiNode(Any[5, 6], Any[0, Core.SSAValue(6)]),
+        Core.PhiNode(Int32[5, 6], Any[0, Core.SSAValue(6)]),
         Expr(:call, >, Core.SSAValue(7), 10),
         GotoIfNot(Core.SSAValue(8), 3),
         # block 5
-        Core.PhiNode(Any[2, 8], Any[0, Core.SSAValue(7)]),
+        Core.PhiNode(Int32[2, 8], Any[0, Core.SSAValue(7)]),
         ReturnNode(Core.SSAValue(10)),
     ]
     nstmts = length(src.code)
@@ -147,7 +147,7 @@ let m = Meta.@lower 1 + 1
         # block 1
         nothing,
         # block 2
-        PhiNode(Any[1, 7], Any[Core.Argument(2), SSAValue(9)]),
+        PhiNode(Int32[1, 7], Any[Core.Argument(2), SSAValue(9)]),
         Expr(:call, isa, SSAValue(2), UnionAll),
         GotoIfNot(Core.SSAValue(3), 11),
         # block 3
@@ -319,3 +319,26 @@ end
 const _some_coeffs = (1,[2],3,4)
 splat_from_globalref(x) = (x, _some_coeffs...,)
 @test splat_from_globalref(0) == (0, 1, [2], 3, 4)
+
+function pi_on_argument(x)
+    if isa(x, Core.Argument)
+        return x.n
+    end
+    return -2
+end
+let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
+    nisa = 0, found_pi = false
+    for stmt in code
+        if Meta.isexpr(stmt, :call)
+            callee = stmt.args[1]
+            if (callee === isa || callee === :isa || (isa(callee, GlobalRef) &&
+                                                      callee.name === :isa))
+                nisa += 1
+            end
+        elseif stmt === Core.PiNode(Core.Argument(2), Core.Argument)
+            found_pi = true
+        end
+    end
+    @test nisa == 1
+    @test found_pi
+end

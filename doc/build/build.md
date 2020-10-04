@@ -156,6 +156,7 @@ Building Julia requires that the following software be installed:
 - **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
 - **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
 - **[powershell]** (>= 3.0)     — necessary only on Windows.
+- **[which]**                   — needed for checking build dependencies.
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
@@ -181,7 +182,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 - **[GMP]**                  — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]**                 — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
 - **[libgit2]**              — Git linkable library, used by Julia's package manager.
-- **[curl]**                 — libcurl provides download and proxy support for Julia's package manager.
+- **[curl]**                 — libcurl provides download and proxy support.
 - **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
 - **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
@@ -220,6 +221,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 [powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
+[which]:        https://carlowood.github.io/which/
 
 ## Build dependencies
 
