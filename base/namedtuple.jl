@@ -168,7 +168,11 @@ nteltype(::Type) = Any
 nteltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
 
 ==(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) == Tuple(b)
-==(a::NamedTuple, b::NamedTuple) = false
+==(a::NamedTuple, b::NamedTuple) =
+    length(a) == length(b) &&
+    all(keys(a)) do ka
+        haskey(b, ka) && getfield(a, ka) == getfield(b, ka)
+    end
 
 isequal(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = isequal(Tuple(a), Tuple(b))
 isequal(a::NamedTuple, b::NamedTuple) = false
