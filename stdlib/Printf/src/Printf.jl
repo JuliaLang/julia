@@ -73,7 +73,9 @@ end
 base(T) = T <: HexBases ? 16 : T <: Val{'o'} ? 8 : 10
 char(::Type{Val{c}}) where {c} = c
 
-@inline function _detectFormat!(f, bytes, len, pos::Int, fmts::Vector{Spec})
+# detect specific format such as "%04d" that starts at position pos
+# and push to vector of all formats fmts
+@inline function _detectformat!(f, bytes, len, pos::Int, fmts::Vector{Spec})
     leftalign = plus = space = zero = hash = false
     b = bytes[pos]
     pos += 1
@@ -158,15 +160,22 @@ function Format(f::AbstractString)
     isempty(f) && throw(ArgumentError("empty format string"))
     bytes = codeunits(f)
     len = length(bytes)
+    # start and actual position of the currently parsed segment
     start = pos = 1
+    # denotes if the current symbol (bytes[pos]) is escaped by '%'
     escaped = false
+    # denotes if the parsing reached the end of format f
     processing = true
+    # stores the actual symbol
     b = 0x00
+    # store the resulting substrings and formats
     strs = UnitRange{Int}[]
     fmts = Spec[]
     while processing
         while true
+            # the end of formate is reached
             if pos > len
+                # push the final substring range (if not escaped) and terminate
                 escaped && throw(ArgumentError("incomplete format string: '$f'"))
                 push!(strs, start:pos-1)
                 processing = false
@@ -174,12 +183,13 @@ function Format(f::AbstractString)
             end
             b = bytes[pos]
             if escaped && b != UInt8('%')
+                # new format detected: push actual substring range and detect the format
                 push!(strs, start:pos-2)
-                pos = _detectFormat!(f, bytes, len, pos, fmts)
-                start = pos
+                start = pos = _detectformat!(f, bytes, len, pos, fmts)
                 escaped = false
                 continue
             end
+            # update whether the next symbol is escaped and increment pos
             escaped = xor(escaped, b == UInt8('%'))
             pos += 1
         end
@@ -642,13 +652,13 @@ function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     return pos
 end
 
-const UNROLL_UPTO = 16
-# if you have your own buffer + pos, write formatted args directly to it
-@inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
-    # write out first substring
+# copy the subrange into output buffer (buf) starting at pos
+# while removing escaped '%' symbols
+# returns position of the next format
+@inline function _formatsubstringrange!(buf::Vector{UInt8}, str, range, pos)
     escapechar = false
-    for i in f.substringranges[1]
-        b = f.str[i]
+    for i in range
+        b = str[i]
         if !escapechar
             buf[pos] = b
             pos += 1
@@ -657,38 +667,16 @@ const UNROLL_UPTO = 16
             escapechar = false
         end
     end
-    # for each format, write out arg and next substring
-    # unroll up to 16 formats
-    N = length(f.formats)
-    Base.@nexprs 16 i -> begin
-        if N >= i
-            pos = fmt(buf, pos, args[i], f.formats[i])
-            for j in f.substringranges[i + 1]
-                b = f.str[j]
-                if !escapechar
-                    buf[pos] = b
-                    pos += 1
-                    escapechar = b === UInt8('%')
-                else
-                    escapechar = false
-                end
-            end
-        end
-    end
-    if N > 16
-        for i = 17:length(f.formats)
-            pos = fmt(buf, pos, args[i], f.formats[i])
-            for j in f.substringranges[i + 1]
-                b = f.str[j]
-                if !escapechar
-                    buf[pos] = b
-                    pos += 1
-                    escapechar = b === UInt8('%')
-                else
-                    escapechar = false
-                end
-            end
-        end
+    return pos
+end
+
+# if you have your own buffer + pos, write formatted args directly to it
+@inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
+    # write out first substring
+    pos = _formatsubstringrange!(buf, f.str, f.substringranges[1], pos)
+    for i = 1:length(f.formats)
+        pos = fmt(buf, pos, args[i], f.formats[i])
+        pos = _formatsubstringrange!(buf, f.str, f.substringranges[i+1], pos)
     end
     return pos
 end
@@ -715,16 +703,8 @@ plength(f::Spec{T}, x) where {T <: Floats} =
 @inline function computelen(substringranges, formats, args)
     len = sum(length, substringranges)
     N = length(formats)
-    # unroll up to 16 formats
-    Base.@nexprs 16 i -> begin
-        if N >= i
-            len += plength(formats[i], args[i])
-        end
-    end
-    if N > 16
-        for i = 17:length(formats)
-            len += plength(formats[i], args[i])
-        end
+    for i = 1:length(formats)
+        len += plength(formats[i], args[i])
     end
     return len
 end
