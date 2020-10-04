@@ -2572,6 +2572,7 @@ function showarg(io::IO, r::ReshapedReinterpretArray{T}, toplevel) where {T}
     print(io, "reinterpret(reshape, ", T, ", ")
     showarg(io, parent(r), false)
     print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(r))
 end
 
 # printing iterators from Base.Iterators
