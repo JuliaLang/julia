@@ -377,7 +377,6 @@ For users coming to Julia from R, these are some noteworthy differences:
     * Use `import SomePkg: SubModule.SubSubmodule` (Julia) to access package submodules.
   * **Directory-based package repositories** (Julia) can be made available by adding repository
     paths to the `Base.LOAD_PATH` array.
-    * By default, Julia also treats the current working directory as a type of "package repository".
     * Packages from directory-based repositories do not require the `pkg> add` tool prior to
       being loaded with `import` or `using`. They are simply available to the project.
     * Directory-based package repositories are the **quickest solution** to developping local
