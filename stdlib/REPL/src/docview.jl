@@ -66,7 +66,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main)
     # so that the resulting expressions are evaluated in the Base.Docs namespace
     :($REPL.@repl $io $expr $brief $mod)
 end
-_helpmode(line::AbstractString) = _helpmode(stdout, line)
+_helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
 
 # Print vertical lines along each docstring if there are multiple docs
 function insert_hlines(io::IO, docs)
@@ -375,7 +375,9 @@ function repl_search(io::IO, s::Union{Symbol,String}, mod::Module)
     printmatches(io, s, map(quote_spaces, doc_completions(s, mod)), cols = _displaysize(io)[2] - length(pre))
     println(io, "\n")
 end
-repl_search(s) = repl_search(stdout, s, mod)
+
+# TODO: document where this is used
+repl_search(s, mod::Module) = repl_search(stdout, s, mod)
 
 function repl_corrections(io::IO, s, mod::Module)
     print(io, "Couldn't find ")
@@ -707,7 +709,8 @@ function print_correction(io::IO, word::String, mod::Module)
     return
 end
 
-print_correction(word) = print_correction(stdout, word, Main)
+# TODO: document where this is used
+print_correction(word, mod::Module) = print_correction(stdout, word, mod)
 
 # Completion data
 
@@ -722,7 +725,7 @@ accessible(mod::Module) =
            collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
 function doc_completions(name, mod::Module=Main)
-    res = fuzzysort(name, accessible(Main))
+    res = fuzzysort(name, accessible(mod))
 
     # to insert an entry like `raw""` for `"@raw_str"` in `res`
     ms = match.(r"^@(.*?)_str$", res)
@@ -734,7 +737,7 @@ function doc_completions(name, mod::Module=Main)
     end
     res
 end
-doc_completions(name::Symbol) = doc_completions(string(name))
+doc_completions(name::Symbol) = doc_completions(string(name), mod)
 
 
 # Searching and apropos

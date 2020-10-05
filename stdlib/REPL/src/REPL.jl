@@ -221,7 +221,7 @@ end
 
 """
     start_repl_backend(backend::REPLBackend)
-p
+
     Call directly to run backend loop on current Task.
     Use @async for run backend on new Task.
 
