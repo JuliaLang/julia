@@ -75,7 +75,7 @@ Specifying a `step` of 1 explicitly, does not result in a [`UnitRange`](@ref).
 `stop` may be specified as either a positional or keyword argument.
 If `stop` is given as a positional argument, a keyword argument
 of either `length` or `step` must be specified.
-If `stop` is given as the sole keyword argument, a `step` is assumed be 1.0.
+If `stop` is given as the sole keyword argument, `step` is assumed to be 1.0.
 
 If `length` and `stop` are provided and `step` is not, the step size will be computed
 automatically such that there are `length` linearly spaced elements in the range.
@@ -100,7 +100,7 @@ julia> range(1, length=100)
 julia> range(1, stop=100)
 1:100
 
-julia> range(1,stop=100, step=1)
+julia> range(1, stop=100, step=1)
 1:1:100
 
 julia> range(1, stop=3.3)
@@ -129,7 +129,6 @@ ArgumentError("Too many arguments specified; try passing only one of `stop` or `
 
 julia> try range(1; stop=5, length=5, step=1) catch e println(e) end
 ArgumentError("Too many arguments specified; try passing only one of `stop` or `length`")
-
 ```
 """
 range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing) =
