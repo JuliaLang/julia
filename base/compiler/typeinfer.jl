@@ -10,7 +10,7 @@ end
 
 module Timings
 
-using Core.Compiler: -, +, length, push!, pop!, @inline
+using Core.Compiler: -, +, length, push!, pop!, @inline, @inbounds
 
 struct Timing
     name::Any
@@ -47,23 +47,25 @@ end
     accum_time = stop_time - parent_timer.cur_start_time
 
     # Add in accum_time ("modify" the immutable struct)
-    _timings[end] = Timings.Timing(
-        parent_timer.name,
-        parent_timer.start_time,
-        parent_timer.cur_start_time,
-        parent_timer.time + accum_time,
-        parent_timer.children,
-    )
+    @inbounds begin
+        _timings[end] = Timings.Timing(
+            parent_timer.name,
+            parent_timer.start_time,
+            parent_timer.cur_start_time,
+            parent_timer.time + accum_time,
+            parent_timer.children,
+        )
+    end
 
     # Start the new timer right before returning
     push!(_timings, Timings.Timing(name, UInt64(0)))
     len = length(_timings)
-    new_timer = _timings[len]
+    new_timer = @inbounds _timings[len]
     # Set the current time _after_ appending the node, to try to exclude the
     # overhead from measurement.
     start = Timings.time_ns()
 
-    Core.Compiler.@inbounds begin
+    @inbounds begin
         _timings[len] = Timings.Timing(
             new_timer.name,
             start,
@@ -103,7 +105,7 @@ end
 
     # And finally restart the parent timer:
     len = length(_timings)
-    Core.Compiler.@inbounds begin
+    @inbounds begin
         _timings[len] = Timings.Timing(
             parent_timer.name,
             parent_timer.start_time,
