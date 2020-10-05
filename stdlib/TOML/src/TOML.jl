@@ -100,11 +100,10 @@ const ParserError = Internals.ParserError
 
 
 """
-    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sort=false, by=identity)
+    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
 
-Writes `data` as TOML syntax to the stream `io`. The keyword argument `sort`
-sorts the output on the keys of the tables with the top level tables are
-sorted according to the keyword argument `by`.
+Write `data` as TOML syntax to the stream `io`. If the keyword argument `sorted` is set to `true`,
+sort tables according to the function given by the keyword argument `by`.
 
 The following data types are supported: `AbstractDict`, `Integer`, `AbstractFloat`, `Bool`,
 `Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats

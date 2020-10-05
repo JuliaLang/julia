@@ -424,35 +424,37 @@ jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_modul
     std::string code;
     raw_string_ostream stream(code);
 
-    Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
-    if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
-        jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
+    {
+        Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
+        if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
+            jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
-    JL_LOCK(&codegen_lock); // Might GC
-    LineNumberAnnotatedWriter AAW{debuginfo};
-    if (!llvmf->getParent()) {
-        // print the function declaration as-is
-        llvmf->print(stream, &AAW);
-        delete llvmf;
-    }
-    else {
-        Module *m = llvmf->getParent();
-        if (strip_ir_metadata) {
-            std::string llvmfn(llvmf->getName());
-            jl_strip_llvm_addrspaces(m);
-            jl_strip_llvm_debug(m, true, &AAW);
-            // rewriting the function type creates a new function, so look it up again
-            llvmf = m->getFunction(llvmfn);
-        }
-        if (dump_module) {
-            m->print(stream, &AAW);
+        JL_LOCK(&codegen_lock); // Might GC
+        LineNumberAnnotatedWriter AAW{debuginfo};
+        if (!llvmf->getParent()) {
+            // print the function declaration as-is
+            llvmf->print(stream, &AAW);
+            delete llvmf;
         }
         else {
-            llvmf->print(stream, &AAW);
+            Module *m = llvmf->getParent();
+            if (strip_ir_metadata) {
+                std::string llvmfn(llvmf->getName());
+                jl_strip_llvm_addrspaces(m);
+                jl_strip_llvm_debug(m, true, &AAW);
+                // rewriting the function type creates a new function, so look it up again
+                llvmf = m->getFunction(llvmfn);
+            }
+            if (dump_module) {
+                m->print(stream, &AAW);
+            }
+            else {
+                llvmf->print(stream, &AAW);
+            }
+            delete m;
         }
-        delete m;
+        JL_UNLOCK(&codegen_lock); // Might GC
     }
-    JL_UNLOCK(&codegen_lock); // Might GC
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
 }

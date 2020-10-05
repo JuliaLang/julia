@@ -9,25 +9,37 @@ BUILD_LLVM_CLANG := 1
 # because it's a build requirement
 endif
 
-ifeq ($(USE_POLLY),1)
+ifeq ($(USE_RV),1)
+BUILD_LLVM_CLANG := 1
+# because it's a build requirement
+endif
+
+
 ifeq ($(USE_SYSTEM_LLVM),0)
 ifneq ($(LLVM_VER),svn)
+ifeq ($(USE_POLLY),1)
 $(error USE_POLLY=1 requires LLVM_VER=svn)
+endif
+
+ifeq ($(USE_MLIR),1)
+$(error USE_MLIR=1 requires LLVM_VER=svn)
+endif
+
+ifeq ($(USE_RV),1)
+$(error USE_RV=1 requires LLVM_VER=svn)
 endif
 endif
 endif
 
-ifeq ($(USE_MLIR),1)
-ifeq ($(USE_SYSTEM_LLVM),0)
-ifneq ($(LLVM_VER),svn)
-$(error USE_MLIR=1 requires LLVM_VER=svn)
-endif
-endif
+ifneq ($(USE_RV),)
+LLVM_RV_GIT_URL ?= https://github.com/cdl-saarland/rv
+LLVM_RV_GIT_VER ?= release_90
 endif
 
 
 # for Monorepo
 LLVM_ENABLE_PROJECTS :=
+LLVM_EXTERNAL_PROJECTS :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang;compiler-rt
 endif
@@ -39,6 +51,9 @@ LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lldb
 endif
 ifeq ($(USE_MLIR), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);mlir
+endif
+ifeq ($(USE_RV), 1)
+LLVM_EXTERNAL_PROJECTS := $(LLVM_EXTERNAL_PROJECTS);rv
 endif
 
 include $(SRCDIR)/llvm-options.mk
@@ -54,7 +69,11 @@ LLVM_LLDB_TAR:=$(SRCCACHE)/lldb-$(LLVM_TAR_EXT)
 endif # BUILD_LLDB
 
 ifeq ($(BUILD_LLVM_CLANG),1)
+ifeq ($(LLVM_VER_MAJ).$(LLVM_VER_MIN),9.0)
 LLVM_CLANG_TAR:=$(SRCCACHE)/cfe-$(LLVM_TAR_EXT)
+else
+LLVM_CLANG_TAR:=$(SRCCACHE)/clang-$(LLVM_TAR_EXT)
+endif
 LLVM_COMPILER_RT_TAR:=$(SRCCACHE)/compiler-rt-$(LLVM_TAR_EXT)
 else
 LLVM_CLANG_TAR:=
@@ -68,7 +87,7 @@ endif
 endif # LLVM_VER != svn
 
 # Figure out which targets to build
-LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly
+LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
@@ -79,6 +98,12 @@ LLVM_CMAKE :=
 # MONOREPO
 ifeq ($(LLVM_VER),svn)
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
+LLVM_CMAKE += -DLLVM_EXTERNAL_PROJECTS="$(LLVM_EXTERNAL_PROJECTS)"
+
+ifeq ($(USE_RV),1)
+LLVM_CMAKE += -DLLVM_EXTERNAL_RV_SOURCE_DIR=$(LLVM_MONOSRC_DIR)/rv
+LLVM_CMAKE += -DLLVM_CXX_STD=c++14
+endif
 endif
 
 # Allow adding LLVM specific flags
@@ -351,8 +376,12 @@ ifneq ($(LLVM_VER),svn)
 	mkdir -p $(LLVM_SRC_DIR)
 	$(TAR) -C $(LLVM_SRC_DIR) --strip-components 1 -xf $(LLVM_TAR)
 else
+	([ ! -d $(LLVM_BARESRC_DIR) ] && \
+		git clone --bare $(LLVM_GIT_URL) $(LLVM_BARESRC_DIR) ) || \
+		(cd $(LLVM_BARESRC_DIR) && \
+		git fetch)
 	([ ! -d $(LLVM_MONOSRC_DIR) ] && \
-		git clone $(LLVM_GIT_URL) $(LLVM_MONOSRC_DIR) ) || \
+		git clone --dissociate --reference $(LLVM_BARESRC_DIR) $(LLVM_GIT_URL) $(LLVM_MONOSRC_DIR) ) || \
 		(cd $(LLVM_MONOSRC_DIR) && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER),)
@@ -362,6 +391,11 @@ endif # LLVM_GIT_VER
 	# Debug output only. Disable pager and ignore error.
 	(cd $(LLVM_SRC_DIR) && \
 		git show HEAD --stat | cat) || true
+ifeq ($(USE_RV),1)
+	git clone -b $(LLVM_RV_GIT_VER) $(LLVM_RV_GIT_URL) $(LLVM_MONOSRC_DIR)/rv
+	(cd $(LLVM_MONOSRC_DIR)/rv && \
+		git submodule update --init) || true
+endif
 endif # LLVM_VER
 ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
@@ -457,6 +491,10 @@ $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-r_aarch64_prel32)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-r_ppc_rel)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa))
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
+endif
 endif # LLVM_VER 10.0
 
 ifeq ($(LLVM_VER_SHORT),11.0)
@@ -471,6 +509,10 @@ $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 $(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa))
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
+endif
 endif # LLVM_VER 11.0
 
 
@@ -548,8 +590,11 @@ check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:
-	cd $(LLVM_MONOSRC_DIR) && \
-		git pull --ff-only
+	(cd $(LLVM_BARESRC_DIR) && \
+		git fetch)
+	(cd $(LLVM_MONOSRC_DIR) && \
+		git fetch $(LLVM_BARESRC_DIR) +refs/remotes/*:refs/remotes/* && \
+		git pull --ff-only)
 endif
 else # USE_BINARYBUILDER_LLVM
 ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)

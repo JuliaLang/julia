@@ -278,7 +278,7 @@ const Err{T} = Union{T, ParserError}
 function format_error_message_for_err_type(error::ParserError)
     msg = err_message[error.type]
     if error.type == ErrInvalidBareKeyCharacter
-        c_escaped = escape_string(string(error.data))
+        c_escaped = escape_string(string(error.data)::String)
         msg *= ": '$c_escaped'"
     end
     return msg
@@ -482,6 +482,7 @@ end
 
 function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
+        d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector
@@ -489,7 +490,7 @@ function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, 
         end
         check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
     end
-    return d
+    return d::TOMLDict
 end
 
 function check_allowed_add_key(l::Parser, d, check_defined=true)::Err{Nothing}
@@ -660,13 +661,13 @@ function push!!(v::Vector, el)
         return v
     else
         if typeof(T) === Union
-            newT = Base.typejoin(T, typeof(el))
+            newT = Any
         else
             newT = Union{T, typeof(el)}
         end
         new = Array{newT}(undef, length(v))
         copy!(new, v)
-        return push!!(new, el)
+        return push!(new, el)
     end
 end
 

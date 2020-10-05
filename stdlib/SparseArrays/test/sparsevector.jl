@@ -431,6 +431,11 @@ end
         copyto!(x2, x) # copyto!(SparseVector, AbstractVector)
         @test Vector(x2) == collect(x)
     end
+    let x = 1:9, x1 = spzeros(length(x)), x2 = spzeros(length(x)-1)
+        @test_throws ArgumentError copy!(x2, x)
+        copy!(x1, convert.(eltype(x1), collect(x))) # copy!(SparseVector, AbstractVector)
+        @test Vector(x1) == collect(x)
+    end
 end
 @testset "vec/reinterpret/float/complex" begin
     a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])

@@ -296,6 +296,11 @@ _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.
 
 _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 
+# for types that `apply` knows about, just splatting is faster than collecting first
+_totuple(::Type{Tuple}, itr::Array) = (itr...,)
+_totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
+_totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
+
 end
 
 ## filter ##

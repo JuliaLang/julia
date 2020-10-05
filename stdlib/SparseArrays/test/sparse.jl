@@ -1306,7 +1306,9 @@ end
     for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
         @test m(S, dims=region) == m(A, dims=region)
     end
-
+    for m in [findmax, findmin]
+        @test_throws ArgumentError m(S, (4, 3))
+    end
     S = spzeros(10,8)
     A = Array(S)
     @test argmax(S) == argmax(A) == CartesianIndex(1,1)
@@ -1750,6 +1752,13 @@ end
     # promotion
     @test spdiagm(0 => [1,2], 1 => [3.5], -1 => [4+5im]) == [1 3.5; 4+5im 2]
 
+    # convenience constructor
+    @test spdiagm(x)::SparseMatrixCSC == diagm(x)
+    @test nnz(spdiagm(x)) == count(!iszero, x)
+    @test nnz(spdiagm(sparse([x; 0]))) == 2
+    @test spdiagm(3, 4, x)::SparseMatrixCSC == diagm(3, 4, x)
+    @test nnz(spdiagm(3, 4, sparse([x; 0]))) == 2
+
     # non-square:
     for m=1:4, n=2:4
         if m < 2 || n < 3
@@ -1760,6 +1769,11 @@ end
             @test spdiagm(m,n, 0 => x,  1 => x) == M
         end
     end
+
+    # sparsity-preservation
+    x = sprand(10, 0.2); y = ones(9)
+    @test spdiagm(0 => x, 1 => y) == diagm(0 => x, 1 => y)
+    @test nnz(spdiagm(0 => x, 1 => y)) == length(y) + nnz(x)
 end
 
 @testset "diag" begin
@@ -2271,6 +2285,8 @@ end
     A = sparse([1], [1], [Vector{Float64}(undef, 3)], 3, 3)
     A[1,1] = [1.0, 2.0, 3.0]
     @test A[1,1] == [1.0, 2.0, 3.0]
+    @test_throws BoundsError setindex!(A, [4.0, 5.0, 6.0], 4, 3)
+    @test_throws BoundsError setindex!(A, [4.0, 5.0, 6.0], 3, 4)
 end
 
 @testset "isstored" begin

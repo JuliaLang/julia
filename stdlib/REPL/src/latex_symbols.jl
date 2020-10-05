@@ -183,6 +183,9 @@ const latex_symbols = Dict(
     "\\^phi" => "ᵠ",
     "\\^chi" => "ᵡ",
     "\\^Phi" => "ᶲ",
+    "\\^uparrow" => "ꜛ",
+    "\\^downarrow" => "ꜜ",
+    "\\^!" => "ꜝ",
 
     # Subscripts
     "\\_0" => "₀",

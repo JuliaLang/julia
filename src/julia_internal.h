@@ -595,6 +595,7 @@ extern char jl_using_oprofile_jitevents;
 #ifdef JL_USE_PERF_JITEVENTS
 extern char jl_using_perf_jitevents;
 #endif
+extern char jl_using_gdb_jitevents;
 extern size_t jl_arr_xtralloc_limit;
 
 // -- init.c -- //
@@ -988,6 +989,7 @@ void *jl_get_library_(const char *f_lib, int throw_err) JL_NOTSAFEPOINT;
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
                                       void **hnd) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
     void *(*init_trampoline)(void *tramp, void **nval),
@@ -1185,6 +1187,14 @@ struct typemap_intersection_env {
     int issubty;    // if `a <: b` is true in `intersect(a,b)`
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure);
+
+// -- simplevector.c -- //
+
+// For codegen only.
+JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int8_t jl_svec_isassigned(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i);
+
 
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 

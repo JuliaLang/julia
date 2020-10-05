@@ -97,6 +97,9 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->isinlinealloc = 0;
     t->has_concrete_subtype = 1;
     t->cached_by_hash = 0;
+    t->name = NULL;
+    t->super = NULL;
+    t->parameters = NULL;
     t->layout = NULL;
     t->names = NULL;
     t->types = NULL;
@@ -224,8 +227,11 @@ STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
 {
     if (jl_is_datatype_make_singleton(st)) {
-        st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
-        jl_gc_wb(st, st->instance);
+        // It's possible for st to already have an ->instance if it was redefined
+        if (!st->instance) {
+            st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
+            jl_gc_wb(st, st->instance);
+        }
     }
 }
 
@@ -271,15 +277,30 @@ int jl_pointer_egal(jl_value_t *t)
         return 0; // when setting up the initial types, jl_is_type_type gets confused about this
     if (t == (jl_value_t*)jl_symbol_type)
         return 1;
+    if (t == (jl_value_t*)jl_bool_type)
+        return 1;
     if (jl_is_mutable_datatype(t) && // excludes abstract types
         t != (jl_value_t*)jl_string_type && // technically mutable, but compared by contents
         t != (jl_value_t*)jl_simplevector_type &&
         !jl_is_kind(t))
         return 1;
-    if (jl_is_type_type(t) && jl_is_concrete_type(jl_tparam0(t))) {
+    if ((jl_is_datatype(t) && jl_is_datatype_singleton((jl_datatype_t*)t)) ||
+        t == (jl_value_t*)jl_typeofbottom_type->super)
+        return 1;
+    if (jl_is_type_type(t) && jl_is_datatype(jl_tparam0(t))) {
         // need to use typeseq for most types
         // but can compare some types by pointer
-        return 1;
+        jl_datatype_t *dt = (jl_datatype_t*)jl_tparam0(t);
+        // `Core.TypeofBottom` and `Type{Union{}}` are used interchangeably
+        // with different pointer values even though `Core.TypeofBottom` is a concrete type.
+        // See `Core.Compiler.hasuniquerep`
+        if (dt != jl_typeofbottom_type &&
+            (dt->isconcretetype || jl_svec_len(dt->parameters) == 0)) {
+            // Concrete types have unique pointer values
+            // If the type has zero type parameters it'll also have only one possible
+            // pointer value.
+            return 1;
+        }
     }
     return 0;
 }
@@ -358,7 +379,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             st->layout = &opaque_byte_layout;
             return;
         }
-        else if (st == jl_simplevector_type || st->name == jl_array_typename) {
+        else if (st == jl_simplevector_type || st == jl_module_type || st->name == jl_array_typename) {
             static const jl_datatype_layout_t opaque_ptr_layout = {0, 1, -1, sizeof(void*), 0, 0};
             st->layout = &opaque_ptr_layout;
             return;
@@ -438,11 +459,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     zeroinit = 1;
                 }
                 else {
+                    uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->haspadding)
                         haspadding = 1;
+                    if (i >= st->ninitialized && fld_npointers &&
+                        fld_npointers * sizeof(void*) != fsz) {
+                        // field may be undef (may be uninitialized and contains pointer),
+                        // and contains non-pointer fields of non-zero sizes.
+                        haspadding = 1;
+                    }
                     if (!zeroinit)
                         zeroinit = ((jl_datatype_t*)fld)->zeroinit;
-                    npointers += ((jl_datatype_t*)fld)->layout->npointers;
+                    npointers += fld_npointers;
                 }
             }
             else {

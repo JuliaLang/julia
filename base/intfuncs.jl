@@ -368,9 +368,9 @@ _prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
 _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
-    ispow2(n::Integer) -> Bool
+    ispow2(n::Number) -> Bool
 
-Test whether `n` is a power of two.
+Test whether `n` is an integer power of two.
 
 # Examples
 ```jldoctest
@@ -379,8 +379,22 @@ true
 
 julia> ispow2(5)
 false
+
+julia> ispow2(4.5)
+false
+
+julia> ispow2(0.25)
+true
+
+julia> ispow2(1//8)
+true
 ```
+
+!!! compat "Julia 1.6"
+    Support for non-`Integer` arguments was added in Julia 1.6.
 """
+ispow2(x::Number) = isreal(x) && ispow2(real(x))
+
 ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
 """
@@ -601,75 +615,112 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 
 ## integer to string functions ##
 
-function bin(x::Unsigned, pad::Integer, neg::Bool)
-    i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
-    a = StringVector(i)
+function bin(x::Unsigned, pad::Int, neg::Bool)
+    m = 8 * sizeof(x) - leading_zeros(x)
+    n = neg + max(pad, m)
+    a = StringVector(n)
+    # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
+    #     @inbounds a[n - i] = 0x30 + (((x >> i) % UInt8)::UInt8 & 0x1)
+    # end
+    i = n
+    @inbounds while i >= 4
+        b = UInt32((x % UInt8)::UInt8)
+        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+        a[i-3] = (d >> 0x00) % UInt8
+        a[i-2] = (d >> 0x08) % UInt8
+        a[i-1] = (d >> 0x10) % UInt8
+        a[i]   = (d >> 0x18) % UInt8
+        x >>= 0x4
+        i -= 4
+    end
     while i > neg
-        @inbounds a[i] = 48+(x&0x1)
-        x >>= 1
+        @inbounds a[i] = 0x30 + ((x % UInt8)::UInt8 & 0x1)
+        x >>= 0x1
         i -= 1
     end
     if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
-function oct(x::Unsigned, pad::Integer, neg::Bool)
-    i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
-    a = StringVector(i)
+function oct(x::Unsigned, pad::Int, neg::Bool)
+    m = div(8 * sizeof(x) - leading_zeros(x) + 2, 3)
+    n = neg + max(pad, m)
+    a = StringVector(n)
+    i = n
     while i > neg
-        @inbounds a[i] = 48+(x&0x7)
-        x >>= 3
+        @inbounds a[i] = 0x30 + ((x % UInt8)::UInt8 & 0x7)
+        x >>= 0x3
         i -= 1
     end
     if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
-function dec(x::Unsigned, pad::Integer, neg::Bool)
-    i = neg + ndigits(x, base=10, pad=pad)
-    a = StringVector(i)
-    while i > neg
-        @inbounds a[i] = 48+rem(x,10)
-        x = oftype(x,div(x,10))
-        i -= 1
+# 2-digit decimal characters ("00":"99")
+const _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
+
+function dec(x::Unsigned, pad::Int, neg::Bool)
+    n = neg + ndigits(x, pad=pad)
+    a = StringVector(n)
+    i = n
+    @inbounds while i >= 2
+        d, r = divrem(x, 0x64)
+        d100 = _dec_d100[(r % Int)::Int + 1]
+        a[i-1] = d100 % UInt8
+        a[i] = (d100 >> 0x8) % UInt8
+        x = oftype(x, d)
+        i -= 2
+    end
+    if i > neg
+        @inbounds a[i] = 0x30 + (rem(x, 0xa) % UInt8)::UInt8
     end
     if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
-function hex(x::Unsigned, pad::Integer, neg::Bool)
-    i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
-    a = StringVector(i)
-    while i > neg
-        d = x & 0xf
-        @inbounds a[i] = 48+d+39*(d>9)
-        x >>= 4
-        i -= 1
+function hex(x::Unsigned, pad::Int, neg::Bool)
+    m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
+    n = neg + max(pad, m)
+    a = StringVector(n)
+    i = n
+    while i >= 2
+        b = (x % UInt8)::UInt8
+        d1, d2 = b >> 0x4, b & 0xf
+        @inbounds a[i-1] = d1 + ifelse(d1 > 0x9, 0x57, 0x30)
+        @inbounds a[i]   = d2 + ifelse(d2 > 0x9, 0x57, 0x30)
+        x >>= 0x8
+        i -= 2
+    end
+    if i > neg
+        d = (x % UInt8)::UInt8 & 0xf
+        @inbounds a[i] = d + ifelse(d > 0x9, 0x57, 0x30)
     end
     if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
-const base36digits = ['0':'9';'a':'z']
-const base62digits = ['0':'9';'A':'Z';'a':'z']
+const base36digits = UInt8['0':'9';'a':'z']
+const base62digits = UInt8['0':'9';'A':'Z';'a':'z']
 
-function _base(b::Integer, x::Integer, pad::Integer, neg::Bool)
-    (x >= 0) | (b < 0) || throw(DomainError(x, "For negative `x`, `b` must be negative."))
-    2 <= abs(b) <= 62 || throw(DomainError(b, "base must satisfy 2 ≤ abs(base) ≤ 62"))
+function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
+    (x >= 0) | (base < 0) || throw(DomainError(x, "For negative `x`, `base` must be negative."))
+    2 <= abs(base) <= 62 || throw(DomainError(base, "base must satisfy 2 ≤ abs(base) ≤ 62"))
+    b = (base % Int)::Int
     digits = abs(b) <= 36 ? base36digits : base62digits
-    i = neg + ndigits(x, base=b, pad=pad)
-    a = StringVector(i)
+    n = neg + ndigits(x, base=b, pad=pad)
+    a = StringVector(n)
+    i = n
     @inbounds while i > neg
         if b > 0
-            a[i] = digits[1+rem(x,b)]
+            a[i] = digits[1 + (rem(x, b) % Int)::Int]
             x = div(x,b)
         else
-            a[i] = digits[1+mod(x,-b)]
+            a[i] = digits[1 + (mod(x, -b) % Int)::Int]
             x = cld(x,b)
         end
         i -= 1
     end
-    if neg; a[1]='-'; end
+    if neg; @inbounds a[1]=0x2d; end
     String(a)
 end
 
@@ -691,6 +742,7 @@ julia> string(13, base = 5, pad = 4)
 ```
 """
 function string(n::Integer; base::Integer = 10, pad::Integer = 1)
+    pad = (min(max(pad, typemin(Int)), typemax(Int)) % Int)::Int
     if base == 2
         (n_positive, neg) = split_sign(n)
         bin(n_positive, pad, neg)
