@@ -62,14 +62,18 @@ Given a starting value, construct an iterable with the first element of `start`.
 One keyword argument of either `length`, `stop`, or `step` is required to avoid
 ambiguity.
 
-To specify a [`UnitRange`](@ref) where `step` is 1, use either
+To specify a [`UnitRange`](@ref) where `step` is 1, use one of the following
+where `start`, `length`, and `stop` are all integers.
 * range(start, length=length)
+* range(start, stop=stop)
 * `start:stop`
 * `(:)(start,stop)`
 
+Specifying a `step` of 1 explicitly, does not result in a [`UnitRange`](@ref).
+
 `stop` may be included as the last element of the iterable depending on `step`.
 `stop` may be specified as either a positional or keyword argument.
-If `stop` is given as a positional argument, a keyword argument.
+If `stop` is given as a positional argument, a keyword argument
 of either `length` or `step` must be specified.
 If `stop` is given as the sole keyword argument, a `step` is assumed be 1.0.
 
@@ -77,9 +81,10 @@ If `length` and `stop` are provided and `step` is not, the step size will be com
 automatically such that there are `length` linearly spaced elements in the range.
 
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
-automatically such that the elements are `step` spaced.
+automatically such that the elements are `step` spaced. The last element of the range
+may not be `stop` in this case.
 
-`length`, `stop`, and `step` cannot be all specified.
+`length`, `stop`, and `step` cannot be all specified. An [`ArgumentError`](@ref) will be thrown.
 
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
@@ -94,6 +99,9 @@ julia> range(1, length=100)
 
 julia> range(1, stop=100)
 1:100
+
+julia> range(1,stop=100, step=1)
+1:1:100
 
 julia> range(1, stop=3.3)
 1.0:1.0:3.0
