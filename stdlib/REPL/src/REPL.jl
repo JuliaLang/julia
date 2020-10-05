@@ -496,6 +496,16 @@ active_module(::AbstractREPL) = Main
 active_module(d::REPLDisplay) = active_module(d.repl)
 
 setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
+"""
+    activate(mod::Module=Main)
+
+Set `mod` as the default contextual module in the REPL,
+both for evaluating expressions and printing them.
+"""
+function activate(mod::Module=Main)
+    Base.active_repl.mistate.active_module = mod
+    nothing
+end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
