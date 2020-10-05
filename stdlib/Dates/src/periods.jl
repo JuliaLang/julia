@@ -472,6 +472,14 @@ Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed(x))
 Base.hash(x::Quarter, h::UInt) = hash(3 * value(x), h + otherperiod_seed(x))
 Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed(x))
 
+function Base.hash(x::CompoundPeriod, h::UInt)
+    isempty(x.periods) && return hash(0, h + zero_or_fixedperiod_seed)
+    for p in x.periods
+        h = hash(p, h)
+    end
+    return h
+end
+
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
 Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
 
