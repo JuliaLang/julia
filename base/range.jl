@@ -47,8 +47,10 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start[, stop]; length, stop, step)
-
+    range(start; stop, length) # any one keyword, creates a UnitRange (step = 1)
+    range(start, stop; length, step) # any one keyword
+    range(start; stop, length, step) # any two keywords
+    
 Construct at an `AbstractRange`, given a starting value and one or two required keyword arguments.
 
 `start` is the first value of range. `stop` is the upper bound of the range. `length` is the number of
