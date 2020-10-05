@@ -55,8 +55,8 @@ Construct at an `AbstractRange`, given a starting value and one or two required 
 elements of range. `step` is the difference between each element of the range.
 
 If the only keyword is `stop` or `length` and all arguments are integers this results in a `UnitRange`.
-Otherwise it constructs an `AbstractRange` for which any two of `stop, length, step` 
-can be specified. Giving all three will result in an error. 
+Otherwise it constructs an `AbstractRange` for which any two of `stop, length, step`
+can be specified. Giving all three will result in an error.
 `stop` may be a keyword, or the 2nd positional argument along with another keyword argument.
 
 See the Extended help for more details.
