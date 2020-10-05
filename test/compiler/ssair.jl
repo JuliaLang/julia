@@ -172,15 +172,10 @@ let ci = make_ci([
 end
 
 # Test that GlobalRef in value position is non-canonical
-let ci = (Meta.@lower 1 + 1).args[1]
-    ci.code = [
+let ci = make_ci([
         Expr(:call, GlobalRef(Main, :something_not_defined_please))
         ReturnNode(SSAValue(1))
-    ]
-    nstmts = length(ci.code)
-    ci.ssavaluetypes = nstmts
-    ci.codelocs = fill(Int32(1), nstmts)
-    ci.ssaflags = fill(Int32(0), nstmts)
+    ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
     @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
