@@ -102,16 +102,61 @@ ERROR: ArgumentError: Too many arguments specified; try passing only one of `sto
 ```
 
 # Extended help
-
-    range(start; stop)
     range(start; length)
+    range(start; stop)
+
     range(start; stop, length)
-    range(start; stop, step)
-    range(start; length, step)
     range(start, stop; length)
+
+    range(start; stop, step)
     range(start, stop; step)
 
-The above forms of `range` are the only acceptable calls.
+    range(start; length, step)   
+
+The above forms of `range` are the only acceptable forms of the range call.
+
+## Arguments
+
+The relationship of the arguments is described by the following equation
+written as an expression that must evaluate to true.
+
+    `start + step * (length-1) <= stop`
+
+### `length` argument specified
+
+If `length` is given as the sole keyword argument, `step` is assumed to be 1.0.
+
+### `stop` argument specified
+
+`stop` serves only as an upper bound and may be included as the last element.
+If `stop` is given as the sole keyword argument, `step` is assumed to be 1.0.
+If `stop` is given as a positional argument, a keyword argument of either
+`length` or `step` must be specified per below.
+
+### `stop` and `length` specified
+
+If `length` and `stop` are provided and `step` is not, the step size will be computed
+automatically such that there are `length` linearly spaced elements in the range inclusive
+of `stop`.
+
+### `stop` and `step` specified
+
+If `step` and `stop` are provided and `length` is not, the overall range length will be computed
+automatically such that the elements are `step` spaced. The last element of the range
+may not be `stop` in this case.
+
+
+### `length` and `stop` specified
+
+If `length` and `step are provided and `stop` is not, then the resulting range will include
+`length` elements that are `step` spaced. The last element will be
+`stop = start + step * (length-1)`.
+
+### `length`, `stop`, and `step` cannot be all specified
+
+An [`ArgumentError`](@ref) will be thrown if all three keyword arguments are specified.
+
+## `UnitRange` construction
 
 To specify a [`UnitRange`](@ref) where `step` is 1, use one of the following
 where `start`, `length`, and `stop` are all integers.
@@ -122,19 +167,7 @@ where `start`, `length`, and `stop` are all integers.
 
 Specifying a `step` of 1 explicitly, does not result in a [`UnitRange`](@ref).
 
-`stop` serves only as an upper bound and may be included as the last element.
-If `stop` is given as a positional argument, a keyword argument
-of either `length` or `step` must be specified.
-If `stop` is given as the sole keyword argument, `step` is assumed to be 1.0.
-
-If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range.
-
-If `step` and `stop` are provided and `length` is not, the overall range length will be computed
-automatically such that the elements are `step` spaced. The last element of the range
-may not be `stop` in this case.
-
-`length`, `stop`, and `step` cannot be all specified. An [`ArgumentError`](@ref) will be thrown.
+## Rationally computed intermediate values
 
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
