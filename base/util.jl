@@ -45,12 +45,13 @@ const disable_text_style = Dict{Symbol,String}(
 
 # Create a docstring with an automatically generated list
 # of colors.
-available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
-const possible_formatting_symbols = [:normal, :bold, :default]
-available_text_colors = cat(
-    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
-    dims=1)
+let color_syms = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors))),
+    formatting_syms = [:normal, :bold, :default]
+    global const available_text_colors = cat(
+        sort!(intersect(color_syms, formatting_syms), rev=true),
+        sort!(setdiff(  color_syms, formatting_syms));
+        dims=1)
+end
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")
@@ -66,9 +67,9 @@ Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
-function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
+function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
-    iscolor = get(io, :color, false)
+    iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)
     finally
         str = String(take!(buf))
@@ -139,12 +140,12 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                   end
         isempty(compile) || push!(addflags, "--compile=$compile")
     end
-    let depwarn = if opts.depwarn == 0
-                      "no"
+    let depwarn = if opts.depwarn == 1
+                      "yes"
                   elseif opts.depwarn == 2
                       "error"
                   else
-                      "" # default = "yes"
+                      "" # default = "no"
                   end
         isempty(depwarn) || push!(addflags, "--depwarn=$depwarn")
     end
@@ -384,6 +385,8 @@ _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+_crc32c(x::Integer, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Vector{UInt8}, Csize_t), crc, reinterpret(UInt8, [x]), sizeof(x))
 
 """
     @kwdef typedef
@@ -422,6 +425,7 @@ Stacktrace:
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
     expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
+    expr = expr::Expr
     T = expr.args[2]
     if T isa Expr && T.head === :<:
         T = T.args[1]
@@ -437,12 +441,13 @@ macro kwdef(expr)
         if T isa Symbol
             kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
         elseif T isa Expr && T.head === :curly
+            T = T::Expr
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = [U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
+            Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
             kwdefs = quote
                 ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
@@ -506,22 +511,26 @@ end
 
 """
     Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false, [seed])
+                  exit_on_error=false, revise=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
 fails, all remaining tests in other files will still be run; they are otherwise discarded,
 when `exit_on_error == true`.
+If `revise` is `true`, the `Revise` package is used to load any modifications to `Base` or
+to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false,
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
+                  exit_on_error::Bool=false,
+                  revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
+    revise && push!(tests, "--revise")
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"

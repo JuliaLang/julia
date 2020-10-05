@@ -220,7 +220,7 @@ function mmap(io::IO,
                                 readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
         Base.windowserror(:mmap, handle == C_NULL)
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
-                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
+                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
         Base.windowserror(:mmap, ptr == C_NULL)
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
@@ -335,17 +335,78 @@ const MS_SYNC = 4
 Forces synchronization between the in-memory version of a memory-mapped `Array` or
 [`BitArray`](@ref) and the on-disk version.
 """
-function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
+function sync!(m::Array, flags::Integer=MS_SYNC)
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset
+    mmaplen = sizeof(m) + offset
     GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
-                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
+                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flags) != 0)
     else
         Base.windowserror(:FlushViewOfFile,
-            ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, length(m)) == 0)
+            ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, mmaplen) == 0)
     end
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)
+
+@static if Sys.isunix()
+const MADV_NORMAL = 0
+const MADV_RANDOM = 1
+const MADV_SEQUENTIAL = 2
+const MADV_WILLNEED = 3
+const MADV_DONTNEED = 4
+if Sys.islinux()
+    const MADV_FREE = 8
+    const MADV_REMOVE = 9
+    const MADV_DONTFORK = 10
+    const MADV_DOFORK = 11
+    const MADV_MERGEABLE = 12
+    const MADV_UNMERGEABLE = 13
+    const MADV_HUGEPAGE = 14
+    const MADV_NOHUGEPAGE = 15
+    const MADV_DONTDUMP = 16
+    const MADV_DODUMP = 17
+    const MADV_WIPEONFORK = 18
+    const MADV_KEEPONFORK = 19
+    const MADV_COLD = 20
+    const MADV_PAGEOUT = 21
+    const MADV_HWPOISON = 100
+    const MADV_SOFT_OFFLINE = 101
+elseif Sys.isapple()
+    const MADV_FREE = 5
+elseif Sys.isfreebsd() || Sys.isdragonfly()
+    const MADV_FREE = 5
+    const MADV_NOSYNC = 6
+    const MADV_AUTOSYNC = 7
+    const MADV_NOCORE = 8
+    const MADV_CORE = 9
+    if Sys.isfreebsd()
+        const MADV_PROTECT = 10
+    else
+        const MADV_INVAL = 10
+        const MADV_SETMAP = 11
+    end
+elseif Sys.isopenbsd() || Sys.isnetbsd()
+    const MADV_SPACEAVAIL = 5
+    const MADV_FREE = 6
+end
+
+"""
+    Mmap.madvise!(array, flag::Integer = Mmap.MADV_NORMAL)
+
+Advises the kernel on the intended usage of the memory-mapped `array`, with the intent
+`flag` being one of the available `MADV_*` constants.
+"""
+function madvise!(m::Array, flag::Integer=MADV_NORMAL)
+    offset = rem(UInt(pointer(m)), PAGESIZE)
+    ptr = pointer(m) - offset
+    mmaplen = sizeof(m) + offset
+    GC.@preserve m begin
+        systemerror("madvise",
+                    ccall(:madvise, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flag) != 0)
+    end
+end
+madvise!(B::BitArray, flag::Integer=MADV_NORMAL) = madvise!(B.chunks, flag)
+end # Sys.isunix()
 
 end # module

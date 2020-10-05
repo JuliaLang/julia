@@ -352,10 +352,13 @@ value_t fl_ioreaduntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     cv->len = n;
     if (dest.buf != data) {
         // outgrew initial space
-        cv->data = dest.buf;
+        size_t sz;
+        cv->data = ios_take_buffer(&dest, &sz);
         cv_autorelease(fl_ctx, cv);
     }
-    ((char*)cv->data)[n] = '\0';
+    else {
+        ((char*)cv->data)[n] = '\0';
+    }
     if (n == 0 && ios_eof(src))
         return fl_ctx->FL_EOF;
     return str;

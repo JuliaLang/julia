@@ -67,4 +67,9 @@ end
     @test iterate(I, CartesianIndex(4, typemax(Int)))    === nothing
 end
 
+@testset "CartesianIndices operations" begin
+    I = CartesianIndices((1:3, 4:6))
+    J = CartesianIndices((2:4, 3:5))
 
+    @test @inferred(intersect(I, J)) == CartesianIndices((2:3, 4:5))
+end

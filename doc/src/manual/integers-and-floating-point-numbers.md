@@ -113,34 +113,34 @@ Unsigned integers are input and output using the `0x` prefix and hexadecimal (ba
 determined by the number of hex digits used:
 
 ```jldoctest
-julia> 0x1
+julia> x = 0x1
 0x01
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt8
 
-julia> 0x123
+julia> x = 0x123
 0x0123
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt16
 
-julia> 0x1234567
+julia> x = 0x1234567
 0x01234567
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt32
 
-julia> 0x123456789abcdef
+julia> x = 0x123456789abcdef
 0x0123456789abcdef
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt64
 
-julia> 0x11112222333344445555666677778888
+julia> x = 0x11112222333344445555666677778888
 0x11112222333344445555666677778888
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt128
 ```
 
@@ -148,28 +148,25 @@ This behavior is based on the observation that when one uses unsigned hex litera
 values, one typically is using them to represent a fixed numeric byte sequence, rather than just
 an integer value.
 
-Recall that the variable [`ans`](@ref) is set to the value of the last expression evaluated in
-an interactive session. This does not occur when Julia code is run in other ways.
-
 Binary and octal literals are also supported:
 
 ```jldoctest
-julia> 0b10
+julia> x = 0b10
 0x02
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt8
 
-julia> 0o010
+julia> x = 0o010
 0x08
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt8
 
-julia> 0x00000000000000001111222233334444
+julia> x = 0x00000000000000001111222233334444
 0x00000000000000001111222233334444
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt128
 ```
 
@@ -289,10 +286,10 @@ The above results are all [`Float64`](@ref) values. Literal [`Float32`](@ref) va
 entered by writing an `f` in place of `e`:
 
 ```jldoctest
-julia> 0.5f0
+julia> x = 0.5f0
 0.5f0
 
-julia> typeof(ans)
+julia> typeof(x)
 Float32
 
 julia> 2.5f-4
@@ -302,10 +299,10 @@ julia> 2.5f-4
 Values can be converted to [`Float32`](@ref) easily:
 
 ```jldoctest
-julia> Float32(-1.5)
+julia> x = Float32(-1.5)
 -1.5f0
 
-julia> typeof(ans)
+julia> typeof(x)
 Float32
 ```
 
@@ -319,10 +316,10 @@ julia> 0x1p0
 julia> 0x1.8p3
 12.0
 
-julia> 0x.4p-1
+julia> x = 0x.4p-1
 0.125
 
-julia> typeof(ans)
+julia> typeof(x)
 Float64
 ```
 
@@ -683,12 +680,13 @@ and the identifier or parenthesized expression which it multiplies.
 
 ### Syntax Conflicts
 
-Juxtaposed literal coefficient syntax may conflict with two numeric literal syntaxes: hexadecimal
-integer literals and engineering notation for floating-point literals. Here are some situations
+Juxtaposed literal coefficient syntax may conflict with some numeric literal syntaxes: hexadecimal,
+octal and binary integer literals and engineering notation for floating-point literals. Here are some situations
 where syntactic conflicts arise:
 
   * The hexadecimal integer literal expression `0xff` could be interpreted as the numeric literal
-    `0` multiplied by the variable `xff`.
+    `0` multiplied by the variable `xff`. Similar ambiguities arise with octal and binary literals like
+    `0o777` or `0b01001010`.
   * The floating-point literal expression `1e10` could be interpreted as the numeric literal `1` multiplied
     by the variable `e10`, and similarly with the equivalent `E` form.
   * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
@@ -696,7 +694,7 @@ where syntactic conflicts arise:
 
 In all cases the ambiguity is resolved in favor of interpretation as numeric literals:
 
-  * Expressions starting with `0x` are always hexadecimal literals.
+  * Expressions starting with `0x`/`0o`/`0b` are always hexadecimal/octal/binary literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
   * Expressions starting with a numeric literal followed by `f` are always 32-bit floating-point literals.
 

@@ -32,15 +32,34 @@ SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
 
 # Define an alias for a view of a whole column of a SparseMatrixCSC. Many methods can be written for the
 # union of such a view and a SparseVector so we define an alias for such a union as well
-const SparseColumnView{T}  = SubArray{T,1,<:AbstractSparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
-const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
-const AdjOrTransSparseVectorUnion{T} = LinearAlgebra.AdjOrTrans{T, <:SparseVectorUnion{T}}
+const SparseColumnView{Tv,Ti}  = SubArray{Tv,1,<:AbstractSparseMatrixCSC{Tv,Ti},Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
+const SparseVectorView{Tv,Ti}  = SubArray{Tv,1,<:AbstractSparseVector{Tv,Ti},Tuple{Base.Slice{Base.OneTo{Int}}},false}
+const SparseVectorUnion{Tv,Ti} = Union{SparseVector{Tv,Ti}, SparseColumnView{Tv,Ti}, SparseVectorView{Tv,Ti}}
+const AdjOrTransSparseVectorUnion{Tv,Ti} = LinearAlgebra.AdjOrTrans{Tv, <:SparseVectorUnion{Tv,Ti}}
 
 ### Basic properties
 
 size(x::SparseVector)     = (getfield(x, :n),)
-nnz(x::SparseVector)      = length(nonzeros(x))
 count(f, x::SparseVector) = count(f, nonzeros(x)) + f(zero(eltype(x)))*(length(x) - nnz(x))
+
+# implement the nnz - nzrange - nonzeros - rowvals interface for sparse vectors
+
+nnz(x::SparseVector)      = length(nonzeros(x))
+function nnz(x::SparseColumnView)
+    rowidx, colidx = parentindices(x)
+    return length(nzrange(parent(x), colidx))
+end
+nnz(x::SparseVectorView) = nnz(x.parent)
+
+"""
+    nzrange(x::SparseVectorUnion, col)
+
+Give the range of indices to the structural nonzero values of a sparse vector.
+The column index `col` is ignored (assumed to be `1`).
+"""
+function nzrange(x::SparseVectorUnion, j::Integer)
+    j == 1 ? (1:nnz(x)) : throw(BoundsError(x, (":", j)))
+end
 
 nonzeros(x::SparseVector) = getfield(x, :nzval)
 function nonzeros(x::SparseColumnView)
@@ -49,6 +68,7 @@ function nonzeros(x::SparseColumnView)
     @inbounds y = view(nonzeros(A), nzrange(A, colidx))
     return y
 end
+nonzeros(x::SparseVectorView) = nonzeros(parent(x))
 
 nonzeroinds(x::SparseVector) = getfield(x, :nzind)
 function nonzeroinds(x::SparseColumnView)
@@ -57,12 +77,12 @@ function nonzeroinds(x::SparseColumnView)
     @inbounds y = view(rowvals(A), nzrange(A, colidx))
     return y
 end
+nonzeroinds(x::SparseVectorView) = nonzeroinds(parent(x))
+
+rowvals(x::SparseVectorUnion) = nonzeroinds(x)
 
 indtype(x::SparseColumnView) = indtype(parent(x))
-function nnz(x::SparseColumnView)
-    rowidx, colidx = parentindices(x)
-    return length(nzrange(parent(x), colidx))
-end
+indtype(x::SparseVectorView) = indtype(parent(x))
 
 ## similar
 #
@@ -168,19 +188,19 @@ in which case `combine` defaults to `|`.
 julia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];
 
 julia> sparsevec(II, V)
-5-element SparseVector{Float64,Int64} with 3 stored entries:
+5-element SparseVector{Float64, Int64} with 3 stored entries:
   [1]  =  0.1
   [3]  =  0.5
   [5]  =  0.2
 
 julia> sparsevec(II, V, 8, -)
-8-element SparseVector{Float64,Int64} with 3 stored entries:
+8-element SparseVector{Float64, Int64} with 3 stored entries:
   [1]  =  0.1
   [3]  =  -0.1
   [5]  =  0.2
 
 julia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])
-3-element SparseVector{Bool,Int64} with 3 stored entries:
+3-element SparseVector{Bool, Int64} with 3 stored entries:
   [1]  =  1
   [2]  =  0
   [3]  =  1
@@ -242,7 +262,7 @@ the dictionary, and the nonzero values are the values from the dictionary.
 # Examples
 ```jldoctest
 julia> sparsevec(Dict(1 => 3, 2 => 2))
-2-element SparseVector{Int64,Int64} with 2 stored entries:
+2-element SparseVector{Int64, Int64} with 2 stored entries:
   [1]  =  3
   [2]  =  2
 ```
@@ -320,16 +340,16 @@ Drop entry `x[i]` from `x` if `x[i]` is stored and otherwise do nothing.
 # Examples
 ```jldoctest
 julia> x = sparsevec([1, 3], [1.0, 2.0])
-3-element SparseVector{Float64,Int64} with 2 stored entries:
+3-element SparseVector{Float64, Int64} with 2 stored entries:
   [1]  =  1.0
   [3]  =  2.0
 
 julia> SparseArrays.dropstored!(x, 3)
-3-element SparseVector{Float64,Int64} with 1 stored entry:
+3-element SparseVector{Float64, Int64} with 1 stored entry:
   [1]  =  1.0
 
 julia> SparseArrays.dropstored!(x, 2)
-3-element SparseVector{Float64,Int64} with 1 stored entry:
+3-element SparseVector{Float64, Int64} with 1 stored entry:
   [1]  =  1.0
 ```
 """
@@ -371,7 +391,7 @@ Convert a vector `A` into a sparse vector of length `m`.
 # Examples
 ```jldoctest
 julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
-6-element SparseVector{Float64,Int64} with 3 stored entries:
+6-element SparseVector{Float64, Int64} with 3 stored entries:
   [1]  =  1.0
   [2]  =  2.0
   [5]  =  3.0
@@ -385,15 +405,14 @@ sparse(a::AbstractVector) = sparsevec(a)
 
 function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{Tv}) where {Tv,Ti}
     require_one_based_indexing(s)
-    cap = length(nzind);
+    cap = length(nzind)
     @assert cap == length(nzval)
     n = length(s)
     c = 0
-    @inbounds for i = 1:n
-        v = s[i]
+    @inbounds for (i, v) in enumerate(s)
         if !iszero(v)
             if c >= cap
-                cap *= 2
+                cap = (cap == 0) ? 1 : 2*cap
                 resize!(nzind, cap)
                 resize!(nzval, cap)
             end
@@ -732,6 +751,25 @@ end
 findall(p::Base.Fix2{typeof(in)}, x::SparseVector{<:Any,Ti}) where {Ti} =
     invoke(findall, Tuple{Base.Fix2{typeof(in)}, AbstractArray}, p, x)
 
+"""
+    findnz(x::SparseVector)
+
+Return a tuple `(I, V)`  where `I` is the indices of the stored ("structurally non-zero")
+values in sparse vector `x` and `V` is a vector of the values.
+
+# Examples
+```jldoctest
+julia> x = sparsevec([1 2 0; 0 0 3; 0 4 0])
+9-element SparseVector{Int64, Int64} with 4 stored entries:
+  [1]  =  1
+  [4]  =  2
+  [6]  =  4
+  [8]  =  3
+
+julia> findnz(x)
+([1, 4, 6, 8], [1, 2, 4, 3])
+```
+"""
 function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)
 
@@ -828,6 +866,11 @@ end
 
 getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 
+function Base.isstored(x::AbstractSparseVector, i::Integer)
+    @boundscheck checkbounds(x, i)
+    return i in nonzeroinds(x)
+end
+
 ### show and friends
 
 function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
@@ -849,7 +892,7 @@ function show(io::IOContext, x::AbstractSparseVector)
     if isempty(nzind)
         return show(io, MIME("text/plain"), x)
     end
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
     if !haskey(io, :compact)
@@ -1630,10 +1673,8 @@ function densemv(A::AbstractSparseMatrixCSC, x::AbstractSparseVector; trans::Abs
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
         mul!(y, transpose(A), x)
-    elseif trans == 'C' || trans == 'c'
+    else # trans == 'C' || trans == 'c'
         mul!(y, adjoint(A), x)
-    else
-        throw(ArgumentError("Invalid trans character $trans"))
     end
     y
 end
@@ -1974,13 +2015,13 @@ For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 # Examples
 ```jldoctest
 julia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])
-3-element SparseVector{Float64,Int64} with 3 stored entries:
+3-element SparseVector{Float64, Int64} with 3 stored entries:
   [1]  =  1.0
   [2]  =  0.0
   [3]  =  1.0
 
 julia> dropzeros(A)
-3-element SparseVector{Float64,Int64} with 2 stored entries:
+3-element SparseVector{Float64, Int64} with 2 stored entries:
   [1]  =  1.0
   [3]  =  1.0
 ```

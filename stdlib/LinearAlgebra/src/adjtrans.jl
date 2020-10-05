@@ -22,12 +22,12 @@ This type is intended for linear algebra usage - for general data manipulation s
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Adjoint{Complex{Int64}, Matrix{Complex{Int64}}}:
  3-2im  8-7im
  9-2im  4-6im
 ```
@@ -53,12 +53,12 @@ This type is intended for linear algebra usage - for general data manipulation s
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Transpose{Complex{Int64}, Matrix{Complex{Int64}}}:
  3+2im  8+7im
  9+2im  4+6im
 ```
@@ -100,10 +100,14 @@ Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.par
 
 # wrapping lowercase quasi-constructors
 """
+    A'
     adjoint(A)
 
-Lazy adjoint (conjugate transposition) (also postfix `'`).
-Note that `adjoint` is applied recursively to elements.
+Lazy adjoint (conjugate transposition). Note that `adjoint` is applied recursively to
+elements.
+
+For number types, `adjoint` returns the complex conjugate, and therefore it is equivalent to
+the identity function for real numbers.
 
 This operation is intended for linear algebra usage - for general data manipulation see
 [`permutedims`](@ref Base.permutedims).
@@ -111,14 +115,22 @@ This operation is intended for linear algebra usage - for general data manipulat
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 Adjoint{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Adjoint{Complex{Int64}, Matrix{Complex{Int64}}}:
  3-2im  8-7im
  9-2im  4-6im
+
+julia> x = [3, 4im]
+2-element Vector{Complex{Int64}}:
+ 3 + 0im
+ 0 + 4im
+
+julia> x'x
+25 + 0im
 ```
 """
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
@@ -136,12 +148,12 @@ This operation is intended for linear algebra usage - for general data manipulat
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 Transpose{Complex{Int64}, Matrix{Complex{Int64}}}:
  3+2im  8+7im
  9+2im  4+6im
 ```
@@ -186,6 +198,19 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 convert(::Type{Adjoint{T,S}}, A::Adjoint) where {T,S} = Adjoint{T,S}(convert(S, A.parent))
 convert(::Type{Transpose{T,S}}, A::Transpose) where {T,S} = Transpose{T,S}(convert(S, A.parent))
 
+# Strides and pointer for transposed strided arrays — but only if the elements are actually stored in memory
+Base.strides(A::Adjoint{<:Real, <:AbstractVector}) = (stride(A.parent, 2), stride(A.parent, 1))
+Base.strides(A::Transpose{<:Any, <:AbstractVector}) = (stride(A.parent, 2), stride(A.parent, 1))
+# For matrices it's slightly faster to use reverse and avoid calling stride twice
+Base.strides(A::Adjoint{<:Real, <:AbstractMatrix}) = reverse(strides(A.parent))
+Base.strides(A::Transpose{<:Any, <:AbstractMatrix}) = reverse(strides(A.parent))
+
+Base.unsafe_convert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+Base.unsafe_convert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+
+Base.elsize(::Type{<:Adjoint{<:Real, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
+Base.elsize(::Type{<:Transpose{<:Any, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
+
 # for vectors, the semantics of the wrapped and unwrapped types differ
 # so attempt to maintain both the parent and wrapper type insofar as possible
 similar(A::AdjOrTransAbsVec) = wrapperop(A)(similar(A.parent))
@@ -199,6 +224,7 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec) = parent(v)
+vec(v::AdjointAbsVec{<:Real}) = parent(v)
 
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors
@@ -241,14 +267,24 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 
 ## multiplication *
 
-# Adjoint/Transpose-vector * vector
-*(u::AdjointAbsVec, v::AbstractVector) = dot(u.parent, v)
-*(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
-function *(u::TransposeAbsVec, v::AbstractVector)
-    require_one_based_indexing(u, v)
-    @boundscheck length(u) == length(v) || throw(DimensionMismatch())
-    return sum(@inbounds(u[k]*v[k]) for k in 1:length(u))
+function _dot_nonrecursive(u, v)
+    lu = length(u)
+    if lu != length(v)
+        throw(DimensionMismatch("first array has length $(lu) which does not match the length of the second, $(length(v))."))
+    end
+    if lu == 0
+        zero(eltype(u)) * zero(eltype(v))
+    else
+        sum(uu*vv for (uu, vv) in zip(u, v))
+    end
 end
+
+# Adjoint/Transpose-vector * vector
+*(u::AdjointAbsVec{<:Number}, v::AbstractVector{<:Number}) = dot(u.parent, v)
+*(u::TransposeAbsVec{T}, v::AbstractVector{T}) where {T<:Real} = dot(u.parent, v)
+*(u::AdjOrTransAbsVec, v::AbstractVector) = _dot_nonrecursive(u, v)
+
+
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
 # Adjoint/Transpose-vector * Adjoint/Transpose-vector
@@ -258,14 +294,10 @@ end
 
 # AdjOrTransAbsVec{<:Any,<:AdjOrTransAbsVec} is a lazy conj vectors
 # We need to expand the combinations to avoid ambiguities
-(*)(u::TransposeAbsVec, v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) =
-    sum(uu*vv for (uu, vv) in zip(u, v))
-(*)(u::AdjointAbsVec,   v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) =
-    sum(uu*vv for (uu, vv) in zip(u, v))
-(*)(u::TransposeAbsVec, v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) =
-    sum(uu*vv for (uu, vv) in zip(u, v))
-(*)(u::AdjointAbsVec,   v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) =
-    sum(uu*vv for (uu, vv) in zip(u, v))
+(*)(u::TransposeAbsVec, v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) = _dot_nonrecursive(u, v)
+(*)(u::AdjointAbsVec,   v::AdjointAbsVec{<:Any,<:TransposeAbsVec}) = _dot_nonrecursive(u, v)
+(*)(u::TransposeAbsVec, v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) = _dot_nonrecursive(u, v)
+(*)(u::AdjointAbsVec,   v::TransposeAbsVec{<:Any,<:AdjointAbsVec}) = _dot_nonrecursive(u, v)
 
 ## pseudoinversion
 pinv(v::AdjointAbsVec, tol::Real = 0) = pinv(v.parent, tol).parent

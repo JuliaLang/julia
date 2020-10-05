@@ -52,6 +52,7 @@ end
 end
 
 y = Dates.Year(1)
+q = Dates.Quarter(1)
 m = Dates.Month(1)
 w = Dates.Week(1)
 d = Dates.Day(1)
@@ -64,6 +65,7 @@ ns = Dates.Nanosecond(1)
 emptyperiod = ((y + d) - d) - y
 @testset "Period arithmetic" begin
     @test Dates.Year(y) == y
+    @test Dates.Quarter(q) == q
     @test Dates.Month(m) == m
     @test Dates.Week(w) == w
     @test Dates.Day(d) == d
@@ -224,6 +226,8 @@ end
     @test Dates.string(Dates.Year(1)) == "1 year"
     @test Dates.string(Dates.Year(-1)) == "-1 year"
     @test Dates.string(Dates.Year(2)) == "2 years"
+    @test isfinite(Dates.Year)
+    @test isfinite(Dates.Year(0))
     @test zero(Dates.Year) == Dates.Year(0)
     @test zero(Dates.Year(10)) == Dates.Year(0)
     @test zero(Dates.Month) == Dates.Month(0)
@@ -289,6 +293,7 @@ end
 
 @testset "basic properties" begin
     @test Dates.Year("1") == y
+    @test Dates.Quarter("1") == q
     @test Dates.Month("1") == m
     @test Dates.Week("1") == w
     @test Dates.Day("1") == d
@@ -303,6 +308,7 @@ end
 
     dt = Dates.DateTime(2014)
     @test typeof(Dates.Year(dt)) <: Dates.Year
+    @test typeof(Dates.Quarter(dt)) <: Dates.Quarter
     @test typeof(Dates.Month(dt)) <: Dates.Month
     @test typeof(Dates.Week(dt)) <: Dates.Week
     @test typeof(Dates.Day(dt)) <: Dates.Day
@@ -313,6 +319,7 @@ end
 end
 @testset "Default values" begin
     @test Dates.default(Dates.Year) == y
+    @test Dates.default(Dates.Quarter) == q
     @test Dates.default(Dates.Month) == m
     @test Dates.default(Dates.Week) == w
     @test Dates.default(Dates.Day) == d
@@ -443,6 +450,31 @@ end
         z = convert(Dates.Month, y)
         @test y == z
         @test hash(y) == hash(z)
+
+        y = Dates.Quarter(x)
+        z = convert(Dates.Month, y)
+        @test y == z
+        @test hash(y) == hash(z)
+
+        y = Dates.Year(x)
+        z = convert(Dates.Quarter, y)
+        @test y == z
+        @test hash(y) == hash(z)
+    end
+end
+@testset "Equality and hashing between FixedPeriod/OtherPeriod/CompoundPeriod (#37459)" begin
+    function test_hash_equality(x, y)
+        @test x == y
+        @test y == x
+        @test isequal(x, y)
+        @test isequal(y, x)
+        @test hash(x) == hash(y)
+    end
+    for FP = (Dates.Week, Dates.Day, Dates.Hour, Dates.Minute,
+              Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond)
+        for OP = (Dates.Year, Dates.Quarter, Dates.Month)
+            test_hash_equality(FP(0), OP(0))
+        end
     end
 end
 

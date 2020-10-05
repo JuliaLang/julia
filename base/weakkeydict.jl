@@ -69,6 +69,7 @@ function WeakKeyDict(kv)
     end
 end
 
+sizehint!(d::WeakKeyDict, newsz) = sizehint!(d.ht, newsz)
 empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
 
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)

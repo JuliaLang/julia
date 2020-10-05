@@ -4,7 +4,7 @@ This file describes how to install, or build, and use Julia on Windows.
 
 For more general information about Julia, please see the
 [main README](https://github.com/JuliaLang/julia/blob/master/README.md)
-or the [documentation](https://docs.julialang.org/).
+or the [documentation](https://docs.julialang.org).
 
 
 ## General Information for Windows
@@ -58,6 +58,9 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 
  1. [Download](https://julialang.org/downloads) the latest version of Julia.
     Extract the binary to a reasonable destination folder, e.g. `C:\julia`.
+    By default, Julia will be installed into
+    `C:\Users\YOURNAME\AppData\Local\Julia-1.0.0\bin`,
+    where `YOURNAME` is your Windows user name.
 
  2. Double-click the `julia` shortcut to launch Julia.
 
@@ -192,7 +195,7 @@ zypper -n install mingw$BITS-cross-gcc-c++ mingw$BITS-cross-gcc-fortran \
 cp /usr/$XC_HOST/sys-root/mingw/bin/*.dll /usr/lib*/gcc/$XC_HOST/*/
 git clone git://github.com/JuliaLang/julia.git julia
 cd julia
-make -j4 win-extras julia-ui-release
+make -j4 win-extras julia-cli-release
 export WINEDEBUG=-all # suppress wine fixme's
 # this last step may need to be run interactively
 make -j4 binary-dist

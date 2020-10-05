@@ -170,6 +170,13 @@ try
               const layout1 = Ptr{Int8}[Ptr{Int8}(0), Ptr{Int8}(1), Ptr{Int8}(-1)]
               const layout2 = Any[Ptr{Int8}(0), Ptr{Int16}(1), Ptr{Int32}(-1)]
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
+
+              # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
+              call_bottom() = show(stdout::IO, Union{})
+              Core.Compiler.return_type(call_bottom, ())
+
+              # check that @ccallable works from precompiled modules
+              Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
           end
           """)
     # make sure `sin` didn't have a kwfunc (which would invalidate the attempted test)
@@ -218,13 +225,26 @@ try
         @test Foo.layout3 == ["ab", "cd", "ef", "gh", "ij"]
     end
 
+    @eval begin function ccallable_test()
+        Base.llvmcall(
+        ("""declare i32 @f35014(i32)
+            define i32 @entry() {
+            0:
+                %1 = call i32 @f35014(i32 3)
+                ret i32 %1
+            }""", "entry"
+        ), Cint, Tuple{})
+    end
+    @test ccallable_test() == 4
+    end
+
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_logs (:warn, "Replacing module `$Foo_module`") begin
-        ms = Base._require_from_serialized(cachefile)
+        ms = Base._require_from_serialized(cachefile, Base.TOMLCache())
         @test isa(ms, Array{Any,1})
     end
 
@@ -244,9 +264,9 @@ try
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
-        discard_module = mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3])
+        discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) ]
-        @test map(x -> x[2], deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
+        @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
                             Base.PkgId(Foo) => Base.PkgId(Test),
@@ -268,17 +288,16 @@ try
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
+                [:Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, ]),
-                # Plus precompilation module generated at build time
-                let id = Base.PkgId("__PackagePrecompilationStatementModule")
-                    Dict(id => Base.module_build_id(Base.root_module(id)))
-                end
+                 :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,
+                 :ArgTools, :Tar,]),
            )
         @test discard_module.(deps) == deps1
+        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
+        @test map(x -> x.filename, deps) == [Foo_file]
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
         @test sin(0x01, 0x4000, 0x30031234) == 52
@@ -319,6 +338,55 @@ try
         @test pointer_from_objref(PV) === pointer_from_objref(ft(ft(PV)[1].parameters[1])[1])
     end
 
+    Nest_module = :Nest4b3a94a1a081a8cb
+    Nest_file = joinpath(dir, "$Nest_module.jl")
+    NestInner_file = joinpath(dir, "$(Nest_module)Inner.jl")
+    NestInner2_file = joinpath(dir, "$(Nest_module)Inner2.jl")
+    write(Nest_file,
+        """
+        module $Nest_module
+        include("$(escape_string(NestInner_file))")
+        end
+        """)
+    write(NestInner_file,
+        """
+        module NestInner
+        include("$(escape_string(NestInner2_file))")
+        end
+        """)
+    write(NestInner2_file,
+        """
+        f() = 22
+        """)
+    Nest = Base.require(Main, Nest_module)
+    cachefile = joinpath(cachedir, "$Nest_module.ji")
+    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    @test last(deps).modpath == ["NestInner"]
+
+    UsesB_module = :UsesB4b3a94a1a081a8cb
+    B_module     = :UsesB4b3a94a1a081a8cb_B
+    UsesB_file = joinpath(dir, "$UsesB_module.jl")
+    B_file = joinpath(dir, "$(B_module).jl")
+    write(UsesB_file,
+        """
+        module $UsesB_module
+        using $B_module
+        end
+        """)
+    write(B_file,
+        """
+        module $B_module
+        export bfunc
+        bfunc() = 33
+        end
+        """)
+    UsesB = Base.require(Main, UsesB_module)
+    cachefile = joinpath(cachedir, "$UsesB_module.ji")
+    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    id1, id2 = only(requires)
+    @test Base.pkgorigins[id1].cachepath == cachefile
+    @test Base.pkgorigins[id2].cachepath == joinpath(cachedir, "$B_module.ji")
+
     Baz_file = joinpath(dir, "Baz.jl")
     write(Baz_file,
           """
@@ -349,7 +417,7 @@ try
           """)
 
     cachefile = Base.compilecache(Base.PkgId("FooBar"))
-    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"))
+    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), Base.TOMLCache())
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
@@ -389,13 +457,26 @@ try
           error("break me")
           end
           """)
-    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn "LoadError: break me\nStacktrace:\n [1] error" try
             Base.require(Main, :FooBar2)
             error("the \"break me\" test failed")
         catch exc
             isa(exc, ErrorException) || rethrow()
             occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
         end
+
+    # Test that trying to eval into closed modules during precompilation is an error
+    FooBar3_file = joinpath(dir, "FooBar3.jl")
+    FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
+    write(FooBar3_inc, "x=1\n")
+    for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
+        write(FooBar3_file, code)
+        @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
+                Base.require(Main, :FooBar3)
+            catch exc
+                isa(exc, ErrorException) || rethrow()
+            end
+    end
 
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")

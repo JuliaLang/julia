@@ -550,7 +550,7 @@ end
     @test  transpose(Xv2)*Xv2     ≈ XtX
     @test (transpose(Xv3)*Xv3)[1] ≈ XtX
     @test  Xv1'*Xv1     ≈ XcX
-    @test Xv2'*Xv2 ≈ norm(Xv2)^2
+    @test  Xv2'*Xv2     ≈ XcX
     @test (Xv3'*Xv3)[1] ≈ XcX
     @test (Xv1*transpose(Xv1))[1] ≈ XXt
     @test  Xv2*transpose(Xv2)     ≈ XXt

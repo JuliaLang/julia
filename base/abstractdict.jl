@@ -45,7 +45,7 @@ struct ValueIterator{T<:AbstractDict}
 end
 
 function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
-    print(io, T.name, " for a ")
+    print(io, T.name.name, " for a ")
     summary(io, iter.dict)
 end
 
@@ -86,12 +86,12 @@ return the elements in the same order.
 # Examples
 ```jldoctest
 julia> D = Dict('a'=>2, 'b'=>3)
-Dict{Char,Int64} with 2 entries:
+Dict{Char, Int64} with 2 entries:
   'a' => 2
   'b' => 3
 
 julia> collect(keys(D))
-2-element Array{Char,1}:
+2-element Vector{Char}:
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
 ```
@@ -112,12 +112,12 @@ return the elements in the same order.
 # Examples
 ```jldoctest
 julia> D = Dict('a'=>2, 'b'=>3)
-Dict{Char,Int64} with 2 entries:
+Dict{Char, Int64} with 2 entries:
   'a' => 2
   'b' => 3
 
 julia> collect(values(D))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  3
 ```
@@ -168,7 +168,7 @@ julia> d2 = Dict(1 => 4, 4 => 5);
 julia> merge!(d1, d2);
 
 julia> d1
-Dict{Int64,Int64} with 3 entries:
+Dict{Int64, Int64} with 3 entries:
   4 => 5
   3 => 4
   1 => 4
@@ -209,7 +209,7 @@ julia> d2 = Dict(1 => 4, 4 => 5);
 julia> mergewith!(+, d1, d2);
 
 julia> d1
-Dict{Int64,Int64} with 3 entries:
+Dict{Int64, Int64} with 3 entries:
   4 => 5
   3 => 4
   1 => 6
@@ -217,13 +217,13 @@ Dict{Int64,Int64} with 3 entries:
 julia> mergewith!(-, d1, d1);
 
 julia> d1
-Dict{Int64,Int64} with 3 entries:
+Dict{Int64, Int64} with 3 entries:
   4 => 0
   3 => 0
   1 => 0
 
-julia> foldl(mergewith!(+), [d1, d2]; init=Dict{Int64,Int64}())
-Dict{Int64,Int64} with 3 entries:
+julia> foldl(mergewith!(+), [d1, d2]; init=Dict{Int64, Int64}())
+Dict{Int64, Int64} with 3 entries:
   4 => 5
   3 => 0
   1 => 4
@@ -281,23 +281,23 @@ value for that key will be the value it has in the last collection listed.
 # Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-Dict{String,Float64} with 2 entries:
+Dict{String, Float64} with 2 entries:
   "bar" => 42.0
   "foo" => 0.0
 
 julia> b = Dict("baz" => 17, "bar" => 4711)
-Dict{String,Int64} with 2 entries:
+Dict{String, Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
 
 julia> merge(a, b)
-Dict{String,Float64} with 3 entries:
+Dict{String, Float64} with 3 entries:
   "bar" => 4711.0
   "baz" => 17.0
   "foo" => 0.0
 
 julia> merge(b, a)
-Dict{String,Float64} with 3 entries:
+Dict{String, Float64} with 3 entries:
   "bar" => 42.0
   "baz" => 17.0
   "foo" => 0.0
@@ -326,17 +326,17 @@ Method `merge(combine::Union{Function,Type}, args...)` as an alias of
 # Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-Dict{String,Float64} with 2 entries:
+Dict{String, Float64} with 2 entries:
   "bar" => 42.0
   "foo" => 0.0
 
 julia> b = Dict("baz" => 17, "bar" => 4711)
-Dict{String,Int64} with 2 entries:
+Dict{String, Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
 
 julia> mergewith(+, a, b)
-Dict{String,Float64} with 3 entries:
+Dict{String, Float64} with 3 entries:
   "bar" => 4753.0
   "baz" => 17.0
   "foo" => 0.0
@@ -370,13 +370,13 @@ The function `f` is passed `key=>value` pairs.
 # Example
 ```jldoctest
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
-Dict{Int64,String} with 3 entries:
+Dict{Int64, String} with 3 entries:
   2 => "b"
   3 => "c"
   1 => "a"
 
 julia> filter!(p->isodd(p.first), d)
-Dict{Int64,String} with 2 entries:
+Dict{Int64, String} with 2 entries:
   3 => "c"
   1 => "a"
 ```
@@ -412,34 +412,21 @@ The function `f` is passed `key=>value` pairs.
 # Examples
 ```jldoctest
 julia> d = Dict(1=>"a", 2=>"b")
-Dict{Int64,String} with 2 entries:
+Dict{Int64, String} with 2 entries:
   2 => "b"
   1 => "a"
 
 julia> filter(p->isodd(p.first), d)
-Dict{Int64,String} with 1 entry:
+Dict{Int64, String} with 1 entry:
   1 => "a"
 ```
 """
 function filter(f, d::AbstractDict)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = empty(d)
-    try
-        for pair in d
-            if f(pair)
-                df[pair.first] = pair.second
-            end
-        end
-    catch e
-        if isa(e, MethodError) && e.f === f
-            depwarn("In `filter(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter)
-            for (k, v) in d
-                if f(k, v)
-                    df[k] = v
-                end
-            end
-        else
-            rethrow()
+    for pair in d
+        if f(pair)
+            df[pair.first] = pair.second
         end
     end
     return df
@@ -566,12 +553,12 @@ of `dict` then it will be converted to the value type if possible and otherwise 
 # Examples
 ```jldoctest
 julia> d = Dict(:a => 1, :b => 2)
-Dict{Symbol,Int64} with 2 entries:
+Dict{Symbol, Int64} with 2 entries:
   :a => 1
   :b => 2
 
 julia> map!(v -> v-1, values(d))
-Base.ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
+ValueIterator for a Dict{Symbol, Int64} with 2 entries. Values:
   0
   1
 ```

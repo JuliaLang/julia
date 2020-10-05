@@ -1,0 +1,14 @@
+{
+    "oneline": {
+        "type": "string",
+        "value": "This string has a ' quote character."
+    },
+    "firstnl": {
+        "type": "string",
+        "value": "This string has a ' quote character."
+    },
+    "multiline": {
+        "type": "string",
+        "value": "This string\r\nhas ' a quote character\r\nand more than\r\none newline\r\nin it."
+    }
+}

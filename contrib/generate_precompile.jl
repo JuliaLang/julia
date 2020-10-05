@@ -1,17 +1,33 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if isempty(ARGS) || ARGS[1] !== "0"
+Sys.__init_build()
 # Prevent this from being put into the Main namespace
 @eval Module() begin
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
-Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+Base.include(@__MODULE__, joinpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 
 CTRL_C = '\x03'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
+
+hardcoded_precompile_statements = """
+# used by Revise.jl
+@assert precompile(Tuple{typeof(Base.parse_cache_header), String})
+@assert precompile(Tuple{typeof(pushfirst!), Vector{Any}, Function})
+# used by Requires.jl
+@assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@assert precompile(Tuple{typeof(push!), Vector{Function}, Function})
+# miscellaneous
+@assert precompile(Tuple{typeof(Base.require), Base.PkgId})
+@assert precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
+@assert precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
+"""
 
 precompile_script = """
 2+2
@@ -29,13 +45,28 @@ f(x) = x03
 f(1,2)
 [][1]
 cd("complet_path\t\t$CTRL_C
+# Used by JuliaInterpreter
+push!(Set{Module}(), Main)
+push!(Set{Method}(), first(methods(collect)))
+# Used by Revise
+(setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
+(setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
+get(Base.pkgorigins, Base.PkgId(Base), nothing)
 """
 
-julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
+julia_exepath() = joinpath(Sys.BINDIR::String, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+if have_repl
+    hardcoded_precompile_statements *= """
+    @assert precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+    """
+end
 
+# This is disabled because it doesn't give much benefit
+# and the code in Distributed is poorly typed causing many invalidations
+#=
 Distributed = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
           nothing)
@@ -47,6 +78,24 @@ if Distributed !== nothing
     @distributed (+) for i = 1:100 Int(rand(Bool)) end
     """
 end
+=#
+
+
+Artifacts = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
+          nothing)
+if Artifacts !== nothing
+    precompile_script *= """
+    using Artifacts, Base.BinaryPlatforms, Libdl
+    artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
+    cd(() -> @artifact_str("c_simple"), dirname(artifacts_toml))
+    artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
+    platforms = [Artifacts.unpack_platform(e, "c_simple", artifacts_toml) for e in artifacts["c_simple"]]
+    best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
+    dlopen("libjulia$(ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
+    """
+end
+
 
 Pkg = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
@@ -56,30 +105,70 @@ if Pkg !== nothing
     precompile_script *= Pkg.precompile_script
 end
 
+FileWatching = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching"),
+          nothing)
+if FileWatching !== nothing
+    hardcoded_precompile_statements *= """
+    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
+    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+    """
+end
+
+Libdl = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"),
+          nothing)
+if Libdl !== nothing
+    hardcoded_precompile_statements *= """
+    precompile(Tuple{typeof(Libc.Libdl.dlopen), String})
+    """
+end
+
+Test = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"),
+          nothing)
+if Test !== nothing
+    hardcoded_precompile_statements *= """
+    @assert precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
+    @assert precompile(Tuple{typeof(Test.testset_beginend), Tuple{String, Expr}, Expr, LineNumberNode})
+    @assert precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
+    @assert precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
+    """
+end
+
 function generate_precompile_statements()
     start_time = time_ns()
     debug_output = devnull # or stdout
+    sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
     # Precompile a package
+    global hardcoded_precompile_statements
+
     mktempdir() do prec_path
-        push!(DEPOT_PATH, prec_path)
-        push!(LOAD_PATH, prec_path)
         pkgname = "__PackagePrecompilationStatementModule"
         mkpath(joinpath(prec_path, pkgname, "src"))
-        write(joinpath(prec_path, pkgname, "src", "$pkgname.jl"),
+        path = joinpath(prec_path, pkgname, "src", "$pkgname.jl")
+        write(path,
               """
               module $pkgname
               end
               """)
-        @eval using __PackagePrecompilationStatementModule
-        empty!(LOAD_PATH)
-        empty!(DEPOT_PATH)
+        tmp = tempname()
+        # Running compilecache on buildbots fails with
+        # `More than one command line CPU targets specified without a `--output-` flag specified`
+        # so start a new process without a CPU target specified
+        s = """
+            push!(DEPOT_PATH, $(repr(prec_path)));
+            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
+            Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
+            """
+        run(`$(julia_exepath()) -O0 --sysimage $sysimg --startup-file=no -Cnative -e $s`)
+        hardcoded_precompile_statements *= "\n" * read(tmp, String)
     end
 
-    print("Generating precompile statements...")
     mktemp() do precompile_file, precompile_file_h
         # Run a repl process and replay our script
-        pty_slave, pty_master = open_fake_pty()
+        pts, ptm = open_fake_pty()
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
         if have_repl
             cmdargs = ```--color=yes
@@ -92,30 +181,29 @@ function generate_precompile_statements()
                     "JULIA_PROJECT" => nothing, # remove from environment
                     "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib",
                     "TERM" => "") do
-            sysimg = Base.unsafe_string(Base.JLOptions().image_file)
             run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
                    --cpu-target=native --startup-file=no --color=yes
                    -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
                    -i $cmdargs```,
-                pty_slave, pty_slave, pty_slave; wait=false)
+                   pts, pts, pts; wait=false)
         end
-        Base.close_stdio(pty_slave)
-        # Prepare a background process to copy output from process until `pty_slave` is closed
+        Base.close_stdio(pts)
+        # Prepare a background process to copy output from process until `pts` is closed
         output_copy = Base.BufferStream()
         tee = @async try
-            while !eof(pty_master)
-                l = readavailable(pty_master)
+            while !eof(ptm)
+                l = readavailable(ptm)
                 write(debug_output, l)
                 Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
                 write(output_copy, l)
             end
             close(output_copy)
-            close(pty_master)
+            close(ptm)
         catch ex
             close(output_copy)
-            close(pty_master)
+            close(ptm)
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
-                rethrow() # ignore EIO on pty_master after pty_slave dies
+                rethrow() # ignore EIO on ptm after pts dies
             end
         end
         # wait for the definitive prompt before start writing to the TTY
@@ -124,24 +212,29 @@ function generate_precompile_statements()
         readavailable(output_copy)
         # Input our script
         if have_repl
-            for l in split(precompile_script, '\n'; keepempty=false)
+            precompile_lines = split(precompile_script::String, '\n'; keepempty=false)
+            curr = 0
+            for l in precompile_lines
                 sleep(0.1)
+                curr += 1
+                print("\rGenerating precompile statements... $curr/$(length(precompile_lines))")
                 # consume any other output
                 bytesavailable(output_copy) > 0 && readavailable(output_copy)
                 # push our input
                 write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
-                write(pty_master, l, "\n")
+                write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
-                # NOTE: this is rather innaccurate because the Pkg REPL mode is a special flower
+                # NOTE: this is rather inaccurate because the Pkg REPL mode is a special flower
                 readuntil(output_copy, "\n")
                 readuntil(output_copy, "> ")
             end
+            println()
         end
-        write(pty_master, "exit()\n")
+        write(ptm, "exit()\n")
         wait(tee)
         success(p) || Base.pipeline_error(p)
-        close(pty_master)
+        close(ptm)
         write(debug_output, "\n#### FINISHED ####\n")
 
         # Extract the precompile statements from the precompile file
@@ -149,6 +242,10 @@ function generate_precompile_statements()
         for statement in eachline(precompile_file_h)
             # Main should be completely clean
             occursin("Main.", statement) && continue
+            push!(statements, statement)
+        end
+
+        for statement in split(hardcoded_precompile_statements::String, '\n')
             push!(statements, statement)
         end
 
@@ -164,30 +261,48 @@ function generate_precompile_statements()
         n_succeeded = 0
         include_time = @elapsed for statement in sort(collect(statements))
             # println(statement)
+            # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
+            # N with a large number seems to work around it.
+            statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
             try
                 Base.include_string(PrecompileStagingArea, statement)
                 n_succeeded += 1
+                print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
             catch
                 # See #28808
                 # @error "Failed to precompile $statement"
             end
         end
+        println()
         if have_repl
             # Seems like a reasonable number right now, adjust as needed
             # comment out if debugging script
-            @assert n_succeeded > 1500
+            @assert n_succeeded > 1200
         end
 
-        print(" $(length(statements)) generated in ")
         tot_time = time_ns() - start_time
-        Base.time_print(tot_time)
-        print(" (overhead "); Base.time_print(tot_time - (include_time * 1e9)); println(")")
+        include_time *= 1e9
+        gen_time = tot_time - include_time
+        println("Precompilation complete. Summary:")
+        print("Total ─────── "); Base.time_print(tot_time); println()
+        print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100); println("%")
+        print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
     end
 
     return
 end
 
 generate_precompile_statements()
+
+# As a last step in system image generation,
+# remove some references to build time environment for a more reproducible build.
+@eval Base PROGRAM_FILE = ""
+@eval Sys begin
+    BINDIR = ""
+    STDLIB = ""
+end
+empty!(Base.ARGS)
+empty!(Core.ARGS)
 
 end # @eval
 end

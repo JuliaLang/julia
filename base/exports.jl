@@ -38,6 +38,7 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
+    ComposedFunction,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -329,6 +330,7 @@ export
     sinc,
     sincos,
     sincosd,
+    sincospi,
     sind,
     sinh,
     sinpi,
@@ -439,6 +441,7 @@ export
     zeros,
 
 # search, find, match and related functions
+    contains,
     eachmatch,
     endswith,
     findall,
@@ -455,12 +458,15 @@ export
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     startswith,
 
 # linear algebra
+    var"'", # to enable syntax a' for adjoint
     adjoint,
     transpose,
     kron,
+    kron!,
 
 # bitarrays
     falses,
@@ -470,6 +476,7 @@ export
     append!,
     insert!,
     pop!,
+    popat!,
     prepend!,
     push!,
     resize!,
@@ -484,6 +491,7 @@ export
     any,
     firstindex,
     collect,
+    count!,
     count,
     delete!,
     deleteat!,
@@ -695,10 +703,8 @@ export
     backtrace,
     catch_backtrace,
     error,
-    register_error_hint,
     rethrow,
     retry,
-    show_error_hints,
     systemerror,
 
 # stack traces
@@ -779,6 +785,7 @@ export
     close,
     countlines,
     eachline,
+    readeach,
     eof,
     fd,
     fdio,
@@ -794,6 +801,7 @@ export
     bytesavailable,
     ntoh,
     open,
+    peek,
     pipeline,
     Pipe,
     PipeBuffer,
@@ -908,6 +916,7 @@ export
     process_running,
     run,
     setenv,
+    addenv,
     success,
     withenv,
 

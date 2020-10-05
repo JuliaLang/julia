@@ -69,6 +69,8 @@ end
     NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))
 
 @test eltype((a=[1,2], b=[3,4])) === Vector{Int}
+@test eltype(NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
+    (missing, missing))) === Union{Real, Missing}
 
 @test Tuple((a=[1,2], b=[3,4])) == ([1,2], [3,4])
 @test Tuple(NamedTuple()) === ()
@@ -98,7 +100,7 @@ end
 let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Nothing}}}((1,Int32(2))),
                NamedTuple{(:a,:c),Tuple{Union{Int8,Nothing},Float64}}((nothing,1.0)))
     @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Nothing},Union{Int32,Nothing},Float64}}
-    @test repr(nt) == "NamedTuple{(:a, :b, :c),Tuple{Union{Nothing, Int8},Union{Nothing, Int32},Float64}}((nothing, 2, 1.0))"
+    @test repr(nt) == "NamedTuple{(:a, :b, :c), Tuple{Union{Nothing, Int8}, Union{Nothing, Int32}, Float64}}((nothing, 2, 1.0))"
 end
 
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
@@ -121,7 +123,10 @@ end
 @test get(()->0, (a=1,), :b) == 0
 @test Base.tail((a = 1, b = 2.0, c = 'x')) ≡ (b = 2.0, c = 'x')
 @test Base.tail((a = 1, )) ≡ NamedTuple()
+@test Base.front((a = 1, b = 2.0, c = 'x')) ≡ (a = 1, b = 2.0)
+@test Base.front((a = 1, )) ≡ NamedTuple()
 @test_throws ArgumentError Base.tail(NamedTuple())
+@test_throws ArgumentError Base.front(NamedTuple())
 
 # syntax errors
 
@@ -151,6 +156,8 @@ let d = [:a=>1, :b=>2, :c=>3]   # use an array to preserve order
     y = (w=30, z=40)
     @test (;t..., y...) == (x=1, y=20, w=30, z=40)
     @test (;t..., y=0, y...) == (x=1, y=0, w=30, z=40)
+
+    @test NamedTuple(d) === (a=1, b=2, c=3)
 end
 
 # inference tests

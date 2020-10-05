@@ -1,6 +1,8 @@
 {
   global:
     __asan*;
+    __tsan*;
+    pthread*;
     __stack_chk_guard;
     asprintf;
     bitvector_*;
@@ -34,6 +36,7 @@
     _IO_stdin_used;
     __ZN4llvm23createLowerSimdLoopPassEv;
     LLVMExtra*;
+    repl_entrypoint;
 
     /* freebsd */
     environ;

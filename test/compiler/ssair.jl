@@ -1,15 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.Meta
 using Core.IR
 const Compiler = Core.Compiler
+using .Compiler: CFG, BasicBlock
+
+make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
+
+function make_ci(code)
+    ci = (Meta.@lower 1 + 1).args[1]
+    ci.code = code
+    nstmts = length(ci.code)
+    ci.ssavaluetypes = nstmts
+    ci.codelocs = fill(Int32(1), nstmts)
+    ci.ssaflags = fill(Int32(0), nstmts)
+    return ci
+end
 
 # TODO: this test is broken
 #let code = Any[
-#        Expr(:gotoifnot, SlotNumber(2), 4),
+#        GotoIfNot(SlotNumber(2), 4),
 #        Expr(:(=), SlotNumber(3), 2),
 #        # Test a SlotNumber as a value of a PhiNode
-#        PhiNode(Any[2,3], Any[1, SlotNumber(3)]),
-#        Expr(:return, SSAValue(3))
+#        PhiNode(Int32[2,3], Any[1, SlotNumber(3)]),
+#        ReturnNode(SSAValue(3))
 #    ]
 #
 #    ci = eval(Expr(:new, CodeInfo,
@@ -22,13 +36,12 @@ const Compiler = Core.Compiler
 #        false, false, false, false
 #    ))
 #
-#    NullLineInfo = Core.LineInfoNode(Symbol(""), Symbol(""), 0, 0)
+#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), 0, 0)
 #    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
 
 # Issue #31121
-using .Compiler: CFG, BasicBlock
 
 # We have the following CFG and corresponding DFS numbering:
 #
@@ -47,7 +60,6 @@ using .Compiler: CFG, BasicBlock
 # than `3`, so the idom search missed that `1` is `3`'s semi-dominator). Here
 # we manually construct that CFG and verify that the DFS records the correct
 # parent.
-make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 let cfg = CFG(BasicBlock[
     make_bb([]     , [2, 3]),
     make_bb([1]    , [4, 5]),
@@ -63,11 +75,12 @@ let cfg = CFG(BasicBlock[
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
         for (a, b, c, d) in Iterators.product(((true, false) for _ = 1:4)...)
-            let cfg′ = Compiler.copy(cfg)
-                a && reverse!(cfg′.blocks[1].succs)
-                b && reverse!(cfg′.blocks[2].succs)
-                c && reverse!(cfg′.blocks[4].preds)
-                d && reverse!(cfg′.blocks[5].preds)
+            let blocks = copy(cfg.blocks)
+                a && (blocks[1] = make_bb(blocks[1].preds, reverse(blocks[1].succs)))
+                b && (blocks[2] = make_bb(blocks[2].preds, reverse(blocks[2].succs)))
+                c && (blocks[4] = make_bb(reverse(blocks[4].preds), blocks[4].succs))
+                d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
+                cfg′ = CFG(blocks, cfg.index)
                 @test Compiler.SNCA(cfg′) == correct_idoms
             end
         end
@@ -107,8 +120,8 @@ let cfg = CFG(BasicBlock[
     make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
     make_bb([2, 3]    , []    ),
 ], Int[])
-    code = Compiler.IRCode(
-        [], [], Int32[], UInt8[], cfg, LineInfoNode[], [], [], [])
+    insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
+    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], [], [])
     compact = Compiler.IncrementalCompact(code, true)
     @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
 end
@@ -134,9 +147,7 @@ end
 @test f32579(0, false) === false
 
 # Test for bug caused by renaming blocks improperly, related to PR #32145
-using Base.Meta
-let ci = (Meta.@lower 1 + 1).args[1]
-    ci.code = [
+let ci = make_ci([
         # block 1
         Core.Compiler.GotoIfNot(Expr(:boundscheck), 6),
         # block 2
@@ -146,19 +157,78 @@ let ci = (Meta.@lower 1 + 1).args[1]
         Core.PhiNode(),
         Core.Compiler.ReturnNode(),
         # block 4
-        Expr(:call,
-             GlobalRef(Main, :something),
-             GlobalRef(Main, :somethingelse)),
-        Core.Compiler.GotoIfNot(Core.SSAValue(6), 9),
+        GlobalRef(Main, :something),
+        GlobalRef(Main, :somethingelse),
+        Expr(:call, Core.SSAValue(6), Core.SSAValue(7)),
+        Core.Compiler.GotoIfNot(Core.SSAValue(8), 11),
         # block 5
-        Core.Compiler.ReturnNode(Core.SSAValue(6)),
+        Core.Compiler.ReturnNode(Core.SSAValue(8)),
         # block 6
-        Core.Compiler.ReturnNode(Core.SSAValue(6))
+        Core.Compiler.ReturnNode(Core.SSAValue(8))
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    @test Core.Compiler.verify_ir(ir) == nothing
+end
+
+# Test that GlobalRef in value position is non-canonical
+let ci = (Meta.@lower 1 + 1).args[1]
+    ci.code = [
+        Expr(:call, GlobalRef(Main, :something_not_defined_please))
+        ReturnNode(SSAValue(1))
     ]
     nstmts = length(ci.code)
     ci.ssavaluetypes = nstmts
     ci.codelocs = fill(Int32(1), nstmts)
     ci.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
+end
+
+# Issue #29107
+let ci = make_ci([
+        # Block 1
+        Core.Compiler.GotoNode(6),
+        # Block 2
+        # The following phi node gets deleted because it only has one edge, so
+        # the call to `something` is made to use the value of `something2()`,
+        # even though this value is defined after it. We don't want this to
+        # happen even though this block is dead because subsequent optimization
+        # passes may look at all code, dead or not.
+        Core.PhiNode(Int32[2], Any[Core.SSAValue(4)]),
+        Expr(:call, :something, Core.SSAValue(2)),
+        Expr(:call, :something2),
+        Core.Compiler.GotoNode(2),
+        # Block 3
+        Core.Compiler.ReturnNode(1000)
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    # Make sure that if there is a call to `something` (block 2 should be
+    # removed entirely with working DCE), it doesn't use any SSA values that
+    # come after it.
+    for i in 1:length(ir.stmts)
+        s = ir.stmts[i]
+        if isa(s, Expr) && s.head == :call && s.args[1] == :something
+            if isa(s.args[2], SSAValue)
+                @test s.args[2].id <= i
+            end
+        end
+    end
+end
+
+# Make sure dead blocks that are removed are not still referenced in live phi
+# nodes
+let ci = make_ci([
+        # Block 1
+        Core.Compiler.GotoNode(3),
+        # Block 2 (no predecessors)
+        Core.Compiler.ReturnNode(3),
+        # Block 3
+        Core.PhiNode(Int32[1, 2], Any[100, 200]),
+        Core.Compiler.ReturnNode(Core.SSAValue(3))
+    ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
     @test Core.Compiler.verify_ir(ir) == nothing

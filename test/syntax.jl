@@ -341,18 +341,6 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
            @X19861
            """)::Expr) == 23341
 
-# test parse_input_line for a streaming IO input
-let b = IOBuffer("""
-                 let x = x
-                     x
-                 end
-                 f()
-                 """)
-    @test Base.parse_input_line(b).args[end] == Expr(:let, Expr(:(=), :x, :x), Expr(:block, LineNumberNode(2, :none), :x))
-    @test Base.parse_input_line(b).args[end] == Expr(:call, :f)
-    @test Base.parse_input_line(b) === nothing
-end
-
 # issue #15763
 test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
@@ -690,8 +678,8 @@ function count_meta_loc(exprs)
     return push_count
 end
 
-function is_return_ssavalue(ex::Expr)
-    ex.head === :return && isa(ex.args[1], Core.SSAValue)
+function is_return_ssavalue(ex)
+    ex isa Core.ReturnNode && ex.val isa Core.SSAValue
 end
 
 function is_pop_loc(ex::Expr)
@@ -1668,6 +1656,8 @@ end
 # #6080
 @test Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x))) == Expr(:error, "invalid syntax &x")
 
+@test Meta.lower(@__MODULE__, :(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ())))) == Expr(:error, "ccall function name and library expression cannot reference local variables")
+
 @test_throws ParseError Meta.parse("x.'")
 @test_throws ParseError Meta.parse("0.+1")
 
@@ -2103,6 +2093,18 @@ end
 end
 @test z28789 == 42
 
+# issue #37126
+@test isempty(Test.collect_test_logs() do
+    include_string(@__MODULE__, """
+        function foo37126()
+            f(lhs::Integer, rhs::Integer) = nothing
+            f(lhs::Integer, rhs::AbstractVector{<:Integer}) = nothing
+            return f
+        end
+        struct Bar37126{T<:Real, P<:Real} end
+        """)
+    end[1])
+
 # issue #34673
 # check that :toplevel still returns a value when nested inside something else
 @test eval(Expr(:block, 0, Expr(:toplevel, 43))) == 43
@@ -2192,7 +2194,7 @@ end
 
 # Syntax desugaring pass errors contain line numbers
 @test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
-    Expr(:error, "function argument names not unique around some_file:101")
+    Expr(:error, "function argument name not unique: \"x\" around some_file:101")
 
 # Ensure file names don't leak between `eval`s
 eval(LineNumberNode(11, :incorrect_file))
@@ -2219,7 +2221,127 @@ end
 @test Meta.parse("aa\UE0080", raise=false) ==
     Expr(:error, "invalid character \"\Ue0080\" near column 3")
 
+# issue #31238
+a31238, b31238 = let x
+    return 1
+end
+@test !@isdefined(a31238) && !@isdefined(b31238)
+@test @eval((a31238, b31238) = let x
+    return 1
+end) === 1
+
 # issue #35201
 h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
+
+
+@testset "issue #34544/35367" begin
+    # Test these evals shouldnt segfault
+    eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
+    eval(Expr(:module, true, :bar2, Expr(:block)))
+    eval(Expr(:quote, Expr(:module, true, :bar3, Expr(:quote))))
+    @test_throws ErrorException eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar4, Expr(:quote)))))
+    @test_throws ErrorException eval(Expr(:module, true, :bar5, Expr(:foo)))
+    @test_throws ErrorException eval(Expr(:module, true, :bar6, Expr(:quote)))
+end
+
+# issue #35391
+macro a35391(b)
+    :(GC.@preserve ($(esc(b)),) )
+end
+@test @a35391(0) === (0,)
+
+# global declarations from the top level are not inherited by functions.
+# don't allow such a declaration to override an outer local, since it's not
+# clear what it should do.
+@test Meta.lower(Main, :(let
+                           x = 1
+                           let
+                             global x
+                           end
+                         end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
+# note: this `begin` block must be at the top level
+_temp_33553 = begin
+    global _x_this_remains_undefined
+    let
+        local _x_this_remains_undefined = 2
+        _x_this_remains_undefined
+    end
+end
+@test _temp_33553 == 2
+@test !@isdefined(_x_this_remains_undefined)
+
+# lowering of adjoint
+@test (1 + im)' == 1 - im
+x = let var"'"(x) = 2x
+    3'
+end
+@test x == 6
+
+# issue #36196
+@test_throws ParseError("\"for\" at none:1 expected \"end\", got \")\"") Meta.parse("(for i=1; println())")
+@test_throws ParseError("\"try\" at none:1 expected \"end\", got \")\"") Meta.parse("(try i=1; println())")
+
+# issue #36272
+macro m36272()
+    :((a, b=1) -> a*b)
+end
+@test @m36272()(1) == 1
+
+# issue #37134
+macro m37134()
+    :(x :: Int -> 62)
+end
+@test @m37134()(1) == 62
+@test_throws MethodError @m37134()(1.0) == 62
+
+macro n37134()
+    :($(esc(Expr(:tuple, Expr(:..., :x))))->$(esc(:x)))
+end
+@test @n37134()(2,1) === (2,1)
+
+@testset "unary ± and ∓" begin
+    @test Meta.parse("±x") == Expr(:call, :±, :x)
+    @test Meta.parse("∓x") == Expr(:call, :∓, :x)
+end
+
+@testset "test .<: and .>:" begin
+    tmp = [Int, Float64, String, Bool] .<: Union{Int, String}
+    @test tmp == Bool[1, 0, 1, 0]
+
+    tmp = [Int, Float64, String, Bool] .>: [Int, Float64, String, Bool]
+    @test tmp == Bool[1, 1, 1, 1]
+
+    tmp = @. [Int, Float64, String, Bool] <: Union{Int, String}
+    @test tmp == Bool[1, 0,1, 0]
+
+    @test (Int .<: [Integer] .<: [Real]) == [true]
+end
+
+@test :(a <-- b <-- c) == Expr(:call, :<--, :a, Expr(:call, :<--, :b, :c))
+@test :(a .<-- b.<--c) == Expr(:call, :.<--, :a, Expr(:call, :.<--, :b, :c))
+@test :(a<-->b<-->c) == Expr(:call, :<-->, :a, Expr(:call, :<-->, :b, :c))
+@test :(a.<-->b .<--> c) == Expr(:call, :.<-->, :a, Expr(:call, :.<-->, :b, :c))
+@test :(a --> b --> c) == Expr(:-->, :a, Expr(:-->, :b, :c))
+@test :(a --> b.-->c) == Expr(:-->, :a, Expr(:call, :.-->, :b, :c))
+let (-->) = (+)
+    @test (40 --> 2) == 42
+end
+@test_throws ParseError("invalid operator \"<---\"") Meta.parse("1<---2")
+@test_throws ParseError("invalid operator \".<---\"") Meta.parse("1 .<--- 2")
+@test_throws ParseError("invalid operator \"--\"") Meta.parse("a---b")
+@test_throws ParseError("invalid operator \".--\"") Meta.parse("a.---b")
+
+# issue #37228
+# NOTE: the `if` needs to be at the top level
+if isodd(1) && all(iseven(2) for c in ())
+    @test true
+else
+    @test false
+end
+
+@test :(a +ꜝ b) == Expr(:call, :+ꜝ, :a, :b)
+
+# issue #37656
+@test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)

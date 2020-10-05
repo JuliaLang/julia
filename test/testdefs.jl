@@ -46,4 +46,16 @@ end
 # looking in . messes things up badly
 filter!(x->x!=".", LOAD_PATH)
 
+# Support for Revise
+function revise_trackall()
+    Revise.track(Core.Compiler)
+    Revise.track(Base)
+    for (id, mod) in Base.loaded_modules
+        if id.name in STDLIBS
+            Revise.track(mod)
+        end
+    end
+    Revise.revise()
+end
+
 nothing # File is loaded via a remotecall to "include". Ensure it returns "nothing".

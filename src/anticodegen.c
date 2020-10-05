@@ -5,11 +5,9 @@
 
 #include "intrinsics.h"
 
-int globalUnique = 0;
-
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
-void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
+void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
 int32_t jl_get_llvm_gv(jl_value_t *p) UNAVAILABLE
 void jl_write_malloc_log(void) UNAVAILABLE
 void jl_write_coverage_data(void) UNAVAILABLE
@@ -27,7 +25,6 @@ JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(void *DC, uint8_t *Bytes, uint64_t 
 int32_t jl_assign_functionID(const char *fname) UNAVAILABLE
 
 void jl_init_codegen(void) { }
-void jl_fptr_to_llvm(void *fptr, jl_method_instance_t *lam, int specsig) { }
 
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline)
 {
@@ -66,5 +63,3 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
 {
     return 0;
 }
-
-jl_array_t *jl_cfunction_list;
