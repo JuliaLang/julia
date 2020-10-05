@@ -111,7 +111,7 @@ ERROR: ArgumentError: Too many arguments specified; try passing only one of `sto
     range(start; stop, step)
     range(start, stop; step)
 
-    range(start; length, step)   
+    range(start; length, step)
 
 The above forms of `range` are the only acceptable forms of the range call.
 
@@ -144,7 +144,6 @@ of `stop`.
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
 automatically such that the elements are `step` spaced. The last element of the range
 may not be `stop` in this case.
-
 
 ### `length` and `stop` specified
 
