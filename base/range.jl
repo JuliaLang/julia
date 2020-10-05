@@ -47,61 +47,33 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start; stop)
-    range(start; length)
-    range(start, stop; length)
-    range(start, stop; step)
+    range(start[, stop]; length, stop, step)
 
-    # The following cause an ArgumentError to be thrown.
-    range(start, stop) # Must specify either length or step
-    range(start; step) # Cannot specify step alone
-    range(start, stop; length, step) # Cannot specify all of stop, length, and step
-    range(start; stop, length, step) # Cannot specify all of stop, length, and step
+Construct at an `AbstractRange`, given a starting value and one or two required keyword arguments.
 
-Given a starting value, construct an iterable with the first element of `start`.
-One keyword argument of either `length`, `stop`, or `step` is required to avoid
-ambiguity.
+`start` is the first value of range. `stop` is the upper bound of the range. `length` is the number of
+elements of range. `step` is the difference between each element of the range.
 
-To specify a [`UnitRange`](@ref) where `step` is 1, use one of the following
-where `start`, `length`, and `stop` are all integers.
-* range(start, length=length)
-* range(start, stop=stop)
-* `start:stop`
-* `(:)(start,stop)`
+If the only keyword is `stop` or `length` and all arguments are integers this results in a `UnitRange`.
+Otherwise it constructs an `AbstractRange` for which any two of `stop, length, step` 
+can be specified. Giving all three will result in an error. 
+`stop` may be a keyword, or the 2nd positional argument along with another keyword argument.
 
-Specifying a `step` of 1 explicitly, does not result in a [`UnitRange`](@ref).
-
-`stop` may be included as the last element of the iterable depending on `step`.
-`stop` may be specified as either a positional or keyword argument.
-If `stop` is given as a positional argument, a keyword argument
-of either `length` or `step` must be specified.
-If `stop` is given as the sole keyword argument, `step` is assumed to be 1.0.
-
-If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range.
-
-If `step` and `stop` are provided and `length` is not, the overall range length will be computed
-automatically such that the elements are `step` spaced. The last element of the range
-may not be `stop` in this case.
-
-`length`, `stop`, and `step` cannot be all specified. An [`ArgumentError`](@ref) will be thrown.
-
-Special care is taken to ensure intermediate values are computed rationally.
-To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
+See the Extended help for more details.
 
 !!! compat "Julia 1.1"
     `stop` as a positional argument requires at least Julia 1.1.
 
 # Examples
 ```jldoctest
-julia> range(1, length=100)
-1:100
+julia> range(2, length=100)
+2:101
 
-julia> range(1, stop=100)
-1:100
+julia> range(3, stop=100)
+3:100
 
-julia> range(1, stop=100, step=1)
-1:1:100
+julia> range(4, stop=100, step=2)
+4:2:100
 
 julia> range(1, stop=3.3)
 1.0:1.0:3.0
@@ -118,18 +90,52 @@ julia> range(1, 10, length=101)
 julia> range(1, 100, step=5)
 1:5:96
 
-julia> try range(1, 5) catch e println(e) end
-ArgumentError("At least one of `length` or `step` must be specified")
+julia> julia> range(1,5)
+ERROR: ArgumentError: At least one of `length` or `step` must be specified
+[...]
 
-julia> try range(1, step=1) catch e println(e) end
-ArgumentError("At least one of `length` or `stop` must be specified")
-
-julia> try range(1, 5; length=5, step=1) catch e println(e) end
-ArgumentError("Too many arguments specified; try passing only one of `stop` or `length`")
-
-julia> try range(1; stop=5, length=5, step=1) catch e println(e) end
-ArgumentError("Too many arguments specified; try passing only one of `stop` or `length`")
+julia> range(1; stop=5, length=5, step=1)
+ERROR: ArgumentError: Too many arguments specified; try passing only one of `stop` or `length`
+[...]
 ```
+
+# Extended help
+
+    range(start; stop)
+    range(start; length)
+    range(start; stop, length)
+    range(start; stop, step)
+    range(start; length, step)
+    range(start, stop; length)
+    range(start, stop; step)
+
+The above forms of `range` are the only acceptable calls.
+
+To specify a [`UnitRange`](@ref) where `step` is 1, use one of the following
+where `start`, `length`, and `stop` are all integers.
+* range(start, length=length)
+* range(start, stop=stop)
+* `start:stop`
+* `(:)(start,stop)`
+
+Specifying a `step` of 1 explicitly, does not result in a [`UnitRange`](@ref).
+
+`stop` serves only as an upper bound and may be included as the last element.
+If `stop` is given as a positional argument, a keyword argument
+of either `length` or `step` must be specified.
+If `stop` is given as the sole keyword argument, `step` is assumed to be 1.0.
+
+If `length` and `stop` are provided and `step` is not, the step size will be computed
+automatically such that there are `length` linearly spaced elements in the range.
+
+If `step` and `stop` are provided and `length` is not, the overall range length will be computed
+automatically such that the elements are `step` spaced. The last element of the range
+may not be `stop` in this case.
+
+`length`, `stop`, and `step` cannot be all specified. An [`ArgumentError`](@ref) will be thrown.
+
+Special care is taken to ensure intermediate values are computed rationally.
+To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 """
 range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing) =
     _range(start, step, stop, length)
