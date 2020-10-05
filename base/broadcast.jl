@@ -726,7 +726,7 @@ end
         end
         if i == lr && Core.Compiler.isvarargtype(pi)
             N = (Base.unwrap_unionall(pi)::DataType).parameters[2]
-            c[i] = Vararg{ci, N}
+            c[i] = Base.rewrap_unionall(Vararg{ci, N}, pi)
         else
             c[i] = ci
         end
@@ -923,7 +923,7 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     # Now handle the remaining values
     # The typeassert gives inference a helping hand on the element type and dimensionality
     # (work-around for #28382)
-    ElType′ = ElType <: Type ? DataType : ElType
+    ElType′ = ElType <: Type ? Type : ElType
     RT = dest isa AbstractArray ? AbstractArray{<:ElType′, ndims(dest)} : Any
     return copyto_nonleaf!(dest, bc′, iter, state, 1)::RT
 end
