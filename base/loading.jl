@@ -1216,7 +1216,7 @@ function compilecache(pkg::PkgId, path::String)
     @logmsg verbosity "Precompiling $pkg"
     precomp_msg = " > $(pkg.name)"
     should_log_deps = PRECOMPILING_INTERACTIVELY[] && !isinteractive() && (CoreLogging.current_logstate().min_enabled_level > CoreLogging.Debug) #don't print for main package or when in debug
-    should_log_deps && print(precomp_msg)
+    should_log_deps && print("\n",precomp_msg,"\e[$(length(precomp_msg))D")
 
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
@@ -1239,7 +1239,7 @@ function compilecache(pkg::PkgId, path::String)
         end
     finally
         rm(tmppath, force=true)
-        should_log_deps && print("\e[$(length(precomp_msg))D\e[0J") #clear last dep print
+        should_log_deps && print("\e[0J\e[A") #clear last dep print
     end
     if p.exitcode == 125
         return PrecompilableError()
