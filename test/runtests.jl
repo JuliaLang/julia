@@ -15,6 +15,12 @@ tests = unique(tests)
 
 if use_revise
     using Revise
+    # Remote-eval the following to initialize Revise in workers
+    const revise_init_expr = quote
+        using Revise
+        const STDLIBS = $STDLIBS
+        revise_trackall()
+    end
 end
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
@@ -84,16 +90,8 @@ cd(@__DIR__) do
     @everywhere include("testdefs.jl")
 
     if use_revise
-        @everywhere begin
-            Revise.track(Core.Compiler)
-            Revise.track(Base)
-            for (id, mod) in Base.loaded_modules
-                if id.name in STDLIBS
-                    Revise.track(mod)
-                end
-            end
-            Revise.revise()
-        end
+        Base.invokelatest(revise_trackall)
+        Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
     #pretty print the information about gc and mem usage
@@ -223,6 +221,9 @@ cd(@__DIR__) do
                                 rmprocs(wrkr, waitfor=30)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
+                                if use_revise
+                                    Distributed.remotecall_eval(Main, p, revise_init_expr)
+                                end
                             end
                         else
                             print_testworker_stats(test, wrkr, resp)
@@ -233,6 +234,9 @@ cd(@__DIR__) do
                                     rmprocs(wrkr, waitfor=30)
                                     p = addprocs_with_testenv(1)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
+                                    if use_revise
+                                        Distributed.remotecall_eval(Main, p, revise_init_expr)
+                                    end
                                 else # single process testing
                                     error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                                 end

@@ -20,6 +20,7 @@ UInt64
 """
 function unsigned(::Type{<:Integer}) end
 
+unsigned(::Type{Bool}) = UInt
 unsigned(::Type{Int8}) = UInt8
 unsigned(::Type{Int16}) = UInt16
 unsigned(::Type{Int32}) = UInt32

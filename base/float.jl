@@ -48,7 +48,7 @@ A not-a-number value of type [`Float64`](@ref).
 NaN, NaN64
 
 ## conversions to floating-point ##
-Float16(x::Integer) = convert(Float16, convert(Float32, x))
+Float16(x::Integer) = convert(Float16, convert(Float32, x)::Float32)
 for t in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float16
 end
@@ -285,7 +285,7 @@ Equivalent to `typeof(float(zero(T)))`.
 # Examples
 ```jldoctest
 julia> float(Complex{Int})
-Complex{Float64}
+ComplexF64 (alias for Complex{Float64})
 
 julia> float(Int)
 Float64
@@ -533,24 +533,10 @@ abs(x::Float64) = abs_float(x)
 Test whether a number value is a NaN, an indeterminate value which is neither an infinity
 nor a finite number ("not a number").
 """
-isnan(x::AbstractFloat) = x != x
+isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
 isnan(x::Real) = false
 
-"""
-    isfinite(f) -> Bool
-
-Test whether a number is finite.
-
-# Examples
-```jldoctest
-julia> isfinite(5)
-true
-
-julia> isfinite(NaN32)
-false
-```
-"""
 isfinite(x::AbstractFloat) = x - x == 0
 isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
@@ -724,6 +710,8 @@ function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)
     (y & exponent_mask(T) == 0) & (y & significand_mask(T) != 0)
 end
+
+ispow2(x::AbstractFloat) = !iszero(x) && frexp(x)[1] == 0.5
 
 @eval begin
     typemin(::Type{Float16}) = $(bitcast(Float16, 0xfc00))

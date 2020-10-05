@@ -83,7 +83,7 @@ function connect!(sock::PipeEndpoint, path::AbstractString)
     req = Libc.malloc(Base._sizeof_uv_connect)
     uv_req_set_data(req, C_NULL)
     ccall(:uv_pipe_connect, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), req, sock.handle, path,
-          uv_jl_connectcb::Ptr{Cvoid})
+          @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint)))
     sock.status = StatusConnecting
     iolock_end()
     return sock

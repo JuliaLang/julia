@@ -478,37 +478,29 @@ static int stack_grows_down(void) {
 
 void task_scanner(jl_task_t *task, int root_task)
 {
+    int var_on_frame;
+
     // The task scanner is not necessary for liveness, as the
     // corresponding task stack is already part of the stack.
     // Its purpose is simply to test that the task scanner
     // doing actual work does not trigger a problem.
-    size_t size;
-    int tid;
-    void *stack = jl_task_stack_buffer(task, &size, &tid);
-    if (tid >= 0) {
-        // this is the live stack of a thread. Is it ours?
-        if (stack && tid == jl_threadid()) {
-            // only scan the live portion of the stack.
-            char *end_stack = (char *) stack + size;
-            if (lt_ptr(stack, &size) && lt_ptr(&size, (char *)stack + size)) {
-                if (stack_grows_down()) {
-                    size = end_stack - (char *)&size;
-                    stack = (void *)&size;
-                }
-                else {
-                    size = (char *) end_stack - (char *) &size;
-                }
-            } else {
-                // error, current stack frame must be on the live stack.
-                jl_error("stack frame not part of the current task");
-            }
+    char *start_stack;
+    char *end_stack;
+    char *total_start_stack;
+    char *total_end_stack;
+    jl_active_task_stack(task, &start_stack, &end_stack, &total_start_stack, &total_end_stack);
+
+    // this is the live stack of a thread. Is it ours?
+    if (start_stack && task == (jl_task_t *)jl_get_current_task()) {
+        if (!(lt_ptr(start_stack, &var_on_frame) && lt_ptr(&var_on_frame, end_stack))) {
+            // error, current stack frame must be on the live stack.
+            jl_error("stack frame not part of the current task");
         }
-        else
-            stack = NULL;
     }
-    if (stack) {
-        void **start = (void **) stack;
-        void **end = start + size / sizeof(void *);
+
+    if (start_stack) {
+        void **start = (void **)start_stack;
+        void **end = (void **)end_stack;
         while (start < end) {
             void *p = *start++;
             void *q = jl_gc_internal_obj_base_ptr(p);

@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax
+             sign, hastypemax, isodd, digits!
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -342,6 +342,8 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
+isodd(x::BigInt) = MPZ.tstbit(x, 0)
+
 function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
@@ -458,7 +460,8 @@ promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
     big(x)
 
 Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
-`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+`BigFloat`). See [`BigFloat`](@ref BigFloat(::Any, rounding::RoundingMode)) for
+information about some pitfalls with floating-point numbers.
 """
 function big end
 
@@ -689,6 +692,24 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     end
     isneg(n) && (sv[1] = '-' % UInt8)
     String(sv)
+end
+
+function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
+    if 2 ≤ base ≤ 62
+        s = codeunits(string(n; base))
+        i, j = firstindex(a)-1, length(s)+1
+        lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
+        while i < lasti
+            # base ≤ 36: 0-9, plus a-z for 10-35
+            # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
+            x = s[j -= 1]
+            a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
+        end
+        lasti = lastindex(a)
+        while i < lasti; a[i+=1] = zero(T); end
+        return isneg(n) ? map!(-,a,a) : a
+    end
+    return invoke(digits!, Tuple{typeof(a), Integer}, a, n; base) # slow generic fallback
 end
 
 function ndigits0zpb(x::BigInt, b::Integer)

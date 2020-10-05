@@ -255,6 +255,22 @@ let errors = @testset NoThrowTestSet begin
     end
 end
 
+let retval_tests = @testset NoThrowTestSet begin
+        ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
+        pass_mock = Test.Pass(:test, 1, 2, LineNumberNode(0, "A Pass Mock"))
+        @test Test.record(ts, pass_mock) isa Test.Pass
+        error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
+        @test Test.record(ts, error_mock) isa Test.Error
+        fail_mock = Test.Fail(:test, 1, 2, 3, LineNumberNode(0, "A Fail Mock"))
+        @test Test.record(ts, fail_mock) isa Test.Fail
+        broken_mock = Test.Broken(:test, LineNumberNode(0, "A Broken Mock"))
+        @test Test.record(ts, broken_mock) isa Test.Broken
+    end
+    for retval_test in retval_tests
+        @test retval_test isa Test.Pass
+    end
+end
+
 @testset "printing of a TestSetException" begin
     tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}()))
     @test occursin("1 passed", tse_str)
@@ -549,6 +565,13 @@ for i in 1:6
     @test typeof(tss[i].results[4]) == CustomTestSet
     @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
 end
+
+# test that second argument is escaped correctly
+foo = 3
+tss = @testset CustomTestSet foo=foo "custom testset - escaping" begin
+    @test true
+end
+@test tss.foo == 3
 
 # test @inferred
 uninferrable_function(i) = (1, "1")[i]
@@ -916,3 +939,17 @@ end
     end
 end
 
+# Issue 20620
+@test @inferred(.![true, false]) == [false, true]
+@test @inferred([3, 4] .- [1, 2] .+ [-2, -2]) == [0, 0]
+
+@testset "push/pop_testset invariance (Issue 32937)" begin
+    io = IOBuffer()
+    path = joinpath(@__DIR__(), "test_pop_testset_exec.jl")
+    cmd = `$(Base.julia_cmd()) $path`
+    ok = !success(pipeline(cmd; stdout = io, stderr = io))
+    if !ok
+        @error "push/pop_testset invariance test failed" cmd Text(String(take!(io)))
+    end
+    @test ok
+end

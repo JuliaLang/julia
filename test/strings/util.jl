@@ -297,6 +297,9 @@ end
     @test replace("a", in("a") => typeof) == "Char"
     @test replace("a", ['a'] => typeof) == "Char"
 
+    # Issue 36953
+    @test replace("abc", "" => "_", count=1) == "_abc"
+
 end
 
 @testset "chomp/chop" begin

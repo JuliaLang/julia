@@ -63,6 +63,11 @@ end
     @test signed(true) == 1
     @test unsigned(true) isa Unsigned
     @test unsigned(true) == unsigned(1)
+
+    @test signed(Bool) == Int
+    @test signed(Bool) == typeof(signed(true))
+    @test unsigned(Bool) == UInt
+    @test unsigned(Bool) == typeof(unsigned(true))
 end
 @testset "bswap" begin
     @test bswap(Int8(3)) == 3

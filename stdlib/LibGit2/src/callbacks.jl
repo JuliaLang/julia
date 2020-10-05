@@ -275,8 +275,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
         p.url = unsafe_string(url_ptr)
         m = match(URL_REGEX, p.url)
 
-        p.scheme = something(m[:scheme], "")
-        p.username = something(m[:user], "")
+        p.scheme = something(m[:scheme], SubString(""))
+        p.username = something(m[:user], SubString(""))
         p.host = m[:host]
 
         # When an explicit credential is supplied we will make sure to use the given
@@ -287,7 +287,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
             cred = p.explicit
 
             # Copy explicit credentials to avoid mutating approved credentials.
-            p.credential = deepcopy(cred)
+            # invalidation fix from cred being non-inferrable
+            p.credential = Base.invokelatest(deepcopy, cred)
 
             if isa(cred, SSHCredential)
                 allowed_types &= Cuint(Consts.CREDTYPE_SSH_KEY)
@@ -301,7 +302,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
 
             # Perform a deepcopy as we do not want to mutate approved cached credentials
             if haskey(p.cache, cred_id)
-                p.credential = deepcopy(p.cache[cred_id])
+                # invalidation fix from p.cache[cred_id] being non-inferrable
+                p.credential = Base.invokelatest(deepcopy, p.cache[cred_id])
             end
         end
 
@@ -350,8 +352,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
 end
 
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
-                        oid_ptr::Ptr{GitHash}, is_merge::Cuint, payload::Ptr{Cvoid})
-    fhead_vec = unsafe_pointer_to_objref(payload)::Vector{FetchHead}
+                                    oid_ptr::Ptr{GitHash}, is_merge::Cuint, payload::Any)
+    fhead_vec = payload::Vector{FetchHead}
     Base.push!(fhead_vec, FetchHead(unsafe_string(ref_name), unsafe_string(remote_url),
         unsafe_load(oid_ptr), is_merge == 1))
     return Cint(0)
@@ -362,4 +364,4 @@ mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cs
 "C function pointer for `credentials_callback`"
 credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any))
 "C function pointer for `fetchhead_foreach_callback`"
-fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Ptr{Cvoid}))
+fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Any))

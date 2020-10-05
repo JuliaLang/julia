@@ -75,3 +75,13 @@ else
     hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x96d26dc6))
     hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x469d72af)
 end
+
+## hashing strings ##
+
+const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
+const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
+
+function hash(s::String, h::UInt)
+    h += memhash_seed
+    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
+end

@@ -1,0 +1,183 @@
+
+# HG changeset patch
+# User Torbjorn Granlund <tg@gmplib.org>
+# Date 1593897341 -7200
+# Node ID c5d0fcb069696e02aeff5b64108cd3ba299bf181
+# Parent  9240f425c5853b8f76cf91646301ee39bac434d9
+Initial support for arm64-darwin.
+
+diff -r 9240f425c585 -r c5d0fcb06969 configure.ac
+--- a/configure.ac	Thu Jun 18 18:39:48 2020 +0200
++++ b/configure.ac	Sat Jul 04 23:15:41 2020 +0200
+@@ -3699,6 +3699,14 @@
+       case $ABI in
+         32)
+ 	  GMP_INCLUDE_MPN(arm/arm-defs.m4) ;;
++        64)
++	  case $host in
++	    *-*-darwin*)
++	      GMP_INCLUDE_MPN(arm64/darwin.m4) ;;
++	    *)
++	      GMP_INCLUDE_MPN(arm64/arm64-defs.m4) ;;
++          esac
++	  ;;
+       esac
+       ;;
+     hppa*-*-*)
+diff -r 9240f425c585 -r c5d0fcb06969 mpn/arm64/arm64-defs.m4
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/mpn/arm64/arm64-defs.m4	Sat Jul 04 23:15:41 2020 +0200
+@@ -0,0 +1,53 @@
++divert(-1)
++
++dnl  m4 macros for ARM64 ELF assembler.
++
++dnl  Copyright 2020 Free Software Foundation, Inc.
++
++dnl  This file is part of the GNU MP Library.
++dnl
++dnl  The GNU MP Library is free software; you can redistribute it and/or modify
++dnl  it under the terms of either:
++dnl
++dnl    * the GNU Lesser General Public License as published by the Free
++dnl      Software Foundation; either version 3 of the License, or (at your
++dnl      option) any later version.
++dnl
++dnl  or
++dnl
++dnl    * the GNU General Public License as published by the Free Software
++dnl      Foundation; either version 2 of the License, or (at your option) any
++dnl      later version.
++dnl
++dnl  or both in parallel, as here.
++dnl
++dnl  The GNU MP Library is distributed in the hope that it will be useful, but
++dnl  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++dnl  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++dnl  for more details.
++dnl
++dnl  You should have received copies of the GNU General Public License and the
++dnl  GNU Lesser General Public License along with the GNU MP Library.  If not,
++dnl  see https://www.gnu.org/licenses/.
++
++
++dnl  Standard commenting is with @, the default m4 # is for constants and we
++dnl  don't want to disable macro expansions in or after them.
++
++changecom
++
++
++dnl  LEA_HI(reg,gmp_symbol), LEA_LO(reg,gmp_symbol)
++dnl
++dnl  Load the address of gmp_symbol into a register. We split this into two
++dnl  parts to allow separation for manual insn scheduling.
++
++ifdef(`PIC',`dnl
++define(`LEA_HI', `adrp	$1, :got:$2')dnl
++define(`LEA_LO', `ldr	$1, [$1, #:got_lo12:$2]')dnl
++',`dnl
++define(`LEA_HI', `adrp	$1, $2')dnl
++define(`LEA_LO', `add	$1, $1, :lo12:$2')dnl
++')dnl
++
++divert`'dnl
+diff -r 9240f425c585 -r c5d0fcb06969 mpn/arm64/bdiv_q_1.asm
+--- a/mpn/arm64/bdiv_q_1.asm	Thu Jun 18 18:39:48 2020 +0200
++++ b/mpn/arm64/bdiv_q_1.asm	Sat Jul 04 23:15:41 2020 +0200
+@@ -61,15 +61,9 @@
+ 	clz	cnt, x6
+ 	lsr	d, d, cnt
+ 
+-ifdef(`PIC',`
+-	adrp	x7, :got:__gmp_binvert_limb_table
++	LEA_HI(	x7, binvert_limb_table)
+ 	ubfx	x6, d, 1, 7
+-	ldr	x7, [x7, #:got_lo12:__gmp_binvert_limb_table]
+-',`
+-	adrp	x7, __gmp_binvert_limb_table
+-	ubfx	x6, d, 1, 7
+-	add	x7, x7, :lo12:__gmp_binvert_limb_table
+-')
++	LEA_LO(	x7, binvert_limb_table)
+ 	ldrb	w6, [x7, x6]
+ 	ubfiz	x7, x6, 1, 8
+ 	umull	x6, w6, w6
+@@ -81,7 +75,7 @@
+ 	mul	x6, x6, x6
+ 	msub	di, x6, d, x7
+ 
+-	b	mpn_pi1_bdiv_q_1
++	b	GSYM_PREFIX`'mpn_pi1_bdiv_q_1
+ EPILOGUE()
+ 
+ PROLOGUE(mpn_pi1_bdiv_q_1)
+diff -r 9240f425c585 -r c5d0fcb06969 mpn/arm64/darwin.m4
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/mpn/arm64/darwin.m4	Sat Jul 04 23:15:41 2020 +0200
+@@ -0,0 +1,50 @@
++divert(-1)
++
++dnl  m4 macros for ARM64 Darwin assembler.
++
++dnl  Copyright 2020 Free Software Foundation, Inc.
++
++dnl  This file is part of the GNU MP Library.
++dnl
++dnl  The GNU MP Library is free software; you can redistribute it and/or modify
++dnl  it under the terms of either:
++dnl
++dnl    * the GNU Lesser General Public License as published by the Free
++dnl      Software Foundation; either version 3 of the License, or (at your
++dnl      option) any later version.
++dnl
++dnl  or
++dnl
++dnl    * the GNU General Public License as published by the Free Software
++dnl      Foundation; either version 2 of the License, or (at your option) any
++dnl      later version.
++dnl
++dnl  or both in parallel, as here.
++dnl
++dnl  The GNU MP Library is distributed in the hope that it will be useful, but
++dnl  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++dnl  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++dnl  for more details.
++dnl
++dnl  You should have received copies of the GNU General Public License and the
++dnl  GNU Lesser General Public License along with the GNU MP Library.  If not,
++dnl  see https://www.gnu.org/licenses/.
++
++
++dnl  Standard commenting is with @, the default m4 # is for constants and we
++dnl  don't want to disable macro expansions in or after them.
++
++changecom
++
++
++dnl  LEA_HI(reg,gmp_symbol), LEA_LO(reg,gmp_symbol)
++dnl
++dnl  Load the address of gmp_symbol into a register. We split this into two
++dnl  parts to allow separation for manual insn scheduling.  TODO: Darwin allows
++dnl  for relaxing these two insns into an adr and a nop, but that requires the
++dnl  .loh pseudo for connecting them.
++
++define(`LEA_HI',`adrp	$1, $2@GOTPAGE')dnl
++define(`LEA_LO',`ldr	$1, [$1, $2@GOTPAGEOFF]')dnl
++
++divert`'dnl
+diff -r 9240f425c585 -r c5d0fcb06969 mpn/arm64/invert_limb.asm
+--- a/mpn/arm64/invert_limb.asm	Thu Jun 18 18:39:48 2020 +0200
++++ b/mpn/arm64/invert_limb.asm	Sat Jul 04 23:15:41 2020 +0200
+@@ -41,9 +41,9 @@
+ ASM_START()
+ PROLOGUE(mpn_invert_limb)
+ 	lsr	x2, x0, #54
+-	adrp	x1, approx_tab
++	LEA_HI(	x1, approx_tab)
+ 	and	x2, x2, #0x1fe
+-	add	x1, x1, :lo12:approx_tab
++	LEA_LO(	x1, approx_tab)
+ 	ldrh	w3, [x1,x2]
+ 	lsr	x4, x0, #24
+ 	add	x4, x4, #1
+

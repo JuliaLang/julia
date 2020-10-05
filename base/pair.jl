@@ -31,7 +31,7 @@ julia> p = "foo" => 7
 "foo" => 7
 
 julia> typeof(p)
-Pair{String,Int64}
+Pair{String, Int64}
 
 julia> p.first
 "foo"

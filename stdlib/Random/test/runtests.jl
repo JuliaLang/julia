@@ -10,7 +10,7 @@ using .Main.OffsetArrays
 using Random
 using Random.DSFMT
 
-using Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
+using Random: Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
 
 import Future # randjump
 
@@ -222,24 +222,10 @@ randmtzig_fill_ziggurat_tables()
 @test all(we == Random.we)
 @test all(fe == Random.fe)
 
-#same random numbers on for small ranges on all systems
-guardseed() do
-    seed = rand(UInt)
-    Random.seed!(seed)
-    r = map(Int64, rand(map(Int32, 97:122)))
-    Random.seed!(seed)
-    @test r == rand(map(Int64, 97:122))
-    Random.seed!(seed)
-    r = map(UInt64, rand(map(UInt32, 97:122)))
-    Random.seed!(seed)
-    @test r == rand(map(UInt64, 97:122))
-end
-
 for U in (Int64, UInt64)
     @test all(div(one(UInt64) << 52, k)*k - 1 == SamplerRangeInt(map(U, 1:k)).u
               for k in 13 .+ Int64(2).^(1:30))
 end
-
 
 #issue 8257
 let i8257 = 1:1/3:100
@@ -455,6 +441,38 @@ for rng in [MersenneTwister(), RandomDevice()],
     end
 end
 
+@testset "rand(Bool) uniform distribution" begin
+    for n in [rand(1:8), rand(9:16), rand(17:64)]
+        a = zeros(Bool, n)
+        as = zeros(Int, n)
+        # we will test statistical properties for each position of a,
+        # but also for 3 linear combinations of positions (for the array version)
+        lcs = unique!.([rand(1:n, 2), rand(1:n, 3), rand(1:n, 5)])
+        aslcs = zeros(Int, 3)
+        for rng = (MersenneTwister(), RandomDevice())
+            for scalar = [false, true]
+                fill!(a, 0)
+                fill!(as, 0)
+                fill!(aslcs, 0)
+                for _ = 1:49
+                    if scalar
+                        for i in eachindex(as)
+                            as[i] += rand(rng, Bool)
+                        end
+                    else
+                        as .+= rand!(rng, a)
+                        aslcs .+= [xor(getindex.(Ref(a), lcs[i])...) for i in 1:3]
+                    end
+                end
+                @test all(x -> 7 <= x <= 42, as) # for each x, fails with proba ≈ 2/35_000_000
+                if !scalar
+                    @test all(x -> 7 <= x <= 42, aslcs)
+                end
+            end
+        end
+    end
+end
+
 # test reproducility of methods
 let mta = MersenneTwister(42), mtb = MersenneTwister(42)
 
@@ -574,16 +592,16 @@ end
 @test_throws DomainError DSFMT.DSFMT_state(zeros(Int32, rand(0:DSFMT.JN32-1)))
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0)
+                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0, 0, 0, -1, -1, -1, -1)
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0, 0, 0, -1, -1, -1, -1)
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0, 0, 0, -1, -1, -1, -1)
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1, 0, 0, -1, -1, -1, -1)
 
 # seed is private to MersenneTwister
 let seed = rand(UInt32, 10)
@@ -675,11 +693,16 @@ struct RandomStruct23964 end
     @test_throws ArgumentError rand(RandomStruct23964())
 end
 
-@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
-                                                 T ∈ (Int32, UInt32, Int64, Int128, UInt128)
-    RNG isa MersenneTwister && Random.seed!(RNG, rand(UInt128)) # for reproducibility
-    r = T(1):T(108)
-    @test rand(RNG, SamplerRangeFast(r)) ∈ r
+@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(rand(UInt128)), RandomDevice()),
+                                                        T ∈ (Int8, Int16, Int32, UInt32, Int64, Int128, UInt128)
+    for S in (SamplerRangeInt, SamplerRangeFast, SamplerRangeNDL)
+        S == SamplerRangeNDL && sizeof(T) > 8 && continue
+        r = T(1):T(108)
+        @test rand(RNG, S(r)) ∈ r
+        @test rand(RNG, S(typemin(T):typemax(T))) isa T
+        a, b = sort!(rand(-1000:1000, 2) .% T)
+        @test rand(RNG, S(a:b)) ∈ a:b
+    end
 end
 
 @testset "rand! is allocation-free" begin
@@ -771,10 +794,67 @@ end
         @test rand!(GLOBAL_RNG, A, x) === A == rand!(mt, B, x) === B
     end
     # issue #33170
-    @test Sampler(GLOBAL_RNG, 2:4, Val(1)) isa SamplerRangeFast
-    @test Sampler(GLOBAL_RNG, 2:4, Val(Inf)) isa SamplerRangeFast
+    @test Sampler(GLOBAL_RNG, 2:4, Val(1)) isa SamplerRangeNDL
+    @test Sampler(GLOBAL_RNG, 2:4, Val(Inf)) isa SamplerRangeNDL
 end
 
 @testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
     @test length.(rand.(T(), 1:3)) == 1:3
+end
+
+@testset "generated scalar integers do not overlap" begin
+    m = MersenneTwister()
+    xs = reinterpret(UInt64, m.ints)
+    x = rand(m, UInt128)  # m.idxI % 16 == 0
+    @test x % UInt64 == xs[end-1]
+    x = rand(m, UInt64)
+    @test x == xs[end-2]
+    x = rand(m, UInt64)
+    @test x == xs[end-3]
+    x = rand(m, UInt64)
+    @test x == xs[end-4]
+    x = rand(m, UInt128) # m.idxI % 16 == 8
+    @test (x >> 64) % UInt64 == xs[end-6]
+    @test x % UInt64 == xs[end-7]
+    x = rand(m, UInt64)
+    @test x == xs[end-8] # should not be == xs[end-7]
+
+    s = Set{UInt64}()
+    n = 0
+    for _=1:2000
+        x = rand(m, rand((UInt64, UInt128, Int64, Int128)))
+        if sizeof(x) == 8
+            push!(s, x % UInt64)
+            n += 1
+        else
+            push!(s, x % UInt64, (x >> 64) % UInt64)
+            n += 2
+        end
+    end
+    @test length(s) == n
+end
+
+@testset "show" begin
+    m = MersenneTwister(123)
+    @test string(m) == "MersenneTwister(123)"
+    Random.jump!(m, 2*big(10)^20)
+    @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
+    @test m == MersenneTwister(123, (200000000000000000000, 0))
+    rand(m)
+    @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
+    @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
+    rand(m, Int64)
+    @test string(m) == "MersenneTwister(123, (200000000000000000000, 2002, 0, 255, 1002, 0, 1, 1))"
+    @test m == MersenneTwister(123, (200000000000000000000, 2002, 0, 255, 1002, 0, 1, 1))
+
+    m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
+    @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b)"
+    rand(m, Int64)
+    @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 2002, 1000, 254, 0, 0, 0, 1))"
+    @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 2002, 1000, 254, 0, 0, 0, 1))
+
+    # test when floats advancing is done by initializing ints, and (few) floats are then generated
+    m = MersenneTwister(0); rand(m, Int64); rand(m)
+    @test string(m) == "MersenneTwister(0, (0, 2002, 1000, 255, 0, 0, 0, 1))"
+    @test m == MersenneTwister(0, (0, 2002, 1000, 255, 0, 0, 0, 1))
 end

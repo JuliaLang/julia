@@ -6,14 +6,13 @@ endif
 
 ifneq ($(USE_BINARYBUILDER_MPFR),1)
 
-ifeq ($(USE_SYSTEM_MPFR), 0)
+MPFR_OPTS := --enable-thread-safe --enable-shared-cache --disable-float128 --disable-decimal-float
 ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS := --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
-endif
+MPFR_OPTS += --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
 endif
 ifeq ($(BUILD_OS),WINNT)
 ifeq ($(OS),WINNT)
-MPFR_OPTS += --disable-thread-safe CFLAGS="$(CFLAGS) -DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"
+MPFR_OPTS += CFLAGS="$(CFLAGS) -DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"
 endif
 endif
 

@@ -225,10 +225,10 @@ end
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
     display(TextDisplay(b), [missing])
-    @test String(take!(b)) == "1-element Array{$Missing,1}:\n missing"
+    @test String(take!(b)) == "1-element Vector{$Missing}:\n missing"
     b = IOBuffer()
     display(TextDisplay(b), [1 missing])
-    @test String(take!(b)) == "1×2 Array{$(Union{Int, Missing}),2}:\n 1  missing"
+    @test String(take!(b)) == "1×2 Matrix{$(Union{Int, Missing})}:\n 1  missing"
 end
 
 @testset "arrays with missing values" begin
@@ -491,6 +491,11 @@ end
             @test_throws ArgumentError reduce(x -> x/2, itr)
             @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
         end
+
+        # issue #35504
+        nt = NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
+            (missing, missing))
+        @test sum(skipmissing(nt)) === 0
     end
 
     @testset "filter" begin

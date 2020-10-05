@@ -82,6 +82,7 @@ aimg  = randn(n,n)/2
         @testset "Generalized svd" begin
             a_svd = a[1:div(n, 2), :]
             gsvd = svd(a,a_svd)
+            @test Base.propertynames(gsvd) == (:alpha, :beta, :vals, :S, :D1, :D2, :R0, :U, :V, :Q, :a, :b, :k, :l, :R)
             @test gsvd.U*gsvd.D1*gsvd.R*gsvd.Q' ≈ a
             @test gsvd.V*gsvd.D2*gsvd.R*gsvd.Q' ≈ a_svd
             @test usv.Vt' ≈ usv.V
@@ -189,5 +190,15 @@ end
     @test svdstring == "$(summary(svdd))\nU factor:\n$ustring\nV factor:\n$vstring\nQ factor:\n$qstring\nD1 factor:\n$d1string\nD2 factor:\n$d2string\nR0 factor:\n$r0string"
 end
 
+@testset "c-tor with varying input eltypes" begin
+    A = randn(Float64, 10, 10)
+    U, S, V = svd(A)
+    Ut = convert.(Float16, U)
+    Vt = convert.(Float32, V)
+    svdc = SVD{ComplexF32}(Ut, S, Vt)
+    @test svdc isa SVD{ComplexF32}
+    Uc, Sc, Vc = svdc
+    @test Uc * diagm(0=>Sc) * transpose(V) ≈ complex.(A) rtol=1e-3
+end
 
 end # module TestSVD

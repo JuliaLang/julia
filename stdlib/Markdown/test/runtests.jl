@@ -85,6 +85,8 @@ let text =
 
         And *another* paragraph.
 
+    \tAnd a third paragraph indented with a *tab*.
+
     This isn't part of the footnote.
     """,
     md = Markdown.parse(text)
@@ -97,7 +99,7 @@ let text =
     @test md.content[2].id == "1"
     @test md.content[3].id == "note"
 
-    @test length(md.content[3].text) == 4
+    @test length(md.content[3].text) == 5
 
     let expected =
             """
@@ -115,6 +117,8 @@ let text =
                 ```
 
                 And *another* paragraph.
+
+                And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -137,6 +141,8 @@ let text =
                    some.code
 
                And *another* paragraph.
+
+               And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -671,6 +677,8 @@ let t_1 =
         !!! note
             foo bar baz
 
+        \tsecond tab-indented paragraph
+
         !!! warning "custom title"
             - foo
             - bar
@@ -714,6 +722,7 @@ let t_1 =
     @test m_2.content[1].category == "note"
     @test m_2.content[1].title == "Note"
     @test isa(m_2.content[1].content[1], Markdown.Paragraph)
+    @test isa(m_2.content[1].content[2], Markdown.Paragraph)
 
     @test isa(m_2.content[2], Markdown.Admonition)
     @test m_2.content[2].category == "warning"
@@ -810,6 +819,8 @@ let t_1 =
             !!! note
                 foo bar baz
 
+                second tab-indented paragraph
+
 
             !!! warning "custom title"
                   * foo
@@ -838,6 +849,8 @@ let t_1 =
             """
             .. note::
                foo bar baz
+
+               second tab-indented paragraph
 
 
             .. warning:: custom title
@@ -1137,4 +1150,32 @@ end
 let m = Markdown.parse("---"), io = IOBuffer()
     show(io, "text/latex", m)
     @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
+end
+
+# issue #16194: interpolation in md"..." strings
+@testset "issue #16194: interpolation in md\"...\" strings" begin
+    x = "X"
+    contains_X(md) = occursin(x, sprint(show, MIME("text/plain"), md))
+    @test contains_X(md"# $x") # H1
+    @test contains_X(md"## $x") # H2
+    @test contains_X(md"### $x") # H3
+    @test contains_X(md"x = $x") # Paragraph
+    @test contains_X(md"- $x") # List
+    @test contains_X(md"[$x](..)") # Link
+    @test contains_X(md"**$x**") # Bold
+    @test contains_X(md"*$x*") # Italic
+    @test contains_X( # Table
+        md"""
+        | name |
+        |------|
+        |  $x  |
+        """)
+end
+
+@testset "issue #37232: linebreaks" begin
+    s = @md_str """
+       Misc:\\
+       - line\\
+       """
+    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n  "
 end

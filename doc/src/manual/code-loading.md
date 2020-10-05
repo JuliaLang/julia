@@ -211,7 +211,7 @@ This example map includes three different kinds of package locations (the first 
 
 ### Package directories
 
-Package directories provide a simpler kind of environment without the ability to handle name collisions. In a package directory, the set of top-level packages is the set of subdirectories that "look like" packages. A package `X` is exists in a package directory if the directory contains one of the following "entry point" files:
+Package directories provide a simpler kind of environment without the ability to handle name collisions. In a package directory, the set of top-level packages is the set of subdirectories that "look like" packages. A package `X` exists in a package directory if the directory contains one of the following "entry point" files:
 
 - `X.jl`
 - `X/src/X.jl`

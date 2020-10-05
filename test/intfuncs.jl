@@ -142,6 +142,8 @@ using Random
     end
     @test lcm(0x5, 3) == 15
     @test gcd(0xf, 20) == 5
+    @test gcd(UInt32(6), Int8(-50)) == 2
+    @test gcd(typemax(UInt), -16) == 1
 end
 
 @testset "gcd/lcm for arrays" begin
@@ -184,6 +186,9 @@ end
         @test gcdx(T(-5), T(-12)) === (T(1), T(-5), T(2))
         @test gcdx(T(-25), T(-4)) === (T(1), T(-1), T(6))
     end
+    x, y = Int8(-12), UInt(100)
+    d, u, v = gcdx(x, y)
+    @test x*u + y*v == d
 end
 
 @testset "gcd/lcm/gcdx for custom types" begin
@@ -199,12 +204,13 @@ end
 end
 
 @testset "invmod" begin
-    @test invmod(6, 31) === 26
-    @test invmod(-1, 3) === 2
-    @test invmod(1, -3) === -2
-    @test invmod(-1, -3) === -1
-    @test invmod(0x2, 0x3) === 0x2
-    @test invmod(2, 0x3) === 2
+    @test invmod(6, 31) == 26
+    @test invmod(-1, 3) == 2
+    @test invmod(1, -3) == -2
+    @test invmod(-1, -3) == -1
+    @test invmod(0x2, 0x3) == 2
+    @test invmod(2, 0x3) == 2
+    @test invmod(0x8, -3) == -1
     @test_throws DomainError invmod(0, 3)
 end
 
@@ -298,6 +304,7 @@ end
     @test string(3, base = 2) == "11"
     @test string(3, pad = 2, base = 2) == "11"
     @test string(3, pad = Int32(2), base = Int32(2)) == "11"
+    @test string(3, pad = typemin(Int128) + 3, base = 0x2) == "11"
     @test string(3, pad = 3, base = 2) == "011"
     @test string(-3, base = 2) == "-11"
     @test string(-3, pad = 3, base = 2) == "-011"
@@ -331,6 +338,8 @@ end
     # The following have bases powers of 2, but don't enter the fast path
     @test digits(-3, base = 2) == -[1, 1]
     @test digits(-42, base = 4) == -[2, 2, 2]
+
+    @test_throws DomainError string(5, base = typemin(Int128) + 10)
 
     @testset "digits/base with bases powers of 2" begin
         @test digits(4, base = 2) == [0, 0, 1]
