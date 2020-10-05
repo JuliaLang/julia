@@ -47,7 +47,7 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start; stop, length) # any one keyword, creates a UnitRange (step = 1)
+    range(start; stop, length) # any one keyword, step = 1
     range(start, stop; length, step) # any one keyword
     range(start; stop, length, step) # any two keywords
 
