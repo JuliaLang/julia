@@ -129,10 +129,6 @@ end
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
-# run-time library
-include("runtime/runtime.jl")
-using .Runtime
-
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
