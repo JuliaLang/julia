@@ -250,6 +250,7 @@ julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Minute(50000)))
 4 weeks, 6 days, 17 hours, 20 minutes
 ```
 """
+canonicalize(x::Period) = canonicalize(CompoundPeriod(x))
 function canonicalize(x::CompoundPeriod)
     # canonicalize Periods by pushing "overflow" into a coarser period.
     p = x.periods
