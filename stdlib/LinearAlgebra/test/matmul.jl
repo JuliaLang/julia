@@ -766,4 +766,37 @@ end
     @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
 end
 
+@testset "3-argument *" begin
+    x = [1, 2im]
+    y = [im, 20, 30+40im]
+    z = [-1, 200+im, -3]
+    A = [1 2 3im; 4 5 6+im]
+    B = [-10 -20; -30 -40]
+    a = 3 + im * round(Int, 10^6*(pi-3))
+
+    @test x'*A*y == (x'*A)*y == x'*(A*y)
+
+    @test B*A*y == (B*A)*y == B*(A*y)
+
+    @test a*A*y == (a*A)*y == a*(A*y)
+    @test A*y*a == (A*y)*a == A*(y*a)
+
+    @test a*B*A == (a*B)*A == a*(B*A)
+    @test B*A*a == (B*A)*a == B*(A*a)
+
+    @test a*y'*z == (a*y')*z == a*(y'*z)
+    @test y'*z*a == (y'*z)*a == y'*(z*a)
+
+    @test a*y*z' == (a*y)*z' == a*(y*z')
+    @test y*z'*a == (y*z')*a == y*(z'*a)
+
+    @test a*x'*A == (a*x')*A == a*(x'*A)
+    @test x'*A*a == (x'*A)*a == x'*(A*a)
+    @test a*x'*A isa Adjoint
+
+    @test a*transpose(x)*A == (a*transpose(x))*A == a*(transpose(x)*A)
+    @test transpose(x)*A*a == (transpose(x)*A)*a == transpose(x)*(A*a)
+    @test a*transpose(x)*A isa Transpose
+end
+
 end # module TestMatmul

@@ -1081,3 +1081,33 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
     end # inbounds
     C
 end
+
+# Three-argument *
+*(x::AdjointAbsVec{<:Number}, A::AbstractMatrix, y::AbstractVector) = dot(x.parent,A,y)
+*(x::TransposeAbsVec{<:Real}, A::AbstractMatrix, y::AbstractVector) = dot(x.parent,A,y)
+
+*(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = A*(B*x)
+
+*(α::Number, A::AbstractMatrix, x::AbstractVector) = _scalar_mat_vec(α,A,x)
+*(α::Number, A::AbstractMatrix, B::AbstractMatrix) = _scalar_mat_mat(α,A,B)
+*(A::AbstractMatrix, x::AbstractVector, α::Number) = _scalar_mat_vec(α,A,x)
+*(A::AbstractMatrix, B::AbstractMatrix, α::Number) = _scalar_mat_mat(α,A,B)
+
+*(α::Number, u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, α, u, v)
+*(u::AbstractVector, v::AdjOrTransAbsVec, α::Number) = broadcast(*, u, v, α)
+
+function _scalar_mat_vec(α, A, x)
+    T = promote_type(typeof(α), eltype(A), eltype(x))
+    C = similar(A, T, axes(A,1))
+    mul!(C, A, x, α, false)
+end
+function _scalar_mat_mat(α, A, B)
+    T = promote_type(typeof(α), eltype(A), eltype(B))
+    C = similar(A, T, axes(A,1), axes(B,2))
+    mul!(C, A, B, α, false)
+end
+
+_scalar_mat_vec(α, A::AdjOrTransAbsVec, x) = α * (A * x)
+
+_scalar_mat_mat(α, A::AdjointAbsVec, B) = scalar_mat_vec(α', B', A')'
+_scalar_mat_mat(α, A::TransposeAbsVec, B) = transpose(scalar_mat_vec(α, transpose(B), transpose(A)))
