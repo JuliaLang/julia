@@ -773,6 +773,7 @@ end
     A = [1 2 3im; 4 5 6+im]
     B = [-10 -20; -30 -40]
     a = 3 + im * round(Int, 10^6*(pi-3))
+    b = 123
 
     @test x'*A*y == (x'*A)*y == x'*(A*y)
 

@@ -1083,10 +1083,7 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
 end
 
 # Three-argument *
-*(x::AdjointAbsVec{<:Number}, A::AbstractMatrix, y::AbstractVector) = dot(x.parent,A,y)
-*(x::TransposeAbsVec{<:Real}, A::AbstractMatrix, y::AbstractVector) = dot(x.parent,A,y)
-
-*(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = A*(B*x)
+*(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = _mat_mat_vec(A,B,x)
 
 *(α::Number, A::AbstractMatrix, x::AbstractVector) = _scalar_mat_vec(α,A,x)
 *(α::Number, A::AbstractMatrix, B::AbstractMatrix) = _scalar_mat_mat(α,A,B)
@@ -1102,6 +1099,14 @@ end
 
 *(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix) = _tri_matmul(A,B,C)
 *(tv::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix) = (tv*B) * C
+
+function _mat_mat_vec(A,B,x)
+    if A isa AdjointAbsVec{<:Number} || A isa TransposeAbsVec{<:Real}
+        dot(A.parent, B, x)
+    else
+        A * (B*x)
+    end
+end
 
 function _scalar_mat_vec(α, A, x)
     T = promote_type(typeof(α), eltype(A), eltype(x))
