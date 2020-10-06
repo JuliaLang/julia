@@ -8,10 +8,24 @@ function typeinf(interp::AbstractInterpreter, result::InferenceResult, cached::B
     return typeinf(interp, frame)
 end
 
+"""
+The module `Core.Compiler.Timings` provides a simple implementation of nested timers that
+can be used to measure the exclusive time spent inferring each method instance that is
+recursively inferred during type inference.
+
+This is meant to be internal to the compiler, and makes some specific assumptions about
+being used for this purpose alone.
+"""
 module Timings
 
 using Core.Compiler: -, +, length, push!, pop!, @inline, @inbounds
 
+"""
+    Core.Compiler.Timing(name, start_time, ...)
+
+Internal type containing the timing result for running type inference on a single
+MethodInstance.
+"""
 struct Timing
     name::Any
     start_time::UInt64
@@ -22,29 +36,33 @@ struct Timing
     Timing(name, start_time) = new(name, start_time, start_time, UInt64(0), Timing[])
 end
 
-time_ns() = ccall(:jl_hrtime, UInt64, ())
+_time_ns() = ccall(:jl_hrtime, UInt64, ())  # Re-implemented here because Base not yet available.
 
+# We keep a stack of the Timings for each of the MethodInstances currently being timed.
+# Since type inference currently operates via a depth-first search (during abstract
+# evaluation), this vector operates like a call stack. The last node in _timings is the
+# node currently being inferred, and its parent is directly before it, etc.
+# Each Timing also contains its own vector for all of its children, so that the tree
+# call structure through type inference is recorded. (It's recorded as a tree, not a graph,
+# because we create a new node for duplicates.)
 const _timings = Timing[]
+"""
+    Core.Compiler.reset_timings()
+Empty out the previously recorded type inference timings, and start the "root" timer again.
+"""
 function reset_timings()
     Core.Compiler.empty!(_timings)
-    Core.Compiler.push!(_timings, Timing("root", time_ns()))
+    Core.Compiler.push!(_timings, Timing("root", _time_ns()))
     nothing
 end
 reset_timings()
 
-function close_current_timer()
-    stop_time = time_ns()
+# (This is split into a function so that it can be called both here and once at the Very
+# End of the operation, by whoever started the operation and called `reset_timings()`.)
+@inline function close_current_timer()
+    stop_time = _time_ns()
     parent_timer = _timings[end]
     accum_time = Core.Compiler.:(-)(stop_time, parent_timer.cur_start_time)
-end
-
-@inline function enter_new_timer(name)
-    # Stop the current timer before recursing into the child
-    stop_time = Timings.time_ns()
-
-    _timings = Timings._timings
-    parent_timer = _timings[end]
-    accum_time = stop_time - parent_timer.cur_start_time
 
     # Add in accum_time ("modify" the immutable struct)
     @inbounds begin
@@ -56,6 +74,13 @@ end
             parent_timer.children,
         )
     end
+    return nothing
+end
+
+@inline function enter_new_timer(name)
+    # Very first thing, stop the active timer: get the current time and add in the
+    # time since it was last started to its aggregate exclussive time.
+    close_current_timer()
 
     # Start the new timer right before returning
     push!(_timings, Timings.Timing(name, UInt64(0)))
@@ -63,7 +88,7 @@ end
     new_timer = @inbounds _timings[len]
     # Set the current time _after_ appending the node, to try to exclude the
     # overhead from measurement.
-    start = Timings.time_ns()
+    start = Timings._time_ns()
 
     @inbounds begin
         _timings[len] = Timings.Timing(
@@ -75,13 +100,12 @@ end
         )
     end
 
-    # IDEA:
-    # _timings_values[end] = Timings.time_ns()
+    return nothing
 end
 
 @inline function exit_current_timer(_expected_name_)
     # Finish the new timer
-    stop_time = Timings.time_ns()
+    stop_time = Timings._time_ns()
 
     # Grab the new timer again because it might have been modified in _timings
     # (since it's an immutable struct)
@@ -109,28 +133,31 @@ end
         _timings[len] = Timings.Timing(
             parent_timer.name,
             parent_timer.start_time,
-            Timings.time_ns(),
+            Timings._time_ns(),
             parent_timer.time,
             parent_timer.children,
         )
     end
-end
 
+    return nothing
+end
 
 end  # module Timings
 
-# TODO(PR): What's the right way to do a global const mutable boolean in Core.Compiler?
-const __measure_typeinf__ = fill(false)
+"""
+    Core.Compiler.__toggle_measure_typeinf(true)
+    Core.Compiler.__toggle_measure_typeinf(false)
+Toggle recording per-method-instance timings within type inference in the Compiler.
+"""
 __toggle_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
+const __measure_typeinf__ = fill(false)
 
+# Wrapper around _typeinf that optionally records the exclusive time for each invocation.
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     if __measure_typeinf__[]
         Timings.enter_new_timer(frame.linfo.specTypes)
-
         v = _typeinf(interp, frame)
-
         Timings.exit_current_timer(frame.linfo.specTypes)
-
         return v
     else
         return _typeinf(interp, frame)
