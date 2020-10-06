@@ -185,9 +185,8 @@ end
 """
     muladd(A, y, z)
 
-Combined multiply-add, `A*y .+ z`, for either matrix-matrix multiplication or
-matrix-vector multiplication. The result is always the size of `A*y`, although
-`z` may have fewer dimensions.
+Combined multiply-add, `A*y .+ z`, for matrix-matrix or matrix-vector multiplication.
+The result is always the size of `A*y`, but `z` may be smaller, or a scalar.
 
 !!! compat "Julia 1.6"
      These methods require Julia 1.6 or later.
@@ -220,18 +219,13 @@ Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z) = muladd(A', x', z')'
 Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z) = transpose(muladd(transpose(A), transpose(x), transpose(z)))
 
 function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z)
-    if z isa AbstractArray
-        ndims(z) > 2 && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
-    end
+    ndims(z) > 2 && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
     (u .* v) .+ z
 end
 
 function Base.muladd(u::AdjOrTransAbsVec, v::AbstractVector, z)
     uv = _dot_nonrecursive(u, v)
-    if z isa AbstractArray
-        uv isa AbstractArray && ndims(uv) <= ndims(z) ||
-            throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
-    end
+    ndims(z) > ndims(uv) && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
     uv .+ z
 end
 

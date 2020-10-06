@@ -323,6 +323,15 @@ end
     @test muladd(u2', u2, 0) isa Number
     @test muladd(v3', v3, im) == dot(v3,v3) + im
     @test_throws DimensionMismatch muladd(v3', v3, [1])
+
+    vofm = [rand(1:9,2,2) for _ in 1:3]
+    Mofm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
+
+    @test muladd(vofm', vofm, vofm[1]) == vofm' * vofm .+ vofm[1] # inner
+    @test muladd(vofm, vofm', Mofm) == vofm * vofm' .+ Mofm       # outer
+    @test muladd(vofm', Mofm, vofm') == vofm' * Mofm .+ vofm'     # bra-mat
+    @test muladd(Mofm, Mofm, vofm) == Mofm * Mofm .+ vofm         # mat-mat
+    @test_broken muladd(Mofm, vofm, vofm) == Mofm * vofm .+ vofm  # mat-vec
 end
 
 # issue #6450
