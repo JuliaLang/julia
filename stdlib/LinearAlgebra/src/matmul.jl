@@ -1121,26 +1121,6 @@ function _mat_mat_vec(A,B,x)
     end
 end
 
-function mat_vec_scalar(A, x, γ)
-    T = promote_type(eltype(A), eltype(x), typeof(γ))
-    C = similar(A, T, axes(A,1))
-    mul!(C, A, x, γ, false)
-end
-
-mat_vec_scalar(A::AdjOrTransAbsVec, x, γ) = (A * x) * γ
-
-function mat_mat_scalar(A, B, γ)
-    T = promote_type(eltype(A), eltype(B), typeof(γ))
-    C = similar(A, T, axes(A,1), axes(B,2))
-    mul!(C, A, B, γ, false)
-end
-
-mat_mat_scalar(A::AdjointAbsVec, B, γ::Union{Real,Complex}) = mat_vec_scalar(B', A', γ')'
-mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
-
-mat_mat_scalar(A::TransposeAbsVec, B, γ::Union{Real,Complex}) = transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
-mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
-
 function _tri_matmul(A,B,C)
     n,m = size(A)
     # m,k == size(B)
@@ -1153,3 +1133,33 @@ function _tri_matmul(A,B,C)
         (A*B) * C
     end
 end
+
+# The fast path for two arrays * one scalar is opt-in.
+_SafeMatrix{T} = Union{StridedMatrix{T}, AdjOrTransAbsMat{T, <:StridedMatrix}}
+
+mat_vec_scalar(A, x, γ) = (A*x) .* γ  # fallback
+mat_vec_scalar(A::_SafeMatrix, x::StridedVector, γ) = _mat_vec_scalar(A, x, γ)
+mat_vec_scalar(A::AdjOrTransAbsVec, x::StridedVector, γ) = (A * x) * γ
+
+function _mat_vec_scalar(A, x, γ)
+    T = promote_type(eltype(A), eltype(x), typeof(γ))
+    C = similar(A, T, axes(A,1))
+    mul!(C, A, x, γ, false)
+end
+
+mat_mat_scalar(A, B, γ) = (A*B) .* γ # fallback
+mat_mat_scalar(A::_SafeMatrix, B::_SafeMatrix, γ) = _mat_mat_scalar(A, B, γ)
+
+function _mat_mat_scalar(A, B, γ)
+    T = promote_type(eltype(A), eltype(B), typeof(γ))
+    C = similar(A, T, axes(A,1), axes(B,2))
+    mul!(C, A, B, γ, false)
+end
+
+mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
+mat_mat_scalar(A::AdjointAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) = mat_vec_scalar(B', A', γ')'
+
+mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
+mat_mat_scalar(A::TransposeAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) =
+    transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
+
