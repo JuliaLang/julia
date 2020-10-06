@@ -1719,6 +1719,7 @@ end
     else
         len = @ccall swprintf(buffer::Ptr{Cwchar_t}, n::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
     end
+    Libc.systemerror("swprintf", len < 0)
     str = GC.@preserve buffer unsafe_string(pointer(buffer), len)
     @test str == "α+β=15"
     str = GC.@preserve buffer unsafe_string(Cwstring(pointer(buffer)))
