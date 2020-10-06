@@ -766,7 +766,7 @@ end
     @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
 end
 
-@testset "3-argument *" begin
+@testset "3-arg *, order by type" begin
     x = [1, 2im]
     y = [im, 20, 30+40im]
     z = [-1, 200+im, -3]
@@ -797,6 +797,15 @@ end
     @test a*transpose(x)*A == (a*transpose(x))*A == a*(transpose(x)*A)
     @test transpose(x)*A*a == (transpose(x)*A)*a == transpose(x)*(A*a)
     @test a*transpose(x)*A isa Transpose
+end
+
+@testset "3-arg *, order by size" begin
+    M44 = randn(4,4)
+    M24 = randn(2,4)
+    M42 = randn(4,2)
+    @test M44*M44*M44 ≈ (M44*M44)*M44 ≈ M44*(M44*M44)
+    @test M42*M24*M44 ≈ (M42*M24)*M44 ≈ M42*(M24*M44)
+    @test M44*M42*M24 ≈ (M44*M42)*M24 ≈ M44*(M42*M24)
 end
 
 end # module TestMatmul

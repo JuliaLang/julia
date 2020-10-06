@@ -1096,6 +1096,8 @@ end
 *(α::Number, u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, α, u, v)
 *(u::AbstractVector, v::AdjOrTransAbsVec, α::Number) = broadcast(*, u, v, α)
 
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix) = _tri_matmul(A,B,C)
+
 function _scalar_mat_vec(α, A, x)
     T = promote_type(typeof(α), eltype(A), eltype(x))
     C = similar(A, T, axes(A,1))
@@ -1111,3 +1113,16 @@ _scalar_mat_vec(α, A::AdjOrTransAbsVec, x) = α * (A * x)
 
 _scalar_mat_mat(α, A::AdjointAbsVec, B) = scalar_mat_vec(α', B', A')'
 _scalar_mat_mat(α, A::TransposeAbsVec, B) = transpose(scalar_mat_vec(α, transpose(B), transpose(A)))
+
+function _tri_matmul(A,B,C)
+    n,m = size(A)
+    # m,k == size(B)
+    k,l = size(C)
+    costAB_C = n*m*k + n*k*l
+    costA_BC = m*k*l + n*m*l
+    if costA_BC < costAB_C
+        A * (B*C)
+    else
+        (A*B) * C
+    end
+end
