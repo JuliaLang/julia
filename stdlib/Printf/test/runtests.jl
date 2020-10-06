@@ -303,6 +303,12 @@ end
 @testset "basics" begin
 
     @test Printf.@sprintf("%%") == "%"
+    @test Printf.@sprintf("1%%") == "1%"
+    @test Printf.@sprintf("%%1") == "%1"
+    @test Printf.@sprintf("1%%2") == "1%2"
+    @test Printf.@sprintf("1%%%d", 2) == "1%2"
+    @test Printf.@sprintf("1%%2%%3") == "1%2%3"
+    @test Printf.@sprintf("GAP[%%]") == "GAP[%]"
     @test Printf.@sprintf("hey there") == "hey there"
     @test_throws ArgumentError Printf.Format("")
     @test_throws ArgumentError Printf.Format("%+")

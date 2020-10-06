@@ -80,10 +80,19 @@ function Format(f::AbstractString)
     len = length(bytes)
     pos = 1
     b = 0x00
-    while true
+    while pos <= len
         b = bytes[pos]
         pos += 1
-        (pos > len || (b == UInt8('%') && pos <= len && bytes[pos] != UInt8('%'))) && break
+        if b == UInt8('%')
+            pos > len && throw(ArgumentError("invalid format string: '$f'"))
+            if bytes[pos] == UInt8('%')
+                # escaped '%'
+                b = bytes[pos]
+                pos += 1
+            else
+                break
+            end
+        end
     end
     strs = [1:pos - 1 - (b == UInt8('%'))]
     fmts = []
