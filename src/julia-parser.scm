@@ -1045,7 +1045,10 @@
 (define (parse-unary-call s op un spc)
   (let ((next (peek-token s)))
     (cond ((or (closing-token? next) (newline? next) (eq? next '=))
-           op)  ; return operator by itself, as in (+)
+           (if (dotop? op)
+               ;; standalone dotted operators are parsed as (|.| op)
+               (list '|.| (undotop op))
+               op))  ; return operator by itself, as in (+)
           ((or (eqv? next #\{)  ;; this case is +{T}(x::T) = ...
                (and (not un) (eqv? next #\( )))
            (ts:put-back! s op spc)

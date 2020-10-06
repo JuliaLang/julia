@@ -1511,7 +1511,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && (nargs != 2 || !is_expr(args[2], :tuple))
-        if nargs == 2 && is_quoted(args[2])
+        # standalone .op
+        if nargs == 1 && args[1] isa Symbol && isoperator(args[1])
+            print(io, "(.", args[1], ")")
+        elseif nargs == 2 && is_quoted(args[2])
             item = args[1]
             # field
             field = unquoted(args[2])

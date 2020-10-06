@@ -861,7 +861,7 @@ let f = function (x::T, y::S) where T<:S where S
 end
 
 # issue #20541
-@test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
+@test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :.!, :b))
 
 @test Meta.lower(Main, :(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
 @test Meta.lower(Main, :(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
@@ -2342,6 +2342,25 @@ else
 end
 
 @test :(a +ꜝ b) == Expr(:call, :+ꜝ, :a, :b)
+
+function ncalls_in_lowered(ex, fname)
+    lowered_exprs = Meta.lower(Main, ex).args[1].code
+    return count(lowered_exprs) do ex
+        Meta.isexpr(ex, :call) && ex.args[1] == fname
+    end
+end
+
+@testset "standalone .op" begin
+    @test :(.+) == Expr(:., :+)
+    @test :(map(.-, a)) == Expr(:call, :map, Expr(:., :-), :a)
+
+    @test ncalls_in_lowered(:(.*), GlobalRef(Base, :BroadcastFunction)) == 1
+    @test ncalls_in_lowered(:((.^).(a, b)), GlobalRef(Base, :broadcasted)) == 1
+    @test ncalls_in_lowered(:((.^).(a, b)), GlobalRef(Base, :BroadcastFunction)) == 1
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :broadcasted)) == 3
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :BroadcastFunction)) == 0
+end
 
 # issue #37656
 @test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
