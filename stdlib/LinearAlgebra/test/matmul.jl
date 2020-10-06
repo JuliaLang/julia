@@ -809,6 +809,14 @@ end
     @test a*b*A == (a*b)*A == a*(b*A)
     @test a*A*b == (a*A)*b == a*(A*b)
     @test A*a*b == (A*a)*b == A*(a*b)
+
+    vm = [rand(1:9,2,2) for _ in 1:3]
+    Mm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
+
+    @test vm' * Mm * vm == (vm' * Mm) * vm == vm' * (Mm * vm)
+    @test Mm * Mm' * vm == (Mm * Mm') * vm == Mm * (Mm' * vm)
+    @test vm' * Mm * Mm == (vm' * Mm) * Mm == vm' * (Mm * Mm)
+    @test Mm * Mm' * Mm == (Mm * Mm') * Mm == Mm * (Mm' * Mm)
 end
 
 @testset "3-arg *, order by size" begin
