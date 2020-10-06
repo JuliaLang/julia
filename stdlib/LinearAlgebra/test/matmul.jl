@@ -797,6 +797,13 @@ end
     @test a*transpose(x)*A == (a*transpose(x))*A == a*(transpose(x)*A)
     @test transpose(x)*A*a == (transpose(x)*A)*a == transpose(x)*(A*a)
     @test a*transpose(x)*A isa Transpose
+
+    @test x'*B*A == (x'*B)*A == x'*(B*A)
+    @test x'*B*A isa Adjoint
+
+    @test y*x'*A == (y*x')*A == y*(x'*A)
+    y31 = reshape(y,3,1)
+    @test y31*x'*A == (y31*x')*A == y31*(x'*A)
 end
 
 @testset "3-arg *, order by size" begin

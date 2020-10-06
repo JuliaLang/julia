@@ -1093,10 +1093,12 @@ end
 *(A::AbstractMatrix, x::AbstractVector, α::Number) = _scalar_mat_vec(α,A,x)
 *(A::AbstractMatrix, B::AbstractMatrix, α::Number) = _scalar_mat_mat(α,A,B)
 
-*(α::Number, u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, α, u, v)
-*(u::AbstractVector, v::AdjOrTransAbsVec, α::Number) = broadcast(*, u, v, α)
+*(α::Number, u::AbstractVector, tv::AdjOrTransAbsVec) = broadcast(*, α, u, tv)
+*(u::AbstractVector, tv::AdjOrTransAbsVec, α::Number) = broadcast(*, u, tv, α)
+*(u::AbstractVector, tv::AdjOrTransAbsVec, A::AbstractMatrix) = u * (tv*A)
 
 *(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix) = _tri_matmul(A,B,C)
+*(tv::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix) = (tv*B) * C
 
 function _scalar_mat_vec(α, A, x)
     T = promote_type(typeof(α), eltype(A), eltype(x))
@@ -1111,8 +1113,8 @@ end
 
 _scalar_mat_vec(α, A::AdjOrTransAbsVec, x) = α * (A * x)
 
-_scalar_mat_mat(α, A::AdjointAbsVec, B) = scalar_mat_vec(α', B', A')'
-_scalar_mat_mat(α, A::TransposeAbsVec, B) = transpose(scalar_mat_vec(α, transpose(B), transpose(A)))
+_scalar_mat_mat(α, A::AdjointAbsVec, B) = _scalar_mat_vec(α', B', A')'
+_scalar_mat_mat(α, A::TransposeAbsVec, B) = transpose(_scalar_mat_vec(α, transpose(B), transpose(A)))
 
 function _tri_matmul(A,B,C)
     n,m = size(A)
