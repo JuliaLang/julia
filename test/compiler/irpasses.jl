@@ -319,3 +319,26 @@ end
 const _some_coeffs = (1,[2],3,4)
 splat_from_globalref(x) = (x, _some_coeffs...,)
 @test splat_from_globalref(0) == (0, 1, [2], 3, 4)
+
+function pi_on_argument(x)
+    if isa(x, Core.Argument)
+        return x.n
+    end
+    return -2
+end
+let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
+    nisa = 0, found_pi = false
+    for stmt in code
+        if Meta.isexpr(stmt, :call)
+            callee = stmt.args[1]
+            if (callee === isa || callee === :isa || (isa(callee, GlobalRef) &&
+                                                      callee.name === :isa))
+                nisa += 1
+            end
+        elseif stmt === Core.PiNode(Core.Argument(2), Core.Argument)
+            found_pi = true
+        end
+    end
+    @test nisa == 1
+    @test found_pi
+end

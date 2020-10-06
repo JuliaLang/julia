@@ -278,10 +278,10 @@ function complete_path(path::AbstractString, pos::Int; use_envpath=false, shell_
                 filesinpath = readdir(pathdir)
             catch e
                 # Bash allows dirs in PATH that can't be read, so we should as well.
-                if isa(e, Base.IOError)
+                if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
                     continue
                 else
-                    # We only handle IOError here
+                    # We only handle IOError and ArgumentError here
                     rethrow()
                 end
             end

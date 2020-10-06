@@ -97,7 +97,7 @@ mutable struct PromptState <: ModeState
     # indentation of lines which do not include the prompt
     # if negative, the width of the prompt is used
     indent::Int
-    refresh_lock::Threads.AbstractLock
+    refresh_lock::Threads.SpinLock
     # this would better be Threads.Atomic{Float64}, but not supported on some platforms
     beeping::Float64
     # this option is to detect when code is pasted in non-"bracketed paste mode" :
@@ -1512,9 +1512,10 @@ function fixup_keymaps!(dict::Dict{Char,Any}, level, s, subkeymap)
     nothing
 end
 
-function add_specialisations(dict::Dict{Char,Any}, subdict, level)
+function add_specialisations(dict::Dict{Char,Any}, subdict::Dict{Char,Any}, level::Int)
     default_branch = subdict[wildcard]
     if isa(default_branch, Dict)
+        default_branch = default_branch::Dict{Char,Any}
         # Go through all the keymaps in the default branch
         # and copy them over to dict
         for s in keys(default_branch)
@@ -1549,7 +1550,7 @@ end
 
 # `target` is the total keymap being built up, already being a nested tree of Dicts.
 # source is the keymap specified by the user (with normalized keys)
-function keymap_merge(target::Dict{Char,Any}, source::Dict)
+function keymap_merge(target::Dict{Char,Any}, source::Union{Dict{Char,Any},AnyDict})
     ret = copy(target)
     direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Nothing}), source)
     # first direct entries

@@ -19,12 +19,12 @@ call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods::Int = InferenceParams(interp).MAX_METHODS)
-    if sv.currpc in sv.throw_blocks
+    if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
         return CallMeta(Any, false)
     end
     valid_worlds = WorldRange()
     atype_params = unwrap_unionall(atype).parameters
-    splitunions = 1 < countunionsplit(atype_params) <= InferenceParams(interp).MAX_UNION_SPLITTING
+    splitunions = 1 < unionsplitcost(atype_params) <= InferenceParams(interp).MAX_UNION_SPLITTING
     mts = Core.MethodTable[]
     fullmatch = Bool[]
     if splitunions
@@ -95,7 +95,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
         val = pure_eval_call(f, argtypes)
         if val !== false
-            return CallMeta(val, info)
+            # TODO: add some sort of edge(s)
+            return CallMeta(val, MethodResultPure())
         end
     end
 
@@ -112,7 +113,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         sigtuple = unwrap_unionall(sig)::DataType
         splitunions = false
         this_rt = Bottom
-        # TODO: splitunions = 1 < countunionsplit(sigtuple.parameters) * napplicable <= InferenceParams(interp).MAX_UNION_SPLITTING
+        # TODO: splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).MAX_UNION_SPLITTING
         # currently this triggers a bug in inference recursion detection
         if splitunions
             splitsigs = switchtupleunion(sig)
@@ -620,7 +621,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     while valtype !== Any
         stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv).rt
         stateordonet = widenconst(stateordonet)
-        nounion = typesubtract(stateordonet, Nothing)
+        nounion = typesubtract(stateordonet, Nothing, 0)
         if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
             valtype = Any
             break
@@ -653,7 +654,7 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
     end
     res = Union{}
     nargs = length(aargtypes)
-    splitunions = 1 < countunionsplit(aargtypes) <= InferenceParams(interp).MAX_APPLY_UNION_ENUM
+    splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).MAX_APPLY_UNION_ENUM
     ctypes = Any[Any[aft]]
     infos = [Union{Nothing, AbstractIterationInfo}[]]
     for i = 1:nargs
@@ -749,8 +750,7 @@ function pure_eval_call(@nospecialize(f), argtypes::Vector{Any})
     args = Any[ (a = widenconditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
     try
         value = Core._apply_pure(f, args)
-        # TODO: add some sort of edge(s)
-        return Const(value, true)
+        return Const(value)
     catch
         return false
     end
@@ -814,7 +814,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                     tty_lb = tty_ub # TODO: this would be wrong if !isexact_tty, but instanceof_tfunc doesn't preserve this info
                     if !has_free_typevars(tty_lb) && !has_free_typevars(tty_ub)
                         ifty = typeintersect(aty, tty_ub)
-                        elty = typesubtract(aty, tty_lb)
+                        elty = typesubtract(aty, tty_lb, InferenceParams(interp).MAX_UNION_SPLITTING)
                         return Conditional(a, ifty, elty)
                     end
                 end
@@ -831,7 +831,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 elseif rt === Const(true)
                     bty = Union{}
                 elseif bty isa Type && isdefined(typeof(aty.val), :instance) # can only widen a if it is a singleton
-                    bty = typesubtract(bty, typeof(aty.val))
+                    bty = typesubtract(bty, typeof(aty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
                 end
                 return Conditional(b, aty, bty)
             end
@@ -841,7 +841,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 elseif rt === Const(true)
                     aty = Union{}
                 elseif aty isa Type && isdefined(typeof(bty.val), :instance) # same for b
-                    aty = typesubtract(aty, typeof(bty.val))
+                    aty = typesubtract(aty, typeof(bty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
                 end
                 return Conditional(a, bty, aty)
             end
@@ -997,7 +997,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)
         val = pure_eval_call(f, argtypes)
-        return CallMeta(val === false ? Type : val, false)
+        return CallMeta(val === false ? Type : val, MethodResultPure())
     end
     atype = argtypes_to_type(argtypes)
     return abstract_call_gf_by_type(interp, f, argtypes, atype, sv, max_methods)
@@ -1175,10 +1175,10 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
             if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val) &&
-                    _all(i->at.val[i] isa fieldtype(t, i), 1:n)
+                let t = t, at = at; _all(i->at.val[i] isa fieldtype(t, i), 1:n); end
                 t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
             elseif isa(at, PartialStruct) && at ⊑ Tuple && n == length(at.fields) &&
-                    _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n)
+                let t = t, at = at; _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n); end
                 t = PartialStruct(t, at.fields)
             end
         end
@@ -1330,8 +1330,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
-                elseif isa(rt, Const) && rt.actual
-                    rt = Const(rt.val)
                 end
                 if tchanged(rt, frame.bestguess)
                     # new (wider) return type for frame

@@ -159,7 +159,7 @@ endif
 	#NB: must be the last lines of the recipe, else signature may be invalidated.
 
 	# Codesign should look at the embedded Info.plist to get the signing identifier.
-	# See JLDFLAGS in Make.inc for Darwin platform and Info.plist target in ui/Makefile.
+	# See JLDFLAGS in Make.inc for Darwin platform and Info.plist target in cli/Makefile.
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia-debug

@@ -678,7 +678,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
     if m !== nothing
         while parentmodule(m) !== m
@@ -698,7 +698,7 @@ end
 
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = replaceuserpath(file))

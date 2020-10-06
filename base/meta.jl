@@ -226,11 +226,11 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
 end
 
 function parseatom(text::AbstractString, pos::Integer; filename="none")
-    return _parse_string(text, filename, pos, :atom)
+    return _parse_string(text, String(filename), pos, :atom)
 end
 
 function parseall(text::AbstractString; filename="none")
-    ex,_ = _parse_string(text, filename, 1, :all)
+    ex,_ = _parse_string(text, String(filename), 1, :all)
     return ex
 end
 

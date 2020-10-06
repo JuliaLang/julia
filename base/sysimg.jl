@@ -47,10 +47,17 @@ let
             :Distributed,
             :SharedArrays,
             :TOML,
+            :Artifacts,
             :Pkg,
             :Test,
             :REPL,
             :Statistics,
+            :MozillaCACerts_jll,
+            :LibCURL_jll,
+            :LibCURL,
+            :Downloads,
+            :ArgTools,
+            :Tar,
         ]
 
     maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)

@@ -115,6 +115,20 @@ using .Iterators: Flatten, Filter, product  # for generators
 
 include("namedtuple.jl")
 
+# For OS specific stuff
+# We need to strcat things here, before strings are really defined
+function strcat(x::String, y::String)
+    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), Core.sizeof(x) + Core.sizeof(y))
+    GC.@preserve x y out begin
+        out_ptr = unsafe_convert(Ptr{UInt8}, out)
+        unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
+        unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
+    end
+    return out
+end
+include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
+include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -162,10 +176,6 @@ include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
 include("strings/substring.jl")
-
-# For OS specific stuff
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
 # Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
 # a slightly more verbose fashion than usual, because we're running so early.
@@ -236,6 +246,9 @@ include("weakkeydict.jl")
 include("logging.jl")
 using .CoreLogging
 
+# BinaryPlatforms, used by Artifacts
+include("binaryplatforms.jl")
+
 # functions defined in Random
 function rand end
 function randn end
@@ -250,7 +263,6 @@ using .Filesystem
 include("cmd.jl")
 include("process.jl")
 include("ttyhascolor.jl")
-include("grisu/grisu.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -264,7 +276,7 @@ const (∛)=cbrt
 delete_method(which(include, (Module, String)))
 let SOURCE_PATH = ""
     global function include(mod::Module, path::String)
-        prev = SOURCE_PATH
+        prev = SOURCE_PATH::String
         path = normpath(joinpath(dirname(prev), path))
         Core.println(path)
         ccall(:jl_uv_flush, Nothing, (Ptr{Nothing},), Core.io_pointer(Core.stdout))
@@ -323,15 +335,15 @@ using .MathConstants: ℯ, π, pi
 # metaprogramming
 include("meta.jl")
 
+# Stack frames and traces
+include("stacktraces.jl")
+using .StackTraces
+
 # utilities
 include("deepcopy.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
-
-# Stack frames and traces
-include("stacktraces.jl")
-using .StackTraces
 
 include("initdefs.jl")
 
@@ -379,6 +391,9 @@ include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexp
 
 end_base_include = time_ns()
 
+const _sysimage_modules = PkgId[]
+in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
+
 if is_primary_base_module
 function __init__()
     # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
@@ -403,6 +418,7 @@ function __init__()
     init_depot_path()
     init_load_path()
     init_active_project()
+    append!(empty!(_sysimage_modules), keys(loaded_modules))
     nothing
 end
 

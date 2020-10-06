@@ -104,6 +104,8 @@ end
 NamedTuple{names, T}(itr) where {names, T <: Tuple} = NamedTuple{names, T}(T(itr))
 NamedTuple{names}(itr) where {names} = NamedTuple{names}(Tuple(itr))
 
+NamedTuple(itr) = (; itr...)
+
 end # if Base
 
 length(t::NamedTuple) = nfields(t)
@@ -250,6 +252,8 @@ merge(a::NamedTuple{()}, b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple)     = b
 
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
+
+merge(a::NamedTuple, b::Iterators.Zip{<:Tuple{Any,Any}}) = merge(a, NamedTuple{Tuple(b.is[1])}(b.is[2]))
 
 merge(a::NamedTuple, b::NamedTuple, cs::NamedTuple...) = merge(merge(a, b), cs...)
 

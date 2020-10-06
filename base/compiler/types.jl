@@ -44,7 +44,7 @@ struct OptimizationParams
     inlining::Bool              # whether inlining is enabled
     inline_cost_threshold::Int  # number of CPU cycles beyond which it's not worth inlining
     inline_nonleaf_penalty::Int # penalty for dynamic dispatch
-    inline_tupleret_bonus::Int  # extra willingness for non-isbits tuple return types
+    inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
     inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
 
     # Duplicating for now because optimizer inlining requires it.
@@ -53,15 +53,18 @@ struct OptimizationParams
     MAX_TUPLE_SPLAT::Int
     MAX_UNION_SPLITTING::Int
 
+    unoptimize_throw_blocks::Bool
+
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
             inline_cost_threshold::Int = 100,
             inline_nonleaf_penalty::Int = 1000,
-            inline_tupleret_bonus::Int = 400,
+            inline_tupleret_bonus::Int = 250,
             inline_error_path_cost::Int = 20,
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
+            unoptimize_throw_blocks::Bool = true,
         )
         return new(
             inlining,
@@ -72,6 +75,7 @@ struct OptimizationParams
             max_methods,
             tuple_splat,
             union_splitting,
+            unoptimize_throw_blocks,
         )
     end
 end
@@ -84,6 +88,7 @@ Parameters that control type inference operation.
 struct InferenceParams
     ipo_constant_propagation::Bool
     aggressive_constant_propagation::Bool
+    unoptimize_throw_blocks::Bool
 
     # don't consider more than N methods. this trades off between
     # compiler performance and generated code performance.
@@ -109,6 +114,7 @@ struct InferenceParams
     function InferenceParams(;
             ipo_constant_propagation::Bool = true,
             aggressive_constant_propagation::Bool = false,
+            unoptimize_throw_blocks::Bool = true,
             max_methods::Int = 3,
             union_splitting::Int = 4,
             apply_union_enum::Int = 8,
@@ -118,6 +124,7 @@ struct InferenceParams
         return new(
             ipo_constant_propagation,
             aggressive_constant_propagation,
+            unoptimize_throw_blocks,
             max_methods,
             union_splitting,
             apply_union_enum,

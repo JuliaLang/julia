@@ -606,6 +606,40 @@ maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be 
 minimum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
+"""
+    argmin(r::AbstractRange)
+
+Ranges can have multiple minimal elements. In that case
+`argmin` will return a minimal index, but not necessarily the
+first one.
+"""
+function argmin(r::AbstractRange)
+    if isempty(r)
+        throw(ArgumentError("range must be non-empty"))
+    elseif step(r) > 0
+        firstindex(r)
+    else
+        first(searchsorted(r, last(r)))
+    end
+end
+
+"""
+    argmax(r::AbstractRange)
+
+Ranges can have multiple maximal elements. In that case
+`argmax` will return a maximal index, but not necessarily the
+first one.
+"""
+function argmax(r::AbstractRange)
+    if isempty(r)
+        throw(ArgumentError("range must be non-empty"))
+    elseif step(r) > 0
+        first(searchsorted(r, last(r)))
+    else
+        firstindex(r)
+    end
+end
+
 extrema(r::AbstractRange) = (minimum(r), maximum(r))
 
 # Ranges are immutable
@@ -990,15 +1024,15 @@ end
 Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
 collect(r::AbstractRange) = vcat(r)
 
-reverse(r::OrdinalRange) = (:)(last(r), -step(r), first(r))
-function reverse(r::StepRangeLen)
+_reverse(r::OrdinalRange, ::Colon) = (:)(last(r), -step(r), first(r))
+function _reverse(r::StepRangeLen, ::Colon)
     # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
     # invalid. As `reverse(r)` is also empty, any offset would work so we keep
     # `r.offset`
     offset = isempty(r) ? r.offset : length(r)-r.offset+1
     StepRangeLen(r.ref, -r.step, length(r), offset)
 end
-reverse(r::LinRange{T}) where {T} = LinRange{T}(r.stop, r.start, length(r))
+_reverse(r::LinRange{T}, ::Colon) where {T} = LinRange{T}(r.stop, r.start, length(r))
 
 ## sorting ##
 

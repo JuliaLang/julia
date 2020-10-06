@@ -18,7 +18,6 @@ export @test, @test_throws, @test_broken, @test_skip,
     @test_logs, @test_deprecated
 
 export @testset
-# Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
@@ -29,7 +28,7 @@ import Distributed: myid
 using Random
 using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
-using Core.Compiler: typesubtract
+using Base: typesplit
 
 const DISPLAY_FAILED = (
     :isequal,
@@ -147,7 +146,7 @@ mutable struct Error <: Result
     test_type::Symbol
     orig_expr
     value
-    backtrace
+    backtrace::String
     source::LineNumberNode
 
     function Error(test_type, orig_expr, value, bt, source)
@@ -1238,7 +1237,7 @@ function parse_testset_args(args)
         elseif isa(arg, Expr) && arg.head === :(=)
             # we're building up a Dict literal here
             key = Expr(:quote, arg.args[1])
-            push!(options.args, Expr(:call, :(=>), key, arg.args[2]))
+            push!(options.args, Expr(:call, :(=>), key, esc(arg.args[2])))
         else
             error("Unexpected argument $arg to @testset")
         end
@@ -1321,7 +1320,7 @@ Int64
 
 julia> @code_warntype f(2)
 Variables
-  #self#::Core.Const(f, false)
+  #self#::Core.Const(f)
   a::Int64
 
 Body::UNION{FLOAT64, INT64}
@@ -1394,7 +1393,7 @@ function _inferred(ex, mod, allow = :(Union{}))
             end)
             @assert length(inftypes) == 1
             rettype = result isa Type ? Type{result} : typeof(result)
-            rettype <: allow || rettype == typesubtract(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            rettype <: allow || rettype == typesplit(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
             result
         end
     end)

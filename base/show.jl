@@ -85,6 +85,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
+    recur_io_k = IOContext(recur_io, :typeinfo=>keytype(t))
+    recur_io_v = IOContext(recur_io, :typeinfo=>valtype(t))
 
     summary(io, t)
     isempty(t) && return
@@ -105,8 +107,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(show, k, context=recur_io, sizehint=0)
-            vs[i] = sprint(show, v, context=recur_io, sizehint=0)
+            ks[i] = sprint(show, k, context=recur_io_k, sizehint=0)
+            vs[i] = sprint(show, v, context=recur_io_v, sizehint=0)
             keylen = clamp(length(ks[i]), keylen, cols)
             vallen = clamp(length(vs[i]), vallen, cols)
         end
@@ -127,7 +129,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
         else
-            key = sprint(show, k, context=recur_io, sizehint=0)
+            key = sprint(show, k, context=recur_io_k, sizehint=0)
         end
         print(recur_io, key)
         print(io, " => ")
@@ -136,7 +138,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
             val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
             print(io, val)
         else
-            show(recur_io, v)
+            show(recur_io_v, v)
         end
     end
 end
@@ -414,7 +416,7 @@ function _show_default(io::IO, @nospecialize(x))
         end
     else
         print(io, "0x")
-        r = Ref(x)
+        r = Ref{Any}(x)
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
             for i in (nb - 1):-1:0
@@ -740,8 +742,9 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     if !print_without_params(x) && get(io, :compact, true)
         properx = makeproper(io, x)
         if make_typealias(properx) !== nothing || x <: make_typealiases(properx)[2]
-            print(io, " = ")
+            print(io, " (alias for ")
             show(IOContext(io, :compact => false), x)
+            print(io, ")")
         end
     end
 
@@ -2169,9 +2172,9 @@ module IRShow
     include("compiler/ssair/show.jl")
 
     const __debuginfo = Dict{Symbol, Any}(
-        # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
-        :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
-        # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
+        # :full => src -> Base.IRShow.statementidx_lineinfo_printer(src), # and add variable slot information
+        :source => src -> Base.IRShow.statementidx_lineinfo_printer(src),
+        # :oneliner => src -> Base.IRShow.statementidx_lineinfo_printer(Base.IRShow.PartialLineInfoPrinter, src),
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
     const default_debuginfo = Ref{Symbol}(:none)
@@ -2460,7 +2463,6 @@ function summary(x)
     summary(io, x)
     String(take!(io))
 end
-summary(io::IO, t::Tuple) = print(io, t)
 
 ## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
@@ -2560,10 +2562,17 @@ function showarg(io::IO, r::ReshapedArray, toplevel)
     toplevel && print(io, " with eltype ", eltype(r))
 end
 
-function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
+function showarg(io::IO, r::NonReshapedReinterpretArray{T}, toplevel) where {T}
     print(io, "reinterpret(", T, ", ")
     showarg(io, parent(r), false)
     print(io, ')')
+end
+
+function showarg(io::IO, r::ReshapedReinterpretArray{T}, toplevel) where {T}
+    print(io, "reinterpret(reshape, ", T, ", ")
+    showarg(io, parent(r), false)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(r))
 end
 
 # printing iterators from Base.Iterators

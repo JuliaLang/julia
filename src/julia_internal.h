@@ -595,6 +595,7 @@ extern char jl_using_oprofile_jitevents;
 #ifdef JL_USE_PERF_JITEVENTS
 extern char jl_using_perf_jitevents;
 #endif
+extern char jl_using_gdb_jitevents;
 extern size_t jl_arr_xtralloc_limit;
 
 // -- init.c -- //
@@ -1186,6 +1187,14 @@ struct typemap_intersection_env {
     int issubty;    // if `a <: b` is true in `intersect(a,b)`
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure);
+
+// -- simplevector.c -- //
+
+// For codegen only.
+JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int8_t jl_svec_isassigned(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i);
+
 
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 

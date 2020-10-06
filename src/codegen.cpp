@@ -618,12 +618,15 @@ static const auto jl_newbits_func = new JuliaFunction{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
+// `julia.typeof` does read memory, but it is effectively readnone before we lower
+// the allocation function. This is OK as long as we lower `julia.typeof` no later than
+// `julia.gc_alloc_obj`.
 static const auto jl_typeof_func = new JuliaFunction{
     "julia.typeof",
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
                 {T_prjlvalue}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind, Attribute::ArgMemOnly, Attribute::NoRecurse}),
+            Attributes(C, {Attribute::ReadNone, Attribute::NoUnwind, Attribute::NoRecurse}),
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
@@ -1118,7 +1121,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *t
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
-static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store);
+static Instruction *tbaa_decorate(MDNode *md, Instruction *inst);
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
@@ -2308,7 +2311,51 @@ static jl_cgval_t emit_getfield(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_s
     return mark_julia_type(ctx, result, true, jl_any_type);
 }
 
-static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
+template<typename Func>
+static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Func &&func)
+{
+    BasicBlock *currBB = ctx.builder.GetInsertBlock();
+    BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "guard_pass", ctx.f);
+    BasicBlock *exitBB = BasicBlock::Create(jl_LLVMContext, "guard_exit", ctx.f);
+    ctx.builder.CreateCondBr(ifnot, passBB, exitBB);
+    ctx.builder.SetInsertPoint(passBB);
+    auto res = func();
+    passBB = ctx.builder.GetInsertBlock();
+    ctx.builder.CreateBr(exitBB);
+    ctx.builder.SetInsertPoint(exitBB);
+    PHINode *phi = ctx.builder.CreatePHI(T_int1, 2);
+    phi->addIncoming(ConstantInt::get(T_int1, defval), currBB);
+    phi->addIncoming(res, passBB);
+    return phi;
+}
+
+template<typename Func>
+static Value *emit_nullcheck_guard(jl_codectx_t &ctx, Value *nullcheck, Func &&func)
+{
+    if (!nullcheck)
+        return func();
+    return emit_guarded_test(ctx, null_pointer_cmp(ctx, nullcheck), false, func);
+}
+
+template<typename Func>
+static Value *emit_nullcheck_guard2(jl_codectx_t &ctx, Value *nullcheck1,
+                                    Value *nullcheck2, Func &&func)
+{
+    if (!nullcheck1)
+        return emit_nullcheck_guard(ctx, nullcheck2, func);
+    if (!nullcheck2)
+        return emit_nullcheck_guard(ctx, nullcheck1, func);
+    nullcheck1 = null_pointer_cmp(ctx, nullcheck1);
+    nullcheck2 = null_pointer_cmp(ctx, nullcheck2);
+    // If both are NULL, return true.
+    return emit_guarded_test(ctx, ctx.builder.CreateOr(nullcheck1, nullcheck2), true, [&] {
+        return emit_guarded_test(ctx, ctx.builder.CreateAnd(nullcheck1, nullcheck2),
+                                 false, func);
+    });
+}
+
+static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
+                               Value *nullcheck1, Value *nullcheck2)
 {
     if (jl_pointer_egal(arg1.typ) || jl_pointer_egal(arg2.typ)) {
         Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : arg1.V;
@@ -2325,16 +2372,21 @@ static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const 
                                         emit_bitcast(ctx, varg2, T_pint8));
     }
 
-    Value *varg1 = mark_callee_rooted(ctx, boxed(ctx, arg1));
-    Value *varg2 = mark_callee_rooted(ctx, boxed(ctx, arg2));
-    return ctx.builder.CreateTrunc(ctx.builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
+    return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] {
+        Value *varg1 = mark_callee_rooted(ctx, boxed(ctx, arg1));
+        Value *varg2 = mark_callee_rooted(ctx, boxed(ctx, arg2));
+        return ctx.builder.CreateTrunc(ctx.builder.CreateCall(prepare_call(jlegal_func),
+                                                              {varg1, varg2}), T_int1);
+    });
 }
 
 static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2);
+static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
+                        Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr);
 
 static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
-    assert(arg1.typ == arg2.typ && arg1.TIndex && arg2.TIndex && jl_is_uniontype(arg1.typ) && "unimplemented");
+    assert(jl_egal(arg1.typ, arg2.typ) && arg1.TIndex && arg2.TIndex && jl_is_uniontype(arg1.typ) && "unimplemented");
     Value *tindex = arg1.TIndex;
     BasicBlock *defaultBB = BasicBlock::Create(jl_LLVMContext, "unionbits_is_boxed", ctx.f);
     SwitchInst *switchInst = ctx.builder.CreateSwitch(tindex, defaultBB);
@@ -2342,7 +2394,7 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
     ctx.builder.SetInsertPoint(postBB);
     PHINode *phi = ctx.builder.CreatePHI(T_int1, 2);
     unsigned counter = 0;
-    for_each_uniontype_small(
+    bool allunboxed = for_each_uniontype_small(
         [&](unsigned idx, jl_datatype_t *jt) {
             BasicBlock *tempBB = BasicBlock::Create(jl_LLVMContext, "unionbits_is", ctx.f);
             ctx.builder.SetInsertPoint(tempBB);
@@ -2356,6 +2408,7 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
         },
         arg1.typ,
         counter);
+    assert(allunboxed); (void)allunboxed;
     ctx.builder.SetInsertPoint(defaultBB);
     Function *trap_func = Intrinsic::getDeclaration(
         ctx.f->getParent(),
@@ -2403,13 +2456,11 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
     if (at->isAggregateType()) { // Struct or Array
         jl_datatype_t *sty = (jl_datatype_t*)arg1.typ;
         size_t sz = jl_datatype_size(sty);
-        Value *varg1 = arg1.ispointer() ? maybe_decay_tracked(ctx, data_pointer(ctx, arg1)) : arg1.V;
-        Value *varg2 = arg2.ispointer() ? maybe_decay_tracked(ctx, data_pointer(ctx, arg2)) : arg2.V;
         if (sz > 512 && !sty->layout->haspadding) {
-            if (!arg1.ispointer())
-                varg1 = value_to_pointer(ctx, arg1).V;
-            if (!arg2.ispointer())
-                varg2 = value_to_pointer(ctx, arg2).V;
+            Value *varg1 = arg1.ispointer() ? maybe_decay_tracked(ctx, data_pointer(ctx, arg1)) :
+                value_to_pointer(ctx, arg1).V;
+            Value *varg2 = arg2.ispointer() ? maybe_decay_tracked(ctx, data_pointer(ctx, arg2)) :
+                value_to_pointer(ctx, arg2).V;
             varg1 = emit_pointer_from_objref(ctx, varg1);
             varg2 = emit_pointer_from_objref(ctx, varg2);
             Value *gc_uses[2];
@@ -2419,80 +2470,38 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
             if ((gc_uses[nroots] = get_gc_root_for(arg2)))
                 nroots++;
             OperandBundleDef OpBundle("jl_roots", makeArrayRef(gc_uses, nroots));
-            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
+            auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         ctx.builder.CreateBitCast(varg1, T_pint8),
                         ctx.builder.CreateBitCast(varg2, T_pint8),
                         ConstantInt::get(T_size, sz) },
                     ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
+            MDNode *tbaa = nullptr;
+            if (!arg1.tbaa) {
+                tbaa = arg2.tbaa;
+            }
+            else if (!arg2.tbaa) {
+                tbaa = arg1.tbaa;
+            }
+            else {
+                tbaa = MDNode::getMostGenericTBAA(arg1.tbaa, arg2.tbaa);
+            }
+            if (tbaa)
+                tbaa_decorate(tbaa, answer);
             return ctx.builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
         }
         else {
-            Type *atp = at->getPointerTo();
-            if (arg1.ispointer())
-                varg1 = maybe_bitcast(ctx, varg1, atp);
-            if (arg2.ispointer())
-                varg2 = maybe_bitcast(ctx, varg2, atp);
             jl_svec_t *types = sty->types;
             Value *answer = ConstantInt::get(T_int1, 1);
             for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
-                // TODO: should we replace this with `subAns = emit_f_is(emit_getfield_knownidx(ctx, arg1, i, arg1.typ), emit_getfield_knownidx(ctx, arg2, i, arg2.typ))`
-                // or is there any value in all this extra effort??
                 jl_value_t *fldty = jl_svecref(types, i);
                 if (type_is_ghost(julia_type_to_llvm(ctx, fldty)))
                     continue;
-                unsigned byte_offset = jl_field_offset(sty, i);
-                Value *subAns, *fld1, *fld2;
-                unsigned llvm_idx = (i > 0 && isa<StructType>(at)) ? convert_struct_offset(ctx, at, byte_offset) : i;
-                if (arg1.ispointer())
-                    fld1 = ctx.builder.CreateConstInBoundsGEP2_32(at, varg1, 0, llvm_idx);
-                else
-                    fld1 = ctx.builder.CreateExtractValue(varg1, llvm_idx);
-                if (arg2.ispointer())
-                    fld2 = ctx.builder.CreateConstInBoundsGEP2_32(at, varg2, 0, llvm_idx);
-                else
-                    fld2 = ctx.builder.CreateExtractValue(varg2, llvm_idx);
-                if (jl_field_isptr(sty, i)) {
-                    if (arg1.ispointer()) {
-                        fld1 = ctx.builder.CreateAlignedLoad(T_prjlvalue, fld1, Align(sizeof(void*)));
-                        cast<LoadInst>(fld1)->setOrdering(AtomicOrdering::Unordered);
-                    }
-                    if (arg2.ispointer()) {
-                        fld2 = ctx.builder.CreateAlignedLoad(T_prjlvalue, fld2, Align(sizeof(void*)));
-                        cast<LoadInst>(fld2)->setOrdering(AtomicOrdering::Unordered);
-                    }
-                    subAns = emit_box_compare(ctx,
-                            mark_julia_type(ctx, fld1, true, fldty),
-                            mark_julia_type(ctx, fld2, true, fldty));
-                }
-                else if (jl_is_uniontype(fldty)) {
-                    unsigned tindex_offset = byte_offset + jl_field_size(sty, i) - 1;
-                    jl_cgval_t fld1_info;
-                    jl_cgval_t fld2_info;
-                    if (arg1.ispointer()) {
-                        Value *tindex1 = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
-                                ctx.builder.CreateAlignedLoad(T_int8, emit_struct_gep(ctx, at, varg1, tindex_offset), Align(1)));
-                        fld1_info = mark_julia_slot(fld1, fldty, tindex1, arg1.tbaa);
-                    }
-                    else {
-                        fld1_info = emit_getfield_knownidx(ctx, arg1, i, sty);
-                    }
-                    if (arg2.ispointer()) {
-                        Value *tindex2 = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
-                                ctx.builder.CreateAlignedLoad(T_int8, emit_struct_gep(ctx, at, varg2, tindex_offset), Align(1)));
-                        fld2_info = mark_julia_slot(fld2, fldty, tindex2, arg2.tbaa);
-                    }
-                    else {
-                        fld2_info = emit_getfield_knownidx(ctx, arg2, i, sty);
-                    }
-                    subAns = emit_bitsunion_compare(ctx, fld1_info, fld2_info);
-                }
-                else {
-                    assert(jl_is_concrete_type(fldty));
-                    jl_cgval_t fld1_info = arg1.ispointer() ? mark_julia_slot(fld1, fldty, NULL, arg1.tbaa) : mark_julia_type(ctx, fld1, false, fldty);
-                    jl_cgval_t fld2_info = arg2.ispointer() ? mark_julia_slot(fld2, fldty, NULL, arg2.tbaa) : mark_julia_type(ctx, fld2, false, fldty);
-                    subAns = emit_bits_compare(ctx, fld1_info, fld2_info);
-                }
-                answer = ctx.builder.CreateAnd(answer, subAns);
+                Value *nullcheck1 = nullptr;
+                Value *nullcheck2 = nullptr;
+                auto fld1 = emit_getfield_knownidx(ctx, arg1, i, sty, &nullcheck1);
+                auto fld2 = emit_getfield_knownidx(ctx, arg2, i, sty, &nullcheck2);
+                answer = ctx.builder.CreateAnd(answer, emit_f_is(ctx, fld1, fld2,
+                                                                 nullcheck1, nullcheck2));
             }
             return answer;
         }
@@ -2502,8 +2511,17 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
 }
 
 // emit code for is (===).
-static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
+// If either `nullcheck1` or `nullcheck2` are non-NULL, they are pointer values
+// representing the undef-ness of `arg1` and `arg2`.
+// This can only happen when comparing two fields of the same time and the result should be
+// true if both are NULL
+static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
+                        Value *nullcheck1, Value *nullcheck2)
 {
+    // handle simple static expressions with no side-effects
+    if (arg1.constant && arg2.constant)
+        return ConstantInt::get(T_int1, jl_egal(arg1.constant, arg2.constant));
+
     jl_value_t *rt1 = arg1.typ;
     jl_value_t *rt2 = arg2.typ;
     if (jl_is_concrete_type(rt1) && jl_is_concrete_type(rt2) && !jl_is_kind(rt1) && !jl_is_kind(rt2) && rt1 != rt2) {
@@ -2511,12 +2529,18 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         return ConstantInt::get(T_int1, 0);
     }
 
-    if (arg1.isghost || arg2.isghost) {
-        // comparing to a singleton object
+    if (arg1.isghost || arg2.isghost || arg1.constant == jl_bottom_type ||
+        arg2.constant == jl_bottom_type) {
+        // comparing to a singleton object, special case for value `jl_bottom_type`
+        // since it is normalized to `::Type{Union{}}` instead...
         if (arg1.TIndex)
-            return emit_isa(ctx, arg1, rt2, NULL).first; // rt2 is a singleton type
+            return emit_nullcheck_guard(ctx, nullcheck1, [&] {
+                return emit_isa(ctx, arg1, rt2, NULL).first; // rt2 is a singleton type
+            });
         if (arg2.TIndex)
-            return emit_isa(ctx, arg2, rt1, NULL).first; // rt1 is a singleton type
+            return emit_nullcheck_guard(ctx, nullcheck2, [&] {
+                return emit_isa(ctx, arg2, rt1, NULL).first; // rt1 is a singleton type
+            });
         // rooting these values isn't needed since we won't load this pointer
         // and we know at least one of them is a unique Singleton
         // which is already enough to ensure pointer uniqueness for this test
@@ -2529,34 +2553,52 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
         return ConstantInt::get(T_int1, 0);
 
+    // If both sides are boxed or can be trivially boxed,
+    // we'll prefer to do a pointer check.
+    // At this point, we know that at least one of the arguments isn't a constant
+    // so a runtime content check will involve at least one load from the
+    // pointer (and likely a type check)
+    // so a pointer comparison should be no worse than that even in imaging mode
+    // when the constant pointer has to be loaded.
+    if ((arg1.V || arg1.constant) && (arg2.V || arg2.constant) &&
+        (jl_pointer_egal(rt1) || jl_pointer_egal(rt2)))
+        return ctx.builder.CreateICmpEQ(boxed(ctx, arg1), boxed(ctx, arg2));
+
     bool justbits1 = jl_is_concrete_immutable(rt1);
     bool justbits2 = jl_is_concrete_immutable(rt2);
     if (justbits1 || justbits2) { // whether this type is unique'd by value
-        jl_value_t *typ = justbits1 ? rt1 : rt2;
-        if (rt1 == rt2)
-            return emit_bits_compare(ctx, arg1, arg2);
-        Value *same_type = (typ == rt2) ? emit_isa(ctx, arg1, typ, NULL).first : emit_isa(ctx, arg2, typ, NULL).first;
-        BasicBlock *currBB = ctx.builder.GetInsertBlock();
-        BasicBlock *isaBB = BasicBlock::Create(jl_LLVMContext, "is", ctx.f);
-        BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_is", ctx.f);
-        ctx.builder.CreateCondBr(same_type, isaBB, postBB);
-        ctx.builder.SetInsertPoint(isaBB);
-        Value *bitcmp = emit_bits_compare(ctx,
-                jl_cgval_t(arg1, typ, NULL),
-                jl_cgval_t(arg2, typ, NULL));
-        isaBB = ctx.builder.GetInsertBlock(); // might have changed
-        ctx.builder.CreateBr(postBB);
-        ctx.builder.SetInsertPoint(postBB);
-        PHINode *cmp = ctx.builder.CreatePHI(T_int1, 2);
-        cmp->addIncoming(ConstantInt::get(T_int1, 0), currBB);
-        cmp->addIncoming(bitcmp, isaBB);
-        return cmp;
+        return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] () -> Value* {
+            jl_value_t *typ = justbits1 ? rt1 : rt2;
+            if (rt1 == rt2)
+                return emit_bits_compare(ctx, arg1, arg2);
+            Value *same_type = (typ == rt2) ? emit_isa(ctx, arg1, typ, NULL).first :
+                emit_isa(ctx, arg2, typ, NULL).first;
+            BasicBlock *currBB = ctx.builder.GetInsertBlock();
+            BasicBlock *isaBB = BasicBlock::Create(jl_LLVMContext, "is", ctx.f);
+            BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_is", ctx.f);
+            ctx.builder.CreateCondBr(same_type, isaBB, postBB);
+            ctx.builder.SetInsertPoint(isaBB);
+            Value *bitcmp = emit_bits_compare(ctx, jl_cgval_t(arg1, typ, NULL),
+                                              jl_cgval_t(arg2, typ, NULL));
+            isaBB = ctx.builder.GetInsertBlock(); // might have changed
+            ctx.builder.CreateBr(postBB);
+            ctx.builder.SetInsertPoint(postBB);
+            PHINode *cmp = ctx.builder.CreatePHI(T_int1, 2);
+            cmp->addIncoming(ConstantInt::get(T_int1, 0), currBB);
+            cmp->addIncoming(bitcmp, isaBB);
+            return cmp;
+        });
     }
 
-    // if (arg1.tindex || arg2.tindex)
-    //   TODO: handle with emit_bitsunion_compare
+    // TODO: handle the case where arg1.typ != arg2.typ, or when one of these isn't union,
+    //       or when the union can be pointer
+    if (arg1.TIndex && arg2.TIndex && jl_egal(arg1.typ, arg2.typ) &&
+        jl_is_uniontype(arg1.typ) && is_uniontype_allunboxed(arg1.typ))
+        return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] {
+            return emit_bitsunion_compare(ctx, arg1, arg2);
+        });
 
-    return emit_box_compare(ctx, arg1, arg2);
+    return emit_box_compare(ctx, arg1, arg2, nullcheck1, nullcheck2);
 }
 
 static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
@@ -2565,18 +2607,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 // returns true if the call has been handled
 {
     if (f == jl_builtin_is && nargs == 2) {
-        // emit values
-        const jl_cgval_t &v1 = argv[1];
-        const jl_cgval_t &v2 = argv[2];
-        // handle simple static expressions with no side-effects
-        if (v1.constant) {
-            if (v2.constant) {
-                *ret = mark_julia_type(ctx, ConstantInt::get(T_int8, jl_egal(v1.constant, v2.constant)), false, jl_bool_type);
-                return true;
-            }
-        }
         // emit comparison test
-        Value *ans = emit_f_is(ctx, v1, v2);
+        Value *ans = emit_f_is(ctx, argv[1], argv[2]);
         *ret = mark_julia_type(ctx, ctx.builder.CreateZExt(ans, T_int8), false, jl_bool_type);
         return true;
     }
@@ -3052,9 +3084,20 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         jl_datatype_t *sty = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
         assert(jl_string_type->mutabl);
         if (sty == jl_string_type || sty == jl_simplevector_type) {
+            if (obj.constant) {
+                size_t sz;
+                if (sty == jl_string_type) {
+                    sz = jl_string_len(obj.constant);
+                }
+                else {
+                    sz = (1 + jl_svec_len(obj.constant)) * sizeof(void*);
+                }
+                *ret = mark_julia_type(ctx, ConstantInt::get(T_size, sz), false, jl_long_type);
+                return true;
+            }
             // String and SimpleVector's length fields have the same layout
             auto ptr = emit_bitcast(ctx, boxed(ctx, obj), T_psize);
-            Value *len = tbaa_decorate(tbaa_mutab, ctx.builder.CreateAlignedLoad(T_size, ptr, Align(sizeof(size_t))));
+            Value *len = tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_size, ptr, Align(sizeof(size_t))));
             MDBuilder MDB(jl_LLVMContext);
             if (sty == jl_simplevector_type) {
                 auto rng = MDB.createRange(
@@ -3961,7 +4004,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
 
 static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t rval_info, jl_value_t *l=NULL)
 {
-    if (!vi.used)
+    if (!vi.used || vi.value.typ == jl_bottom_type)
         return;
 
     // convert rval-type to lval-type
@@ -4046,6 +4089,49 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     jl_varinfo_t &vi = ctx.slots[sl];
     jl_cgval_t rval_info = emit_expr(ctx, r, ssaval);
     emit_varinfo_assign(ctx, vi, rval_info, l);
+}
+
+static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
+{
+    jl_varinfo_t &vi = ctx.phic_slots[phic];
+    // If the val is null, we can ignore the store.
+    // The middle end guarantees that the value from this
+    // upsilon node is not dynamically observed.
+    if (val) {
+        jl_cgval_t rval_info = emit_expr(ctx, val);
+        if (rval_info.typ == jl_bottom_type)
+            // as a special case, PhiC nodes are allowed to use undefined
+            // values, since they are just copy operations, so we need to
+            // ignore the store (it will not by dynamically observed), while
+            // normally, for any other operation result, we'd assume this store
+            // was unreachable and dead
+            val = NULL;
+        else
+            emit_varinfo_assign(ctx, vi, rval_info);
+    }
+    if (!val) {
+        if (vi.boxroot) {
+            // memory optimization: eagerly clear this gc-root now
+            ctx.builder.CreateAlignedStore(V_rnull, vi.boxroot, Align(sizeof(void*)), true);
+        }
+        if (vi.pTIndex) {
+            // We don't care what the contents of the variable are, but it
+            // does need to satisfy the union invariants (i.e. inbounds
+            // tindex).
+            ctx.builder.CreateAlignedStore(
+                vi.boxroot ? ConstantInt::get(T_int8, 0x80) :
+                             ConstantInt::get(T_int8, 0x01),
+                vi.pTIndex, Align(1), true);
+        }
+        else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
+            assert(vi.value.ispointer());
+            Type *T = cast<AllocaInst>(vi.value.V)->getAllocatedType();
+            if (CountTrackedPointers(T).count) {
+                // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
+                ctx.builder.CreateStore(Constant::getNullValue(T), vi.value.V, true);
+            }
+        }
+    }
 }
 
 // --- convert expression to code ---
@@ -6052,10 +6138,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             i == 0) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(T_prjlvalue, 0,
                 jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
-            StoreInst *SI = new StoreInst(
-                ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), av,
-                false,
-                Align(sizeof(void*)));
+            StoreInst *SI = new StoreInst(V_rnull, av, false, Align(sizeof(void*)));
             SI->insertAfter(ctx.ptlsStates);
             varinfo.boxroot = av;
             if (ctx.debug_enabled && varinfo.dinfo) {
@@ -6657,23 +6740,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             continue;
         }
         if (jl_is_upsilonnode(stmt)) {
-            jl_value_t *val = jl_fieldref_noalloc(stmt, 0);
-            // If the val is null, we can ignore the store.
-            // The middle end guarantees that the value from this
-            // upsilon node is not dynamically observed.
-            jl_varinfo_t &vi = ctx.phic_slots[upsilon_to_phic[cursor+1]];
-            if (val) {
-                jl_cgval_t rval_info = emit_expr(ctx, val);
-                emit_varinfo_assign(ctx, vi, rval_info);
-            } else if (vi.pTIndex) {
-                // We don't care what the contents of the variable are, but it
-                // does need to satisfy the union invariants (i.e. inbounds
-                // tindex).
-                ctx.builder.CreateStore(
-                    vi.boxroot ? ConstantInt::get(T_int8, 0x80) :
-                                 ConstantInt::get(T_int8, 0x01),
-                    vi.pTIndex, true);
-            }
+            emit_upsilonnode(ctx, upsilon_to_phic[cursor + 1], jl_fieldref_noalloc(stmt, 0));
             find_next_stmt(cursor + 1);
             continue;
         }
@@ -7050,7 +7117,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         SmallVector<std::string, 1> Exports;
         for (const auto &F: Mod->functions())
             if (!F.isDeclaration())
-                Exports.push_back(F.getName());
+                Exports.push_back(F.getName().str());
         if (Linker::linkModules(*jl_Module, std::move(Mod))) {
             jl_error("Failed to link LLVM bitcode");
         }
@@ -7661,10 +7728,9 @@ extern "C" void jl_init_llvm(void)
     std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
     jl_data_layout.reset(DL);
 
-// Register GDB event listener
-#ifdef JL_DEBUG_BUILD
-    jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
-#endif
+    // Register GDB event listener
+    if(jl_using_gdb_jitevents)
+        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
 
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)

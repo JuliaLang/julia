@@ -566,6 +566,13 @@ for i in 1:6
     @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
 end
 
+# test that second argument is escaped correctly
+foo = 3
+tss = @testset CustomTestSet foo=foo "custom testset - escaping" begin
+    @test true
+end
+@test tss.foo == 3
+
 # test @inferred
 uninferrable_function(i) = (1, "1")[i]
 uninferrable_small_union(i) = (1, nothing)[i]

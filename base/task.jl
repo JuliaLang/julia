@@ -214,6 +214,9 @@ julia> yield();
 julia> istaskfailed(b)
 true
 ```
+
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
 """
 istaskfailed(t::Task) = (t._state === task_state_failed)
 

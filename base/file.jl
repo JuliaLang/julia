@@ -187,7 +187,8 @@ end
     mkpath(path::AbstractString; mode::Unsigned = 0o777)
 
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
-`0o777`, modified by the current file creation mask.
+`0o777`, modified by the current file creation mask. Unlike [`mkdir`](@ref), `mkpath`
+does not error if `path` (or parts of it) already exists.
 Return `path`.
 
 # Examples
@@ -261,7 +262,8 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
-                if (filemode(lstat(path)) & 0o222) == 0
+                st = lstat(path)
+                if ispath(st) && (filemode(st) & 0o222) == 0
                     chmod(path, 0o777)
                 end
             end
@@ -975,12 +977,13 @@ function symlink(p::AbstractString, np::AbstractString)
         end
     end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
+    sym = "symlink"
     @static if Sys.iswindows()
         if err < 0 && !isdir(p)
-            @warn "On Windows, creating file symlinks requires Administrator privileges" maxlog=1 _group=:file
+            sym = "On Windows, creating symlinks requires Administrator privileges.\nsymlink"
         end
     end
-    uv_error("symlink",err)
+    uv_error(sym, err)
 end
 
 """

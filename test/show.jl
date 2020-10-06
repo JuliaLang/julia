@@ -757,7 +757,7 @@ else
 end
 
 # Method location correction (Revise integration)
-dummyloc(m::Method) = :nofile, 123456789
+dummyloc(m::Method) = :nofile, Int32(123456789)
 Base.methodloc_callback[] = dummyloc
 let repr = sprint(show, "text/plain", methods(Base.inbase))
     @test occursin("nofile:123456789", repr)
@@ -1387,6 +1387,18 @@ end
 
     d = Dict("+"=>1)
     @test showstr(d) == "Dict(\"+\" => 1)"
+
+    struct Foo
+        a::Int
+    end
+    struct Bar
+        a::Int
+    end
+    d = Dict([Bar(1), Bar(2)] => [Foo(1), Foo(2)])
+    @test showstr(d) == "Dict{Vector{$(curmod_prefix)Bar}, Vector{$(curmod_prefix)Foo}}([$(curmod_prefix)Bar(1), $(curmod_prefix)Bar(2)] => [$(curmod_prefix)Foo(1), $(curmod_prefix)Foo(2)])"
+    @test sprint(show, MIME("text/plain"), d) == """
+        Dict{Vector{$(curmod_prefix)Bar}, Vector{$(curmod_prefix)Foo}} with 1 entry:
+          [Bar(1), Bar(2)] => [Foo(1), Foo(2)]"""
 end
 
 @testset "alignment for pairs" begin  # (#22899)
@@ -1516,6 +1528,8 @@ end
     @test summary(r) == "4×2 reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2) with eltype Int16"
     p = PermutedDimsArray(r, (2, 1))
     @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
+    p = reinterpret(reshape, Tuple{Float32,Float32}, [1.0f0 3.0f0; 2.0f0 4.0f0])
+    @test summary(p) == "2-element reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32}) with eltype Tuple{Float32, Float32}"
 end
 
 @testset "Methods" begin
@@ -1710,8 +1724,8 @@ end
 end
 
 @testset "Tuple summary" begin
-    @test summary((1,2,3)) == "(1, 2, 3)"
-    @test summary((:a, "b", 'c')) == "(:a, \"b\", 'c')"
+    @test summary((1,2,3)) == "Tuple{$Int, $Int, $Int}"
+    @test summary((:a, "b", 'c')) == "Tuple{Symbol, String, Char}"
 end
 
 # Tests for code_typed linetable annotations

@@ -2704,3 +2704,9 @@ end
     @test all(m -> m.file == Symbol("deprecated.jl"),
         collect(methods(T))[findall(R -> !(R<:T), Base.return_types(T))])
 end
+
+@testset "generic isfinite" begin
+    @test invoke(isfinite, Tuple{Number}, 0.0) == true
+    @test invoke(isfinite, Tuple{Number}, NaN) == false
+    @test invoke(isfinite, Tuple{Number}, Inf) == false
+end

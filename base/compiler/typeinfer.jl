@@ -49,7 +49,9 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
                         caller.src = nothing
                     end
                 end
-                valid_worlds = intersect(valid_worlds, opt.valid_worlds)
+                # As a hack the et reuses frame_edges[1] to push any optimization
+                # edges into, so we don't need to handle them specially here
+                valid_worlds = intersect(valid_worlds, opt.inlining.et.valid_worlds[])
             end
         end
     end
