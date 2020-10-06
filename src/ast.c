@@ -968,7 +968,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
         margs[i] = jl_array_ptr_ref(args, i - 1);
 
     size_t last_age = ptls->world_age;
-    ptls->world_age = world;
+    ptls->world_age = world < jl_world_counter ? world : jl_world_counter;
     jl_value_t *result;
     JL_TRY {
         margs[0] = jl_toplevel_eval(*ctx, margs[0]);
@@ -1123,7 +1123,7 @@ JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
 JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
                                             const char *file, int line)
 {
-    return jl_expand_in_world(expr, inmodule, file, line, jl_world_counter);
+    return jl_expand_in_world(expr, inmodule, file, line, ~(size_t)0);
 }
 
 // Lowering, with starting program location and worldage specified
@@ -1146,7 +1146,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, jl_world_counter);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0, ~(size_t)0);
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     JL_AST_PRESERVE_PUSH(ctx, old_roots, inmodule);
@@ -1167,7 +1167,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *
     JL_TIMING(LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, jl_world_counter);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0, ~(size_t)0);
     expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk-stmt", expr, inmodule, file, line);
     JL_GC_POP();
     return expr;
