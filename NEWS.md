@@ -86,6 +86,7 @@ New library functions
 New library features
 --------------------
 
+* `redirect_*`, functions now accept `DevNull` to discard all output redirected to it, and as an empty input. ([#36146]).
 * The `redirect_*` functions can now be called on `IOContext` objects.
 * New constructor `NamedTuple(iterator)` that constructs a named tuple from a key-value pair iterator.
 * A new `reinterpret(reshape, T, a::AbstractArray{S})` reinterprets `a` to have eltype `T` while potentially
