@@ -1124,7 +1124,7 @@ end
 function mat_vec_scalar(A, x, γ)
     T = promote_type(eltype(A), eltype(x), typeof(γ))
     C = similar(A, T, axes(A,1))
-    mul!(C, A, x, γ, false) # γ on the right
+    mul!(C, A, x, γ, false)
 end
 
 mat_vec_scalar(A::AdjOrTransAbsVec, x, γ) = (A * x) * γ
@@ -1132,14 +1132,14 @@ mat_vec_scalar(A::AdjOrTransAbsVec, x, γ) = (A * x) * γ
 function mat_mat_scalar(A, B, γ)
     T = promote_type(eltype(A), eltype(B), typeof(γ))
     C = similar(A, T, axes(A,1), axes(B,2))
-    mul!(C, A, B, γ, false) # γ on the right
+    mul!(C, A, B, γ, false)
 end
 
 mat_mat_scalar(A::AdjointAbsVec, B, γ::Union{Real,Complex}) = mat_vec_scalar(B', A', γ')'
-mat_mat_scalar(A::AdjointAbsVec, B, γ) = (B' * (A' .* γ'))'
+mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
 
 mat_mat_scalar(A::TransposeAbsVec, B, γ::Union{Real,Complex}) = transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
-mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(transpose(B) * (transpose(A) .* γ))
+mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
 
 function _tri_matmul(A,B,C)
     n,m = size(A)
