@@ -793,14 +793,14 @@ end
 
     @test a*x'*A == (a*x')*A == a*(x'*A)
     @test x'*A*a == (x'*A)*a == x'*(A*a)
-    @test a*x'*A isa Adjoint
+    @test a*x'*A isa Adjoint{<:Any, <:Vector}
 
     @test a*transpose(x)*A == (a*transpose(x))*A == a*(transpose(x)*A)
     @test transpose(x)*A*a == (transpose(x)*A)*a == transpose(x)*(A*a)
-    @test a*transpose(x)*A isa Transpose
+    @test a*transpose(x)*A isa Transpose{<:Any, <:Vector}
 
     @test x'*B*A == (x'*B)*A == x'*(B*A)
-    @test x'*B*A isa Adjoint
+    @test x'*B*A isa Adjoint{<:Any, <:Vector}
 
     @test y*x'*A == (y*x')*A == y*(x'*A)
     y31 = reshape(y,3,1)

@@ -1085,17 +1085,17 @@ end
 # Three-argument *
 *(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = _mat_mat_vec(A,B,x)
 
-*(α::Number, A::AbstractMatrix, x::AbstractVector) = _scalar_mat_vec(α,A,x)
-*(α::Number, A::AbstractMatrix, B::AbstractMatrix) = _scalar_mat_mat(α,A,B)
-*(A::AbstractMatrix, x::AbstractVector, α::Number) = _scalar_mat_vec(α,A,x)
-*(A::AbstractMatrix, B::AbstractMatrix, α::Number) = _scalar_mat_mat(α,A,B)
+*(A::AbstractMatrix, x::AbstractVector, γ::Number) = mat_vec_scalar(A,x,γ)
+*(A::AbstractMatrix, B::AbstractMatrix, γ::Number) = mat_mat_scalar(A,B,γ)
+*(α::Number, B::AbstractMatrix, C::AbstractVecOrMat) = *(C',B',α')'
+*(α::Number, B::Transpose, C::AbstractVecOrMat) = transpose(*(transpose(C),transpose(B),α))
 
-*(α::Number, A::AbstractArray, β::Number) = (α*β) * A
-*(A::AbstractArray, α::Number, β::Number) = A * (α*β)
+*(α::Number, B::AbstractArray, γ::Number) = broadcast(*, α, B, γ)
+*(A::AbstractArray, β::Number, γ::Number) = broadcast(*, A, β*γ)
 
 *(α::Number, u::AbstractVector, tv::AdjOrTransAbsVec) = broadcast(*, α, u, tv)
-*(u::AbstractVector, tv::AdjOrTransAbsVec, α::Number) = broadcast(*, u, tv, α)
-*(u::AbstractVector, tv::AdjOrTransAbsVec, A::AbstractMatrix) = u * (tv*A)
+*(u::AbstractVector, tv::AdjOrTransAbsVec, γ::Number) = broadcast(*, u, tv, γ)
+*(u::AbstractVector, tv::AdjOrTransAbsVec, C::AbstractMatrix) = u * (tv*C)
 
 *(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix) = _tri_matmul(A,B,C)
 *(tv::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix) = (tv*B) * C
@@ -1108,21 +1108,25 @@ function _mat_mat_vec(A,B,x)
     end
 end
 
-function _scalar_mat_vec(α, A, x)
-    T = promote_type(typeof(α), eltype(A), eltype(x))
+function mat_vec_scalar(A, x, γ)
+    T = promote_type(eltype(A), eltype(x), typeof(γ))
     C = similar(A, T, axes(A,1))
-    mul!(C, A, x, α, false)
+    mul!(C, A, x, γ, false) # γ on the right
 end
-function _scalar_mat_mat(α, A, B)
-    T = promote_type(typeof(α), eltype(A), eltype(B))
+
+mat_vec_scalar(A::AdjOrTransAbsVec, x, γ) = (A * x) * γ
+
+function mat_mat_scalar(A, B, γ)
+    T = promote_type(eltype(A), eltype(B), typeof(γ))
     C = similar(A, T, axes(A,1), axes(B,2))
-    mul!(C, A, B, α, false)
+    mul!(C, A, B, γ, false) # γ on the right
 end
 
-_scalar_mat_vec(α, A::AdjOrTransAbsVec, x) = α * (A * x)
+mat_mat_scalar(A::AdjointAbsVec, B, γ::Union{Real,Complex}) = mat_vec_scalar(B', A', γ')'
+mat_mat_scalar(A::AdjointAbsVec, B, γ) = (B' * (A' .* γ'))'
 
-_scalar_mat_mat(α, A::AdjointAbsVec, B) = _scalar_mat_vec(α', B', A')'
-_scalar_mat_mat(α, A::TransposeAbsVec, B) = transpose(_scalar_mat_vec(α, transpose(B), transpose(A)))
+mat_mat_scalar(A::TransposeAbsVec, B, γ::Union{Real,Complex}) = transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
+mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(transpose(B) * (transpose(A) .* γ))
 
 function _tri_matmul(A,B,C)
     n,m = size(A)
