@@ -181,13 +181,11 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 /* Rooted by the base module */
 static jl_function_t *task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
-void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
+void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
-    t->result = resultval;
-    jl_gc_wb(t, t->result);
-    if (t->exception != jl_nothing)
+    if (t->_isexception)
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
     else
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_DONE);
@@ -495,8 +493,9 @@ JL_DLLEXPORT void jl_switch(void)
         return;
     }
     if (t->_state != JL_TASK_STATE_RUNNABLE || (t->started && t->stkbuf == NULL)) {
-        ct->exception = t->exception;
+        ct->_isexception = t->_isexception;
         ct->result = t->result;
+        jl_gc_wb(ct, ct->result);
         return;
     }
     if (ptls->in_finalizer)
@@ -680,7 +679,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
-    t->exception = jl_nothing;
+    t->_isexception = 0;
     // Inherit logger state from parent task
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
@@ -805,11 +804,11 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 #endif
 
     t->started = 1;
-    if (t->exception != jl_nothing) {
+    if (t->_isexception) {
         record_backtrace(ptls, 0);
-        jl_push_excstack(&t->excstack, t->exception,
+        jl_push_excstack(&t->excstack, t->result,
                          ptls->bt_data, ptls->bt_size);
-        res = t->exception;
+        res = t->result;
     }
     else {
         JL_TRY {
@@ -823,13 +822,14 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
         }
         JL_CATCH {
             res = jl_current_exception();
-            t->exception = res;
-            jl_gc_wb(t, res);
+            t->_isexception = 1;
             goto skip_pop_exception;
         }
 skip_pop_exception:;
     }
-    jl_finish_task(t, res);
+    t->result = res;
+    jl_gc_wb(t, t->result);
+    jl_finish_task(t);
     gc_debug_critical_error();
     abort();
 }
@@ -1250,7 +1250,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->start = NULL;
     ptls->current_task->result = jl_nothing;
     ptls->current_task->donenotify = jl_nothing;
-    ptls->current_task->exception = jl_nothing;
+    ptls->current_task->_isexception = 0;
     ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
