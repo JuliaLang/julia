@@ -130,6 +130,12 @@ end
 @test B[1] === Complex{Int64}(11+12im)
 @test B[2] === Complex{Int64}(13+14im)
 @test B[3] === Complex{Int64}(15+16im)
+z3 = (0x00, 0x00, 0x00)
+Az = [z3 z3; z3 z3]
+Azr = reinterpret(reshape, UInt8, Az)
+W = WrapperArray(Azr)
+copyto!(W, fill(0x01, 3, 2, 2))
+@test all(isequal((0x01, 0x01, 0x01)), Az)
 
 # ensure that reinterpret arrays aren't erroneously classified as strided
 let A = reshape(1:20, 5, 4)
