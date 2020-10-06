@@ -230,7 +230,7 @@ mt_setfull!(r::MersenneTwister) = r.idxF = 0
 mt_setempty!(r::MersenneTwister) = r.idxF = MT_CACHE_F
 mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idxF+=1]
 
-function gen_rand(r::MersenneTwister)
+@noinline function gen_rand(r::MersenneTwister)
     r.adv_vals = r.adv
     GC.@preserve r fill_array!(r, pointer(r.vals), length(r.vals), CloseOpen12())
     mt_setfull!(r)
