@@ -1100,9 +1100,8 @@ or examining `size.((A,B,C))` to choose which to multiply first.
 
 *(A::AbstractMatrix, x::AbstractVector, γ::Number) = mat_vec_scalar(A,x,γ)
 *(A::AbstractMatrix, B::AbstractMatrix, γ::Number) = mat_mat_scalar(A,B,γ)
-*(α::Number, B::AbstractMatrix, C::AbstractVecOrMat) = *(C',B',α')'
-*(α::Number, B::Transpose, C::AbstractVecOrMat) = transpose(*(transpose(C),transpose(B),α))
-
+*(α::Union{Real,Complex}, B::AbstractMatrix, C::AbstractVector) = mat_vec_scalar(B,C,α)
+*(α::Union{Real,Complex}, B::AbstractMatrix, C::AbstractMatrix) = mat_mat_scalar(B,C,α)
 
 *(α::Number, u::AbstractVector, tv::AdjOrTransAbsVec) = broadcast(*, α, u, tv)
 *(u::AbstractVector, tv::AdjOrTransAbsVec, γ::Number) = broadcast(*, u, tv, γ)
