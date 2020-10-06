@@ -1083,6 +1083,19 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
 end
 
 # Three-argument *
+"""
+    *(A, B::AbstractMatrix, C)
+
+Most 3-argument `*` calls containing matrices or vectors are done in an efficient way,
+rather than the left-to-right default of `*(x,y,z,...)`.
+
+This can mean performing `B*C` first if `C::AbstractVector`, calling `dot`, using
+five-argument `mul!` to fuse the scalar `A::Number` with the matrix multiplication `B*C`,
+or examining `size.((A,B,C))` to choose which to multiply first.
+
+!!! compat "Julia 1.6"
+    These optimisations require least Julia 1.6.
+"""
 *(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = _mat_mat_vec(A,B,x)
 
 *(A::AbstractMatrix, x::AbstractVector, γ::Number) = mat_vec_scalar(A,x,γ)
