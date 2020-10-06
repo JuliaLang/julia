@@ -75,7 +75,7 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
 
     return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
 end
-varinfo(pat::Regex; kwargs...) = varinfo(Main, pat, kwargs...)
+varinfo(pat::Regex) = varinfo(get_active_module(), pat)
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)
