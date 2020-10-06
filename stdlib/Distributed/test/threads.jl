@@ -6,9 +6,6 @@ exeflags = ("--startup-file=no",
             "--check-bounds=yes",
             "--depwarn=error",
             "--threads=2")
-procs_added = addprocs(2; exeflags)
-
-@everywhere procs_added using Base.Threads
 
 function call_on(f, wid, tid)
   remotecall(wid) do
@@ -29,12 +26,16 @@ isdone(rr) = fetch_from_owner(istaskdone, rr)
 isfailed(rr) = fetch_from_owner(istaskfailed, rr)
 
 @testset "RemoteChannel allows put!/take! from thread other than 1" begin
-  ps = product(procs_added, procs_added)
-  ts = product(1:2, 1:2)
-  chan_id = first(procs_added)
-  timeout = 1.0
-  @testset "from process $p1 to $p2 via $chan_id" for (p1, p2) in ps
-    @testset "from thread $p1.$t1 to $p2.$t2" for (t1, t2) in ts
+  ws = ts = product(1:2, 1:2)
+  timeout = 10.0
+  @testset "from worker $w1 to $w2 via 1" for (w1, w2) in ws
+    @testset "from thread $w1.$t1 to $w2.$t2" for (t1, t2) in ts
+      # We want (the default) lazyness, so that we wait for `Worker.c_state`!
+      procs_added = addprocs(2; exeflags, lazy=true)
+      @everywhere procs_added using Base.Threads
+      p1 = procs_added[w1]
+      p2 = procs_added[w2]
+      chan_id = first(procs_added)
       chan = RemoteChannel(chan_id)
       send = call_on(p1, t1) do
         put!(chan, nothing)
@@ -47,7 +48,7 @@ isfailed(rr) = fetch_from_owner(istaskfailed, rr)
       @test isdone(recv)
       @test !isfailed(send)
       @test !isfailed(recv)
+      rmprocs(procs_added)
     end
   end
-  rmprocs(procs_added)
 end
