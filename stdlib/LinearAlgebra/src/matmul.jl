@@ -203,14 +203,14 @@ julia> muladd(A, B, C)
 ```
 """
 function Base.muladd(A::AbstractMatrix{TA}, y::AbstractVector{Ty}, z) where {TA, Ty}
-    T = promote_type(TA, Ty, z isa AbstractArray ? eltype(z) : typeof(z))
+    T = promote_type(TA, Ty, eltype(z))
     C = similar(A, T, axes(A,1))
     C .= z
     mul!(C, A, y, true, true)
 end
 
 function Base.muladd(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}, z) where {TA, TB}
-    T = promote_type(TA, TB, z isa AbstractArray ? eltype(z) : typeof(z))
+    T = promote_type(TA, TB, eltype(z))
     C = similar(A, T, axes(A,1), axes(B,2))
     C .= z
     mul!(C, A, B, true, true)

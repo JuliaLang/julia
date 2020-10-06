@@ -318,6 +318,7 @@ end
     @test muladd(u2, v3', 0) isa Matrix
     @test muladd(u2, v3', 99) == u2 * v3' .+ 99
     @test muladd(u2, v3', A23) == u2 * v3' .+ A23
+    @test_throws DimensionMismatch muladd(u2, v3', ones(2,3,4))
 
     @test muladd(u2', u2, 0) isa Number
     @test muladd(v3', v3, im) == dot(v3,v3) + im
