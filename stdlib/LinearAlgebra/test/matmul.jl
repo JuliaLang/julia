@@ -804,6 +804,10 @@ end
     @test y*x'*A == (y*x')*A == y*(x'*A)
     y31 = reshape(y,3,1)
     @test y31*x'*A == (y31*x')*A == y31*(x'*A)
+
+    @test a*b*A == (a*b)*A == a*(b*A)
+    @test a*A*b == (a*A)*b == a*(A*b)
+    @test A*a*b == (A*a)*b == A*(a*b)
 end
 
 @testset "3-arg *, order by size" begin

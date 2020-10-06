@@ -1093,6 +1093,9 @@ end
 *(A::AbstractMatrix, x::AbstractVector, α::Number) = _scalar_mat_vec(α,A,x)
 *(A::AbstractMatrix, B::AbstractMatrix, α::Number) = _scalar_mat_mat(α,A,B)
 
+*(α::Number, A::AbstractArray, β::Number) = (α*β) * A
+*(A::AbstractArray, α::Number, β::Number) = A * (α*β)
+
 *(α::Number, u::AbstractVector, tv::AdjOrTransAbsVec) = broadcast(*, α, u, tv)
 *(u::AbstractVector, tv::AdjOrTransAbsVec, α::Number) = broadcast(*, u, tv, α)
 *(u::AbstractVector, tv::AdjOrTransAbsVec, A::AbstractMatrix) = u * (tv*A)
