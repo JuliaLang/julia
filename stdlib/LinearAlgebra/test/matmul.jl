@@ -806,10 +806,6 @@ end
     y31 = reshape(y,3,1)
     @test y31*x'*A == (y31*x')*A == y31*(x'*A)
 
-    @test a*b*A == (a*b)*A == a*(b*A)
-    @test a*A*b == (a*A)*b == a*(A*b)
-    @test A*a*b == (A*a)*b == A*(a*b)
-
     vm = [rand(1:9,2,2) for _ in 1:3]
     Mm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
 

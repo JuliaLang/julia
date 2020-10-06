@@ -1103,8 +1103,6 @@ or examining `size.((A,B,C))` to choose which to multiply first.
 *(α::Number, B::AbstractMatrix, C::AbstractVecOrMat) = *(C',B',α')'
 *(α::Number, B::Transpose, C::AbstractVecOrMat) = transpose(*(transpose(C),transpose(B),α))
 
-*(α::Number, B::AbstractArray, γ::Number) = broadcast(*, α, B, γ)
-*(A::AbstractArray, β::Number, γ::Number) = broadcast(*, A, β*γ)
 
 *(α::Number, u::AbstractVector, tv::AdjOrTransAbsVec) = broadcast(*, α, u, tv)
 *(u::AbstractVector, tv::AdjOrTransAbsVec, γ::Number) = broadcast(*, u, tv, γ)
