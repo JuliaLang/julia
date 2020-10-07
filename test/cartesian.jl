@@ -87,6 +87,44 @@ ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
         @test R[1, 2] == R[4] == CartesianIndex(1, 4)
         @test R[end] == R[length(R)] == last(R) == CartesianIndex(5, 1)
     end
+
+    @testset "IdentityUnitRange" begin
+        function _collect(A)
+            rst = eltype(A)[]
+            for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+        function _simd_collect(A)
+            rst = eltype(A)[]
+            @simd for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+
+        for oinds in [
+            (Base.IdentityUnitRange(0:1),),
+            (Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(0:2)),
+            (Base.IdentityUnitRange(0:1), Base.OneTo(3)),
+        ]
+            R = CartesianIndices(oinds)
+            @test axes(R) === oinds
+            @test _collect(R) == _simd_collect(R) == vec(collect(R))
+        end
+        R = CartesianIndices((Base.IdentityUnitRange(0:1), 0:1))
+        @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+
+    end
+
+    for oinds in [(2, 3), (0:1, 0:2), (0:1:1, 0:1:2), (Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(0:2)) ]
+        R = CartesianIndices((2, 3))
+        @test vec(LinearIndices(R)) == 1:6
+    end
+    # TODO: non-1 steps are not supported yet, but may change in the future
+    @test_throws ArgumentError LinearIndices(CartesianIndices((1:2:5, )))
+    @test_throws ArgumentError LinearIndices(CartesianIndices((1:1:5, 1:2:5)))
 end
 
 module TestOffsetArray
@@ -130,8 +168,9 @@ end
             SR = CartesianIndex(first.(oinds)):CartesianIndex(step.(oinds)):CartesianIndex(last.(oinds))
             @test A[oinds...] == A[SR]
             @test A[SR] == A[R[SR]]
-            # FIXME: A[SR] == A[Linearindices[SR]] should hold for StepRange CartesianIndices
-            @test_broken A[SR] == A[LinearIndices[SR]]
+
+            # TODO: A[SR] == A[Linearindices(SR)] should hold for StepRange CartesianIndices
+            @test_broken A[SR] == A[LinearIndices(SR)]
         end
     end
 end
@@ -145,6 +184,13 @@ end
         @test !(i in I)
         @test iterate(I, i) == (i_next, i_next)
     end
+
+    # check iteration behavior on boundary
+    R = CartesianIndex(1, 1):CartesianIndex(2, 3):CartesianIndex(4, 5)
+    @test R.indices == (1:2:3, 1:3:4)
+    i = CartesianIndex(4, 1)
+    i_next = CartesianIndex(1, 4)
+    @test !(i in R) && iterate(R, i) == (i_next, i_next)
 
     for R in [
         CartesianIndices((1:-1:-1, 1:2:5)),
@@ -199,10 +245,11 @@ end
         RR = Iterators.Reverse(R)
         rR = reverse(R)
         @test rR == collect(RR)
+        @test rR.indices == (5:-1:0, 5:-1:0)
 
         @test eltype(RR) == CartesianIndex{2}
         @test size(RR) == size(R)
-        @test axes(RR) == axes(R) # might change
+        @test axes(RR) == axes(R)
 
         @test first(RR) == last(R) == CartesianIndex(5, 5)
         @test last(RR) == first(R) == CartesianIndex(0, 0)
