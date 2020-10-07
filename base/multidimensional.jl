@@ -274,12 +274,13 @@ module IteratorsMD
 
     CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
     CartesianIndices(inds::NTuple{N,Union{<:Integer,OrdinalRange{<:Integer}}}) where {N} =
-        CartesianIndices(map(_range2ind, inds))
+        CartesianIndices(map(_convert2ind, inds))
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
-    _range2ind(sz::Integer) = Base.OneTo(sz)
-    _range2ind(ind::OrdinalRange) = ind
+    _convert2ind(sz::Integer) = Base.OneTo(sz)
+    _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
+    _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
 
     """
         (:)(start::CartesianIndex, [step::CartesianIndex], stop::CartesianIndex)
@@ -532,15 +533,16 @@ module IteratorsMD
             indices = map(rng->first(rng):last(rng), indices)
             LinearIndices{length(indices), typeof(indices)}(indices)
         else
-            # Given the fact that StepRange 1:2:4 === 1:2:3, we lost the dimensional information and
-            # thus cannot calculate the correct linear indices when the steps are not 1.
+            # Given the fact that StepRange 1:2:4 === 1:2:3, we lost the original size information
+            # and thus cannot calculate the correct linear indices when the steps are not 1.
             throw(ArgumentError("LinearIndices for $(typeof(inds)) with non-1 step size is not yet supported."))
         end
     end
 
     # This is currently needed because converting to LinearIndices is only available when steps are
-    # all 1 NOTE: this is only a temporary patch and could be possible removed when StepRange
-    # support to LinearIndices is done
+    # all 1
+    # NOTE: this is only a temporary patch and could be possiblely removed when StepRange support to
+    # LinearIndices is done
     function Base.collect(inds::CartesianIndices)
         dest = Array{eltype(inds), ndims(inds)}(undef, size(inds))
         i = 0

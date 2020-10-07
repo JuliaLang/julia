@@ -117,6 +117,9 @@ Standard library changes
 * The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside. ([#37320])
+* `CartesianIndices` can now be constructed from three `CartesianIndex`es `I`, `S`, `J` with `I:S:J`.
+  `step` for `CartesianIndices` now returns a `CartesianIndex`, which is `CartesianIndex(1, 1)`
+  for old use cases. ([#37829]).
 
 #### LinearAlgebra
 
