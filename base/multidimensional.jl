@@ -265,6 +265,7 @@ module IteratorsMD
     struct CartesianIndices{N,R<:NTuple{N,OrdinalRange{Int, Int}}} <: AbstractArray{CartesianIndex{N},N}
         indices::R
     end
+    const UnitCartesianIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} = CartesianIndices{N,R}
 
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
     function CartesianIndices(inds::NTuple{N,OrdinalRange{<:Integer, <:Integer}}) where {N}
