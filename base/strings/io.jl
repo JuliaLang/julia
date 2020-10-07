@@ -609,6 +609,46 @@ function indentation(str::AbstractString; tabwidth=8)
 end
 
 """
+    indent(str::AbstractString, n::Int)
+
+Indent each non-blank line by `n` spaces.
+
+# Examples
+```jldoctest
+julia> Base.indent("a\\nb", 4)
+"    a\\n    b"
+
+julia> Base.indent("  a\\n  \\n  b", 2)
+"    a\\n  \\n    b"
+```
+"""
+function indent(str::AbstractString, n::Int)
+    indent == 0 && return str
+    # Note: this loses the type of the original string
+    buf = IOBuffer(sizehint=sizeof(str))
+    indent_str = " " ^ n
+
+    line_start = firstindex(str)
+    blank_line = true
+    for (i, ch) in enumerate(str)
+        if ch == '\n'
+            !blank_line && print(buf, indent_str)
+            print(buf, str[line_start:i])
+            line_start = nextind(str, i)
+            blank_line = true
+        elseif blank_line && !isspace(ch)
+            blank_line = false
+        end
+    end
+
+    # Last line of string that doesn't contain a newline
+    !blank_line && print(buf, indent_str)
+    print(buf, str[line_start:lastindex(str)])
+
+    String(take!(buf))
+end
+
+"""
     unindent(str::AbstractString, indent::Int; tabwidth=8)
 
 Remove leading indentation from string.

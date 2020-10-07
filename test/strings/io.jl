@@ -270,3 +270,12 @@ for i = 1:10
     print(buf, join(s22021, "\n"))
     @test isvalid(String, take!(buf))
 end
+
+@testset "indent" begin
+    @test Base.indent("", 4) == ""
+    @test Base.indent("\n", 4) == "\n"
+    @test Base.indent("  \n  ", 2) == "  \n  "
+
+    @test Base.indent("a", 4) == "    a"
+    @test Base.indent("a\n\nb", 4) == "    a\n\n    b"
+end
