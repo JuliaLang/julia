@@ -390,7 +390,7 @@ module IteratorsMD
     # Unlike ordinary ranges, CartesianIndices requires the iteration continue on the next column
     # when there is no valid item in the current column.
     # `iterate` returns `Union{Nothing, Tuple}`, we explicitly pass a `valid` flag to eliminate
-    # the type instability inside the core __inc logic, and this gives better runtime performance.
+    # the type instability inside the core `__inc` logic, and this gives better runtime performance.
     __inc(::Tuple{}, ::Tuple{}) = false, ()
     @inline function __inc(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
         rng = indices[1]
