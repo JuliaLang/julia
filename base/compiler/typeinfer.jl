@@ -20,20 +20,27 @@ module Timings
 
 using Core.Compiler: -, +, length, push!, pop!, @inline, @inbounds
 
+# What we record for any given frame we infer during type inference.
+function _typeinf_identifier(frame::Core.Compiler.InferenceState)
+    # TODO: What information do we want to collect to identify each invocation of type inference?
+    mi_info = (frame.linfo, frame.world)
+    return mi_info
+end
+
 """
-    Core.Compiler.Timing(name, start_time, ...)
+    Core.Compiler.Timing(mi_info, start_time, ...)
 
 Internal type containing the timing result for running type inference on a single
 MethodInstance.
 """
 struct Timing
-    name::Any
+    mi_info::Any
     start_time::UInt64
     cur_start_time::UInt64
     time::UInt64
     children::Core.Array{Timing,1}
-    Timing(name, start_time, cur_start_time, time, children) = new(name, start_time, cur_start_time, time, children)
-    Timing(name, start_time) = new(name, start_time, start_time, UInt64(0), Timing[])
+    Timing(mi_info, start_time, cur_start_time, time, children) = new(mi_info, start_time, cur_start_time, time, children)
+    Timing(mi_info, start_time) = new(mi_info, start_time, start_time, UInt64(0), Timing[])
 end
 
 _time_ns() = ccall(:jl_hrtime, UInt64, ())  # Re-implemented here because Base not yet available.
@@ -67,7 +74,7 @@ reset_timings()
     # Add in accum_time ("modify" the immutable struct)
     @inbounds begin
         _timings[end] = Timings.Timing(
-            parent_timer.name,
+            parent_timer.mi_info,
             parent_timer.start_time,
             parent_timer.cur_start_time,
             parent_timer.time + accum_time,
@@ -77,13 +84,15 @@ reset_timings()
     return nothing
 end
 
-@inline function enter_new_timer(name)
+@inline function enter_new_timer(frame)
     # Very first thing, stop the active timer: get the current time and add in the
     # time since it was last started to its aggregate exclussive time.
     close_current_timer()
 
+    mi_info = _typeinf_identifier(frame)
+
     # Start the new timer right before returning
-    push!(_timings, Timings.Timing(name, UInt64(0)))
+    push!(_timings, Timings.Timing(mi_info, UInt64(0)))
     len = length(_timings)
     new_timer = @inbounds _timings[len]
     # Set the current time _after_ appending the node, to try to exclude the
@@ -92,7 +101,7 @@ end
 
     @inbounds begin
         _timings[len] = Timings.Timing(
-            new_timer.name,
+            new_timer.mi_info,
             start,
             start,
             new_timer.time,
@@ -103,21 +112,23 @@ end
     return nothing
 end
 
-@inline function exit_current_timer(_expected_name_)
+@inline function exit_current_timer(_expected_frame_)
     # Finish the new timer
     stop_time = Timings._time_ns()
+
+    expected_mi_info = _typeinf_identifier(_expected_frame_)
 
     # Grab the new timer again because it might have been modified in _timings
     # (since it's an immutable struct)
     # And remove it from the current timings stack
     _timings = Timings._timings
     new_timer = pop!(_timings)
-    Core.Compiler.@assert new_timer.name === _expected_name_ (new_timer.name, _expected_name_)
+    Core.Compiler.@assert new_timer.mi_info === expected_mi_info (new_timer.mi_info, expected_mi_info)
 
     accum_time = stop_time - new_timer.cur_start_time
     # Add in accum_time ("modify" the immutable struct)
     new_timer = Timings.Timing(
-        new_timer.name,
+        new_timer.mi_info,
         new_timer.start_time,
         new_timer.cur_start_time,
         new_timer.time + accum_time,
@@ -131,7 +142,7 @@ end
     len = length(_timings)
     @inbounds begin
         _timings[len] = Timings.Timing(
-            parent_timer.name,
+            parent_timer.mi_info,
             parent_timer.start_time,
             Timings._time_ns(),
             parent_timer.time,
@@ -155,9 +166,9 @@ const __measure_typeinf__ = fill(false)
 # Wrapper around _typeinf that optionally records the exclusive time for each invocation.
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     if __measure_typeinf__[]
-        Timings.enter_new_timer(frame.linfo.specTypes)
+        Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
-        Timings.exit_current_timer(frame.linfo.specTypes)
+        Timings.exit_current_timer(frame)
         return v
     else
         return _typeinf(interp, frame)
