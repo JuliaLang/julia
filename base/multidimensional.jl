@@ -265,7 +265,6 @@ module IteratorsMD
     struct CartesianIndices{N,R<:NTuple{N,OrdinalRange{Int, Int}}} <: AbstractArray{CartesianIndex{N},N}
         indices::R
     end
-    const UnitCartesianIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} = CartesianIndices{N,R}
 
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
     function CartesianIndices(inds::NTuple{N,OrdinalRange{<:Integer, <:Integer}}) where {N}
@@ -388,8 +387,8 @@ module IteratorsMD
         return CartesianIndex(I...)
     end
 
-    # Unlike ordinary ranges, CartesianIndices requires the iteration continue on the next column
-    # when there is no valid item in the current column.
+    # Unlike ordinary ranges, CartesianIndices continues the iteration in the next column when the
+    # current column is consumed. The implementation is written recursively to achieve this.
     # `iterate` returns `Union{Nothing, Tuple}`, we explicitly pass a `valid` flag to eliminate
     # the type instability inside the core `__inc` logic, and this gives better runtime performance.
     __inc(::Tuple{}, ::Tuple{}) = false, ()
@@ -524,23 +523,29 @@ module IteratorsMD
     # 0-d cartesian ranges are special-cased to iterate once and only once
     iterate(iter::Reverse{<:CartesianIndices{0}}, state=false) = state ? nothing : (CartesianIndex(), true)
 
-    Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R<:AbstractUnitRange} = LinearIndices{N,R}(inds.indices)
-    function Base.LinearIndices(inds::CartesianIndices{N}) where N
+    function Base.LinearIndices(inds::CartesianIndices{N,R}) where {N,R<:NTuple{N, AbstractUnitRange}}
+        LinearIndices{N,R}(inds.indices)
+    end
+    function Base.LinearIndices(inds::CartesianIndices)
         indices = inds.indices
         if all(x->x==1, step.(indices))
             indices = map(rng->first(rng):last(rng), indices)
-            LinearIndices{N, typeof(indices)}(indices)
+            LinearIndices{length(indices), typeof(indices)}(indices)
         else
+            # Given the fact that StepRange 1:2:4 === 1:2:3, we lost the dimensional information and
+            # thus cannot calculate the correct linear indices when the steps are not 1.
             throw(ArgumentError("LinearIndices for $(typeof(inds)) with non-1 step size is not yet supported."))
         end
     end
 
-    # This is needed because converting to LinearIndices is only available when steps are all 1
-    # NOTE: this is only a temporary patch until the LinearIndices support is done
+    # This is currently needed because converting to LinearIndices is only available when steps are
+    # all 1 NOTE: this is only a temporary patch and could be possible removed when StepRange
+    # support to LinearIndices is done
     function Base.collect(inds::CartesianIndices)
-        dest = Array{eltype(inds)}(undef, size(inds))
-        @inbounds for (i, idx) in enumerate(inds)
-            dest[i] = idx
+        dest = Array{eltype(inds), ndims(inds)}(undef, size(inds))
+        i = 0
+        @inbounds for a in inds
+            dest[i+=1] = a
         end
         dest
     end
