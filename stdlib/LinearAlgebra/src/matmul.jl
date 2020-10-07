@@ -1110,13 +1110,9 @@ or examining `size.((A,B,C))` to choose which to multiply first.
 *(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix) = _tri_matmul(A,B,C)
 *(tv::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix) = (tv*B) * C
 
-function _mat_mat_vec(A,B,x)
-    if A isa AdjointAbsVec{<:Number} || A isa TransposeAbsVec{<:Real}
-        dot(A.parent, B, x)
-    else
-        A * (B*x)
-    end
-end
+_mat_mat_vec(A::AdjointAbsVec{<:Number}, B, x) = dot(A.parent, B, x)
+_mat_mat_vec(A::TransposeAbsVec{<:Real}, B, x) = dot(A.parent, B, x)
+_mat_mat_vec(A, B, x) = A * (B*x)
 
 function _tri_matmul(A,B,C)
     n,m = size(A)
@@ -1159,4 +1155,3 @@ mat_mat_scalar(A::AdjointAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) = mat_
 mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
 mat_mat_scalar(A::TransposeAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) =
     transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
-
