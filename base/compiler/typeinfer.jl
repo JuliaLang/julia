@@ -18,12 +18,17 @@ being used for this purpose alone.
 """
 module Timings
 
-using Core.Compiler: -, +, length, push!, pop!, @inline, @inbounds
+using Core.Compiler: -, +, :, length, push!, pop!, @inline, @inbounds, copy
 
 # What we record for any given frame we infer during type inference.
 function _typeinf_identifier(frame::Core.Compiler.InferenceState)
     # TODO: What information do we want to collect to identify each invocation of type inference?
-    mi_info = (frame.linfo, frame.world)
+    mi_info = (
+        frame.linfo,
+        frame.world,
+        copy(frame.sptypes),
+        frame.slottypes[2:end],  # Skip repeating the method instance
+    )
     return mi_info
 end
 
@@ -123,7 +128,7 @@ end
     # And remove it from the current timings stack
     _timings = Timings._timings
     new_timer = pop!(_timings)
-    Core.Compiler.@assert new_timer.mi_info === expected_mi_info (new_timer.mi_info, expected_mi_info)
+    Core.Compiler.@assert new_timer.mi_info[1] === expected_mi_info[1]
 
     accum_time = stop_time - new_timer.cur_start_time
     # Add in accum_time ("modify" the immutable struct)
