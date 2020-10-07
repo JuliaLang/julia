@@ -633,7 +633,7 @@ function indent(str::AbstractString, n::Int)
     for (i, ch) in enumerate(str)
         if ch == '\n'
             !blank_line && print(buf, indent_str)
-            print(buf, str[line_start:i])
+            print(buf, SubString(str, line_start, i))
             line_start = nextind(str, i)
             blank_line = true
         elseif blank_line && !isspace(ch)
@@ -643,7 +643,7 @@ function indent(str::AbstractString, n::Int)
 
     # Last line of string that doesn't contain a newline
     !blank_line && print(buf, indent_str)
-    print(buf, str[line_start:lastindex(str)])
+    print(buf, SubString(str, line_start, lastindex(str)))
 
     String(take!(buf))
 end
