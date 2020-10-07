@@ -257,13 +257,13 @@ end
 # but which don't handle SCartesianIndex2
 function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, ind::SCartesianIndex2) where {T,N}
     @_propagate_inbounds_meta
-    I = _to_subscript_indices(A, ind.i, ind.j)
-    getindex(A, I...)
+    J = _ind2sub(tail(axes(A)), ind.j)
+    getindex(A, ind.i, J...)
 end
 function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesianIndex2) where {T,N}
     @_propagate_inbounds_meta
-    I = _to_subscript_indices(A, ind.i, ind.j)
-    setindex!(A, v, I...)
+    J = _ind2sub(tail(axes(A)), ind.j)
+    setindex!(A, v, ind.i, J...)
 end
 
 

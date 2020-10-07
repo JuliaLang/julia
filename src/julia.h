@@ -1729,11 +1729,11 @@ typedef struct _jl_task_t {
     jl_value_t *tls;
     jl_value_t *donenotify;
     jl_value_t *result;
-    jl_value_t *exception;
     jl_value_t *logstate;
     jl_function_t *start;
     uint8_t _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
+    uint8_t _isexception; // set if `result` is an exception to throw or that we exited with
 
 // hidden state:
     // id of owning thread - does not need to be defined until the task runs
@@ -1744,6 +1744,8 @@ typedef struct _jl_task_t {
     size_t world_age;
     // saved exception stack
     jl_excstack_t *excstack;
+    // current exception handler
+    jl_handler_t *eh;
 
     jl_ucontext_t ctx; // saved thread state
     void *stkbuf; // malloc'd memory (either copybuf or stack)
@@ -1751,8 +1753,6 @@ typedef struct _jl_task_t {
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
 
-    // current exception handler
-    jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
 

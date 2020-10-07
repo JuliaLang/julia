@@ -2365,6 +2365,23 @@ end
 # issue #37656
 @test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
 
+# issue #37890
+struct A37890{A, B}
+    a
+    b
+    A37890(args::Tuple) = return new{typeof.(args)...}(args...)
+end
+@test A37890((1, "")) isa A37890{Int, String}
+@test_throws ErrorException A37890((1,1,1))
+@test_throws TypeError A37890((1,))
+
+struct B37890{A, B}
+    a
+    b
+    B37890(a, b) = new{Int, ()..., Int8}(a, b)
+end
+@test B37890(1.0, 2.0f0) isa B37890{Int, Int8}
+
 # import ... as
 @test_throws ParseError("invalid syntax \"using A as ...\"") Meta.parse("using A as B")
 @test_throws ParseError("invalid syntax \"using A.b as ...\"") Meta.parse("using A.b as B")
