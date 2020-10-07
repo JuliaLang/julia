@@ -121,7 +121,7 @@ ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))
     end
 
     for oinds in [(2, 3), (0:1, 0:2), (0:1:1, 0:1:2), (Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(0:2)) ]
-        R = CartesianIndices((2, 3))
+        R = CartesianIndices(oinds)
         @test vec(LinearIndices(R)) == 1:6
     end
     # TODO: non-1 steps are not supported yet, but may change in the future

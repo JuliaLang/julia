@@ -528,10 +528,10 @@ module IteratorsMD
     function Base.LinearIndices(inds::CartesianIndices{N}) where N
         indices = inds.indices
         if all(x->x==1, step.(indices))
-            indices = map(ind->convert(AbstractUnitRange, ind), indices)
+            indices = map(rng->first(rng):last(rng), indices)
             LinearIndices{N, typeof(indices)}(indices)
         else
-            throw(ArgumentError("LinearIndices for $typeof(inds) with non-1 step size is not yet supported."))
+            throw(ArgumentError("LinearIndices for $(typeof(inds)) with non-1 step size is not yet supported."))
         end
     end
 
