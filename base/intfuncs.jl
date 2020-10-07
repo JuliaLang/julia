@@ -74,7 +74,7 @@ end
 """
     lcm(x, y...)
 
-Least common (non-negative) multiple.
+Least common (positive) multiple (or zero if any argument is zero).
 The arguments may be integer and rational numbers.
 
 !!! compat "Julia 1.4"
