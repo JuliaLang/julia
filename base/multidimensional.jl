@@ -425,6 +425,9 @@ module IteratorsMD
 
     length(iter::CartesianIndices) = prod(size(iter))
 
+    # make CartesianIndices a multidimensional range
+    Base.step(iter::CartesianIndices) = CartesianIndex(map(step, iter.indices))
+
     first(iter::CartesianIndices) = CartesianIndex(map(first, iter.indices))
     last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
 
