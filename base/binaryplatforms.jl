@@ -795,7 +795,7 @@ function parse_dl_name_version(path::String, os::String)
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"
     else
         # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?).so((?:\.[\d]+)*)$"
+        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"
     end
 
     m = match(dlregex, basename(path))
