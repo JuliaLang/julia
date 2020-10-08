@@ -13,9 +13,9 @@ is shown for illustrative purposes:
 module MyModule
 using Lib
 
-using BigLib: thing1, thing2
+using BigLib: thing1, thing2, thing3 as t3
 
-import Base.show
+import Base.show, Base.print as pr
 
 export MyType, foo
 
@@ -26,7 +26,7 @@ end
 bar(x) = 2x
 foo(a::MyType) = bar(a.x) + 1
 
-show(io::IO, a::MyType) = print(io, "MyType $(a.x)")
+show(io::IO, a::MyType) = pr(io, "MyType $(a.x)")
 end
 ```
 
@@ -85,6 +85,37 @@ functions into the current workspace:
 | `import MyModule`               | `MyModule.x`, `MyModule.y` and `MyModule.p`                                     | `MyModule.x`, `MyModule.y` and `MyModule.p` |
 | `import MyModule.x, MyModule.p` | `x` and `p`                                                                     | `x` and `p`                                 |
 | `import MyModule: x, p`         | `x` and `p`                                                                     | `x` and `p`                                 |
+
+### Import renaming
+
+An identifier brought into scope by `import` or `using` can be renamed with the keyword `as`.
+This is useful for working around name conflicts as well as for shortening names.
+For example, `Base` exports the function name `read`, but the CSV.jl package also provides `CSV.read`.
+If we are going to invoke CSV reading many times, it would be convenient to drop the `CSV.` qualifier.
+But then it is ambiguous whether we are referring to `Base.read` or `CSV.read`:
+
+```julia
+julia> read;
+
+julia> import CSV.read
+WARNING: ignoring conflicting import of CSV.read into Main
+```
+
+Renaming provides a solution:
+
+```julia
+julia> import CSV.read as rd
+```
+
+Imported packages themselves can also be renamed:
+
+```julia
+import BenchmarkTools as BT
+```
+
+`as` works with `using` only when a single identifier is brought into scope.
+For example `using CSV: read as rd` works, but `using CSV as C` does not, since it operates
+on all of the exported names in `CSV`.
 
 ### Modules and files
 

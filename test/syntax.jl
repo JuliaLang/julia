@@ -2381,3 +2381,51 @@ struct B37890{A, B}
     B37890(a, b) = new{Int, ()..., Int8}(a, b)
 end
 @test B37890(1.0, 2.0f0) isa B37890{Int, Int8}
+
+# import ... as
+@test_throws ParseError("invalid syntax \"using A as ...\"") Meta.parse("using A as B")
+@test_throws ParseError("invalid syntax \"using A.b as ...\"") Meta.parse("using A.b as B")
+@test_throws ParseError("invalid syntax \"using A.b as ...\"") Meta.parse("using X, A.b as B")
+@test_throws ParseError("invalid syntax \"import A as B:\"") Meta.parse("import A as B: c")
+@test_throws ParseError("invalid syntax \"import A.b as B:\"") Meta.parse("import A.b as B: c")
+
+module TestImportAs
+using Test
+
+module Mod
+const x = 1
+global maybe_undef
+def() = (global maybe_undef = 0)
+func(x) = 2x + 1
+end
+
+module Mod2
+const y = 2
+end
+
+import .Mod: x as x2
+
+@test x2 == 1
+@test !@isdefined(x)
+
+import .Mod2.y as y2
+
+@test y2 == 2
+@test !@isdefined(y)
+
+@test_throws ErrorException eval(:(import .Mod.x as (a.b)))
+
+import .Mod.maybe_undef as mu
+@test_throws UndefVarError mu
+Mod.def()
+@test mu === 0
+
+using .Mod: func as f
+@test f(10) == 21
+@test !@isdefined(func)
+@test_throws ErrorException("error in method definition: function Mod.func must be explicitly imported to be extended") eval(:(f(x::Int) = x))
+end
+
+import .TestImportAs.Mod2 as M2
+@test !@isdefined(Mod2)
+@test M2 === TestImportAs.Mod2

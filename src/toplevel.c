@@ -542,10 +542,10 @@ static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_m
     return li;
 }
 
-static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import)
+static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym_t *asname)
 {
     assert(m);
-    jl_sym_t *name = import->name;
+    jl_sym_t *name = asname ? asname : import->name;
     jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
         b = jl_get_binding(m, name);
@@ -691,13 +691,25 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                     if (m == jl_main_module && name == NULL) {
                         // TODO: for now, `using A` in Main also creates an explicit binding for `A`
                         // This will possibly be extended to all modules.
-                        import_module(m, u);
+                        import_module(m, u, NULL);
                     }
                 }
+                continue;
             }
-            else {
-                jl_eval_errorf(m, "syntax: malformed \"using\" statement");
+            else if (from && jl_is_expr(a) && ((jl_expr_t*)a)->head == as_sym && jl_expr_nargs(a) == 2 &&
+                     jl_is_expr(jl_exprarg(a, 0)) && ((jl_expr_t*)jl_exprarg(a, 0))->head == dot_sym) {
+                jl_sym_t *asname = (jl_sym_t*)jl_exprarg(a, 1);
+                if (jl_is_symbol(asname)) {
+                    jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
+                    name = NULL;
+                    jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "using");
+                    assert(name);
+                    // `using A: B as C` syntax
+                    jl_module_use_as(m, import, name, asname);
+                    continue;
+                }
             }
+            jl_eval_errorf(m, "syntax: malformed \"using\" statement");
         }
         JL_GC_POP();
         return jl_nothing;
@@ -716,15 +728,34 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 name = NULL;
                 jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "import");
                 if (name == NULL) {
-                    import_module(m, import);
+                    // `import A` syntax
+                    import_module(m, import, NULL);
                 }
                 else {
+                    // `import A.B` or `import A: B` syntax
                     jl_module_import(m, import, name);
                 }
+                continue;
             }
-            else {
-                jl_eval_errorf(m, "syntax: malformed \"import\" statement");
+            else if (jl_is_expr(a) && ((jl_expr_t*)a)->head == as_sym && jl_expr_nargs(a) == 2 &&
+                     jl_is_expr(jl_exprarg(a, 0)) && ((jl_expr_t*)jl_exprarg(a, 0))->head == dot_sym) {
+                jl_sym_t *asname = (jl_sym_t*)jl_exprarg(a, 1);
+                if (jl_is_symbol(asname)) {
+                    jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
+                    name = NULL;
+                    jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "import");
+                    if (name == NULL) {
+                        // `import A as B` syntax
+                        import_module(m, import, asname);
+                    }
+                    else {
+                        // `import A.B as C` syntax
+                        jl_module_import_as(m, import, name, asname);
+                    }
+                    continue;
+                }
             }
+            jl_eval_errorf(m, "syntax: malformed \"import\" statement");
         }
         JL_GC_POP();
         return jl_nothing;

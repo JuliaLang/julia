@@ -21,6 +21,8 @@ New language features
   `(x...) -> (op).(x...)`, which can be useful for passing the broadcasted version of an
   operator to higher-order functions, like for example `map(.*, A, B)` for an elementwise
   product of two arrays of arrays. ([#37583])
+* The syntax `import A as B` (plus `import A: x as y`, `import A.x as y`, and `using A: x as y`)
+  can now be used to rename imported modules and identifiers ([#1255]).
 
 Language changes
 ----------------
