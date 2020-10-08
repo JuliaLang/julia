@@ -2844,9 +2844,9 @@ f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 # usually (SnoopCompileCore).
 function time_inference(f)
     Core.Compiler.Timings.reset_timings()
-    Core.Compiler.__toggle_measure_typeinf(true)
+    Core.Compiler.__set_measure_typeinf(true)
     f()
-    Core.Compiler.__toggle_measure_typeinf(false)
+    Core.Compiler.__set_measure_typeinf(false)
     Core.Compiler.Timings.close_current_timer()
     return Core.Compiler.Timings._timings[1]
 end

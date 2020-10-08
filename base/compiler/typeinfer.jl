@@ -161,11 +161,11 @@ end
 end  # module Timings
 
 """
-    Core.Compiler.__toggle_measure_typeinf(true)
-    Core.Compiler.__toggle_measure_typeinf(false)
+    Core.Compiler.__set_measure_typeinf(true)
+    Core.Compiler.__set_measure_typeinf(false)
 Toggle recording per-method-instance timings within type inference in the Compiler.
 """
-__toggle_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
+__set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = fill(false)
 
 # Wrapper around _typeinf that optionally records the exclusive time for each invocation.
