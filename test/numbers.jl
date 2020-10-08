@@ -460,6 +460,8 @@ end
     @test sign(-0//1) == 0
     @test sign(1//0) == 1
     @test sign(-1//0) == -1
+    @test sign(pi) === 1.0
+    @test sign(pi) === -sign(-pi)
     @test isa(sign(2//3), Rational{Int})
     @test isa(2//3 + 2//3im, Complex{Rational{Int}})
     @test isa(sign(2//3 + 2//3im), ComplexF64)
