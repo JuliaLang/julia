@@ -853,7 +853,13 @@ end
     for shift in 1:5
         s1,s2,s3,s4,s5 = circshift(3:7, shift)
         a=randn(s1,s2); b=randn(s2,s3); c=randn(s3,s4); d=randn(s4,s5)
+
+        # _quad_matmul
         @test *(a,b,c,d) ≈ (a*b) * (c*d)
+
+        # _tri_matmul(A,B,B,δ)
+        @test *(11.1,b,c,d) ≈ (11.1*b) * (c*d)
+        @test *(a,b,c,99.9) ≈ (a*b) * (c*99.9)
     end
 end
 

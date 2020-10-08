@@ -1114,16 +1114,16 @@ _mat_mat_vec(A::AdjointAbsVec{<:Number}, B, x) = dot(A.parent, B, x)
 _mat_mat_vec(A::TransposeAbsVec{<:Real}, B, x) = dot(A.parent, B, x)
 _mat_mat_vec(A, B, x) = A * (B*x)
 
-function _tri_matmul(A,B,C)
+function _tri_matmul(A,B,C,δ=nothing)
     n,m = size(A)
     # m,k == size(B)
     k,l = size(C)
     costAB_C = n*m*k + n*k*l
     costA_BC = m*k*l + n*m*l
     if costA_BC < costAB_C
-        A * (B*C)
+        isnothing(δ) ? A * (B*C) : A * mat_mat_scalar(B,C,δ)
     else
-        (A*B) * C
+        isnothing(δ) ? (A*B) * C : mat_mat_scalar(A*B, C, δ)
     end
 end
 
@@ -1157,7 +1157,7 @@ mat_mat_scalar(A::TransposeAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) =
     transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
 
 
-# Four-argument *
+# Four-argument *, by type
 *(α::Number, β::Number, C::AbstractMatrix, x::AbstractVector) = (α*β) * C * x
 *(α::Number, β::Number, C::AbstractMatrix, D::AbstractMatrix) = (α*β) * C * D
 *(α::Number, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = α * B * (C*x)
@@ -1174,9 +1174,12 @@ mat_mat_scalar(A::TransposeAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) =
 *(vt::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) = (vt*B) * C * D
 *(vt::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = vt * B * (C*x)
 
-*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) = _quad_mul(A,B,C,D)
+# Four-argument *, by size
+*(α::Union{Real,Complex}, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) = _tri_matmul(B,C,D,α)
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, δ::Number) = _tri_matmul(A,B,C,δ)
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) = _quad_matmul(A,B,C,D)
 
-function _quad_mul(A,B,C,D)
+function _quad_matmul(A,B,C,D)
     c1 = _mul_cost((A,B),(C,D))
     c2 = _mul_cost(((A,B),C),D)
     c3 = _mul_cost(A,(B,(C,D)))
