@@ -2910,3 +2910,10 @@ end
 
 # issue #37638
 @test !(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}) <: Vararg)
+
+# Issue #37943
+f37943(x::Any, i::Int) = getfield((x::Pair{false, Int}), i)
+g37943(i::Int) = fieldtype(Pair{false, T} where T, i)
+@test only(Base.return_types(f37943, Tuple{Any, Int})) === Union{}
+@test only(Base.return_types(g37943, Tuple{Int})) === Union{Type{Union{}}, Type{Any}}
+
