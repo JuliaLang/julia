@@ -199,7 +199,7 @@ end
 for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
     @eval begin
         ($func)(x::Real) = ($func)(float(x))
-        @inline function ($func)(x::T) where T<:Float64
+        function ($func)(x::T) where T<:Float64
             N_float = muladd(x, LogBo256INV($base, T), MAGIC_ROUND_CONST(T))
             N = reinterpret(uinttype(T), N_float) % Int32
             N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV($base, T))
@@ -222,7 +222,7 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
             return reinterpret(T, twopk + reinterpret(Int64, small_part))
         end
 
-        @inline function ($func)(x::T) where T<:Float32
+        function ($func)(x::T) where T<:Float32
             N_float = round(x*LogBINV($base, T))
             N = unsafe_trunc(Int32, N_float)
             r = muladd(N_float, LogBU($base, T), x)
