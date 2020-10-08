@@ -1162,7 +1162,7 @@ mat_mat_scalar(A::TransposeAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) =
 *(α::Number, β::Number, C::AbstractMatrix, D::AbstractMatrix) = (α*β) * C * D
 *(α::Number, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = α * B * (C*x)
 *(α::Number, vt::AdjOrTransAbsVec, C::AbstractMatrix, x::AbstractVector) = α * (vt*C*x)
-*(α::Number, vt::AdjOrTransAbsVec, C::AbstractMatrix, D::AbstractMatrix) = (α*vt*C) * D
+*(α::Union{Real,Complex}, vt::AdjOrTransAbsVec, C::AbstractMatrix, D::AbstractMatrix) = (α*vt*C) * D
 
 *(A::AbstractMatrix, x::AbstractVector, γ::Number, δ::Number) = A * x * (γ*δ)
 *(A::AbstractMatrix, B::AbstractMatrix, γ::Number, δ::Number) = A * B * (γ*δ)
