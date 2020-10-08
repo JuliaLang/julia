@@ -23,8 +23,21 @@ for i in 1:n
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
     FDmax = Sys.iswindows() ? 0x7fff : (n + 60) # expectations on reasonable values
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    fds_ok = 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax
+    if !fds_ok
+        @info "#vvvvvvvvvvvvvv FD OUTPUT vvvvvvvvvvvvvvvv#"
+        run(`lsof -p $(getpid())`)
+        @info "#^^^^^^^^^^^^^^ FD OUTPUT ^^^^^^^^^^^^^^^^#"
+        @test false
+    end
+
+    fds_ok = 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    if !fds_ok
+        @info "#vvvvvvvvvvvvvv FD OUTPUT vvvvvvvvvvvvvvvv#"
+        run(`lsof -p $(getpid())`)
+        @info "#^^^^^^^^^^^^^^ FD OUTPUT ^^^^^^^^^^^^^^^^#"
+        @test false
+    end
 end
 
 function pfd_tst_reads(idx, intvl)
