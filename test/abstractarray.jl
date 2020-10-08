@@ -1141,3 +1141,56 @@ end
     @test last(itr, 1) == [itr[end]]
     @test_throws ArgumentError last(itr, -6)
 end
+
+# Ensure dataids are inferrable for custom arrays
+struct M0 <: AbstractArray{Int,2} end
+struct M1{T} <: AbstractArray{Int,2}
+    x::T
+end
+struct M2{T,S} <: AbstractArray{Int,2}
+    x::T
+    y::S
+end
+struct M10{A,B,C,D,E,F,G,H,I,J} <: AbstractArray{Int,2}
+    a::A
+    b::B
+    c::C
+    d::D
+    e::E
+    f::F
+    g::G
+    h::H
+    i::I
+    j::J
+end
+
+@testset "dataids" begin
+    @test @inferred(Base.dataids(M0())) === ()
+    @test @inferred(Base.dataids(M1(1))) === ()
+    @test @inferred(Base.dataids(M1(1:10))) === ()
+    @test @inferred(Base.dataids(M10(1,2,3,4,5,6,7,8,9,0))) === ()
+
+    @test @inferred(Base.dataids(M1(M1([1])))) != Base.dataids(M1(M1([1])))
+    @test @inferred(Base.dataids(M1(M2([1],2)))) != Base.dataids(M1(M2([1],2)))
+    @test @inferred(Base.dataids(M1(M2([1],[2])))) != Base.dataids(M1(M2([1],[2])))
+    @test @inferred(Base.dataids(M10([1],[2],[3],[4],[5],[6],[7],[8],[9],[0]))) != Base.dataids(M10([1],[2],[3],[4],[5],[6],[7],[8],[9],[0]))
+
+    x = [1]
+    y = [1]
+    mx = M1(x)
+    mxx = M2(x,x)
+    mxy = M2(x,y)
+    @test @inferred(Base.mightalias(mx,mx))
+    @test @inferred(Base.mightalias(mx,mxx))
+    @test @inferred(Base.mightalias(mx,mxy))
+    @test @inferred(Base.mightalias(mxx,x))
+    @test @inferred(Base.mightalias(x,mxy))
+    @test !@inferred(Base.mightalias(mx, y))
+    @test !@inferred(Base.mightalias(mxx, y))
+    @test !@inferred(Base.mightalias(mxx, [1]))
+    @test !@inferred(Base.mightalias(mxy, 1:10))
+    @test !@inferred(Base.mightalias(mxy, M0()))
+    @test !@inferred(Base.mightalias(mxy, [1]))
+    @test !@inferred(Base.mightalias(mxy, M1(1:10)))
+    @test !@inferred(Base.mightalias(mxy, M1([1])))
+end

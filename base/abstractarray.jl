@@ -1354,7 +1354,19 @@ parts can specialize this method to return the concatenation of the `dataids` of
 their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
-dataids(A::AbstractArray) = (UInt(objectid(A)),)
+function dataids(A::AbstractArray)
+    @_inline_meta
+    if @generated
+        :(ids = tuple($([:(dataids(getfield(A, $i))...) for i in 1:fieldcount(A)]...)))
+    else
+        ids = _splatmap(dataids, ntuple(i -> getfield(A, i), Val(nfields(A))))
+    end
+    if isimmutable(A) || !isempty(ids)
+        return ids
+    else
+        return (UInt(pointer_from_objref(A)),)
+    end
+end
 dataids(A::Array) = (UInt(pointer(A)),)
 dataids(::AbstractRange) = ()
 dataids(x) = ()

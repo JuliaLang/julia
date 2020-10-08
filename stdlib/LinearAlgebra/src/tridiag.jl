@@ -593,6 +593,8 @@ similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), sim
 # Operations on Tridiagonal matrices
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
 
+Base.dataids(A::Tridiagonal) = (Base.dataids(A.dl), Base.dataids(A.d), Base.dataids(A.du))
+
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
     @eval function ($func)(M::Tridiagonal)
