@@ -152,8 +152,12 @@ module ObjLoadTest
         didcall = true
         nothing
     end
+    @test_throws(ErrorException("@ccallable was already defined for this method name"),
+                 @eval @ccallable Cvoid jl_the_callback(not_the_method::Int) = "other")
     # Make sure everything up until here gets compiled
-    jl_the_callback(); didcall = false
+    @test jl_the_callback() === nothing
+    @test jl_the_callback(1) == "other"
+    didcall = false
     function do_the_call()
         llvmcall(
             ("""declare void @jl_the_callback()

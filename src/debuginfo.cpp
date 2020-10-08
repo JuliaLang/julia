@@ -313,10 +313,11 @@ public:
 #endif
 
 #if defined(_OS_WINDOWS_)
-        uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
+        uint64_t SectionAddrCheck = 0;
+        uint64_t SectionLoadCheck = 0;
+        uint64_t SectionWriteCheck = 0;
         uint8_t *UnwindData = NULL;
 #if defined(_CPU_X86_64_)
-        uint64_t SectionLoadOffset = 1; // The real offset shouldn't be 1.
         uint8_t *catchjmp = NULL;
         for (const object::SymbolRef &sym_iter : debugObj.symbols()) {
             StringRef sName = cantFail(sym_iter.getName());
@@ -338,41 +339,38 @@ public:
                 Section->getName(sName);
 #endif
                 uint64_t SectionLoadAddr = getLoadAddress(sName);
-                Addr -= SectionAddr - SectionLoadAddr;
-                *pAddr = (uint8_t*)Addr;
-                if (SectionAddrCheck)
-                    assert(SectionAddrCheck == SectionLoadAddr);
-                else
-                    SectionAddrCheck = SectionLoadAddr;
+                assert(SectionLoadAddr);
+                if (SectionAddrCheck) // assert that all of the Sections are at the same location
+                    assert(SectionAddrCheck == SectionAddr &&
+                           SectionLoadCheck == SectionLoadAddr);
+                SectionAddrCheck = SectionAddr;
+                SectionLoadCheck = SectionLoadAddr;
+                SectionWriteCheck = SectionLoadAddr;
                 if (memmgr)
-                    SectionAddr =
-                        (uintptr_t)lookupWriteAddressFor(memmgr,
-                                                         (void*)SectionLoadAddr);
-                if (SectionLoadOffset != 1)
-                    assert(SectionLoadOffset == SectionAddr - SectionLoadAddr);
-                else
-                    SectionLoadOffset = SectionAddr - SectionLoadAddr;
+                    SectionWriteCheck = (uintptr_t)lookupWriteAddressFor(memmgr,
+                            (void*)SectionLoadAddr);
+                Addr += SectionWriteCheck - SectionLoadAddr;
+                *pAddr = (uint8_t*)Addr;
             }
         }
         assert(catchjmp);
         assert(UnwindData);
         assert(SectionAddrCheck);
-        assert(SectionLoadOffset != 1);
-        catchjmp[SectionLoadOffset] = 0x48;
-        catchjmp[SectionLoadOffset + 1] = 0xb8; // mov RAX, QWORD PTR [&__julia_personality]
-        *(uint64_t*)(&catchjmp[SectionLoadOffset + 2]) =
-            (uint64_t)&__julia_personality;
-        catchjmp[SectionLoadOffset + 10] = 0xff;
-        catchjmp[SectionLoadOffset + 11] = 0xe0; // jmp RAX
-        UnwindData[SectionLoadOffset] = 0x09; // version info, UNW_FLAG_EHANDLER
-        UnwindData[SectionLoadOffset + 1] = 4;    // size of prolog (bytes)
-        UnwindData[SectionLoadOffset + 2] = 2;    // count of unwind codes (slots)
-        UnwindData[SectionLoadOffset + 3] = 0x05; // frame register (rbp) = rsp
-        UnwindData[SectionLoadOffset + 4] = 4;    // second instruction
-        UnwindData[SectionLoadOffset + 5] = 0x03; // mov RBP, RSP
-        UnwindData[SectionLoadOffset + 6] = 1;    // first instruction
-        UnwindData[SectionLoadOffset + 7] = 0x50; // push RBP
-        *(DWORD*)&UnwindData[SectionLoadOffset + 8] = (DWORD)(catchjmp - (uint8_t*)SectionAddrCheck); // relative location of catchjmp
+        assert(SectionLoadCheck);
+        catchjmp[0] = 0x48;
+        catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [&__julia_personality]
+        *(uint64_t*)(&catchjmp[2]) = (uint64_t)&__julia_personality;
+        catchjmp[10] = 0xff;
+        catchjmp[11] = 0xe0; // jmp RAX
+        UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
+        UnwindData[1] = 4;    // size of prolog (bytes)
+        UnwindData[2] = 2;    // count of unwind codes (slots)
+        UnwindData[3] = 0x05; // frame register (rbp) = rsp
+        UnwindData[4] = 4;    // second instruction
+        UnwindData[5] = 0x03; // mov RBP, RSP
+        UnwindData[6] = 1;    // first instruction
+        UnwindData[7] = 0x50; // push RBP
+        *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionWriteCheck); // relative location of catchjmp
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
@@ -400,9 +398,10 @@ public:
             size_t Size = sym_size.second;
 #if defined(_OS_WINDOWS_)
             if (SectionAddrCheck)
-                assert(SectionAddrCheck == SectionLoadAddr);
-            else
-                SectionAddrCheck = SectionLoadAddr;
+                assert(SectionAddrCheck == SectionAddr &&
+                       SectionLoadCheck == SectionLoadAddr);
+            SectionAddrCheck = SectionAddr;
+            SectionLoadCheck = SectionLoadAddr;
             create_PRUNTIME_FUNCTION(
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
