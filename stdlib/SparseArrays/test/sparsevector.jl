@@ -60,7 +60,7 @@ end
     @test occursin("3.5", string(spv_x1))
 
     # issue #30589
-    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool,$Int} with 1 stored entry:\n  [1]  =  1"
+    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool, $Int} with 1 stored entry:\n  [1]  =  1"
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -430,6 +430,11 @@ end
         x2 = spzeros(length(x))
         copyto!(x2, x) # copyto!(SparseVector, AbstractVector)
         @test Vector(x2) == collect(x)
+    end
+    let x = 1:9, x1 = spzeros(length(x)), x2 = spzeros(length(x)-1)
+        @test_throws ArgumentError copy!(x2, x)
+        copy!(x1, convert.(eltype(x1), collect(x))) # copy!(SparseVector, AbstractVector)
+        @test Vector(x1) == collect(x)
     end
 end
 @testset "vec/reinterpret/float/complex" begin
@@ -1297,9 +1302,9 @@ mutable struct t20488 end
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparsevec(Int64[1], [1.0]))
-    @test String(take!(io)) == "1-element SparseArrays.SparseVector{Float64,Int64} with 1 stored entry:\n  [1]  =  1.0"
+    @test String(take!(io)) == "1-element SparseArrays.SparseVector{Float64, Int64} with 1 stored entry:\n  [1]  =  1.0"
     show(io, MIME"text/plain"(),  spzeros(Float64, Int64, 2))
-    @test String(take!(io)) == "2-element SparseArrays.SparseVector{Float64,Int64} with 0 stored entries"
+    @test String(take!(io)) == "2-element SparseArrays.SparseVector{Float64, Int64} with 0 stored entries"
     show(io, similar(sparsevec(rand(3) .+ 0.1), t20488))
     @test String(take!(io)) == "  [1]  =  #undef\n  [2]  =  #undef\n  [3]  =  #undef"
 end

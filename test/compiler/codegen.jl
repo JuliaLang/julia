@@ -10,14 +10,8 @@ const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().mallo
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
 # `_dump_function` might be more efficient but it doesn't really matter here...
-get_llvm(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
-    sprint(code_llvm, f, t, strip_ir_metadata, dump_module)
-
-get_llvm_noopt(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
-    InteractiveUtils._dump_function(f, t,
-                #=native=# false, #=wrapper=# false, #=strip=# strip_ir_metadata,
-                #=dump_module=# dump_module, #=syntax=#:att, #=optimize=#false)
-
+get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true) =
+    sprint(code_llvm, f, t, raw, dump_module, optimize)
 
 if opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
@@ -455,4 +449,49 @@ end
 @testset "#36422" begin
     str_36422 = "using InteractiveUtils; code_llvm(Base.ht_keyindex, (Dict{NTuple{65,Int64},Nothing}, NTuple{65,Int64}))"
     @test success(`$(Base.julia_cmd()) --startup-file=no -e $str_36422`)
+end
+
+@noinline g37262(x) = (x ? error("intentional") : (0x1, "v", "1", ".", "2"))
+function f37262(x)
+    try
+        GC.safepoint()
+    catch
+        GC.safepoint()
+    end
+    try
+        GC.gc()
+        return g37262(x)
+    catch ex
+        GC.gc()
+    finally
+        GC.gc()
+    end
+end
+@testset "#37262" begin
+    str = "store volatile { i8, {}*, {}*, {}*, {}* } zeroinitializer, { i8, {}*, {}*, {}*, {}* }* %phic"
+    llvmstr = get_llvm(f37262, (Bool,), false, false, false)
+    @test contains(llvmstr, str) || llvmstr
+    @test f37262(Base.inferencebarrier(true)) === nothing
+end
+
+# issue #37671
+let d = Dict((:a,) => 1, (:a, :b) => 2)
+    @test d[(:a,)] == 1
+    @test d[(:a, :b)] == 2
+end
+
+# issue #37880
+primitive type Has256Bits 256 end
+let x = reinterpret(Has256Bits, [0xfcdac822cac89d82de4f9b3326da8294, 0x6ebac4d5982880ca703c57e37657f1ee])[]
+    shifted = [0xeefcdac822cac89d82de4f9b3326da82, 0x006ebac4d5982880ca703c57e37657f1]
+    f(x) = Base.lshr_int(x, 0x8)
+    @test reinterpret(UInt128, [f(x)]) == shifted
+    @test reinterpret(UInt128, [Base.lshr_int(x, 0x8)]) == shifted
+    g(x) = Base.ashr_int(x, 0x8)
+    @test reinterpret(UInt128, [g(x)]) == shifted
+    @test reinterpret(UInt128, [Base.ashr_int(x, 0x8)]) == shifted
+    lshifted = [0xdac822cac89d82de4f9b3326da829400, 0xbac4d5982880ca703c57e37657f1eefc]
+    h(x) = Base.shl_int(x, 0x8)
+    @test reinterpret(UInt128, [h(x)]) == lshifted
+    @test reinterpret(UInt128, [Base.shl_int(x, 0x8)]) == lshifted
 end

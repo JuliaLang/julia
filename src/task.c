@@ -181,13 +181,11 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 /* Rooted by the base module */
 static jl_function_t *task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
-void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
+void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
-    t->result = resultval;
-    jl_gc_wb(t, t->result);
-    if (t->exception != jl_nothing)
+    if (t->_isexception)
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
     else
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_DONE);
@@ -198,12 +196,14 @@ void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNR
     ptls->in_pure_callback = 0;
     jl_get_ptls_states()->world_age = jl_world_counter;
     // let the runtime know this task is dead and find a new task to run
-    if (task_done_hook_func == NULL) {
-        task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
-                                                            jl_symbol("task_done_hook"));
+    jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
+    if (done == NULL) {
+        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("task_done_hook"));
+        if (done != NULL)
+            jl_atomic_store_release(&task_done_hook_func, done);
     }
-    if (task_done_hook_func != NULL) {
-        jl_value_t *args[2] = {task_done_hook_func, (jl_value_t*)t};
+    if (done != NULL) {
+        jl_value_t *args[2] = {done, (jl_value_t*)t};
         JL_TRY {
             jl_apply(args, 2);
         }
@@ -245,6 +245,57 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
     return (void *)((char *)task->stkbuf + off);
 }
 
+JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
+                                       char **active_start, char **active_end,
+                                       char **total_start, char **total_end)
+{
+    if (!task->started) {
+        *total_start = *active_start = 0;
+        *total_end = *active_end = 0;
+        return;
+    }
+
+    int16_t tid = task->tid;
+    jl_ptls_t ptls2 = (tid != -1) ? jl_all_tls_states[tid] : 0;
+
+    if (task->copy_stack && ptls2 && task == ptls2->current_task) {
+        *total_start = *active_start = (char*)ptls2->stackbase - ptls2->stacksize;
+        *total_end = *active_end = (char*)ptls2->stackbase;
+    }
+    else if (task->stkbuf) {
+        *total_start = *active_start = (char*)task->stkbuf;
+#ifndef _OS_WINDOWS_
+        if (jl_all_tls_states[0]->root_task == task) {
+            // See jl_init_root_task(). The root task of the main thread
+            // has its buffer enlarged by an artificial 3000000 bytes, but
+            // that means that the start of the buffer usually points to
+            // inaccessible memory. We need to correct for this.
+            *active_start += ROOT_TASK_STACK_ADJUSTMENT;
+            *total_start += ROOT_TASK_STACK_ADJUSTMENT;
+        }
+#endif
+
+        *total_end = *active_end = (char*)task->stkbuf + task->bufsz;
+#ifdef COPY_STACKS
+        // save_stack stores the stack of an inactive task in stkbuf, and the
+        // actual number of used bytes in copy_stack.
+        if (task->copy_stack > 1)
+            *active_end = (char*)task->stkbuf + task->copy_stack;
+#endif
+    }
+    else {
+        // no stack allocated yet
+        *total_start = *active_start = 0;
+        *total_end = *active_end = 0;
+        return;
+    }
+
+    if (task == jl_current_task) {
+        // scan up to current `sp` for current thread and task
+        *active_start = (char*)jl_get_frame_addr();
+    }
+}
+
 // Marked noinline so we can consistently skip the associated frame.
 // `skip` is number of additional frames to skip.
 NOINLINE static void record_backtrace(jl_ptls_t ptls, int skip) JL_NOTSAFEPOINT
@@ -258,12 +309,12 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     _julia_init(rel);
 }
 
-JL_DLLEXPORT void jl_set_next_task(jl_task_t *task)
+JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT
 {
     jl_get_ptls_states()->next_task = task;
 }
 
-JL_DLLEXPORT jl_task_t *jl_get_next_task(void)
+JL_DLLEXPORT jl_task_t *jl_get_next_task(void) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ptls->next_task)
@@ -274,8 +325,6 @@ JL_DLLEXPORT jl_task_t *jl_get_next_task(void)
 #ifdef JL_TSAN_ENABLED
 const char tsan_state_corruption[] = "TSAN state corrupted. Exiting HARD!\n";
 #endif
-
-void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 
 static void ctx_switch(jl_ptls_t ptls)
 {
@@ -444,8 +493,9 @@ JL_DLLEXPORT void jl_switch(void)
         return;
     }
     if (t->_state != JL_TASK_STATE_RUNNABLE || (t->started && t->stkbuf == NULL)) {
-        ct->exception = t->exception;
+        ct->_isexception = t->_isexception;
         ct->result = t->result;
+        jl_gc_wb(ct, ct->result);
         return;
     }
     if (ptls->in_finalizer)
@@ -515,10 +565,8 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
     jl_exit(1);
 }
 
-jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
-
 // yield to exception handler
-void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
+static void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->io_wait = 0;
@@ -631,8 +679,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
-    t->exception = jl_nothing;
-    t->backtrace = jl_nothing;
+    t->_isexception = 0;
     // Inherit logger state from parent task
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
@@ -692,7 +739,7 @@ JL_DLLEXPORT jl_value_t *jl_get_root_task(void)
     return (jl_value_t*)ptls->root_task;
 }
 
-void JL_DLLEXPORT jl_task_wait()
+JL_DLLEXPORT void jl_task_wait()
 {
     static jl_function_t *wait_func = NULL;
     if (!wait_func) {
@@ -704,7 +751,7 @@ void JL_DLLEXPORT jl_task_wait()
     jl_get_ptls_states()->world_age = last_age;
 }
 
-void JL_DLLEXPORT jl_schedule_task(jl_task_t *task)
+JL_DLLEXPORT void jl_schedule_task(jl_task_t *task)
 {
     static jl_function_t *sched_func = NULL;
     if (!sched_func) {
@@ -757,11 +804,11 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 #endif
 
     t->started = 1;
-    if (t->exception != jl_nothing) {
+    if (t->_isexception) {
         record_backtrace(ptls, 0);
-        jl_push_excstack(&t->excstack, t->exception,
+        jl_push_excstack(&t->excstack, t->result,
                          ptls->bt_data, ptls->bt_size);
-        res = t->exception;
+        res = t->result;
     }
     else {
         JL_TRY {
@@ -775,13 +822,14 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
         }
         JL_CATCH {
             res = jl_current_exception();
-            t->exception = res;
-            jl_gc_wb(t, res);
+            t->_isexception = 1;
             goto skip_pop_exception;
         }
 skip_pop_exception:;
     }
-    jl_finish_task(t, res);
+    t->result = res;
+    jl_gc_wb(t, t->result);
+    jl_finish_task(t);
     gc_debug_critical_error();
     abort();
 }
@@ -1202,8 +1250,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->start = NULL;
     ptls->current_task->result = jl_nothing;
     ptls->current_task->donenotify = jl_nothing;
-    ptls->current_task->exception = jl_nothing;
-    ptls->current_task->backtrace = jl_nothing;
+    ptls->current_task->_isexception = 0;
     ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
@@ -1228,12 +1275,12 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     jl_init_basefiber(JL_STACK_SIZE);
 }
 
-JL_DLLEXPORT int jl_is_task_started(jl_task_t *t)
+JL_DLLEXPORT int jl_is_task_started(jl_task_t *t) JL_NOTSAFEPOINT
 {
     return t->started;
 }
 
-JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t)
+JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t) JL_NOTSAFEPOINT
 {
     return t->tid;
 }

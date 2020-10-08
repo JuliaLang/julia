@@ -193,17 +193,16 @@ static void jl_gc_wait_for_the_world(void)
 {
     if (jl_n_threads > 1)
         jl_wake_libuv();
-    for (int i = 0;i < jl_n_threads;i++) {
+    for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        // FIXME: The acquire load pairs with the release stores
+        // This acquire load pairs with the release stores
         // in the signal handler of safepoint so we are sure that
-        // all the stores on those threads are visible. However,
-        // we're currently not using atomic stores in mutator threads.
-        // We should either use atomic store release there too or use signals
-        // to flush the memory operations on those threads.
-        while (!ptls2->gc_state || !jl_atomic_load_acquire(&ptls2->gc_state)) {
+        // all the stores on those threads are visible.
+        // We're currently also using atomic store release in mutator threads
+        // (in jl_gc_state_set), but we may want to use signals to flush the
+        // memory operations on those threads lazily instead.
+        while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state))
             jl_cpu_pause(); // yield?
-        }
     }
 }
 
@@ -482,7 +481,7 @@ JL_DLLEXPORT void jl_finalize_th(jl_ptls_t ptls, jl_value_t *o)
     arraylist_new(&copied_list, 0);
     // No need to check the to_finalize list since the user is apparently
     // still holding a reference to the object
-    for (int i = 0;i < jl_n_threads;i++) {
+    for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         finalize_object(&ptls2->finalizers, o, &copied_list, ptls != ptls2);
     }
@@ -1027,7 +1026,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
     reset_thread_gc_counts();
 }
 
-static size_t array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
+size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
 {
     size_t sz = 0;
     int isbitsunion = jl_array_isbitsunion(a);
@@ -1049,7 +1048,7 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
             jl_free_aligned(d);
         else
             free(d);
-        gc_num.freed += array_nbytes(a);
+        gc_num.freed += jl_array_nbytes(a);
     }
 }
 
@@ -1820,6 +1819,54 @@ STATIC_INLINE int gc_mark_scan_array8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
     return 0;
 }
 
+// Scan a sparse array of object references, see `gc_mark_objarray_t`
+STATIC_INLINE int gc_mark_scan_array16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
+                                      gc_mark_array16_t *ary16,
+                                      jl_value_t **begin, jl_value_t **end,
+                                      uint16_t *elem_begin, uint16_t *elem_end,
+                                      jl_value_t **pnew_obj, uintptr_t *ptag, uint8_t *pbits)
+{
+    (void)jl_assume(ary16 == (gc_mark_array16_t*)sp->data);
+    size_t elsize = ((jl_array_t*)ary16->elem.parent)->elsize / sizeof(jl_value_t*);
+    for (; begin < end; begin += elsize) {
+        for (; elem_begin < elem_end; elem_begin++) {
+            jl_value_t **slot = &begin[*elem_begin];
+            *pnew_obj = *slot;
+            if (*pnew_obj)
+                verify_parent2("array", ary16->elem.parent, slot, "elem(%d)",
+                               gc_slot_to_arrayidx(ary16->elem.parent, begin));
+            if (!gc_try_setmark(*pnew_obj, &ary16->elem.nptr, ptag, pbits))
+                continue;
+            elem_begin++;
+            // Found an object to mark
+            if (elem_begin < elem_end) {
+                // Haven't done with this one yet. Update the content and push it back
+                ary16->elem.begin = elem_begin;
+                ary16->begin = begin;
+                gc_repush_markdata(sp, gc_mark_array16_t);
+            }
+            else {
+                begin += elsize;
+                if (begin < end) {
+                    // Haven't done with this array yet. Reset the content and push it back
+                    ary16->elem.begin = ary16->rebegin;
+                    ary16->begin = begin;
+                    gc_repush_markdata(sp, gc_mark_array16_t);
+                }
+                else {
+                    // Finished scanning this one, finish up by checking the GC invariance
+                    // and let the next item replacing the current one directly.
+                    gc_mark_push_remset(ptls, ary16->elem.parent, ary16->elem.nptr);
+                }
+            }
+            return 1;
+        }
+        elem_begin = ary16->rebegin;
+    }
+    gc_mark_push_remset(ptls, ary16->elem.parent, ary16->elem.nptr);
+    return 0;
+}
+
 
 // Scan an object with 8bits field descriptors. see `gc_mark_obj8_t`
 STATIC_INLINE int gc_mark_scan_obj8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mark_obj8_t *obj8,
@@ -1937,6 +1984,8 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
             goto objarray;                      \
         case GC_MARK_L_array8:                  \
             goto array8;                        \
+        case GC_MARK_L_array16:                 \
+            goto array16;                       \
         case GC_MARK_L_obj8:                    \
             goto obj8;                          \
         case GC_MARK_L_obj16:                   \
@@ -2029,6 +2078,7 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
         gc_mark_label_addrs[GC_MARK_L_finlist] = gc_mark_laddr(finlist);
         gc_mark_label_addrs[GC_MARK_L_objarray] = gc_mark_laddr(objarray);
         gc_mark_label_addrs[GC_MARK_L_array8] = gc_mark_laddr(array8);
+        gc_mark_label_addrs[GC_MARK_L_array16] = gc_mark_laddr(array16);
         gc_mark_label_addrs[GC_MARK_L_obj8] = gc_mark_laddr(obj8);
         gc_mark_label_addrs[GC_MARK_L_obj16] = gc_mark_laddr(obj16);
         gc_mark_label_addrs[GC_MARK_L_obj32] = gc_mark_laddr(obj32);
@@ -2048,6 +2098,7 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
     jl_value_t **objary_end;
 
     gc_mark_array8_t *ary8;
+    gc_mark_array16_t *ary16;
 
     gc_mark_obj8_t *obj8;
     char *obj8_parent;
@@ -2108,6 +2159,17 @@ array8_loaded:
         goto mark;
     goto pop;
 
+array16:
+    ary16 = gc_pop_markdata(&sp, gc_mark_array16_t);
+    objary_begin = ary16->begin;
+    objary_end = ary16->end;
+    obj16_begin = ary16->elem.begin;
+    obj16_end = ary16->elem.end;
+array16_loaded:
+    if (gc_mark_scan_array16(ptls, &sp, ary16, objary_begin, objary_end, obj16_begin, obj16_end,
+                            &new_obj, &tag, &bits))
+        goto mark;
+    goto pop;
 
 obj8:
     obj8 = gc_pop_markdata(&sp, gc_mark_obj8_t);
@@ -2411,17 +2473,17 @@ mark: {
                 verify_parent1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
                 (void)val_buf;
                 gc_setmark_buf_(ptls, (char*)a->data - a->offset * a->elsize,
-                                bits, array_nbytes(a));
+                                bits, jl_array_nbytes(a));
             }
             else if (flags.how == 2) {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
-                                     array_nbytes(a));
+                                     jl_array_nbytes(a));
                     if (bits == GC_OLD_MARKED) {
-                        ptls->gc_cache.perm_scanned_bytes += array_nbytes(a);
+                        ptls->gc_cache.perm_scanned_bytes += jl_array_nbytes(a);
                     }
                     else {
-                        ptls->gc_cache.scanned_bytes += array_nbytes(a);
+                        ptls->gc_cache.scanned_bytes += jl_array_nbytes(a);
                     }
                 }
             }
@@ -2474,6 +2536,15 @@ mark: {
                                        &markdata, sizeof(markdata), 0);
                     ary8 = (gc_mark_array8_t*)sp.data;
                     goto array8_loaded;
+                }
+                else if (layout->fielddesc_type == 1) {
+                    obj16_begin = (uint16_t*)jl_dt_layout_ptrs(layout);
+                    obj16_end = obj16_begin + npointers;
+                    gc_mark_array16_t markdata = {objary_begin, objary_end, obj16_begin, {new_obj, obj16_begin, obj16_end, nptr}};
+                    gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(array16),
+                                       &markdata, sizeof(markdata), 0);
+                    ary16 = (gc_mark_array16_t*)sp.data;
+                    goto array16_loaded;
                 }
                 else {
                     assert(0 && "unimplemented");
@@ -2639,10 +2710,6 @@ mark: {
     }
 }
 
-extern jl_typemap_entry_t *call_cache[N_CALL_CACHE];
-extern jl_array_t *jl_all_methods;
-extern jl_array_t *_jl_debug_method_invalidation;
-
 static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                                      jl_ptls_t ptls2)
 {
@@ -2761,7 +2828,7 @@ JL_DLLEXPORT int jl_gc_is_enabled(void)
     return !ptls->disable_gc;
 }
 
-JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes)
+JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes) JL_NOTSAFEPOINT
 {
     jl_gc_num_t num = gc_num;
     combine_thread_gc_counts(&num);
@@ -2782,7 +2849,7 @@ JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
 }
 
 // TODO: these were supposed to be thread local
-JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
+JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT
 {
     int64_t oldtb = last_gc_total_bytes;
     int64_t newtb;
@@ -2791,7 +2858,7 @@ JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
     return newtb - oldtb;
 }
 
-JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset)
+JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT
 {
     int64_t oldtb = last_gc_total_bytes;
     int64_t newtb;
@@ -3084,8 +3151,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     }
     gc_debug_print();
 
-    int8_t old_state = jl_gc_state(ptls);
-    ptls->gc_state = JL_GC_STATE_WAITING;
+    int8_t old_state = ptls->gc_state;
+    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
     // `jl_safepoint_start_gc()` makes sure only one thread can
     // run the GC.
     if (!jl_safepoint_start_gc()) {

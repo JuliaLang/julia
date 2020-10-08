@@ -52,7 +52,7 @@ You can also specify to build a debug version of LLVM, by setting either `LLVM_D
 `LLVM_DEBUG = Release` in your `Make.user` file. The former will be a fully unoptimized build
 of LLVM and the latter will produce an optimized build of LLVM. Depending on your needs the
 latter will suffice and it quite a bit faster. If you use `LLVM_DEBUG = Release` you will also
-want to set `LLVM_ASSERTIONS = 1` to enable diagonstics for different passes. Only `LLVM_DEBUG = 1`
+want to set `LLVM_ASSERTIONS = 1` to enable diagnostics for different passes. Only `LLVM_DEBUG = 1`
 implies that option by default.
 
 ## Passing options to LLVM
@@ -60,8 +60,8 @@ implies that option by default.
 You can pass options to LLVM via the environment variable `JULIA_LLVM_ARGS`.
 Here are example settings using `bash` syntax:
 
-  * `export JULIA_LLVM_ARGS = -print-after-all` dumps IR after each pass.
-  * `export JULIA_LLVM_ARGS = -debug-only=loop-vectorize` dumps LLVM `DEBUG(...)` diagnostics for
+  * `export JULIA_LLVM_ARGS=-print-after-all` dumps IR after each pass.
+  * `export JULIA_LLVM_ARGS=-debug-only=loop-vectorize` dumps LLVM `DEBUG(...)` diagnostics for
     loop vectorizer. If you get warnings about "Unknown command line argument", rebuild LLVM with
     `LLVM_ASSERTIONS = 1`.
 
@@ -113,7 +113,7 @@ The best strategy is to create a code example in a form where you can use LLVM's
 study it and the pass of interest in isolation.
 
 1. Create an example Julia code of interest.
-2. Use `JULIA_LLVM_ARGS = -print-after-all` to dump the IR.
+2. Use `JULIA_LLVM_ARGS=-print-after-all` to dump the IR.
 3. Pick out the IR at the point just before the pass of interest runs.
 4. Strip the debug metadata and fix up the TBAA metadata by hand.
 

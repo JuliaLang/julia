@@ -527,7 +527,7 @@ julia> struct SummedArray{T<:Number,S<:Number}
        end
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
-SummedArray{Int32,Int32}(Int32[1, 2, 3], 6)
+SummedArray{Int32, Int32}(Int32[1, 2, 3], 6)
 ```
 
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements

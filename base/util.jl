@@ -385,6 +385,8 @@ _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+_crc32c(x::Integer, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Vector{UInt8}, Csize_t), crc, reinterpret(UInt8, [x]), sizeof(x))
 
 """
     @kwdef typedef
@@ -520,7 +522,7 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)

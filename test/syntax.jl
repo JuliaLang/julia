@@ -861,7 +861,7 @@ let f = function (x::T, y::S) where T<:S where S
 end
 
 # issue #20541
-@test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
+@test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :.!, :b))
 
 @test Meta.lower(Main, :(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
 @test Meta.lower(Main, :(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
@@ -1656,6 +1656,8 @@ end
 # #6080
 @test Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x))) == Expr(:error, "invalid syntax &x")
 
+@test Meta.lower(@__MODULE__, :(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ())))) == Expr(:error, "ccall function name and library expression cannot reference local variables")
+
 @test_throws ParseError Meta.parse("x.'")
 @test_throws ParseError Meta.parse("0.+1")
 
@@ -2091,6 +2093,18 @@ end
 end
 @test z28789 == 42
 
+# issue #37126
+@test isempty(Test.collect_test_logs() do
+    include_string(@__MODULE__, """
+        function foo37126()
+            f(lhs::Integer, rhs::Integer) = nothing
+            f(lhs::Integer, rhs::AbstractVector{<:Integer}) = nothing
+            return f
+        end
+        struct Bar37126{T<:Real, P<:Real} end
+        """)
+    end[1])
+
 # issue #34673
 # check that :toplevel still returns a value when nested inside something else
 @test eval(Expr(:block, 0, Expr(:toplevel, 43))) == 43
@@ -2275,6 +2289,18 @@ macro m36272()
 end
 @test @m36272()(1) == 1
 
+# issue #37134
+macro m37134()
+    :(x :: Int -> 62)
+end
+@test @m37134()(1) == 62
+@test_throws MethodError @m37134()(1.0) == 62
+
+macro n37134()
+    :($(esc(Expr(:tuple, Expr(:..., :x))))->$(esc(:x)))
+end
+@test @n37134()(2,1) === (2,1)
+
 @testset "unary ± and ∓" begin
     @test Meta.parse("±x") == Expr(:call, :±, :x)
     @test Meta.parse("∓x") == Expr(:call, :∓, :x)
@@ -2306,3 +2332,52 @@ end
 @test_throws ParseError("invalid operator \".<---\"") Meta.parse("1 .<--- 2")
 @test_throws ParseError("invalid operator \"--\"") Meta.parse("a---b")
 @test_throws ParseError("invalid operator \".--\"") Meta.parse("a.---b")
+
+# issue #37228
+# NOTE: the `if` needs to be at the top level
+if isodd(1) && all(iseven(2) for c in ())
+    @test true
+else
+    @test false
+end
+
+@test :(a +ꜝ b) == Expr(:call, :+ꜝ, :a, :b)
+
+function ncalls_in_lowered(ex, fname)
+    lowered_exprs = Meta.lower(Main, ex).args[1].code
+    return count(lowered_exprs) do ex
+        Meta.isexpr(ex, :call) && ex.args[1] == fname
+    end
+end
+
+@testset "standalone .op" begin
+    @test :(.+) == Expr(:., :+)
+    @test :(map(.-, a)) == Expr(:call, :map, Expr(:., :-), :a)
+
+    @test ncalls_in_lowered(:(.*), GlobalRef(Base, :BroadcastFunction)) == 1
+    @test ncalls_in_lowered(:((.^).(a, b)), GlobalRef(Base, :broadcasted)) == 1
+    @test ncalls_in_lowered(:((.^).(a, b)), GlobalRef(Base, :BroadcastFunction)) == 1
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :broadcasted)) == 3
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :BroadcastFunction)) == 0
+end
+
+# issue #37656
+@test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
+
+# issue #37890
+struct A37890{A, B}
+    a
+    b
+    A37890(args::Tuple) = return new{typeof.(args)...}(args...)
+end
+@test A37890((1, "")) isa A37890{Int, String}
+@test_throws ErrorException A37890((1,1,1))
+@test_throws TypeError A37890((1,))
+
+struct B37890{A, B}
+    a
+    b
+    B37890(a, b) = new{Int, ()..., Int8}(a, b)
+end
+@test B37890(1.0, 2.0f0) isa B37890{Int, Int8}

@@ -195,7 +195,7 @@ zypper -n install mingw$BITS-cross-gcc-c++ mingw$BITS-cross-gcc-fortran \
 cp /usr/$XC_HOST/sys-root/mingw/bin/*.dll /usr/lib*/gcc/$XC_HOST/*/
 git clone git://github.com/JuliaLang/julia.git julia
 cd julia
-make -j4 win-extras julia-ui-release
+make -j4 win-extras julia-cli-release
 export WINEDEBUG=-all # suppress wine fixme's
 # this last step may need to be run interactively
 make -j4 binary-dist

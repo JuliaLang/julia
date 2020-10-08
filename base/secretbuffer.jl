@@ -79,7 +79,7 @@ function SecretBuffer!(d::Vector{UInt8})
     s
 end
 
-unsafe_SecretBuffer!(s::Cstring) = unsafe_SecretBuffer!(convert(Ptr{UInt8}, s), ccall(:strlen, Cint, (Cstring,), s))
+unsafe_SecretBuffer!(s::Cstring) = unsafe_SecretBuffer!(convert(Ptr{UInt8}, s), Int(ccall(:strlen, Csize_t, (Cstring,), s)))
 function unsafe_SecretBuffer!(p::Ptr{UInt8}, len=1)
     s = SecretBuffer(sizehint=len)
     for i in 1:len

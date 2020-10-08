@@ -85,7 +85,7 @@ void jl_module_run_initializer(jl_module_t *m)
     }
 }
 
-void jl_register_root_module(jl_module_t *m)
+static void jl_register_root_module(jl_module_t *m)
 {
     static jl_value_t *register_module_func = NULL;
     assert(jl_base_module);
@@ -115,7 +115,7 @@ static int jl_is__toplevel__mod(jl_module_t *mod)
 }
 
 // TODO: add locks around global state mutation operations
-jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
+static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(ex->head == module_sym);
@@ -533,9 +533,6 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     return 1;
 }
 
-void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
-                              int binding_effects);
-
 static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
@@ -633,7 +630,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
 
     jl_expr_t *ex = (jl_expr_t*)e;
 
-    if (ex->head == dot_sym) {
+    if (ex->head == dot_sym && jl_expr_nargs(ex) != 1) {
         if (jl_expr_nargs(ex) != 2)
             jl_eval_errorf(m, "syntax: malformed \".\" expression");
         jl_value_t *lhs = jl_exprarg(ex, 0);
@@ -816,7 +813,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     jl_value_t *result;
     if (has_intrinsics || (!has_defs && fast && has_loops &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
-                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN)) {
+                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN &&
+                           jl_get_module_compile(m) != JL_OPTIONS_COMPILE_OFF &&
+                           jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         mfunc = method_instance_for_thunk(thk, m);
         jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
@@ -826,7 +825,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         // helps in common cases.
         size_t world = jl_world_counter;
         ptls->world_age = world;
-        if (!has_defs) {
+        if (!has_defs && jl_get_module_infer(m) != 0) {
             (void)jl_type_infer(mfunc, world, 0);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
@@ -848,7 +847,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
-void jl_check_open_for(jl_module_t *m, const char* funcname)
+static void jl_check_open_for(jl_module_t *m, const char* funcname)
 {
     if (jl_options.incremental && jl_generating_output()) {
         if (m != jl_main_module) { // TODO: this was grand-fathered in
@@ -910,8 +909,8 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
 // Parse julia code from the string `text` at top level, attributing it to
 // `filename`. This is used during bootstrap, but the real Base.include() is
 // implemented in Julia code.
-jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
-                              jl_value_t *filename)
+static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
+                                     jl_value_t *filename)
 {
     if (!jl_is_string(text) || !jl_is_string(filename)) {
         jl_errorf("Expected `String`s for `text` and `filename`");

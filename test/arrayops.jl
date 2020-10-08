@@ -1428,8 +1428,8 @@ end
 
     # non-1-indexed array
     oa = OffsetArray(Vector(1:10), -5)
-    filter!(x -> x > 5, oa)
-    @test oa == OffsetArray(Vector(6:10), -5)
+    oa = oa[oa.>5] # deleteat! is not supported for OffsetArrays
+    @test oa == Vector(6:10)
 
     # empty non-1-indexed array
     eoa = OffsetArray([], -5)
@@ -1553,6 +1553,28 @@ end
     # a lower dimension is not a singleton
     # eltype not allocated inline
     @test reverse(["a" "b"; "c" "d"], dims = 2) == ["b" "a"; "d" "c"]
+end
+
+@testset "reverse multiple dims" begin
+    for A in (zeros(2,4), zeros(3,5))
+        A[:] .= 1:length(A) # unique-ify elements
+        @test reverse(A) == reverse!(reverse(A, dims=1), dims=2) ==
+              reverse(A, dims=(1,2)) == reverse(A, dims=(2,1))
+        @test_throws ArgumentError reverse(A, dims=(1,2,3))
+        @test_throws ArgumentError reverse(A, dims=(1,2,2))
+    end
+    for A in (zeros(2,4,6), zeros(3,5,7))
+        A[:] .= 1:length(A) # unique-ify elements
+        @test reverse(A) == reverse(A, dims=:) == reverse!(copy(A)) == reverse!(copy(A), dims=:) ==
+              reverse!(reverse!(reverse(A, dims=1), dims=2), dims=3) ==
+              reverse!(reverse(A, dims=(1,2)), dims=3) ==
+              reverse!(reverse(A, dims=(2,3)), dims=1) ==
+              reverse!(reverse(A, dims=(1,3)), dims=2) ==
+              reverse(A, dims=(1,2,3)) == reverse(A, dims=(3,2,1)) == reverse(A, dims=(2,1,3))
+        @test reverse(A, dims=(1,2)) == reverse!(reverse(A, dims=1), dims=2)
+        @test reverse(A, dims=(1,3)) == reverse!(reverse(A, dims=1), dims=3)
+        @test reverse(A, dims=(2,3)) == reverse!(reverse(A, dims=2), dims=3)
+    end
 end
 
 @testset "isdiag, istril, istriu" begin

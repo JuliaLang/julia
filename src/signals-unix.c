@@ -673,6 +673,8 @@ static void *signal_listener(void *arg)
         unw_context_t *signal_context;
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
+        if (critical || profile)
+            jl_lock_profile();
         for (int i = jl_n_threads; i-- > 0; ) {
             // notify thread to stop
             jl_thread_suspend_and_get_state(i, &signal_context);
@@ -717,6 +719,8 @@ static void *signal_listener(void *arg)
             // notify thread to resume
             jl_thread_resume(i, sig);
         }
+        if (critical || profile)
+            jl_unlock_profile();
 #endif
 
         // this part is async with the running of the rest of the program

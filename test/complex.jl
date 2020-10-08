@@ -1187,3 +1187,10 @@ end
 
 # complex with non-concrete eltype
 @test_throws ErrorException complex(Union{Complex{Int}, Nothing}[])
+
+@testset "ispow2" begin
+    @test ispow2(4+0im)
+    @test ispow2(0.25+0im)
+    @test !ispow2(4+5im)
+    @test !ispow2(7+0im)
+end

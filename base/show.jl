@@ -85,6 +85,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
+    recur_io_k = IOContext(recur_io, :typeinfo=>keytype(t))
+    recur_io_v = IOContext(recur_io, :typeinfo=>valtype(t))
 
     summary(io, t)
     isempty(t) && return
@@ -105,8 +107,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(show, k, context=recur_io, sizehint=0)
-            vs[i] = sprint(show, v, context=recur_io, sizehint=0)
+            ks[i] = sprint(show, k, context=recur_io_k, sizehint=0)
+            vs[i] = sprint(show, v, context=recur_io_v, sizehint=0)
             keylen = clamp(length(ks[i]), keylen, cols)
             vallen = clamp(length(vs[i]), vallen, cols)
         end
@@ -127,7 +129,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
         else
-            key = sprint(show, k, context=recur_io, sizehint=0)
+            key = sprint(show, k, context=recur_io_k, sizehint=0)
         end
         print(recur_io, key)
         print(io, " => ")
@@ -136,7 +138,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
             val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
             print(io, val)
         else
-            show(recur_io, v)
+            show(recur_io_v, v)
         end
     end
 end
@@ -204,7 +206,7 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
     if istaskfailed(t)
         println(io)
-        show_task_exception(io, t)
+        show_task_exception(io, t, indent = false)
     end
 end
 
@@ -414,7 +416,7 @@ function _show_default(io::IO, @nospecialize(x))
         end
     else
         print(io, "0x")
-        r = Ref(x)
+        r = Ref{Any}(x)
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
             for i in (nb - 1):-1:0
@@ -617,7 +619,7 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector)
         for i = 1:n
             p = env[i]
             show(io, p)
-            i < n && print(io, ",")
+            i < n && print(io, ", ")
         end
     end
     print(io, "}")
@@ -740,8 +742,9 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     if !print_without_params(x) && get(io, :compact, true)
         properx = makeproper(io, x)
         if make_typealias(properx) !== nothing || x <: make_typealiases(properx)[2]
-            print(io, " = ")
+            print(io, " (alias for ")
             show(IOContext(io, :compact => false), x)
+            print(io, ")")
         end
     end
 
@@ -844,13 +847,14 @@ function show_type_name(io::IO, tn::Core.TypeName)
     nothing
 end
 
-function show_datatype(io::IO, x::DataType)
+function show_datatype(io::IO, @nospecialize(x::DataType))
+    parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
-    n = length(x.parameters)::Int
+    n = length(parameters)
 
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
-    if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
-        print(io, "NTuple{", n, ',', x.parameters[1], "}")
+    if istuple && n > 3 && all(i -> (parameters[1] === i), parameters)
+        print(io, "NTuple{", n, ", ", parameters[1], "}")
     else
         show_type_name(io, x.name)
         if (n > 0 || istuple) && x !== Tuple
@@ -860,9 +864,9 @@ function show_datatype(io::IO, x::DataType)
             # since this information is still useful.
             print(io, '{')
             for i = 1:n
-                p = x.parameters[i]
+                p = parameters[i]
                 show(io, p)
-                i < n && print(io, ',')
+                i < n && print(io, ", ")
             end
             print(io, '}')
         end
@@ -888,7 +892,7 @@ macro show(exs...)
     blk = Expr(:block)
     for ex in exs
         push!(blk.args, :(println($(sprint(show_unquoted,ex)*" = "),
-                                  repr(begin value=$(esc(ex)) end))))
+                                  repr(begin local value = $(esc(ex)) end))))
     end
     isempty(exs) || push!(blk.args, :value)
     return blk
@@ -927,7 +931,7 @@ function gettypeinfos(io::IO, p::Pair)
 end
 
 function show(io::IO, p::Pair)
-    isdelimited(io, p) && return show_default(io, p)
+    isdelimited(io, p) && return show_pairtyped(io, p)
     typeinfos = gettypeinfos(io, p)
     for i = (1, 2)
         io_i = IOContext(io, :typeinfo => typeinfos[i])
@@ -936,6 +940,11 @@ function show(io::IO, p::Pair)
         isdelimited(io_i, p[i]) || print(io, ")")
         i == 1 && print(io, get(io, :compact, false) ? "=>" : " => ")
     end
+end
+
+function show_pairtyped(io::IO, p::Pair{K,V}) where {K,V}
+    show(io, typeof(p))
+    show(io, (p.first, p.second))
 end
 
 function show(io::IO, m::Module)
@@ -1502,7 +1511,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && (nargs != 2 || !is_expr(args[2], :tuple))
-        if nargs == 2 && is_quoted(args[2])
+        # standalone .op
+        if nargs == 1 && args[1] isa Symbol && isoperator(args[1])
+            print(io, "(.", args[1], ")")
+        elseif nargs == 2 && is_quoted(args[2])
             item = args[1]
             # field
             field = unquoted(args[2])
@@ -1596,7 +1608,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # scalar multiplication (i.e. "100x")
         elseif (func === :* &&
             length(func_args) == 2 && isa(func_args[1], Union{Int, Int64, Float32, Float64}) &&
-            isa(func_args[2], Symbol) && !in(string(func_args[2]::Symbol)[1], ('e', 'E', 'f')))
+            isa(func_args[2], Symbol) &&
+            !in(string(func_args[2]::Symbol)[1], ('e', 'E', 'f', (func_args[1] == 0 && func_args[1] isa Integer ?
+                                                                  # don't juxtapose 0 with b, o, x
+                                                                  ('b', 'o', 'x') : ())...)))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec, quote_level)
             else
@@ -1920,7 +1935,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                 end
                 print(io, ")")
             else
-                escape_string(io, x, "\"\$")
+                escape_string(io, String(x)::String, "\"\$")
             end
         end
         print(io, '"')
@@ -2160,9 +2175,9 @@ module IRShow
     include("compiler/ssair/show.jl")
 
     const __debuginfo = Dict{Symbol, Any}(
-        # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
-        :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
-        # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
+        # :full => src -> Base.IRShow.statementidx_lineinfo_printer(src), # and add variable slot information
+        :source => src -> Base.IRShow.statementidx_lineinfo_printer(src),
+        # :oneliner => src -> Base.IRShow.statementidx_lineinfo_printer(Base.IRShow.PartialLineInfoPrinter, src),
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
     const default_debuginfo = Ref{Symbol}(:none)
@@ -2357,14 +2372,14 @@ julia> x = MyStruct(1, (2,3));
 julia> dump(x)
 MyStruct
   x: Int64 1
-  y: Tuple{Int64,Int64}
+  y: Tuple{Int64, Int64}
     1: Int64 2
     2: Int64 3
 
 julia> dump(x; maxdepth = 1)
 MyStruct
   x: Int64 1
-  y: Tuple{Int64,Int64}
+  y: Tuple{Int64, Int64}
 ```
 """
 function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
@@ -2424,6 +2439,7 @@ end
 
 const undef_ref_str = "#undef"
 
+show(io::IO, ::UndefInitializer) = print(io, "UndefInitializer()")
 
 """
     summary(io::IO, x)
@@ -2450,7 +2466,6 @@ function summary(x)
     summary(io, x)
     String(take!(io))
 end
-summary(io::IO, t::Tuple) = print(io, t)
 
 ## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
@@ -2492,12 +2507,12 @@ specialize this function for specific types to customize printing.
 A SubArray created as `view(a, :, 3, 2:5)`, where `a` is a
 3-dimensional Float64 array, has type
 
-    SubArray{Float64,2,Array{Float64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}
+    SubArray{Float64, 2, Array{Float64, 3}, Tuple{Colon, Int64, UnitRange{Int64}}, false}
 
 The default `show` printing would display this full type.
 However, the summary for SubArrays actually prints as
 
-    2×4 view(::Array{Float64,3}, :, 3, 2:5) with eltype Float64
+    2×4 view(::Array{Float64, 3}, :, 3, 2:5) with eltype Float64
 
 because of a definition similar to
 
@@ -2550,10 +2565,17 @@ function showarg(io::IO, r::ReshapedArray, toplevel)
     toplevel && print(io, " with eltype ", eltype(r))
 end
 
-function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
+function showarg(io::IO, r::NonReshapedReinterpretArray{T}, toplevel) where {T}
     print(io, "reinterpret(", T, ", ")
     showarg(io, parent(r), false)
     print(io, ')')
+end
+
+function showarg(io::IO, r::ReshapedReinterpretArray{T}, toplevel) where {T}
+    print(io, "reinterpret(reshape, ", T, ", ")
+    showarg(io, parent(r), false)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(r))
 end
 
 # printing iterators from Base.Iterators

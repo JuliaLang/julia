@@ -27,7 +27,7 @@ julia> A = [1 2 3; 4 5 6; 7 8 9]
  7  8  9
 
 julia> Diagonal(A)
-3×3 Diagonal{Int64,Vector{Int64}}:
+3×3 Diagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅
  ⋅  5  ⋅
  ⋅  ⋅  9
@@ -48,7 +48,7 @@ julia> V = [1, 2]
  2
 
 julia> Diagonal(V)
-2×2 Diagonal{Int64,Vector{Int64}}:
+2×2 Diagonal{Int64, Vector{Int64}}:
  1  ⋅
  ⋅  2
 ```

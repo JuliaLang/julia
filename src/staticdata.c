@@ -168,9 +168,9 @@ typedef enum {
 } jl_callingconv_t;
 
 
-// this supports up to 1 GB images and 16 RefTags
+// this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
 // if a larger size is required, will need to add support for writing larger relocations in many cases below
-#define RELOC_TAG_OFFSET 28
+#define RELOC_TAG_OFFSET 29
 
 
 /* read and write in host byte order */
@@ -949,7 +949,7 @@ static void jl_read_symbols(jl_serializer_state *s)
         const char *str = (const char*)base;
         base += len + 1;
         //printf("symbol %3d: %s\n", len, str);
-        jl_sym_t *sym = jl_symbol_n(str, len);
+        jl_sym_t *sym = _jl_symbol(str, len);
         arraylist_push(&deser_sym, (void*)sym);
     }
 }
@@ -1396,6 +1396,12 @@ static void jl_save_system_image_to_stream(ios_t *f)
         jl_write_gv_ints(&s);
     }
 
+    if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET) ||
+        const_data.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)) {
+        jl_printf(JL_STDERR, "ERROR: system image too large\n");
+        jl_exit(1);
+    }
+
     // step 3: combine all of the sections into one file
     write_uint32(f, sysimg.size - sizeof(uint32_t));
     ios_seek(&sysimg, sizeof(uint32_t));
@@ -1475,9 +1481,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     ios_close(&f);
     JL_SIGATOMIC_END();
 }
-
-extern void jl_init_int32_int64_cache(void);
-extern void jl_gc_set_permalloc_region(void *start, void *end);
 
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)

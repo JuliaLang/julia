@@ -286,6 +286,8 @@ end
 # but without losing too much precision in common cases
 # and also trying to be mostly associative and commutative
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
+    typea === Union{} && return typeb
+    typeb === Union{} && return typea
     suba = typea ⊑ typeb
     suba && issimpleenoughtype(typeb) && return typeb
     subb = typeb ⊑ typea
@@ -333,7 +335,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
 
        typea_nfields = nfields_tfunc(typea)
        typeb_nfields = nfields_tfunc(typeb)
-       if !isa(typea_nfields, Const) || !isa(typea_nfields, Const) || typea_nfields.val !== typeb_nfields.val
+       if !isa(typea_nfields, Const) || !isa(typeb_nfields, Const) || typea_nfields.val !== typeb_nfields.val
             return widenconst(typea)
        end
 

@@ -304,6 +304,7 @@ end
     @test string(3, base = 2) == "11"
     @test string(3, pad = 2, base = 2) == "11"
     @test string(3, pad = Int32(2), base = Int32(2)) == "11"
+    @test string(3, pad = typemin(Int128) + 3, base = 0x2) == "11"
     @test string(3, pad = 3, base = 2) == "011"
     @test string(-3, base = 2) == "-11"
     @test string(-3, pad = 3, base = 2) == "-011"
@@ -337,6 +338,8 @@ end
     # The following have bases powers of 2, but don't enter the fast path
     @test digits(-3, base = 2) == -[1, 1]
     @test digits(-42, base = 4) == -[2, 2, 2]
+
+    @test_throws DomainError string(5, base = typemin(Int128) + 10)
 
     @testset "digits/base with bases powers of 2" begin
         @test digits(4, base = 2) == [0, 0, 1]

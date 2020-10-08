@@ -99,7 +99,7 @@ Returns the number of stored (filled) elements in a sparse array.
 # Examples
 ```jldoctest
 julia> A = sparse(2I, 3, 3)
-3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+3×3 SparseMatrixCSC{Int64, Int64} with 3 stored entries:
  2  ⋅  ⋅
  ⋅  2  ⋅
  ⋅  ⋅  2
@@ -131,7 +131,7 @@ modifications to the returned vector will mutate `A` as well. See
 # Examples
 ```jldoctest
 julia> A = sparse(2I, 3, 3)
-3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+3×3 SparseMatrixCSC{Int64, Int64} with 3 stored entries:
  2  ⋅  ⋅
  ⋅  2  ⋅
  ⋅  ⋅  2
@@ -159,7 +159,7 @@ nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 # Examples
 ```jldoctest
 julia> A = sparse(2I, 3, 3)
-3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+3×3 SparseMatrixCSC{Int64, Int64} with 3 stored entries:
  2  ⋅  ⋅
  ⋅  2  ⋅
  ⋅  ⋅  2
@@ -671,7 +671,7 @@ julia> A = Matrix(1.0I, 3, 3)
  0.0  0.0  1.0
 
 julia> sparse(A)
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+3×3 SparseMatrixCSC{Float64, Int64} with 3 stored entries:
  1.0   ⋅    ⋅
   ⋅   1.0   ⋅
   ⋅    ⋅   1.0
@@ -711,7 +711,7 @@ julia> Js = [1; 2; 3];
 julia> Vs = [1; 2; 3];
 
 julia> sparse(Is, Js, Vs)
-3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+3×3 SparseMatrixCSC{Int64, Int64} with 3 stored entries:
  1  ⋅  ⋅
  ⋅  2  ⋅
  ⋅  ⋅  3
@@ -1319,21 +1319,21 @@ For expert drivers and additional information, see [`permute!`](@ref).
 # Examples
 ```jldoctest
 julia> A = spdiagm(0 => [1, 2, 3, 4], 1 => [5, 6, 7])
-4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
+4×4 SparseMatrixCSC{Int64, Int64} with 7 stored entries:
  1  5  ⋅  ⋅
  ⋅  2  6  ⋅
  ⋅  ⋅  3  7
  ⋅  ⋅  ⋅  4
 
 julia> permute(A, [4, 3, 2, 1], [1, 2, 3, 4])
-4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
+4×4 SparseMatrixCSC{Int64, Int64} with 7 stored entries:
  ⋅  ⋅  ⋅  4
  ⋅  ⋅  3  7
  ⋅  2  6  ⋅
  1  5  ⋅  ⋅
 
 julia> permute(A, [1, 2, 3, 4], [4, 3, 2, 1])
-4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
+4×4 SparseMatrixCSC{Int64, Int64} with 7 stored entries:
  ⋅  ⋅  5  1
  ⋅  6  2  ⋅
  7  3  ⋅  ⋅
@@ -1372,14 +1372,14 @@ and no space beyond that passed in.
 # Examples
 ```jldoctest
 julia> A = sparse(Diagonal([1, 2, 3, 4]))
-4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
+4×4 SparseMatrixCSC{Int64, Int64} with 4 stored entries:
  1  ⋅  ⋅  ⋅
  ⋅  2  ⋅  ⋅
  ⋅  ⋅  3  ⋅
  ⋅  ⋅  ⋅  4
 
 julia> SparseArrays.fkeep!(A, (i, j, v) -> isodd(v))
-4×4 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
+4×4 SparseMatrixCSC{Int64, Int64} with 2 stored entries:
  1  ⋅  ⋅  ⋅
  ⋅  ⋅  ⋅  ⋅
  ⋅  ⋅  3  ⋅
@@ -1453,13 +1453,13 @@ For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 # Examples
 ```jldoctest
 julia> A = sparse([1, 2, 3], [1, 2, 3], [1.0, 0.0, 1.0])
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+3×3 SparseMatrixCSC{Float64, Int64} with 3 stored entries:
  1.0   ⋅    ⋅
   ⋅   0.0   ⋅
   ⋅    ⋅   1.0
 
 julia> dropzeros(A)
-3×3 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+3×3 SparseMatrixCSC{Float64, Int64} with 2 stored entries:
  1.0   ⋅    ⋅
   ⋅    ⋅    ⋅
   ⋅    ⋅   1.0
@@ -1573,12 +1573,12 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> sprand(Bool, 2, 2, 0.5)
-2×2 SparseMatrixCSC{Bool,Int64} with 1 stored entry:
+2×2 SparseMatrixCSC{Bool, Int64} with 1 stored entry:
  ⋅  ⋅
  ⋅  1
 
 julia> sprand(Float64, 3, 0.75)
-3-element SparseVector{Float64,Int64} with 1 stored entry:
+3-element SparseVector{Float64, Int64} with 1 stored entry:
   [3]  =  0.298614
 ```
 """
@@ -1620,7 +1620,7 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(0))
 julia> sprandn(2, 2, 0.75)
-2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+2×2 SparseMatrixCSC{Float64, Int64} with 2 stored entries:
   ⋅   0.586617
   ⋅   0.297336
 ```
@@ -1647,13 +1647,13 @@ specified.
 # Examples
 ```jldoctest
 julia> spzeros(3, 3)
-3×3 SparseMatrixCSC{Float64,Int64} with 0 stored entries:
+3×3 SparseMatrixCSC{Float64, Int64} with 0 stored entries:
   ⋅    ⋅    ⋅
   ⋅    ⋅    ⋅
   ⋅    ⋅    ⋅
 
 julia> spzeros(Float32, 4)
-4-element SparseVector{Float32,Int64} with 0 stored entries
+4-element SparseVector{Float32, Int64} with 0 stored entries
 ```
 """
 spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
@@ -3096,12 +3096,12 @@ Drop entry `A[i,j]` from `A` if `A[i,j]` is stored, and otherwise do nothing.
 
 ```jldoctest
 julia> A = sparse([1 2; 0 0])
-2×2 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
+2×2 SparseMatrixCSC{Int64, Int64} with 2 stored entries:
  1  2
  ⋅  ⋅
 
 julia> SparseArrays.dropstored!(A, 1, 2); A
-2×2 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
+2×2 SparseMatrixCSC{Int64, Int64} with 1 stored entry:
  1  ⋅
  ⋅  ⋅
 ```
@@ -3135,14 +3135,14 @@ stored and otherwise do nothing. Derivative forms:
 # Examples
 ```jldoctest
 julia> A = sparse(Diagonal([1, 2, 3, 4]))
-4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
+4×4 SparseMatrixCSC{Int64, Int64} with 4 stored entries:
  1  ⋅  ⋅  ⋅
  ⋅  2  ⋅  ⋅
  ⋅  ⋅  3  ⋅
  ⋅  ⋅  ⋅  4
 
 julia> SparseArrays.dropstored!(A, [1, 2], [1, 1])
-4×4 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+4×4 SparseMatrixCSC{Int64, Int64} with 3 stored entries:
  ⋅  ⋅  ⋅  ⋅
  ⋅  2  ⋅  ⋅
  ⋅  ⋅  3  ⋅
@@ -3323,7 +3323,7 @@ Concatenate matrices block-diagonally. Currently only implemented for sparse mat
 # Examples
 ```jldoctest
 julia> blockdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
-5×5 SparseMatrixCSC{Int64,Int64} with 5 stored entries:
+5×5 SparseMatrixCSC{Int64, Int64} with 5 stored entries:
  2  ⋅  ⋅  ⋅  ⋅
  ⋅  2  ⋅  ⋅  ⋅
  ⋅  ⋅  2  ⋅  ⋅
@@ -3491,37 +3491,55 @@ function istril(A::AbstractSparseMatrixCSC)
     return true
 end
 
+_nnz(v::AbstractSparseVector) = nnz(v)
+_nnz(v::AbstractVector) = length(v)
+
+function _indices(v::AbstractSparseVector, row, col)
+    ix = nonzeroinds(v)
+    return (row .+ ix, col .+ ix)
+end
+function _indices(v::AbstractVector, row, col)
+    veclen = length(v)
+    return (row+1:row+veclen, col+1:col+veclen)
+end
+
+_nzvals(v::AbstractSparseVector) = nonzeros(v)
+_nzvals(v::AbstractVector) = v
 
 function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
     for p in kv
-        ncoeffs += length(p.second)
+        ncoeffs += _nnz(p.second)
     end
     I = Vector{Int}(undef, ncoeffs)
     J = Vector{Int}(undef, ncoeffs)
     V = Vector{promote_type(map(x -> eltype(x.second), kv)...)}(undef, ncoeffs)
     i = 0
+    m = 0
+    n = 0
     for p in kv
-        dia = p.first
-        vect = p.second
-        numel = length(vect)
-        if dia < 0
-            row = -dia
+        k = p.first
+        v = p.second
+        if k < 0
+            row = -k
             col = 0
-        elseif dia > 0
+        elseif k > 0
             row = 0
-            col = dia
+            col = k
         else
             row = 0
             col = 0
         end
+        numel = _nnz(v)
         r = 1+i:numel+i
-        I[r] = row+1:row+numel
-        J[r] = col+1:col+numel
-        copyto!(view(V, r), vect)
+        I[r], J[r] = _indices(v, row, col)
+        copyto!(view(V, r), _nzvals(v))
+        veclen = length(v)
+        m = max(m, row + veclen)
+        n = max(n, col + veclen)
         i += numel
     end
-    return I, J, V
+    return I, J, V, m, n
 end
 
 """
@@ -3537,7 +3555,7 @@ can be specified by passing `m,n` as the first arguments.
 # Examples
 ```jldoctest
 julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
-5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:
+5×5 SparseMatrixCSC{Int64, Int64} with 8 stored entries:
  ⋅  4  ⋅  ⋅  ⋅
  1  ⋅  3  ⋅  ⋅
  ⋅  2  ⋅  2  ⋅
@@ -3547,9 +3565,39 @@ julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
 """
 spdiagm(kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm(nothing, kv...)
 spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm((Int(m),Int(n)), kv...)
+
+"""
+    spdiagm(v::AbstractVector)
+    spdiagm(m::Integer, n::Integer, v::AbstractVector)
+
+Construct a sparse matrix with elements of the vector as diagonal elements.
+By default (no given `m` and `n`), the matrix is square and its size is given
+by `length(v)`, but a non-square size `m`×`n` can be specified by passing `m`
+and `n` as the first arguments.
+
+!!! compat "Julia 1.6"
+    These functions require at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> spdiagm([1,2,3])
+3×3 SparseMatrixCSC{Int64, Int64} with 3 stored entries:
+ 1  ⋅  ⋅
+ ⋅  2  ⋅
+ ⋅  ⋅  3
+
+julia> spdiagm(sparse([1,0,3]))
+3×3 SparseMatrixCSC{Int64, Int64} with 2 stored entries:
+ 1  ⋅  ⋅
+ ⋅  ⋅  ⋅
+ ⋅  ⋅  3
+```
+"""
+spdiagm(v::AbstractVector) = _spdiagm(nothing, 0 => v)
+spdiagm(m::Integer, n::Integer, v::AbstractVector) = _spdiagm((Int(m), Int(n)), 0 => v)
+
 function _spdiagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
-    I, J, V = spdiagm_internal(kv...)
-    mmax, nmax = dimlub(I), dimlub(J)
+    I, J, V, mmax, nmax = spdiagm_internal(kv...)
     mnmax = max(mmax, nmax)
     m, n = something(size, (mnmax,mnmax))
     (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))

@@ -58,66 +58,78 @@ end
 
 ## data movement ##
 
-function reverse(A::Array{T}; dims::Integer) where T
-    nd = ndims(A); d = dims
-    1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
-    sd = size(A, d)
-    if sd == 1 || isempty(A)
-        return copy(A)
-    end
+"""
+    reverse(A; dims=:)
 
-    B = similar(A)
+Reverse `A` along dimension `dims`, which can be an integer (a
+single dimension), a tuple of integers (a tuple of dimensions)
+or `:` (reverse along all the dimensions, the default).  See
+also [`reverse!`](@ref) for in-place reversal.
 
-    nnd = 0
-    for i = 1:nd
-        nnd += Int(size(A,i)==1 || i==d)
-    end
-    if nnd==nd
-        # reverse along the only non-singleton dimension
-        for i = 1:sd
-            B[i] = A[sd+1-i]
-        end
-        return B
-    end
+# Examples
+```jldoctest
+julia> b = Int64[1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
 
-    d_in = size(A)
-    leading = d_in[1:(d-1)]
-    M = prod(leading)
-    N = length(A)
-    stride = M * sd
+julia> reverse(b, dims=2)
+2×2 Matrix{Int64}:
+ 2  1
+ 4  3
 
-    if M==1
-        for j = 0:stride:(N-stride)
-            for i = 1:sd
-                ri = sd+1-i
-                B[j + ri] = A[j + i]
-            end
-        end
-    else
-        if allocatedinline(T) && M>200
-            for i = 1:sd
-                ri = sd+1-i
-                for j=0:stride:(N-stride)
-                    offs = j + 1 + (i-1)*M
-                    boffs = j + 1 + (ri-1)*M
-                    copyto!(B, boffs, A, offs, M)
-                end
-            end
-        else
-            for i = 1:sd
-                ri = sd+1-i
-                for j=0:stride:(N-stride)
-                    offs = j + 1 + (i-1)*M
-                    boffs = j + 1 + (ri-1)*M
-                    for k=0:(M-1)
-                        B[boffs + k] = A[offs + k]
-                    end
-                end
-            end
-        end
+julia> reverse(b)
+2×2 Matrix{Int64}:
+ 4  3
+ 2  1
+```
+
+!!! compat "Julia 1.6"
+    Prior to Julia 1.6, only single-integer `dims` are supported in `reverse`.
+"""
+reverse(A::AbstractArray; dims=:) = _reverse(A, dims)
+_reverse(A, dims) = reverse!(copymutable(A); dims)
+
+"""
+    reverse!(A; dims=:)
+
+Like [`reverse`](@ref), but operates in-place in `A`.
+
+!!! compat "Julia 1.6"
+    Multidimensional `reverse!` requires Julia 1.6.
+"""
+reverse!(A::AbstractArray; dims=:) = _reverse!(A, dims)
+_reverse!(A::AbstractArray{<:Any,N}, ::Colon) where {N} = _reverse!(A, ntuple(identity, Val{N}()))
+_reverse!(A, dim::Integer) = _reverse!(A, (Int(dim),))
+_reverse!(A, dims::NTuple{M,Integer}) where {M} = _reverse!(A, Int.(dims))
+function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
+    dimrev = ntuple(k -> k in dims, Val{N}()) # boolean tuple indicating reversed dims
+
+    if N < M || M != sum(dimrev)
+        throw(ArgumentError("invalid dimensions $dims in reverse!"))
     end
-    return B
+    M == 0 && return A # nothing to reverse
+
+    # swapping loop only needs to traverse ≈half of the array
+    halfsz = ntuple(k -> k == dims[1] ? size(A,k) ÷ 2 : size(A,k), Val{N}())
+
+    last1 = ntuple(k -> lastindex(A,k)+firstindex(A,k), Val{N}()) # offset for reversed index
+    for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(halfsz[k]), Val{N}()))
+        iₜ = Tuple(i)
+        iᵣ = CartesianIndex(ifelse.(dimrev, last1 .- iₜ, iₜ))
+        @inbounds A[iᵣ], A[i] = A[i], A[iᵣ]
+    end
+    if M > 1 && isodd(size(A, dims[1]))
+        # middle slice for odd dimensions must be recursively flipped
+        mid = firstindex(A, dims[1]) + (size(A, dims[1]) ÷ 2)
+        midslice = CartesianIndices(ntuple(k -> k == dims[1] ? (mid:mid) : (firstindex(A,k):lastindex(A,k)), Val{N}()))
+        _reverse!(view(A, midslice), dims[2:end])
+    end
+    return A
 end
+# fix ambiguity with array.jl:
+_reverse!(A::AbstractVector, dim::Tuple{Int}) = _reverse!(A, first(dim))
+
 
 """
     rotl90(A)

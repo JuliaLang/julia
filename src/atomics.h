@@ -95,8 +95,16 @@
     __atomic_load_n(obj, __ATOMIC_SEQ_CST)
 #  define jl_atomic_load_acquire(obj)           \
     __atomic_load_n(obj, __ATOMIC_ACQUIRE)
+#ifdef JL_TSAN_ENABLED
+// For the sake of tsan, call these loads consume ordering since they will act
+// as such on the processors we support while normally, the compiler would
+// upgrade this to acquire ordering, which is strong (and slower) than we want.
+#  define jl_atomic_load_relaxed(obj)           \
+    __atomic_load_n(obj, __ATOMIC_CONSUME)
+#else
 #  define jl_atomic_load_relaxed(obj)           \
     __atomic_load_n(obj, __ATOMIC_RELAXED)
+#endif
 #elif defined(_COMPILER_MICROSOFT_)
 // TODO: these only define compiler barriers, and aren't correct outside of x86
 #  define jl_fence() _ReadWriteBarrier()

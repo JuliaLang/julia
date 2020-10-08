@@ -358,7 +358,7 @@ function pipe_reader end
 function pipe_writer end
 
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
-unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)
+unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)::Union{Int,UInt}
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
 flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
 
@@ -707,7 +707,7 @@ end
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    return unsafe_write(io, pname, Int(ccall(:strlen, Csize_t, (Cstring,), pname)))
+    return unsafe_write(io, pname, ccall(:strlen, Csize_t, (Cstring,), pname))
 end
 
 function write(to::IO, from::IO)

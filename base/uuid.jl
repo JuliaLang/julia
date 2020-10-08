@@ -8,6 +8,7 @@
 struct UUID
     value::UInt128
 end
+UUID(u::UUID) = u
 UUID(u::NTuple{2, UInt64}) = UUID((UInt128(u[1]) << 64) | UInt128(u[2]))
 UUID(u::NTuple{4, UInt32}) = UUID((UInt128(u[1]) << 96) | (UInt128(u[2]) << 64) |
                                   (UInt128(u[3]) << 32) | UInt128(u[4]))
@@ -31,46 +32,54 @@ end
 UInt128(u::UUID) = u.value
 
 let
-@noinline throw_malformed_uuid(s) = throw(ArgumentError("Malformed UUID string: $(repr(s))"))
 @inline function uuid_kernel(s, i, u)
     _c = UInt32(@inbounds codeunit(s, i))
     d = __convert_digit(_c, UInt32(16))
-    d >= 16 && throw_malformed_uuid(s)
+    d >= 16 && return nothing
     u <<= 4
-    u | d
+    return u | d
 end
 
-global UUID
-function UUID(s::AbstractString)
+function Base.tryparse(::Type{UUID}, s::AbstractString)
     u = UInt128(0)
-    ncodeunits(s) != 36 && throw_malformed_uuid(s)
+    ncodeunits(s) != 36 && return nothing
     for i in 1:8
         u = uuid_kernel(s, i, u)
+        u === nothing && return nothing
     end
-    @inbounds codeunit(s, 9) == UInt8('-') || @goto error
+    @inbounds codeunit(s, 9) == UInt8('-') || return nothing
     for i in 10:13
         u = uuid_kernel(s, i, u)
+        u === nothing && return nothing
     end
-    @inbounds codeunit(s, 14) == UInt8('-') || @goto error
+    @inbounds codeunit(s, 14) == UInt8('-') || return nothing
     for i in 15:18
         u = uuid_kernel(s, i, u)
+        u === nothing && return nothing
     end
-    @inbounds codeunit(s, 19) == UInt8('-') || @goto error
+    @inbounds codeunit(s, 19) == UInt8('-') || return nothing
     for i in 20:23
         u = uuid_kernel(s, i, u)
+        u === nothing && return nothing
     end
-    @inbounds codeunit(s, 24) == UInt8('-') || @goto error
+    @inbounds codeunit(s, 24) == UInt8('-') || return nothing
     for i in 25:36
         u = uuid_kernel(s, i, u)
+        u === nothing && return nothing
     end
     return Base.UUID(u)
-    @label error
-    throw_malformed_uuid(s)
 end
 end
 
-parse(::Type{UUID}, s::AbstractString) = UUID(s)
+let
+    @noinline throw_malformed_uuid(s) = throw(ArgumentError("Malformed UUID string: $(repr(s))"))
+    function Base.parse(::Type{UUID}, s::AbstractString)
+        uuid = tryparse(UUID, s)
+        return uuid === nothing ? throw_malformed_uuid(s) : uuid
+    end
+end
 
+UUID(s::AbstractString) = parse(UUID, s)
 
 let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
     global string

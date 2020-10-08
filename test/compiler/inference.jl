@@ -99,6 +99,14 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) == Vector
+@test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
+@test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
+
+struct SomethingBits
+    x::Base.BitIntegerType
+end
+@test Base.return_types(getproperty, (SomethingBits, Symbol)) == Any[Base.BitIntegerType]
+
 
 # issue 9770
 @noinline x9770() = false
@@ -761,20 +769,23 @@ g11015(::Type{Bool}, ::Bool) = 2.0
 
 # better inference of apply (#20343)
 f20343(::String, ::Int) = 1
-f20343(::Int, ::String, ::Int, ::Int) = 1
-f20343(::Int, ::Int, ::String, ::Int, ::Int, ::Int) = 1
-f20343(::Union{Int,String}...) = Int8(1)
+f20343(::Int, ::String, ::Int, ::Int) = 2
+f20343(::Int, ::Int, ::String, ::Int, ::Int, ::Int) = 3
+f20343(::Int, ::Int, ::Int, ::String, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int) = 4
+f20343(::Union{Int,String}...) = Int8(5)
 f20343(::Any...) = "no"
 function g20343()
     n = rand(1:3)
-    i = ntuple(i->n==i ? "" : 0, 2n)::Union{Tuple{String,Int},Tuple{Int,String,Int,Int},Tuple{Int,Int,String,Int,Int,Int}}
+    T = Union{Tuple{String, Int}, Tuple{Int, String, Int, Int}, Tuple{Int, Int, String, Int, Int, Int}}
+    i = ntuple(i -> n == i ? "" : 0, 2n)::T
     f20343(i...)
 end
 @test Base.return_types(g20343, ()) == [Int]
 function h20343()
     n = rand(1:3)
-    i = ntuple(i->n==i ? "" : 0, 3)::Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}
-    f20343(i..., i...)
+    T = Union{Tuple{String, Int, Int}, Tuple{Int, String, Int}, Tuple{Int, Int, String}}
+    i = ntuple(i -> n == i ? "" : 0, 3)::T
+    f20343(i..., i..., i..., i...)
 end
 @test Base.return_types(h20343, ()) == [Union{Int8, Int}]
 function i20343()
@@ -1408,7 +1419,7 @@ using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
 @test sizeof_nothrow(String)
 @test !sizeof_nothrow(Type{String})
 @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
-let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10, false), UInt64])
+let PT = PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
     @test sizeof_tfunc(PT) === Const(16)
     @test nfields_tfunc(PT) === Const(2)
     @test sizeof_nothrow(PT)
@@ -1427,6 +1438,7 @@ end
 @test nfields_tfunc(Type{Union{}}) === Const(0)
 @test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
 @test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
+@test nfields_tfunc(Union{Tuple{Int, Float64}, Tuple{Int, Int}}) === Const(2)
 
 using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
@@ -1483,8 +1495,6 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
-    @test opt.valid_worlds.max_world === Core.Compiler.get_world_counter()
-    @test opt.valid_worlds.min_world === Core.Compiler.min_world(opt.src) === UInt(1)
     @test opt.nargs == 3
 end
 
@@ -2092,7 +2102,11 @@ end
 # issue #28356
 # unit test to make sure countunionsplit overflows gracefully
 # we don't care what number is returned as long as it's large
-@test Core.Compiler.countunionsplit(Any[Union{Int32,Int64} for i=1:80]) > 100000
+@test Core.Compiler.unionsplitcost(Any[Union{Int32, Int64} for i=1:80]) > 100000
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}]) == 2
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32, Int64}, Int8]) == 8
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32}, Int8]) == 6
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32}, Union{Int8, Int16, Int32, Int64}, Int8]) == 6
 
 # make sure compiler doesn't hang in union splitting
 
@@ -2616,7 +2630,20 @@ end
 
 f() = _foldl_iter(step, (Missing[],), [0.0], 1)
 end
-@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}, 0) == Tuple{Int}
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}, 1) == Tuple{Int}
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}, 2) == Tuple{Int}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, Tuple{Char, Any, Any}, 0) ==
+        Tuple{Int, Union{Char, Int}, Union{Char, Int}}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, Tuple{Char, Any, Any}, 10) ==
+        Union{Tuple{Int, Char, Char}, Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, NTuple{3, Char}, 0) ==
+        NTuple{3, Union{Int, Char}}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, NTuple{3, Char}, 10) ==
+        Union{Tuple{Char, Char, Int}, Tuple{Char, Int, Char}, Tuple{Char, Int, Int}, Tuple{Int, Char, Char},
+              Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
+
+
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
 
 # constant prop through keyword arguments
@@ -2683,6 +2710,8 @@ function symcmp36230(vec)
     a, b = vec[1], vec[2]
     if isa(a, Symbol) && isa(b, Symbol)
         return a == b
+    elseif isa(a, Int) && isa(b, Int)
+        return a == b
     end
     return false
 end
@@ -2742,7 +2771,75 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test Core.Compiler.sizeof_tfunc(UnionAll) === Int
 @test !Core.Compiler.sizeof_nothrow(UnionAll)
 
+@test Base.return_types(Expr) == Any[Expr]
 
+# Use a global constant to rely less on unrelated constant propagation
+const const_int32_typename = Int32.name
+# Check constant propagation for field of constant `TypeName`
+# works for both valid and invalid field names. (Ref #37443)
+getfield_const_typename_good1() = getfield(const_int32_typename, 1)
+getfield_const_typename_good2() = getfield(const_int32_typename, :name)
+getfield_const_typename_bad1() = getfield(const_int32_typename, 0x1)
+@eval getfield_const_typename_bad2() = getfield(const_int32_typename, $(()))
+for goodf in [getfield_const_typename_good1, getfield_const_typename_good2]
+    local goodf
+    local code = code_typed(goodf, Tuple{})[1].first.code
+    @test code[1] === Core.ReturnNode(QuoteNode(:Int32))
+    @test goodf() === :Int32
+end
+for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
+    local badf
+    local code = code_typed(badf, Tuple{})[1].first.code
+    @test Meta.isexpr(code[1], :call)
+    @test code[end] === Core.ReturnNode()
+    @test_throws TypeError badf()
+end
+
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), Vararg{DataType}}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), DataType, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), DataType, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Symbol
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Vararg}) == Expr
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Vararg}) == Expr
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Any, Vararg}) == Expr
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Any, Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Any, Any, Any, Vararg}) == Bool
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Any, Vararg}) == Type
+f_apply_cglobal(args...) = cglobal(args...)
+@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Vararg{Type{Int}}}) == Ptr
+@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}}) == Ptr
+@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Vararg{Type{Int}}}) == Ptr{Int}
+@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}}) == Union{}
+
+# issue #37532
+@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{Int}}, Int])
+@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{T}} where T, Ptr])
+@test !Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr}, Ptr])
+f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
+@test Base.return_types(f37532, Tuple{Any, Int}) == Any[Int]
+
+# PR #37749
 # Helper functions for Core.Compiler.Timings. These are normally accessed via a package -
 # usually (SnoopCompileCore).
 function time_inference(f)
@@ -2753,14 +2850,12 @@ function time_inference(f)
     Core.Compiler.Timings.close_current_timer()
     return Core.Compiler.Timings._timings[1]
 end
-
 function depth(t::Core.Compiler.Timings.Timing)
     maximum(depth.(t.children), init=0) + 1
 end
 function flatten_times(t::Core.Compiler.Timings.Timing)
     collect(Iterators.flatten([(t.time => t.mi_info,), flatten_times.(t.children)...]))
 end
-
 # Some very limited testing of timing the type inference (#37749). I'm not sure how
 # detailed to make these tests, since I'm not sure if we want to enforce a specific output
 # format given that this may change, so these tests are fairly limited in detail.
@@ -2804,3 +2899,6 @@ end
     end
     @test !isempty(flatten_times(timing))
 end
+
+# issue #37638
+@test !(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}) <: Vararg)
