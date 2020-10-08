@@ -207,6 +207,9 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     # blocks, which isn't allowed for regular SSA values, so
                     # we skip the validation below.
                     continue
+                elseif stmt.head === :isdefined && length(stmt.args) == 1 && stmt.args[1] isa GlobalRef
+                    # a GlobalRef isdefined check does not evaluate its argument
+                    continue
                 end
             end
             for op in userefs(stmt)

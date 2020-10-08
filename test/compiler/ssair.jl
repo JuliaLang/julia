@@ -233,3 +233,9 @@ let ci = make_ci([
     ir = Core.Compiler.compact!(ir, true)
     @test Core.Compiler.verify_ir(ir) == nothing
 end
+
+# issue #37919
+let ci = code_lowered(()->@isdefined(_not_def_37919_), ())[1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
