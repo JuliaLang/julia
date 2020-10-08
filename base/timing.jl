@@ -114,7 +114,7 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, outer_compile_time=0)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     length(timestr) < 10 && print(" "^(10 - length(timestr)))
     print(timestr, " seconds")
@@ -142,6 +142,10 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0)
         print(Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
     end
     parens && print(")")
+    if outer_compile_time > 0
+        print(" + ")
+        print(Ryu.writefixed(Float64(outer_compile_time/1e9), 6), " seconds top-level compilation time")
+    end
     nothing
 end
 
@@ -195,20 +199,51 @@ julia> @time begin
 """
 macro time(ex)
     quote
-        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
-        local stats = gc_num()
-        local compile_elapsedtime = cumulative_compile_time_ns()
-        local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        compile_elapsedtime = cumulative_compile_time_ns() - compile_elapsedtime
-        local diff = GC_Diff(gc_num(), stats)
-        time_print(elapsedtime, diff.allocd, diff.total_time,
-                   gc_alloc_count(diff), compile_elapsedtime)
+        # First, measure how long it takes to compile the @time block without a body
+        local empty_body_compiletime = cumulative_compile_time_ns()
+        $(_time_expr(nothing))
+        empty_body_compiletime = cumulative_compile_time_ns() - empty_body_compiletime
+
+        # Then, run the real code, and measure the compilation time there, and subtract out
+        # the time for just the overhead.
+        local outer_compiletime = cumulative_compile_time_ns()
+        elapsedtime, inner_compiletime, gcdiff, val = $(_time_expr(ex))
+        outer_compiletime = cumulative_compile_time_ns() - outer_compiletime
+
+        # Subtract out the inner (dynamic dispatch) compilation time to get toplevel + overhead.
+        outer_compiletime = outer_compiletime - inner_compiletime
+        # Threshold to display compilation time (because computers have hella variance)
+        overhead_ratio = outer_compiletime / empty_body_compiletime
+        if overhead_ratio > 2.0  # three standard deviations of noise in our experiments
+            # Subtract out the overhead, so we reflect only the true compiletime for user code.
+            toplevel_compiletime = outer_compiletime - empty_body_compiletime
+        else
+            toplevel_compiletime = 0
+        end
+
+        time_print(elapsedtime, gcdiff.allocd, gcdiff.total_time,
+                   gc_alloc_count(gcdiff), inner_compiletime, toplevel_compiletime)
+
         println()
         val
     end
 end
+
+function _time_expr(ex)
+    Expr(:toplevel, quote
+        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+        local stats = gc_num()
+        local compiletime = cumulative_compile_time_ns()
+        local elapsedtime = time_ns()
+        local val = $(esc(ex))
+        elapsedtime = time_ns() - elapsedtime
+        compiletime = cumulative_compile_time_ns() - compiletime
+        local gcdiff = GC_Diff(gc_num(), stats)
+        elapsedtime, compiletime, gcdiff, val
+    end)
+end
+
+
 
 """
     @timev
