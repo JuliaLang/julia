@@ -527,7 +527,7 @@ jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t 
 void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT void jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
+int jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 // Each tuple can exist in one of 4 Vararg states:
 //   NONE: no vararg                            Tuple{Int,Float32}

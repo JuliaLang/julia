@@ -5396,7 +5396,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
 // do codegen to create a C-callable alias/wrapper, or if sysimg_handle is set,
 // restore one from a loaded system image.
-void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
+const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
 {
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
     jl_value_t *ff = ft->instance;
@@ -5438,7 +5438,7 @@ void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declr
                 gen_cfun_wrapper((Module*)llvmmod, params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
             }
             JL_GC_POP();
-            return;
+            return name;
         }
         err = jl_get_exceptionf(jl_errorexception_type, "%s", sig.err_msg.c_str());
     }
@@ -7587,7 +7587,6 @@ static void init_jit_functions(void)
     add_named_global(except_enter_func, (void*)NULL);
 
 #ifdef _OS_WINDOWS_
-#ifndef FORCE_ELF
 #if defined(_CPU_X86_64_)
 #if defined(_COMPILER_GCC_)
     add_named_global("___chkstk_ms", &___chkstk_ms);
@@ -7599,7 +7598,6 @@ static void init_jit_functions(void)
     add_named_global("_alloca", &_alloca);
 #else
     add_named_global("_chkstk", &_chkstk);
-#endif
 #endif
 #endif
 #endif
@@ -7751,7 +7749,7 @@ extern "C" void jl_init_llvm(void)
     #endif
 
     init_julia_llvm_meta();
-    jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine);
+    jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine, &jl_LLVMContext);
 
     // Mark our address spaces as non-integral
     jl_data_layout = jl_ExecutionEngine->getDataLayout();
