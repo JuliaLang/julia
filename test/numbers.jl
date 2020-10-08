@@ -426,6 +426,15 @@ end
     @test sprint(show, -498796.2749933266, context=:compact => true) == "-4.98796e5"
     @test sprint(show, 123456.78, context=:compact=>true) == "1.23457e5"
 
+    # issue 37941
+    @test sprint(show, MIME("text/plain"), Float16(0.0)) == "Float16(0.0)"
+    @test sprint(show, MIME("text/plain"), -Float16(0.0)) == "Float16(-0.0)"
+    @test sprint(show, MIME("text/plain"), Float16(5.0)) == "Float16(5.0)"
+    @test sprint(show, MIME("text/plain"), -Float16(5.0)) == "Float16(-5.0)"
+    @test sprint(show, MIME("text/plain"), Float16(Inf)) == "Inf16"
+    @test sprint(show, MIME("text/plain"), -Float16(Inf)) == "-Inf16"
+    @test sprint(show, MIME("text/plain"), Float16(NaN)) == "NaN16"
+
     @test repr(1.0f0) == "1.0f0"
     @test repr(-1.0f0) == "-1.0f0"
     @test repr(0.0f0) == "0.0f0"
