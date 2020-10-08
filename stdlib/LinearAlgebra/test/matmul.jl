@@ -824,4 +824,37 @@ end
     @test M44*M42*M24 ≈ (M44*M42)*M24 ≈ M44*(M42*M24)
 end
 
+@testset "4-arg *, by type" begin
+    y = [im, 20, 30+40im]
+    z = [-1, 200+im, -3]
+    a = 3 + im * round(Int, 10^6*(pi-3))
+    b = 123
+    M = rand(vcat(1:9, im.*[1,2,3]), 3,3)
+    N = rand(vcat(1:9, im.*[1,2,3]), 3,3)
+
+    @test a * b * M * y == (a*b) * (M*y)
+    @test a * b * M * N == (a*b) * (M*N)
+    @test a * M * N * y == (a*M) * (N*y)
+    @test a * y' * M * z == (a*y') * (M*z)
+    @test a * y' * M * N == (a*y') * (M*N)
+
+    @test M * y * a * b == (M*y) * (a*b)
+    @test M * N * a * b == (M*N) * (a*b)
+    @test M * N * y * a == (a*M) * (N*y)
+    @test y' * M * z * a == (a*y') * (M*z)
+    @test y' * M * N * a == (a*y') * (M*N)
+
+    @test M * N * conj(M) * y == (M*N) * (conj(M)*y)
+    @test y' * M * N * conj(M) == (y'*M) * (N*conj(M))
+    @test y' * M * N * z == (y'*M) * (N*z)
+end
+
+@testset "4-arg *, by size" begin
+    for shift in 1:5
+        s1,s2,s3,s4,s5 = circshift(3:7, shift)
+        a=randn(s1,s2); b=randn(s2,s3); c=randn(s3,s4); d=randn(s4,s5)
+        @test *(a,b,c,d) ≈ (a*b) * (c*d)
+    end
+end
+
 end # module TestMatmul

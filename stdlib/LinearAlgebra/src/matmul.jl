@@ -1086,12 +1086,12 @@ end
 """
     *(A, B::AbstractMatrix, C)
 
-Most 3-argument `*` calls containing matrices or vectors are done in an efficient way,
-rather than the left-to-right default of `*(x,y,z,...)`.
+Most 3- and 4-argument `*` calls containing matrices or vectors are done in an
+efficient way, rather than the left-to-right default of `*(x,y,z,...)`.
 
 This can mean performing `B*C` first if `C::AbstractVector`, calling `dot`, using
 five-argument `mul!` to fuse the scalar `A::Number` with the matrix multiplication `B*C`,
-or examining `size.((A,B,C))` to choose which to multiply first.
+or examining `size.((A,B,C,D))` to choose which to multiply first.
 
 !!! compat "Julia 1.6"
     These optimisations require least Julia 1.6.
@@ -1127,7 +1127,7 @@ function _tri_matmul(A,B,C)
     end
 end
 
-# The fast path for two arrays * one scalar is opt-in.
+# Fast path for two arrays * one scalar is opt-in, via mat_vec_scalar and mat_mat_scalar.
 _SafeMatrix{T} = Union{StridedMatrix{T}, AdjOrTransAbsMat{T, <:StridedMatrix}}
 
 mat_vec_scalar(A, x, γ) = (A*x) .* γ  # fallback
@@ -1155,3 +1155,49 @@ mat_mat_scalar(A::AdjointAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) = mat_
 mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
 mat_mat_scalar(A::TransposeAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) =
     transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
+
+
+# Four-argument *
+*(α::Number, β::Number, C::AbstractMatrix, x::AbstractVector) = (α*β) * C * x
+*(α::Number, β::Number, C::AbstractMatrix, D::AbstractMatrix) = (α*β) * C * D
+*(α::Number, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = α * B * (C*x)
+*(α::Number, vt::AdjOrTransAbsVec, C::AbstractMatrix, x::AbstractVector) = α * (vt*C*x)
+*(α::Number, vt::AdjOrTransAbsVec, C::AbstractMatrix, D::AbstractMatrix) = (α*vt*C) * D
+
+*(A::AbstractMatrix, x::AbstractVector, γ::Number, δ::Number) = A * x * (γ*δ)
+*(A::AbstractMatrix, B::AbstractMatrix, γ::Number, δ::Number) = A * B * (γ*δ)
+*(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector, δ::Number, ) = A * (B*x*δ)
+*(vt::AdjOrTransAbsVec, B::AbstractMatrix, x::AbstractVector, δ::Number) = (vt*B*x) * δ
+*(vt::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix, δ::Number) = (vt*B) * C * δ
+
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = A * B * (C*x)
+*(vt::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) = (vt*B) * C * D
+*(vt::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = vt * B * (C*x)
+
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) = _quad_mul(A,B,C,D)
+
+function _quad_mul(A,B,C,D)
+    c1 = _mul_cost((A,B),(C,D))
+    c2 = _mul_cost(((A,B),C),D)
+    c3 = _mul_cost(A,(B,(C,D)))
+    c4 = _mul_cost((A,(B,C)),D)
+    c5 = _mul_cost(A,((B,C),D))
+    cmin = min(c1,c2,c3,c4,c5)
+    if c1 == cmin
+        (A*B) * (C*D)
+    elseif c2 == cmin
+        ((A*B) * C) * D
+    elseif c3 == cmin
+        A * (B * (C*D))
+    elseif c4 == cmin
+        (A * (B*C)) * D
+    else
+        A * ((B*C) * D)
+    end
+end
+@inline _mul_cost(A::AbstractMatrix) = 0
+@inline _mul_cost((A,B)::Tuple) = _mul_cost(A,B)
+@inline _mul_cost(A,B) = _mul_cost(A) + _mul_cost(B) + *(_mul_sizes(A)..., last(_mul_sizes(B)))
+@inline _mul_sizes(A::AbstractMatrix) = size(A)
+@inline _mul_sizes((A,B)::Tuple) = first(_mul_sizes(A)), last(_mul_sizes(B))
+
