@@ -130,6 +130,12 @@ end
 @test B[1] === Complex{Int64}(11+12im)
 @test B[2] === Complex{Int64}(13+14im)
 @test B[3] === Complex{Int64}(15+16im)
+z3 = (0x00, 0x00, 0x00)
+Az = [z3 z3; z3 z3]
+Azr = reinterpret(reshape, UInt8, Az)
+W = WrapperArray(Azr)
+copyto!(W, fill(0x01, 3, 2, 2))
+@test all(isequal((0x01, 0x01, 0x01)), Az)
 
 # ensure that reinterpret arrays aren't erroneously classified as strided
 let A = reshape(1:20, 5, 4)
@@ -262,10 +268,10 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     @test r[1,2] === reinterpret(Int64, v[1,2])
     @test r[0,3] === reinterpret(Int64, v[0,3])
     @test r[1,3] === reinterpret(Int64, v[1,3])
-    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is Base.IdentityUnitRange(0:1). Try reshaping first.") reinterpret(UInt32, v)
-    @test_throws ArgumentError("`reinterpret(reshape, Tuple{Float64, Float64}, a)` where `eltype(a)` is Float64 requires that `axes(a, 1)` (got Base.IdentityUnitRange(0:1)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Tuple{Float64,Float64}, v)
+    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is OffsetArrays.IdOffsetRange(0:1). Try reshaping first.") reinterpret(UInt32, v)
+    @test_throws ArgumentError("`reinterpret(reshape, Tuple{Float64, Float64}, a)` where `eltype(a)` is Float64 requires that `axes(a, 1)` (got OffsetArrays.IdOffsetRange(0:1)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Tuple{Float64,Float64}, v)
     v = OffsetArray(a, (0, 1))
-    @test axes(reinterpret(reshape, Tuple{Float64,Float64}, v)) === (Base.IdentityUnitRange(2:3),)
+    @test axes(reinterpret(reshape, Tuple{Float64,Float64}, v)) === (OffsetArrays.IdOffsetRange(Base.OneTo(2), 1),)
     r = reinterpret(UInt32, v)
     axsv = axes(v)
     @test axes(r) === (oftype(axsv[1], 1:4), axsv[2])
@@ -283,7 +289,7 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     offsetvt = (-2, 4)
     vt = OffsetArray(at, offsetvt)
     istr = string(Int)
-    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is Base.IdentityUnitRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
+    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is OffsetArrays.IdOffsetRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
     vt = reshape(vt, 1:1, axes(vt)...)
     r = reinterpret(Int, vt)
     @test r == OffsetArray(reshape(1:8, 2, 2, 2), (0, offsetvt...))
@@ -312,6 +318,19 @@ B[] = Int32(5)
 @test B[] === Int32(5)
 @test Brs[] === Int32(5)
 @test A[] === UInt32(5)
+
+a = [(1.0,2.0)]
+af = @inferred(reinterpret(reshape, Float64, a))
+anew = @inferred(reinterpret(reshape, Tuple{Float64,Float64}, vec(af)))
+@test anew[1] == a[1]
+@test ndims(anew) == 0
+
+# re-reinterpret
+a0 = reshape([0x22, 0x44, 0x88, 0xf0, 0x01, 0x02, 0x03, 0x04], 4, 2)
+a = reinterpret(reshape, NTuple{4,UInt8}, a0)
+@test a == [(0x22, 0x44, 0x88, 0xf0), (0x01, 0x02, 0x03, 0x04)]
+@test reinterpret(UInt8, a) == [0x22, 0x44, 0x88, 0xf0, 0x01, 0x02, 0x03, 0x04]
+@test reinterpret(reshape, UInt8, a) === a0
 
 # reductions
 a = [(1,2,3), (4,5,6)]

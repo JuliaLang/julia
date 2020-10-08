@@ -3,9 +3,9 @@
 ## number-theoretic functions ##
 
 """
-    gcd(x,y)
+    gcd(x, y...)
 
-Greatest common (positive) divisor (or zero if `x` and `y` are both zero).
+Greatest common (positive) divisor (or zero if all arguments are zero).
 The arguments may be integer and rational numbers.
 
 !!! compat "Julia 1.4"
@@ -33,6 +33,9 @@ julia> gcd(1//3,-2//3)
 
 julia> gcd(1//3,2)
 1//3
+
+julia> gcd(0, 0, 10, 15)
+5
 ```
 """
 function gcd(a::T, b::T) where T<:Integer
@@ -69,7 +72,7 @@ end
 @noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
 
 """
-    lcm(x,y)
+    lcm(x, y...)
 
 Least common (non-negative) multiple.
 The arguments may be integer and rational numbers.
@@ -99,6 +102,9 @@ julia> lcm(1//3,-2//3)
 
 julia> lcm(1//3,2)
 2//1
+
+julia> lcm(1,3,5,7)
+105
 ```
 """
 function lcm(a::T, b::T) where T<:Integer

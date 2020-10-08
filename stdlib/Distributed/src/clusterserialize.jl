@@ -112,7 +112,7 @@ function serialize(s::ClusterSerializer, t::Task)
     serialize(s, t.storage)
     serialize(s, t._state)
     serialize(s, t.result)
-    serialize(s, t.exception)
+    serialize(s, t._isexception)
 end
 
 function serialize(s::ClusterSerializer, g::GlobalRef)
@@ -251,7 +251,7 @@ function deserialize(s::ClusterSerializer, ::Type{Task})
     t.storage = deserialize(s)
     t._state = deserialize(s)::UInt8
     t.result = deserialize(s)
-    t.exception = deserialize(s)
+    t._isexception = deserialize(s)
     t
 end
 

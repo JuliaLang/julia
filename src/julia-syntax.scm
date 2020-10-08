@@ -746,13 +746,17 @@
                 ,@locs
                 (call (curly ,name ,@params) ,@field-names)))))
 
+(define (num-non-varargs args)
+  (count (lambda (a) (not (vararg? a))) args))
+
 (define (new-call Tname type-params sparams params args field-names field-types)
   (if (any kwarg? args)
       (error "\"new\" does not accept keyword arguments"))
-  (if (length> params (length type-params))
-      (error "too few type parameters specified in \"new{...}\""))
-  (if (length> type-params (length params))
-      (error "too many type parameters specified in \"new{...}\""))
+  (let ((nnv (num-non-varargs type-params)))
+    (if (and (not (any vararg? type-params)) (length> params nnv))
+        (error "too few type parameters specified in \"new{...}\""))
+    (if (> nnv (length params))
+        (error "too many type parameters specified in \"new{...}\"")))
   (let* ((Texpr (if (null? type-params)
                     `(outerref ,Tname)
                     `(curly (outerref ,Tname)
@@ -767,7 +771,7 @@
                                               ; local variable (currently just handles sparam) for the bijection of params to type-params
                                           `(call (core fieldtype) ,tn ,(+ fld 1)))
                                      ,val)))))
-    (cond ((length> (filter (lambda (a) (not (vararg? a))) args) (length field-names))
+    (cond ((> (num-non-varargs args) (length field-names))
            `(call (core throw) (call (top ArgumentError)
                                      ,(string "new: too many arguments (expected " (length field-names) ")"))))
           ((any vararg? args)
@@ -1767,7 +1771,7 @@
              (args (map dot-to-fuse (cdr kws+args)))
              (make `(call (top ,(if (null? kws) 'broadcasted 'broadcasted_kwsyntax)) ,@kws ,f ,@args)))
         (if top (cons 'fuse make) make)))
-    (if (and (pair? e) (eq? (car e) '|.|))
+    (if (and (length= e 3) (eq? (car e) '|.|))
         (let ((f (cadr e)) (x (caddr e)))
           (cond ((or (atom? x) (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
                  `(call (top getproperty) ,f ,x))
@@ -1778,12 +1782,21 @@
                      (make-fuse f (cdr x))))
                 (else
                  (error (string "invalid syntax \"" (deparse e) "\"")))))
-        (if (and (pair? e) (eq? (car e) 'call) (dotop-named? (cadr e)))
-            (let ((f (undotop (cadr e))) (x (cddr e)))
-              (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
-                  (make-fuse '(top literal_pow)
-                             (list f (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
-                  (make-fuse f x)))
+        (if (and (pair? e) (eq? (car e) 'call))
+            (begin
+              (define (make-fuse- f x)
+                (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
+                    (make-fuse '(top literal_pow)
+                               (list f (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
+                    (make-fuse f x)))
+              (let ((f (cadr e)))
+                (cond ((dotop-named? f)
+                       (make-fuse- (undotop f) (cddr e)))
+                      ;; (.+)(a, b) is parsed as (call (|.| +) a b), but we still want it to fuse
+                      ((and (length= f 2) (eq? (car f) '|.|))
+                       (make-fuse- (cadr f) (cddr e)))
+                      (else
+                        e))))
             e)))
   (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
@@ -1963,8 +1976,12 @@
                   (map expand-forms (cdr e))))))
 
    '|.|
-   (lambda (e) ; e = (|.| f x)
-     (expand-fuse-broadcast '() e))
+   (lambda (e)
+     (if (length= e 2)
+         ;; e = (|.| op)
+         `(call (top BroadcastFunction) ,(cadr e))
+         ;; e = (|.| f x)
+         (expand-fuse-broadcast '() e)))
 
    '.=
    (lambda (e)
@@ -2164,6 +2181,9 @@
          (let ((f (cadr e)))
            (cond ((dotop-named? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
+                 ;; "(.op)(...)"
+                 ((and (length= f 2) (eq? (car f) '|.|))
+                  (expand-fuse-broadcast '() `(|.| ,(cadr f) (tuple ,@(cddr e)))))
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))

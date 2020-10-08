@@ -2006,7 +2006,6 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
 // compile-time method lookup
 jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache)
 {
-    JL_TIMING(METHOD_LOOKUP_COMPILE);
     if (jl_has_free_typevars((jl_value_t*)types))
         return NULL; // don't poison the cache due to a malformed query
     if (!jl_has_concrete_subtype((jl_value_t*)types))
@@ -3076,13 +3075,19 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 //static jl_mutex_t typeinf_lock;
 #define typeinf_lock codegen_lock
 
+uint64_t jl_cumulative_compile_time = 0;
+static uint64_t inference_start_time = 0;
+
 JL_DLLEXPORT void jl_typeinf_begin(void)
 {
     JL_LOCK(&typeinf_lock);
+    inference_start_time = jl_hrtime();
 }
 
 JL_DLLEXPORT void jl_typeinf_end(void)
 {
+    if (typeinf_lock.count == 1)
+        jl_cumulative_compile_time += (jl_hrtime() - inference_start_time);
     JL_UNLOCK(&typeinf_lock);
 }
 

@@ -46,6 +46,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         writable = array_subpadding(S, T)
         new{T, N, S, A, false}(a, readable, writable)
     end
+    reinterpret(::Type{T}, a::AbstractArray{T}) where {T} = a
 
     # With reshaping
     function reinterpret(::typeof(reshape), ::Type{T}, a::A) where {T,S,A<:AbstractArray{S}}
@@ -74,6 +75,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         writable = array_subpadding(S, T)
         new{T, N, S, A, true}(a, readable, writable)
     end
+    reinterpret(::typeof(reshape), ::Type{T}, a::AbstractArray{T}) where {T} = a
 end
 
 ReshapedReinterpretArray{T,N,S,A<:AbstractArray{S}} = ReinterpretArray{T,N,S,A,true}
@@ -97,7 +99,7 @@ julia> A = [1 2; 3 4]
  3  4
 
 julia> reinterpret(reshape, Complex{Int}, A)    # the result is a vector
-2-element reinterpret(reshape, Complex{$Int}, ::Matrix{$Int}):
+2-element reinterpret(reshape, Complex{$Int}, ::Matrix{$Int}) with eltype Complex{$Int}:
  1 + 3im
  2 + 4im
 
@@ -107,7 +109,7 @@ julia> a = [(1,2,3), (4,5,6)]
  (4, 5, 6)
 
 julia> reinterpret(reshape, Int, a)             # the result is a matrix
-3×2 reinterpret(reshape, $Int, ::Vector{Tuple{$Int, $Int, $Int}}):
+3×2 reinterpret(reshape, $Int, ::Vector{Tuple{$Int, $Int, $Int}}) with eltype $Int:
  1  4
  2  5
  3  6
@@ -115,7 +117,8 @@ julia> reinterpret(reshape, Int, a)             # the result is a matrix
 """
 reinterpret(::typeof(reshape), T::Type, a::AbstractArray)
 
-reinterpret(::Type{T}, a::ReinterpretArray) where {T} = reinterpret(T, a.parent)
+reinterpret(::Type{T}, a::NonReshapedReinterpretArray) where {T} = reinterpret(T, a.parent)
+reinterpret(::typeof(reshape), ::Type{T}, a::ReshapedReinterpretArray) where {T} = reinterpret(reshape, T, a.parent)
 
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
@@ -254,13 +257,13 @@ end
 # but which don't handle SCartesianIndex2
 function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, ind::SCartesianIndex2) where {T,N}
     @_propagate_inbounds_meta
-    I = _to_subscript_indices(A, ind.i, ind.j)
-    getindex(A, I...)
+    J = _ind2sub(tail(axes(A)), ind.j)
+    getindex(A, ind.i, J...)
 end
 function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesianIndex2) where {T,N}
     @_propagate_inbounds_meta
-    I = _to_subscript_indices(A, ind.i, ind.j)
-    setindex!(A, v, I...)
+    J = _ind2sub(tail(axes(A)), ind.j)
+    setindex!(A, v, ind.i, J...)
 end
 
 
@@ -316,7 +319,7 @@ end
     # Convert to full indices here, to avoid needing multiple conversions in
     # the loop in _getindex_ra
     inds = _to_subscript_indices(a, i)
-    _getindex_ra(a, inds[1], tail(inds))
+    isempty(inds) ? _getindex_ra(a, 1, ()) : _getindex_ra(a, inds[1], tail(inds))
 end
 
 @inline @propagate_inbounds function getindex(a::ReshapedReinterpretArray{T,N,S}, ind::SCartesianIndex2) where {T,N,S}

@@ -78,7 +78,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 12 # do not make changes without bumping the version #!
+const ser_version = 13 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -444,7 +444,7 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    state = [t.code, t.storage, t.state, t.result, t.exception]
+    state = [t.code, t.storage, t.state, t.result, t._isexception]
     writetag(s.io, TASK_TAG)
     for fld in state
         serialize(s, fld)
@@ -1348,7 +1348,15 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
         @assert false
     end
     t.result = deserialize(s)
-    t.exception = deserialize(s)
+    exc = deserialize(s)
+    if exc === nothing
+        t._isexception = false
+    elseif exc isa Bool
+        t._isexception = exc
+    else
+        t._isexception = true
+        t.result = exc
+    end
     t
 end
 

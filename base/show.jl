@@ -1447,7 +1447,10 @@ function show_generator(io, ex::Expr, indent, quote_level)
     end
 end
 
-function valid_import_path(@nospecialize ex)
+function valid_import_path(@nospecialize(ex), allow_as = true)
+    if allow_as && is_expr(ex, :as) && length((ex::Expr).args) == 2
+        ex = (ex::Expr).args[1]
+    end
     return is_expr(ex, :(.)) && length((ex::Expr).args) > 0 && all(a->isa(a,Symbol), (ex::Expr).args)
 end
 
@@ -1511,7 +1514,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && (nargs != 2 || !is_expr(args[2], :tuple))
-        if nargs == 2 && is_quoted(args[2])
+        # standalone .op
+        if nargs == 1 && args[1] isa Symbol && isoperator(args[1])
+            print(io, "(.", args[1], ")")
+        elseif nargs == 2 && is_quoted(args[2])
             item = args[1]
             # field
             field = unquoted(args[2])
@@ -1995,6 +2001,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             first = false
             show_import_path(io, a, quote_level)
         end
+    elseif head === :as && nargs == 2 && valid_import_path(args[1], false)
+        show_import_path(io, args[1], quote_level)
+        print(io, " as ")
+        show_unquoted(io, args[2], indent, 0, quote_level)
     elseif head === :meta && nargs >= 2 && args[1] === :push_loc
         print(io, "# meta: location ", join(args[2:end], " "))
     elseif head === :meta && nargs == 1 && args[1] === :pop_loc
@@ -2572,6 +2582,7 @@ function showarg(io::IO, r::ReshapedReinterpretArray{T}, toplevel) where {T}
     print(io, "reinterpret(reshape, ", T, ", ")
     showarg(io, parent(r), false)
     print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(r))
 end
 
 # printing iterators from Base.Iterators

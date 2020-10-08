@@ -44,7 +44,7 @@ jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *splatnew_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
-jl_sym_t *foreigncall_sym;
+jl_sym_t *foreigncall_sym; jl_sym_t *as_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
@@ -363,6 +363,7 @@ void jl_init_common_symbols(void)
     thunk_sym = jl_symbol("thunk");
     toplevel_sym = jl_symbol("toplevel");
     dot_sym = jl_symbol(".");
+    as_sym = jl_symbol("as");
     colon_sym = jl_symbol(":");
     boundscheck_sym = jl_symbol("boundscheck");
     inbounds_sym = jl_symbol("inbounds");

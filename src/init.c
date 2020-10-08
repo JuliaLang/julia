@@ -436,6 +436,8 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
+char jl_using_gdb_jitevents = 0;
+
 int isabspath(const char *in) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
@@ -689,6 +691,15 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_perf_jitevents= 1;
+    }
+#endif
+
+#if defined(JL_DEBUG_BUILD)
+    jl_using_gdb_jitevents = 1;
+# else
+    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
+    if (jit_gdb && atoi(jit_gdb)) {
+        jl_using_gdb_jitevents = 1;
     }
 #endif
 

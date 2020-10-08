@@ -16,6 +16,13 @@ New language features
 * `ꜛ` (U+A71B), `ꜜ` (U+A71C) and `ꜝ` (U+A71D) can now also be used as operator
   suffixes. They can be tab-completed from `\^uparrow`, `\^downarrow` and `\^!` in the REPL
   ([#37542]).
+* Standalone "dotted" operators now get parsed as `Expr(:., :op)`, which gets lowered to
+  `Base.BroadcastFunction(op)`. This means `.op` is functionally equivalent to
+  `(x...) -> (op).(x...)`, which can be useful for passing the broadcasted version of an
+  operator to higher-order functions, like for example `map(.*, A, B)` for an elementwise
+  product of two arrays of arrays. ([#37583])
+* The syntax `import A as B` (plus `import A: x as y`, `import A.x as y`, and `using A: x as y`)
+  can now be used to rename imported modules and identifiers ([#1255]).
 
 Language changes
 ----------------
@@ -177,6 +184,7 @@ Standard library changes
 #### Dates
 
 * `Quarter` period is defined ([#35519]).
+* `canonicalize` can now take `Period` as an input ([#37391])
 * Zero-valued `FixedPeriod`s and `OtherPeriod`s now compare equal, e.g.,
   `Year(0) == Day(0)`. The behavior of non-zero `Period`s is not changed. ([#37486])
 

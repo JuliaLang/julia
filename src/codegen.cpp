@@ -7140,6 +7140,7 @@ jl_compile_result_t jl_emit_code(
         jl_value_t *jlrettype,
         jl_codegen_params_t &params)
 {
+    JL_TIMING(CODEGEN);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     std::unique_ptr<Module> m;
@@ -7170,6 +7171,7 @@ jl_compile_result_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params)
 {
+    JL_TIMING(CODEGEN);
     JL_GC_PUSH1(&src);
     if (!src) {
         src = (jl_code_info_t*)codeinst->inferred;
@@ -7242,6 +7244,7 @@ void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
     jl_codegen_params_t &params, CompilationPolicy policy)
 {
+    JL_TIMING(CODEGEN);
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     while (!params.workqueue.empty()) {
@@ -7728,10 +7731,9 @@ extern "C" void jl_init_llvm(void)
     std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
     jl_data_layout.reset(DL);
 
-// Register GDB event listener
-#ifdef JL_DEBUG_BUILD
-    jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
-#endif
+    // Register GDB event listener
+    if(jl_using_gdb_jitevents)
+        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
 
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)

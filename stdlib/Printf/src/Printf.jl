@@ -80,10 +80,19 @@ function Format(f::AbstractString)
     len = length(bytes)
     pos = 1
     b = 0x00
-    while true
+    while pos <= len
         b = bytes[pos]
         pos += 1
-        (pos > len || (b == UInt8('%') && pos <= len && bytes[pos] != UInt8('%'))) && break
+        if b == UInt8('%')
+            pos > len && throw(ArgumentError("invalid format string: '$f'"))
+            if bytes[pos] == UInt8('%')
+                # escaped '%'
+                b = bytes[pos]
+                pos += 1
+            else
+                break
+            end
+        end
     end
     strs = [1:pos - 1 - (b == UInt8('%'))]
     fmts = []
@@ -645,9 +654,16 @@ const UNROLL_UPTO = 16
 # if you have your own buffer + pos, write formatted args directly to it
 @inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
     # write out first substring
+    escapechar = false
     for i in f.substringranges[1]
-        buf[pos] = f.str[i]
-        pos += 1
+        b = f.str[i]
+        if !escapechar
+            buf[pos] = b
+            pos += 1
+            escapechar = b === UInt8('%')
+        else
+            escapechar = false
+        end
     end
     # for each format, write out arg and next substring
     # unroll up to 16 formats
@@ -656,8 +672,14 @@ const UNROLL_UPTO = 16
         if N >= i
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
-                buf[pos] = f.str[j]
-                pos += 1
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
+                end
             end
         end
     end
@@ -665,8 +687,14 @@ const UNROLL_UPTO = 16
         for i = 17:length(f.formats)
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
-                buf[pos] = f.str[j]
-                pos += 1
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
+                end
             end
         end
     end

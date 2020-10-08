@@ -861,7 +861,7 @@ let f = function (x::T, y::S) where T<:S where S
 end
 
 # issue #20541
-@test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
+@test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :.!, :b))
 
 @test Meta.lower(Main, :(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
 @test Meta.lower(Main, :(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
@@ -2343,6 +2343,25 @@ end
 
 @test :(a +ꜝ b) == Expr(:call, :+ꜝ, :a, :b)
 
+function ncalls_in_lowered(ex, fname)
+    lowered_exprs = Meta.lower(Main, ex).args[1].code
+    return count(lowered_exprs) do ex
+        Meta.isexpr(ex, :call) && ex.args[1] == fname
+    end
+end
+
+@testset "standalone .op" begin
+    @test :(.+) == Expr(:., :+)
+    @test :(map(.-, a)) == Expr(:call, :map, Expr(:., :-), :a)
+
+    @test ncalls_in_lowered(:(.*), GlobalRef(Base, :BroadcastFunction)) == 1
+    @test ncalls_in_lowered(:((.^).(a, b)), GlobalRef(Base, :broadcasted)) == 1
+    @test ncalls_in_lowered(:((.^).(a, b)), GlobalRef(Base, :BroadcastFunction)) == 1
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :broadcasted)) == 3
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:((.+)(a, b .- (.^)(c, 2))), GlobalRef(Base, :BroadcastFunction)) == 0
+end
+
 # issue #37656
 @test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
 
@@ -2354,3 +2373,68 @@ macro m37540()
     end
 end
 @test @m37540() == 1
+
+# issue #37890
+struct A37890{A, B}
+    a
+    b
+    A37890(args::Tuple) = return new{typeof.(args)...}(args...)
+end
+@test A37890((1, "")) isa A37890{Int, String}
+@test_throws ErrorException A37890((1,1,1))
+@test_throws TypeError A37890((1,))
+
+struct B37890{A, B}
+    a
+    b
+    B37890(a, b) = new{Int, ()..., Int8}(a, b)
+end
+@test B37890(1.0, 2.0f0) isa B37890{Int, Int8}
+
+# import ... as
+@test_throws ParseError("invalid syntax \"using A as ...\"") Meta.parse("using A as B")
+@test_throws ParseError("invalid syntax \"using A.b as ...\"") Meta.parse("using A.b as B")
+@test_throws ParseError("invalid syntax \"using A.b as ...\"") Meta.parse("using X, A.b as B")
+@test_throws ParseError("invalid syntax \"import A as B:\"") Meta.parse("import A as B: c")
+@test_throws ParseError("invalid syntax \"import A.b as B:\"") Meta.parse("import A.b as B: c")
+
+module TestImportAs
+using Test
+
+module Mod
+const x = 1
+global maybe_undef
+def() = (global maybe_undef = 0)
+func(x) = 2x + 1
+end
+
+module Mod2
+const y = 2
+end
+
+import .Mod: x as x2
+
+@test x2 == 1
+@test !@isdefined(x)
+
+import .Mod2.y as y2
+
+@test y2 == 2
+@test !@isdefined(y)
+
+@test_throws ErrorException eval(:(import .Mod.x as (a.b)))
+
+import .Mod.maybe_undef as mu
+@test_throws UndefVarError mu
+Mod.def()
+@test mu === 0
+
+using .Mod: func as f
+@test f(10) == 21
+@test !@isdefined(func)
+@test_throws ErrorException("error in method definition: function Mod.func must be explicitly imported to be extended") eval(:(f(x::Int) = x))
+end
+
+import .TestImportAs.Mod2 as M2
+@test !@isdefined(Mod2)
+@test M2 === TestImportAs.Mod2

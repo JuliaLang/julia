@@ -46,6 +46,21 @@
       (string ":" (deparse e))
       (deparse e)))
 
+(define (deparse-import-path e)
+  (cond ((and (pair? e) (eq? (car e) '|.|))
+         (let loop ((lst   (cdr e))
+                    (ndots 0))
+           (if (or (null? lst)
+                   (not (eq? (car lst) '|.|)))
+               (string (string.rep "." ndots)
+                       (string.join (map deparse lst) "."))
+               (loop (cdr lst) (+ ndots 1)))))
+        ((and (pair? e) (eq? (car e) ':))
+         (string (deparse-import-path (cadr e)) ": "
+                 (string.join (map deparse-import-path (cddr e)) ", ")))
+        (else
+         (string e))))
+
 (define (deparse e (ilvl 0))
   (cond ((or (symbol? e) (number? e)) (string e))
         ((string? e) (print-to-string e))
@@ -71,6 +86,8 @@
          (if (length= e 2)
              (string (car e) (deparse (cadr e)))
              (string (deparse (cadr e)) " " (car e) " " (deparse (caddr e)))))
+        ((eq? (car e) 'as)
+         (string (deparse-import-path (cadr e)) " as " (deparse (caddr e))))
         (else
          (case (car e)
            ((null)  "nothing")
@@ -209,21 +226,7 @@
                     "end"))
            ;; misc syntax forms
            ((import using)
-            (define (deparse-path e)
-              (cond ((and (pair? e) (eq? (car e) '|.|))
-                     (let loop ((lst   (cdr e))
-                                (ndots 0))
-                       (if (or (null? lst)
-                               (not (eq? (car lst) '|.|)))
-                           (string (string.rep "." ndots)
-                                   (string.join (map deparse lst) "."))
-                           (loop (cdr lst) (+ ndots 1)))))
-                    ((and (pair? e) (eq? (car e) ':))
-                     (string (deparse-path (cadr e)) ": "
-                             (string.join (map deparse-path (cddr e)) ", ")))
-                    (else
-                     (string e))))
-            (string (car e) " " (string.join (map deparse-path (cdr e)) ", ")))
+            (string (car e) " " (string.join (map deparse-import-path (cdr e)) ", ")))
            ((global local export) (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
            ((const)        (string "const " (deparse (cadr e))))
            ((top)          (deparse (cadr e)))

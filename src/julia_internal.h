@@ -116,6 +116,8 @@ static inline uint64_t cycleclock(void)
 
 #include "timing.h"
 
+extern uint64_t jl_cumulative_compile_time;
+
 #ifdef _COMPILER_MICROSOFT_
 #  define jl_return_address() ((uintptr_t)_ReturnAddress())
 #else
@@ -595,6 +597,7 @@ extern char jl_using_oprofile_jitevents;
 #ifdef JL_USE_PERF_JITEVENTS
 extern char jl_using_perf_jitevents;
 #endif
+extern char jl_using_gdb_jitevents;
 extern size_t jl_arr_xtralloc_limit;
 
 // -- init.c -- //
@@ -1241,7 +1244,7 @@ extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
 extern jl_sym_t *splatnew_sym;
 extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
-extern jl_sym_t *foreigncall_sym;
+extern jl_sym_t *foreigncall_sym; extern jl_sym_t *as_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;

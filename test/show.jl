@@ -205,6 +205,11 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 @test_repr "import A.B, C.D"
+@test_repr "import A as B"
+@test_repr "import A.x as y"
+@test_repr "import A: x as y"
+@test_repr "import A.B: x, y as z"
+@test_repr "import A.B: x, y as z, a.b as c, xx"
 
 # keyword args (issue #34023 and #32775)
 @test_repr "f(a, b=c)"
@@ -1528,6 +1533,8 @@ end
     @test summary(r) == "4×2 reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2) with eltype Int16"
     p = PermutedDimsArray(r, (2, 1))
     @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
+    p = reinterpret(reshape, Tuple{Float32,Float32}, [1.0f0 3.0f0; 2.0f0 4.0f0])
+    @test summary(p) == "2-element reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32}) with eltype Tuple{Float32, Float32}"
 end
 
 @testset "Methods" begin
@@ -2018,3 +2025,6 @@ end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
+
+@test sprint(show, :(./)) == ":((./))"
+@test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

@@ -224,14 +224,14 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
             }
             else {
                 JL_UNLOCK_NOGC(&m->lock);
-                jl_binding_t *b2 = jl_get_binding(b->owner, var);
+                jl_binding_t *b2 = jl_get_binding(b->owner, b->name);
                 if (b2 == NULL || b2->value == NULL)
                     jl_errorf("invalid method definition: imported function %s.%s does not exist",
-                              jl_symbol_name(b->owner->name), jl_symbol_name(var));
+                              jl_symbol_name(b->owner->name), jl_symbol_name(b->name));
                 // TODO: we might want to require explicitly importing types to add constructors
                 if (!b->imported && !jl_is_type(b2->value)) {
                     jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended",
-                              jl_symbol_name(b->owner->name), jl_symbol_name(var));
+                              jl_symbol_name(b->owner->name), jl_symbol_name(b->name));
                 }
                 return b2;
             }
@@ -248,7 +248,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
     return b;
 }
 
-static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
+static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname,
                            int explici);
 
 typedef struct _modstack_t {
@@ -331,14 +331,14 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
             // do a full import to prevent the result of this lookup
             // from changing, for example if this var is assigned to
             // later.
-            module_import_(m, b->owner, var, 0);
+            module_import_(m, b->owner, var, var, 0);
             return b;
         }
         return NULL;
     }
     JL_UNLOCK(&m->lock);
     if (b->owner != m)
-        return jl_get_binding_(b->owner, var, &top);
+        return jl_get_binding_(b->owner, b->name, &top);
     return b;
 }
 
@@ -404,7 +404,7 @@ JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s)
 }
 
 // NOTE: we use explici since explicit is a C++ keyword
-static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int explici)
+static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname, int explici)
 {
     jl_binding_t *b = jl_get_binding(from, s);
     if (b == NULL) {
@@ -431,11 +431,19 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int 
         }
 
         JL_LOCK(&to->lock);
-        jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&to->bindings, s);
+        jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&to->bindings, asname);
         jl_binding_t *bto = *bp;
         if (bto != HT_NOTFOUND) {
             if (bto == b) {
                 // importing a binding on top of itself. harmless.
+            }
+            else if (bto->name != s) {
+                JL_UNLOCK(&to->lock);
+                jl_printf(JL_STDERR,
+                          "WARNING: ignoring conflicting import of %s.%s into %s\n",
+                          jl_symbol_name(from->name), jl_symbol_name(s),
+                          jl_symbol_name(to->name));
+                return;
             }
             else if (bto->owner == b->owner) {
                 // already imported
@@ -443,7 +451,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int 
             }
             else if (bto->owner != to && bto->owner != NULL) {
                 // already imported from somewhere else
-                jl_binding_t *bval = jl_get_binding(to, s);
+                jl_binding_t *bval = jl_get_binding(to, asname);
                 if (bval->constp && bval->value && b->constp && b->value == bval->value) {
                     // equivalent binding
                     bto->imported = (explici!=0);
@@ -493,12 +501,22 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int 
 
 JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 {
-    module_import_(to, from, s, 1);
+    module_import_(to, from, s, s, 1);
+}
+
+JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname)
+{
+    module_import_(to, from, s, asname, 1);
 }
 
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 {
-    module_import_(to, from, s, 0);
+    module_import_(to, from, s, s, 0);
+}
+
+JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname)
+{
+    module_import_(to, from, s, asname, 0);
 }
 
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
