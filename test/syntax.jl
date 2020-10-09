@@ -2397,6 +2397,10 @@ const x = 1
 global maybe_undef
 def() = (global maybe_undef = 0)
 func(x) = 2x + 1
+
+macro mac(x)
+    :($(esc(x)) + 1)
+end
 end
 
 module Mod2
@@ -2424,6 +2428,18 @@ using .Mod: func as f
 @test f(10) == 21
 @test !@isdefined(func)
 @test_throws ErrorException("error in method definition: function Mod.func must be explicitly imported to be extended") eval(:(f(x::Int) = x))
+
+z = 42
+import .z as also_z
+@test also_z == 42
+
+import .Mod.@mac as @m
+@test @m(3) == 4
+
+@test_throws ErrorException eval(:(import .Mod.@mac as notmacro))
+@test_throws ErrorException eval(:(import .Mod.func as @notmacro))
+@test_throws ErrorException eval(:(using .Mod: @mac as notmacro))
+@test_throws ErrorException eval(:(using .Mod: func as @notmacro))
 end
 
 import .TestImportAs.Mod2 as M2

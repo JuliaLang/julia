@@ -1606,6 +1606,21 @@
                    (error (string "invalid syntax \"using " (deparse-import-path (cadr first)) " as ...\"")))
                (list* word first rest)))))
 
+(define (parse-macro-name s)
+  (let ((nxt (peek-token s)))
+    (disallow-space s '@ nxt))
+  (with-space-sensitive
+   (if (eq? (peek-token s) '|.|)
+       (begin (take-token s) '__dot__)
+       (parse-atom s #f))))
+
+(define (parse-atsym s)
+  (let ((t (peek-token s)))
+    (if (eqv? t #\@)
+        (begin (take-token s)
+               (macroify-name (parse-macro-name s)))
+        (parse-unary-prefix s))))
+
 (define (parse-import-dots s)
   (let loop ((l '())
              (t (require-token s)))  ;; skip newlines
@@ -1622,7 +1637,7 @@
            (begin (take-token s)
                   (loop (list* '|.| '|.| '|.| '|.| l) (peek-token s))))
           (else
-           (cons (macrocall-to-atsym (parse-unary-prefix s)) l)))))
+           (cons (parse-atsym s) l)))))
 
 (define (parse-import-path s word)
   (let loop ((path (parse-import-dots s)))
@@ -1633,7 +1648,7 @@
        ((eq? nxt '|.|)
         (disallow-space s (car path) nxt)
         (take-token s)
-        (loop (cons (unquote (macrocall-to-atsym (parse-unary-prefix s))) path)))
+        (loop (cons (unquote (parse-atsym s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
             (eof-object? nxt))
         (cons '|.| (reverse path)))
@@ -1651,7 +1666,7 @@
           (if (and (not from) (eq? word 'using))
               (error (string "invalid syntax \"using " (deparse-import-path path) " as ...\"")))
           (take-token s)
-          `(as ,path ,(parse-unary-prefix s)))
+          `(as ,path ,(parse-atsym s)))
         path)))
 
 ;; parse comma-separated assignments, like "i=1:n,j=1:m,..."
@@ -2388,13 +2403,9 @@
           ;; macro call
           ((eqv? t #\@)
            (take-token s)
-           (let ((nxt (peek-token s)))
-             (disallow-space s '@ nxt))
            (with-space-sensitive
             (let ((startloc  (line-number-node s))
-                  (head (if (eq? (peek-token s) '|.|)
-                            (begin (take-token s) '__dot__)
-                            (parse-atom s #f))))
+                  (head (parse-macro-name s)))
               (peek-token s)
               (if (ts:space? s)
                   (maybe-docstring
