@@ -377,6 +377,13 @@ static int substr_isspace(char *p, char *pend)
     return 1;
 }
 
+static char* substr_hasf(char *p, char *pend)
+{
+    while (p != pend && *p != 'f')
+        p++;
+    return p;
+}
+
 JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, size_t len)
 {
     char *p;
@@ -385,8 +392,12 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
     char *tofree = NULL;
     int hasvalue = 0;
 
+    // check for 1f0 format (vs 1e0) while allowing for inf
+    char const * const first_f = substr_hasf(bstr, pend);
+    const int hasf = (first_f != bstr) && (first_f != pend) && *(first_f - 1) != 'n';
+
     errno = 0;
-    if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
+    if (hasf || !(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
         char *newstr;
         if (len + 1 < jl_page_size) {
@@ -397,6 +408,8 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
         }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
+        if(hasf)
+            newstr[first_f - bstr] = 'e';
         bstr = newstr;
         pend = bstr+len;
     }
@@ -444,8 +457,12 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
     char *tofree = NULL;
     int hasvalue = 0;
 
+    // check for 1f0 format (vs 1e0) while allowing for inf
+    char const * const first_f = substr_hasf(bstr, pend);
+    const int hasf = (first_f != bstr) && (first_f != pend) && *(first_f - 1) != 'n';
+
     errno = 0;
-    if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
+    if (hasf || !(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
         char *newstr;
         if (len + 1 < jl_page_size) {
@@ -456,6 +473,8 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
         }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
+        if(hasf)
+            newstr[first_f - bstr] = 'e';
         bstr = newstr;
         pend = bstr+len;
     }
