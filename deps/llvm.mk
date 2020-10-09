@@ -59,7 +59,12 @@ endif
 include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
+ifeq (,$(findstring rc,$(LLVM_VER)))
 LLVM_TAR_EXT:=$(LLVM_VER).src.tar.xz
+else
+LLVM_VER_SPLIT := $(subst -rc, ,$(LLVM_VER))
+LLVM_TAR_EXT:=$(word 1,$(LLVM_VER_SPLIT))rc$(word 2,$(LLVM_VER_SPLIT)).src.tar.xz
+endif
 
 ifneq ($(LLVM_VER),svn)
 LLVM_TAR:=$(SRCCACHE)/llvm-$(LLVM_TAR_EXT)
@@ -229,12 +234,7 @@ LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
 ifneq ($(LLVM_VER),svn)
-ifeq (,$(findstring rc,$(LLVM_VER)))
 LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
-else
-LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
-LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
-endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCCACHE)
