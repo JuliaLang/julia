@@ -543,6 +543,9 @@ module IteratorsMD
     # all 1
     # NOTE: this is only a temporary patch and could be possibly removed when StepRange support to
     # LinearIndices is done
+    function Base.collect(inds::CartesianIndices{N, R}) where {N,R<:NTuple{N, AbstractUnitRange}}
+        Base._collect_indices(axes(inds), inds)
+    end
     function Base.collect(inds::CartesianIndices)
         dest = Array{eltype(inds), ndims(inds)}(undef, size(inds))
         i = 0
