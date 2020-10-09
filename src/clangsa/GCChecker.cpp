@@ -1306,6 +1306,8 @@ bool GCChecker::evalCall(const CallExpr *CE,
   // (globals should not be invalidated, etc), hence the use of evalCall.
 #if LLVM_VERSION_MAJOR >= 9
   const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
+  if (!CE)
+    return false;
 #endif
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
   auto name = C.getCalleeName(CE);
