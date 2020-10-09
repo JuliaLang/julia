@@ -2856,9 +2856,7 @@ end
 function flatten_times(t::Core.Compiler.Timings.Timing)
     collect(Iterators.flatten([(t.time => t.mi_info,), flatten_times.(t.children)...]))
 end
-# Some very limited testing of timing the type inference (#37749). I'm not sure how
-# detailed to make these tests, since I'm not sure if we want to enforce a specific output
-# format given that this may change, so these tests are fairly limited in detail.
+# Some very limited testing of timing the type inference (#37749).
 @testset "Core.Compiler.Timings" begin
     # Functions that call each other
     @eval module M
@@ -2891,7 +2889,7 @@ end
     @eval module C
         i(x) = x === 0 ? 0 : 1 / x
         a(x) = i(0) * i(x)
-        b() = i(0) * i(1)
+        b() = i(0) * i(1) * i(0)
     end
     timing = time_inference() do
         @eval C.a(2)

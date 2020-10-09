@@ -18,7 +18,8 @@ being used for this purpose alone.
 """
 module Timings
 
-using Core.Compiler: -, +, :, length, push!, pop!, @inline, @inbounds, copy
+using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
+    @inbounds, copy
 
 # What we record for any given frame we infer during type inference.
 function _typeinf_identifier(frame::Core.Compiler.InferenceState)
@@ -39,7 +40,7 @@ Internal type containing the timing result for running type inference on a singl
 MethodInstance.
 """
 struct Timing
-    mi_info::Any
+    mi_info::Tuple{Core.MethodInstance,UInt64,Vector{Any},Vector{Any}}
     start_time::UInt64
     cur_start_time::UInt64
     time::UInt64
@@ -58,13 +59,19 @@ _time_ns() = ccall(:jl_hrtime, UInt64, ())  # Re-implemented here because Base n
 # call structure through type inference is recorded. (It's recorded as a tree, not a graph,
 # because we create a new node for duplicates.)
 const _timings = Timing[]
+# ROOT() is an empty function used as the top-level Timing node to measure all time spent
+# *not* in type inference during a given recording trace. It is used as a "dummy" node.
+function ROOT() end
+ROOT()  # Call it to compile a method instance for it.
 """
     Core.Compiler.reset_timings()
-Empty out the previously recorded type inference timings, and start the "root" timer again.
+Empty out the previously recorded type inference timings, and start the ROOT() timer again.
 """
 function reset_timings()
-    Core.Compiler.empty!(_timings)
-    Core.Compiler.push!(_timings, Timing("root", _time_ns()))
+    empty!(_timings)
+    push!(_timings, Timing(
+        (first(Core.Compiler.methods(ROOT).ms[1].specializations), 0x0, Any[], Any[],),
+        _time_ns()))
     nothing
 end
 reset_timings()
