@@ -306,3 +306,7 @@ let x = 1, y = 2
     @test Meta.lower(Main, Meta.parse("(; a.y, y)")) == Expr(:error, "field name \"y\" repeated in named tuple")
     @test (; a.y, x) === (y=2, x=1)
 end
+
+# issue #37926
+@test nextind((a=1,), 1) == nextind((1,), 1) == 2
+@test prevind((a=1,), 2) == prevind((1,), 2) == 1
