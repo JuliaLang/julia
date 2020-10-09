@@ -529,7 +529,7 @@ module IteratorsMD
     end
     function Base.LinearIndices(inds::CartesianIndices)
         indices = inds.indices
-        if all(x->x==1, step.(indices))
+        if all(x->step(x)==1, indices)
             indices = map(rng->first(rng):last(rng), indices)
             LinearIndices{length(indices), typeof(indices)}(indices)
         else
@@ -541,7 +541,7 @@ module IteratorsMD
 
     # This is currently needed because converting to LinearIndices is only available when steps are
     # all 1
-    # NOTE: this is only a temporary patch and could be possiblely removed when StepRange support to
+    # NOTE: this is only a temporary patch and could be possibly removed when StepRange support to
     # LinearIndices is done
     function Base.collect(inds::CartesianIndices)
         dest = Array{eltype(inds), ndims(inds)}(undef, size(inds))
