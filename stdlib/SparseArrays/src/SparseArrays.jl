@@ -60,6 +60,4 @@ function *(A::BiTriSym, B::BiTriSym)
     mul!(similar(A, TS, size(A)...), A, B)
 end
 
-LinearAlgebra.diagzero(D::Diagonal{<:AbstractSparseMatrix{T}},i,j) where {T} = spzeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
-
 end
