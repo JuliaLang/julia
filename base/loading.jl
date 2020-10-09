@@ -1250,7 +1250,7 @@ function compilecache(pkg::PkgId, cache::TOMLCache = TOMLCache(), show_errors::B
     return compilecache(pkg, path, cache, show_errors)
 end
 
-const MAX_NUM_PRECOMPILE_FILES = 10
+const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, cache::TOMLCache = TOMLCache(), show_errors::Bool = true)
     # decide where to put the resulting cache file
@@ -1260,7 +1260,7 @@ function compilecache(pkg::PkgId, path::String, cache::TOMLCache = TOMLCache(), 
     if pkg.uuid !== nothing
         entrypath, entryfile = cache_file_entry(pkg)
         cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
-        if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES
+        if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
             idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
             rm(joinpath(cachepath, cachefiles[idx]))
         end
