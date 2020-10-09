@@ -623,10 +623,10 @@ julia> Base.indent("  a\\n  \\n  b", 2)
 ```
 """
 function indent(str::AbstractString, n::Int)
-    indent == 0 && return str
+    n == 0 && return str
     # Note: this loses the type of the original string
     buf = IOBuffer(sizehint=sizeof(str))
-    indent_str = " " ^ n
+    indent_str = ' ' ^ n
 
     line_start = firstindex(str)
     blank_line = true
