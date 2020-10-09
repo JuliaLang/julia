@@ -62,6 +62,16 @@ function getindex(g::Generator{<:AbstractArray}, I...)
     end
 end
 
+function getindex(g::Generator, I...)
+    A = collect(g.iter)
+    subset = A[I...]
+    if typeof(subset) == eltype(A)
+        g.f(subset)
+    else
+        map(g.f, subset)
+    end
+end
+
 firstindex(g::Generator) = firstindex(g.iter)
 lastindex(g::Generator) = lastindex(g.iter)
 
