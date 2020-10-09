@@ -423,6 +423,13 @@ end
     B = adjB.parent
     return generic_matmatmul!(C, 'C', 'C', A, B, MulAddMul(alpha, beta))
 end
+
+@inline function mul!(C::StridedMatrix{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, transB::Transpose{<:Any,<:StridedVecOrMat{T}},
+                 alpha::Number, beta::Number) where {T<:BlasFloat}
+    A = adjA.parent
+    B = transB.parent
+    return gemm_wrapper!(C, 'C', 'T', A, B, MulAddMul(alpha, beta))
+end
 @inline function mul!(C::AbstractMatrix, adjA::Adjoint{<:Any,<:AbstractVecOrMat}, transB::Transpose{<:Any,<:AbstractVecOrMat},
                  alpha::Number, beta::Number)
     A = adjA.parent
