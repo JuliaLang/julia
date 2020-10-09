@@ -117,6 +117,9 @@ end
     return nothing
 end
 
+# _expected_frame_ is not needed within this function; it is used in the `@assert`, to
+# assert that indeed we are always returning to a parent after finishing all of its
+# children (that is, asserting that inference proceeds via depth-first-search).
 @inline function exit_current_timer(_expected_frame_)
     # Finish the new timer
     stop_time = Timings._time_ns()
@@ -163,7 +166,7 @@ end  # module Timings
 """
     Core.Compiler.__set_measure_typeinf(true)
     Core.Compiler.__set_measure_typeinf(false)
-Toggle recording per-method-instance timings within type inference in the Compiler.
+If set to `true`, record per-method-instance timings within type inference in the Compiler.
 """
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = fill(false)
