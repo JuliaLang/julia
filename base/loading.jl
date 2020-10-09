@@ -83,12 +83,12 @@ end
 ## SHA1 ##
 
 struct SHA1
-    bytes::Vector{UInt8}
-    function SHA1(bytes::Vector{UInt8})
-        length(bytes) == 20 ||
-            throw(ArgumentError("wrong number of bytes for SHA1 hash: $(length(bytes))"))
-        return new(bytes)
-    end
+    bytes::NTuple{20, UInt8}
+end
+function SHA1(bytes::Vector{UInt8})
+    length(bytes) == 20 ||
+        throw(ArgumentError("wrong number of bytes for SHA1 hash: $(length(bytes))"))
+    return SHA1(ntuple(i->bytes[i], Val(20)))
 end
 SHA1(s::AbstractString) = SHA1(hex2bytes(s))
 parse(::Type{SHA1}, s::AbstractString) = SHA1(s)
