@@ -219,3 +219,16 @@ end
 let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end
+
+@testset "indexing" begin
+    g = (i % 2 == 0 ? error("invalid") : i for i in 1:3)
+
+    @test g[3] == 3
+    @test g[1:2:3] == [1, 3]
+    @test firstindex(g) == 1
+    @test lastindex(g) == 3
+
+    @test (tuple(x) for x in ["a"])[1] == ("a",)
+    @test (tuple(x) for x in [[0]])[1] == ([0],)
+    @test (x * y for (x, y) in Dict(3 => 4))[1] == 12
+end

@@ -92,6 +92,7 @@ New library features
 * New constructor `NamedTuple(iterator)` that constructs a named tuple from a key-value pair iterator.
 * A new `reinterpret(reshape, T, a::AbstractArray{S})` reinterprets `a` to have eltype `T` while potentially
   inserting or consuming the first dimension depending on the ratio of `sizeof(T)` and `sizeof(S)`.
+* Generators support `getindex`, `firstindex`, and `lastindex` ([#37648]).
 
 Standard library changes
 ------------------------
