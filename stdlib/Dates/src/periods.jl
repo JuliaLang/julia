@@ -475,40 +475,7 @@ Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
 
 Base.isless(x::Period, y::CompoundPeriod) = CompoundPeriod(x) < y
 Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
-function Base.isless(x::CompoundPeriod, y::CompoundPeriod)
-    has_other = false
-    has_fixed = false
-    x_val::Int64 = 0
-    y_val::Int64 = 0
-    # if any overlap of OtherPeriod or FixedPeriod occurs an error is thrown so it can be treated as 
-    # x and y val only being either Nanosecond or Month
-    for p in x.periods
-        if(typeof(p) <: FixedPeriod)
-            has_fixed = true
-            x_val += tons(p)
-        else
-            has_other = true
-            x_val += value(convert(Month,p))
-        end
-        if(has_fixed && has_other)
-            throw(ErrorException("Can not compare OtherPeriods and FixedPeriods in a CompoundPeriod."))
-        end
-    end
-
-    for p in y.periods
-        if(typeof(p) <: FixedPeriod)
-            has_fixed = true
-            y_val += tons(p)
-        else
-            has_other = true
-            y_val += value(convert(Month,p))
-        end
-        if(has_fixed && has_other)
-            throw(ErrorException("Can not compare OtherPeriods and FixedPeriods in a CompoundPeriod."))
-        end
-    end
-    return x_val < y_val
-end
+Base.isless(x::CompoundPeriod, y::CompoundPeriod) = tons(x) < tons(y)
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
 toms(c::Nanosecond)  = div(value(c), 1000000)

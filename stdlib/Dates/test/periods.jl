@@ -478,10 +478,7 @@ end
     @test (2y-m < 25m+1y) == true
     @test (2y < 25m+1y) == true
     @test (25m+1y < 2y) == false
-    #tests for error throwing for not allowed comparisons (FixedPeriod and OtherPeriod combinations)
-    @test_throws ErrorException y + h < h + m
-    @test_throws ErrorException y + h < m
-    @test_throws ErrorException y < m+h
-
+    #Test combined Fixed and Other Periods
+    @test (1m + 1d < 1m + 1s) = false
 end
 end
