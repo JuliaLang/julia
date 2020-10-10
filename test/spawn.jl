@@ -261,6 +261,25 @@ end
     end
 end
 
+@testset "redirect" begin
+    mktempdir() do dir
+        cd(dir) do
+            content_stderr = randstring()
+            content_stdin = randstring()
+            content_stdout = randstring()
+            write("stdin.txt", content_stdin)
+            line = redirect(stdout="stdout.txt", stderr="stderr.txt", stdin="stdin.txt") do
+                print(content_stdout)
+                print(stderr, content_stderr)
+                readline()
+            end
+            @test read("stderr.txt", String) == content_stderr
+            @test line == content_stdin
+            @test read("stdout.txt", String) == content_stdout
+        end
+    end
+end
+
 # issue #36136
 @testset "redirect to devnull" begin
     @test redirect_stdout(devnull) do; println("Hello") end === nothing

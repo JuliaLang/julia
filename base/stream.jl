@@ -1215,19 +1215,77 @@ i.e. data to be read from [`stdin`](@ref) may be written to `wr`.
 """
 redirect_stdin
 
-for (F,S) in ((:redirect_stdin, :stdin), (:redirect_stdout, :stdout), (:redirect_stderr, :stderr))
-    @eval function $F(f::Function, stream)
-        STDOLD = $S
-        local ret
-        $F(stream)
-        try
-            ret = f()
-        finally
-            $F(STDOLD)
-        end
-        ret
+
+"""
+    redirect(;stdin=stdin, stderr=stderr, stdout=stdout)
+
+Redirect a subset of the streams `stdin`, `stderr`, `stdout`.
+"""
+function redirect(;stdin=nothing, stderr=nothing, stdout=nothing)
+    stdin  === nothing || redirect_stdin(stdin)
+    stderr === nothing || redirect_stderr(stderr)
+    stdout === nothing || redirect_stdout(stdout)
+end
+
+"""
+    redirect(f; stdin=nothing, stderr=nothing, stdout=nothing)
+
+
+Redirect a subset of the streams `stdin`, `stderr`, `stdout`,
+call `f()` and restore each stream.
+
+Possible values for each stream are:
+* `nothing` indicating the stream should not be redirected.
+* `path::AbstractString` redirecting the stream to the file at `path`.
+* `io` an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+
+```julia
+julia> redirect(stdout="stdout.txt", stderr="stderr.txt") do
+           print("hello stdout")
+           print(stderr, "hello stderr")
+       end
+
+julia> read("stdout.txt", String)
+"hello stdout"
+
+julia> read("stderr.txt", String)
+"hello stderr"
+```
+
+!!! compat "Julia 1.6"
+    `redirect` requires Julia 1.6 or later.
+"""
+function redirect(f; stdin=nothing, stderr=nothing, stdout=nothing)
+
+    function resolve(new::Nothing, oldstream, mode)
+        (new=nothing, close=false, old=nothing)
+    end
+    function resolve(path::AbstractString, oldstream,mode)
+        (new=open(path, mode), close=true, old=oldstream)
+    end
+    function resolve(new, oldstream, mode)
+        (new=new, close=false, old=oldstream)
+    end
+
+    new_err, close_err, old_err = resolve(stderr, Base.stderr, "w")
+    new_in , close_in , old_in  = resolve(stdin , Base.stdin , "r")
+    new_out, close_out, old_out = resolve(stdout, Base.stdout, "w")
+
+    redirect(; stderr=new_err, stdin=new_in, stdout=new_out)
+
+    try
+        return f()
+    finally
+        redirect(;stderr=old_err, stdin=old_in, stdout=old_out)
+        close_err && close(new_err)
+        close_in  && close(new_in )
+        close_out && close(new_out)
     end
 end
+
+redirect_stderr(f::Function, stream) = redirect(f, stderr=stream)
+redirect_stdin(f::Function, stream) = redirect(f, stdin=stream)
+redirect_stdout(f::Function, stream) = redirect(f, stdout=stream)
 
 """
     redirect_stdout(f::Function, stream)
@@ -1237,6 +1295,8 @@ Upon completion, [`stdout`](@ref) is restored to its prior setting.
 
 !!! note
     `stream` must be a `TTY`, a `Pipe`, or a socket.
+
+See also [`redirect`](@ref).
 """
 redirect_stdout(f::Function, stream)
 
@@ -1248,6 +1308,8 @@ Upon completion, [`stderr`](@ref) is restored to its prior setting.
 
 !!! note
     `stream` must be a `TTY`, a `Pipe`, or a socket.
+
+See also [`redirect`](@ref).
 """
 redirect_stderr(f::Function, stream)
 
@@ -1259,6 +1321,8 @@ Upon completion, [`stdin`](@ref) is restored to its prior setting.
 
 !!! note
     `stream` must be a `TTY`, a `Pipe`, or a socket.
+
+See also [`redirect`](@ref).
 """
 redirect_stdin(f::Function, stream)
 
