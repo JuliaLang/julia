@@ -101,9 +101,9 @@ end
     unique(itr)
 
 Return an array containing only the unique elements of collection `itr`, as
-determined by [`hash`](@ref) equality, in the order that the first of each set
-of equivalent elements originally appears. The element type of the input is
-preserved.
+determined by [`isequal`](@ref), in the order that the first of each set of
+equivalent elements originally appears. The element type of the input is
+preserved. Note that [`isequal`](@ref) requires equality of [`hash`](@ref).
 
 # Examples
 ```jldoctest
