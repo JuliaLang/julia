@@ -257,7 +257,7 @@ second argument is zero.
 ## Floating-Point Numbers
 
 Literal floating-point numbers are represented in the standard formats, using
-[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E-notation) when necessary:
+[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E_notation) when necessary:
 
 ```jldoctest
 julia> 1.0
