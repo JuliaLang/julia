@@ -379,16 +379,34 @@ tofloat(x) = Float64(x)
 tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
+_snprintf(ptr, siz, str, arg) =
+    @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+                                   arg::Ref{BigFloat})::Cint
+
+const __BIG_FLOAT_MAX__ = 8192
+
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     x = tofloat(arg)
-    if x isa BigFloat && isfinite(x)
-        ptr = pointer(buf, pos)
-        newpos = @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, (length(buf) - pos + 1)::Csize_t, string(spec; modifier="R")::Ptr{UInt8}; arg::Ref{BigFloat})::Cint
-        newpos > 0 || error("invalid printf formatting for BigFloat")
-        return pos + newpos
-    elseif x isa BigFloat
+    if x isa BigFloat
+        if isfinite(x)
+            GC.@preserve buf begin
+                siz = length(buf) - pos + 1
+                str = string(spec; modifier="R")
+                len = _snprintf(pointer(buf, pos), siz, str, x)
+                if len > siz
+                    maxout = max(__BIG_FLOAT_MAX__,
+                                 ceil(Int, precision(x) * log(2) / log(10)) + 25)
+                    len > maxout &&
+                        error("Over $maxout bytes $len needed to output BigFloat $x")
+                    resize!(buf, len + 1)
+                    len = _snprintf(pointer(buf, pos), len + 1, str, x)
+                end
+                len > 0 || throw(ArgumentError("invalid printf formatting $str for BigFloat"))
+                return pos + len
+            end
+        end
         x = Float64(x)
     end
     if T == Val{'e'} || T == Val{'E'}
