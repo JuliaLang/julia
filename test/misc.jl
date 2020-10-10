@@ -647,6 +647,31 @@ let foo() = begin
     @test foo() == 1
 end
 
+module atinvokelatest
+f(x) = 1
+g(x, y; z=0) = x * y + z
+end
+
+let foo() = begin
+        @eval atinvokelatest.f(x::Int) = 3
+        return Base.@invokelatest atinvokelatest.f(0)
+    end
+    @test foo() == 3
+end
+
+let foo() = begin
+        @eval atinvokelatest.f(x::Int) = 3
+        return Base.@invokelatest atinvokelatest.f(0)
+    end
+    @test foo() == 3
+
+    bar() = begin
+        @eval atinvokelatest.g(x::Int, y::Int; z=3) = z
+        return Base.@invokelatest atinvokelatest.g(2, 3; z=1)
+    end
+    @test bar() == 1
+end
+
 # Endian tests
 # For now, we only support little endian.
 # Add an `Sys.ARCH` test for big endian when/if we add support for that.
