@@ -23,7 +23,6 @@ using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inlin
 
 # What we record for any given frame we infer during type inference.
 function _typeinf_identifier(frame::Core.Compiler.InferenceState)
-    # TODO: What information do we want to collect to identify each invocation of type inference?
     mi_info = (
         frame.linfo,
         frame.world,
@@ -65,19 +64,23 @@ function ROOT() end
 ROOT()  # Call it to compile a method instance for it.
 """
     Core.Compiler.reset_timings()
-Empty out the previously recorded type inference timings, and start the ROOT() timer again.
+
+Empty out the previously recorded type inference timings (`Core.Compiler._timings`), and
+start the ROOT() timer again. `ROOT()` measures all time spent _outside_ inference.
 """
 function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
+        # Get the MethodInstance for ROOT(), and use default empty values for other fields.
         (first(Core.Compiler.methods(ROOT).ms[1].specializations), 0x0, Any[], Any[],),
         _time_ns()))
-    nothing
+    return nothing
 end
 reset_timings()
 
-# (This is split into a function so that it can be called both here and once at the Very
-# End of the operation, by whoever started the operation and called `reset_timings()`.)
+# (This is split into a function so that it can be called both in this module, at the top
+# of `enter_new_timer()``, and once at the Very End of the operation, by whoever started
+# the operation and called `reset_timings()`.)
 @inline function close_current_timer()
     stop_time = _time_ns()
     parent_timer = _timings[end]
@@ -98,7 +101,7 @@ end
 
 @inline function enter_new_timer(frame)
     # Very first thing, stop the active timer: get the current time and add in the
-    # time since it was last started to its aggregate exclussive time.
+    # time since it was last started to its aggregate exclusive time.
     close_current_timer()
 
     mi_info = _typeinf_identifier(frame)
@@ -171,8 +174,8 @@ end
 end  # module Timings
 
 """
-    Core.Compiler.__set_measure_typeinf(true)
-    Core.Compiler.__set_measure_typeinf(false)
+    Core.Compiler.__set_measure_typeinf(onoff::Bool)
+
 If set to `true`, record per-method-instance timings within type inference in the Compiler.
 """
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
