@@ -263,20 +263,25 @@ end
 
 @testset "redirect" begin
     mktempdir() do dir
-        cd(dir) do
-            content_stderr = randstring()
-            content_stdin = randstring()
-            content_stdout = randstring()
-            write("stdin.txt", content_stdin)
-            line = redirect(stdout="stdout.txt", stderr="stderr.txt", stdin="stdin.txt") do
-                print(content_stdout)
-                print(stderr, content_stderr)
-                readline()
-            end
-            @test read("stderr.txt", String) == content_stderr
-            @test line == content_stdin
-            @test read("stdout.txt", String) == content_stdout
+        path_stderr = joinpath(dir, "stderr.txt")
+        path_stdin  = joinpath(dir, "stdin.txt")
+        path_stdout = joinpath(dir, "stdout.txt")
+
+        content_stderr = randstring()
+        content_stdin  = randstring()
+        content_stdout = randstring()
+
+        write(path_stdin, content_stdin)
+
+        line = redirect(stdout=path_stdout, stderr=path_stderr, stdin=path_stdin) do
+            print(content_stdout)
+            print(stderr, content_stderr)
+            readline()
         end
+
+        @test read(path_stderr, String) == content_stderr
+        @test line == content_stdin
+        @test read(path_stdout, String) == content_stdout
     end
 end
 
