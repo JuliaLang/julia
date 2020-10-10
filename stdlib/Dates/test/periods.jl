@@ -479,6 +479,6 @@ end
     @test (2y < 25m+1y) == true
     @test (25m+1y < 2y) == false
     #Test combined Fixed and Other Periods
-    @test (1m + 1d < 1m + 1s) = false
+    @test (1m + 1d < 1m + 1s) == false
 end
 end
