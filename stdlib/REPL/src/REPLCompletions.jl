@@ -583,15 +583,16 @@ end
 
 function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)
     loading_candidates = String[]
-    p = Base.TOML.Parser()
-    Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
-    d = Base.TOML.parse(p)
-    pkg = get(d, "name", nothing)
+    d = Base.parsed_toml(project_file)
+    pkg = get(d, "name", nothing)::Union{String, Nothing}
     if pkg !== nothing && startswith(pkg, pkgstarts)
         push!(loading_candidates, pkg)
     end
-    for (pkg, _) in get(d, "deps", [])
-        startswith(pkg, pkgstarts) && push!(loading_candidates, pkg)
+    deps = get(d, "deps", nothing)::Union{Dict{String, Any}, Nothing}
+    if deps !== nothing
+        for (pkg, _) in deps
+            startswith(pkg, pkgstarts) && push!(loading_candidates, pkg)
+        end
     end
     return Completion[PackageCompletion(name) for name in loading_candidates]
 end

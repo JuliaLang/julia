@@ -244,7 +244,7 @@ try
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_logs (:warn, "Replacing module `$Foo_module`") begin
-        ms = Base._require_from_serialized(cachefile, Base.TOMLCache())
+        ms = Base._require_from_serialized(cachefile)
         @test isa(ms, Array{Any,1})
     end
 
@@ -417,7 +417,7 @@ try
           """)
 
     cachefile = Base.compilecache(Base.PkgId("FooBar"))
-    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), Base.TOMLCache())
+    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"))
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
