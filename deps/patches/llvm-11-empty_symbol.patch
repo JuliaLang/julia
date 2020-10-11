@@ -1,0 +1,56 @@
+From 34f9e3400e1b8537c9b6fd2d3871f7af0153d4ab Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Sun, 11 Oct 2020 14:50:39 -0400
+Subject: [PATCH] [RTDYLD] be more defensive about empty symbol
+
+---
+ llvm/lib/ExecutionEngine/RuntimeDyld/RuntimeDyld.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git llvm/lib/ExecutionEngine/RuntimeDyld/RuntimeDyld.cpp llvm/lib/ExecutionEngine/RuntimeDyld/RuntimeDyld.cpp
+index 7e9b0690cce..1b0ef63d8b8 100644
+--- llvm/lib/ExecutionEngine/RuntimeDyld/RuntimeDyld.cpp
++++ llvm/lib/ExecutionEngine/RuntimeDyld/RuntimeDyld.cpp
+@@ -308,6 +308,7 @@ RuntimeDyldImpl::loadObjectImpl(const object::ObjectFile &Obj) {
+                         << " SID: " << SectionID
+                         << " Offset: " << format("%p", (uintptr_t)Addr)
+                         << " flags: " << *FlagsOrErr << "\n");
++      assert(!Name.empty()); // Should not enter an empty symbol
+       GlobalSymbolTable[Name] = SymbolTableEntry(SectionID, Addr, *JITSymFlags);
+     } else if (SymType == object::SymbolRef::ST_Function ||
+                SymType == object::SymbolRef::ST_Data ||
+@@ -340,6 +341,7 @@ RuntimeDyldImpl::loadObjectImpl(const object::ObjectFile &Obj) {
+                         << " SID: " << SectionID
+                         << " Offset: " << format("%p", (uintptr_t)SectOffset)
+                         << " flags: " << *FlagsOrErr << "\n");
++      assert(!Name.empty()); // Should not enter an empty symbol
+       GlobalSymbolTable[Name] =
+           SymbolTableEntry(SectionID, SectOffset, *JITSymFlags);
+     }
+@@ -769,6 +771,7 @@ Error RuntimeDyldImpl::emitCommonSymbols(const ObjectFile &Obj,
+ 
+     LLVM_DEBUG(dbgs() << "Allocating common symbol " << Name << " address "
+                       << format("%p", Addr) << "\n");
++    assert(!Name.empty()); // Should not enter an empty symbol
+     GlobalSymbolTable[Name] =
+         SymbolTableEntry(SectionID, Offset, std::move(*JITSymFlags));
+     Offset += Size;
+@@ -930,6 +933,7 @@ void RuntimeDyldImpl::addRelocationForSymbol(const RelocationEntry &RE,
+   if (Loc == GlobalSymbolTable.end()) {
+     ExternalSymbolRelocations[SymbolName].push_back(RE);
+   } else {
++    assert(!SymbolName.empty() && "Empty symbol should not be in GlobalSymbolTable");
+     // Copy the RE since we want to modify its addend.
+     RelocationEntry RECopy = RE;
+     const auto &SymInfo = Loc->second;
+@@ -1107,6 +1111,7 @@ void RuntimeDyldImpl::applyExternalSymbolRelocations(
+         // New entries may have been added to the relocation list.
+         i = ExternalSymbolRelocations.find(Name);
+       } else {
++        assert(!Name.empty() && "Empty symbol should not be in GlobalSymbolTable");
+         // We found the symbol in our global table.  It was probably in a
+         // Module that we loaded previously.
+         const auto &SymInfo = Loc->second;
+-- 
+2.28.0
+

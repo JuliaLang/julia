@@ -514,6 +514,7 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
 endif
 $(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-empty_symbol)) # remove for LLVM 12
 endif # LLVM_VER 11.0
 
 
