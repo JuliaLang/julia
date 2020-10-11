@@ -369,6 +369,8 @@ end
 end
 
 # issue #36527
+s = raw"""
+using Test
 function f36527()
     caught = false
     🏡 = Core.eval(Main, :(module asdf36527 end))
@@ -383,6 +385,8 @@ function f36527()
 end
 
 @test f36527()
+"""
+@test success(`$(Base.julia_cmd()) -g2 -e $s`)
 
 # accessing an undefined var in tail position in a catch block
 function undef_var_in_catch()

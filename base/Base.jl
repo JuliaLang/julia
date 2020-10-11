@@ -66,6 +66,9 @@ time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 start_base_include = time_ns()
 
+julia_debug = true
+isdebug() = julia_debug::Bool
+
 ## Load essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
@@ -396,6 +399,7 @@ in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
 if is_primary_base_module
 function __init__()
+    global julia_debug = Base.JLOptions().debug_level >= 2
     # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
     if !haskey(ENV, "OPENBLAS_MAIN_FREE") && !haskey(ENV, "GOTOBLAS_MAIN_FREE")
         ENV["OPENBLAS_MAIN_FREE"] = "1"

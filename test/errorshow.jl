@@ -332,7 +332,7 @@ let undefvar
     @test err_str == "InterruptException:"
     err_str = @except_str throw(ArgumentError("not an error")) ArgumentError
     @test err_str == "ArgumentError: not an error"
-    err_str = @except_str @assert(false) AssertionError
+    err_str = read(`$(Base.julia_cmd()) -g2 -e 'try @assert false; catch e; showerror(stdout, e); end'`, String)
     @test err_str == "AssertionError: false"
 end
 

@@ -901,4 +901,73 @@ let
     end
 end
 
+# Debug mode
+let
+    tmp = mktempdir()
+    try
+        cd(tmp) do
+            pkg_content(mod) = """
+            """
+
+            write("Project.toml", """
+                  [deps]
+                  A = "065497a9-3da1-45c2-901d-78aba5544f04"
+                  B = "d52a13bc-ce4c-4a58-a416-e1c8b2d677de"
+                  """)
+
+            write("Manifest.toml", """
+                    [[A]]
+                    deps = ["B"]
+                    path = "A"
+                    uuid = "065497a9-3da1-45c2-901d-78aba5544f04"
+
+                    [[B]]
+                    path = "B"
+                    uuid = "d52a13bc-ce4c-4a58-a416-e1c8b2d677de"
+                    """)
+
+            mkpath("A/src/")
+            write("A/src/A.jl", """
+                module A
+                    using B
+                    const is_debug = isdebug()
+                    maybe_assert() = @assert false
+                end
+                """)
+
+            mkpath("B/src/")
+            write("B/src/B.jl", """
+                module B
+                    const is_debug = isdebug()
+                    maybe_assert() = @assert false
+                end
+                """)
+
+            s = """
+                using Test
+                using A
+                @test A.is_debug == true
+                @test A.B.is_debug == true
+                @test_throws AssertionError A.maybe_assert()
+                @test_throws AssertionError A.B.maybe_assert()
+            """
+            @test success(Cmd(`$(Base.julia_cmd()) --project -g2 -e $s`; env = ["JULIA_DEPOT_PATH"=>tmp]))
+
+            s = """
+                using Test
+                using A
+                @test A.is_debug == false
+                @test A.B.is_debug == false
+                @test A.maybe_assert() === nothing
+                @test A.B.maybe_assert() === nothing
+            """
+            @test success(Cmd(`$(Base.julia_cmd()) --project -e $s`; env = ["JULIA_DEPOT_PATH"=>tmp]))
+        end
+    finally
+        rm(tmp; recursive=true)
+    end
+end
+
+
+
 end # !withenv
