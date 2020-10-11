@@ -97,6 +97,9 @@ Standard library changes
 * `Meta-e` now opens the current input in an editor. The content (if modified) will be
   executed upon existing the editor.
 
+* The contextual module which is active at the REPL can be changed (it is `Main` by default),
+  via the `activate_module` function ([#33872]).
+
 #### SparseArrays
 
 #### Dates

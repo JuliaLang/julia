@@ -176,9 +176,10 @@ struct EmptyHistoryProvider <: HistoryProvider end
 
 reset_state(::EmptyHistoryProvider) = nothing
 
-complete_line(c::EmptyCompletionProvider, s, mod) = String[], "", true
+complete_line(c::EmptyCompletionProvider, s) = String[], "", true
 
-# for Pkg which specializes complete_line with only 2 arguments
+# complete_line can be specialized for only two arguments, when the active module
+# doesn't matter (e.g. Pkg does this)
 complete_line(c::CompletionProvider, s, ::Module) = complete_line(c, s)
 
 terminal(s::IO) = s

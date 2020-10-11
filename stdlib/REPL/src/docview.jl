@@ -478,8 +478,8 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main)
 end
 isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
 
-repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main) = isregex(ex) ? :(apropos($io, $ex, $mod)) : _repl(ex, brief)
-repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main) = :(apropos($io, $str, $mod))
+repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief)
+repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main) = :(apropos($io, $str))
 repl(io::IO, other; brief::Bool=true, mod::Module=Main) = esc(:(@doc $other))
 #repl(io::IO, other) = lookup_doc(other) # TODO
 

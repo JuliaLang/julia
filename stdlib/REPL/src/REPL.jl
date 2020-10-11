@@ -517,7 +517,7 @@ function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
-function complete_line(c::ShellCompletionProvider, s::PromptState, ::Module)
+function complete_line(c::ShellCompletionProvider, s::PromptState)
     # First parse everything up to the current position
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
@@ -525,7 +525,7 @@ function complete_line(c::ShellCompletionProvider, s::PromptState, ::Module)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
-function complete_line(c::LatexCompletions, s, ::Module)
+function complete_line(c::LatexCompletions, s)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)::String
     ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
@@ -926,10 +926,14 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
 function contextual_prompt(repl::LineEditREPL, prompt::Union{String,Function})
     function ()
-        mod = repl.mistate.active_module
-        prefix = mod == Main ? "" : string('(', mod, ") ")
-        pr = prompt isa String ? prompt : prompt()
-        prefix * pr
+        mod = active_module(repl)
+        if prompt == JULIA_PROMPT
+            mod == Main ? prompt : string(mod, "> ")
+        else
+            prefix = mod == Main ? "" : string('(', mod, ") ")
+            pr = prompt isa String ? prompt : prompt()
+            prefix * pr
+        end
     end
 end
 

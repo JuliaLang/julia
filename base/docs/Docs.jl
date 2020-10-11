@@ -238,7 +238,7 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
         # that over-writing a docstring *may* have been accidental.  The warning
         # is suppressed for symbols in Main (or current active module),
         # for interactive use (#23011).
-        __module__ === Base.get_active_module() ||
+        __module__ === Base.active_module() ||
             @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
