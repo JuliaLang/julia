@@ -1205,11 +1205,10 @@ end
 
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
-                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String}, toml_cache::Dict{String, CachedTOMLDict})
+                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
-    copy!(Base.TOML_CACHE.d, toml_cache)
     ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
     Base.ACTIVE_PROJECT[] = nothing
     Base._track_dependencies[] = true
@@ -1231,8 +1230,8 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     end
 end
 
-@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),Nothing, Dict{String,CachedTOMLDict}))
-@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),String, Dict{String,CachedTOMLDict}))
+@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),Nothing))
+@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),String))
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), show_errors::Bool = true)
@@ -1268,7 +1267,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
-            $(repr(load_path)), $deps, $(repr(source_path(nothing))), $(repr(TOML_CACHE.d)))
+            $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
     close(io.in)
     return io
