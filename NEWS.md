@@ -23,6 +23,8 @@ New language features
   product of two arrays of arrays. ([#37583])
 * The syntax `import A as B` (plus `import A: x as y`, `import A.x as y`, and `using A: x as y`)
   can now be used to rename imported modules and identifiers ([#1255]).
+* Unsigned literals (starting with `0x`) which are too big to fit in an `UInt128` object
+  are now interpreted as `BigInt` ([#23546]).
 
 Language changes
 ----------------
