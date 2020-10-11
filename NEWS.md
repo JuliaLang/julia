@@ -92,6 +92,8 @@ New library features
 * New constructor `NamedTuple(iterator)` that constructs a named tuple from a key-value pair iterator.
 * A new `reinterpret(reshape, T, a::AbstractArray{S})` reinterprets `a` to have eltype `T` while potentially
   inserting or consuming the first dimension depending on the ratio of `sizeof(T)` and `sizeof(S)`.
+* New `append!(vector, collections...)` and `prepend!(vector, collections...)` methods accept multiple
+  collections to be appended or prepended ([#36227]).
 
 Standard library changes
 ------------------------
