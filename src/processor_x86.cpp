@@ -969,9 +969,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     // This can happen with virtualization.
     features.push_back("+64bit");
 #endif
-#if JL_LLVM_VERSION >= 90000
     features.push_back("+cx8");
-#endif
     return std::make_pair(std::move(name), std::move(features));
 }
 
