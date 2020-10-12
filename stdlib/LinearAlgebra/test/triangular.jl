@@ -608,7 +608,6 @@ end
 @testset "inplace mul of appropriate types should preserve triagular structure" begin
     for elty1 in (Float32, Float64, ComplexF32, ComplexF64, Int)
         for elty2 in (Float32, Float64, ComplexF32, ComplexF64, Int)
-
             A = UpperTriangular(rand(elty1, 5, 5))
             A2 = UpperTriangular(rand(elty2, 5, 5))
             Au = UnitUpperTriangular(rand(elty1, 5, 5))
@@ -622,21 +621,25 @@ end
             @test mul!(similar(A,promote_type(elty1,elty2)), A, A2) ≈ A*A2
             @test mul!(similar(A,promote_type(elty1,elty2)), A2, A) ≈ A2*A
             @test mul!(similar(A2), A2, A2) ≈ A2*A2
+            @test mul!(copy(A), A, A, 3, 5) ≈ mul!(Matrix(copy(A)), Matrix(A), Matrix(A), 3, 5)
 
             @test mul!(similar(A), A, Au) ≈ A*Au
             @test mul!(similar(A,promote_type(elty1,elty2)), A, Au2) ≈ A*Au2
             @test mul!(similar(A,promote_type(elty1,elty2)), Au2, A) ≈ Au2*A
             @test mul!(similar(Au2), Au2, Au2) ≈ Au2*Au2
+            @test mul!(Matrix{promote_type(elty1,elty2)}(copy(A)), Au2, Au2, 3, 5) ≈ mul!(Matrix{promote_type(elty1,elty2)}(copy(A)), Matrix(Au2), Matrix(Au2), 3, 5)
 
             @test mul!(similar(B), B, B) ≈ B*B
             @test mul!(similar(B,promote_type(elty1,elty2)), B, B2) ≈ B*B2
             @test mul!(similar(B,promote_type(elty1,elty2)), B2, B) ≈ B2*B
             @test mul!(similar(B2), B2, B2) ≈ B2*B2
+            @test mul!(copy(B), B, B, 3, 5) ≈ mul!(Matrix(copy(B)), Matrix(B), Matrix(B), 3, 5)
 
             @test mul!(similar(B), B, Bu) ≈ B*Bu
             @test mul!(similar(B,promote_type(elty1,elty2)), B, Bu2) ≈ B*Bu2
             @test mul!(similar(B,promote_type(elty1,elty2)), Bu2, B) ≈ Bu2*B
             @test mul!(similar(Bu2), Bu2, Bu2) ≈ Bu2*Bu2
+            @test mul!(Matrix{promote_type(elty1,elty2)}(copy(B)), Bu2, Bu2, 3, 5) ≈ mul!(Matrix{promote_type(elty1,elty2)}(copy(B)), Matrix(Bu2), Matrix(Bu2), 3, 5)
         end
     end
 end
