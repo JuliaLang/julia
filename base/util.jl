@@ -483,11 +483,7 @@ macro kwdef(flags, expr)
             should_kwshow = flags.args[2]
             if should_kwshow
                 kwshow = :(
-                    function $Base.show(io::$IO, s::$(esc(S)))
-                        $print(io, "$($(esc(S)))(")
-                        $print(io, join(("$a = $(repr(getfield(s,a)))" for a in $call_args), ", "))
-                        $print(io, ")")
-                    end
+                    $Base.show(io::$IO, s::$(esc(S))) = $Base.show_default(io, s, kwshow=true)
                 )
             end
         else
