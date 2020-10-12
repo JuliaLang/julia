@@ -22,8 +22,15 @@ using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inlin
     @inbounds, copy
 
 # What we record for any given frame we infer during type inference.
+struct InferenceFrameInfo
+    mi::Core.MethodInstance
+    world::UInt64
+    sptypes::Vector{Any}
+    slottypes::Vector{Any}
+end
+
 function _typeinf_identifier(frame::Core.Compiler.InferenceState)
-    mi_info = (
+    mi_info = InferenceFrameInfo(
         frame.linfo,
         frame.world,
         copy(frame.sptypes),
@@ -39,7 +46,7 @@ Internal type containing the timing result for running type inference on a singl
 MethodInstance.
 """
 struct Timing
-    mi_info::Tuple{Core.MethodInstance,UInt64,Vector{Any},Vector{Any}}
+    mi_info::InferenceFrameInfo
     start_time::UInt64
     cur_start_time::UInt64
     time::UInt64
@@ -61,7 +68,8 @@ const _timings = Timing[]
 # ROOT() is an empty function used as the top-level Timing node to measure all time spent
 # *not* in type inference during a given recording trace. It is used as a "dummy" node.
 function ROOT() end
-ROOT()  # Call it to compile a method instance for it.
+const ROOTmi = Core.Compiler.specialize_method(
+    first(Core.Compiler.methods(ROOT)), Tuple{typeof(ROOT)}, Core.svec())
 """
     Core.Compiler.reset_timings()
 
@@ -71,15 +79,15 @@ start the ROOT() timer again. `ROOT()` measures all time spent _outside_ inferen
 function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
-        # Get the MethodInstance for ROOT(), and use default empty values for other fields.
-        (first(Core.Compiler.methods(ROOT).ms[1].specializations), 0x0, Any[], Any[],),
+        # The MethodInstance for ROOT(), and default empty values for other fields.
+        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[]),
         _time_ns()))
     return nothing
 end
 reset_timings()
 
 # (This is split into a function so that it can be called both in this module, at the top
-# of `enter_new_timer()``, and once at the Very End of the operation, by whoever started
+# of `enter_new_timer()`, and once at the Very End of the operation, by whoever started
 # the operation and called `reset_timings()`.)
 @inline function close_current_timer()
     stop_time = _time_ns()
@@ -141,7 +149,7 @@ end
     # And remove it from the current timings stack
     _timings = Timings._timings
     new_timer = pop!(_timings)
-    Core.Compiler.@assert new_timer.mi_info[1] === expected_mi_info[1]
+    Core.Compiler.@assert new_timer.mi_info.mi === expected_mi_info.mi
 
     accum_time = stop_time - new_timer.cur_start_time
     # Add in accum_time ("modify" the immutable struct)

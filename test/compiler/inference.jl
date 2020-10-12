@@ -2870,7 +2870,7 @@ end
     end
     # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
     # their concrete types.
-    @test sort([mi.def.name for (time,(mi,_)) in flatten_times(timing1)[end-1:end]]) == [:i, :i2]
+    @test sort([mi_info.mi.def.name for (time,mi_info) in flatten_times(timing1)[end-1:end]]) == [:i, :i2]
     # Test that inference has cached some of the Method Instances
     timing2 = time_inference() do
         @eval M.g(2, 3.0)
