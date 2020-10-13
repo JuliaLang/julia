@@ -136,6 +136,7 @@ Azr = reinterpret(reshape, UInt8, Az)
 W = WrapperArray(Azr)
 copyto!(W, fill(0x01, 3, 2, 2))
 @test all(isequal((0x01, 0x01, 0x01)), Az)
+@test eachindex(W, W) == eachindex(W)
 
 # ensure that reinterpret arrays aren't erroneously classified as strided
 let A = reshape(1:20, 5, 4)
@@ -238,6 +239,12 @@ let a = fill(1.0, 5, 3)
         r[goodinds...] = -5
         @test r[goodinds...] == -5
     end
+
+    ar = [(1,2), (3,4)]
+    arr = reinterpret(reshape, Int, ar)
+    @test @inferred(IndexStyle(arr)) == Base.IndexSCartesian2{2}()
+    @test @inferred(eachindex(arr)) == Base.SCartesianIndices2{2}(Base.OneTo(2))
+    @test @inferred(eachindex(arr, arr)) == Base.SCartesianIndices2{2}(Base.OneTo(2))
 end
 
 # Error on reinterprets that would expose padding
