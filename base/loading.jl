@@ -1234,7 +1234,7 @@ end
 @assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),String))
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
-function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), show_errors::Bool = true)
+function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     rm(output, force=true)   # Remove file if it exists
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
@@ -1262,7 +1262,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
                        --startup-file=no --history-file=no --warn-overwrite=yes
                        --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                        $trace
-                       --eval 'eval(Meta.parse(read(stdin,String)))'`, stderr=show_errors ? stderr : devnull),
+                       --eval 'eval(Meta.parse(read(stdin,String)))'`, stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
@@ -1273,8 +1273,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     return io
 end
 
-@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), Bool))
-@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), Bool))
+@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), typeof(stderr), typeof(stdout)))
+@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), typeof(stderr), typeof(stdout)))
 
 function compilecache_path(pkg::PkgId)::String
     entrypath, entryfile = cache_file_entry(pkg)
@@ -1300,15 +1300,15 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, show_errors::Bool = true)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
-    return compilecache(pkg, path, show_errors)
+    return compilecache(pkg, path, internal_stderr, internal_stdout)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = 10
 
-function compilecache(pkg::PkgId, path::String, show_errors::Bool = true, do_logging::Bool=true)
+function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     # decide where to put the resulting cache file
     cachefile = compilecache_path(pkg)
     cachepath = dirname(cachefile)
@@ -1338,7 +1338,7 @@ function compilecache(pkg::PkgId, path::String, show_errors::Bool = true, do_log
     local p
     try
         close(tmpio)
-        p = create_expr_cache(pkg, path, tmppath, concrete_deps, show_errors)
+        p = create_expr_cache(pkg, path, tmppath, concrete_deps, internal_stderr, internal_stdout)
         if success(p)
             # append checksum to the end of the .ji file:
             open(tmppath, "a+") do f
