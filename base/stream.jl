@@ -1267,9 +1267,26 @@ function redirect(f; stdin=nothing, stderr=nothing, stdout=nothing)
         (new=new, close=false, old=oldstream)
     end
 
-    new_err, close_err, old_err = resolve(stderr, Base.stderr, "w")
-    new_in , close_in , old_in  = resolve(stdin , Base.stdin , "r")
-    new_out, close_out, old_out = resolve(stdout, Base.stdout, "w")
+    same_path(x, y) = false
+    same_path(x::AbstractString, y::AbstractString) = x == y
+    if same_path(stderr, stdin)
+        throw(ArgumentError("stdin and stderr cannot be the same path"))
+    end
+    if same_path(stdout, stdin)
+        throw(ArgumentError("stdin and stdout cannot be the same path"))
+    end
+
+    if same_path(stderr, stdout)
+        # make sure that in case stderr = stdout = "same/path"
+        # only a single io is used instead of opening the same file twice
+        new_out, close_out, old_out = resolve(stdout, Base.stdout, "w")
+        new_err, close_err, old_err = new_out, false, Base.stderr
+    else
+        new_err, close_err, old_err = resolve(stderr, Base.stderr, "w")
+        new_out, close_out, old_out = resolve(stdout, Base.stdout, "w")
+    end
+
+    new_in, close_in, old_in = resolve(stdin , Base.stdin , "r")
 
     redirect(; stderr=new_err, stdin=new_in, stdout=new_out)
 
