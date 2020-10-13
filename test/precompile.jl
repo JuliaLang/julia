@@ -67,9 +67,10 @@ try
               include_dependency("foo.jl")
               include_dependency("foo.jl")
               module Bar
-                  @doc "bar function" bar(x) = x + 2
                   include_dependency("bar.jl")
               end
+              @doc "Bar module" Bar # this needs to define the META dictionary via eval
+              @eval Bar @doc "bar function" bar(x) = x + 2
 
               # test for creation of some reasonably complicated type
               struct MyType{T} end
@@ -262,6 +263,7 @@ try
         # issue #12284:
         @test string(Base.Docs.doc(Foo.foo)) == "foo function\n"
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
+        @test string(Base.Docs.doc(Foo.Bar)) == "Bar module\n"
 
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
