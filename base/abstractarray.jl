@@ -1248,10 +1248,10 @@ function _setindex!(::IndexCartesian, A::AbstractArray{T,N}, v, I::Vararg{Int, N
 end
 function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) where M
     @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
-    r
+    @boundscheck M == 0 && checkbounds(A)
+    return setindex!(A, v, _to_subscript_indices(A, I...)...)
 end
+
 
 """
     parent(A)
