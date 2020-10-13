@@ -393,8 +393,7 @@ function finish_opaque_closure!(clos::PartialOpaque, mod::Module, interp::Abstra
     argtypes = Any[argt.parameters...]
     pushfirst!(argtypes, clos.env)
     if isdispatchtuple(argt)
-        # If we don't need to track specializations, just infer this here
-        # right now.
+        # If we don't need to track specializations, just infer this here right now.
         result = InferenceResult(Core.OpaqueClosure, argtypes)
         state = InferenceState(result, copy(clos.ci), false, interp)
         typeinf_local(interp, state)

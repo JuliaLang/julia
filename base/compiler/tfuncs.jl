@@ -1430,7 +1430,7 @@ function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(lb), @nospecial
     argt, argt_exact = instanceof_tfunc(arg)
     lbt, lb_exact = instanceof_tfunc(lb)
     if !lb_exact
-    lbt = Union{}
+        lbt = Union{}
     end
 
     ubt, ub_exact = instanceof_tfunc(ub)

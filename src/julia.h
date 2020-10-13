@@ -352,7 +352,7 @@ struct _jl_method_instance_t {
     uint8_t inInference; // flags to tell if inference is running on this object
 };
 
-// YACK - Yet another kind of closure.
+// OpaqueClosure
 typedef struct jl_opaque_closure_t {
     JL_DATA_TYPE
     jl_value_t *env;

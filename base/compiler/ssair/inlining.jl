@@ -1089,6 +1089,10 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
             push!(todo, idx=>InliningTodo(nothing, ResolvedInliningSpec(ir′, linear_inline_eligible(ir′))))
             return nothing
         end
+        # Refuse to inline OpaqueClosures we can't see, to preserve the
+        # possibility of functions higher in the call stack seeing this
+        # and performing the inlining.
+        return nothing
     end
 
     sig = with_atype(sig)
@@ -1223,9 +1227,6 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
                 ir.stmts[idx][:inst] = quoted(calltype.val)
                 continue
             end
-            # Refuse to inline OpaqueClosures we can't see otherwise, to preserve the
-            # possibility of functions higher in the call stack seeing this
-            # and performing the inlining.
             continue
         end
 
