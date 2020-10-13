@@ -1023,7 +1023,7 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         else
             # Dual-index implementation
             i = idf - 1
-            @inbounds @simd for a in src
+            @inbounds for a in src
                 dest[i+=1] = a
             end
         end
