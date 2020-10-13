@@ -300,21 +300,29 @@ end
         path_stdout = joinpath(dir, "stdout.txt")
 
         content_stderr = randstring()
-        content_stdin  = randstring()
         content_stdout = randstring()
 
-        write(path_stdin, content_stdin)
-
-        line = redirect(stdout=path_stdout, stderr=path_stderr, stdin=path_stdin) do
+        redirect(stdout=path_stdout, stderr=path_stderr) do
             print(content_stdout)
             print(stderr, content_stderr)
-            readline()
         end
 
         @test read(path_stderr, String) == content_stderr
-        @test line == content_stdin
         @test read(path_stdout, String) == content_stdout
     end
+
+    # stdin is unavailable on the workers. Run test on master.
+    ret = Core.eval(Main,
+            quote
+                remotecall_fetch(1) do
+                    mktempdir() do dir
+                        path = joinpath(dir, "stdin.txt")
+                        write(path, "hello from stdin\n")
+                        redirect(readline, stdin=path)
+                    end
+                end
+            end)
+    @test ret == "hello from stdin"
 end
 
 # issue #36136
