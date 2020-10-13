@@ -447,9 +447,9 @@ function complete_line(c::ShellCompletionProvider, s::PromptState)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
-function complete_line(c::LatexCompletions, s::PromptState)
+function complete_line(c::LatexCompletions, s)
     partial = beforecursor(LineEdit.buffer(s))
-    full = LineEdit.input_string(s)
+    full = LineEdit.input_string(s)::String
     ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
