@@ -751,7 +751,19 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ### mul!
-mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T} = lmul!(Q, copyto!(C, B))
+function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T}
+    require_one_based_indexing(C, B)
+    mB = size(B, 1)
+    mC = size(C, 1)
+    if mB < mC
+        fill!(C, zero(T))
+        inds = eachindex(IndexCartesian(), B)
+        copyto!(C, inds, B, inds)
+        return lmul!(Q, C)
+    else
+        return lmul!(Q, copyto!(C, B))
+    end
+end
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, Q::AbstractQ{T}) where {T} = rmul!(copyto!(C, A), Q)
 mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::StridedVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T} = rmul!(copyto!(C, A), adjQ)
