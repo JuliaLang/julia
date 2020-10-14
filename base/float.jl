@@ -460,17 +460,29 @@ Test whether a number is infinite.
 """
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 
-## hashing small, built-in numeric types ##
+const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
+let Tf = Float64, Tu = UInt64, Ti = Int64
+    @eval function hash(x::$Tf, h::UInt)
+        # see comments on trunc and hash(Real, UInt)
+        if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
+            xi = fptosi($Ti, x)
+            if isequal(xi, x)
+                return hash(xi, h)
+            end
+        elseif $(Tf(typemin(Tu))) <= x < $(Tf(typemax(Tu)))
+            xu = fptoui($Tu, x)
+            if isequal(xu, x)
+                return hash(xu, h)
+            end
+        elseif isnan(x)
+            return hx_NaN ⊻ h # NaN does not have a stable bit pattern
+        end
+        return hash_uint64(bitcast(UInt64, x)) - 3h
+    end
+end
 
-hx(a::UInt64, b::Float64, h::UInt) = hash_uint64((3a + reinterpret(UInt64,b)) - h)
-const hx_NaN = hx(UInt64(0), NaN, UInt(0  ))
-
-hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
-hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64, abs(x)), Float64(x), h)
-hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN ⊻ h) : hx(fptoui(UInt64, abs(x)), x, h)
-
-hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
+hash(x::Float16, h::UInt) = hash(Float64(x), h)
 
 """
     precision(num::AbstractFloat)

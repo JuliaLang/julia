@@ -2,6 +2,10 @@
 
 ## efficient value-based hashing of integers ##
 
+hash(x::Int64,  h::UInt) = hash_uint64(bitcast(UInt64, x)) - 3h
+hash(x::UInt64, h::UInt) = hash_uint64(x) - 3h
+hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
+
 function hash_integer(n::Integer, h::UInt)
     h ⊻= hash_uint((n % UInt) ⊻ h)
     n = abs(n)
@@ -226,7 +230,3 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
     h = hash_integer(num, h)
     return h
 end
-
-## hashing Float16s ##
-
-hash(x::Float16, h::UInt) = hash(Float64(x), h)
