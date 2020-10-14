@@ -3376,11 +3376,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
 static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, StringRef specFunctionObject,
                                           jl_cgval_t *argv, size_t nargs, jl_value_t *inferred_retty)
 {
-    auto theFptr = cast<Function>(jl_Module->getOrInsertFunction(specFunctionObject, jl_func_sig)
-#if JL_LLVM_VERSION >= 90000
-                .getCallee()
-#endif
-            );
+    auto theFptr = cast<Function>(
+        jl_Module->getOrInsertFunction(specFunctionObject, jl_func_sig).getCallee());
     add_return_attr(theFptr, Attribute::NonNull);
     theFptr->addFnAttr(Thunk);
     Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, JLCALL_F_CC);
@@ -4608,11 +4605,8 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     Value *theFarg;
     if (codeinst->invoke != NULL) {
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->invoke, codeinst);
-        theFunc = cast<Function>(M->getOrInsertFunction(theFptrName, jlinvoke_func->_type(jl_LLVMContext))
-#if JL_LLVM_VERSION >= 90000
-                .getCallee()
-#endif
-                );
+        theFunc = cast<Function>(
+            M->getOrInsertFunction(theFptrName, jlinvoke_func->_type(jl_LLVMContext)).getCallee());
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
     else {
@@ -6878,14 +6872,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                    FromBB->getName() + "." + PhiBB->getName() + "_crit_edge");
                 Function::iterator FBBI = FromBB->getIterator();
                 ctx.f->getBasicBlockList().insert(++FBBI, NewBB); // insert after existing block
-#if JL_LLVM_VERSION >= 90000
                 terminator->replaceSuccessorWith(PhiBB, NewBB);
-#else
-                for (unsigned Idx = 0, NumSuccessors = terminator->getNumSuccessors(); Idx != NumSuccessors; ++Idx) {
-                    if (terminator->getSuccessor(Idx) == PhiBB)
-                      terminator->setSuccessor(Idx, NewBB);
-                }
-#endif
                 DebugLoc Loc = terminator->getDebugLoc();
                 terminator = BranchInst::Create(PhiBB);
                 terminator->setDebugLoc(Loc);
@@ -6987,17 +6974,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (FromBB != NewBB) {
                 BB_rewrite_map[LookupKey] = NewBB;
                 preds.insert(NewBB);
-#if JL_LLVM_VERSION >= 90000
                 PhiBB->replacePhiUsesWith(FromBB, NewBB);
-#else
-                for (BasicBlock::iterator I = PhiBB->begin(); isa<PHINode>(I); ++I) {
-                    PHINode *PN = cast<PHINode>(I);
-                    ssize_t BBIdx = PN->getBasicBlockIndex(FromBB);
-                    if (BBIdx == -1)
-                        continue;
-                    PN->setIncomingBlock(BBIdx, NewBB);
-                }
-#endif
             }
             ctx.builder.ClearInsertionPoint();
         }
@@ -7724,8 +7701,6 @@ extern "C" void jl_init_llvm(void)
         // Make sure we are using the large code model on 64bit
         // Let LLVM pick a default suitable for jitting on 32bit
         CodeModel::Large;
-#elif JL_LLVM_VERSION < 60000
-        CodeModel::JITDefault;
 #else
         None;
 #endif
@@ -7735,10 +7710,8 @@ extern "C" void jl_init_llvm(void)
             options,
             Reloc::Static, // Generate simpler code for JIT
             codemodel,
-            optlevel
-#if JL_LLVM_VERSION >= 60000
-            , /*JIT*/ true
-#endif
+            optlevel,
+            true // JIT
             );
     assert(jl_TargetMachine && "Failed to select target machine -"
                                " Is the LLVM backend for this CPU enabled?");
