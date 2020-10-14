@@ -1380,7 +1380,7 @@ function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
     return ret
 end
 
-function add_nested_key!(keymap::Dict, key, value; override = false)
+function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override = false)
     y = iterate(key)
     while y !== nothing
         c, i = y
@@ -1559,13 +1559,14 @@ function keymap_merge(target::Dict{Char,Any}, source::Union{Dict{Char,Any},AnyDi
     end
     # then redirected entries
     for key in setdiff(keys(source), keys(direct_keys))
+        key::Union{String, Char}
         # We first resolve redirects in the source
         value = source[key]
         visited = Vector{Any}()
         while isa(value, Union{Char,String})
             value = normalize_key(value)
             if value in visited
-                error("Eager redirection cycle detected for key " * escape_string(key))
+                throw_eager_redirection_cycle(key)
             end
             push!(visited,value)
             if !haskey(source,value)
@@ -1577,13 +1578,18 @@ function keymap_merge(target::Dict{Char,Any}, source::Union{Dict{Char,Any},AnyDi
         if isa(value, Union{Char,String})
             value = getEntry(ret, value)
             if value === nothing
-                error("Could not find redirected value " * escape_string(source[key]))
+                throw_could_not_find_redirected_value(key)
             end
         end
         add_nested_key!(ret, key, value; override = true)
     end
     return ret
 end
+
+throw_eager_redirection_cycle(key::Union{Char, String}) =
+    error("Eager redirection cycle detected for key ", repr(key))
+throw_could_not_find_redirected_value(key::Union{Char, String}) =
+    error("Could not find redirected value ", repl(key))
 
 function keymap_unify(keymaps)
     ret = Dict{Char,Any}()
