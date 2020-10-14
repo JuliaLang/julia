@@ -23,7 +23,7 @@ Documentation:
 Julia is a high-level, high-performance dynamic language for technical
 computing.  The main homepage for Julia can be found at
 [julialang.org](https://julialang.org/).  This is the GitHub
-repository of Julia source code, including instructions for compiling
+repository of the source code of Julia, which includes instructions for compiling
 and installing Julia, below.
 
 ## Resources
