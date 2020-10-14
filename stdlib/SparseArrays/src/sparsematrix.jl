@@ -2738,7 +2738,8 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
     end
     return A
 end
-
+# ignore indexing into a Number by range
+_getrowinds(I::Number, range) = I
 _getrowinds(I::AbstractVector{<:Integer}, range) = I[range]
 
 # Nonscalar A[I,J] = B: Convert B to a SparseMatrixCSC of the appropriate shape first
