@@ -788,6 +788,10 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
+# This is a utility that can be inserted by the optimizer. Eventually it may
+# need to be a builtin, but for now, it works ok
+getfield_opaque_env(o::OpaqueClosure, i::Int) = getfield(o.env, i)
+
 # Binding for the julia parser, called as
 #
 #    Core._parse(text, filename, offset, options)

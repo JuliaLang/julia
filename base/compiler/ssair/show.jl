@@ -20,6 +20,11 @@ function Base.show(io::IO, cfg::CFG)
     end
 end
 
+function Base.show(io::IO, po::PartialOpaque)
+    # Don't show the parent and the CI. They tend to be redundant and big
+    print(io, "PartialOpaque(", po.t, ", ", po.env, ", ", "...)")
+end
+
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool)
     if idx in used
         idx_s = string(idx)

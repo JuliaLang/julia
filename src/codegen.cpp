@@ -3292,7 +3292,14 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             jl_cgval_t fptr = mark_julia_type(ctx,
                 specptr ? (llvm::Value*)specptr : (llvm::Value*)ConstantPointerNull::get((llvm::PointerType*)T_pvoidfunc),
                 false, jl_voidpointer_type);
-            Function *jlptr = ctx.f->getParent()->getFunction(closure_decls.functionObject);
+
+            Value *jlptr;
+            if (closure_decls.functionObject == "jl_fptr_args" ||
+                closure_decls.functionObject == "jl_fptr_sparam") {
+                jlptr = specptr;
+            } else {
+                jlptr = ctx.f->getParent()->getFunction(closure_decls.functionObject);
+            }
             jl_cgval_t jlcall_ptr = mark_julia_type(ctx,
                 jlptr ? (llvm::Value*)jlptr : (llvm::Value*)ConstantPointerNull::get((llvm::PointerType*)T_pvoidfunc),
                 false, jl_voidpointer_type);

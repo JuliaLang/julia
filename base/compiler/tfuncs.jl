@@ -1491,6 +1491,13 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
     elseif f === Core.ifelse
         length(argtypes) == 3 || return false
         return argtypes[1] ⊑ Bool
+    elseif f === Core._opaque_closure
+        length(argtypes) >= 4 || return false
+        return argtypes[1] ⊑ Type &&
+            argtypes[2] ⊑ Type &&
+            argtypes[3] ⊑ Type &&
+            (argtypes[4] ⊑ CodeInfo ||
+             argtypes[4] ⊑ Method)
     end
     return false
 end

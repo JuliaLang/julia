@@ -388,6 +388,10 @@ function finish_opaque_closure!(clos::PartialOpaque, mod::Module, interp::Abstra
     # Infer with the most general types possible, so that optimization has
     # access to the result.
 
+    if isa(clos.ci, Method) || isa(clos.ci, OptimizationState)
+        return
+    end
+
     argt = unwrap_unionall(clos.t).parameters[1]
 
     argtypes = Any[argt.parameters...]
@@ -426,6 +430,18 @@ function finish_opaque_closure!(clos::PartialOpaque, mod::Module, interp::Abstra
     end
 end
 
+function finish_rettype!(@nospecialize(rt), mod::Module, interp::AbstractInterpreter)
+    if isa(rt, PartialOpaque)
+        finish_opaque_closure!(rt, mod, interp)
+    elseif isa(rt, PartialStruct)
+        for field in rt.fields
+            if isa(field, PartialStruct) || isa(field, PartialOpaque)
+                finish_rettype!(field, mod, interp)
+            end
+        end
+    end
+end
+
 # inference completed on `me`
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
@@ -454,10 +470,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     else
         # annotate fulltree with type information
         type_annotate!(me)
-        if isa(me.bestguess, PartialOpaque)
-            mod = isa(me.linfo.def, Module) ? me.linfo.def : me.linfo.def.module
-            finish_opaque_closure!(me.bestguess, mod, interp)
-        end
+        mod = isa(me.linfo.def, Module) ? me.linfo.def : me.linfo.def.module
+        finish_rettype!(me.bestguess, mod, interp)
         me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
     end
     if me.result !== nothing

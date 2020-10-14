@@ -42,9 +42,11 @@ struct InliningTodo
     # The MethodInstance to be inlined
     mi::Union{MethodInstance, Nothing}
     spec::Union{ResolvedInliningSpec, DelayedInliningSpec}
+    # Whether what we're inlining is an OpaqueClosure
+    is_opaque::Bool
 end
 
-InliningTodo(mi::MethodInstance, match::MethodMatch, atypes::Vector{Any}, @nospecialize(stmttype)) = InliningTodo(mi, DelayedInliningSpec(match, atypes, stmttype))
+InliningTodo(mi::MethodInstance, match::MethodMatch, atypes::Vector{Any}, @nospecialize(stmttype)) = InliningTodo(mi, DelayedInliningSpec(match, atypes, stmttype), false)
 
 struct ConstantCase
     val::Any
@@ -298,6 +300,14 @@ function finish_cfg_inline!(state::CFGInliningState)
     end
 end
 
+function transform_opaque_env!(ir::IRCode, @nospecialize(stmt′))
+    # If this is an access into the opaque closure environment,
+    # rewrite it to a call to `getfield_opaque_env`
+    if isexpr(stmt′, :call) && is_known_call(stmt′, getfield, ir, Any[]) && stmt′.args[2] === Argument(1)
+        stmt′.args[1] = Core.getfield_opaque_env
+    end
+end
+
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                          linetable::Vector{LineInfoNode}, item::InliningTodo,
                          boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
@@ -340,6 +350,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         #compact[idx] = nothing
         inline_compact = IncrementalCompact(compact, spec.ir, compact.result_idx)
         for ((_, idx′), stmt′) in inline_compact
+            item.is_opaque && transform_opaque_env!(spec.ir, stmt′)
             # This dance is done to maintain accurate usage counts in the
             # face of rename_arguments! mutating in place - should figure out
             # something better eventually.
@@ -375,6 +386,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         inline_compact = IncrementalCompact(compact, spec.ir, compact.result_idx)
         for ((_, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
+            item.is_opaque && transform_opaque_env!(spec.ir, stmt′)
             stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck_idx, compact)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
@@ -550,12 +562,6 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
         for ((old_idx, idx), stmt) in compact
             if old_idx == inline_idx
                 argexprs = copy(stmt.args)
-                if isa(item, InliningTodo) && item.mi === nothing
-                    # For opaque closures, the `self` argument is the object passed as
-                    # the environment
-                    @assert isa(argexprs[1], SSAValue)
-                    argexprs[1] = compact[argexprs[1]].args[5]
-                end
                 refinish = false
                 if compact.result_idx == first(compact.result_bbs[compact.active_result_bb].stmts)
                     compact.active_result_bb -= 1
@@ -782,7 +788,7 @@ function analyze_method!(match::MethodMatch, atypes::Vector{Any},
 end
 
 function InliningTodo(mi::MethodInstance, ir::IRCode)
-    return InliningTodo(mi, ResolvedInliningSpec(ir, linear_inline_eligible(ir)))
+    return InliningTodo(mi, ResolvedInliningSpec(ir, linear_inline_eligible(ir)), false)
 end
 
 function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Array{UInt8, 1}})
@@ -1086,9 +1092,21 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
         callee = stmt.args[1]
         if isa(callee, SSAValue) && isexpr(ir.stmts[callee.id][:inst], :new_opaque_closure) && length(ir.stmts[callee.id][:inst].args) >= 6
             ir′ = ir.opaques[(ir.stmts[callee.id][:inst].args[5]::OpaqueClosureIdx).n]::IRCode
-            push!(todo, idx=>InliningTodo(nothing, ResolvedInliningSpec(ir′, linear_inline_eligible(ir′))))
+            push!(todo, idx=>InliningTodo(nothing, ResolvedInliningSpec(ir′, linear_inline_eligible(ir′)), true))
             return nothing
         end
+
+        ft = sig.ft
+        if isa(ft, PartialOpaque) && isa(ft.ci, Method)
+            atypes = copy(sig.atypes)
+            atypes[1] = ft.env
+            match = MethodMatch(argtypes_to_type(atypes), Core.svec(), ft.ci, true)
+            result = analyze_method!(match, atypes, state.et, state.caches, state.params, calltype)::InliningTodo
+            result = InliningTodo(result.mi, result.spec, true)
+            handle_single_case!(ir, stmt, idx, result, false, todo)
+            return nothing
+        end
+
         # Refuse to inline OpaqueClosures we can't see, to preserve the
         # possibility of functions higher in the call stack seeing this
         # and performing the inlining.

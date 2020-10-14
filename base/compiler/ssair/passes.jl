@@ -270,12 +270,24 @@ function is_pending(compact::IncrementalCompact, old::OldSSAValue)
 end
 
 function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
-        @nospecialize(result_t), field::Int, leaves::Vector{Any})
+        @nospecialize(result_t), field::Int, leaves::Vector{Any},
+        is_opaque_getfield)
     # For every leaf, the lifted value
     lifted_leaves = IdDict{Any, Any}()
     maybe_undef = false
     for leaf in leaves
         leaf_key = leaf
+        function lift_arg(lifted)
+            if is_old(compact, leaf) && isa(lifted, SSAValue)
+                lifted = OldSSAValue(lifted.id)
+            end
+            if isa(lifted, GlobalRef) || isa(lifted, Expr)
+                lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
+                def.args[1+field] = lifted
+                (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
+            end
+            lifted_leaves[leaf_key] = RefValue{Any}(lifted)
+        end
         if isa(leaf, AnySSAValue)
             if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
                 leaf = compact.ssa_rename[leaf.id]
@@ -290,17 +302,18 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             else
                 def = compact[leaf]
             end
+
+            if is_opaque_getfield
+                if isexpr(def, :call) && is_known_call(def, Core._opaque_closure, compact) && isa(field, Int) &&
+                        1 <= field <= length(def.args)-5
+                    lift_arg(def.args[5+field])
+                    continue
+                else
+                    return nothing
+                end
+            end
             if is_tuple_call(compact, def) && isa(field, Int) && 1 <= field < length(def.args)
-                lifted = def.args[1+field]
-                if is_old(compact, leaf) && isa(lifted, SSAValue)
-                    lifted = OldSSAValue(lifted.id)
-                end
-                if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
-                    def.args[1+field] = lifted
-                    (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
-                end
-                lifted_leaves[leaf_key] = RefValue{Any}(lifted)
+                lift_arg(def.args[1+field])
                 continue
             elseif isexpr(def, :new)
                 typ = widenconst(types(compact)[leaf])
@@ -539,6 +552,7 @@ function getfield_elim_pass!(ir::IRCode)
         #ndone += 1
         result_t = compact_exprtype(compact, SSAValue(idx))
         is_getfield = is_setfield = false
+        is_getfield_opaque = false
         is_ccall = false
         is_unchecked = false
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
@@ -547,6 +561,9 @@ function getfield_elim_pass!(ir::IRCode)
             4 <= length(stmt.args) <= 5 || continue
         elseif is_known_call(stmt, getfield, compact)
             is_getfield = true
+            3 <= length(stmt.args) <= 4 || continue
+        elseif is_known_call(stmt, Core.getfield_opaque_env, compact)
+            is_getfield_opaque = true
             3 <= length(stmt.args) <= 4 || continue
         elseif is_known_call(stmt, isa, compact)
             # TODO
@@ -676,7 +693,7 @@ function getfield_elim_pass!(ir::IRCode)
         field = try_compute_fieldidx_expr(struct_typ, stmt)
         field === nothing && continue
 
-        r = lift_leaves(compact, stmt, result_t, field, leaves)
+        r = lift_leaves(compact, stmt, result_t, field, leaves, is_getfield_opaque)
         r === nothing && continue
         lifted_leaves, any_undef = r
 

@@ -1034,7 +1034,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, clos::Partial
         return CallMeta(clos.ci.src.rettype, nothing)
     else
         nargtypes = argtypes[2:end]
-        pushfirst!(nargtypes, Core.OpaqueClosure)
+        pushfirst!(nargtypes, clos.env)
         sig = argtypes_to_type(nargtypes)
         rt, edge = abstract_call_method(interp, clos.ci::Method, sig, Core.svec(), false, sv)
         return CallMeta(rt, edge)
