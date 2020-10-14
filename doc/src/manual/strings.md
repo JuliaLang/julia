@@ -159,8 +159,8 @@ julia> 'A' + 1
 String literals are delimited by double quotes or triple double quotes:
 
 ```jldoctest helloworldstring
-julia> str = "Hello, world.\n"
-"Hello, world.\n"
+julia> str = "Hello, world."
+"Hello, world."
 
 julia> """Contains "quote" characters"""
 "Contains \"quote\" characters"
@@ -461,8 +461,8 @@ julia> greet = "Hello"
 julia> whom = "world"
 "world"
 
-julia> string(greet, ", ", whom, ".\n")
-"Hello, world.\n"
+julia> string(greet, ", ", whom, ".")
+"Hello, world."
 ```
 
 It's important to be aware of potentially dangerous situations such as concatenation of invalid UTF-8 strings.
@@ -496,8 +496,8 @@ concatenation preserves all characters in strings and additivity of string lengt
 Julia also provides [`*`](@ref) for string concatenation:
 
 ```jldoctest stringconcat
-julia> greet * ", " * whom * ".\n"
-"Hello, world.\n"
+julia> greet * ", " * whom * "."
+"Hello, world."
 ```
 
 While `*` may seem like a surprising choice to users of languages that provide `+` for string
@@ -529,7 +529,7 @@ julia> "$greet, $whom.\n"
 ```
 
 This is more readable and convenient and equivalent to the above string concatenation -- the system
-rewrites this apparent single string literal into the call `string(greet, ", ", whom, ".\n")`.
+rewrites this apparent single string literal into the call `string(greet, ", ", whom, ".")`.
 
 The shortest complete expression after the `$` is taken as the expression whose value is to be
 interpolated into the string. Thus, you can interpolate any expression into a string using parentheses:
