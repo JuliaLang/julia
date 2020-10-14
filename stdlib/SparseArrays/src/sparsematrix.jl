@@ -2671,7 +2671,7 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
 
                 while true
                     old_row = rowval[old_ptr]
-                    new_row = _getrowinds(I, new_ptr)
+                    new_row = I[new_ptr]
                     if old_row < new_row
                         rowvalA[rowidx] = old_row
                         nzvalA[rowidx] = nzval[old_ptr]
@@ -2739,7 +2739,6 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
     return A
 end
 
-_getrowinds(I::Number, range) = I
 _getrowinds(I::AbstractVector{<:Integer}, range) = I[range]
 
 # Nonscalar A[I,J] = B: Convert B to a SparseMatrixCSC of the appropriate shape first
