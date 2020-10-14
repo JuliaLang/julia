@@ -199,6 +199,7 @@ public:
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;
+    size_t getTotalBytes() const;
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
