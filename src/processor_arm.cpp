@@ -365,8 +365,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"cortex-a72", CPU::arm_cortex_a72, CPU::generic, 0, Feature::arm_cortex_a72},
     {"cortex-a73", CPU::arm_cortex_a73, CPU::generic, 0, Feature::arm_cortex_a73},
     {"cortex-a75", CPU::arm_cortex_a75, CPU::generic, 0, Feature::arm_cortex_a75},
-    {"cortex-a76", CPU::arm_cortex_a76, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
-    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
+    {"cortex-a76", CPU::arm_cortex_a76, CPU::generic, 0, Feature::arm_cortex_a76},
+    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::generic, 0, Feature::arm_cortex_a76},
     {"cortex-a77", CPU::arm_cortex_a77, CPU::arm_cortex_a76, 110000, Feature::arm_cortex_a77},
     {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, 110000, Feature::arm_cortex_a78},
     {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, 110000, Feature::arm_cortex_x1},
@@ -642,8 +642,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"cortex-a72", CPU::arm_cortex_a72, CPU::generic, 0, Feature::arm_cortex_a72},
     {"cortex-a73", CPU::arm_cortex_a73, CPU::generic, 0, Feature::arm_cortex_a73},
     {"cortex-a75", CPU::arm_cortex_a75, CPU::generic, 0, Feature::arm_cortex_a75},
-    {"cortex-a76", CPU::arm_cortex_a76, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
-    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
+    {"cortex-a76", CPU::arm_cortex_a76, CPU::generic, 0, Feature::arm_cortex_a76},
+    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::generic, 0, Feature::arm_cortex_a76},
     {"cortex-a77", CPU::arm_cortex_a77, CPU::arm_cortex_a76, 110000, Feature::arm_cortex_a77},
     {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, 110000, Feature::arm_cortex_a78},
     {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, 110000, Feature::arm_cortex_x1},
@@ -1616,17 +1616,6 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
         const char *fename_str = fename.name;
         bool enable = test_nbit(features, fename.bit);
         bool disable = test_nbit(data.dis.features, fename.bit);
-#if defined(_CPU_ARM_) && JL_LLVM_VERSION < 90000
-        if (fename.bit == Feature::d32) {
-            if (enable) {
-                feature_strs.push_back("-d16");
-            }
-            else if (disable) {
-                feature_strs.push_back("+d16");
-            }
-            continue;
-        }
-#endif
         if (enable) {
             feature_strs.insert(feature_strs.begin(), std::string("+") + fename_str);
         }

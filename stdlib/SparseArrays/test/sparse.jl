@@ -3098,4 +3098,22 @@ end
     @test nonzeros(d) == V[1:4]
 end
 
+@testset "fill! for SubArrays" begin
+    a = sprand(10, 10, 0.2)
+    b = copy(a)
+    sa = view(a, 1:10, 2:3)
+    fill!(sa, 0.0)
+    b[1:10, 2:3] .= 0.0
+    @test a == b
+    A = sparse([1], [1], [Vector{Float64}(undef, 3)], 3, 3)
+    A[1,1] = [1.0, 2.0, 3.0]
+    B = deepcopy(A)
+    sA = view(A, 1:1, 1:2)
+    fill!(sA, [4.0, 5.0, 6.0])
+    for jj in 1:2
+        B[1, jj] = [4.0, 5.0, 6.0]
+    end
+    @test A == B
+end
+
 end # module

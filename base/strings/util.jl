@@ -669,7 +669,7 @@ julia> bytes2hex(b)
 """
 function bytes2hex end
 
-function bytes2hex(a::AbstractArray{UInt8})
+function bytes2hex(a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
     b = Base.StringVector(2*length(a))
     @inbounds for (i, x) in enumerate(a)
         b[2i - 1] = hex_chars[1 + x >> 4]
@@ -678,10 +678,11 @@ function bytes2hex(a::AbstractArray{UInt8})
     return String(b)
 end
 
-bytes2hex(io::IO, a::AbstractArray{UInt8}) =
+function bytes2hex(io::IO, a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
     for x in a
         print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
     end
+end
 
 # check for pure ASCII-ness
 function ascii(s::String)

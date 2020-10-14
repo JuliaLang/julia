@@ -253,6 +253,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_s
 
 typedef struct _modstack_t {
     jl_module_t *m;
+    jl_sym_t *var;
     struct _modstack_t *prev;
 } modstack_t;
 
@@ -313,10 +314,10 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
 // get binding for reading. might return NULL for unbound.
 static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *st)
 {
-    modstack_t top = { m, st };
+    modstack_t top = { m, var, st };
     modstack_t *tmp = st;
     while (tmp != NULL) {
-        if (tmp->m == m) {
+        if (tmp->m == m && tmp->var == var) {
             // import cycle without finding actual location
             return NULL;
         }
@@ -337,7 +338,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
         return NULL;
     }
     JL_UNLOCK(&m->lock);
-    if (b->owner != m)
+    if (b->owner != m || b->name != var)
         return jl_get_binding_(b->owner, b->name, &top);
     return b;
 }

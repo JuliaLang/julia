@@ -2,6 +2,7 @@
 
 using Test
 import REPL
+import Markdown
 
 @testset "symbol completion" begin
     @test startswith(let buf = IOBuffer()
@@ -13,4 +14,8 @@ import REPL
             Core.eval(Main, REPL.helpmode(buf, "🐨"))
             String(take!(buf))
         end, "\"🐨\" can be typed by \\:koala:<tab>\n")
+end
+
+@testset "Non-Markdown" begin
+    @test isa(REPL.insert_hlines(IOBuffer(), Markdown.Text("foo")), Markdown.Text)
 end
