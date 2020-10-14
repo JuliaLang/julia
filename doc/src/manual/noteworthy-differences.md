@@ -203,7 +203,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     is not significant as it is in Python. Unlike Python, Julia has no `pass` keyword.
   * Strings are denoted by double quotation marks (`"text"`) in Julia (with three double quotation marks for multi-line strings), whereas in Python they can be denoted either by single (`'text'`) or double quotation marks (`"text"`). Single quotation marks are used for characters in Julia (`'c'`).
   * String concatenation is done with `*` in Julia, not `+` like in Python. Analogously, string repetition is done with `^`, not `*`. Implicit string concatenation of string literals like in Python (e.g. `'ab' 'cd' == 'abcd'`) is not done in Julia.
-  * Python Lists—flexible but slow—correspond to the Julia `Vector{Any}` type or more generally `Vector{T}` where `T` is some non-concrete element type. "Fast" arrays like Numpy arrays that store elements in-place (i.e., `dtype` is `np.float64`, `[('f1', np.uint64), ('f2', np.int32)]`, etc.) can be represented by `Array{T}` where `T` is a concrete, immutable element type. This includes built-in types like `Float64`, `Int32`, `Int64` but also more complex types like `Tuple{UInt64,Float64}` and many user-defined types as well.
+  * Python Lists—flexible but slow—correspond to the Julia `Vector{Any}` type or more generally `Vector{T}` where `T` is some non-concrete element type. "Fast" arrays like NumPy arrays that store elements in-place (i.e., `dtype` is `np.float64`, `[('f1', np.uint64), ('f2', np.int32)]`, etc.) can be represented by `Array{T}` where `T` is a concrete, immutable element type. This includes built-in types like `Float64`, `Int32`, `Int64` but also more complex types like `Tuple{UInt64,Float64}` and many user-defined types as well.
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
     in Python.
@@ -215,7 +215,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia has no line continuation syntax: if, at the end of a line, the input so far is a complete
     expression, it is considered done; otherwise the input continues. One way to force an expression
     to continue is to wrap it in parentheses.
-  * Julia arrays are column major (Fortran ordered) whereas NumPy arrays are row major (C-ordered)
+  * Julia arrays are column-major (Fortran-ordered) whereas NumPy arrays are row-major (C-ordered)
     by default. To get optimal performance when looping over arrays, the order of the loops should
     be reversed in Julia relative to NumPy (see [relevant section of Performance Tips](@ref man-performance-column-major)).
   * Julia's updating operators (e.g. `+=`, `-=`, ...) are *not in-place* whereas NumPy's are. This
@@ -243,8 +243,8 @@ For users coming to Julia from R, these are some noteworthy differences:
   * There are no classes in Julia. Instead they are structures (mutable or immutable), containing data but no methods.
   * Calling a method of a class in Python (`a = MyClass(x), x.func(y)`) corresponds to a function call in Julia, e.g. `a = MyStruct(x), func(x::MyStruct, y)`. In general, multiple dispatch is more flexible and powerful than the Python class system.
   * Julia structures may have exactly one abstract supertype, whereas Python classes can inherit from one or more (abstract or concrete) superclasses.
-  * The logical Julia program structure (Packages and Modules) is independent of the file strucutre (`include` for additional files), whereas the Python code structure is defined by directories (Packages) and files (Modules).
-  * The ternary operator `x > 0 ? 1 : -1` in Julia corresponds to conditional expression in Python `1 if x > 0 else -1`.
+  * The logical Julia program structure (Packages and Modules) is independent of the file structure (`include` for additional files), whereas the Python code structure is defined by directories (Packages) and files (Modules).
+  * The ternary operator `x > 0 ? 1 : -1` in Julia corresponds to a conditional expression in Python `1 if x > 0 else -1`.
   * In Julia the `@` symbol refers to a macro, whereas in Python it refers to a decorator.
   * Exception handling in Julia is done using `try` — `catch` — `finally`, instead of `try` — `except` — `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia due to performance reasons.
   * In Julia loops are fast, there is no need to write "vectorized" code for performance reasons.
