@@ -51,7 +51,7 @@ helpful to start contributing to the Julia codebase.
 
 ## Binary Installation
 
-If you would rather not compile the latest Julia from source,
+If you do not wish to compile the latest Julia from source,
 platform-specific tarballs with pre-compiled binaries are also
 [available for download](https://julialang.org/downloads/). The
 downloads page also provides details on the
