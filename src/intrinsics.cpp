@@ -1038,8 +1038,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
 
     }
 
-// Implements IEEE negate. See issue #7868
-    case neg_float: return math_builder(ctx)().CreateFSub(ConstantFP::get(t, -0.0), x);
+    case neg_float: return math_builder(ctx)().CreateFNeg(x);
     case neg_float_fast: return math_builder(ctx, true)().CreateFNeg(x);
     case add_float: return math_builder(ctx)().CreateFAdd(x, y);
     case sub_float: return math_builder(ctx)().CreateFSub(x, y);
