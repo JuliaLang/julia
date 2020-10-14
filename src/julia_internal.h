@@ -1312,6 +1312,9 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
 #endif
 
+float __gnu_h2f_ieee(uint16_t param) JL_NOTSAFEPOINT;
+uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
+
 #ifdef __cplusplus
 }
 #endif
