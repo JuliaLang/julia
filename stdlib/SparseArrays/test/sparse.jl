@@ -1057,6 +1057,12 @@ end
     @test a[1,:] == sparse([1; 1; 3:10])
     a[1:0,2] .= 1
     @test a[:,2] == sparse([1:10;])
+    a[1,2:3] .= 1
+    @test a[1,:] == sparse([1; 1; 1; 4:10])
+    a[2:4,2] .= 1
+    @test a[:,2] == sparse([1; 1; 1; 1; 5:10])
+    a[2:4,2:3] .= 3
+    @test nnz(a) == 22
 
     @test_throws BoundsError a[:,11] = spzeros(10,1)
     @test_throws BoundsError a[11,:] = spzeros(1,10)
