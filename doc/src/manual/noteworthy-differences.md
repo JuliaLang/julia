@@ -241,7 +241,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * The adjoint operator `'` in Julia returns an adjoint of a vector (a lazy representation of row vector), whereas the transpose operator `.T` over a vector in Python returns the original vector (non-op).
   * In Julia, a function may contain multiple concrete implementations (called *Methods*), selected via multiple dispatch, whereas standard functions in Python have a single implementation (no polymorphism), although Python's Standard Library does include single-dispatch capability.
   * There are no classes in Julia. Instead they are structures (mutable or immutable), containing data but no methods.
-  * Calling a method of a class in Python (`a = MyClass(x), x.func(y)`) corresponds to a function call in Julia, e.g. `a = MyStruct(x), func(x::MyStruct, y)`. In general, multiple dispatch is more flexible and powerful than the Python class system.
+  * Calling a method of a class instance in Python (`a = MyClass(x); a.func(y)`) corresponds to a function call in Julia, e.g. `a = MyStruct(x); func(a::MyStruct, y)`. In general, multiple dispatch is more flexible and powerful than the Python class system.
   * Julia structures may have exactly one abstract supertype, whereas Python classes can inherit from one or more (abstract or concrete) superclasses.
   * The logical Julia program structure (Packages and Modules) is independent of the file structure (`include` for additional files), whereas the Python code structure is defined by directories (Packages) and files (Modules).
   * The ternary operator `x > 0 ? 1 : -1` in Julia corresponds to a conditional expression in Python `1 if x > 0 else -1`.
