@@ -1338,6 +1338,7 @@ end
 
 # PR #38049
 struct var"#X#" end
+var"#f#"() = 2
 
 # (Just to make this test more sustainable,) we don't necesssarily need to test the exact
 # output format, just ensure that it prints at least the parts we expect:
@@ -1349,8 +1350,13 @@ struct var"#X#" end
     @testset for v in (
             var"#X#",
             var"#X#"(),
+            Vector,
             Vector{<:Any},
             Vector{var"#X#"},
+            +,
+            typeof(+),
+            var"#f#",
+            typeof(var"#f#"),
         )
         @test v == eval(Meta.parse(static_shown(v)))
     end
