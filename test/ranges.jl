@@ -1,5 +1,33 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+@testset "range costruction" begin
+    @testset "range(;kw...)" begin
+        @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
+        @test range(start=1, step=1, stop=10, length=10) == 1:1:10
+        @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
+
+        r = 3.0:2:11
+        @test r == range(start=first(r), step=step(r), stop=last(r)                  )
+        @test r == range(start=first(r), step=step(r),               length=length(r))
+        @test r == range(start=first(r),               stop=last(r), length=length(r))
+        @test r == range(                step=step(r), stop=last(r), length=length(r))
+
+        r = 4:9
+        @test r === range(start=first(r), stop=last(r)                  )
+        @test r === range(start=first(r),               length=length(r))
+        @test r  == range(start=first(r), stop=last(r), length=length(r))
+        @test r === range(                stop=last(r), length=length(r))
+    end
+
+    @test range(1, 100) === 1:100 # ArgumentError before 1.6
+    @test_throws range(1.0, step=0.25, stop=2.0, length=6)
+    r = range(1.0, step=0.25, stop=2.0, length=5) # ArgumentError before 1.6
+    @test first(r) === 1.0
+    @test step(r) === 0.25
+    @test last(r) === 2.0
+    @test length(r) === 5
+end
+
 using Dates, Random
 isdefined(Main, :PhysQuantities) || @eval Main include("testhelpers/PhysQuantities.jl")
 using .Main.PhysQuantities
@@ -1418,7 +1446,6 @@ end
     @test_throws ArgumentError range(nothing)
     @test_throws ArgumentError range(1, step=4)
     @test_throws ArgumentError range(nothing, length=2)
-    @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
 end
 
 @testset "issue #23300#issuecomment-371575548" begin
@@ -1597,8 +1624,6 @@ end
             end
         end
     end
-    # require a keyword arg
-    @test_throws ArgumentError range(1, 100)
 end
 
 @testset "Reverse empty ranges" begin

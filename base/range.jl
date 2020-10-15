@@ -47,21 +47,21 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start[, stop]; length, stop, step=1)
+    range(start[, stop]; length, stop, step)
+    range(;start, length, stop, step)
 
-Given a starting value, construct a range either by length or from `start` to `stop`,
-optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
-One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
-
-If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range.
-
-If `step` and `stop` are provided and `length` is not, the overall range length will be computed
-automatically such that the elements are `step` spaced.
+Construct a `range` from the arguments.
+Mathematically a range is uniquely determined by any three of `start`, `step`, `stop` and `length`.
+Valid invocations of range are:
+* Call `range` with all four arguments. If the arguments are inconsistent, an error will be thrown.
+* Call `range` with any three of `start`, `step`, `stop`, `length`.
+* Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
+to be one and a [`UnitRange`](@ref) will be returned.
 
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 
+`start` may be specified as either a positional or keyword argument.
 `stop` may be specified as either a positional or keyword argument.
 
 !!! compat "Julia 1.1"
@@ -89,11 +89,20 @@ julia> range(1, 10, length=101)
 
 julia> range(1, 100, step=5)
 1:5:96
+
+julia> range(stop=10, length=5)
+6:10
+
+julia> range(stop=10, step=1, length=5)
+6:1:10
+
+julia> range(start=1, step=1, stop=10)
+1:1:10
 ```
 """
 function range end
 
-range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing) =
+range(start; stop=nothing, length::Union{Integer,Nothing}=nothing, step=nothing) =
     __range(start, step, stop, length)
 
 range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) =
@@ -105,7 +114,7 @@ range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, ste
 __range(start::Nothing, step::Nothing, stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
 __range(start::Nothing, step::Nothing, stop::Nothing, length         ) = range_error(start, step, stop, length)
 __range(start::Nothing, step::Nothing, stop         , length::Nothing) = range_error(start, step, stop, length)
-__range(start::Nothing, step::Nothing, stop         , length         ) = range_error(start, step, stop, length)
+__range(start::Nothing, step::Nothing, stop         , length         ) = range_stop_length(stop, length)
 __range(start::Nothing, step         , stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
 __range(start::Nothing, step         , stop::Nothing, length         ) = range_error(start, step, stop, length)
 __range(start::Nothing, step         , stop         , length::Nothing) = range_error(start, step, stop, length)
@@ -113,18 +122,22 @@ __range(start::Nothing, step         , stop         , length         ) = range_s
 
 __range(start         , step::Nothing, stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
 __range(start         , step::Nothing, stop::Nothing, length         ) = range_start_length(start, length)
-__range(start         , step::Nothing, stop         , length::Nothing) = range_error(start, step, stop, length)
+__range(start         , step::Nothing, stop         , length::Nothing) = range_start_stop(start, stop)
 __range(start         , step::Nothing, stop         , length         ) = range_start_stop_length(start, stop, length)
 __range(start         , step         , stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
 __range(start         , step         , stop::Nothing, length         ) = range_start_step_length(start, step, length)
 __range(start         , step         , stop         , length::Nothing) = range_start_step_stop(start, step, stop)
-__range(start         , step         , stop         , length         ) = range_error(start, step, stop, length)
+__range(start         , step         , stop         , length         ) = range_start_step_stop_length(start, step, stop, length)
+
+range_stop_length(stop, length) = (stop-length+1):stop
 
 range_step_stop_length(step, stop, length) = reverse(range_start_step_length(stop, -step, length))
 
 range_start_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
 range_start_length(a::AbstractFloat, len::Integer) = range_start_step_length(a, oftype(a, 1), len)
 range_start_length(a,                len::Integer) = range_start_step_length(a, oftype(a-a, 1), len)
+
+range_start_stop(start, stop) = start:stop
 
 range_start_step_length(a::AbstractFloat, step::AbstractFloat, len::Integer) =
     range_start_step_length(promote(a, step)..., len)
@@ -144,14 +157,30 @@ _rangestyle(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
 
 range_start_step_stop(start, step, stop) = start:step:stop
 
+function range_start_step_stop_length(start, step, stop, length)
+    r = range_start_stop_length(start, stop, length)
+    if Base.step(r) == step
+        return r
+    else
+        msg = """
+        Could not construct range with arguments
+        start = $start
+        step = $step
+        stop = $stop
+        length = $length
+        Try omitting one argument.
+        Closest candidate was $r.
+        """
+        throw(ArgumentError(msg))
+    end
+end
+
 function range_error(start, step, stop, length)
     hasstart  = start === nothing
     hasstep   = step  === nothing
     hasstop   = stop  === nothing
     haslength = start === nothing
-    hint = if hasstart && hasstep && hasstop && haslength
-        "Try omitting one argument."
-    elseif !hasstop && !haslength
+    hint = if !hasstop && !haslength
         "At least one of `length` or `stop` must be specified."
     elseif !hasstep && !haslength
         "At least one of `length` or `step` must be specified."
