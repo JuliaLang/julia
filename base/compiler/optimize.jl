@@ -450,7 +450,7 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             ssachangemap[i] += ssachangemap[i - 1]
         end
     end
-    if labelchangemap[end] == 0 && ssachangemap[end] == 0
+    if labelchangemap[end] == 0 || ssachangemap[end] == 0
         return
     end
     for i = 1:length(body)
