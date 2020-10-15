@@ -67,6 +67,9 @@ To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 !!! compat "Julia 1.1"
     `stop` as a positional argument requires at least Julia 1.1.
 
+!!! compat "Julia 1.6"
+    `start` as a keyword argument requires at least Julia 1.6.
+
 # Examples
 ```jldoctest
 julia> range(1, length=100)
@@ -88,49 +91,86 @@ julia> range(1, 100, step=5)
 1:5:96
 ```
 """
+function range end
+
 range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing) =
-    _range(start, step, stop, length)
+    __range(start, step, stop, length)
 
 range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) =
-    _range2(start, step, stop, length)
+    __range(start, step, stop, length)
 
-_range2(start, ::Nothing, stop, ::Nothing) =
-    throw(ArgumentError("At least one of `length` or `step` must be specified"))
+range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, step=nothing) =
+    __range(start, step, stop, length)
 
-_range2(start, step, stop, length) = _range(start, step, stop, length)
+__range(start::Nothing, step::Nothing, stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
+__range(start::Nothing, step::Nothing, stop::Nothing, length         ) = range_error(start, step, stop, length)
+__range(start::Nothing, step::Nothing, stop         , length::Nothing) = range_error(start, step, stop, length)
+__range(start::Nothing, step::Nothing, stop         , length         ) = range_error(start, step, stop, length)
+__range(start::Nothing, step         , stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
+__range(start::Nothing, step         , stop::Nothing, length         ) = range_error(start, step, stop, length)
+__range(start::Nothing, step         , stop         , length::Nothing) = range_error(start, step, stop, length)
+__range(start::Nothing, step         , stop         , length         ) = range_step_stop_length(step, stop, length)
 
-# Range from start to stop: range(a, [step=s,] stop=b), no length
-_range(start, step,      stop, ::Nothing) = (:)(start, step, stop)
-_range(start, ::Nothing, stop, ::Nothing) = (:)(start, stop)
+__range(start         , step::Nothing, stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
+__range(start         , step::Nothing, stop::Nothing, length         ) = range_start_length(start, length)
+__range(start         , step::Nothing, stop         , length::Nothing) = range_error(start, step, stop, length)
+__range(start         , step::Nothing, stop         , length         ) = range_start_stop_length(start, stop, length)
+__range(start         , step         , stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
+__range(start         , step         , stop::Nothing, length         ) = range_start_step_length(start, step, length)
+__range(start         , step         , stop         , length::Nothing) = range_start_step_stop(start, step, stop)
+__range(start         , step         , stop         , length         ) = range_error(start, step, stop, length)
 
-# Range of a given length: range(a, [step=s,] length=l), no stop
-_range(a::Real,          ::Nothing,         ::Nothing, len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
-_range(a::AbstractFloat, ::Nothing,         ::Nothing, len::Integer) = _range(a, oftype(a, 1),   nothing, len)
-_range(a::AbstractFloat, st::AbstractFloat, ::Nothing, len::Integer) = _range(promote(a, st)..., nothing, len)
-_range(a::Real,          st::AbstractFloat, ::Nothing, len::Integer) = _range(float(a), st,      nothing, len)
-_range(a::AbstractFloat, st::Real,          ::Nothing, len::Integer) = _range(a, float(st),      nothing, len)
-_range(a,                ::Nothing,         ::Nothing, len::Integer) = _range(a, oftype(a-a, 1), nothing, len)
+range_step_stop_length(step, stop, length) = reverse(range_start_step_length(stop, -step, length))
 
-_range(a::T, step::T, ::Nothing, len::Integer) where {T <: AbstractFloat} =
+range_start_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
+range_start_length(a::AbstractFloat, len::Integer) = range_start_step_length(a, oftype(a, 1), len)
+range_start_length(a,                len::Integer) = range_start_step_length(a, oftype(a-a, 1), len)
+
+range_start_step_length(a::AbstractFloat, step::AbstractFloat, len::Integer) =
+    range_start_step_length(promote(a, step)..., len)
+range_start_step_length(a::Real,          step::AbstractFloat, len::Integer) =
+    range_start_step_length(float(a), step,      len)
+range_start_step_length(a::AbstractFloat, step::Real,          len::Integer) =
+    range_start_step_length(a, float(step),      len)
+range_start_step_length(a::T,             step::T,             len::Integer) where {T <: AbstractFloat} =
     _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
-_range(a::T, step, ::Nothing, len::Integer) where {T} =
+range_start_step_length(a::T,             step,                len::Integer) where {T} =
     _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
+
 _rangestyle(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
     StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
 _rangestyle(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
     StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
 
-# Malformed calls
-_range(start,     step,      ::Nothing, ::Nothing) = # range(a, step=s)
-    throw(ArgumentError("At least one of `length` or `stop` must be specified"))
-_range(start,     ::Nothing, ::Nothing, ::Nothing) = # range(a)
-    throw(ArgumentError("At least one of `length` or `stop` must be specified"))
-_range(::Nothing, ::Nothing, ::Nothing, ::Nothing) = # range(nothing)
-    throw(ArgumentError("At least one of `length` or `stop` must be specified"))
-_range(start::Real, step::Real, stop::Real, length::Integer) = # range(a, step=s, stop=b, length=l)
-    throw(ArgumentError("Too many arguments specified; try passing only one of `stop` or `length`"))
-_range(::Nothing, ::Nothing, ::Nothing, ::Integer) = # range(nothing, length=l)
-    throw(ArgumentError("Can't start a range at `nothing`"))
+range_start_step_stop(start, step, stop) = start:step:stop
+
+function range_error(start, step, stop, length)
+    hasstart  = start === nothing
+    hasstep   = step  === nothing
+    hasstop   = stop  === nothing
+    haslength = start === nothing
+    hint = if hasstart && hasstep && hasstop && haslength
+        "Try omitting one argument."
+    elseif !hasstop && !haslength
+        "At least one of `length` or `stop` must be specified."
+    elseif !hasstep && !haslength
+        "At least one of `length` or `step` must be specified."
+    elseif !hasstart && !hasstop
+        "At least one of `start` or `stop` must be specified."
+    else
+        "Try specifying more arguments."
+    end
+
+    msg = """
+    Cannot construct range from arguments:
+    start = $start
+    step = $step
+    stop = $stop
+    length = $length
+    $hint
+    """
+    throw(ArgumentError(msg))
+end
 
 ## 1-dimensional ranges ##
 
@@ -419,13 +459,13 @@ function LinRange(start, stop, len::Integer)
     LinRange{T}(start, stop, len)
 end
 
-function _range(start::T, ::Nothing, stop::S, len::Integer) where {T,S}
+function range_start_stop_length(start::T, stop::S, len::Integer) where {T,S}
     a, b = promote(start, stop)
-    _range(a, nothing, b, len)
+    range_start_stop_length(a, b, len)
 end
-_range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Real} = LinRange{T}(start, stop, len)
-_range(start::T, ::Nothing, stop::T, len::Integer) where {T} = LinRange{T}(start, stop, len)
-_range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Integer} =
+range_start_stop_length(start::T, stop::T, len::Integer) where {T<:Real} = LinRange{T}(start, stop, len)
+range_start_stop_length(start::T, stop::T, len::Integer) where {T} = LinRange{T}(start, stop, len)
+range_start_stop_length(start::T, stop::T, len::Integer) where {T<:Integer} =
     _linspace(float(T), start, stop, len)
 ## for Float16, Float32, and Float64 we hit twiceprecision.jl to lift to higher precision StepRangeLen
 # for all other types we fall back to a plain old LinRange
