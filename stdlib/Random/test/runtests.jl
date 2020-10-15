@@ -858,3 +858,45 @@ end
     @test string(m) == "MersenneTwister(0, (0, 2002, 1000, 255, 0, 0, 0, 1))"
     @test m == MersenneTwister(0, (0, 2002, 1000, 255, 0, 0, 0, 1))
 end
+
+module DefaultRNG
+using Random: Random, Sampler, AbstractRNG
+
+struct CustomRNG <: AbstractRNG end
+struct Custom end
+
+Base.eltype(::Type{Custom}) = Custom
+
+struct CustomSampler <: Sampler{Custom} end
+struct CustomSamplerType <: Sampler{Custom} end
+
+Random.default_rng(::Custom) = CustomRNG()
+Random.default_rng(::Type{Custom}) = CustomRNG()
+
+Random.Sampler(::Type{CustomRNG}, ::Custom, ::Random.Repetition) = CustomSampler()
+Random.Sampler(::Type{CustomRNG}, ::Type{Custom}, ::Random.Repetition) =
+    CustomSamplerType()
+
+Random.rand(::CustomRNG, ::CustomSampler) = Custom()
+Random.rand(::CustomRNG, ::CustomSamplerType) = Custom()
+
+end # module CustomDefaultRNG
+
+@testset "default_rng(x)" begin
+    Custom = DefaultRNG.Custom
+    @test rand(Custom()) == Custom()
+    A = rand(Custom(), 2)
+    B = [Custom(), Custom()]
+    @test A == B
+    @test rand!(A) == B
+    @test rand!(A, Custom()) == B
+    @test rand!(DefaultRNG.CustomRNG(), A, DefaultRNG.CustomSampler()) == B
+    @test_throws ArgumentError rand(Random.default_rng(), Custom())
+    @test_throws ArgumentError rand(Random.default_rng(), Custom(), 2)
+
+    @test rand(Custom) == Custom()
+    A = rand(Custom, 2)
+    @test A == B
+    @test_throws ArgumentError rand(Random.default_rng(), Custom)
+    @test_throws ArgumentError rand(Random.default_rng(), Custom, 2)
+end

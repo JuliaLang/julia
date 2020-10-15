@@ -348,6 +348,9 @@ seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(default_rng(), seed)
 
 ### Global RNG
 
+default_rng(X) = default_rng()
+default_rng(::Type{X}) where {X} = default_rng()
+
 const THREAD_RNGs = MersenneTwister[]
 @inline default_rng() = default_rng(Threads.threadid())
 @noinline function default_rng(tid::Int)
