@@ -604,6 +604,23 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROO
     return (jl_value_t*)dt;
 }
 
+static size_t jl_static_show_x_sym_escaped(JL_STREAM *out, jl_sym_t *name) JL_NOTSAFEPOINT
+{
+    size_t n = 0;
+
+    char *sn = jl_symbol_name(name);
+    int hidden = strchr(sn, '#') != 0;
+
+    if (hidden) {
+        n += jl_printf(out, "var\"");
+    }
+    n += jl_printf(out, "%s", sn);
+    if (hidden) {
+        n += jl_printf(out, "\"");
+    }
+    return n;
+}
+
 // `v` might be pointing to a field inlined in a structure therefore
 // `jl_typeof(v)` may not be the same with `vt` and only `vt` should be
 // used to determine the type of the value.
@@ -682,37 +699,24 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
         jl_sym_t *sym = globfunc ? globname : dv->name->name;
         char *sn = jl_symbol_name(sym);
-        int hidden = !globfunc && strchr(sn, '#');
         size_t i = 0;
-        int quote = 0;
-        if (hidden) {
-            n += jl_printf(out, "getfield(");
-        }
-        else if (globfunc) {
+        size_t quote = 0;
+        if (globfunc) {
             n += jl_printf(out, "typeof(");
         }
         if (jl_core_module && (dv->name->module != jl_core_module || !jl_module_exports_p(jl_core_module, sym))) {
             n += jl_static_show_x(out, (jl_value_t*)dv->name->module, depth);
-            if (!hidden) {
-                n += jl_printf(out, ".");
-                if (globfunc && !jl_id_start_char(u8_nextchar(sn, &i))) {
-                    n += jl_printf(out, ":(");
-                    quote = 1;
-                }
+            n += jl_printf(out, ".");
+            if (globfunc && !jl_id_start_char(u8_nextchar(sn, &i))) {
+                n += jl_printf(out, ":(");
+                quote = 1;
             }
         }
-        if (hidden) {
-            n += jl_printf(out, ", Symbol(\"");
-            n += jl_printf(out, "%s", sn);
-            n += jl_printf(out, "\"))");
-        }
-        else {
-            n += jl_printf(out, "%s", sn);
-            if (globfunc) {
+        n += jl_static_show_x_sym_escaped(out, sym);
+        if (globfunc) {
+            n += jl_printf(out, ")");
+            if (quote)
                 n += jl_printf(out, ")");
-                if (quote)
-                    n += jl_printf(out, ")");
-            }
         }
         if (dv->parameters && (jl_value_t*)dv != dv->name->wrapper &&
             (jl_has_free_typevars(v) ||
@@ -832,7 +836,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 n += jl_printf(out, ")");
             n += jl_printf(out, "<:");
         }
-        n += jl_printf(out, "%s", jl_symbol_name(var->name));
+        n += jl_static_show_x_sym_escaped(out, var->name);
         if (showbounds && (ub != (jl_value_t*)jl_any_type || lb != jl_bottom_type)) {
             // show type-var upper bound if it is defined, or if we showed the lower bound
             int ua = jl_is_unionall(ub);

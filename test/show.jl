@@ -1336,6 +1336,26 @@ end
 
 @test static_shown(QuoteNode(:x)) == ":(:x)"
 
+# PR #38049
+struct var"#X#" end
+
+# (Just to make this test more sustainable,) we don't necesssarily need to test the exact
+# output format, just ensure that it prints at least the parts we expect:
+@test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
+@test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))
+
+# Test that static_shown is returning valid, correct julia expressions
+@testset "static_show() prints valid julia" begin
+    @testset for v in (
+            var"#X#",
+            var"#X#"(),
+            Vector{<:Any},
+            Vector{var"#X#"},
+        )
+        @test v == eval(Meta.parse(static_shown(v)))
+    end
+end
+
 # Test @show
 let fname = tempname()
     try
