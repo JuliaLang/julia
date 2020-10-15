@@ -20,8 +20,8 @@ using Unicode: normalize
 ## Help mode ##
 
 # This is split into helpmode and _helpmode to easier unittest _helpmode
-helpmode(io::IO, line::AbstractString, mod::Module) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line, mod))))
-helpmode(line::AbstractString, mod::Module) = helpmode(stdout, line, mod)
+helpmode(io::IO, line::AbstractString, mod::Module=Main) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line, mod))))
+helpmode(line::AbstractString, mod::Module=Main) = helpmode(stdout, line, mod)
 
 const extended_help_on = Ref{Any}(nothing)
 
