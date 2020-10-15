@@ -419,6 +419,9 @@ function __init__()
     init_load_path()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
+    if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
+        MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
+    end
     nothing
 end
 

@@ -1306,7 +1306,7 @@ function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout:
     return compilecache(pkg, path, internal_stderr, internal_stdout)
 end
 
-const MAX_NUM_PRECOMPILE_FILES = 10
+const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     # decide where to put the resulting cache file
@@ -1316,7 +1316,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     if pkg.uuid !== nothing
         entrypath, entryfile = cache_file_entry(pkg)
         cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
-        if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES
+        if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
             idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
             rm(joinpath(cachepath, cachefiles[idx]))
         end
