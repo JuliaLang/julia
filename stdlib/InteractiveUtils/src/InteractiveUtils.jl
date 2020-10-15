@@ -21,27 +21,36 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r"")
+    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sort_size::Bool = false)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
+
+- `all` : also list non-exported objects defined in the module, deprecated objects, and compiler-generated objects.
+- `imported` : also list objects explicitly imported from other modules.
+- `sort_size` : sort results by their size, in descending order
 """
-function varinfo(m::Module=Main, pattern::Regex=r"")
+function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sort_size::Bool = false)
     rows =
         Any[ let value = getfield(m, v)
                  Any[string(v),
                      (value===Base || value===Main || value===Core ? "" : format_bytes(summarysize(value))),
-                     summary(value)]
+                     summary(value),
+                     summarysize(value)]
              end
-             for v in sort!(names(m)) if isdefined(m, v) && occursin(pattern, string(v)) ]
-
+             for v in sort!(names(m, all = all, imported = imported)) if isdefined(m, v) && occursin(pattern, string(v)) ]
+    if sort_size
+        sizes = map(r->r[4], rows)
+        p = sortperm(sizes, rev=true)
+        rows = rows[p]
+    end
     pushfirst!(rows, Any["name", "size", "summary"])
 
-    return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
+    return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
 end
-varinfo(pat::Regex) = varinfo(Main, pat)
+varinfo(pat::Regex; kwargs...) = varinfo(Main, pat, kwargs...)
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)
