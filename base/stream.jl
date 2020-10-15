@@ -1262,16 +1262,19 @@ julia> redirect(stdout="log.txt", stderr="log.txt", stdin=devnull) do
 end
 ```
 
-However it is not supported to pass two distinct descriptors of the same resource.
+However it is not supported to pass two distinct descriptors of the same file.
 ```julia
 julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
 
-# This is not suppored
-julia> redirect(stdout=io1, stderr=io2) do
-    ...
-end
+julia> redirect(f, stdout=io1, stderr=io2) # not suppored
+```
+Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
+```julia
+julia> io = open(...)
+
+julia> redirect(f, stdout=io, stdin=io) # not supported
 ```
 
 !!! compat "Julia 1.6"
