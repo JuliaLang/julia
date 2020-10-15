@@ -508,8 +508,10 @@ void jl_dump_native(void *native_code,
 
     if (unopt_bc_fname)
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
-    if (bc_fname || obj_fname || asm_fname)
+    if (bc_fname || obj_fname || asm_fname) {
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
+        addMachinePasses(&PM, TM.get());
+    }
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
     if (obj_fname)
@@ -603,6 +605,15 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
     PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
     PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
 }
+
+
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+{
+    // TODO: don't do this on CPUs that natively support Float16
+    PM->add(createDemoteFloat16Pass());
+    PM->add(createGVNPass());
+}
+
 
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
@@ -809,6 +820,7 @@ public:
         TPMAdapter Adapter(TPM);
         addTargetPasses(&Adapter, jl_TargetMachine);
         addOptimizationPasses(&Adapter, OptLevel);
+        addMachinePasses(&Adapter, jl_TargetMachine);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -846,6 +858,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         PM = new legacy::PassManager();
         addTargetPasses(PM, jl_TargetMachine);
         addOptimizationPasses(PM, jl_options.opt_level);
+        addMachinePasses(PM, jl_TargetMachine);
     }
 
     // get the source code for this function

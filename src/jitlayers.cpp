@@ -523,6 +523,7 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
 {
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, optlevel);
+    addMachinePasses(&PM, &TM);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 }
