@@ -26,9 +26,9 @@ foo(x::T,y::T) where T = x-y == zero(T)
 # FINAL: %2 = fpext half %0 to float
 # FINAL: %3 = fpext half %1 to float
 # FINAL: fsub half %2, %3
-emit(foo, Tuple{Float16,Float16})
+emit(foo, Float16, Float16)
 
 @fastmath foo(x::T,y::T) where T = x-y == zero(T)
 # LOWER: fsub fast half %0, %1
 # FINAL: fsub fast half %0, %1
-emit(foo, Tuple{Float16,Float16})
+emit(foo, Float16, Float16)
