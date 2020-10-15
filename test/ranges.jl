@@ -20,7 +20,7 @@
     end
 
     @test range(1, 100) === 1:100 # ArgumentError before 1.6
-    @test_throws range(1.0, step=0.25, stop=2.0, length=6)
+    @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=6)
     r = range(1.0, step=0.25, stop=2.0, length=5) # ArgumentError before 1.6
     @test first(r) === 1.0
     @test step(r) === 0.25
