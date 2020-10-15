@@ -84,6 +84,7 @@ New library functions
   efficiently ([#35816]).
 * New function `addenv` for adding environment mappings into a `Cmd` object, returning the new `Cmd` object.
 * New function `insorted` for determining whether an element is in a sorted collection or not ([#37490]).
+* New function `redirect` for redirecting `stdin`, `stdout` and `stderr` ([#37978]).
 
 New library features
 --------------------
