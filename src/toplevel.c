@@ -895,6 +895,15 @@ static void jl_check_open_for(jl_module_t *m, const char* funcname)
         if (m != jl_main_module) { // TODO: this was grand-fathered in
             JL_LOCK(&jl_modules_mutex);
             int open = ptrhash_has(&jl_current_modules, (void*)m);
+            if (!open && jl_module_init_order != NULL) {
+                size_t i, l = jl_array_len(jl_module_init_order);
+                for (i = 0; i < l; i++) {
+                    if (m == (jl_module_t*)jl_array_ptr_ref(jl_module_init_order, i)) {
+                        open = 1;
+                        break;
+                    }
+                }
+            }
             JL_UNLOCK(&jl_modules_mutex);
             if (!open && !jl_is__toplevel__mod(m)) {
                 const char* name = jl_symbol_name(m->name);
