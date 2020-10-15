@@ -842,6 +842,10 @@ end
 # compute an inferred AST and return type
 function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atypes, sparams)::MethodInstance
+    typeinf_code(interp, mi, run_optimizer)
+end
+
+function typeinf_code(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = InferenceResult(mi)
     frame = InferenceState(result, false, interp)
