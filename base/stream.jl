@@ -1239,6 +1239,7 @@ Possible values for each stream are:
 * `path::AbstractString` redirecting the stream to the file at `path`.
 * `io` an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
 
+# Examples
 ```julia
 julia> redirect(stdout="stdout.txt", stderr="stderr.txt") do
            print("hello stdout")
@@ -1250,6 +1251,27 @@ julia> read("stdout.txt", String)
 
 julia> read("stderr.txt", String)
 "hello stderr"
+```
+
+# Edge cases
+
+It is possible to pass the same exactly same argument to `stdout` and `stderr`:
+```julia
+julia> redirect(stdout="log.txt", stderr="log.txt", stdin=devnull) do
+    ...
+end
+```
+
+However it is not supported to pass two distinct descriptors of the same resource.
+```julia
+julia> io1 = open("same/path", "w")
+
+julia> io2 = open("same/path", "w")
+
+# This is not suppored
+julia> redirect(stdout=io1, stderr=io2) do
+    ...
+end
 ```
 
 !!! compat "Julia 1.6"
