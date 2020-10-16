@@ -1694,7 +1694,7 @@ let e = @test_throws RemoteException pmap(1) do _
             wait(@async error(42))
         end
     # check that the inner TaskFailedException is correctly formed & can be printed
-    es = @show sprint(showerror, e.value)
+    es = sprint(showerror, e.value)
     @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
     @test contains(es, "\n\n    nested task error:")
     @test_broken contains(es, "\n\n    nested task error: 42\n")
