@@ -211,7 +211,7 @@ ERROR: BoundsError: attempt to access String
 
 julia> str[end+1]
 ERROR: BoundsError: attempt to access String
- at index [14]
+ 13-codeunit String at index [14]
 [...]
 ```
 
