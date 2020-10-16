@@ -32,6 +32,8 @@ hardcoded_precompile_statements = """
 repl_script = """
 2+2
 print("")
+display([1])
+display([1 2; 3 4])
 @time 1+1
 ; pwd
 ? reinterpret
