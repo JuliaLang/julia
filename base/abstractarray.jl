@@ -1258,7 +1258,8 @@ end
 
 Return the underlying "parent array”. This parent array of objects of types `SubArray`, `ReshapedArray`
 or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
-during object creation. If the input is not a wrapped object, return the input itself.
+during object creation. If the input is not a wrapped object, return the input itself. If the input is
+wrapped multiple times, only the outermost wrapper will be removed.
 
 # Examples
 ```jldoctest
