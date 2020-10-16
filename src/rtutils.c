@@ -626,7 +626,10 @@ static size_t jl_static_show_x_sym_escaped(JL_STREAM *out, jl_sym_t *name) JL_NO
     size_t n = 0;
 
     char *sn = jl_symbol_name(name);
-    int hidden = strchr(sn, '#') != 0;
+    int hidden = 0;
+    if (!(jl_is_identifier(sn) || jl_is_operator(sn))) {
+        hidden = 1;
+    }
 
     if (hidden) {
         n += jl_printf(out, "var\"");

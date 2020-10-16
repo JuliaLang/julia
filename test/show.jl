@@ -1337,8 +1337,13 @@ end
 @test static_shown(QuoteNode(:x)) == ":(:x)"
 
 # PR #38049
+@test static_shown(sum) == "Base.sum"
+@test static_shown(+) == "Base.:(+)"
+@test static_shown(typeof(+)) == "typeof(Base.:(+))"
+
 struct var"#X#" end
 var"#f#"() = 2
+struct var"%X%" end  # Invalid name without '#'
 
 # (Just to make this test more sustainable,) we don't necesssarily need to test the exact
 # output format, just ensure that it prints at least the parts we expect:
@@ -1350,6 +1355,8 @@ var"#f#"() = 2
     @testset for v in (
             var"#X#",
             var"#X#"(),
+            var"%X%",
+            var"%X%"(),
             Vector,
             Vector{<:Any},
             Vector{var"#X#"},
