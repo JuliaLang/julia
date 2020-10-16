@@ -1302,6 +1302,7 @@ _edit_indent(buf::IOBuffer, b::Int, num::Int) =
     num >= 0 ? edit_splice!(buf, b => b, ' '^num, rigid_mark=false) :
                edit_splice!(buf, b => (b - num))
 
+<<<<<<< HEAD
 function mode_idx(hist::HistoryProvider, mode::TextInterface)
     c = :julia
     for (k,v) in hist.mode_mapping
@@ -1343,6 +1344,49 @@ function edit_input(s, f = (filename, line) -> InteractiveUtils.edit(filename, l
         write(buf, str)
         seek(buf, pos) # restore state from before edit
         refresh_line(s)
+    end
+end
+
+# return the identifier under the cursor, possibly with other words concatenated
+# to it with dots (e.g. "A.B.C" in "X; A.B.C*3", if the cursor is between "A" and "C")
+function current_word_with_dots(buf::IOBuffer)
+    pos = position(buf)
+    while true
+        char_move_word_right(buf)
+        if eof(buf) || peek(buf, Char) != '.'
+            break
+        end
+    end
+    pend = position(buf)
+    while true
+        char_move_word_left(buf)
+        p = position(buf)
+        p == 0 && break
+        seek(buf, p-1)
+        if peek(buf, Char) != '.'
+            seek(buf, p)
+            break
+        end
+    end
+    pbegin = position(buf)
+    word = pend > pbegin ?
+        String(buf.data[pbegin+1:pend]) :
+        ""
+    seek(buf, pos)
+    word
+end
+
+current_word_with_dots(s::MIState) = current_word_with_dots(buffer(s))
+
+function activate_module(s::MIState)
+    word = current_word_with_dots(s);
+    isempty(word) && return beep(s)
+    try
+        REPL.activate(Base.Core.eval(Base.active_module(),
+                                     Base.Meta.parse(word)))
+        refresh_line(s)
+    catch
+        beep(s)
     end
 end
 
@@ -2387,7 +2431,11 @@ AnyDict(
     "\eu" => (s::MIState,o...)->edit_upper_case(s),
     "\el" => (s::MIState,o...)->edit_lower_case(s),
     "\ec" => (s::MIState,o...)->edit_title_case(s),
+<<<<<<< HEAD
     "\ee" => (s::MIState,o...) -> edit_input(s),
+=======
+    "\emm" => (s::MIState, o...) -> activate_module(s)
+>>>>>>> 88db0e9418 (use a keybinding to activate modules and delete Base.activate_module)
 )
 
 const history_keymap = AnyDict(
