@@ -647,15 +647,9 @@ static debug_link_info getDebuglink(const object::ObjectFile &Obj) JL_NOTSAFEPOI
         if (!Section.getName(sName) && sName == ".gnu_debuglink")
 #endif
         {
-            StringRef Contents;
-#if JL_LLVM_VERSION >= 90000
             auto found = Section.getContents();
-            if (found)
-                Contents = *found;
-#else
-            bool found = !Section.getContents(Contents);
-#endif
             if (found) {
+                StringRef Contents = *found;
                 size_t length = Contents.find('\0');
                 info.filename = Contents.substr(0, length);
                 info.crc32 = *(const uint32_t*)Contents.substr(LLT_ALIGN(length + 1, 4), 4).data();

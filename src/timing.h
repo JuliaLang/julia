@@ -53,8 +53,6 @@ void jl_timing_block_stop(jl_timing_block_t *cur_block);
         X(METHOD_LOOKUP_FAST),    \
         X(LLVM_OPT),              \
         X(LLVM_MODULE_FINISH),    \
-        X(LLVM_EMIT),             \
-        X(METHOD_LOOKUP_COMPILE), \
         X(METHOD_MATCH),          \
         X(TYPE_CACHE_LOOKUP),     \
         X(TYPE_CACHE_INSERT),     \

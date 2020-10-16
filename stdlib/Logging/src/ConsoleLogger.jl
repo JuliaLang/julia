@@ -50,14 +50,14 @@ function showvalue(io, e::Tuple{Exception,Any})
 end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
-function default_logcolor(level)
+function default_logcolor(level::LogLevel)
     level < Info  ? Base.debug_color() :
     level < Warn  ? Base.info_color()  :
     level < Error ? Base.warn_color()  :
                     Base.error_color()
 end
 
-function default_metafmt(level, _module, group, id, file, line)
+function default_metafmt(level::LogLevel, _module, group, id, file, line)
     @nospecialize
     color = default_logcolor(level)
     prefix = (level == Warn ? "Warning" : string(level))*':'

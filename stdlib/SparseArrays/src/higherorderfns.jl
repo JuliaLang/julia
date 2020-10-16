@@ -4,7 +4,7 @@ module HigherOrderFns
 
 # This module provides higher order functions specialized for sparse arrays,
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
-import Base: map, map!, broadcast, copy, copyto!
+import Base: map, map!, broadcast, copy, copyto!, _extrema_dims, _extrema_itr
 
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector, AbstractSparseMatrixCSC,
@@ -29,6 +29,7 @@ using LinearAlgebra
 # (11) Define broadcast[!] methods handling combinations of scalars, sparse vectors/matrices,
 #       structured matrices, and one- and two-dimensional Arrays.
 # (12) Define map[!] methods handling combinations of sparse and structured matrices.
+# (13) Define extrema methods optimized for sparse vectors/matrices.
 
 
 # (0) BroadcastStyle rules and convenience types for dispatch
@@ -1153,5 +1154,61 @@ map(f::Tf, A::SparseOrStructuredMatrix, Bs::Vararg{SparseOrStructuredMatrix,N}) 
     (_checksameshape(A, Bs...); _noshapecheck_map(f, _sparsifystructured(A), map(_sparsifystructured, Bs)...))
 map!(f::Tf, C::AbstractSparseMatrixCSC, A::SparseOrStructuredMatrix, Bs::Vararg{SparseOrStructuredMatrix,N}) where {Tf,N} =
     (_checksameshape(C, A, Bs...); _noshapecheck_map!(f, C, _sparsifystructured(A), map(_sparsifystructured, Bs)...))
+
+
+# (13) extrema methods optimized for sparse vectors/matrices.
+function _extrema_itr(f, A::SparseVecOrMat)
+    M = length(A)
+    iszero(M) && throw(ArgumentError("Sparse array must have at least one element."))
+    N = nnz(A)
+    iszero(N) && return f(zero(eltype(A))), f(zero(eltype(A)))
+    vmin, vmax = _extrema_itr(f, nonzeros(A))
+    if N != M
+        f0 = f(zero(eltype(A)))
+        vmin = min(f0, vmin)
+        vmax = max(f0, vmax)
+    end
+    vmin, vmax
+end
+
+function _extrema_dims(f, x::SparseVector, dims)
+    sz = zeros(1)
+    for d in dims
+        sz[d] = 1
+    end
+    if sz == [1] && !iszero(length(x))
+        return [_extrema_itr(f, x)]
+    end
+    invoke(_extrema_dims, Tuple{Any, AbstractArray, Any}, f, x, dims)
+end
+
+function _extrema_dims(f, A::AbstractSparseMatrix, dims)
+    sz = zeros(2)
+    for d in dims
+        sz[d] = 1
+    end
+    if sz == [1, 0] && !iszero(length(A))
+        T = eltype(A)
+        B = Array{Tuple{T,T}}(undef, 1, size(A, 2))
+        @inbounds for col_idx in 1:size(A, 2)
+            col = @view A[:,col_idx]
+            fx = (nnz(col) == size(A, 1)) ? f(A[1,col_idx]) : f(zero(T))
+            B[col_idx] = (fx, fx)
+            for x in nonzeros(col)
+                fx = f(x)
+                if fx < B[col_idx][1]
+                    B[col_idx] = (fx, B[col_idx][2])
+                elseif fx > B[col_idx][2]
+                    B[col_idx] = (B[col_idx][1], fx)
+                end
+            end
+        end
+        return B
+    end
+    invoke(_extrema_dims, Tuple{Any, AbstractArray, Any}, f, A, dims)
+end
+
+_extrema_dims(f, A::SparseVector, ::Colon) = _extrema_itr(f, A)
+_extrema_dims(f, A::AbstractSparseMatrix, ::Colon) = _extrema_itr(f, A)
 
 end

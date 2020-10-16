@@ -284,7 +284,7 @@ struct REPLBackendRef
 end
 REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
 function destroy(ref::REPLBackendRef, state::Task)
-    if istaskfailed(state) && Base.task_result(state) isa Exception
+    if istaskfailed(state)
         close(ref.repl_channel, TaskFailedException(state))
         close(ref.response_channel, TaskFailedException(state))
     end
@@ -447,9 +447,9 @@ function complete_line(c::ShellCompletionProvider, s::PromptState)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
-function complete_line(c::LatexCompletions, s::PromptState)
+function complete_line(c::LatexCompletions, s)
     partial = beforecursor(LineEdit.buffer(s))
-    full = LineEdit.input_string(s)
+    full = LineEdit.input_string(s)::String
     ret, range, should_complete = bslash_completions(full, lastindex(partial))[2]
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
@@ -901,7 +901,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
-        on_done = respond(line->helpmode(outstream(repl), line), repl, julia_prompt,
+        on_done = respond(line::String->helpmode(outstream(repl), line), repl, julia_prompt,
                           pass_empty=true, suppress_on_semicolon=false))
 
 

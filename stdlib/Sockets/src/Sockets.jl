@@ -572,6 +572,9 @@ end
     nagle(socket::Union{TCPServer, TCPSocket}, enable::Bool)
 
 Enables or disables Nagle's algorithm on a given TCP server or socket.
+
+!!! compat "Julia 1.3"
+    This function requires Julia 1.3 or later.
 """
 function nagle(sock::Union{TCPServer, TCPSocket}, enable::Bool)
     # disable or enable Nagle's algorithm on all OSes

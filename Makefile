@@ -48,7 +48,7 @@ $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUI
 
 julia-symlink: julia-cli-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
-	@echo '@"%~dp0"\'"$$(echo $(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE)) | tr / '\\')" '%*' > $(BUILDROOT)/julia.bat
+	@echo '@"%~dp0\'"$$(echo $(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE)) | tr / '\\')"\" '%*' > $(BUILDROOT)/julia.bat
 	chmod a+x $(BUILDROOT)/julia.bat
 else
 ifndef JULIA_VAGRANT_BUILD
@@ -180,7 +180,7 @@ else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
 ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-10jl
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-11jl
 endif
 ifeq ($(OS),Darwin)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libosxunwind

@@ -128,14 +128,16 @@ end
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
 # (Used by Revise and perhaps other packages.)
+# Any function `f` stored here must be consistent with the signature
+#    f(m::Method)::Tuple{Union{Symbol,String}, Union{Int32,Int64}}
 const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
 
 function fixup_stdlib_path(path::String)
     # The file defining Base.Sys gets included after this file is included so make sure
     # this function is valid even in this intermediary state
-    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB
+    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB::String
         # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-        path = replace(path, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+        path = replace(path, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB::String))
     end
     return path
 end
@@ -145,7 +147,7 @@ function updated_methodloc(m::Method)::Tuple{String, Int32}
     file, line = m.file, m.line
     if methodloc_callback[] !== nothing
         try
-            file, line = invokelatest(methodloc_callback[], m)
+            file, line = invokelatest(methodloc_callback[], m)::Tuple{Union{Symbol,String}, Union{Int32,Int64}}
         catch
         end
     end

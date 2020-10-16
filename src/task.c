@@ -181,13 +181,11 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 /* Rooted by the base module */
 static jl_function_t *task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
-void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
+void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
-    t->result = resultval;
-    jl_gc_wb(t, t->result);
-    if (t->exception != jl_nothing)
+    if (t->_isexception)
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
     else
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_DONE);
@@ -245,6 +243,57 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
     }
     *size = task->bufsz - off;
     return (void *)((char *)task->stkbuf + off);
+}
+
+JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
+                                       char **active_start, char **active_end,
+                                       char **total_start, char **total_end)
+{
+    if (!task->started) {
+        *total_start = *active_start = 0;
+        *total_end = *active_end = 0;
+        return;
+    }
+
+    int16_t tid = task->tid;
+    jl_ptls_t ptls2 = (tid != -1) ? jl_all_tls_states[tid] : 0;
+
+    if (task->copy_stack && ptls2 && task == ptls2->current_task) {
+        *total_start = *active_start = (char*)ptls2->stackbase - ptls2->stacksize;
+        *total_end = *active_end = (char*)ptls2->stackbase;
+    }
+    else if (task->stkbuf) {
+        *total_start = *active_start = (char*)task->stkbuf;
+#ifndef _OS_WINDOWS_
+        if (jl_all_tls_states[0]->root_task == task) {
+            // See jl_init_root_task(). The root task of the main thread
+            // has its buffer enlarged by an artificial 3000000 bytes, but
+            // that means that the start of the buffer usually points to
+            // inaccessible memory. We need to correct for this.
+            *active_start += ROOT_TASK_STACK_ADJUSTMENT;
+            *total_start += ROOT_TASK_STACK_ADJUSTMENT;
+        }
+#endif
+
+        *total_end = *active_end = (char*)task->stkbuf + task->bufsz;
+#ifdef COPY_STACKS
+        // save_stack stores the stack of an inactive task in stkbuf, and the
+        // actual number of used bytes in copy_stack.
+        if (task->copy_stack > 1)
+            *active_end = (char*)task->stkbuf + task->copy_stack;
+#endif
+    }
+    else {
+        // no stack allocated yet
+        *total_start = *active_start = 0;
+        *total_end = *active_end = 0;
+        return;
+    }
+
+    if (task == jl_current_task) {
+        // scan up to current `sp` for current thread and task
+        *active_start = (char*)jl_get_frame_addr();
+    }
 }
 
 // Marked noinline so we can consistently skip the associated frame.
@@ -444,8 +493,9 @@ JL_DLLEXPORT void jl_switch(void)
         return;
     }
     if (t->_state != JL_TASK_STATE_RUNNABLE || (t->started && t->stkbuf == NULL)) {
-        ct->exception = t->exception;
+        ct->_isexception = t->_isexception;
         ct->result = t->result;
+        jl_gc_wb(ct, ct->result);
         return;
     }
     if (ptls->in_finalizer)
@@ -629,7 +679,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
-    t->exception = jl_nothing;
+    t->_isexception = 0;
     // Inherit logger state from parent task
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
@@ -754,11 +804,11 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 #endif
 
     t->started = 1;
-    if (t->exception != jl_nothing) {
+    if (t->_isexception) {
         record_backtrace(ptls, 0);
-        jl_push_excstack(&t->excstack, t->exception,
+        jl_push_excstack(&t->excstack, t->result,
                          ptls->bt_data, ptls->bt_size);
-        res = t->exception;
+        res = t->result;
     }
     else {
         JL_TRY {
@@ -772,13 +822,14 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
         }
         JL_CATCH {
             res = jl_current_exception();
-            t->exception = res;
-            jl_gc_wb(t, res);
+            t->_isexception = 1;
             goto skip_pop_exception;
         }
 skip_pop_exception:;
     }
-    jl_finish_task(t, res);
+    t->result = res;
+    jl_gc_wb(t, t->result);
+    jl_finish_task(t);
     gc_debug_critical_error();
     abort();
 }
@@ -1199,7 +1250,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->start = NULL;
     ptls->current_task->result = jl_nothing;
     ptls->current_task->donenotify = jl_nothing;
-    ptls->current_task->exception = jl_nothing;
+    ptls->current_task->_isexception = 0;
     ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;

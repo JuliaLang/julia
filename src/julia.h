@@ -1474,8 +1474,9 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
-JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from,
-                                   jl_sym_t *s);
+JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
+JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
+JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT;
@@ -1603,6 +1604,8 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmod
                                             const char *file, int line);
 JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *inmodule,
                                                  const char *file, int line);
+JL_DLLEXPORT jl_value_t *jl_expand_in_world(jl_value_t *expr, jl_module_t *inmodule,
+                                            const char *file, int line, size_t world);
 JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
                                                  const char *file, int line);
@@ -1728,11 +1731,11 @@ typedef struct _jl_task_t {
     jl_value_t *tls;
     jl_value_t *donenotify;
     jl_value_t *result;
-    jl_value_t *exception;
     jl_value_t *logstate;
     jl_function_t *start;
     uint8_t _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
+    uint8_t _isexception; // set if `result` is an exception to throw or that we exited with
 
 // hidden state:
     // id of owning thread - does not need to be defined until the task runs
@@ -1743,6 +1746,8 @@ typedef struct _jl_task_t {
     size_t world_age;
     // saved exception stack
     jl_excstack_t *excstack;
+    // current exception handler
+    jl_handler_t *eh;
 
     jl_ucontext_t ctx; // saved thread state
     void *stkbuf; // malloc'd memory (either copybuf or stack)
@@ -1750,8 +1755,6 @@ typedef struct _jl_task_t {
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
 
-    // current exception handler
-    jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
 

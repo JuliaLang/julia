@@ -34,7 +34,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.inst[3]
@@ -62,7 +62,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end

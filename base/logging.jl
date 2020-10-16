@@ -350,7 +350,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
         let
             level = $level
             std_level = convert(LogLevel, level)
-            if std_level >= getindex(_min_enabled_level)
+            if std_level >= _min_enabled_level[]
                 group = $(log_data._group)
                 _module = $(log_data._module)
                 logger = current_logger_for_env(std_level, group, _module)
@@ -458,7 +458,7 @@ function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
 end
 
 # Global log limiting mechanism for super fast but inflexible global log limiting.
-const _min_enabled_level = Ref(Debug)
+const _min_enabled_level = Ref{LogLevel}(Debug)
 
 # LogState - a cache of data extracted from the logger, plus the logger itself.
 struct LogState

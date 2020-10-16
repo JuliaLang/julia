@@ -287,6 +287,11 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             elseif a1.name === _NAMEDTUPLE_NAME
                 if isconcretetype(a1)
                     return Const(false)
+                else
+                    ns = a1.parameters[1]
+                    if isa(ns, Tuple)
+                        return Const(1 <= idx <= length(ns))
+                    end
                 end
             elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
@@ -809,7 +814,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 nv = fieldindex(widenconst(s), nv, false)
             end
             if isa(nv, Int) && 1 <= nv <= length(s.fields)
-                return s.fields[nv]
+                return unwrapva(s.fields[nv])
             end
         end
         s = widenconst(s)

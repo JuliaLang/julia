@@ -849,7 +849,7 @@ A list of modules can also be specified as an array.
     At least Julia 1.4 is required for specifying a module.
 """
 function methods(@nospecialize(f), @nospecialize(t),
-                 @nospecialize(mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing))
+                 mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
@@ -879,7 +879,7 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
 end
 
 function methods(@nospecialize(f),
-                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
+                 mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
@@ -1527,7 +1527,7 @@ REPL tab completion on `x.` shows only the `private=false` properties.
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
-propertynames(x, private) = propertynames(x) # ignore private flag by default
+propertynames(x, private::Bool) = propertynames(x) # ignore private flag by default
 
 """
     hasproperty(x, s::Symbol)

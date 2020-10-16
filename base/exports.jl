@@ -458,6 +458,7 @@ export
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     startswith,
 
 # linear algebra
