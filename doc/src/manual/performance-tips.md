@@ -3,7 +3,7 @@
 In the following sections, we briefly go through a few techniques that can help make your Julia
 code run as fast as possible.
 
-## Write functions, not just scripts
+## Performance critical code should be inside a function
 
 Any code that is performance critical should be inside a function. Code inside functions tends to run much faster than top level code, due to how Julia's compiler works.
 
