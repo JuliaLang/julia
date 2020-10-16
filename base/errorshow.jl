@@ -248,9 +248,9 @@ function showerror(io::IO, ex::MethodError)
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
-    elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
+    elseif (allmethods = methods(f); isempty(allmethods)) && isa(f, DataType) && f.abstract
         print(io, "no constructors have been defined for ", f)
-    elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
+    elseif isempty(allmethods) && !isa(f, Function) && !isa(f, Type)
         print(io, "objects of type ", ft, " are not callable")
     else
         if ft <: Function && isempty(ft.parameters) &&

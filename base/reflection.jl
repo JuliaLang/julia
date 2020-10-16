@@ -828,9 +828,9 @@ isempty(m::MethodList) = isempty(m.ms)
 iterate(m::MethodList, s...) = iterate(m.ms, s...)
 eltype(::Type{MethodList}) = Method
 
-function MethodList(mt::Core.MethodTable)
+function MethodList(mt::Core.MethodTable, world::UInt = typemax(UInt))
     ms = Method[]
-    visit(mt) do m
+    visit(mt, world) do m
         push!(ms, m)
     end
     return MethodList(ms, mt)
@@ -855,6 +855,9 @@ function methods(@nospecialize(f), @nospecialize(t),
     end
     t = to_tuple_type(t)
     world = typemax(UInt)
+    if t == Tuple
+        return MethodList(typeof(f).name.mt, world)
+    end
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
     for m in _methods(f, t, -1, world)
@@ -884,42 +887,44 @@ function methods(@nospecialize(f),
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
 
-function visit(f, mt::Core.MethodTable)
-    mt.defs !== nothing && visit(f, mt.defs)
+function visit(f, mt::Core.MethodTable, world::UInt = typemax(UInt))
+    mt.defs !== nothing && visit(f, mt.defs, world)
     nothing
 end
-function visit(f, mc::Core.TypeMapLevel)
+function visit(f, mc::Core.TypeMapLevel, world::UInt = typemax(UInt))
     if mc.targ !== nothing
         e = mc.targ::Vector{Any}
         for i in 2:2:length(e)
-            isassigned(e, i) && visit(f, e[i])
+            isassigned(e, i) && visit(f, e[i], world)
         end
     end
     if mc.arg1 !== nothing
         e = mc.arg1::Vector{Any}
         for i in 2:2:length(e)
-            isassigned(e, i) && visit(f, e[i])
+            isassigned(e, i) && visit(f, e[i], world)
         end
     end
     if mc.tname !== nothing
         e = mc.tname::Vector{Any}
         for i in 2:2:length(e)
-            isassigned(e, i) && visit(f, e[i])
+            isassigned(e, i) && visit(f, e[i], world)
         end
     end
     if mc.name1 !== nothing
         e = mc.name1::Vector{Any}
         for i in 2:2:length(e)
-            isassigned(e, i) && visit(f, e[i])
+            isassigned(e, i) && visit(f, e[i], world)
         end
     end
-    mc.list !== nothing && visit(f, mc.list)
-    mc.any !== nothing && visit(f, mc.any)
+    mc.list !== nothing && visit(f, mc.list, world)
+    mc.any !== nothing && visit(f, mc.any, world)
     nothing
 end
-function visit(f, d::Core.TypeMapEntry)
+function visit(f, d::Core.TypeMapEntry, world::UInt = typemax(UInt))
     while d !== nothing
-        f(d.func)
+        if d.min_world <= world <= d.max_world
+            f(d.func)
+        end
         d = d.next
     end
     nothing
