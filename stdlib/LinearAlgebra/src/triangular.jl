@@ -737,7 +737,10 @@ for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
                         (:LowerTriangular, :LowerTriangular, :UnitLowerTriangular),
                         (:LowerTriangular, :UnitLowerTriangular, :LowerTriangular),
                         (:UnitLowerTriangular, :UnitLowerTriangular, :UnitLowerTriangular))
-    @eval mul!(C::$cty, A::$aty, B::$bty) = (lmul!(A, copyto!(parent(C), B)); C)
+    @eval function mul!(C::$cty, A::$aty, B::$bty)
+        lmul!(A, copyto!(parent(C), B))
+        return C
+    end
 end
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
