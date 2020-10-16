@@ -153,15 +153,35 @@ mktemp() do f, io
 end
 
 module _test_varinfo_
-export x
-x = 1.0
+import Test: @test
+export exported
+exported = 1.0
+not_exp = 1.0
+z_larger = Vector{Float64}(undef, 3)
+a_smaller = Vector{Float64}(undef, 2)
 end
 @test repr(varinfo(Main, r"^$")) == """
 | name | size | summary |
 |:---- | ----:|:------- |
 """
 let v = repr(varinfo(_test_varinfo_))
-    @test occursin("| x              |   8 bytes | Float64 |", v)
+    @test occursin("| exported       |   8 bytes | Float64 |", v)
+    @test !occursin("not_exp", v)
+    @test !occursin("@test", v)
+end
+let v = repr(varinfo(_test_varinfo_, all = true))
+    @test occursin("exported", v)
+    @test occursin("not_exp", v)
+    @test !occursin("@test", v)
+    @test findfirst("a_smaller", v)[1] < findfirst("z_larger", v)[1] # check for alphabetical
+end
+let v = repr(varinfo(_test_varinfo_, imported = true))
+    @test occursin("exported", v)
+    @test !occursin("not_exp", v)
+    @test occursin("@test", v)
+end
+let v = repr(varinfo(_test_varinfo_, all=true, sort_size = true))
+    @test findfirst("z_larger", v)[1] < findfirst("a_smaller", v)[1] # check for size order
 end
 
 # Issue 14173
