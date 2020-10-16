@@ -404,3 +404,22 @@ end
     @test prod(["*" for i in 1:3]) == "***"
     @test prod(["*" for i in 1:0]) == ""
 end
+
+@testset "Grapheme breaks and iterator" begin
+    u1 = reinterpret(Char, UInt32(0xc0) << 24)
+    u2 = reinterpret(Char, UInt32(0xc1) << 24)
+
+    state = Ref(Int32(1))
+    @test Base.Unicode.isgraphemebreak(u1, u2)
+    @test Base.Unicode.isgraphemebreak!(state, u1, u2)
+    @test state[] == 0
+
+    @test_throws(
+        ErrorException("An unknown error occurred while processing UTF-8 data."),
+        Base.Unicode.utf8proc_error(2)
+    )
+    gi = Base.Unicode.graphemes("This is a string")
+    @test gi isa Base.Unicode.GraphemeIterator{String}
+    @test Base.Unicode.isvalid(Char, 'c')
+    @test !Base.Unicode.isvalid(Char, overlong_chars[1])
+end

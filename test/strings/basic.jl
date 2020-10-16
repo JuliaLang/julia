@@ -1093,3 +1093,29 @@ end
     @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
     @test sprint(summary, "") == "empty String"
 end
+
+struct StringWrapper <: AbstractString
+    str::String
+end
+
+@testset "Plug holes in test coverage" begin
+    @test_throws MethodError checkbounds(Bool, "abc", [1.0, 2.0])
+
+    apple_uint8 = Vector{UInt8}("Apple")
+    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
+
+    Base.String(::tstStringType) = "Test"
+    abstract_apple = tstStringType(apple_uint8)
+    @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
+
+    @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
+
+    Base.iterate(s::StringWrapper, firstind::Integer = 1) = iterate(s.str, firstind)
+    @test isascii(StringWrapper("abc"))
+
+    code_units = Base.CodeUnits("abc")
+    @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
+    @test Base.elsize(code_units) == sizeof(UInt8)
+    @test Base.unsafe_convert(Ptr{Int8}, code_units) == Base.unsafe_convert(Ptr{Int8}, code_units.s)
+end
+
