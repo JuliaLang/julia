@@ -2815,10 +2815,20 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                 int subt2 = matc2->fully_covers != NOT_FULLY_COVERS;
                 if (!subt2 && subt)
                     break;
-                if (subt == subt2)
-                    if (subt || !jl_has_empty_intersection(m->sig, m2->sig))
-                        if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
+                if (subt == subt2) {
+                    if (lim >= 0) {
+                        if (subt || !jl_has_empty_intersection(m->sig, m2->sig))
+                            if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
+                                break;
+                    }
+                    else {
+                        // if unlimited, use approximate sorting, with the only
+                        // main downside being that it may be overly-
+                        // conservative at reporting existence of ambiguities
+                        if (jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig))
                             break;
+                    }
+                }
                 jl_array_ptr_set(env.t, i - j, matc2);
             }
             jl_array_ptr_set(env.t, i - j, env.matc);
