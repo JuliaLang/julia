@@ -6,7 +6,7 @@
     AbstractIrrational <: Real
 
 Number type representing an exact irrational value, which is automatically rounded to the "correct" precision in
-arithmetic operations with other numeric quantities. Even the simplest calculations, like -pi, make convert a
+arithmetic operations with other numeric quantities. Even the simplest calculations, such as -pi or 2π convert a
 number to Float64, making the result no longer irrational.
 
 Subtypes `MyIrrational <: AbstractIrrational` should implement at least `==(::MyIrrational, ::MyIrrational)`,
