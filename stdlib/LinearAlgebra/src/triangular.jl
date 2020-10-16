@@ -737,24 +737,7 @@ for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
                         (:LowerTriangular, :LowerTriangular, :UnitLowerTriangular),
                         (:LowerTriangular, :UnitLowerTriangular, :LowerTriangular),
                         (:UnitLowerTriangular, :UnitLowerTriangular, :UnitLowerTriangular))
-    @eval begin
-        function mul!(C::$cty, A::$aty, B::$bty, alpha::Number, beta::Number)
-            m, n = size(B, 1), size(B, 2)
-            if m != size(A, 1)
-                throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-            end
-            if C === A || C === B
-                throw(ArgumentError("output matrix must not be aliased with input matrix"))
-            end
-
-            @views for i in 1:n
-                C[:, i] = alpha*A*B[:, i] + beta*C[:, i]
-            end
-            return C
-        end
-
-        mul!(C::$cty, A::$aty, B::$bty) = mul!(C, A, B, true, false)
-    end
+    @eval mul!(C::$cty, A::$aty, B::$bty) = (lmul!(A, copyto!(parent(C), B)); C)
 end
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
