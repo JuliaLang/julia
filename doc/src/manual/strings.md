@@ -179,7 +179,7 @@ julia> str[6]
 ',': ASCII/Unicode U+002C (category Po: Punctuation, other)
 
 julia> str[end]
-'\n': ASCII/Unicode U+000A (category Cc: Other, control)
+'.': ASCII/Unicode U+002E (category Po: Punctuation, other)
 ```
 
 Many Julia objects, including strings, can be indexed with integers. The index of the first
@@ -195,21 +195,23 @@ a normal value:
 
 ```jldoctest helloworldstring
 julia> str[end-1]
-'.': ASCII/Unicode U+002E (category Po: Punctuation, other)
+'d': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
 
 julia> str[end÷2]
-' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
+',': ASCII/Unicode U+002C (category Po: Punctuation, other)
 ```
 
 Using an index less than `begin` (`1`) or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
 julia> str[begin-1]
-ERROR: BoundsError: attempt to access 14-codeunit String at index [0]
+ERROR: BoundsError: attempt to access String
+ at index [0]
 [...]
 
 julia> str[end+1]
-ERROR: BoundsError: attempt to access 14-codeunit String at index [15]
+ERROR: BoundsError: attempt to access String
+ at index [14]
 [...]
 ```
 
