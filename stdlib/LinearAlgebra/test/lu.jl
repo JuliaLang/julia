@@ -210,6 +210,15 @@ dimg  = randn(n)/2
             @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
+
+    @testset "Attempt and failure of LDLt factorization (#38026)" begin
+        A = [0.0 -1.0 0.0 0.0
+            -1.0 0.0 0.0 0.0
+            0.0 0.0 0.0 -1.0
+            0.0 0.0 -1.0 0.0]
+        F = factorize(A)
+        @test F isa LU{Float64,<:Tridiagonal}
+    end
 end
 
 @testset "Singular matrices" for T in (Float64, ComplexF64)
