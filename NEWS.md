@@ -25,6 +25,9 @@ New language features
   can now be used to rename imported modules and identifiers ([#1255]).
 * Unsigned literals (starting with `0x`) which are too big to fit in an `UInt128` object
   are now interpreted as `BigInt` ([#23546]).
+* The postfix conjugate transpose operator `'` now accepts Unicode modifiers as
+  suffixes, so e.g. `a'ᵀ` is parsed as `var"'ᵀ"(a)`, which can be defined by the
+  user. `a'ᵀ` parsed as `a' * ᵀ` before, so this is a minor change ([#37247]).
 
 Language changes
 ----------------

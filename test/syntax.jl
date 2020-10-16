@@ -2445,3 +2445,10 @@ end
 import .TestImportAs.Mod2 as M2
 @test !@isdefined(Mod2)
 @test M2 === TestImportAs.Mod2
+
+@testset "unicode modifiers after '" begin
+    @test Meta.parse("a'ᵀ") == Expr(:call, Symbol("'ᵀ"), :a)
+    @test Meta.parse("a'⁻¹") == Expr(:call, Symbol("'⁻¹"), :a)
+    @test Meta.parse("a'ᵀb") == Expr(:call, :*, Expr(:call, Symbol("'ᵀ"), :a), :b)
+    @test Meta.parse("a'⁻¹b") == Expr(:call, :*, Expr(:call, Symbol("'⁻¹"), :a), :b)
+end

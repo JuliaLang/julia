@@ -228,12 +228,12 @@
 
 (define (op-or-sufchar? c) (or (op-suffix-char? c) (opchar? c)))
 
-(define (read-operator port c)
-  (if (and (eqv? c #\*) (eqv? (peek-char port) #\*))
+(define (read-operator port c0 (postfix? #f))
+  (if (and (eqv? c0 #\*) (eqv? (peek-char port) #\*))
       (error "use \"x^y\" instead of \"x**y\" for exponentiation, and \"x...\" instead of \"**x\" for splatting."))
   (if (or (eof-object? (peek-char port)) (not (op-or-sufchar? (peek-char port))))
-      (symbol (string c)) ; 1-char operator
-      (let ((str (let loop ((str (string c))
+      (symbol (string c0)) ; 1-char operator
+      (let ((str (let loop ((str (string c0))
                             (c   (peek-char port))
                             (in-suffix? #f))
                    (if (eof-object? c)
@@ -257,7 +257,10 @@
                                        (and (or (eq? opsym '<-) (eq? opsym '.<-))
                                             (read-char port)
                                             (begin0 (eqv? (peek-char port) #\-)
-                                                    (io.ungetc port #\-))))
+                                                    (io.ungetc port #\-)))
+                                       ;; consume suffixes after ', only if parsing a call chain
+                                       ;; otherwise 'ᵀ' would parse as (|'| |'ᵀ|)
+                                       (and postfix? (eqv? c0 #\') sufchar?))
                                    (begin (read-char port)
                                           (loop newop (peek-char port) sufchar?))
                                    str))
@@ -1244,7 +1247,10 @@
              (if (not (ts:space? s))
                  (begin
                    (take-token s)
-                   (loop (list t ex)))
+                   (let ((t (read-operator (ts:port s) #\' #t)))
+                     (loop (if (eq? t '|'|)
+                               (list t ex)
+                               (list 'call t ex)))))
                  ex))
             ((|.'|) (error "the \".'\" operator is discontinued"))
             ((#\{ )

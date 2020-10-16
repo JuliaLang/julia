@@ -2028,3 +2028,12 @@ end
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
+
+@test sprint(show, :(a'ᵀ)) == ":(a'ᵀ)"
+@test sprint(show, :((+)')) == ":((+)')"
+for s in (Symbol("'"), Symbol("'⁻¹"))
+    @test Base.isoperator(s)
+    @test !Base.isunaryoperator(s)
+    @test !Base.isbinaryoperator(s)
+    @test Base.ispostfixoperator(s)
+end
