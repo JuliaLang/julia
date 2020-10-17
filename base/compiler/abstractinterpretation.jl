@@ -290,7 +290,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
                      istopfunction(f, :<<) || istopfunction(f, :>>))
         return Any
     end
-    force_inference = allconst || InferenceParams(interp).aggressive_constant_propagation
+    force_inference = allconst || method.aggressive_constprop || InferenceParams(interp).aggressive_constant_propagation
     if istopfunction(f, :getproperty) || istopfunction(f, :setproperty!)
         force_inference = true
     end

@@ -243,6 +243,19 @@ macro pure(ex)
 end
 
 """
+    @aggressive_constprop ex
+    @aggressive_constprop(ex)
+
+`@aggressive_constprop` requests more aggressive interprocedural constant
+propagation for the annotated function. For a method where the return type
+depends on the value of the arguments, this can yield improved inference results
+at the cost of additional compile time.
+"""
+macro aggressive_constprop(ex)
+    esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+end
+
+"""
     @propagate_inbounds
 
 Tells the compiler to inline a function while retaining the caller's inbounds context.
