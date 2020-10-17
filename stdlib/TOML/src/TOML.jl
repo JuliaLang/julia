@@ -17,6 +17,9 @@ module Internals
     end
 end
 
+# https://github.com/JuliaLang/julia/issues/36605
+readstring(f::AbstractString) = isfile(f) ? read(f, String) : error(repr(f), ": No such file")
+
 """
     Parser()
 
@@ -38,9 +41,9 @@ Parse file `f` and return the resulting table (dictionary). Throw a
 See also: [`TOML.tryparsefile`](@ref)
 """
 parsefile(f::AbstractString) =
-    Internals.parse(Parser(read(f, String); filepath=abspath(f)))
+    Internals.parse(Parser(readstring(f); filepath=abspath(f)))
 parsefile(p::Parser, f::AbstractString) =
-    Internals.parse(Internals.reinit!(p, read(f, String); filepath=abspath(f)))
+    Internals.parse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
 
 """
     tryparsefile(f::AbstractString)
@@ -52,9 +55,9 @@ Parse file `f` and return the resulting table (dictionary). Return a
 See also: [`TOML.parsefile`](@ref)
 """
 tryparsefile(f::AbstractString) =
-    Internals.tryparse(Parser(read(f, String); filepath=abspath(f)))
+    Internals.tryparse(Parser(readstring(f); filepath=abspath(f)))
 tryparsefile(p::Parser, f::AbstractString) =
-    Internals.tryparse(Internals.reinit!(p, read(f, String); filepath=abspath(f)))
+    Internals.tryparse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
 
 """
     parse(x::Union{AbstractString, IO})
