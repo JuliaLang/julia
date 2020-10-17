@@ -1110,9 +1110,12 @@ or examining `size.((A,B,C,D))` to choose which to multiply first.
 *(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix) = _tri_matmul(A,B,C)
 *(tv::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix) = (tv*B) * C
 
-_mat_mat_vec(A::AdjointAbsVec{<:Number}, B, x) = dot(A.parent, B, x)
-_mat_mat_vec(A::TransposeAbsVec{<:Real}, B, x) = dot(A.parent, B, x)
-_mat_mat_vec(A, B, x) = A * (B*x)
+_mat_mat_vec(A, B, x) = A * (B*x) # fallback
+_mat_mat_vec(tv::AdjOrTransAbsVec, B, x) = (tv*B) * x
+_mat_mat_vec(tv::AdjointAbsVec{<:Number}, B, x) =
+    length(x)<64 ? dot(tv.parent, B, x) : (tv*B) * x
+_mat_mat_vec(tv::TransposeAbsVec{<:Real}, B, x) =
+    length(x)<64 ? dot(tv.parent, B, x) : (tv*B) * x
 
 function _tri_matmul(A,B,C,δ=nothing)
     n,m = size(A)
