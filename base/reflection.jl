@@ -641,7 +641,7 @@ end
 function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
     t = argument_datatype(t)
     if t === nothing
-        throw(ArgumentError("type does not have a definite number of fields"))
+        throw(ArgumentError("type does not have definite fields"))
     end
     return fieldindex(t, name, err)
 end
