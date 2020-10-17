@@ -1382,8 +1382,9 @@ function activate_module(s::MIState)
     word = current_word_with_dots(s);
     isempty(word) && return beep(s)
     try
-        REPL.activate(Base.Core.eval(Base.active_module(),
-                                     Base.Meta.parse(word)))
+        mod = Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
+        REPL.activate(mod)
+        Base.Core.eval(mod, :(using InteractiveUtils))
         refresh_line(s)
     catch
         beep(s)
