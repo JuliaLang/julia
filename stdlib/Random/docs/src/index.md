@@ -145,22 +145,22 @@ Scalar and array methods for `Die` now work as expected:
 
 ```jldoctest Die; setup = :(Random.seed!(1))
 julia> rand(Die)
-Die(10)
+Die(15)
 
 julia> rand(MersenneTwister(0), Die)
-Die(16)
+Die(11)
 
 julia> rand(Die, 3)
 3-element Vector{Die}:
+ Die(18)
  Die(5)
- Die(20)
- Die(9)
+ Die(4)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
 3-element Vector{Die}:
- Die(11)
+ Die(5)
  Die(20)
- Die(10)
+ Die(15)
 ```
 
 #### A simple sampler without pre-computed data
@@ -173,13 +173,13 @@ In order to define random generation out of objects of type `S`, the following m
 julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
 
 julia> rand(Die(4))
-2
+3
 
 julia> rand(Die(4), 3)
 3-element Vector{Any}:
- 1
  4
- 2
+ 1
+ 1
 ```
 
 Given a collection type `S`, it's currently assumed that if `rand(::S)` is defined, an object of type `eltype(S)` will be produced. In the last example, a `Vector{Any}` is produced; the reason is that `eltype(Die) == Any`. The remedy is to define `Base.eltype(::Type{Die}) = Int`.
