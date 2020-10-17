@@ -805,7 +805,6 @@ export
 # misc
     atexit,
     atreplinit,
-    activate_module,
     exit,
     ntuple,
     Splat,
