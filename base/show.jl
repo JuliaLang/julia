@@ -2064,7 +2064,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
         isdefined(uw.name.module, uw.name.mt.name) &&
         ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
+        show_sym(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
     elseif isa(ft, DataType) && ft.name === Type.body.name &&
         (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)

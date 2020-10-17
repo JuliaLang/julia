@@ -426,7 +426,7 @@ let err_str,
     @test startswith(sprint(show, which(Complex{Int}, Tuple{Int})),
                      "Complex{T}(")
     @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Module, Vararg{Any}})),
-                     "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
+                     "var\"@doc\"(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
     @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
