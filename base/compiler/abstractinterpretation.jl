@@ -203,6 +203,8 @@ function const_prop_profitable(@nospecialize(arg))
             isconstType(b) && return true
             const_prop_profitable(b) && return true
         end
+    elseif isa(arg, PartialOpaque)
+        return true
     elseif !isa(arg, Const) || (isa(arg.val, Symbol) || isa(arg.val, Type) || (!isa(arg.val, String) && !ismutable(arg.val)))
         # don't consider mutable values or Strings useful constants
         return true
@@ -1036,7 +1038,13 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, clos::Partial
         nargtypes = argtypes[2:end]
         pushfirst!(nargtypes, clos.env)
         sig = argtypes_to_type(nargtypes)
-        rt, edge = abstract_call_method(interp, clos.ci::Method, sig, Core.svec(), false, sv)
+        rt, edgecycle, edge = abstract_call_method(interp, clos.ci::Method, sig, Core.svec(), false, sv)
+        if !edgecycle
+            const_rettype = abstract_call_method_with_const_args(interp, rt, argtypes[1], nargtypes, MethodMatch(sig, Core.svec(), clos.ci::Method, false), sv, edgecycle)
+            if const_rettype ⊑ rt
+               rt = const_rettype
+            end
+        end
         return CallMeta(rt, edge)
     end
 end

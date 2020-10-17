@@ -690,8 +690,14 @@ function getfield_elim_pass!(ir::IRCode)
 
         isempty(leaves) && continue
 
-        field = try_compute_fieldidx_expr(struct_typ, stmt)
-        field === nothing && continue
+        if is_getfield_opaque
+            field = stmt.args[3]
+            isa(field, QuoteNode) && (field = field.value)
+            isa(field, Int) || continue
+        else
+            field = try_compute_fieldidx_expr(struct_typ, stmt)
+            field === nothing && continue
+        end
 
         r = lift_leaves(compact, stmt, result_t, field, leaves, is_getfield_opaque)
         r === nothing && continue

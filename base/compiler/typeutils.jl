@@ -34,6 +34,7 @@ end
 
 function has_nontrivial_const_info(@nospecialize t)
     isa(t, PartialStruct) && return true
+    isa(t, PartialOpaque) && return true
     return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && hasuniquerep(t.val))
 end
 
