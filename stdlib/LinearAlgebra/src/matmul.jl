@@ -1131,10 +1131,10 @@ function _tri_matmul(A,B,C,δ=nothing)
 end
 
 # Fast path for two arrays * one scalar is opt-in, via mat_vec_scalar and mat_mat_scalar.
-_SafeMatrix{T} = Union{StridedMatrix{T}, AdjOrTransAbsMat{T, <:StridedMatrix}}
+StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
 
 mat_vec_scalar(A, x, γ) = (A*x) .* γ  # fallback
-mat_vec_scalar(A::_SafeMatrix, x::StridedVector, γ) = _mat_vec_scalar(A, x, γ)
+mat_vec_scalar(A::StridedMaybeAdjOrTransMat, x::StridedVector, γ) = _mat_vec_scalar(A, x, γ)
 mat_vec_scalar(A::AdjOrTransAbsVec, x::StridedVector, γ) = (A * x) * γ
 
 function _mat_vec_scalar(A, x, γ)
@@ -1144,7 +1144,8 @@ function _mat_vec_scalar(A, x, γ)
 end
 
 mat_mat_scalar(A, B, γ) = (A*B) .* γ # fallback
-mat_mat_scalar(A::_SafeMatrix, B::_SafeMatrix, γ) = _mat_mat_scalar(A, B, γ)
+mat_mat_scalar(A::StridedMaybeAdjOrTransMat, B::StridedMaybeAdjOrTransMat, γ) =
+    _mat_mat_scalar(A, B, γ)
 
 function _mat_mat_scalar(A, B, γ)
     T = promote_type(eltype(A), eltype(B), typeof(γ))
@@ -1153,10 +1154,11 @@ function _mat_mat_scalar(A, B, γ)
 end
 
 mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
-mat_mat_scalar(A::AdjointAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) = mat_vec_scalar(B', A', γ')'
+mat_mat_scalar(A::AdjointAbsVec, B::StridedMaybeAdjOrTransMat, γ::Union{Real,Complex}) =
+    mat_vec_scalar(B', A', γ')'
 
 mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
-mat_mat_scalar(A::TransposeAbsVec, B::_SafeMatrix, γ::Union{Real,Complex}) =
+mat_mat_scalar(A::TransposeAbsVec, B::StridedMaybeAdjOrTransMat, γ::Union{Real,Complex}) =
     transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
 
 
