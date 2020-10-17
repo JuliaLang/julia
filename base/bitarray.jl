@@ -1389,7 +1389,7 @@ circshift!(B::BitVector, i::Integer) = circshift!(B, B, i)
 function bitcount(Bc::Vector{UInt64}; init::T=0) where {T}
     n::T = init
     @inbounds for i = 1:length(Bc)
-        n += count_ones(Bc[i]) % T
+        n = (n + count_ones(Bc[i])) % T
     end
     return n
 end

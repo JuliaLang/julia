@@ -941,7 +941,7 @@ _bool(f) = x->f(x)::Bool
     count([f=identity,] itr; init=0) -> Integer
 
 Count the number of elements in `itr` for which the function `f` returns `true`.
-If `f` is omitted, counts the number of `true` elements in `itr` (which
+If `f` is omitted, count the number of `true` elements in `itr` (which
 should be a collection of boolean values). `init` optionally specifies the value
 to start counting from and therefore also determines the output type.
 
@@ -956,8 +956,8 @@ julia> count(i->(4<=i<=6), [2,3,4,5,6])
 julia> count([true, false, true, true])
 3
 
-julia> count(>(3), 1:7, init=0x00)
-0x04
+julia> count(>(3), 1:7, init=0x03)
+0x07
 ```
 """
 count(itr; init=0) = count(identity, itr; init)
@@ -983,7 +983,7 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
         end
     end
     for i in sizeof(UInt)*chunks+1:length(x)
-        n += x[i] % T
+        n = (n + x[i]) % T
     end
     return n
 end
