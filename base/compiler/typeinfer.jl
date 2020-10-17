@@ -395,8 +395,8 @@ function finish_opaque_closure!(clos::PartialOpaque, mod::Module, interp::Abstra
     argt = unwrap_unionall(clos.t).parameters[1]
 
     argtypes = Any[argt.parameters...]
-    pushfirst!(argtypes, clos.env)
     if isdispatchtuple(argt)
+        pushfirst!(argtypes, clos.env)
         # If we don't need to track specializations, just infer this here right now.
         result = InferenceResult(Core.OpaqueClosure, argtypes)
         state = InferenceState(result, copy(clos.ci), false, interp)
@@ -407,10 +407,10 @@ function finish_opaque_closure!(clos::PartialOpaque, mod::Module, interp::Abstra
     else
         # Otherwise infer via the method instance cache.
         m = ccall(:jl_mk_opaque_closure_method, Any, (Any,), mod)::Method
-        m.nargs = Int32(length(argtypes))
+        m.nargs = Int32(length(argtypes) + 1)
         m.source = clos.ci
         argtypes = Any[argt.parameters...]
-        pushfirst!(argtypes, Core.OpaqueClosure)
+        pushfirst!(argtypes, clos.env)
         m.unspecialized = specialize_method(m, argtypes_to_type(argtypes), Core.svec())
 
         mi = m.unspecialized
@@ -470,8 +470,12 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     else
         # annotate fulltree with type information
         type_annotate!(me)
-        mod = isa(me.linfo.def, Module) ? me.linfo.def : me.linfo.def.module
-        finish_rettype!(me.bestguess, mod, interp)
+        if isa(me.bestguess, PartialOpaque)
+            if me.linfo !== nothing
+                mod = isa(me.linfo.def, Module) ? me.linfo.def : me.linfo.def.module
+                finish_opaque_closure!(me.bestguess, mod, interp)
+            end
+        end
         me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
     end
     if me.result !== nothing

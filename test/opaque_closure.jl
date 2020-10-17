@@ -74,9 +74,9 @@ function complicated_identity(x)
 end
 @test @inferred(complicated_identity(1)) == 1
 @test @inferred(complicated_identity("a")) == "a"
-let ci = @code_typed complicated_identity(1)
+let ci = (@code_typed complicated_identity(1))[1]
     @test length(ci.code) == 1
-    @test isa(ci.code[1], ReturnNode)
+    @test isa(ci.code[1], Core.ReturnNode)
 end
 
 struct OcOpt

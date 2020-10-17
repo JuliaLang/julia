@@ -1101,8 +1101,10 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
             atypes = copy(sig.atypes)
             atypes[1] = ft.env
             match = MethodMatch(argtypes_to_type(atypes), Core.svec(), ft.ci, true)
-            result = analyze_method!(match, atypes, state.et, state.caches, state.params, calltype)::InliningTodo
-            result = InliningTodo(result.mi, result.spec, true)
+            result = analyze_method!(match, atypes, state.et, state.caches, state.params, calltype)
+            if isa(result, InliningTodo)
+                result = InliningTodo(result.mi, result.spec, true)
+            end
             handle_single_case!(ir, stmt, idx, result, false, todo)
             return nothing
         end
