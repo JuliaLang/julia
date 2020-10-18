@@ -49,7 +49,8 @@ copy(d::Dict) = Dict(d)
 # Dict{K,V}(kv::Tuple{Vararg{Tuple{K,V}}})     = Dict{K,V}(kv)
 # Dict{K  }(kv::Tuple{Vararg{Tuple{K,Any}}})   = Dict{K,Any}(kv)
 # Dict{V  }(kv::Tuple{Vararg{Tuple{Any,V}}})   = Dict{Any,V}(kv)
-Dict(kv::Tuple{Vararg{Pair{K,V}}}) where {K,V}  = Dict{K,V}(kv)
+
+# problematic line: Dict(kv::Tuple{Vararg{Pair{K,V}}}) where {K,V}  = Dict{K,V}(kv)
 
 Dict(kv::AbstractArray{Tuple{K,V}}) where {K,V} = Dict{K,V}(kv)
 Dict(kv::AbstractArray{Pair{K,V}}) where {K,V}  = Dict{K,V}(kv)
