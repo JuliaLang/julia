@@ -2473,6 +2473,7 @@ const prefix_history_keymap = merge!(
         end,
         # match escape sequences for pass through
         "^x*" => "*",
+        "\em*" => "*",
         "\e*" => "*",
         "\e[*" => "*",
         "\eO*"  => "*",
