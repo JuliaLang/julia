@@ -1089,14 +1089,14 @@ end
 Most 3- and 4-argument `*` calls containing matrices or vectors are done in an
 efficient way, rather than the left-to-right default of `*(x,y,z,...)`.
 
-This can mean performing `B*C` first if `C::AbstractVector`, calling `dot`, using
-five-argument `mul!` to fuse the scalar `A::Number` with the matrix multiplication `B*C`,
+This can mean performing `B*C` first if `C::AbstractVector`, using five-argument
+`mul!` to fuse the scalar `A::Number` with the matrix multiplication `B*C`,
 or examining `size.((A,B,C,D))` to choose which to multiply first.
 
 !!! compat "Julia 1.6"
     These optimisations require least Julia 1.6.
 """
-*(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = _mat_mat_vec(A,B,x)
+*(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = A * (B*x)
 
 *(A::AbstractMatrix, x::AbstractVector, γ::Number) = mat_vec_scalar(A,x,γ)
 *(A::AbstractMatrix, B::AbstractMatrix, γ::Number) = mat_mat_scalar(A,B,γ)
@@ -1109,13 +1109,6 @@ or examining `size.((A,B,C,D))` to choose which to multiply first.
 
 *(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix) = _tri_matmul(A,B,C)
 *(tv::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix) = (tv*B) * C
-
-_mat_mat_vec(A, B, x) = A * (B*x) # fallback
-_mat_mat_vec(tv::AdjOrTransAbsVec, B, x) = (tv*B) * x
-_mat_mat_vec(tv::AdjointAbsVec{<:Number}, B, x) =
-    length(x)<64 ? dot(tv.parent, B, x) : (tv*B) * x
-_mat_mat_vec(tv::TransposeAbsVec{<:Real}, B, x) =
-    length(x)<64 ? dot(tv.parent, B, x) : (tv*B) * x
 
 function _tri_matmul(A,B,C,δ=nothing)
     n,m = size(A)
