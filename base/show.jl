@@ -2064,7 +2064,8 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
         isdefined(uw.name.module, uw.name.mt.name) &&
         ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        show_sym(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
+        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
+        print_within_stacktrace(io, s, bold=true)
     elseif isa(ft, DataType) && ft.name === Type.body.name &&
         (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
@@ -2076,19 +2077,20 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         if html
             print(io, "($fargname::<b>", ft, "</b>)")
         else
-            print(io, "($fargname::", ft, ")")
+            print_within_stacktrace(io, "($fargname::", ft, ")", bold=true)
         end
     end
     nothing
 end
 
-function print_within_stacktrace(io, s...; color, bold=false)
+function print_within_stacktrace(io, s...; color=:normal, bold=false)
     if get(io, :backtrace, false)::Bool
         printstyled(io, s...; color, bold)
     else
         print(io, s...)
     end
 end
+
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing, argnames=nothing)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
@@ -2127,7 +2129,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
             print_type_stacktrace(io, t)
         end
     end
-    print(io, ")")
+    print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     nothing
 end
@@ -2135,7 +2137,7 @@ end
 function print_type_stacktrace(io, type; color=:normal)
     str = sprint(show, type, context=io)
     i = findfirst('{', str)
-    if isnothing(i)
+    if isnothing(i) || !get(io, :backtrace, false)::Bool
         printstyled(io, str; color=color)
     else
         printstyled(io, str[1:i-1]; color=color)
