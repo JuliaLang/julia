@@ -1302,7 +1302,6 @@ _edit_indent(buf::IOBuffer, b::Int, num::Int) =
     num >= 0 ? edit_splice!(buf, b => b, ' '^num, rigid_mark=false) :
                edit_splice!(buf, b => (b - num))
 
-<<<<<<< HEAD
 function mode_idx(hist::HistoryProvider, mode::TextInterface)
     c = :julia
     for (k,v) in hist.mode_mapping
