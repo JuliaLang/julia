@@ -562,8 +562,8 @@ function replaceuserpath(str)
     return str
 end
 
-const STACKTRACE_MODULECOLORS = [:magenta, :blue, :cyan, :green, :yellow]
-const STACKTRACE_FIXEDCOLORS = IdDict(Base => :red, Core => :red)
+const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
+const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
 stacktrace_expand_basepaths()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
