@@ -42,9 +42,7 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
              end
              for v in sort!(names(m, all = all, imported = imported)) if isdefined(m, v) && occursin(pattern, string(v)) ]
     if sort_size
-        sizes = map(r->r[4], rows)
-        p = sortperm(sizes, rev=true)
-        rows = rows[p]
+        rows = sort!(rows, by=r->r[4], rev=true)
     end
     pushfirst!(rows, Any["name", "size", "summary"])
 
