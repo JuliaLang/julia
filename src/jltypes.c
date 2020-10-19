@@ -1558,6 +1558,9 @@ static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *s
         jl_value_t *pi = jl_svecref(p, i);
         JL_TRY {
             pi = inst_type_w_(pi, env, stack, 1);
+            if (!jl_is_type(pi) && !jl_is_typevar(pi)) {
+                pi = jl_bottom_type;
+            }
         }
         JL_CATCH {
             pi = jl_bottom_type;

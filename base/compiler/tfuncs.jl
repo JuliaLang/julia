@@ -822,6 +822,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     if isType(s) || !isa(s, DataType) || s.abstract
         return Any
     end
+    s = s::DataType
     if s <: Tuple && name ⊑ Symbol
         return Bottom
     end
@@ -831,6 +832,9 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         return Any
     end
+    # If no value has this type, then this statement should be unreachable.
+    # Bail quickly now.
+    s.has_concrete_subtype || return Union{}
     if s.name === _NAMEDTUPLE_NAME && !isconcretetype(s)
         if isa(name, Const) && isa(name.val, Symbol)
             if isa(s.parameters[1], Tuple)
