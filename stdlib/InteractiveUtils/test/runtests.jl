@@ -180,8 +180,11 @@ let v = repr(varinfo(_test_varinfo_, imported = true))
     @test !occursin("not_exp", v)
     @test occursin("@test", v)
 end
-let v = repr(varinfo(_test_varinfo_, all=true, sort_size = true))
+let v = repr(varinfo(_test_varinfo_, all = true, sortby = :size))
     @test findfirst("z_larger", v)[1] < findfirst("a_smaller", v)[1] # check for size order
+end
+let v = repr(varinfo(_test_varinfo_, sortby = :summary))
+    @test findfirst("Float64", v)[1] < findfirst("Module", v)[1] # check for summary order
 end
 
 # Issue 14173

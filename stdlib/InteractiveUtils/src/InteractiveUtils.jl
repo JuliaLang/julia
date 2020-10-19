@@ -21,7 +21,7 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sort_size::Bool = false)
+    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
@@ -30,9 +30,10 @@ The memory consumption estimate is an approximate lower bound on the size of the
 
 - `all` : also list non-exported objects defined in the module, deprecated objects, and compiler-generated objects.
 - `imported` : also list objects explicitly imported from other modules.
-- `sort_size` : sort results by their size, in descending order
+- `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
 """
-function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sort_size::Bool = false)
+function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name)
+    @assert sortby in [:name, :size, :summary] "Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"
     rows =
         Any[ let value = getfield(m, v)
                  Any[string(v),
@@ -41,8 +42,10 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
                      summarysize(value)]
              end
              for v in sort!(names(m, all = all, imported = imported)) if isdefined(m, v) && occursin(pattern, string(v)) ]
-    if sort_size
-        rows = sort!(rows, by=r->r[4], rev=true)
+    if sortby != :name
+        col = sortby == :size ? 4 : 3 # if it's not :size, it must be :summary here
+        reverse = sortby == :size ? true : false
+        rows = sort!(rows, by=r->r[col], rev=reverse)
     end
     pushfirst!(rows, Any["name", "size", "summary"])
 
