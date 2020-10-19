@@ -353,7 +353,7 @@ struct SamplerBigInt <: Sampler{BigInt}
     mask::Limb        # applied to the highest limb
 end
 
-function Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetition)
+function SamplerBigInt(r::AbstractUnitRange{BigInt})
     m = last(r) - first(r)
     m < 0 && throw(ArgumentError("range must be non-empty"))
     nd = ndigits(m, base=2)
@@ -363,6 +363,8 @@ function Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetiti
     nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
     return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, mask)
 end
+
+Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetition) = SamplerBigInt(r)
 
 rand(rng::AbstractRNG, sp::SamplerBigInt) =
     rand!(rng, BigInt(nbits = sp.nlimbsmax*8*sizeof(Limb)), sp)
