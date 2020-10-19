@@ -39,6 +39,8 @@ Language changes
   a function like other operators. The dotted version `.-->` is now parsed as well.
   For backwards compatibility, `-->` still parses using its own expression head
   instead of `:call`.
+* Instances of `UniformScaling` are no longer `isequal` to matrices. Previous
+  behaviour violated the rule that `isequal(x, y)` implies `hash(x) == hash(y)`.
 
 Compiler/Runtime improvements
 -----------------------------
