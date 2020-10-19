@@ -2704,7 +2704,7 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
                                 resize!(nzvalA, nnzA)
                             end
                             r = rowidx:(rowidx+(new_stop-new_ptr))
-                            rowvalA[r] .= _getrowinds(I, new_ptr:new_stop)
+                            rowvalA[r] .= I <: Number ? I : I[new_ptr:new_stop]
                             for rr in r
                                 nzvalA[rr] = x
                             end
@@ -2738,9 +2738,6 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
     end
     return A
 end
-# ignore indexing into a Number by range
-_getrowinds(I::Number, range) = I
-_getrowinds(I::AbstractVector{<:Integer}, range) = @inbounds I[range]
 
 # Nonscalar A[I,J] = B: Convert B to a SparseMatrixCSC of the appropriate shape first
 _to_same_csc(::AbstractSparseMatrixCSC{Tv, Ti}, V::AbstractMatrix, I...) where {Tv,Ti} = convert(SparseMatrixCSC{Tv,Ti}, V)
