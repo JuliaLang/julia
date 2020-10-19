@@ -69,6 +69,9 @@
 // for configuration options
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/CommandLine.h>
+#if JL_LLVM_VERSION >= 120000
+#include <llvm/Support/Process.h>
+#endif
 
 #include <llvm/IR/InlineAsm.h>
 #if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
@@ -7643,7 +7646,24 @@ extern "C" void jl_init_llvm(void)
     const char *const argv_avoidsfb[] = {"", "-x86-disable-avoid-SFB"}; // llvm bug 41629, see https://gist.github.com/vtjnash/192cab72a6cfc00256ff118238163b55
     cl::ParseCommandLineOptions(sizeof(argv_avoidsfb)/sizeof(argv_avoidsfb[0]), argv_avoidsfb, "disable-avoidsfb\n");
 #endif
+#if JL_LLVM_VERSION >= 120000
+    // https://reviews.llvm.org/rGc068e9c8c123e7f8c8f3feb57245a012ccd09ccf
+    Optional<std::string> envValue = sys::Process::GetEnv("JULIA_LLVM_ARGS");
+    if (envValue) {
+        SmallVector<const char *, 20> newArgv;
+        BumpPtrAllocator A;
+        StringSaver Saver(A);
+        newArgv.push_back(Saver.save("Julia").data());
+
+        // Parse the value of the environment variable into a "command line"
+        // and hand it off to ParseCommandLineOptions().
+        cl::TokenizeGNUCommandLine(*envValue, Saver, newArgv);
+        int newArgc = static_cast<int>(newArgv.size());
+        cl::ParseCommandLineOptions(newArgc, &newArgv[0]);
+    }
+#else
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
+#endif
 
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
