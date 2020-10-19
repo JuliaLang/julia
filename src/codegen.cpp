@@ -7702,7 +7702,11 @@ extern "C" void jl_init_llvm(void)
             // This is the only way I can find to print the help message once.
             // It'll be nice if we can iterate through the features and print our own help
             // message...
+#if JL_LLVM_VERSION >= 120000
+            MSTI->setDefaultFeatures("help", "", "");
+#else
             MSTI->setDefaultFeatures("help", "");
+#endif
         }
     }
     // Package up features to be passed to target/subtarget
