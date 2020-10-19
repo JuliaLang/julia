@@ -862,3 +862,24 @@ end
     @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
     @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
 end
+
+@testset "rand! for BigInt/BigFloat" begin
+    rng = MersenneTwister()
+    s = Random.Sampler(MersenneTwister, 1:big(9))
+    x = rand(s)
+    @test x isa BigInt
+    y = rand!(rng, x, s)
+    @test y === x
+    @test x in 1:9
+
+    s = Random.Sampler(MersenneTwister, Random.CloseOpen01(BigFloat))
+    x = rand(s)
+    @test x isa BigFloat
+    y = rand!(rng, x, s)
+    @test y === x
+    @test 0 <= x < 1
+    s = Random.Sampler(MersenneTwister, Random.CloseOpen12(BigFloat))
+    y = rand!(rng, x, s)
+    @test y === x
+    @test 1 <= x < 2
+end
