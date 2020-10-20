@@ -463,8 +463,8 @@ try
             Base.require(Main, :FooBar2)
             error("the \"break me\" test failed")
         catch exc
-            isa(exc, ErrorException) || rethrow()
-            occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
+            isa(exc, Base.PrecompileFailedException) || rethrow()
+            isa(exc, ErrorException) && occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
         end
 
     # Test that trying to eval into closed modules during precompilation is an error
@@ -476,7 +476,7 @@ try
         @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
                 Base.require(Main, :FooBar3)
             catch exc
-                isa(exc, ErrorException) || rethrow()
+                isa(exc, Base.PrecompileFailedException) || rethrow()
             end
     end
 
