@@ -1293,6 +1293,19 @@ function compilecache_path(pkg::PkgId)::String
 end
 
 """
+    PrecompileFailedException(pkg::PkgId, cachefile::String)
+
+Failure to precompile a module
+"""
+struct PrecompileFailedException <: Exception
+    pkg::PkgId
+    cachefile::String
+end
+function showerror(io::IO, ex::PrecompileFailedException)
+    print(io, "PrecompileFailedException: Failed to precompile $(ex.pkg) to $(ex.cachefile).")
+end
+
+"""
     Base.compilecache(module::PkgId)
 
 Creates a precompiled cache file for a module and all of its dependencies.
@@ -1357,7 +1370,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     if p.exitcode == 125
         return PrecompilableError()
     else
-        error("Failed to precompile $pkg to $cachefile.")
+        throw(PrecompileFailedException(pkg, cachefile))
     end
 end
 
