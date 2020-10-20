@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <installer-gui-script minSpecVersion="2">
     <title>FRAMEWORK_NAME</title>
-    <background file="logo_hires.png" mime-type="image/png" alignment="bottomleft" scaling="proportional"/>
+    <background file="logo.svg" mime-type="image/svg" alignment="bottomleft" scaling="proportional"/>
     <readme file="readme.rtf" mime-type="text/rtf"/>
     <conclusion file="conclusion.rtf" mime-type="text/rtf"/>
     <volume-check>
