@@ -2704,7 +2704,7 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
                                 resize!(nzvalA, nnzA)
                             end
                             r = rowidx:(rowidx+(new_stop-new_ptr))
-                            rowvalA[r] .= I <: Number ? I : I[new_ptr:new_stop]
+                            rowvalA[r] .= I isa Number ? I : I[new_ptr:new_stop]
                             for rr in r
                                 nzvalA[rr] = x
                             end
