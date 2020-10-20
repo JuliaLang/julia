@@ -1284,13 +1284,11 @@ function factorize(A::StridedMatrix{T}) where T
                 return Bidiagonal(diag(A), diag(A, 1), :U)
             end
             if utri1
-                if (herm & (T <: Complex)) | sym
-                    try
-                        return ldlt!(SymTridiagonal(diag(A), diag(A, -1)))
-                    catch
-                    end
-                end
-                return lu(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
+                # TODO: enable once a specialized, non-dense bunchkaufman method exists
+                # if (herm & (T <: Complex)) | sym
+                    # return bunchkaufman(SymTridiagonal(diag(A), diag(A, -1)))
+                # end
+                return lu!(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
             end
         end
         if utri
