@@ -635,7 +635,7 @@ void jl_init_int32_int64_cache(void);
 
 void jl_teardown_codegen(void);
 
-void _julia_init(JL_IMAGE_SEARCH rel);
+void _julia_init(JL_IMAGE_SEARCH rel, int just_repl);
 
 void jl_set_base_ctx(char *__stk);
 

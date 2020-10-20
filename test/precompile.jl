@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Distributed, Random
+using REPL # doc lookup function
 
 Foo_module = :Foo4b3a94a1a081a8cb
 Foo2_module = :F2oo4b3a94a1a081a8cb
@@ -282,20 +283,19 @@ try
         modules, deps1 = Base.cache_dependencies(cachefile)
         @test Dict(modules) == merge(
             Dict(let m = Base.PkgId(s)
-                    m => Base.module_build_id(Base.root_module(m))
+                     m => Base.module_build_id(Base.root_module(m))
                  end for s in
                  [ "Base", "Core", "Main",
                    string(Foo2_module), string(FooBase_module) ]),
-            # plus modules included in the system image
+            # plus modules included in the minimal system image
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
-                 :Future, :LazyArtifacts, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
-                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,
-                 :ArgTools, :Tar, :NetworkOptions,]),
+                [ :Artifacts, :Base64, :CRC32c, :Dates, :FileWatching, :Future,
+                  :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf, :Random,
+                  :Serialization, :SparseArrays, :Unicode, :SHA, :UUIDs,
+                  # plus direct dependencies
+                  :Test, :InteractiveUtils, :Markdown]),
            )
         @test discard_module.(deps) == deps1
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)

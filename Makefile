@@ -149,9 +149,12 @@ $(build_datarootdir)/julia/julia-config.jl: $(JULIAHOME)/contrib/julia-config.jl
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
-julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
-	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) $(call spawn, $(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/etc/write_base_cache.jl) \
-		$(call cygpath_w,$(build_datarootdir)/julia/base.cache))
+julia-base-cache: $(build_datarootdir)/julia/base.cache
+
+# this depends on the phony target julia-sysimg- to force rebuilding
+$(build_datarootdir)/julia/base.cache: $(JULIAHOME)/etc/write_base_cache.jl julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
+	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) \
+		$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no $(call cygpath_w,$<) $(call cygpath_w,$@)
 
 # public libraries, that are installed in $(prefix)/lib
 JL_TARGETS := julia julialoader
@@ -359,8 +362,10 @@ endif
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+	$(INSTALL_M) $(build_private_libdir)/fullsys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+	$(INSTALL_M) $(build_private_libdir)/fullsys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
 
 	# Copy in all .jl sources as well
@@ -616,7 +621,9 @@ LLVM_SIZE := $(build_depsbindir)/llvm-size$(EXE)
 endif
 build-stats:
 	@printf $(JULCOLOR)' ==> ./julia binary sizes\n'$(ENDCOLOR)
-	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
+	$(call spawn,$(LLVM_SIZE) -A \
+		$(call cygpath_w,$(build_private_libdir)/fullsys.$(SHLIB_EXT)) \
+		$(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_bindir)/julia$(EXE)))
 	@printf $(JULCOLOR)' ==> ./julia launch speedtest\n'$(ENDCOLOR)

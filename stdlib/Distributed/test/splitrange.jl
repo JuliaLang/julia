@@ -27,6 +27,7 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main @everywhere include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+@everywhere using Test
 oa = OffsetArray([123, -345], (-2,))
 @sync @distributed for i in eachindex(oa)
     @test i ∈ (-1, 0)

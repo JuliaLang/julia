@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, LinearAlgebra, SparseArrays
+using SuiteSparse, LinearAlgebra, SparseArrays
+using Test
 
 @testset "threaded SuiteSparse tests" begin
     A = sprandn(200, 200, 0.2)

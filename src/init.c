@@ -540,7 +540,7 @@ static const char *absformat(const char *in)
     return out;
 }
 
-static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
+static const char *jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, int just_repl)
 {   // this function resolves the paths in jl_options to absolute file locations as needed
     // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
     // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
@@ -569,7 +569,24 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.julia_bindir = abspath(jl_options.julia_bindir, 0);
     free(free_path);
     free_path = NULL;
+    const char *image_file = NULL;
     if (jl_options.image_file) {
+        if (jl_options.image_file == jl_get_default_sysimg_path() && just_repl) {
+            // if we're just launching a REPL for the default environment
+            // interpose a slightly more complete environment at startup
+            free_path = (char*)malloc_s(PATH_MAX);
+            int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%sfull",
+                             jl_options.julia_bindir, jl_options.image_file);
+            if (n >= PATH_MAX || n < 0) {
+                jl_error("fatal error: jl_options.image_file path too long");
+            }
+            // swap filename and "full" prefix in string to form the target name
+            char *dirp = strrchr(free_path, PATHSEPSTRING[0]) + strlen(PATHSEPSTRING);
+            memmove(dirp + 4, dirp, n - (dirp - free_path) - 4);
+            memcpy(dirp, "full", 4);
+            image_file = free_path;
+            free_path = NULL;
+        }
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
             free_path = (char*)malloc_s(PATH_MAX);
@@ -579,13 +596,13 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
                 jl_error("fatal error: jl_options.image_file path too long");
             }
             jl_options.image_file = free_path;
-        }
-        if (jl_options.image_file)
-            jl_options.image_file = abspath(jl_options.image_file, 0);
-        if (free_path) {
-            free(free_path);
             free_path = NULL;
         }
+        else {
+            jl_options.image_file = abspath(jl_options.image_file, 0);
+        }
+        if (image_file == NULL)
+            image_file = jl_options.image_file;
     }
     if (jl_options.outputo)
         jl_options.outputo = abspath(jl_options.outputo, 0);
@@ -609,6 +626,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             }
         }
     }
+
+    return image_file;
 }
 
 static void jl_set_io_wait(int v)
@@ -626,7 +645,7 @@ static void restore_fp_env(void)
     }
 }
 
-void _julia_init(JL_IMAGE_SEARCH rel)
+void _julia_init(JL_IMAGE_SEARCH rel, int just_repl)
 {
     jl_init_timing();
     // Make sure we finalize the tls callback before starting any threads.
@@ -728,15 +747,15 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_enable(0);
 
-    jl_resolve_sysimg_location(rel);
+    const char *image_file = jl_resolve_sysimg_location(rel, just_repl);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
-    if (jl_options.image_file)
-        jl_preload_sysimg_so(jl_options.image_file);
+    if (image_file)
+        jl_preload_sysimg_so(image_file);
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    if (jl_options.image_file) {
-        jl_restore_system_image(jl_options.image_file);
+    if (image_file) {
+        jl_restore_system_image(image_file);
     }
     else {
         jl_init_types();
@@ -752,7 +771,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_init_flisp();
     jl_init_serializer();
 
-    if (!jl_options.image_file) {
+    if (!image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
         jl_core_module->parent = jl_core_module;
         jl_type_typename->mt->module = jl_core_module;
@@ -786,7 +805,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_enable(1);
 
-    if (jl_options.image_file && (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
+    if (image_file && (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
         jl_array_t *init_order = jl_module_init_order;
         JL_GC_PUSH1(&init_order);
         jl_module_init_order = NULL;

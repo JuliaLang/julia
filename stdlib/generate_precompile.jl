@@ -4,9 +4,7 @@ if isempty(ARGS) || ARGS[1] !== "0"
 Sys.__init_build()
 # Prevent this from being put into the Main namespace
 @eval Module() begin
-if !isdefined(Base, :uv_eventloop)
-    Base.reinit_stdio()
-end
+Base.reinit_stdio()
 Base.include(@__MODULE__, joinpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 
@@ -148,6 +146,7 @@ function generate_precompile_statements()
     start_time = time_ns()
     debug_output = devnull # or stdout
     sysimg = Base.unsafe_string(Base.JLOptions().image_file)
+    blackhole = Sys.isunix() ? "/dev/null" : "nul"
 
     # Extract the precompile statements from the precompile file
     statements = Set{String}()
@@ -168,15 +167,23 @@ function generate_precompile_statements()
               module $pkgname
               end
               """)
-        tmp = tempname()
+        precompile_file = tempname()
         s = """
-            pushfirst!(DEPOT_PATH, $(repr(prec_path)));
-            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
+            pushfirst!(DEPOT_PATH, $(repr(prec_path)))
+            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(precompile_file))
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             $precompile_script
             """
-        run(`$(julia_exepath()) -O0 --sysimage $sysimg --startup-file=no -Cnative -e $s`)
-        for statement in split(read(tmp, String), '\n')
+        p = withenv("JULIA_HISTORY" => blackhole,
+                    "JULIA_PROJECT" => nothing, # remove from environment
+                    "JULIA_LOAD_PATH" => "@stdlib",
+                    "JULIA_DEPOT_PATH" => ":",
+                    "TERM" => "") do
+            run(pipeline(`$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
+                         --cpu-target=native --startup-file=no --color=yes`,
+                         stdin=IOBuffer(s), stdout=debug_output))
+        end
+        for statement in split(read(precompile_file, String), '\n')
             push!(statements, statement)
         end
     end
@@ -184,22 +191,19 @@ function generate_precompile_statements()
     mktemp() do precompile_file, precompile_file_h
         # Collect statements from running a REPL process and replaying our REPL script
         pts, ptm = open_fake_pty()
-        blackhole = Sys.isunix() ? "/dev/null" : "nul"
         if have_repl
-            cmdargs = ```--color=yes
-                      -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
-                      ```
+            cmdargs = ```-e 'import REPL; REPL.Terminals.is_precompiling[] = true'```
         else
             cmdargs = `-e nothing`
         end
         p = withenv("JULIA_HISTORY" => blackhole,
                     "JULIA_PROJECT" => nothing, # remove from environment
-                    "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib",
+                    "JULIA_LOAD_PATH" => "@stdlib",
                     "JULIA_PKG_PRECOMPILE_AUTO" => "0",
+                    "JULIA_DEPOT_PATH" => ":",
                     "TERM" => "") do
             run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
                    --cpu-target=native --startup-file=no --color=yes
-                   -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
                    -i $cmdargs```,
                    pts, pts, pts; wait=false)
         end
@@ -285,11 +289,9 @@ function generate_precompile_statements()
         end
     end
     println()
-    if have_repl
-        # Seems like a reasonable number right now, adjust as needed
-        # comment out if debugging script
-        @assert n_succeeded > 1200
-    end
+    # Seems like a reasonable number right now, adjust as needed
+    # comment out if debugging script
+    @assert n_succeeded > (have_repl ? 600 : 60)
 
     tot_time = time_ns() - start_time
     include_time *= 1e9
@@ -306,13 +308,19 @@ generate_precompile_statements()
 
 # As a last step in system image generation,
 # remove some references to build time environment for a more reproducible build.
-@eval Base PROGRAM_FILE = ""
+@eval Base begin
+    PROGRAM_FILE = ""
+    stdout = Core.stdout
+    stderr = Core.stderr
+end
 @eval Sys begin
     BINDIR = ""
     STDLIB = ""
 end
 empty!(Base.ARGS)
 empty!(Core.ARGS)
+empty!(Base.TOML_CACHE.d)
+Base.TOML.reinit!(Base.TOML_CACHE.p, "")
 
 end # @eval
 end

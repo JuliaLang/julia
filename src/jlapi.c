@@ -71,7 +71,7 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
         jl_options.image_file = image_relative_path;
     else
         jl_options.image_file = jl_get_default_sysimg_path();
-    julia_init(JL_IMAGE_JULIA_HOME);
+    julia_init(JL_IMAGE_JULIA_HOME, 0);
     jl_exception_clear();
 }
 
@@ -679,7 +679,8 @@ JL_DLLEXPORT int repl_entrypoint(int argc, char *argv[])
         argc--;
     }
     jl_parse_opts(&argc, (char***)&argv);
-    julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
+    int just_repl = jl_options.cmds == NULL && argc == 0;
+    julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME, just_repl);
     if (lisp_prompt) {
         jl_get_ptls_states()->world_age = jl_get_world_counter();
         jl_lisp_prompt();
