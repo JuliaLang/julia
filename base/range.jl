@@ -56,7 +56,7 @@ Valid invocations of range are:
 * Call `range` with all four arguments. If the arguments are inconsistent, an error will be thrown.
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-to be one and a [`UnitRange`](@ref) will be returned.
+to be one. If all arguments are integers, a [`UnitRange`](@ref) will be returned.
 
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
