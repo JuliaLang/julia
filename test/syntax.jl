@@ -2490,3 +2490,6 @@ end
             in 1:3
         end""")
 end
+
+# PR #37973
+@test Meta.parse("1¦2⌿3") == Expr(:call, :¦, 1, Expr(:call, :⌿, 2, 3))

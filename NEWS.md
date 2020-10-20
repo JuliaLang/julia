@@ -41,6 +41,8 @@ Language changes
   instead of `:call`.
 * Instances of `UniformScaling` are no longer `isequal` to matrices. Previous
   behaviour violated the rule that `isequal(x, y)` implies `hash(x) == hash(y)`.
+* `⌿` (U+233F) and `¦` (U+00A6) are now infix operators with times-like and plus-like precedence,
+  respectively. Previously they were parsed as identifier characters ([#37973]).
 
 Compiler/Runtime improvements
 -----------------------------
