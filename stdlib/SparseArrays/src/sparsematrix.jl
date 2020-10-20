@@ -2588,7 +2588,7 @@ function Base.fill!(V::SubArray{Tv, <:Any, <:AbstractSparseMatrixCSC{Tv}, <:Tupl
     end
 end
 """
-Helper method for immediately preceding setindex! method. For all (i,j) such that i in I and
+Helper method for immediately preceding fill! method. For all (i,j) such that i in I and
 j in J, assigns zero to A[i,j] if A[i,j] is a presently-stored entry, and otherwise does nothing.
 """
 function _spsetz_setindex!(A::AbstractSparseMatrixCSC,
@@ -2624,7 +2624,7 @@ function _spsetz_setindex!(A::AbstractSparseMatrixCSC,
     end
 end
 """
-Helper method for immediately preceding setindex! method. For all (i,j) such that i in I
+Helper method for immediately preceding fill! method. For all (i,j) such that i in I
 and j in J, assigns x to A[i,j] if A[i,j] is a presently-stored entry, and allocates and
 assigns x to A[i,j] if A[i,j] is not presently stored.
 """
@@ -2704,7 +2704,7 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
                                 resize!(nzvalA, nnzA)
                             end
                             r = rowidx:(rowidx+(new_stop-new_ptr))
-                            rowvalA[r] .= I[new_ptr:new_stop]
+                            rowvalA[r] .= I isa Number ? I : I[new_ptr:new_stop]
                             for rr in r
                                 nzvalA[rr] = x
                             end
