@@ -464,7 +464,6 @@ try
             error("the \"break me\" test failed")
         catch exc
             isa(exc, Base.PrecompileFailedException) || rethrow()
-            isa(exc, ErrorException) && occursin("ERROR: LoadError: break me", exc.msg) && rethrow()
         end
 
     # Test that trying to eval into closed modules during precompilation is an error
