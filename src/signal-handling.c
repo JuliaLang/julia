@@ -27,6 +27,8 @@ static const    uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
+void jl_lock_profile(void);
+void jl_unlock_profile(void);
 
 static uint64_t jl_last_sigint_trigger = 0;
 static uint64_t jl_disable_sigint_time = 0;
