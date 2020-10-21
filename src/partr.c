@@ -234,7 +234,7 @@ void jl_init_threadinginfra(void)
 }
 
 
-void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED);
+void JL_NORETURN jl_finish_task(jl_task_t *t);
 
 // thread function: used by all except the main thread
 void jl_threadfun(void *arg)
@@ -261,8 +261,7 @@ void jl_threadfun(void *arg)
     free(targ);
 
     (void)jl_gc_unsafe_enter(ptls);
-    jl_current_task->exception = jl_nothing;
-    jl_finish_task(jl_current_task, jl_nothing); // noreturn
+    jl_finish_task(jl_current_task); // noreturn
 }
 
 

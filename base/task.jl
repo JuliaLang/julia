@@ -49,7 +49,7 @@ function showerror(io::IO, ex::CompositeException)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
-            print(io, string("\n\n...and ", remaining, " more exception(s).\n"))
+            print(io, "\n\n...and ", remaining, " more exception", remaining > 1 ? "s" : "", ".\n")
         end
     else
         print(io, "CompositeException()\n")
@@ -147,6 +147,9 @@ const task_state_failed   = UInt8(2)
     elseif field === :backtrace
         # TODO: this field name should be deprecated in 2.0
         return catch_stack(t)[end][2]
+    elseif field === :exception
+        # TODO: this field name should be deprecated in 2.0
+        return t._isexception ? t.result : nothing
     else
         return getfield(t, field)
     end
@@ -619,7 +622,8 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
         t.queue === nothing || Base.list_deletefirst!(t.queue, t)
-        setfield!(t, :exception, arg)
+        setfield!(t, :result, arg)
+        setfield!(t, :_isexception, true)
     else
         t.queue === nothing || Base.error("schedule: Task not runnable")
         setfield!(t, :result, arg)
@@ -683,9 +687,10 @@ function try_yieldto(undo)
         rethrow()
     end
     ct = current_task()
-    exc = ct.exception
-    if exc !== nothing
-        ct.exception = nothing
+    if ct._isexception
+        exc = ct.result
+        ct.result = nothing
+        ct._isexception = false
         throw(exc)
     end
     result = ct.result
@@ -695,8 +700,10 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
-    t.exception = exc
-    return yieldto(t)
+    t.result = exc
+    t._isexception = true
+    set_next_task(t)
+    return try_yieldto(identity)
 end
 
 function ensure_rescheduled(othertask::Task)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module BinaryPlatforms
 
 export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
@@ -142,6 +144,20 @@ function Base.setindex!(p::AbstractPlatform, v::String, k::String)
     return p
 end
 
+# Hash definitino to ensure that it's stable
+function Base.hash(p::Platform, h::UInt)
+    h += 0x506c6174666f726d % UInt
+    h = hash(p.tags, h)
+    h = hash(p.compare_strategies, h)
+    return h
+end
+
+# Simple equality definition; for compatibility testing, use `platforms_match()`
+function Base.:(==)(a::Platform, b::Platform)
+    return a.tags == b.tags && a.compare_strategies == b.compare_strategies
+end
+
+
 # Allow us to easily serialize Platform objects
 function Base.repr(p::Platform; context=nothing)
     str = string(
@@ -165,9 +181,6 @@ function Base.show(io::IO, p::Platform)
     end
     print(io, str)
 end
-
-# Simple equality definition; for compatibility testing, use `platforms_match()`
-Base.:(==)(a::AbstractPlatform, b::AbstractPlatform) = tags(a) == tags(b)
 
 function validate_tags(tags::Dict)
     throw_invalid_key(k) = throw(ArgumentError("Key \"$(k)\" cannot have value \"$(tags[k])\""))
@@ -488,7 +501,7 @@ julia> triplet(Platform("armv7l", "Linux"; libgfortran_version="3"))
 """
 function triplet(p::AbstractPlatform)
     str = string(
-        arch(p),
+        arch(p)::Union{Symbol,String},
         os_str(p),
         libc_str(p),
         call_abi_str(p),
@@ -541,15 +554,19 @@ end
 
 # Helper functions for Linux and FreeBSD libc/abi mishmashes
 function libc_str(p::AbstractPlatform)
-    if libc(p) === nothing
+    lc = libc(p)
+    if lc === nothing
         return ""
-    elseif libc(p) === "glibc"
+    elseif lc === "glibc"
         return "-gnu"
     else
-        return string("-", libc(p))
+        return string("-", lc)
     end
 end
-call_abi_str(p::AbstractPlatform) = (call_abi(p) === nothing) ? "" : call_abi(p)
+function call_abi_str(p::AbstractPlatform)
+    cabi = call_abi(p)
+    cabi === nothing ? "" : string(cabi::Union{Symbol,String})
+end
 
 Sys.isapple(p::AbstractPlatform) = os(p) == "macos"
 Sys.islinux(p::AbstractPlatform) = os(p) == "linux"
@@ -780,7 +797,7 @@ function parse_dl_name_version(path::String, os::String)
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"
     else
         # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?).so((?:\.[\d]+)*)$"
+        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"
     end
 
     m = match(dlregex, basename(path))

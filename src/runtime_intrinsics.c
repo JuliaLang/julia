@@ -211,6 +211,20 @@ static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
     OP((c_type*)pr, a); \
 }
 
+#define un_fintrinsic_half(OP, name) \
+static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
+{ \
+    uint16_t a = *(uint16_t*)pa; \
+    float A = __gnu_h2f_ieee(a); \
+    if (osize == 16) { \
+        float R; \
+        OP(&R, A); \
+        *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+    } else { \
+        OP((uint16_t*)pr, A); \
+    } \
+    }
+
 // float or integer inputs
 // OP::Function macro(inputa, inputb)
 // name::unique string
@@ -222,6 +236,18 @@ static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *p
     c_type a = *(c_type*)pa; \
     c_type b = *(c_type*)pb; \
     *(c_type*)pr = (c_type)OP(a, b); \
+}
+
+#define bi_intrinsic_half(OP, name) \
+static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pr) JL_NOTSAFEPOINT \
+{ \
+    uint16_t a = *(uint16_t*)pa; \
+    uint16_t b = *(uint16_t*)pb; \
+    float A = __gnu_h2f_ieee(a); \
+    float B = __gnu_h2f_ieee(b); \
+    runtime_nbits = 16; \
+    float R = OP(A, B); \
+    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
 }
 
 // float or integer inputs, bool output
@@ -236,6 +262,18 @@ static int jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSA
     c_type b = *(c_type*)pb; \
     return OP(a, b); \
 }
+
+#define bool_intrinsic_half(OP, name) \
+static int jl_##name##16(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSAFEPOINT \
+{ \
+    uint16_t a = *(uint16_t*)pa; \
+    uint16_t b = *(uint16_t*)pb; \
+    float A = __gnu_h2f_ieee(a); \
+    float B = __gnu_h2f_ieee(b); \
+    runtime_nbits = 16; \
+    return OP(A, B); \
+}
+
 
 // integer inputs, with precondition test
 // OP::Function macro(inputa, inputb)
@@ -263,6 +301,20 @@ static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *p
     c_type b = *(c_type*)pb; \
     c_type c = *(c_type*)pc; \
     *(c_type*)pr = (c_type)OP(a, b, c); \
+}
+
+#define ter_intrinsic_half(OP, name) \
+static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, void *pr) JL_NOTSAFEPOINT \
+{ \
+    uint16_t a = *(uint16_t*)pa; \
+    uint16_t b = *(uint16_t*)pb; \
+    uint16_t c = *(uint16_t*)pc; \
+    float A = __gnu_h2f_ieee(a); \
+    float B = __gnu_h2f_ieee(b); \
+    float C = __gnu_h2f_ieee(c); \
+    runtime_nbits = 16; \
+    float R = OP(A, B, C); \
+    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
 }
 
 
@@ -407,11 +459,12 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
 // floating point
 
 #define un_fintrinsic_withtype(OP, name) \
+un_fintrinsic_half(OP, jl_##name##16) \
 un_fintrinsic_ctype(OP, jl_##name##32, float) \
 un_fintrinsic_ctype(OP, jl_##name##64, double) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
 { \
-    return jl_fintrinsic_1(ty, a, #name, jl_##name##32, jl_##name##64); \
+    return jl_fintrinsic_1(ty, a, #name, jl_##name##16, jl_##name##32, jl_##name##64); \
 }
 
 #define un_fintrinsic(OP, name) \
@@ -423,7 +476,7 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 
 typedef void (fintrinsic_op1)(unsigned, void*, void*);
 
-static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name, fintrinsic_op1 *floatop, fintrinsic_op1 *doubleop)
+static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name, fintrinsic_op1 *halfop, fintrinsic_op1 *floatop, fintrinsic_op1 *doubleop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (!jl_is_primitivetype(jl_typeof(a)))
@@ -436,6 +489,9 @@ static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const c
     unsigned sz = jl_datatype_size(jl_typeof(a));
     switch (sz) {
     /* choose the right size c-type operation based on the input */
+    case 2:
+        halfop(sz2 * host_char_bit, pa, pr);
+        break;
     case 4:
         floatop(sz2 * host_char_bit, pa, pr);
         break;
@@ -443,7 +499,7 @@ static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const c
         doubleop(sz2 * host_char_bit, pa, pr);
         break;
     default:
-        jl_errorf("%s: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64", name);
+        jl_errorf("%s: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64", name);
     }
     return newv;
 }
@@ -612,6 +668,7 @@ static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa
 // floating point
 
 #define bi_fintrinsic(OP, name) \
+    bi_intrinsic_half(OP, name) \
     bi_intrinsic_ctype(OP, name, 32, float) \
     bi_intrinsic_ctype(OP, name, 64, double) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
@@ -627,6 +684,9 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pr = jl_data_ptr(newv); \
     switch (sz) { \
     /* choose the right size c-type operation */ \
+    case 2: \
+        jl_##name##16(16, pa, pb, pr); \
+        break; \
     case 4: \
         jl_##name##32(32, pa, pb, pr); \
         break; \
@@ -634,12 +694,13 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
         jl_##name##64(64, pa, pb, pr); \
         break; \
     default: \
-        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64"); \
+        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64"); \
     } \
     return newv; \
 }
 
 #define bool_fintrinsic(OP, name) \
+    bool_intrinsic_half(OP, name) \
     bool_intrinsic_ctype(OP, name, 32, float) \
     bool_intrinsic_ctype(OP, name, 64, double) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
@@ -654,6 +715,9 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     int cmp; \
     switch (sz) { \
     /* choose the right size c-type operation */ \
+    case 2: \
+        cmp = jl_##name##16(16, pa, pb); \
+        break; \
     case 4: \
         cmp = jl_##name##32(32, pa, pb); \
         break; \
@@ -667,6 +731,7 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 }
 
 #define ter_fintrinsic(OP, name) \
+    ter_intrinsic_half(OP, name) \
     ter_intrinsic_ctype(OP, name, 32, float) \
     ter_intrinsic_ctype(OP, name, 64, double) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) \
@@ -682,6 +747,9 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pc = jl_data_ptr(c), *pr = jl_data_ptr(newv); \
     switch (sz) { \
     /* choose the right size c-type operation */ \
+    case 2: \
+        jl_##name##16(16, pa, pb, pc, pr); \
+        break; \
     case 4: \
         jl_##name##32(32, pa, pb, pc, pr); \
         break; \
@@ -689,7 +757,7 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
         jl_##name##64(64, pa, pb, pc, pr); \
         break; \
     default: \
-        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64"); \
+        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64"); \
     } \
     return newv; \
 }
@@ -834,15 +902,17 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
 #define fptrunc(pr, a) \
         if (!(osize < 8 * sizeof(a))) \
             jl_error("fptrunc: output bitsize must be < input bitsize"); \
-        if (osize == 32) \
+        else if (osize == 16) \
+            *(uint16_t*)pr = __gnu_f2h_ieee(a); \
+        else if (osize == 32) \
             *(float*)pr = a; \
         else if (osize == 64) \
             *(double*)pr = a; \
         else \
-            jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
+            jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
 #define fpext(pr, a) \
-        if (!(osize > 8 * sizeof(a))) \
-            jl_error("fpext: output bitsize must be > input bitsize"); \
+        if (!(osize >= 8 * sizeof(a))) \
+            jl_error("fpext: output bitsize must be >= input bitsize"); \
         if (osize == 32) \
             *(float*)pr = a; \
         else if (osize == 64) \

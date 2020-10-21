@@ -16,14 +16,33 @@ New language features
 * `ꜛ` (U+A71B), `ꜜ` (U+A71C) and `ꜝ` (U+A71D) can now also be used as operator
   suffixes. They can be tab-completed from `\^uparrow`, `\^downarrow` and `\^!` in the REPL
   ([#37542]).
+* Standalone "dotted" operators now get parsed as `Expr(:., :op)`, which gets lowered to
+  `Base.BroadcastFunction(op)`. This means `.op` is functionally equivalent to
+  `(x...) -> (op).(x...)`, which can be useful for passing the broadcasted version of an
+  operator to higher-order functions, like for example `map(.*, A, B)` for an elementwise
+  product of two arrays of arrays. ([#37583])
+* The syntax `import A as B` (plus `import A: x as y`, `import A.x as y`, and `using A: x as y`)
+  can now be used to rename imported modules and identifiers ([#1255]).
+* Unsigned literals (starting with `0x`) which are too big to fit in an `UInt128` object
+  are now interpreted as `BigInt` ([#23546]).
+* The postfix conjugate transpose operator `'` now accepts Unicode modifiers as
+  suffixes, so e.g. `a'ᵀ` is parsed as `var"'ᵀ"(a)`, which can be defined by the
+  user. `a'ᵀ` parsed as `a' * ᵀ` before, so this is a minor change ([#37247]).
 
 Language changes
 ----------------
 
+* Macros that return `:quote` expressions (e.g. via `Expr(:quote, ...)`) were previously
+  able to work without escaping (`esc(...)`) their output when needed. This has been
+  corrected, and now `esc` must be used in these macros as it is in other macros ([#37540]).
 * The `-->` operator now lowers to a `:call` expression, so it can be defined as
   a function like other operators. The dotted version `.-->` is now parsed as well.
   For backwards compatibility, `-->` still parses using its own expression head
   instead of `:call`.
+* Instances of `UniformScaling` are no longer `isequal` to matrices. Previous
+  behaviour violated the rule that `isequal(x, y)` implies `hash(x) == hash(y)`.
+* `⌿` (U+233F) and `¦` (U+00A6) are now infix operators with times-like and plus-like precedence,
+  respectively. Previously they were parsed as identifier characters ([#37973]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -76,12 +95,17 @@ New library functions
 * New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more
   efficiently ([#35816]).
 * New function `addenv` for adding environment mappings into a `Cmd` object, returning the new `Cmd` object.
+* New function `insorted` for determining whether an element is in a sorted collection or not ([#37490]).
 
 New library features
 --------------------
 
 * The `redirect_*` functions can now be called on `IOContext` objects.
 * New constructor `NamedTuple(iterator)` that constructs a named tuple from a key-value pair iterator.
+* A new `reinterpret(reshape, T, a::AbstractArray{S})` reinterprets `a` to have eltype `T` while potentially
+  inserting or consuming the first dimension depending on the ratio of `sizeof(T)` and `sizeof(S)`.
+* New `append!(vector, collections...)` and `prepend!(vector, collections...)` methods accept multiple
+  collections to be appended or prepended ([#36227]).
 
 Standard library changes
 ------------------------
@@ -101,6 +125,9 @@ Standard library changes
 * `first` and `last` functions now accept an integer as second argument to get that many
   leading or trailing elements of any iterable ([#34868]).
 * `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
+* `CartesianIndices` now supports step different from `1`. It can also be constructed from three
+  `CartesianIndex`es `I`, `S`, `J` using `I:S:J`. `step` for `CartesianIndices` now returns a
+  `CartesianIndex`. ([#37829])
 * `push!(c::Channel, v)` now returns channel `c`. Previously, it returned the pushed value `v` ([#34202]).
 * `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
 * For consistency `haskey(r::RegexMatch, i::Integer)` has also been added and returns if the capture group for `i` exists ([#37300]).
@@ -163,10 +190,15 @@ Standard library changes
 
 #### SparseArrays
 
-* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns, and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
+* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns,
+  and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
+* New convenient `spdiagm([m, n,] v::AbstractVector)` methods which call
+  `spdiagm([m, n,] 0 => v)`, consistently with their dense `diagm` counterparts. ([#37684])
 
 #### Dates
+
 * `Quarter` period is defined ([#35519]).
+* `canonicalize` can now take `Period` as an input ([#37391])
 * Zero-valued `FixedPeriod`s and `OtherPeriod`s now compare equal, e.g.,
   `Year(0) == Day(0)`. The behavior of non-zero `Period`s is not changed. ([#37486])
 
@@ -180,8 +212,13 @@ Standard library changes
 
 
 #### UUIDs
+
 * Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
 * Added `parse(::Type{UUID}, ::AbstractString)` method
+
+#### Mmap
+* On Unix systems, the `Mmap.madvise!` function (along with OS-specific `Mmap.MADV_*`
+  constants) has been added to give advice on handling of memory-mapped arrays. ([#37369])
 
 Deprecated or removed
 ---------------------
@@ -195,3 +232,51 @@ Tooling Improvements
 
 
 <!--- generated by NEWS-update.jl: -->
+[#1255]: https://github.com/JuliaLang/julia/issues/1255
+[#23546]: https://github.com/JuliaLang/julia/issues/23546
+[#24359]: https://github.com/JuliaLang/julia/issues/24359
+[#31069]: https://github.com/JuliaLang/julia/issues/31069
+[#34202]: https://github.com/JuliaLang/julia/issues/34202
+[#34352]: https://github.com/JuliaLang/julia/issues/34352
+[#34543]: https://github.com/JuliaLang/julia/issues/34543
+[#34868]: https://github.com/JuliaLang/julia/issues/34868
+[#35519]: https://github.com/JuliaLang/julia/issues/35519
+[#35627]: https://github.com/JuliaLang/julia/issues/35627
+[#35628]: https://github.com/JuliaLang/julia/issues/35628
+[#35791]: https://github.com/JuliaLang/julia/issues/35791
+[#35816]: https://github.com/JuliaLang/julia/issues/35816
+[#35839]: https://github.com/JuliaLang/julia/issues/35839
+[#35872]: https://github.com/JuliaLang/julia/issues/35872
+[#35879]: https://github.com/JuliaLang/julia/issues/35879
+[#35883]: https://github.com/JuliaLang/julia/issues/35883
+[#35976]: https://github.com/JuliaLang/julia/issues/35976
+[#36002]: https://github.com/JuliaLang/julia/issues/36002
+[#36150]: https://github.com/JuliaLang/julia/issues/36150
+[#36188]: https://github.com/JuliaLang/julia/issues/36188
+[#36227]: https://github.com/JuliaLang/julia/issues/36227
+[#36280]: https://github.com/JuliaLang/julia/issues/36280
+[#36360]: https://github.com/JuliaLang/julia/issues/36360
+[#36416]: https://github.com/JuliaLang/julia/issues/36416
+[#36434]: https://github.com/JuliaLang/julia/issues/36434
+[#36458]: https://github.com/JuliaLang/julia/issues/36458
+[#36600]: https://github.com/JuliaLang/julia/issues/36600
+[#36643]: https://github.com/JuliaLang/julia/issues/36643
+[#36666]: https://github.com/JuliaLang/julia/issues/36666
+[#36717]: https://github.com/JuliaLang/julia/issues/36717
+[#36784]: https://github.com/JuliaLang/julia/issues/36784
+[#37034]: https://github.com/JuliaLang/julia/issues/37034
+[#37041]: https://github.com/JuliaLang/julia/issues/37041
+[#37300]: https://github.com/JuliaLang/julia/issues/37300
+[#37320]: https://github.com/JuliaLang/julia/issues/37320
+[#37340]: https://github.com/JuliaLang/julia/issues/37340
+[#37367]: https://github.com/JuliaLang/julia/issues/37367
+[#37369]: https://github.com/JuliaLang/julia/issues/37369
+[#37391]: https://github.com/JuliaLang/julia/issues/37391
+[#37486]: https://github.com/JuliaLang/julia/issues/37486
+[#37490]: https://github.com/JuliaLang/julia/issues/37490
+[#37517]: https://github.com/JuliaLang/julia/issues/37517
+[#37542]: https://github.com/JuliaLang/julia/issues/37542
+[#37583]: https://github.com/JuliaLang/julia/issues/37583
+[#37635]: https://github.com/JuliaLang/julia/issues/37635
+[#37684]: https://github.com/JuliaLang/julia/issues/37684
+[#37829]: https://github.com/JuliaLang/julia/issues/37829

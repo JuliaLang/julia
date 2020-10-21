@@ -55,7 +55,7 @@ function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
     while !(curblock in allblocks)
-        curblock = domtree.idoms[curblock]
+        curblock = domtree.idoms_bb[curblock]
     end
     return curblock
 end
@@ -728,7 +728,7 @@ function getfield_elim_pass!(ir::IRCode)
     # IR. This needs to be after we iterate through the IR with
     # `IncrementalCompact` because removing dead blocks can invalidate the
     # domtree.
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
+    @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
 
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses

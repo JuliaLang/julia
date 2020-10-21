@@ -606,6 +606,40 @@ maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be 
 minimum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
+"""
+    argmin(r::AbstractRange)
+
+Ranges can have multiple minimal elements. In that case
+`argmin` will return a minimal index, but not necessarily the
+first one.
+"""
+function argmin(r::AbstractRange)
+    if isempty(r)
+        throw(ArgumentError("range must be non-empty"))
+    elseif step(r) > 0
+        firstindex(r)
+    else
+        first(searchsorted(r, last(r)))
+    end
+end
+
+"""
+    argmax(r::AbstractRange)
+
+Ranges can have multiple maximal elements. In that case
+`argmax` will return a maximal index, but not necessarily the
+first one.
+"""
+function argmax(r::AbstractRange)
+    if isempty(r)
+        throw(ArgumentError("range must be non-empty"))
+    elseif step(r) > 0
+        first(searchsorted(r, last(r)))
+    else
+        firstindex(r)
+    end
+end
+
 extrema(r::AbstractRange) = (minimum(r), maximum(r))
 
 # Ranges are immutable
@@ -925,6 +959,11 @@ UnitRange(r::AbstractUnitRange) = UnitRange(first(r), last(r))
 AbstractUnitRange{T}(r::AbstractUnitRange{T}) where {T} = r
 AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
 AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
+
+OrdinalRange{T1, T2}(r::StepRange) where {T1, T2<: Integer} = StepRange{T1, T2}(r)
+OrdinalRange{T1, T2}(r::AbstractUnitRange{T1}) where {T1, T2<:Integer} = r
+OrdinalRange{T1, T2}(r::UnitRange) where {T1, T2<:Integer} = UnitRange{T1}(r)
+OrdinalRange{T1, T2}(r::OneTo) where {T1, T2<:Integer} = OneTo{T1}(r)
 
 promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
     el_same(promote_type(T1a,T2a),

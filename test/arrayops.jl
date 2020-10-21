@@ -1428,8 +1428,8 @@ end
 
     # non-1-indexed array
     oa = OffsetArray(Vector(1:10), -5)
-    filter!(x -> x > 5, oa)
-    @test oa == OffsetArray(Vector(6:10), -5)
+    oa = oa[oa.>5] # deleteat! is not supported for OffsetArrays
+    @test oa == Vector(6:10)
 
     # empty non-1-indexed array
     eoa = OffsetArray([], -5)
@@ -1612,6 +1612,14 @@ end
     g = (i for i = 1:2:10 if iseven(i)) # isempty(g) == true
     @test append!([1,2], g) == [1,2] == push!([1,2], g...)
     @test prepend!([1,2], g) == [1,2] == pushfirst!([1,2], g...)
+
+    # multiple items
+    A = [1]
+    @test append!(A, [2, 3], [4], [5, 6]) === A
+    @test A == [1, 2, 3, 4, 5, 6]
+    A = [1]
+    @test prepend!(A, [2, 3], [4], [5, 6]) === A
+    @test A == [2, 3, 4, 5, 6, 1]
 
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
