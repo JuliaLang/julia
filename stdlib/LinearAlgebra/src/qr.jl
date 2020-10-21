@@ -756,9 +756,9 @@ function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) whe
     mB = size(B, 1)
     mC = size(C, 1)
     if mB < mC
-        fill!(C, zero(T))
-        inds = eachindex(IndexCartesian(), B)
+        inds = CartesianIndices(B)
         copyto!(C, inds, B, inds)
+        C[CartesianIndices((mB+1:mC, axes(C, 2)))] .= zero(T)
         return lmul!(Q, C)
     else
         return lmul!(Q, copyto!(C, B))
