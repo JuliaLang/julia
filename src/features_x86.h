@@ -69,12 +69,12 @@ JL_FEATURE_DEF(rdpid, 32 * 3 + 22, 0)
 JL_FEATURE_DEF(cldemote, 32 * 3 + 25, 0)
 JL_FEATURE_DEF(movdiri, 32 * 3 + 27, 0)
 JL_FEATURE_DEF(movdir64b, 32 * 3 + 28, 0)
-JL_FEATURE_DEF(enqcmd, 32 * 3 + 29, 90000)
+JL_FEATURE_DEF(enqcmd, 32 * 3 + 29, 0)
 
 // EAX=7,ECX=0: EDX
 // JL_FEATURE_DEF(avx5124vnniw, 32 * 4 + 2, ?????)
 // JL_FEATURE_DEF(avx5124fmaps, 32 * 4 + 3, ?????)
-JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 90000)
+JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 0)
 JL_FEATURE_DEF(serialize, 32 * 4 + 14, 110000)
 JL_FEATURE_DEF(tsxldtrk, 32 * 4 + 16, 110000)
 JL_FEATURE_DEF(pconfig, 32 * 4 + 18, 0)
@@ -108,7 +108,7 @@ JL_FEATURE_DEF(clzero, 32 * 8 + 0, 0)
 JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0)
 
 // EAX=7,ECX=1: EAX
-JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 90000)
+JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 0)
 
 // EAX=0x14,ECX=0: EBX
 JL_FEATURE_DEF(ptwrite, 32 * 10 + 4, 0)

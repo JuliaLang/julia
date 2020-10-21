@@ -57,6 +57,9 @@ let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
     @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
 
+@test Base.in_sysimage(Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"))
+@test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
+
 # Issue #5789 and PR #13542:
 mktempdir() do dir
     cd(dir) do
@@ -173,10 +176,9 @@ end
                 d = findfirst(line -> line == "[deps]", p)
                 t = findfirst(line -> startswith(line, "This"), p)
                 # look up various packages by name
-                cache = Base.TOMLCache()
-                root = Base.explicit_project_deps_get(project_file, "Root", cache)
-                this = Base.explicit_project_deps_get(project_file, "This", cache)
-                that = Base.explicit_project_deps_get(project_file, "That", cache)
+                root = Base.explicit_project_deps_get(project_file, "Root")
+                this = Base.explicit_project_deps_get(project_file, "This")
+                that = Base.explicit_project_deps_get(project_file, "That")
                 # test that the correct answers are given
                 @test root == (something(n, N+1) ≥ something(d, N+1) ? nothing :
                                something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
@@ -202,13 +204,13 @@ Base.ACTIVE_PROJECT[] = nothing
 
 # locate `tail(names)` package by following the search path graph through `names` starting from `where`
 function recurse_package(where::PkgId, name::String, names::String...)
-    pkg = identify_package(where, name, Base.TOMLCache())
+    pkg = identify_package(where, name)
     pkg === nothing && return nothing
     return recurse_package(pkg, names...)
 end
 
 recurse_package(pkg::String) = identify_package(pkg)
-recurse_package(where::PkgId, pkg::String) = identify_package(where, pkg, Base.TOMLCache())
+recurse_package(where::PkgId, pkg::String) = identify_package(where, pkg)
 
 function recurse_package(name::String, names::String...)
     pkg = identify_package(name)
@@ -229,6 +231,7 @@ end
         pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
+        @test Base.compilecache_path(pkg) == Base.compilecache_path(pkg)
     end
     @test identify_package("Baz") == nothing
     @test identify_package("Qux") == nothing

@@ -24,6 +24,15 @@ If `T` is a bitstype, `isassigned(Ref{T}())` will always be true.
 
 When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref`
 object will be converted to a native pointer to the data it references.
+For most `T`, or when converted to a `Ptr{Cvoid}`, this is a pointer to the
+object data. When `T` is an `isbits` type, this value may be safely mutated,
+otherwise mutation is strictly undefined behavior.
+
+As a special case, setting `T = Any` will instead cause the creation of a
+pointer to the reference itself when converted to a `Ptr{Any}`
+(a `jl_value_t const* const*` if T is immutable, else a `jl_value_t *const *`).
+When converted to a `Ptr{Cvoid}`, it will still return a pointer to the data
+region as for any other `T`.
 
 A `C_NULL` instance of `Ptr` can be passed to a `ccall` `Ref` argument to initialize it.
 
@@ -105,7 +114,7 @@ RefArray(x::AbstractArray{T}, i::Int, roots::Any) where {T} = RefArray{T,typeof(
 RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefArray{T,typeof(x),Nothing}(x, i, nothing)
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 
-function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
+function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefArray{T})::P where T
     if allocatedinline(T)
         p = pointer(b.x, b.i)
     elseif isconcretetype(T) && T.mutable
@@ -114,12 +123,11 @@ function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
         # see comment on equivalent branch for RefValue
         p = pointerref(Ptr{Ptr{Cvoid}}(pointer(b.x, b.i)), 1, Core.sizeof(Ptr{Cvoid}))
     end
-    return convert(P, p)
+    return p
 end
-function unsafe_convert(P::Type{Ptr{Any}}, b::RefArray{Any})
-    return convert(P, pointer(b.x, b.i))
+function unsafe_convert(::Type{Ptr{Any}}, b::RefArray{Any})::Ptr{Any}
+    return pointer(b.x, b.i)
 end
-unsafe_convert(::Type{Ptr{Cvoid}}, b::RefArray{T}) where {T} = convert(Ptr{Cvoid}, unsafe_convert(Ptr{T}, b))
 
 ###
 if is_primary_base_module

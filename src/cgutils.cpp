@@ -516,7 +516,7 @@ static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
         return T_int32;
     if (bt == (jl_value_t*)jl_int64_type)
         return T_int64;
-    if (llvmcall && (bt == (jl_value_t*)jl_float16_type))
+    if (bt == (jl_value_t*)jl_float16_type)
         return T_float16;
     if (bt == (jl_value_t*)jl_float32_type)
         return T_float32;
@@ -1122,14 +1122,17 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x,
                                         jl_value_t *type, const std::string *msg);
 
 static void emit_isa_union(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type,
-                           SmallVectorImpl<std::pair<BasicBlock*,Value*>> &bbs)
+                           SmallVectorImpl<std::pair<std::pair<BasicBlock*,BasicBlock*>,Value*>> &bbs)
 {
     if (jl_is_uniontype(type)) {
         emit_isa_union(ctx, x, ((jl_uniontype_t*)type)->a, bbs);
         emit_isa_union(ctx, x, ((jl_uniontype_t*)type)->b, bbs);
         return;
     }
-    bbs.emplace_back(ctx.builder.GetInsertBlock(), emit_isa(ctx, x, type, nullptr).first);
+    BasicBlock *enter = ctx.builder.GetInsertBlock();
+    Value *v = emit_isa(ctx, x, type, nullptr).first;
+    BasicBlock *exit = ctx.builder.GetInsertBlock();
+    bbs.emplace_back(std::make_pair(enter, exit), v);
     BasicBlock *isaBB = BasicBlock::Create(jl_LLVMContext, "isa", ctx.f);
     ctx.builder.SetInsertPoint(isaBB);
 }
@@ -1231,16 +1234,16 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
     }
     if (jl_is_uniontype(intersected_type) &&
         can_optimize_isa_union((jl_uniontype_t*)intersected_type)) {
-        SmallVector<std::pair<BasicBlock*,Value*>,4> bbs;
+        SmallVector<std::pair<std::pair<BasicBlock*,BasicBlock*>,Value*>,4> bbs;
         emit_isa_union(ctx, x, intersected_type, bbs);
         int nbbs = bbs.size();
         BasicBlock *currBB = ctx.builder.GetInsertBlock();
         PHINode *res = ctx.builder.CreatePHI(T_int1, nbbs);
         for (int i = 0; i < nbbs; i++) {
-            auto bb = bbs[i].first;
+            auto bb = bbs[i].first.second;
             ctx.builder.SetInsertPoint(bb);
             if (i + 1 < nbbs) {
-                ctx.builder.CreateCondBr(bbs[i].second, currBB, bbs[i + 1].first);
+                ctx.builder.CreateCondBr(bbs[i].second, currBB, bbs[i + 1].first.first);
                 res->addIncoming(ConstantInt::get(T_int1, 1), bb);
             }
             else {

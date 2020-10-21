@@ -1925,6 +1925,11 @@ function cmp(A::AbstractVector, B::AbstractVector)
     return cmp(length(A), length(B))
 end
 
+"""
+    isless(A::AbstractVector, B::AbstractVector)
+
+Returns true when `A` is less than `B` in lexicographic order.
+"""
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)

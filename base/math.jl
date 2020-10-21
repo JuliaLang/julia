@@ -898,6 +898,8 @@ end
     end
     z
 end
+@inline ^(x::Float16, y::Float16) = Float16(Float32(x)^Float32(y))  # TODO: optimize
+
 @inline function ^(x::Float64, y::Integer)
     y == -1 && return inv(x)
     y == 0 && return one(x)

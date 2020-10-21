@@ -235,11 +235,7 @@ private:
 public:
   void checkBeginFunction(CheckerContext &Ctx) const;
   void checkEndFunction(const clang::ReturnStmt *RS, CheckerContext &Ctx) const;
-#if LLVM_VERSION_MAJOR >= 9
   bool evalCall(const CallEvent &Call, CheckerContext &C) const;
-#else
-  bool evalCall(const CallExpr *CE, CheckerContext &C) const;
-#endif
   void checkPreCall(const CallEvent &Call, CheckerContext &C) const;
   void checkPostCall(const CallEvent &Call, CheckerContext &C) const;
   void checkPostStmt(const CStyleCastExpr *CE, CheckerContext &C) const;
@@ -1030,15 +1026,15 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
                                         const ValueState *OldValS,
                                         ProgramStateRef &State,
                                         CheckerContext &C) const {
+  QualType QT = Result->getType();
+  if (!QT->isPointerType() || QT->getPointeeType()->isVoidType())
+    return nullptr;
   auto ValLoc = State->getSVal(Result, C.getLocationContext()).getAs<Loc>();
   if (!ValLoc) {
     return nullptr;
   }
   SVal Loaded = State->getSVal(*ValLoc);
   if (Loaded.isUnknown() || !Loaded.getAsSymbol()) {
-    QualType QT = Result->getType();
-    if (!QT->isPointerType())
-      return nullptr;
     if (OldValS || GCChecker::isGCTracked(Result)) {
       Loaded = C.getSValBuilder().conjureSymbolVal(
           nullptr, Result, C.getLocationContext(), Result->getType(),
@@ -1296,17 +1292,12 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
   }
 }
 
-#if LLVM_VERSION_MAJOR >= 9
-bool GCChecker::evalCall(const CallEvent &Call,
-#else
-bool GCChecker::evalCall(const CallExpr *CE,
-#endif
-                         CheckerContext &C) const {
+bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   // These checks should have no effect on the surrounding environment
   // (globals should not be invalidated, etc), hence the use of evalCall.
-#if LLVM_VERSION_MAJOR >= 9
   const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
-#endif
+  if (!CE)
+    return false;
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
   auto name = C.getCalleeName(CE);
   if (name == "JL_GC_POP") {
@@ -1340,7 +1331,8 @@ bool GCChecker::evalCall(const CallExpr *CE,
     return true;
   } else if (name == "JL_GC_PUSH1" || name == "JL_GC_PUSH2" ||
              name == "JL_GC_PUSH3" || name == "JL_GC_PUSH4" ||
-             name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6") {
+             name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6" ||
+             name == "JL_GC_PUSH7") {
     ProgramStateRef State = C.getState();
     // Transform slots to roots, transform values to rooted
     unsigned NumArgs = CE->getNumArgs();
@@ -1348,8 +1340,7 @@ bool GCChecker::evalCall(const CallExpr *CE,
       SVal V = C.getSVal(CE->getArg(i));
       auto MRV = V.getAs<loc::MemRegionVal>();
       if (!MRV) {
-        report_error(C,
-                     "JL_GC_PUSH with something other than a local variable");
+        report_error(C, "JL_GC_PUSH with something other than a local variable");
         return true;
       }
       const MemRegion *Region = MRV->getRegion();

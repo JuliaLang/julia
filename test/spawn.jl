@@ -5,6 +5,7 @@
 ###################################
 
 using Random, Sockets
+using Downloads: download
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 

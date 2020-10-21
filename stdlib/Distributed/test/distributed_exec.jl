@@ -439,7 +439,7 @@ catch ex
     # test showerror
     err_str = sprint(showerror, ex)
     err_one_str = sprint(showerror, ex.exceptions[1])
-    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
+    @test err_str == err_one_str * "\n\n...and 4 more exceptions.\n"
 end
 @test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
@@ -1690,16 +1690,14 @@ let (h, t) = Distributed.head_and_tail(Int[], 0)
 end
 
 # issue #35937
-let e
-    try
-        pmap(1) do _
+let e = @test_throws RemoteException pmap(1) do _
             wait(@async error(42))
         end
-    catch ex
-        e = ex
-    end
     # check that the inner TaskFailedException is correctly formed & can be printed
-    @test sprint(showerror, e) isa String
+    es = sprint(showerror, e.value)
+    @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
+    @test contains(es, "\n\n    nested task error:")
+    @test_broken contains(es, "\n\n    nested task error: 42\n")
 end
 
 # issue #27429, propagate relative `include` path to workers
@@ -1713,4 +1711,5 @@ include("splitrange.jl")
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
 rmprocs(workers())
+include("threads.jl")
 include("topology.jl")

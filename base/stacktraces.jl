@@ -217,7 +217,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
-            print(io, Base.demangle_function_name(string(frame.func)))
+            Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
         end
     elseif linfo isa MethodInstance
         def = linfo.def

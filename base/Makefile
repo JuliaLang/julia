@@ -23,11 +23,11 @@ endif
 
 define parse_features
 @echo "# $(2) features" >> $@
-@$(call PRINT_PERL, cat ../src/features_$(1).h | perl -lne 'print "const JL_$(2)_$$1 = UInt32($$2)" if /^\s*JL_FEATURE_DEF(?:_NAME)?\(\s*(\w+)\s*,\s*([^,]+)\s*,.*\)\s*(?:\/\/.*)?$$/' >> $@)
+@$(call PRINT_PERL, cat $(SRCDIR)/../src/features_$(1).h | perl -lne 'print "const JL_$(2)_$$1 = UInt32($$2)" if /^\s*JL_FEATURE_DEF(?:_NAME)?\(\s*(\w+)\s*,\s*([^,]+)\s*,.*\)\s*(?:\/\/.*)?$$/' >> $@)
 @echo >> $@
 endef
 
-$(BUILDDIR)/features_h.jl: ../src/features_x86.h ../src/features_aarch32.h ../src/features_aarch64.h
+$(BUILDDIR)/features_h.jl: $(SRCDIR)/../src/features_x86.h $(SRCDIR)/../src/features_aarch32.h $(SRCDIR)/../src/features_aarch64.h
 	@-rm -f $@
 	@$(call parse_features,x86,X86)
 	@$(call parse_features,aarch32,AArch32)

@@ -70,7 +70,7 @@ julia> function sum_global()
        end;
 
 julia> @time sum_global()
-  0.017705 seconds (15.28 k allocations: 694.484 KiB)
+  0.009639 seconds (7.36 k allocations: 300.310 KiB, 98.32% compilation time)
 496.84883432553846
 
 julia> @time sum_global()
@@ -106,15 +106,15 @@ julia> function sum_arg(x)
        end;
 
 julia> @time sum_arg(x)
-  0.007701 seconds (821 allocations: 43.059 KiB)
+  0.006202 seconds (4.18 k allocations: 217.860 KiB, 99.72% compilation time)
 496.84883432553846
 
 julia> @time sum_arg(x)
-  0.000006 seconds (5 allocations: 176 bytes)
+  0.000005 seconds (1 allocation: 16 bytes)
 496.84883432553846
 ```
 
-The 5 allocations seen are from running the `@time` macro itself in global scope. If we instead run
+The 1 allocation seen is from running the `@time` macro itself in global scope. If we instead run
 the timing in a function, we can see that indeed no allocations are performed:
 
 ```jldoctest sumarg; filter = r"[0-9\.]+ seconds"

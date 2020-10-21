@@ -56,7 +56,7 @@ RUNTIME_SRCS += jitlayers aotcompile debuginfo disasm llvm-simdloop llvm-muladd 
 	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-api llvm-remove-addrspaces \
-	llvm-remove-ni llvm-julia-licm
+	llvm-remove-ni llvm-julia-licm llvm-demote-float16
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -291,20 +291,6 @@ CXXLD += -Wl,--out-implib,$(build_libdir)/$(notdir $@).a
 endif
 else
 CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
-endif
-
-# If we're on windows, don't do versioned shared libraries.  If we're on OSX,
-# put the version number before the .dylib.  Otherwise, put it after.
-ifeq ($(OS), WINNT)
-JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT)
-else
-ifeq ($(OS), Darwin)
-JL_MAJOR_MINOR_SHLIB_EXT := $(SOMAJOR).$(SOMINOR).$(SHLIB_EXT)
-JL_MAJOR_SHLIB_EXT := $(SOMAJOR).$(SHLIB_EXT)
-else
-JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR).$(SOMINOR)
-JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
-endif
 endif
 
 ifeq ($(SHLIB_EXT), so)

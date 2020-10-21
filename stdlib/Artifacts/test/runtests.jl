@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Artifacts, Test, Base.BinaryPlatforms
 using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform
 

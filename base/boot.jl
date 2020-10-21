@@ -8,7 +8,7 @@
 #abstract type Vararg{T} end
 
 #mutable struct Symbol
-#    #opaque
+## opaque
 #end
 
 #mutable struct TypeName
@@ -53,28 +53,43 @@
 #abstract type DenseArray{T,N} <: AbstractArray{T,N} end
 
 #mutable struct Array{T,N} <: DenseArray{T,N}
+## opaque
 #end
 
 #mutable struct Module
-#    name::Symbol
+## opaque
+#end
+
+#mutable struct SimpleVector
+## opaque
+#end
+
+#mutable struct String
+## opaque
 #end
 
 #mutable struct Method
+#...
 #end
 
 #mutable struct MethodInstance
+#...
 #end
 
 #mutable struct CodeInstance
+#...
 #end
 
 #mutable struct CodeInfo
+#...
 #end
 
 #mutable struct TypeMapLevel
+#...
 #end
 
 #mutable struct TypeMapEntry
+#...
 #end
 
 #abstract type Ref{T} end
@@ -764,11 +779,11 @@ Unsigned(x::Int64)  = UInt64(x)
 Signed(x::UInt128)  = Int128(x)
 Unsigned(x::Int128) = UInt128(x)
 
-Signed(x::Union{Float32, Float64, Bool})   = Int(x)
-Unsigned(x::Union{Float32, Float64, Bool}) = UInt(x)
+Signed(x::Union{Float16, Float32, Float64, Bool})   = Int(x)
+Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
-Integer(x::Union{Float32, Float64}) = Int(x)
+Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
 # Binding for the julia parser, called as
 #

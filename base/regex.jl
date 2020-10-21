@@ -199,7 +199,7 @@ Return `true` if `s` starts with the regex pattern, `prefix`.
 See also [`occursin`](@ref) and [`endswith`](@ref).
 
 !!! compat "Julia 1.2"
-     This method requires at least Julia 1.2.
+    This method requires at least Julia 1.2.
 
 # Examples
 ```jldoctest
@@ -231,7 +231,7 @@ Return `true` if `s` ends with the regex pattern, `suffix`.
 See also [`occursin`](@ref) and [`startswith`](@ref).
 
 !!! compat "Julia 1.2"
-     This method requires at least Julia 1.2.
+    This method requires at least Julia 1.2.
 
 # Examples
 ```jldoctest
@@ -643,7 +643,7 @@ meaning that the contained characters are devoid of any special meaning
 (they are quoted with "\\Q" and "\\E").
 
 !!! compat "Julia 1.3"
-     This method requires at least Julia 1.3.
+    This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -722,7 +722,7 @@ end
 Repeat a regex `n` times.
 
 !!! compat "Julia 1.3"
-     This method requires at least Julia 1.3.
+    This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest

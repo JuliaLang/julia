@@ -769,20 +769,23 @@ g11015(::Type{Bool}, ::Bool) = 2.0
 
 # better inference of apply (#20343)
 f20343(::String, ::Int) = 1
-f20343(::Int, ::String, ::Int, ::Int) = 1
-f20343(::Int, ::Int, ::String, ::Int, ::Int, ::Int) = 1
-f20343(::Union{Int,String}...) = Int8(1)
+f20343(::Int, ::String, ::Int, ::Int) = 2
+f20343(::Int, ::Int, ::String, ::Int, ::Int, ::Int) = 3
+f20343(::Int, ::Int, ::Int, ::String, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int) = 4
+f20343(::Union{Int,String}...) = Int8(5)
 f20343(::Any...) = "no"
 function g20343()
     n = rand(1:3)
-    i = ntuple(i->n==i ? "" : 0, 2n)::Union{Tuple{String,Int},Tuple{Int,String,Int,Int},Tuple{Int,Int,String,Int,Int,Int}}
+    T = Union{Tuple{String, Int}, Tuple{Int, String, Int, Int}, Tuple{Int, Int, String, Int, Int, Int}}
+    i = ntuple(i -> n == i ? "" : 0, 2n)::T
     f20343(i...)
 end
 @test Base.return_types(g20343, ()) == [Int]
 function h20343()
     n = rand(1:3)
-    i = ntuple(i->n==i ? "" : 0, 3)::Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}
-    f20343(i..., i...)
+    T = Union{Tuple{String, Int, Int}, Tuple{Int, String, Int}, Tuple{Int, Int, String}}
+    i = ntuple(i -> n == i ? "" : 0, 3)::T
+    f20343(i..., i..., i..., i...)
 end
 @test Base.return_types(h20343, ()) == [Union{Int8, Int}]
 function i20343()
@@ -1069,6 +1072,16 @@ end
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) === Const(true)
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(2)) === Bool
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(3)) === Bool
+@testset "isdefined check for `NamedTuple`s" begin
+    # concrete `NamedTuple`s
+    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:x)) === Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:y)) === Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),Tuple{Int,Int}}, Const(:z)) === Const(false)
+    # non-concrete `NamedTuple`s
+    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:x)) === Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:y)) === Const(true)
+    @test isdefined_tfunc(NamedTuple{(:x,:y),<:Tuple{Int,Any}}, Const(:z)) === Const(false)
+end
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
@@ -2099,7 +2112,11 @@ end
 # issue #28356
 # unit test to make sure countunionsplit overflows gracefully
 # we don't care what number is returned as long as it's large
-@test Core.Compiler.countunionsplit(Any[Union{Int32,Int64} for i=1:80]) > 100000
+@test Core.Compiler.unionsplitcost(Any[Union{Int32, Int64} for i=1:80]) > 100000
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}]) == 2
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32, Int64}, Int8]) == 8
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32}, Int8]) == 6
+@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32}, Union{Int8, Int16, Int32, Int64}, Int8]) == 6
 
 # make sure compiler doesn't hang in union splitting
 
@@ -2623,7 +2640,20 @@ end
 
 f() = _foldl_iter(step, (Missing[],), [0.0], 1)
 end
-@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}, 0) == Tuple{Int}
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}, 1) == Tuple{Int}
+@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}, 2) == Tuple{Int}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, Tuple{Char, Any, Any}, 0) ==
+        Tuple{Int, Union{Char, Int}, Union{Char, Int}}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, Tuple{Char, Any, Any}, 10) ==
+        Union{Tuple{Int, Char, Char}, Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, NTuple{3, Char}, 0) ==
+        NTuple{3, Union{Int, Char}}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, NTuple{3, Char}, 10) ==
+        Union{Tuple{Char, Char, Int}, Tuple{Char, Int, Char}, Tuple{Char, Int, Int}, Tuple{Int, Char, Char},
+              Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
+
+
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
 
 # constant prop through keyword arguments
@@ -2811,3 +2841,79 @@ f_apply_cglobal(args...) = cglobal(args...)
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}}) == Ptr
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Vararg{Type{Int}}}) == Ptr{Int}
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}}) == Union{}
+
+# issue #37532
+@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{Int}}, Int])
+@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{T}} where T, Ptr])
+@test !Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr}, Ptr])
+f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
+@test Base.return_types(f37532, Tuple{Any, Int}) == Any[Int]
+
+# PR #37749
+# Helper functions for Core.Compiler.Timings. These are normally accessed via a package -
+# usually (SnoopCompileCore).
+function time_inference(f)
+    Core.Compiler.Timings.reset_timings()
+    Core.Compiler.__set_measure_typeinf(true)
+    f()
+    Core.Compiler.__set_measure_typeinf(false)
+    Core.Compiler.Timings.close_current_timer()
+    return Core.Compiler.Timings._timings[1]
+end
+function depth(t::Core.Compiler.Timings.Timing)
+    maximum(depth.(t.children), init=0) + 1
+end
+function flatten_times(t::Core.Compiler.Timings.Timing)
+    collect(Iterators.flatten([(t.time => t.mi_info,), flatten_times.(t.children)...]))
+end
+# Some very limited testing of timing the type inference (#37749).
+@testset "Core.Compiler.Timings" begin
+    # Functions that call each other
+    @eval module M
+        i(x) = x+5
+        i2(x) = x+2
+        h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
+        g(y::Integer, x) = h(Any[y]) + Int(x)
+    end
+    timing1 = time_inference() do
+        @eval M.g(2, 3.0)
+    end
+    # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
+    # their concrete types.
+    @test sort([mi_info.mi.def.name for (time,mi_info) in flatten_times(timing1)[end-1:end]]) == [:i, :i2]
+    # Test that inference has cached some of the Method Instances
+    timing2 = time_inference() do
+        @eval M.g(2, 3.0)
+    end
+    @test length(flatten_times(timing2)) < length(flatten_times(timing1))
+
+    # Recursive function
+    @eval module _Recursive f(n::Integer) = n == 0 ? 0 : f(n-1) + 1 end
+    timing = time_inference() do
+        @eval _Recursive.f(5)
+    end
+    @test depth(timing) == 3  # root -> f -> +
+    @test length(flatten_times(timing)) == 3  # root, f, +
+
+    # Functions inferred with multiple constants
+    @eval module C
+        i(x) = x === 0 ? 0 : 1 / x
+        a(x) = i(0) * i(x)
+        b() = i(0) * i(1) * i(0)
+    end
+    timing = time_inference() do
+        @eval C.a(2)
+        @eval C.b()
+    end
+    @test !isempty(flatten_times(timing))
+end
+
+# issue #37638
+@test !(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}) <: Vararg)
+
+# Issue #37943
+f37943(x::Any, i::Int) = getfield((x::Pair{false, Int}), i)
+g37943(i::Int) = fieldtype(Pair{false, T} where T, i)
+@test only(Base.return_types(f37943, Tuple{Any, Int})) === Union{}
+@test only(Base.return_types(g37943, Tuple{Int})) === Union{Type{Union{}}, Type{Any}}
+

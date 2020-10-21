@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random
+using Test, Random
 using Test: guardseed
+using Serialization
+using Distributed: RemoteException
 
 import Logging: Debug, Info, Warn
 
@@ -394,7 +396,7 @@ end
         @test total_broken == 0
     end
     ts.anynonpass = false
-    deleteat!(Test.get_testset().results,1)
+    deleteat!(Test.get_testset().results, 1)
 end
 
 @test .1+.1+.1 ≈ .3
@@ -565,6 +567,13 @@ for i in 1:6
     @test typeof(tss[i].results[4]) == CustomTestSet
     @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
 end
+
+# test that second argument is escaped correctly
+foo = 3
+tss = @testset CustomTestSet foo=foo "custom testset - escaping" begin
+    @test true
+end
+@test tss.foo == 3
 
 # test @inferred
 uninferrable_function(i) = (1, "1")[i]
@@ -945,4 +954,18 @@ end
         @error "push/pop_testset invariance test failed" cmd Text(String(take!(io)))
     end
     @test ok
+end
+
+let ex = :(something_complex + [1, 2, 3])
+    b = PipeBuffer()
+    let t = Test.Pass(:test, (ex, 1), (ex, 2), (ex, 3))
+        serialize(b, t)
+        @test string(t) == string(deserialize(b))
+        @test eof(b)
+    end
+    let t = Test.Broken(:test, ex)
+        serialize(b, t)
+        @test string(t) == string(deserialize(b))
+        @test eof(b)
+    end
 end

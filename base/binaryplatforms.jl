@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module BinaryPlatforms
 
 export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
@@ -8,71 +10,7 @@ export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
 import .Libc.Libdl
 
 ### Submodule with information about CPU features
-module CPUID
-
-export cpu_isa
-
-"""
-    ISA(features::Set{UInt32})
-
-A structure which represents the Instruction Set Architecture (ISA) of a
-computer.  It holds the `Set` of features of the CPU.
-
-The numerical values of the features are automatically generated from the C
-source code of Julia and stored in the `features_h.jl` Julia file.
-"""
-struct ISA
-    features::Set{UInt32}
-end
-
-Base.:<=(a::ISA, b::ISA) = a.features <= b.features
-Base.:<(a::ISA,  b::ISA) = a.features <  b.features
-Base.isless(a::ISA,  b::ISA) = a < b
-
-include("features_h.jl")
-
-# Keep in sync with `arch_march_isa_mapping`.
-const ISAs_by_family = Dict(
-    "x86_64" => (
-        # Source: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html.
-        # Implicit in all sets, because always required: mmx, sse, sse2
-        "x86_64" => ISA(Set{UInt32}()),
-        "core2" => ISA(Set((JL_X86_sse3, JL_X86_ssse3))),
-        "nehalem" => ISA(Set((JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt))),
-        "sandybridge" => ISA(Set((JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_aes, JL_X86_pclmul))),
-        "haswell" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c))),
-        "skylake" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c, JL_X86_rdseed, JL_X86_adx, JL_X86_prfchw, JL_X86_clflushopt, JL_X86_xsavec, JL_X86_xsaves))),
-        "skylake_avx512" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_pku, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c, JL_X86_rdseed, JL_X86_adx, JL_X86_prfchw, JL_X86_clflushopt, JL_X86_xsavec, JL_X86_xsaves, JL_X86_avx512f, JL_X86_clwb, JL_X86_avx512vl, JL_X86_avx512bw, JL_X86_avx512dq, JL_X86_avx512cd))),
-    ),
-    "arm" => (
-        "armv7l" => ISA(Set{UInt32}()),
-        "armv7l_neon" => ISA(Set((JL_AArch32_neon,))),
-        "armv7l_neon_vfp4" => ISA(Set((JL_AArch32_neon, JL_AArch32_vfp4))),
-    ),
-    "aarch64" => (
-        # Implicit in all sets, because always required: fp, asimd
-        "armv8.0_a" => ISA(Set{UInt32}()),
-        "armv8.1_a" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm))),
-        "armv8.2_a_crypto" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_aes, JL_AArch64_sha2))),
-        "armv8.4_a_crypto_sve" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_fp16fml, JL_AArch64_dotprod, JL_AArch64_aes, JL_AArch64_sha2, JL_AArch64_dotprod, JL_AArch64_sve))),
-    ),
-)
-
-test_cpu_feature(feature::UInt32) = ccall(:jl_test_cpu_feature, Bool, (UInt32,), feature)
-cpu_family() = String(Sys.ARCH)
-
-"""
-    cpu_isa()
-
-Return the [`ISA`](@ref) (instruction set architecture) of the current CPU.
-"""
-function cpu_isa()
-    all_features = last(last(get(ISAs_by_family, cpu_family(), "" => [ISA(Set{UInt32}())]))).features
-    return ISA(Set{UInt32}(feat for feat in all_features if test_cpu_feature(feat)))
-end
-
-end # module CPUID
-
+include("cpuid.jl")
 using .CPUID
 
 # This exists to ease compatibility with old-style Platform objects
@@ -108,16 +46,7 @@ struct Platform <: AbstractPlatform
                       kwargs...)
         # A wee bit of normalization
         os = lowercase(os)
-        arch = lowercase(arch)
-        if arch ∈ ("amd64",)
-            arch = "x86_64"
-        elseif arch ∈ ("i386", "i586")
-            arch = "i686"
-        elseif arch ∈ ("arm",)
-            arch = "armv7l"
-        elseif arch ∈ ("ppc64le",)
-            arch = "powerpc64le"
-        end
+        arch = CPUID.normalize_arch(arch)
 
         tags = Dict{String,String}(
             "arch" => arch,
@@ -215,6 +144,20 @@ function Base.setindex!(p::AbstractPlatform, v::String, k::String)
     return p
 end
 
+# Hash definitino to ensure that it's stable
+function Base.hash(p::Platform, h::UInt)
+    h += 0x506c6174666f726d % UInt
+    h = hash(p.tags, h)
+    h = hash(p.compare_strategies, h)
+    return h
+end
+
+# Simple equality definition; for compatibility testing, use `platforms_match()`
+function Base.:(==)(a::Platform, b::Platform)
+    return a.tags == b.tags && a.compare_strategies == b.compare_strategies
+end
+
+
 # Allow us to easily serialize Platform objects
 function Base.repr(p::Platform; context=nothing)
     str = string(
@@ -228,21 +171,21 @@ function Base.repr(p::Platform; context=nothing)
     )
 end
 
-# Simple equality definition; for compatibility testing, use `platforms_match()`
-Base.:(==)(a::AbstractPlatform, b::AbstractPlatform) = tags(a) == tags(b)
+# Make showing the platform a bit more palatable
+function Base.show(io::IO, p::Platform)
+    str = string(platform_name(p), " ", arch(p))
+    # Add on all the other tags not covered by os/arch:
+    other_tags = sort(collect(filter(kv -> kv[1] ∉ ("os", "arch"), tags(p))))
+    if !isempty(other_tags)
+        str = string(str, " {", join([string(k, "=", v) for (k, v) in other_tags], ", "), "}")
+    end
+    print(io, str)
+end
 
-const ARCHITECTURE_FLAGS = Dict(
-    "x86_64" => ["x86_64", "avx", "avx2", "avx512"],
-    "i686" => ["prescott"],
-    "armv7l" => ["armv7l", "neon", "vfp4"],
-    "armv6l" => ["generic"],
-    "aarch64" => ["armv8", "thunderx2", "carmel"],
-    "powerpc64le" => ["generic"],
-)
 function validate_tags(tags::Dict)
     throw_invalid_key(k) = throw(ArgumentError("Key \"$(k)\" cannot have value \"$(tags[k])\""))
     # Validate `arch`
-    if tags["arch"] ∉ keys(ARCHITECTURE_FLAGS)
+    if tags["arch"] ∉ ("x86_64", "i686", "armv7l", "armv6l", "aarch64", "powerpc64le")
         throw_invalid_key("arch")
     end
     # Validate `os`
@@ -300,16 +243,6 @@ function validate_tags(tags::Dict)
     # Validate `cxxstring_abi` is one of the two valid options:
     if "cxxstring_abi" in keys(tags) && tags["cxxstring_abi"] ∉ ("cxx03", "cxx11")
         throw_invalid_key("cxxstring_abi")
-    end
-
-    # Validate `march` is one of our recognized microarchitectures for the architecture we're advertising
-    if "march" in keys(tags) && tags["march"] ∉ ARCHITECTURE_FLAGS[tags["arch"]]
-        throw(ArgumentError("\"march\" cannot have value \"$(tags["march"])\" for arch $(tags["arch"])"))
-    end
-
-    # Validate `cuda` is a parsable `VersionNumber`
-    if "cuda" in keys(tags) && tryparse(VersionNumber, tags["cuda"]) === nothing
-        throw_version_number("cuda")
     end
 end
 
@@ -568,7 +501,7 @@ julia> triplet(Platform("armv7l", "Linux"; libgfortran_version="3"))
 """
 function triplet(p::AbstractPlatform)
     str = string(
-        arch(p),
+        arch(p)::Union{Symbol,String},
         os_str(p),
         libc_str(p),
         call_abi_str(p),
@@ -587,7 +520,7 @@ function triplet(p::AbstractPlatform)
 
     # Tack on all extra tags
     for (tag, val) in tags(p)
-        if tag ∈ ("os", "arch", "libc", "call_abi", "libgfortran_version", "libstdcxx_version", "cxxstring_abi")
+        if tag ∈ ("os", "arch", "libc", "call_abi", "libgfortran_version", "libstdcxx_version", "cxxstring_abi", "os_version")
             continue
         end
         str = string(str, "-", tag, "+", val)
@@ -621,15 +554,19 @@ end
 
 # Helper functions for Linux and FreeBSD libc/abi mishmashes
 function libc_str(p::AbstractPlatform)
-    if libc(p) === nothing
+    lc = libc(p)
+    if lc === nothing
         return ""
-    elseif libc(p) === "glibc"
+    elseif lc === "glibc"
         return "-gnu"
     else
-        return string("-", libc(p))
+        return string("-", lc)
     end
 end
-call_abi_str(p::AbstractPlatform) = (call_abi(p) === nothing) ? "" : call_abi(p)
+function call_abi_str(p::AbstractPlatform)
+    cabi = call_abi(p)
+    cabi === nothing ? "" : string(cabi::Union{Symbol,String})
+end
 
 Sys.isapple(p::AbstractPlatform) = os(p) == "macos"
 Sys.islinux(p::AbstractPlatform) = os(p) == "linux"
@@ -646,28 +583,39 @@ const arch_mapping = Dict(
     "powerpc64le" => "p(ower)?pc64le",
 )
 # Keep this in sync with `CPUID.ISAs_by_family`
+# These are the CPUID side of the microarchitectures targeted by GCC flags in BinaryBuilder.jl
 const arch_march_isa_mapping = let
     function get_set(arch, name)
         all = CPUID.ISAs_by_family[arch]
         return all[findfirst(x -> x.first == name, all)].second
     end
     Dict(
-        "x86_64" => Dict{String,CPUID.ISA}(
+        "i686" => [
+            "i686" => get_set("i686", "i686"),
+            "prescott" => get_set("i686", "prescott"),
+        ],
+        "x86_64" => [
             "x86_64" => get_set("x86_64", "x86_64"),
             "avx" => get_set("x86_64", "sandybridge"),
             "avx2" => get_set("x86_64", "haswell"),
             "avx512" => get_set("x86_64", "skylake_avx512"),
-        ),
-        "armv7l" => Dict{String,CPUID.ISA}(
-            "armv7l" => get_set("arm", "armv7l"),
-            "neon" => get_set("arm", "armv7l_neon"),
-            "vfp4" => get_set("arm", "armv7l_neon_vfp4"),
-        ),
-        "aarch64" => Dict{String,CPUID.ISA}(
-            "armv8" => get_set("aarch64", "armv8.0_a"),
-            "thunderx2" => get_set("aarch64", "armv8.1_a"),
-            "carmel" => get_set("aarch64", "armv8.2_a_crypto"),
-        ),
+        ],
+        "armv6l" => [
+            "arm1176jzfs" => get_set("armv6l", "arm1176jzfs"),
+        ],
+        "armv7l" => [
+            "armv7l" => get_set("armv7l", "armv7l"),
+            "neonvfpv4" => get_set("armv7l", "armv7l+neon+vfpv4"),
+        ],
+        "aarch64" => [
+            "armv8_0" => get_set("aarch64", "armv8.0-a"),
+            "armv8_1" => get_set("aarch64", "armv8.1-a"),
+            "armv8_2_crypto" => get_set("aarch64", "armv8.2-a+crypto"),
+            "armv8_4_crypto_sve" => get_set("aarch64", "armv8.4-a+crypto+sve"),
+        ],
+        "powerpc64le" => [
+            "power8" => get_set("powerpc64le", "power8"),
+        ]
     )
 end
 const os_mapping = Dict(
@@ -694,8 +642,7 @@ const libgfortran_version_mapping = Dict(
 )
 const libstdcxx_version_mapping = Dict{String,String}(
     "libstdcxx_nothing" => "",
-    # This is sadly easier than parsing out the digit directly
-    ("libstdcxx$(idx)" => "-libstdcxx$(idx)" for idx in 18:26)...,
+    "libstdcxx" => "-libstdcxx\\d+",
 )
 const cxxstring_abi_mapping = Dict(
     "cxxstring_nothing" => "",
@@ -745,7 +692,7 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
                     if startswith(k, "libgfortran")
                         return VersionNumber(parse(Int,k[12:end]))
                     elseif startswith(k, "libstdcxx")
-                        return VersionNumber(3, 4, parse(Int,k[10:end]))
+                        return VersionNumber(3, 4, parse(Int,m[k][11:end]))
                     else
                         return k
                     end
@@ -850,7 +797,7 @@ function parse_dl_name_version(path::String, os::String)
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"
     else
         # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?).so((?:\.[\d]+)*)$"
+        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"
     end
 
     m = match(dlregex, basename(path))

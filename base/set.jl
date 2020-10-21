@@ -570,7 +570,7 @@ promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
 # Subtract singleton types which are going to be replaced
 function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
     if issingletontype(K)
-        Core.Compiler.typesubtract(T, K)
+        typesplit(T, K)
     else
         T
     end
@@ -682,4 +682,47 @@ function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::I
         end
     end
     res
+end
+
+### specialization for Dict / Set
+
+function _replace!(new::Callable, t::Dict{K,V}, A::Dict{K,V}, count::Int) where {K,V}
+    # we ignore A, which is supposed to be equal to the destination t,
+    # as it can generally be faster to just replace inline
+    count == 0 && return t
+    c = 0
+    news = Pair{K,V}[]
+    i = skip_deleted_floor!(t)
+    @inbounds while i != 0
+        k1, v1 = t.keys[i], t.vals[i]
+        x1 = Pair{K,V}(k1, v1)
+        x2 = new(x1)
+        if x1 !== x2
+            k2, v2 = first(x2), last(x2)
+            if isequal(k1, k2)
+                t.keys[i] = k2
+                t.vals[i] = v2
+                t.age += 1
+            else
+                _delete!(t, i)
+                push!(news, x2)
+            end
+            c += 1
+            c == count && break
+        end
+        i = i == typemax(Int) ? 0 : skip_deleted(t, i+1)
+    end
+    for n in news
+        push!(t, n)
+    end
+    t
+end
+
+function _replace!(new::Callable, t::Set{T}, ::Set{T}, count::Int) where {T}
+    _replace!(t.dict, t.dict, count) do kv
+        k = first(kv)
+        k2 = new(k)
+        k2 === k ? kv : k2 => nothing
+    end
+    t
 end

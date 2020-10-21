@@ -112,12 +112,12 @@ function inline_into_block!(state::CFGInliningState, block::Int)
     return
 end
 
-function cfg_inline_item!(idx::Int, spec::ResolvedInliningSpec, state::CFGInliningState, from_unionsplit::Bool=false)
+function cfg_inline_item!(ir::IRCode, idx::Int, spec::ResolvedInliningSpec, state::CFGInliningState, from_unionsplit::Bool=false)
     inlinee_cfg = spec.ir.cfg
     # Figure out if we need to split the BB
     need_split_before = false
     need_split = true
-    block = block_for_inst(state.cfg, idx)
+    block = block_for_inst(ir, idx)
     inline_into_block!(state, block)
 
     if !isempty(inlinee_cfg.blocks[1].preds)
@@ -206,8 +206,8 @@ function cfg_inline_item!(idx::Int, spec::ResolvedInliningSpec, state::CFGInlini
     end
 end
 
-function cfg_inline_unionsplit!(idx::Int, item::UnionSplit, state::CFGInliningState)
-    block = block_for_inst(state.cfg, idx)
+function cfg_inline_unionsplit!(ir::IRCode, idx::Int, item::UnionSplit, state::CFGInliningState)
+    block = block_for_inst(ir, idx)
     inline_into_block!(state, block)
     from_bbs = Int[]
     delete!(state.split_targets, length(state.new_cfg_blocks))
@@ -223,7 +223,7 @@ function cfg_inline_unionsplit!(idx::Int, item::UnionSplit, state::CFGInliningSt
         if isa(case, InliningTodo)
             spec = case.spec::ResolvedInliningSpec
             if !spec.linear_inline_eligible
-                cfg_inline_item!(idx, spec, state, true)
+                cfg_inline_item!(ir, idx, spec, state, true)
             end
         end
         bb = length(state.new_cfg_blocks)
@@ -501,13 +501,13 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
     state = CFGInliningState(ir)
     for (idx, item) in todo
         if isa(item, UnionSplit)
-            cfg_inline_unionsplit!(idx, item::UnionSplit, state)
+            cfg_inline_unionsplit!(ir, idx, item::UnionSplit, state)
         else
             item = item::InliningTodo
             spec = item.spec::ResolvedInliningSpec
             # A linear inline does not modify the CFG
             spec.linear_inline_eligible && continue
-            cfg_inline_item!(idx, spec, state, false)
+            cfg_inline_item!(ir, idx, spec, state, false)
         end
     end
     finish_cfg_inline!(state)
@@ -1173,7 +1173,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             continue
         end
 
-        nu = countunionsplit(sig.atypes)
+        nu = unionsplitcost(sig.atypes)
         if nu == 1 || nu > state.params.MAX_UNION_SPLITTING
             if !isa(info, MethodMatchInfo)
                 if state.method_table === nothing

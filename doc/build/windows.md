@@ -90,7 +90,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
     Advanced: you may skip steps 2-4 by running:
 
-        setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,python,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
+        setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,python3,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
         :: replace <url> with a site from https://cygwin.com/mirrors.html
         :: or run setup manually first and select a mirror
 
@@ -100,7 +100,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
     1.  From the *Devel* category: `cmake`, `gcc-g++`, `git`, `make`, `patch`
     2.  From the *Net* category: `curl`
-    3.  From *Interpreters* (or *Python*) category: `m4`, `python`
+    3.  From *Interpreters* (or *Python*) category: `m4`, `python3`
     4.  From the *Archive* category: `p7zip`
     5.  For 32 bit Julia, and also from the *Devel* category:
         `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
@@ -195,7 +195,7 @@ zypper -n install mingw$BITS-cross-gcc-c++ mingw$BITS-cross-gcc-fortran \
 cp /usr/$XC_HOST/sys-root/mingw/bin/*.dll /usr/lib*/gcc/$XC_HOST/*/
 git clone git://github.com/JuliaLang/julia.git julia
 cd julia
-make -j4 win-extras julia-ui-release
+make -j4 win-extras julia-cli-release
 export WINEDEBUG=-all # suppress wine fixme's
 # this last step may need to be run interactively
 make -j4 binary-dist
