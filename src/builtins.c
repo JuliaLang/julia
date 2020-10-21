@@ -399,8 +399,8 @@ JL_CALLABLE(jl_f_sizeof)
     jl_value_t *x = args[0];
     if (jl_is_unionall(x) || jl_is_uniontype(x)) {
         x = jl_unwrap_unionall(x);
-        size_t elsize = 0, al = 0;
-        int isinline = jl_islayout_inline(x, &elsize, &al);
+        size_t elsize = 0;
+        int isinline = jl_uniontype_size(x, &elsize);
         if (isinline)
             return jl_box_long(elsize);
         if (!jl_is_datatype(x))

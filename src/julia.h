@@ -1398,6 +1398,7 @@ JL_DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i,
 JL_DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
+int jl_uniontype_size(jl_value_t *ty, size_t *sz) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al) JL_NOTSAFEPOINT;
 
 // arrays

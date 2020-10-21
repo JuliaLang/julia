@@ -380,7 +380,7 @@ function sizeof_tfunc(@nospecialize(x),)
         x = unwrap_unionall(t)
         if exact && isa(x, Union)
             isinline, sz, _ = uniontype_layout(x)
-            return isinline ? Const(Int(sz)) : Bottom
+            return isinline ? Const(Int(Core.sizeof(x))) : Bottom
         end
         isa(x, DataType) || return Int
         (isconcretetype(x) || isprimitivetype(x)) && return _const_sizeof(x)
