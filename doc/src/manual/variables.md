@@ -59,6 +59,26 @@ name `δ` can be entered by typing `\delta`-*tab*, or even `α̂₂` by `\alpha`
 that you don't know how to type, the REPL help will tell you: just type `?` and
 then paste the symbol.)
 
+Julia allows you to associate multiple names at once:
+
+```jl-doctest
+julia> a, b, c = 10, 20, "Hello!"
+(10, 20, "Hello!")
+
+julia> a
+10
+
+julia> b
+20
+
+julia> c
+"Hello!"
+```
+
+This is sometimes called destructuring. It works recursively and you can do it
+whenever the right hand side of the `=` sign is iterable.
+
+
 Julia will even let you redefine built-in constants and functions if needed (although
 this is not recommended to avoid potential confusions):
 
