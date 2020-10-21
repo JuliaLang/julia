@@ -27,7 +27,6 @@ isfailed(rr) = fetch_from_owner(istaskfailed, rr)
 
 @testset "RemoteChannel allows put!/take! from thread other than 1" begin
   ws = ts = product(1:2, 1:2)
-  timeout = 10.0
   @testset "from worker $w1 to $w2 via 1" for (w1, w2) in ws
     @testset "from thread $w1.$t1 to $w2.$t2" for (t1, t2) in ts
       # We want (the default) lazyness, so that we wait for `Worker.c_state`!
@@ -43,9 +42,19 @@ isfailed(rr) = fetch_from_owner(istaskfailed, rr)
       recv = call_on(p2, t2) do
         take!(chan)
       end
-      timedwait(() -> isdone(send) && isdone(recv), timeout)
+
+      # Wait on the remotecall to have happend
+      @test wait(send) == send
+      @test wait(recv) == recv
+
+      # Wait on the spawned tasks
+      fetch_from_owner(wait, recv)
+      fetch_from_owner(wait, send)
+
+      # Check the tasks
       @test isdone(send)
       @test isdone(recv)
+
       @test !isfailed(send)
       @test !isfailed(recv)
       rmprocs(procs_added)
