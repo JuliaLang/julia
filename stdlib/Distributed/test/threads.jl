@@ -43,13 +43,11 @@ isfailed(rr) = fetch_from_owner(istaskfailed, rr)
         take!(chan)
       end
 
-      # Wait on the remotecall to have happend
-      @test wait(send) == send
-      @test wait(recv) == recv
-
-      # Wait on the spawned tasks
-      fetch_from_owner(wait, recv)
-      fetch_from_owner(wait, send)
+      # Wait on the spawned tasks on the owner
+      @sync
+        @async fetch_from_owner(wait, recv)
+        @async fetch_from_owner(wait, send)
+      end
 
       # Check the tasks
       @test isdone(send)
