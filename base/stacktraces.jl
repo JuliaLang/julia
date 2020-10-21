@@ -119,32 +119,32 @@ end
 const top_level_scope_sym = Symbol("top-level scope")
 
 function lookup(ip::Base.InterpreterIP)
-    if ip.code isa MethodInstance && ip.code.def isa Method
-        codeinfo = ip.code.uninferred
-        func = ip.code.def.name
-        file = ip.code.def.file
-        line = ip.code.def.line
-    elseif ip.code === nothing
+    code = ip.code
+    if code === nothing
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
+    end
+    codeinfo = (code isa MethodInstance ? code.uninferred : code)::CodeInfo
+    # prepare approximate code info
+    if code isa MethodInstance && code.def isa Method
+        func = code.def.name
+        file = code.def.file
+        line = code.def.line
     else
-        @assert ip.code isa CodeInfo
-        codeinfo = ip.code
         func = top_level_scope_sym
         file = empty_sym
         line = 0
     end
     i = max(ip.stmt+1, 1)  # ip.stmt is 0-indexed
     if i > length(codeinfo.codelocs) || codeinfo.codelocs[i] == 0
-        return [StackFrame(func, file, line, ip.code, false, false, 0)]
+        return [StackFrame(func, file, line, code, false, false, 0)]
     end
     lineinfo = codeinfo.linetable[codeinfo.codelocs[i]]
     scopes = StackFrame[]
     while true
-        push!(scopes, StackFrame(lineinfo.method, lineinfo.file, lineinfo.line, ip.code, false, false, 0))
-        if lineinfo.inlined_at == 0
-            break
-        end
+        inlined = lineinfo.inlined_at != 0
+        push!(scopes, StackFrame(lineinfo.method, lineinfo.file, lineinfo.line, inlined ? nothing : code, false, inlined, 0))
+        inlined || break
         lineinfo = codeinfo.linetable[lineinfo.inlined_at]
     end
     return scopes
