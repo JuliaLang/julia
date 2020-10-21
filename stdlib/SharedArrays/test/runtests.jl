@@ -142,6 +142,7 @@ read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
 finalize(S)
+@test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{UInt8})
 
 # call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
 S = nothing
@@ -165,6 +166,7 @@ S = @inferred(SharedArray{Int}(1,2))
 S = @inferred(SharedArray{Int}(1,2,3))
 @test size(S) == (1,2,3)
 @test typeof(S) <: SharedArray{Int}
+@test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{Int})
 
 # reshape
 
