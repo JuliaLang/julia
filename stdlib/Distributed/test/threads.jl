@@ -44,7 +44,7 @@ isfailed(rr) = fetch_from_owner(istaskfailed, rr)
       end
 
       # Wait on the spawned tasks on the owner
-      @sync
+      @sync begin
         @async fetch_from_owner(wait, recv)
         @async fetch_from_owner(wait, send)
       end
