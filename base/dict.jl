@@ -129,7 +129,7 @@ function UDict(kv)
         dict_with_eltype((K, V) -> UDict{K, V}, kv, eltype(kv))
     catch
         if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
-            throw(ArgumentError("UDict(kv): kv needs to be an iterator of tuples or pairs"))
+            throw(ArgumentError("Base.UDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow()
         end
@@ -615,7 +615,7 @@ function pop!(h::UDict, key, default)
 end
 
 function pop!(h::UDict)
-    isempty(h) && throw(ArgumentError("dict must be non-empty"))
+    isempty(h) && throw(ArgumentError("Base.UDict must be non-empty"))
     idx = skip_deleted_floor!(h)
     @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
