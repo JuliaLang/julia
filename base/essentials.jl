@@ -782,8 +782,8 @@ julia> d = Dict("a"=>1, "b"=>2);
 
 julia> values(d)
 ValueIterator for a Dict{String, Int64} with 2 entries. Values:
-  2
   1
+  2
 
 julia> values([2])
 1-element Vector{Int64}:

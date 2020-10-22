@@ -796,8 +796,8 @@ Retrieve the value(s) stored at the given key or index within a collection. The 
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
 Dict{String, Int64} with 2 entries:
-  "b" => 2
   "a" => 1
+  "b" => 2
 
 julia> getindex(A, "a")
 1

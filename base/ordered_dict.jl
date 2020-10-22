@@ -449,5 +449,8 @@ function Base.map!(f, iter::Base.ValueIterator{<:OrderedDict})
     return iter
 end
 
+@propagate_inbounds isslotempty(h::OrderedDict, i::Int) = h.slots[i] == 0
+@propagate_inbounds isslotfilled(h::OrderedDict, i::Int) = h.slots[i] > 0
+
 const Dict = OrderedDict
 const AnyDict = Dict{Any,Any}
