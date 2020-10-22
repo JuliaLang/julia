@@ -91,6 +91,7 @@ Manual = [
     "manual/faq.md",
     "manual/noteworthy-differences.md",
     "manual/unicode-input.md",
+    "manual/command-line-options.md",
 ]
 
 BaseDocs = [

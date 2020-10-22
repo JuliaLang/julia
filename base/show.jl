@@ -648,8 +648,10 @@ function make_typealiases(@nospecialize(x::Type))
     aliases = SimpleVector[]
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
+    each = Any[]
     for p in uniontypes(unwrap_unionall(x))
         p isa UnionAll && push!(xenv, p)
+        push!(each, rewrap_unionall(p, x))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
@@ -682,7 +684,12 @@ function make_typealiases(@nospecialize(x::Type))
                     has_free_typevars(applied) && continue
                     applied <: x || continue # parameter matching didn't make a subtype
                     print_without_params(x) && (env = Core.svec())
-                    push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                    for typ in each # check that the alias also fully subsumes at least component of the input
+                        if typ <: applied
+                            push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                            break
+                        end
+                    end
                 end
             end
         end
@@ -2064,7 +2071,8 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
         isdefined(uw.name.module, uw.name.mt.name) &&
         ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        show_sym(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
+        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
+        print_within_stacktrace(io, s, bold=true)
     elseif isa(ft, DataType) && ft.name === Type.body.name &&
         (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
@@ -2076,19 +2084,20 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         if html
             print(io, "($fargname::<b>", ft, "</b>)")
         else
-            print(io, "($fargname::", ft, ")")
+            print_within_stacktrace(io, "($fargname::", ft, ")", bold=true)
         end
     end
     nothing
 end
 
-function print_within_stacktrace(io, s...; color, bold=false)
+function print_within_stacktrace(io, s...; color=:normal, bold=false)
     if get(io, :backtrace, false)::Bool
         printstyled(io, s...; color, bold)
     else
         print(io, s...)
     end
 end
+
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing, argnames=nothing)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
@@ -2105,16 +2114,16 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     sig = (sig::DataType).parameters
     show_signature_function(env_io, sig[1], demangle)
     first = true
-    print_within_stacktrace(io, "(", color=:light_black)
+    print_within_stacktrace(io, "(", bold=true)
     show_argnames = argnames !== nothing && length(argnames) == length(sig)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         if show_argnames
-            print_within_stacktrace(io, argnames[i]; bold=true, color=:light_black)
+            print_within_stacktrace(io, argnames[i]; color=:light_black)
         end
         print(io, "::")
-        print_within_stacktrace(env_io, sig[i]; color=:light_black)
+        print_type_stacktrace(env_io, sig[i])
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -2122,14 +2131,25 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         for (k, t) in kwargs
             first || print(io, ", ")
             first = false
-            print_within_stacktrace(io, k; bold=true, color=:light_black)
+            print_within_stacktrace(io, k; color=:light_black)
             print(io, "::")
-            print_within_stacktrace(io, t; color=:light_black)
+            print_type_stacktrace(io, t)
         end
     end
-    print_within_stacktrace(io, ")", color=:light_black)
+    print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     nothing
+end
+
+function print_type_stacktrace(io, type; color=:normal)
+    str = sprint(show, type, context=io)
+    i = findfirst('{', str)
+    if isnothing(i) || !get(io, :backtrace, false)::Bool
+        printstyled(io, str; color=color)
+    else
+        printstyled(io, str[1:i-1]; color=color)
+        printstyled(io, str[i:end]; color=:light_black)
+    end
 end
 
 resolvebinding(@nospecialize(ex)) = ex
