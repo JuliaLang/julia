@@ -2114,7 +2114,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     sig = (sig::DataType).parameters
     show_signature_function(env_io, sig[1], demangle)
     first = true
-    print(io, "(")
+    print_within_stacktrace(io, "(", bold=true)
     show_argnames = argnames !== nothing && length(argnames) == length(sig)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
