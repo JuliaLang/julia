@@ -738,7 +738,7 @@ function analyze_method!(match::MethodMatch, atypes::Vector{Any},
     # Bail out if any static parameters are left as TypeVar
     ok = true
     for i = 1:length(match.sparams)
-        isa(match.sparams[i], TypeVar) && return nothing
+        (isa(match.sparams[i], TypeVar) || isa(match.sparams[i], Core.TypeofVararg)) && return nothing
     end
 
     if !params.inlining

@@ -423,7 +423,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = (unwrap_unionall(sig[i]).parameters[1], "...")
+                    sigstr = (unwrap_unionall(sig[i]).T, "...")
                     j = length(t_i)
                 else
                     sigstr = (sig[i],)
@@ -460,7 +460,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
                 for t in arg_types_param[length(sig):end]
-                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).parameters[1], method.sig)
+                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).T, method.sig)
                         right_matches += 1
                     end
                 end
@@ -473,7 +473,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                         sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
-                            sigstr = ((sigtype::DataType).parameters[1], "...")
+                            sigstr = ((sigtype::Core.TypeofVararg).T, "...")
                         else
                             sigstr = (sigtype,)
                         end

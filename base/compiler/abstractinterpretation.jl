@@ -1057,10 +1057,11 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
         spsig = linfo.def.sig
         if isa(spsig, UnionAll)
             if !isempty(linfo.sparam_vals)
-                env = pointer_from_objref(linfo.sparam_vals) + sizeof(Ptr{Cvoid})
-                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, env)
+                sparam_vals = Any[isa(v, Core.TypeofVararg) ? TypeVar(:N, Union{}, Any) :
+                                  v for v in  linfo.sparam_vals]
+                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
-                for v in linfo.sparam_vals
+                for v in sparam_vals
                     if isa(v, TypeVar)
                         T = UnionAll(v, T)
                     end

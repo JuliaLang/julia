@@ -61,6 +61,17 @@ function valid_tparam(@nospecialize(x))
     return isa(x, Symbol) || isbits(x)
 end
 
+function compatible_vatuple(a::DataType, b::DataType)
+    vaa = a.parameters[end]
+    vab = a.parameters[end]
+    if !(isa(vaa, Core.TypeofVararg) && isa(vab, Core.TypeofVararg))
+        return isa(vaa, Core.TypeofVararg) == isa(vab, Core.TypeofVararg)
+    end
+    (isdefined(vaa, :N) == isdefined(vab, :N)) || return false
+    !isdefined(vaa, :N) && return true
+    return vaa.N === vab.N
+end
+
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
 function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::Int)
@@ -80,12 +91,15 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
                     ta = switchtupleunion(a)
                     return typesubtract(Union{ta...}, b, 0)
                 elseif b isa DataType
+                    if !compatible_vatuple(a, b)
+                        return a
+                    end
                     # if exactly one element is not bottom after calling typesubtract
                     # then the result is all of the elements as normal except that one
                     notbottom = fill(false, length(a.parameters))
                     for i = 1:length(notbottom)
-                        ap = a.parameters[i]
-                        bp = b.parameters[i]
+                        ap = unwrapva(a.parameters[i])
+                        bp = unwrapva(b.parameters[i])
                         notbottom[i] = !(ap <: bp && isnotbrokensubtype(ap, bp))
                     end
                     let i = findfirst(notbottom)
@@ -93,6 +107,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
                             ta = collect(a.parameters)
                             ap = a.parameters[i]
                             bp = b.parameters[i]
+                            (isa(ap, Core.TypeofVararg) || isa(bp, Core.TypeofVararg)) && return a
                             ta[i] = typesubtract(ap, bp, min(2, MAX_UNION_SPLITTING))
                             return Tuple{ta...}
                         end
@@ -196,6 +211,7 @@ function unioncomplexity(t::DataType)
     return c
 end
 unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
+unioncomplexity(t::Core.TypeofVararg) = isdefined(t, :T) ? unioncomplexity(t.T) : 0
 unioncomplexity(@nospecialize(x)) = 0
 
 function improvable_via_constant_propagation(@nospecialize(t))
