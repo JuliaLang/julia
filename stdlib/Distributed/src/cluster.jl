@@ -99,7 +99,7 @@ mutable struct Worker
     add_msgs::Array{Any,1}
     gcflag::Bool
     state::WorkerState
-    c_state::Condition      # wait for state changes
+    c_state::Event          # wait for state changes
     ct_time::Float64        # creation time
     conn_func::Any          # used to setup connections lazily
 
@@ -133,7 +133,7 @@ mutable struct Worker
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
-        w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
+        w=new(id, [], [], false, W_CREATED, Event(), time(), conn_func)
         w.initialized = Event()
         register_worker(w)
         w
@@ -144,7 +144,7 @@ end
 
 function set_worker_state(w, state)
     w.state = state
-    notify(w.c_state; all=true)
+    notify(w.c_state)
 end
 
 function check_worker_state(w::Worker)
@@ -189,7 +189,7 @@ function wait_for_conn(w)
         timeout =  worker_timeout() - (time() - w.ct_time)
         timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
 
-        @async (sleep(timeout); notify(w.c_state; all=true))
+        @async (sleep(timeout); notify(w.c_state))
         wait(w.c_state)
         w.state === W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
     end
