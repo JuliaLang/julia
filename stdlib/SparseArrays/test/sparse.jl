@@ -2970,6 +2970,28 @@ end
     @test SparseArrays.getcolptr(vA) == SparseArrays.getcolptr(A[:, 1:5])
 end
 
+@testset "any/all predicates over dims = 1" begin
+    As = sparse([2, 3], [2, 3], [0.0, 1.0]) # empty, structural zero, non-zero
+    Ad = Matrix(As)
+    Bs = copy(As) # like As, but full column
+    Bs[:,3] .= 1.0
+    Bd = Matrix(Bs)
+    Cs = copy(Bs) # like Bs, but full column is all structural zeros
+    Cs[:,3] .= 0.0
+    Cd = Matrix(Cs)
+
+    @testset "any($(repr(pred)))" for pred in (iszero, !iszero, >(-1.0), !=(1.0))
+        @test any(pred, As, dims = 1) == any(pred, Ad, dims = 1)
+        @test any(pred, Bs, dims = 1) == any(pred, Bd, dims = 1)
+        @test any(pred, Cs, dims = 1) == any(pred, Cd, dims = 1)
+    end
+    @testset "all($(repr(pred)))" for pred in (iszero, !iszero, >(-1.0), !=(1.0))
+        @test all(pred, As, dims = 1) == all(pred, Ad, dims = 1)
+        @test all(pred, Bs, dims = 1) == all(pred, Bd, dims = 1)
+        @test all(pred, Cs, dims = 1) == all(pred, Cd, dims = 1)
+    end
+end
+
 @testset "mapreducecols" begin
     n = 20
     m = 10
