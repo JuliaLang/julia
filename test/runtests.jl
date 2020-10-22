@@ -218,7 +218,7 @@ cd(@__DIR__) do
                             end
                         delete!(running_tests, test)
                         push!(results, (test, resp))
-                        if resp[1] isa Exception && !(resp[1] isa TestSetException && isempty(resp[1].errors_and_fails))
+                        if length(resp) == 1
                             print_testworker_errored(test, wrkr, exit_on_error ? nothing : resp[1])
                             if exit_on_error
                                 skipped = length(tests)
@@ -268,12 +268,16 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
-            local resp
-            try
-                resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
+            resp = try
+                    Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                catch e
+                    isa(e, InterruptException) && rethrow()
+                    Any[CapturedException(e, catch_backtrace())]
+                end
+            if length(resp) == 1
+                print_testworker_errored(t, 1, resp[1])
+            else
                 print_testworker_stats(t, 1, resp)
-            catch e
-                resp = Any[e]
             end
             push!(results, (t, resp))
         end
@@ -352,7 +356,7 @@ cd(@__DIR__) do
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
-            Test.record(fake, Test.Error(:test_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
+            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
