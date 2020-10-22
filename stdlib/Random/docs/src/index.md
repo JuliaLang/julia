@@ -145,22 +145,22 @@ Scalar and array methods for `Die` now work as expected:
 
 ```jldoctest Die; setup = :(Random.seed!(1))
 julia> rand(Die)
-Die(10)
+Die(15)
 
 julia> rand(MersenneTwister(0), Die)
-Die(16)
+Die(11)
 
 julia> rand(Die, 3)
 3-element Vector{Die}:
+ Die(18)
  Die(5)
- Die(20)
- Die(9)
+ Die(4)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
 3-element Vector{Die}:
- Die(11)
+ Die(5)
  Die(20)
- Die(10)
+ Die(15)
 ```
 
 #### A simple sampler without pre-computed data
@@ -173,13 +173,13 @@ In order to define random generation out of objects of type `S`, the following m
 julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
 
 julia> rand(Die(4))
-2
+3
 
 julia> rand(Die(4), 3)
 3-element Vector{Any}:
- 1
  4
- 2
+ 1
+ 1
 ```
 
 Given a collection type `S`, it's currently assumed that if `rand(::S)` is defined, an object of type `eltype(S)` will be produced. In the last example, a `Vector{Any}` is produced; the reason is that `eltype(Die) == Any`. The remedy is to define `Base.eltype(::Type{Die}) = Int`.
@@ -332,11 +332,25 @@ DocTestSetup = nothing
 
 # Reproducibility
 
-By using an RNG parameter initialized with a given seed, you can reproduce the same pseudorandom number sequence when running your program multiple times.  However, a minor release of Julia (e.g. 1.3 to 1.4) *may change* the sequence of pseudorandom numbers generated from a specific seed.  (Even if the sequence produced by a low-level function like [`rand`](@ref) does not change, the output of higher-level functions like [`randsubseq`](@ref) may change due to algorithm updates.)   Rationale: guaranteeing that pseudorandom streams never change prohibits many algorithmic improvements.
+By using an RNG parameter initialized with a given seed, you can reproduce the same pseudorandom
+number sequence when running your program multiple times. However, a minor release of Julia (e.g.
+1.3 to 1.4) *may change* the sequence of pseudorandom numbers generated from a specific seed, in
+particular if `MersenneTwister` is used. (Even if the sequence produced by a low-level function like
+[`rand`](@ref) does not change, the output of higher-level functions like [`randsubseq`](@ref) may
+change due to algorithm updates.) Rationale: guaranteeing that pseudorandom streams never change
+prohibits many algorithmic improvements.
 
-If you need to guarantee exact reproducibility of random data, it is advisable to simply *save the data* (e.g. as a supplementary attachment in a scientific publication).  (You can also, of course, specify a
-particular Julia version and package manifest, especially if you require bit reproducibility.)
+If you need to guarantee exact reproducibility of random data, it is advisable to simply *save the
+data* (e.g. as a supplementary attachment in a scientific publication). (You can also, of course,
+specify a particular Julia version and package manifest, especially if you require bit
+reproducibility.)
 
-Software tests that rely on *specific* "random" data should also generally save the data or embed it into the test code.  On the other hand, tests that should pass for *most* random data (e.g. testing `A \ (A*x) ≈ x` for a random matrix `A = randn(n,n)`) can use an RNG with a fixed seed to ensure that simply running the test many times does not encounter a failure due to very improbable data (e.g. an extremely ill-conditioned matrix).
+Software tests that rely on *specific* "random" data should also generally either save the data,
+embed it into the test code, or use third-party packages like
+[StableRNGs.jl](https://github.com/JuliaRandom/StableRNGs.jl). On the other hand, tests that should
+pass for *most* random data (e.g. testing `A \ (A*x) ≈ x` for a random matrix `A = randn(n,n)`) can
+use an RNG with a fixed seed to ensure that simply running the test many times does not encounter a
+failure due to very improbable data (e.g. an extremely ill-conditioned matrix).
 
-The statistical *distribution* from which random samples are drawn *is* guaranteed to be the same across any minor Julia releases.
+The statistical *distribution* from which random samples are drawn *is* guaranteed to be the same
+across any minor Julia releases.

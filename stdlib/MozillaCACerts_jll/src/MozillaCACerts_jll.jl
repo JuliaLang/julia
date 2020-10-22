@@ -5,7 +5,7 @@
 module MozillaCACerts_jll
 
 function __init__()
-	global cacert = normpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "cert.pem")
+	global cacert = normpath(Sys.BINDIR::String, Base.DATAROOTDIR, "julia", "cert.pem")
 end
 
 end # module

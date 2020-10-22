@@ -324,6 +324,9 @@ function ==(A::StridedMatrix, J::UniformScaling)
     return true
 end
 
+isequal(A::AbstractMatrix, J::UniformScaling) = false
+isequal(J::UniformScaling, A::AbstractMatrix) = false
+
 function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
             atol::Real=0, rtol::Real=Base.rtoldefault(T,S,atol), nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)

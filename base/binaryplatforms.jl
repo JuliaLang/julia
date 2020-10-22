@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module BinaryPlatforms
 
 export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
@@ -499,7 +501,7 @@ julia> triplet(Platform("armv7l", "Linux"; libgfortran_version="3"))
 """
 function triplet(p::AbstractPlatform)
     str = string(
-        arch(p),
+        arch(p)::Union{Symbol,String},
         os_str(p),
         libc_str(p),
         call_abi_str(p),
@@ -552,15 +554,19 @@ end
 
 # Helper functions for Linux and FreeBSD libc/abi mishmashes
 function libc_str(p::AbstractPlatform)
-    if libc(p) === nothing
+    lc = libc(p)
+    if lc === nothing
         return ""
-    elseif libc(p) === "glibc"
+    elseif lc === "glibc"
         return "-gnu"
     else
-        return string("-", libc(p))
+        return string("-", lc)
     end
 end
-call_abi_str(p::AbstractPlatform) = (call_abi(p) === nothing) ? "" : call_abi(p)
+function call_abi_str(p::AbstractPlatform)
+    cabi = call_abi(p)
+    cabi === nothing ? "" : string(cabi::Union{Symbol,String})
+end
 
 Sys.isapple(p::AbstractPlatform) = os(p) == "macos"
 Sys.islinux(p::AbstractPlatform) = os(p) == "linux"
@@ -791,7 +797,7 @@ function parse_dl_name_version(path::String, os::String)
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"
     else
         # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?).so((?:\.[\d]+)*)$"
+        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"
     end
 
     m = match(dlregex, basename(path))

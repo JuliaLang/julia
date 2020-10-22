@@ -884,19 +884,9 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         SmallVector<Intrinsic::IITDescriptor, 8> Table;
         getIntrinsicInfoTableEntries(ID, Table);
         ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-#if JL_LLVM_VERSION >= 90000
         auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
         assert(res == Intrinsic::MatchIntrinsicTypes_Match);
         (void)res;
-#else
-        bool res = Intrinsic::matchIntrinsicType(oldfType->getReturnType(), TableRef, overloadTys);
-        assert(!res);
-        for (auto Ty : newfType->params()) {
-            res = Intrinsic::matchIntrinsicType(Ty, TableRef, overloadTys);
-            assert(!res);
-        }
-        (void)res;
-#endif
         bool matchvararg = Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
         assert(!matchvararg);
         (void)matchvararg;

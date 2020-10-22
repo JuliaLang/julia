@@ -287,6 +287,11 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             elseif a1.name === _NAMEDTUPLE_NAME
                 if isconcretetype(a1)
                     return Const(false)
+                else
+                    ns = a1.parameters[1]
+                    if isa(ns, Tuple)
+                        return Const(1 <= idx <= length(ns))
+                    end
                 end
             elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
@@ -817,6 +822,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     if isType(s) || !isa(s, DataType) || s.abstract
         return Any
     end
+    s = s::DataType
     if s <: Tuple && name ⊑ Symbol
         return Bottom
     end
@@ -826,6 +832,9 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         return Any
     end
+    # If no value has this type, then this statement should be unreachable.
+    # Bail quickly now.
+    s.has_concrete_subtype || return Union{}
     if s.name === _NAMEDTUPLE_NAME && !isconcretetype(s)
         if isa(name, Const) && isa(name.val, Symbol)
             if isa(s.parameters[1], Tuple)

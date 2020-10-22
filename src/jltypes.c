@@ -1558,6 +1558,9 @@ static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *s
         jl_value_t *pi = jl_svecref(p, i);
         JL_TRY {
             pi = inst_type_w_(pi, env, stack, 1);
+            if (!jl_is_type(pi) && !jl_is_typevar(pi)) {
+                pi = jl_bottom_type;
+            }
         }
         JL_CATCH {
             pi = jl_bottom_type;
@@ -2448,11 +2451,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "storage",
                                         "donenotify",
                                         "result",
-                                        "exception",
                                         "logstate",
                                         "code",
                                         "_state",
-                                        "sticky"),
+                                        "sticky",
+                                        "_isexception"),
                         jl_svec(10,
                                 jl_any_type,
                                 jl_any_type,
@@ -2461,10 +2464,10 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_any_type,
                                 jl_uint8_type,
+                                jl_bool_type,
                                 jl_bool_type),
-                        0, 1, 7);
+                        0, 1, 6);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
 

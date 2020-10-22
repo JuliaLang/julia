@@ -1219,12 +1219,12 @@ end
     @async REPL.start_repl_backend(backend)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == (2, false)
+    @test reply == Pair{Any, Bool}(2, false)
     twice(ex) = Expr(:tuple, ex, ex)
     push!(backend.ast_transforms, twice)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == ((2, 2), false)
+    @test reply == Pair{Any, Bool}((2, 2), false)
     put!(backend.repl_channel, (nothing, -1))
     Base.wait(backend.backend_task)
 end
@@ -1236,12 +1236,12 @@ frontend_task = @async begin
         @testset "AST Transformations Async" begin
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == (2, false)
+            @test reply == Pair{Any, Bool}(2, false)
             twice(ex) = Expr(:tuple, ex, ex)
             push!(backend.ast_transforms, twice)
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == ((2, 2), false)
+            @test reply == Pair{Any, Bool}((2, 2), false)
         end
     catch e
         Base.rethrow(e)

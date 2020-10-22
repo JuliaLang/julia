@@ -1,0 +1,22 @@
+commit 1822b0827a652d5c970a3a906e1801fb8251135b
+Author: Elliot Saba <staticfloat@gmail.com>
+Date:   Tue Oct 20 23:26:47 2020 +0000
+
+    Include `${MBEDTLS_INCLUDE_DIR}` when compiling `crypt_mbedtls.c`
+    
+    Without this, mbedTLS installs in non-default install locations
+    that are otherwise found by the `FindmbedTLS.cmake` module are not
+    found by the C preprocessor at compile time.
+
+diff --git a/deps/ntlmclient/CMakeLists.txt b/deps/ntlmclient/CMakeLists.txt
+index 5fbf0d0f4..d933f4919 100644
+--- a/deps/ntlmclient/CMakeLists.txt
++++ b/deps/ntlmclient/CMakeLists.txt
+@@ -16,6 +16,7 @@ ELSEIF(USE_HTTPS STREQUAL "OpenSSL")
+ 	SET(SRC_NTLMCLIENT_CRYPTO "crypt_openssl.c")
+ ELSEIF(USE_HTTPS STREQUAL "mbedTLS")
+ 	ADD_DEFINITIONS(-DCRYPT_MBEDTLS)
++	INCLUDE_DIRECTORIES(${MBEDTLS_INCLUDE_DIR})
+ 	SET(SRC_NTLMCLIENT_CRYPTO "crypt_mbedtls.c")
+ ELSE()
+ 	MESSAGE(FATAL_ERROR "Unable to use libgit2's HTTPS backend (${USE_HTTPS}) for NTLM crypto")

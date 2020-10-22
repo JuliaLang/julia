@@ -2,6 +2,14 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
+# Elements of `out` may not be defined (e.g., for `BigFloat`). To make
+# `mul!(out, A, B)` work for such cases, `out .*ₛ beta` short-circuits
+# `out * beta`.  Using `broadcasted` to avoid the multiplication
+# inside this function.
+function *ₛ end
+Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
+    iszero(beta::Number) ? false : broadcasted(*, out, beta)
+
 """
     MulAddMul(alpha, beta)
 
@@ -121,10 +129,22 @@ match the length of the second, $(length(X))."))
     C
 end
 
-@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
-    generic_mul!(C, s, X, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
-    generic_mul!(C, X, s, MulAddMul(alpha, beta))
+@inline function mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
+    if axes(C) == axes(X)
+        C .= (s .* X) .*ₛ alpha .+ C .*ₛ beta
+    else
+        generic_mul!(C, s, X, MulAddMul(alpha, beta))
+    end
+    return C
+end
+@inline function mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
+    if axes(C) == axes(X)
+        C .= (X .* s) .*ₛ alpha .+ C .*ₛ beta
+    else
+        generic_mul!(C, X, s, MulAddMul(alpha, beta))
+    end
+    return C
+end
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729

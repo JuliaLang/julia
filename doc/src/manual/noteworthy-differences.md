@@ -7,8 +7,8 @@ major syntactic and functional differences. The following are some noteworthy di
 may trip up Julia users accustomed to MATLAB:
 
   * Julia arrays are indexed with square brackets, `A[i,j]`.
-  * Julia arrays are not copied when assigned to another variable. After `A = B`, changing elements of `B` will modify `A`
-    as well.
+  * Julia arrays are not copied when assigned to another variable. After `A = B`, changing elements of `B`
+    will modify `A` as well.
   * Julia values are not copied when passed to a function. If a function modifies an array, the changes
     will be visible in the caller.
   * Julia does not automatically grow arrays in an assignment statement. Whereas in MATLAB `a(4) = 3.2`
@@ -18,8 +18,8 @@ may trip up Julia users accustomed to MATLAB:
     which grow `Vector`s much more efficiently than MATLAB's `a(end+1) = val`.
   * The imaginary unit `sqrt(-1)` is represented in Julia as [`im`](@ref), not `i` or `j` as in MATLAB.
   * In Julia, literal numbers without a decimal point (such as `42`) create integers instead of floating
-    point numbers. As a result, some operations can throw
-    a domain error if they expect a float; for example, `julia> a = -1; 2^a` throws a domain error, as the
+    point numbers. As a result, some operations can throw a domain error if they expect a float; for example,
+    `julia> a = -1; 2^a` throws a domain error, as the
     result is not an integer (see [the FAQ entry on domain errors](@ref faq-domain-errors) for details).
   * In Julia, multiple values are returned and assigned as tuples, e.g. `(a, b) = (1, 2)` or `a, b = 1, 2`.
     MATLAB's `nargout`, which is often used in MATLAB to do optional work based on the number of returned
@@ -35,10 +35,10 @@ may trip up Julia users accustomed to MATLAB:
     - To construct block matrices (concatenating in the first two dimensions), use either [`hvcat`](@ref)
       or combine spaces and semicolons (`[a b; c d]`).
   * In Julia, `a:b` and `a:b:c` construct `AbstractRange` objects. To construct a full vector like in MATLAB,
-    use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. An `AbstractRange` object will
-    act like a normal array in most cases but is more efficient because it lazily computes its values.
-    This pattern of creating specialized objects instead of full arrays is used frequently, and is
-    also seen in functions such as [`range`](@ref), or with iterators such as `enumerate`, and
+    use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. An `AbstractRange`
+    object will act like a normal array in most cases but is more efficient because it lazily computes
+    its values. This pattern of creating specialized objects instead of full arrays is used frequently,
+    and is also seen in functions such as [`range`](@ref), or with iterators such as `enumerate`, and
     `zip`. The special objects can mostly be used as if they were normal arrays.
   * Functions in Julia return values from their last expression or the `return` keyword instead of
     listing the names of variables to return in the function definition (see [The return Keyword](@ref)
@@ -70,7 +70,7 @@ may trip up Julia users accustomed to MATLAB:
     in an interactive session. In Julia, unlike MATLAB, `ans` is not set when Julia code is run in
     non-interactive mode.
   * Julia's `struct`s do not support dynamically adding fields at runtime, unlike MATLAB's `class`es.
-    Instead, use a [`Dict`](@ref).
+    Instead, use a [`Dict`](@ref). Dict in Julia isn't ordered.
   * In Julia each module has its own global scope/namespace, whereas in MATLAB there is just one global
     scope.
   * In MATLAB, an idiomatic way to remove unwanted values is to use logical indexing, like in the
@@ -80,8 +80,10 @@ may trip up Julia users accustomed to MATLAB:
     `x[x.>3]` and `x = x[x.>3]`. Using [`filter!`](@ref) reduces the use of temporary arrays.
   * The analogue of extracting (or "dereferencing") all elements of a cell array, e.g. in `vertcat(A{:})`
     in MATLAB, is written using the splat operator in Julia, e.g. as `vcat(A...)`.
-  * In Julia, the `adjoint` function performs conjugate transposition; in MATLAB, `adjoint` provides the "adjugate" or
-    classical adjoint, which is the transpose of the matrix of cofactors.
+  * In Julia, the `adjoint` function performs conjugate transposition; in MATLAB, `adjoint` provides the
+    "adjugate" or classical adjoint, which is the transpose of the matrix of cofactors.
+  * In Julia, a^b^c is evaluated a^(b^c) while in MATLAB it's (a^b)^c.
+
 ## Noteworthy differences from R
 
 One of Julia's goals is to provide an effective language for data analysis and statistical programming.
@@ -271,16 +273,18 @@ For users coming to Julia from R, these are some noteworthy differences:
     a larger size type, such as `Int64` (if `Int` is `Int32`), `Int128`, or the arbitrarily large
     `BigInt` type. There are no numeric literal suffixes, such as `L`, `LL`, `U`, `UL`, `ULL` to indicate
     unsigned and/or signed vs. unsigned. Decimal literals are always signed, and hexadecimal literals
-    (which start with `0x` like C/C++), are unsigned. Hexadecimal literals also, unlike C/C++/Java
+    (which start with `0x` like C/C++), are unsigned, unless when they encode more than 128 bits,
+    in which case they are of type `BigInt`. Hexadecimal literals also, unlike C/C++/Java
     and unlike decimal literals in Julia, have a type based on the *length* of the literal, including
     leading 0s. For example, `0x0` and `0x00` have type [`UInt8`](@ref), `0x000` and `0x0000` have type
     [`UInt16`](@ref), then literals with 5 to 8 hex digits have type `UInt32`, 9 to 16 hex digits type
-    `UInt64` and 17 to 32 hex digits type `UInt128`. This needs to be taken into account when defining
+    `UInt64`, 17 to 32 hex digits type `UInt128`, and more that 32 hex digits type `BigInt`.
+    This needs to be taken into account when defining
     hexadecimal masks, for example `~0xf == 0xf0` is very different from `~0x000f == 0xfff0`. 64 bit `Float64`
     and 32 bit [`Float32`](@ref) bit literals are expressed as `1.0` and `1.0f0` respectively. Floating point
     literals are rounded (and not promoted to the `BigFloat` type) if they can not be exactly represented.
      Floating point literals are closer in behavior to C/C++. Octal (prefixed with `0o`) and binary
-    (prefixed with `0b`) literals are also treated as unsigned.
+    (prefixed with `0b`) literals are also treated as unsigned (or `BigInt` for more than 128 bits).
   * String literals can be delimited with either `"`  or `"""`, `"""` delimited literals can contain
     `"` characters without quoting it like `"\""`. String literals can have values of other variables
     or expressions interpolated into them, indicated by `$variablename` or `$(expression)`, which

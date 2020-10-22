@@ -22,14 +22,14 @@ julia> rng = MersenneTwister(1234);
 julia> bitrand(rng, 10)
 10-element BitVector:
  0
- 1
- 1
- 1
- 1
+ 0
+ 0
  0
  1
  0
  0
+ 0
+ 1
  1
 ```
 """
@@ -53,13 +53,13 @@ number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest
 julia> Random.seed!(3); randstring()
-"4zSHdXlw"
+"Y7m62wOj"
 
 julia> randstring(MersenneTwister(3), 'a':'z', 6)
-"bzlhqn"
+"ocucay"
 
 julia> randstring("ACGT")
-"AGGACATT"
+"ATTTGCGT"
 ```
 
 !!! note

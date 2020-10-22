@@ -945,6 +945,12 @@ p0 = copy(p)
 @views @. p[1:2, :] += r
 @test p[1:2, :] ≈ p0[1:2, :] + r
 
+@test identity(.+) == Broadcast.BroadcastFunction(+)
+@test identity.(.*) == Broadcast.BroadcastFunction(*)
+@test map(.+, [[1,2], [3,4]], [5, 6]) == [[6,7], [9,10]]
+@test repr(.!) == "Base.Broadcast.BroadcastFunction(!)"
+@test eval(:(.+)) == Base.BroadcastFunction(+)
+
 @testset "Issue #28382: inferrability of broadcast with Union eltype" begin
     @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
     @test_broken Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},

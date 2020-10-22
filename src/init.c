@@ -436,6 +436,8 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
+char jl_using_gdb_jitevents = 0;
+
 int isabspath(const char *in) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
@@ -654,8 +656,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
     jl_exe_handle = GetModuleHandleA(NULL);
     JL_MUTEX_INIT(&jl_in_stackwalk);
-    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-    if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
+    if (!SymInitialize(GetCurrentProcess(), "", 1)) {
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
     }
     needsSymRefreshModuleList = 0;
@@ -689,6 +691,15 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_perf_jitevents= 1;
+    }
+#endif
+
+#if defined(JL_DEBUG_BUILD)
+    jl_using_gdb_jitevents = 1;
+# else
+    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
+    if (jit_gdb && atoi(jit_gdb)) {
+        jl_using_gdb_jitevents = 1;
     }
 #endif
 

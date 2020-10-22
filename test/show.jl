@@ -205,6 +205,11 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 @test_repr "import A.B, C.D"
+@test_repr "import A as B"
+@test_repr "import A.x as y"
+@test_repr "import A: x as y"
+@test_repr "import A.B: x, y as z"
+@test_repr "import A.B: x, y as z, a.b as c, xx"
 
 # keyword args (issue #34023 and #32775)
 @test_repr "f(a, b=c)"
@@ -1528,6 +1533,8 @@ end
     @test summary(r) == "4×2 reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2) with eltype Int16"
     p = PermutedDimsArray(r, (2, 1))
     @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
+    p = reinterpret(reshape, Tuple{Float32,Float32}, [1.0f0 3.0f0; 2.0f0 4.0f0])
+    @test summary(p) == "2-element reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32}) with eltype Tuple{Float32, Float32}"
 end
 
 @testset "Methods" begin
@@ -2018,3 +2025,40 @@ end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
+@test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector{T} where T}"
+@test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat{T} where T}"
+
+@test sprint(show, :(./)) == ":((./))"
+@test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
+
+@test sprint(show, :(a'ᵀ)) == ":(a'ᵀ)"
+@test sprint(show, :((+)')) == ":((+)')"
+for s in (Symbol("'"), Symbol("'⁻¹"))
+    @test Base.isoperator(s)
+    @test !Base.isunaryoperator(s)
+    @test !Base.isbinaryoperator(s)
+    @test Base.ispostfixoperator(s)
+end
+
+@testset "method printing with non-standard identifiers ($mime)" for mime in (
+    MIME("text/plain"), MIME("text/html"),
+)
+    _show(io, x) = show(io, MIME(mime), x)
+
+    @eval var","(x) = x
+    @test occursin("var\",\"(x)", sprint(_show, methods(var",")))
+
+    @eval f1(var"a.b") = 3
+    @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
+
+    italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
+
+    @eval f2(; var"123") = 5
+    @test occursin("f2(; $(italic("var\"123\"")))", sprint(_show, methods(f2)))
+
+    @eval f3(; var"%!"...) = 7
+    @test occursin("f3(; $(italic("var\"%!\"...")))", sprint(_show, methods(f3)))
+
+    @eval f4(; var"...") = 9
+    @test_broken occursin("f4(; $(italic("var\"...\"")))", sprint(_show, methods(f4)))
+end

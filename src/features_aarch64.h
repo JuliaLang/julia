@@ -43,12 +43,12 @@ JL_FEATURE_DEF(pa, 30, 0) // HWCAP_PACA
 
 // hwcap2
 JL_FEATURE_DEF(ccdp, 32 + 0, 0) // HWCAP2_DCPODP, ARMv8.2-DCCVADP. Required in ARMv8.5
-JL_FEATURE_DEF(sve2, 32 + 1, 90000) // HWCAP2_SVE2
-// JL_FEATURE_DEF_NAME(sve2_aes, 32 + 2, 90000, "sve2-aes") // HWCAP2_SVEAES, Implied by `sve2-aes`
-JL_FEATURE_DEF_NAME(sve2_aes, 32 + 3, 90000, "sve2-aes") // HWCAP2_SVEPMULL, ID_AA64ZFR0_EL1.AES == 2
+JL_FEATURE_DEF(sve2, 32 + 1, 0) // HWCAP2_SVE2
+// JL_FEATURE_DEF_NAME(sve2_aes, 32 + 2, 0, "sve2-aes") // HWCAP2_SVEAES, Implied by `sve2-aes`
+JL_FEATURE_DEF_NAME(sve2_aes, 32 + 3, 0, "sve2-aes") // HWCAP2_SVEPMULL, ID_AA64ZFR0_EL1.AES == 2
 JL_FEATURE_DEF_NAME(sve2_bitperm, 32 + 4, 100000, "sve2-bitperm") // HWCAP2_SVEBITPERM
-JL_FEATURE_DEF_NAME(sve2_sha3, 32 + 5, 90000, "sve2-sha3") // HWCAP2_SVESHA3
-JL_FEATURE_DEF_NAME(sve2_sm4, 32 + 6, 90000, "sve2-sm4") // HWCAP2_SM4
+JL_FEATURE_DEF_NAME(sve2_sha3, 32 + 5, 0, "sve2-sha3") // HWCAP2_SVESHA3
+JL_FEATURE_DEF_NAME(sve2_sm4, 32 + 6, 0, "sve2-sm4") // HWCAP2_SM4
 JL_FEATURE_DEF(altnzcv, 32 + 7, 0) // HWCAP2_FLAGM2, ARMv8.5-CondM. Required in ARMv8.5
 JL_FEATURE_DEF(fptoint, 32 + 8, 0) // HWCAP2_FRINT. Required in ARMv8.5
 // JL_FEATURE_DEF(svei8mm, 32 + 9, UINT32_MAX) // HWCAP2_SVEI8MM, ARMv8.2-I8MM. Same as `i8mm`
