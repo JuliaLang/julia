@@ -96,6 +96,7 @@ There are various ways to run Julia code and provide options, similar to those a
 ```
 julia [switches] -- [programfile] [args...]
 ```
+If you are a professional programmer used to working on structured projects for even the smallest script, you will save time by reading [this blog post](https://bkamins.github.io/julialang/2020/05/10/julia-project-environments.html).  The package manager, environments, and modules are your friends.
 
 A detailed list of all the available switches can be found at [Command-line Options](@ref
 command-line-options).
