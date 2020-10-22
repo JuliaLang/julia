@@ -168,7 +168,11 @@ using .Multimedia
 # Some type
 include("some.jl")
 
-include("dict.jl")
+#TODO:
+include("dict.jl") # better named udict.jl?
+#include("udict.jl")
+include("ordered_dict.jl") # provides the new Dict implementation
+
 include("abstractset.jl")
 include("set.jl")
 
