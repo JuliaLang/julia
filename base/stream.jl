@@ -1301,17 +1301,15 @@ function redirect(f; stdin=nothing, stderr=nothing, stdout=nothing)
         throw(ArgumentError("stdin and stdout cannot be the same path"))
     end
 
+    new_in , close_in , old_in  = resolve(stdin , Base.stdin , "r")
+    new_out, close_out, old_out = resolve(stdout, Base.stdout, "w")
     if same_path(stderr, stdout)
         # make sure that in case stderr = stdout = "same/path"
         # only a single io is used instead of opening the same file twice
-        new_out, close_out, old_out = resolve(stdout, Base.stdout, "w")
         new_err, close_err, old_err = new_out, false, Base.stderr
     else
         new_err, close_err, old_err = resolve(stderr, Base.stderr, "w")
-        new_out, close_out, old_out = resolve(stdout, Base.stdout, "w")
     end
-
-    new_in, close_in, old_in = resolve(stdin , Base.stdin , "r")
 
     redirect(; stderr=new_err, stdin=new_in, stdout=new_out)
 
