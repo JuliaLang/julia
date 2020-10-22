@@ -13,13 +13,13 @@ See [`Dict`](@ref) for further help.  Note, unlike [`Dict`](@ref),
 `WeakKeyDict` does not convert keys on insertion.
 """
 mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
-    ht::Dict{WeakRef,V}
+    ht::UDict{WeakRef,V}
     lock::ReentrantLock
     finalizer::Function
 
-    # Constructors mirror Dict's
+    # Constructors mirror UDict's
     function WeakKeyDict{K,V}() where V where K
-        t = new(Dict{Any,V}(), ReentrantLock(), identity)
+        t = new(UDict{Any,V}(), ReentrantLock(), identity)
         t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
             if islocked(t)
