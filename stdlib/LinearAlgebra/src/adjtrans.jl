@@ -32,7 +32,7 @@ julia> adjoint(A)
  9-2im  4-6im
 ```
 """
-struct Adjoint{T,S} <: AbstractMatrix{T}
+struct Adjoint{T,S} <: AbstractWrappedArray{T,2,S}
     parent::S
     function Adjoint{T,S}(A::S) where {T,S}
         checkeltype_adjoint(T, eltype(A))
@@ -63,7 +63,7 @@ julia> transpose(A)
  9+2im  4+6im
 ```
 """
-struct Transpose{T,S} <: AbstractMatrix{T}
+struct Transpose{T,S} <: AbstractWrappedArray{T,2,S}
     parent::S
     function Transpose{T,S}(A::S) where {T,S}
         checkeltype_transpose(T, eltype(A))
@@ -73,7 +73,7 @@ end
 
 function checkeltype_adjoint(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype,ParentEltype}
     Expected = Base.promote_op(adjoint, ParentEltype)
-    ResultEltype === Expected || error(string(
+    ResultEltype >: Expected || error(string(
         "Element type mismatch. Tried to create an `Adjoint{", ResultEltype, "}` ",
         "from an object with eltype `", ParentEltype, "`, but the element type of ",
         "the adjoint of an object with eltype `", ParentEltype, "` must be ",
@@ -83,7 +83,7 @@ end
 
 function checkeltype_transpose(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype, ParentEltype}
     Expected = Base.promote_op(transpose, ParentEltype)
-    ResultEltype === Expected || error(string(
+    ResultEltype >: Expected || error(string(
         "Element type mismatch. Tried to create a `Transpose{", ResultEltype, "}` ",
         "from an object with eltype `", ParentEltype, "`, but the element type of ",
         "the transpose of an object with eltype `", ParentEltype, "` must be ",

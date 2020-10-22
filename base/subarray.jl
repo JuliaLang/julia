@@ -11,7 +11,7 @@ const ScalarIndex = Real
 
 Construct `SubArray`s using the [`view`](@ref) function.
 """
-struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
+struct SubArray{T,N,P,I,L} <: AbstractWrappedArray{T,N,P}
     parent::P
     indices::I
     offset1::Int       # for linear indexing and pointer, only valid when L==true
@@ -19,7 +19,7 @@ struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     function SubArray{T,N,P,I,L}(parent, indices, offset1, stride1) where {T,N,P,I,L}
         @_inline_meta
         check_parent_index_match(parent, indices)
-        new(parent, indices, offset1, stride1)
+        new{T,N,P,I,L}(parent, indices, offset1, stride1)
     end
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent

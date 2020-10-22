@@ -3,7 +3,7 @@
 ## Triangular
 
 # could be renamed to Triangular when that name has been fully deprecated
-abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
+abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractWrappedArray{T,2,S} end
 
 # First loop through all methods that don't need special care for upper/lower and unit diagonal
 for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
@@ -15,7 +15,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
             function $t{T,S}(data) where {T,S<:AbstractMatrix{T}}
                 require_one_based_indexing(data)
                 checksquare(data)
-                new{T,S}(data)
+                new(data)
             end
         end
         $t(A::$t) = A
