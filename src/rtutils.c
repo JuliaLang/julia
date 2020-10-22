@@ -707,6 +707,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "UnionAll");
     }
     else if (vt == jl_datatype_type) {
+        // typeof(v) == DataType, so v is a Type object.
+        // Types are printed as a fully qualified name, with parameters, e.g.
+        // `Base.Set{Int}`, and function types are printed as e.g. `typeof(Main.f)`
         jl_datatype_t *dv = (jl_datatype_t*)v;
         jl_sym_t *globname;
         int globfunc = is_globfunction(v, dv, &globname);
@@ -997,6 +1000,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ")");
     }
     else if (jl_function_type && jl_isa(v, (jl_value_t*)jl_function_type)) {
+        // v is function instance (an instance of a Function type).
         jl_datatype_t *dv = (jl_datatype_t*)vt;
         jl_sym_t *sym = dv->name->mt->name;
         char *sn = jl_symbol_name(sym);
@@ -1024,6 +1028,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
     }
     else if (jl_datatype_type && jl_is_datatype(vt)) {
+        // typeof(v) isa DataType, so v is an *instance of* a type that is a Datatype,
+        // meaning v is e.g. an instance of a struct. These are printed as a call to a
+        // type constructor, such as e.g. `Base.UnitRange{Int64}(start=1, stop=2)`
         int istuple = jl_is_tuple_type(vt), isnamedtuple = jl_is_namedtuple_type(vt);
         size_t tlen = jl_datatype_nfields(vt);
         if (isnamedtuple) {
