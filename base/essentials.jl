@@ -27,8 +27,7 @@ abstract type AbstractDict{K,V} end
     AbstractOrderedDict{K, V}
 
 Supertype for ordered dictionary-like types with keys of type `K` and values of
-type `V`. [`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
-An `AbstractOrderedDict{K, V}` should be an iterator of `Pair{K, V}`.
+type `V`.
 """
 abstract type AbstractOrderedDict{K,V} <: AbstractDict{K,V} end
 
