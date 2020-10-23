@@ -171,7 +171,7 @@ include("some.jl")
 #TODO:
 include("dict.jl") # better named udict.jl?
 #include("udict.jl")
-include("ordered_dict.jl") # provides the new Dict implementation
+include("ordered_robin_dict.jl") # provides the new Dict implementation
 
 include("abstractset.jl")
 include("set.jl")
