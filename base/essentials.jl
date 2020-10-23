@@ -17,11 +17,20 @@ abstract type AbstractSet{T} end
 """
     AbstractDict{K, V}
 
-Supertype for dictionary-like types with keys of type `K` and values of type `V`.
-[`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
-An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
+Supertype for unordered (and ordered) dictionary-like types with keys of type `K`
+and values of type `V`. [`Dict`](@ref), [`IdDict`](@ref) and other types
+are subtypes of this. An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
 """
 abstract type AbstractDict{K,V} end
+
+"""
+    AbstractOrderedDict{K, V}
+
+Supertype for ordered dictionary-like types with keys of type `K` and values of
+type `V`. [`Dict`](@ref), [`IdDict`](@ref) and other types are subtypes of this.
+An `AbstractOrderedDict{K, V}` should be an iterator of `Pair{K, V}`.
+"""
+abstract type AbstractOrderedDict{K,V} <: AbstractDict{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
