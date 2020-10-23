@@ -371,18 +371,31 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                 nctx = i
             end
             update_line_only::Bool = false
-            if collapse && 0 < nctx
-                # check if we're adding more frames with the same method name,
-                # if so, drop all existing calls to it from the top of the context
-                # AND check if instead the context was previously printed that way
-                # but now has removed the recursive frames
-                let method = method_name(context[nctx])
-                    if (nctx < nframes && method_name(DI[nframes - nctx]) === method) ||
-                       (nctx < length(context) && method_name(context[nctx + 1]) === method)
-                        update_line_only = true
-                        while nctx > 0 && method_name(context[nctx]) === method
-                            nctx -= 1
+            if collapse
+                if nctx > 0
+                    # check if we're adding more frames with the same method name,
+                    # if so, drop all existing calls to it from the top of the context
+                    # AND check if instead the context was previously printed that way
+                    # but now has removed the recursive frames
+                    let method = method_name(context[nctx])
+                        if (nctx < nframes && method_name(DI[nframes - nctx]) === method) ||
+                           (nctx < length(context) && method_name(context[nctx + 1]) === method)
+                            update_line_only = true
+                            while nctx > 0 && method_name(context[nctx]) === method
+                                nctx -= 1
+                            end
                         end
+                    end
+                elseif length(context) > 0
+                    update_line_only = true
+                end
+            elseif nctx < length(context) && nctx < nframes
+                # look at the first non-matching element to see if we are only changing the line number
+                let CtxLine = context[nctx + 1],
+                    FrameLine = DI[nframes - nctx]
+                    if CtxLine.file === FrameLine.file &&
+                            method_name(CtxLine) === method_name(FrameLine)
+                        update_line_only = true
                     end
                 end
             end
@@ -400,16 +413,6 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     end
                 else
                     npops = length(context) - nctx
-                    # look at the first non-matching element to see if we are only changing the line number
-                    if !update_line_only && nctx < nframes
-                        let CtxLine = context[nctx + 1],
-                            FrameLine = DI[nframes - nctx]
-                            if CtxLine.file === FrameLine.file &&
-                                    method_name(CtxLine) === method_name(FrameLine)
-                                update_line_only = true
-                            end
-                        end
-                    end
                 end
                 resize!(context, nctx)
                 update_line_only && (npops -= 1)

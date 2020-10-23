@@ -166,7 +166,6 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
 {
     if (verbosity == output_none)
         return;
-    bool update_line_only = false;
     uint32_t nframes = DI.size();
     if (nframes == 0)
         return; // just skip over lines with no debug info at all
@@ -179,21 +178,36 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
             break;
         }
     }
-    if (collapse_recursive && 0 < nctx) {
-        // check if we're adding more frames with the same method name,
-        // if so, drop all existing calls to it from the top of the context
-        // AND check if instead the context was previously printed that way
-        // but now has removed the recursive frames
-        StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';');
-        if ((nctx < nframes && StringRef(DI.at(nframes - nctx - 1).FunctionName).rtrim(';') == method) ||
-            (nctx < context.size() && StringRef(context.at(nctx).FunctionName).rtrim(';') == method)) {
-            update_line_only = true;
-            while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method) {
-                nctx -= 1;
+    bool update_line_only = false;
+    if (collapse_recursive) {
+        if (nctx > 0) {
+            // check if we're adding more frames with the same method name,
+            // if so, drop all existing calls to it from the top of the context
+            // AND check if instead the context was previously printed that way
+            // but now has removed the recursive frames
+            StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';');
+            if ((nctx < nframes && StringRef(DI.at(nframes - nctx - 1).FunctionName).rtrim(';') == method) ||
+                (nctx < context.size() && StringRef(context.at(nctx).FunctionName).rtrim(';') == method)) {
+                update_line_only = true;
+                while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method) {
+                    nctx -= 1;
+                }
             }
         }
+        else if (context.size() > 0) {
+            update_line_only = true;
+        }
     }
-    // examine what frames we're returning from
+    else if (nctx < context.size() && nctx < nframes) {
+        // look at the first non-matching element to see if we are only changing the line number
+        const DILineInfo &CtxLine = context.at(nctx);
+        const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+        if (CtxLine.FileName == FrameLine.FileName &&
+                StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';')) {
+            update_line_only = true;
+        }
+    }
+    // examine how many frames we're returning from
     if (nctx < context.size()) {
         // compute the new inlining depth
         uint32_t npops;
@@ -209,15 +223,6 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
         }
         else {
             npops = context.size() - nctx;
-            // look at the first non-matching element to see if we are only changing the line number
-            if (!update_line_only && nctx < nframes) {
-                const DILineInfo &CtxLine = context.at(nctx);
-                const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
-                if (CtxLine.FileName == FrameLine.FileName &&
-                        StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';')) {
-                    update_line_only = true;
-                }
-            }
         }
         context.resize(nctx);
         update_line_only && (npops -= 1);
