@@ -322,6 +322,8 @@ setindex!(v::Pairs, value, key) = (getfield(v, :data)[key] = value; v)
 get(v::Pairs, key, default) = get(getfield(v, :data), key, default)
 get(f::Base.Callable, v::Pairs, key) = get(f, getfield(v, :data), key)
 
+Base.map(f, A::Iterators.Pairs) = collect(Generator(f,A))
+
 # zip
 
 struct Zip{Is<:Tuple}
