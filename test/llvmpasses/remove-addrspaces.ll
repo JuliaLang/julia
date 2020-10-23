@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s
+; RUN: opt -load libjulia-internal%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s
 
 
 define i64 @getindex({} addrspace(10)* nonnull align 16 dereferenceable(40)) {

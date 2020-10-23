@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia%shlibext -CombineMulAdd -S %s | FileCheck %s
+; RUN: opt -load libjulia-internal%shlibext -CombineMulAdd -S %s | FileCheck %s
 
 define double @fast_muladd1(double %a, double %b, double %c) {
 top:
