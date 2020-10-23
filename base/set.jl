@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct Set{T} <: AbstractSet{T}
-    dict::UDict{T,Nothing}
+    dict::Dict{T,Nothing}
 
-    Set{T}() where {T} = new(UDict{T,Nothing}())
-    Set{T}(s::Set{T}) where {T} = new(UDict{T,Nothing}(s.dict))
+    Set{T}() where {T} = new(Dict{T,Nothing}())
+    Set{T}(s::Set{T}) where {T} = new(Dict{T,Nothing}(s.dict))
 end
 
 Set{T}(itr) where {T} = union!(Set{T}(), itr)
@@ -382,7 +382,7 @@ false
 ```
 """
 function allunique(C)
-    seen = UDict{eltype(C), Nothing}()
+    seen = Dict{eltype(C), Nothing}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
@@ -686,7 +686,7 @@ end
 
 ### specialization for Dict / Set
 
-function _replace!(new::Callable, t::UDict{K,V}, A::UDict{K,V}, count::Int) where {K,V}
+function _replace!(new::Callable, t::Dict{K,V}, A::Dict{K,V}, count::Int) where {K,V}
     # we ignore A, which is supposed to be equal to the destination t,
     # as it can generally be faster to just replace inline
     count == 0 && return t
