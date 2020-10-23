@@ -88,7 +88,7 @@ end
 
 """
     findfirst(pattern::AbstractString, string::AbstractString)
-    findfirst(pattern::Regex, string::String)
+    findfirst(pattern::AbstractPattern, string::String)
 
 Find the first occurrence of `pattern` in `string`. Equivalent to
 [`findnext(pattern, string, firstindex(s))`](@ref).
@@ -250,7 +250,7 @@ end
 
 """
     findnext(pattern::AbstractString, string::AbstractString, start::Integer)
-    findnext(pattern::Regex, string::String, start::Integer)
+    findnext(pattern::AbstractPattern, string::String, start::Integer)
 
 Find the next occurrence of `pattern` in `string` starting at position `start`.
 `pattern` can be either a string, or a regular expression, in which case `string`
@@ -507,7 +507,7 @@ findprev(ch::AbstractChar, string::AbstractString, ind::Integer) =
     findprev(==(ch), string, ind)
 
 """
-    occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
+    occursin(needle::Union{AbstractString,AbstractPattern,AbstractChar}, haystack::AbstractString)
 
 Determine whether the first argument is a substring of the second. If `needle`
 is a regular expression, checks whether `haystack` contains a match.
