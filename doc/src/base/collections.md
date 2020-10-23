@@ -194,7 +194,7 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 
 ```@docs
 Base.AbstractDict
-Base.UDict
+Base.Dict
 Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict

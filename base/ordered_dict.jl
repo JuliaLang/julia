@@ -1,38 +1,38 @@
-# OrderedDict
+# Dict
 
 """
-    OrderedDict
+    Dict
 
-`OrderedDict`s are simply dictionaries whose entries have a particular order.  The order
+`Dict`s are simply dictionaries whose entries have a particular order.  The order
 refers to insertion order, which allows deterministic iteration over the dictionary or set.
 """
-mutable struct OrderedDict{K,V} <: AbstractDict{K,V}
+mutable struct Dict{K,V} <: AbstractDict{K,V}
     slots::Array{Int32,1}
     keys::Array{K,1}
     vals::Array{V,1}
     ndel::Int
     dirty::Bool
 
-    function OrderedDict{K,V}() where {K,V}
+    function Dict{K,V}() where {K,V}
         new{K,V}(zeros(Int32,16), Vector{K}(), Vector{V}(), 0, false)
     end
-    function OrderedDict{K,V}(kv) where {K,V}
-        h = OrderedDict{K,V}()
+    function Dict{K,V}(kv) where {K,V}
+        h = Dict{K,V}()
         for (k,v) in kv
             h[k] = v
         end
         return h
     end
-    OrderedDict{K,V}(p::Pair) where {K,V} = setindex!(OrderedDict{K,V}(), p.second, p.first)
-    function OrderedDict{K,V}(ps::Pair...) where {K,V}
-        h = OrderedDict{K,V}()
+    Dict{K,V}(p::Pair) where {K,V} = setindex!(Dict{K,V}(), p.second, p.first)
+    function Dict{K,V}(ps::Pair...) where {K,V}
+        h = Dict{K,V}()
         sizehint!(h, length(ps))
         for p in ps
             h[p.first] = p.second
         end
         return h
     end
-    function OrderedDict{K,V}(d::OrderedDict{K,V}) where {K,V}
+    function Dict{K,V}(d::Dict{K,V}) where {K,V}
         if d.ndel > 0
             rehash!(d)
         end
@@ -40,58 +40,58 @@ mutable struct OrderedDict{K,V} <: AbstractDict{K,V}
         new{K,V}(copy(d.slots), copy(d.keys), copy(d.vals), 0)
     end
 end
-OrderedDict() = OrderedDict{Any,Any}()
-OrderedDict(kv::Tuple{}) = OrderedDict()
-copy(d::OrderedDict) = OrderedDict(d)
+Dict() = Dict{Any,Any}()
+Dict(kv::Tuple{}) = Dict()
+copy(d::Dict) = Dict(d)
 
 # TODO: this can probably be simplified using `eltype` as a THT (Tim Holy trait)
-# OrderedDict{K,V}(kv::Tuple{Vararg{Tuple{K,V}}})     = OrderedDict{K,V}(kv)
-# OrderedDict{K  }(kv::Tuple{Vararg{Tuple{K,Any}}})   = OrderedDict{K,Any}(kv)
-# OrderedDict{V  }(kv::Tuple{Vararg{Tuple{Any,V}}})   = OrderedDict{Any,V}(kv)
+# Dict{K,V}(kv::Tuple{Vararg{Tuple{K,V}}})     = Dict{K,V}(kv)
+# Dict{K  }(kv::Tuple{Vararg{Tuple{K,Any}}})   = Dict{K,Any}(kv)
+# Dict{V  }(kv::Tuple{Vararg{Tuple{Any,V}}})   = Dict{Any,V}(kv)
 
-# problematic line: OrderedDict(kv::Tuple{Vararg{Pair{K,V}}}) where {K,V}  = OrderedDict{K,V}(kv)
+# problematic line: Dict(kv::Tuple{Vararg{Pair{K,V}}}) where {K,V}  = Dict{K,V}(kv)
 
-OrderedDict(kv::AbstractArray{Tuple{K,V}}) where {K,V} = OrderedDict{K,V}(kv)
-OrderedDict(kv::AbstractArray{Pair{K,V}}) where {K,V}  = OrderedDict{K,V}(kv)
-OrderedDict(kv::AbstractDict{K,V}) where {K,V}         = OrderedDict{K,V}(kv)
+Dict(kv::AbstractArray{Tuple{K,V}}) where {K,V} = Dict{K,V}(kv)
+Dict(kv::AbstractArray{Pair{K,V}}) where {K,V}  = Dict{K,V}(kv)
+Dict(kv::AbstractDict{K,V}) where {K,V}         = Dict{K,V}(kv)
 
-OrderedDict(ps::Pair{K,V}...) where {K,V} = OrderedDict{K,V}(ps)
-OrderedDict(ps::Pair...)                  = OrderedDict(ps)
+Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)
+Dict(ps::Pair...)                  = Dict(ps)
 
-function OrderedDict(kv)
+function Dict(kv)
     try
-        dict_with_eltype((K, V) -> OrderedDict{K, V}, kv, eltype(kv))
+        dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
     catch e
         if isempty(methods(iterate, (typeof(kv),))) ||
             !all(x->isa(x, Union{Tuple,Pair}), kv)
-            throw(ArgumentError("OrderedDict(kv): kv needs to be an iterator of tuples or pairs"))
+            throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow(e)
         end
     end
 end
 
-empty(d::OrderedDict{K,V}) where {K,V} = OrderedDict{K,V}()
-empty(d::OrderedDict, ::Type{K}, ::Type{V}) where {K, V} = OrderedDict{K, V}()
+empty(d::Dict{K,V}) where {K,V} = Dict{K,V}()
+empty(d::Dict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
-length(d::OrderedDict) = length(d.keys) - d.ndel
-isempty(d::OrderedDict) = (length(d) == 0)
+length(d::Dict) = length(d.keys) - d.ndel
+isempty(d::Dict) = (length(d) == 0)
 
 """
     isordered(::Type)
 
 Property of associative containers, that is `true` if the container type has a
-defined order (such as `OrderedDict` and `SortedDict`), and `false` otherwise.
+defined order (such as `Dict` and `SortedDict`), and `false` otherwise.
 """
 isordered(::Type{T}) where {T<:AbstractDict} = false
-isordered(::Type{T}) where {T<:OrderedDict} = true
+isordered(::Type{T}) where {T<:Dict} = true
 
-# conversion between OrderedDict types
-function convert(::Type{OrderedDict{K,V}}, d::AbstractDict) where {K,V}
+# conversion between Dict types
+function convert(::Type{Dict{K,V}}, d::AbstractDict) where {K,V}
     if !isordered(typeof(d))
-        Base.depwarn("Conversion to OrderedDict is deprecated for unordered associative containers (in this case, $(typeof(d))). Use an ordered or sorted associative type, such as SortedDict and OrderedDict.", :convert)
+        Base.depwarn("Conversion to Dict is deprecated for unordered associative containers (in this case, $(typeof(d))). Use an ordered or sorted associative type, such as SortedDict and Dict.", :convert)
     end
-    h = OrderedDict{K,V}()
+    h = Dict{K,V}()
     for (k,v) in d
         ck = convert(K,k)
         if !haskey(h,ck)
@@ -102,9 +102,9 @@ function convert(::Type{OrderedDict{K,V}}, d::AbstractDict) where {K,V}
     end
     return h
 end
-convert(::Type{OrderedDict{K,V}},d::OrderedDict{K,V}) where {K,V} = d
+convert(::Type{Dict{K,V}},d::Dict{K,V}) where {K,V} = d
 
-function rehash!(h::OrderedDict{K,V}, newsz = length(h.slots)) where {K,V}
+function rehash!(h::Dict{K,V}, newsz = length(h.slots)) where {K,V}
     olds = h.slots
     keys = h.keys
     vals = h.vals
@@ -188,7 +188,7 @@ function rehash!(h::OrderedDict{K,V}, newsz = length(h.slots)) where {K,V}
     return h
 end
 
-function sizehint!(d::OrderedDict, newsz)
+function sizehint!(d::Dict, newsz)
     slotsz = (newsz*3)>>1
     oldsz = length(d.slots)
     if slotsz <= oldsz
@@ -202,7 +202,7 @@ function sizehint!(d::OrderedDict, newsz)
     rehash!(d, slotsz)
 end
 
-function empty!(h::OrderedDict{K,V}) where {K,V}
+function empty!(h::Dict{K,V}) where {K,V}
     fill!(h.slots, 0)
     empty!(h.keys)
     empty!(h.vals)
@@ -212,7 +212,7 @@ function empty!(h::OrderedDict{K,V}) where {K,V}
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex(h::OrderedDict{K,V}, key, direct) where {K,V}
+function ht_keyindex(h::Dict{K,V}, key, direct) where {K,V}
     slots = h.slots
     sz = length(slots)
     iter = 0
@@ -237,7 +237,7 @@ end
 # get the index where a key is stored, or -pos if not present
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
-function ht_keyindex2(h::OrderedDict{K,V}, key) where {K,V}
+function ht_keyindex2(h::Dict{K,V}, key) where {K,V}
     slots = h.slots
     sz = length(slots)
     iter = 0
@@ -262,7 +262,7 @@ function ht_keyindex2(h::OrderedDict{K,V}, key) where {K,V}
     return ht_keyindex2(h, key)
 end
 
-function _setindex!(h::OrderedDict, v, key, index)
+function _setindex!(h::Dict, v, key, index)
     hk, hv = h.keys, h.vals
     #push!(h.keys, key)
     ccall(:jl_array_grow_end, Cvoid, (Any, UInt), hk, 1)
@@ -283,7 +283,7 @@ function _setindex!(h::OrderedDict, v, key, index)
     end
 end
 
-function setindex!(h::OrderedDict{K,V}, v0, key0) where {K,V}
+function setindex!(h::Dict{K,V}, v0, key0) where {K,V}
     key = convert(K, key0)
     if !isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
@@ -302,7 +302,7 @@ function setindex!(h::OrderedDict{K,V}, v0, key0) where {K,V}
     return h
 end
 
-function get!(h::OrderedDict{K,V}, key0, default) where {K,V}
+function get!(h::Dict{K,V}, key0, default) where {K,V}
     key = convert(K, key0)
     if !isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
@@ -317,7 +317,7 @@ function get!(h::OrderedDict{K,V}, key0, default) where {K,V}
     return v
 end
 
-function get!(default::Base.Callable, h::OrderedDict{K,V}, key0) where {K,V}
+function get!(default::Base.Callable, h::Dict{K,V}, key0) where {K,V}
     key = convert(K, key0)
     if !isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
@@ -341,53 +341,53 @@ function get!(default::Base.Callable, h::OrderedDict{K,V}, key0) where {K,V}
     return v
 end
 
-function getindex(h::OrderedDict{K,V}, key) where {K,V}
+function getindex(h::Dict{K,V}, key) where {K,V}
     index = ht_keyindex(h, key, true)
     return (index<0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
-function get(h::OrderedDict{K,V}, key, default) where {K,V}
+function get(h::Dict{K,V}, key, default) where {K,V}
     index = ht_keyindex(h, key, true)
     return (index<0) ? default : h.vals[index]::V
 end
 
-function get(default::Base.Callable, h::OrderedDict{K,V}, key) where {K,V}
+function get(default::Base.Callable, h::Dict{K,V}, key) where {K,V}
     index = ht_keyindex(h, key, true)
     return (index<0) ? default() : h.vals[index]::V
 end
 
-haskey(h::OrderedDict, key) = (ht_keyindex(h, key, true) >= 0)
-in(key, v::Base.KeySet{K,T}) where {K,T<:OrderedDict{K}} = (ht_keyindex(v.dict, key, true) >= 0)
+haskey(h::Dict, key) = (ht_keyindex(h, key, true) >= 0)
+in(key, v::Base.KeySet{K,T}) where {K,T<:Dict{K}} = (ht_keyindex(v.dict, key, true) >= 0)
 
-function getkey(h::OrderedDict{K,V}, key, default) where {K,V}
+function getkey(h::Dict{K,V}, key, default) where {K,V}
     index = ht_keyindex(h, key, true)
     return (index<0) ? default : h.keys[index]::K
 end
 
-function _pop!(h::OrderedDict, index)
+function _pop!(h::Dict, index)
     @inbounds val = h.vals[h.slots[index]]
     _delete!(h, index)
     return val
 end
 
-function pop!(h::OrderedDict)
+function pop!(h::Dict)
     h.ndel > 0 && rehash!(h)
     key = h.keys[end]
     index = ht_keyindex(h, key, false)
     return key => _pop!(h, index)
 end
 
-function pop!(h::OrderedDict, key)
+function pop!(h::Dict, key)
     index = ht_keyindex(h, key, false)
     index > 0 ? _pop!(h, index) : throw(KeyError(key))
 end
 
-function pop!(h::OrderedDict, key, default)
+function pop!(h::Dict, key, default)
     index = ht_keyindex(h, key, false)
     index > 0 ? _pop!(h, index) : default
 end
 
-function _delete!(h::OrderedDict, index)
+function _delete!(h::Dict, index)
     @inbounds ki = h.slots[index]
     @inbounds h.slots[index] = -ki
     ccall(:jl_arrayunset, Cvoid, (Any, UInt), h.keys, ki-1)
@@ -397,18 +397,18 @@ function _delete!(h::OrderedDict, index)
     return h
 end
 
-function delete!(h::OrderedDict, key)
+function delete!(h::Dict, key)
     index = ht_keyindex(h, key, false)
     if index > 0; _delete!(h, index); end
     return h
 end
 
-function iterate(t::OrderedDict)
+function iterate(t::Dict)
     t.ndel > 0 && rehash!(t)
     length(t.keys) < 1 && return nothing
     return (Pair(t.keys[1], t.vals[1]), 2)
 end
-function iterate(t::OrderedDict, i)
+function iterate(t::Dict, i)
     length(t.keys) < i && return nothing
     return (Pair(t.keys[i], t.vals[i]), i+1)
 end
@@ -422,17 +422,17 @@ function _merge_kvtypes(d, others...)
     return (K,V)
 end
 
-function merge(d::OrderedDict, others::AbstractDict...)
+function merge(d::Dict, others::AbstractDict...)
     K,V = _merge_kvtypes(d, others...)
-    merge!(OrderedDict{K,V}(), d, others...)
+    merge!(Dict{K,V}(), d, others...)
 end
 
-function merge(combine::Function, d::OrderedDict, others::AbstractDict...)
+function merge(combine::Function, d::Dict, others::AbstractDict...)
     K,V = _merge_kvtypes(d, others...)
-    merge!(combine, OrderedDict{K,V}(), d, others...)
+    merge!(combine, Dict{K,V}(), d, others...)
 end
 
-function Base.map!(f, iter::Base.ValueIterator{<:OrderedDict})
+function Base.map!(f, iter::Base.ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
     elements = length(vals) - dict.ndel
@@ -447,8 +447,7 @@ function Base.map!(f, iter::Base.ValueIterator{<:OrderedDict})
     return iter
 end
 
-@propagate_inbounds isslotempty(h::OrderedDict, i::Int) = h.slots[i] == 0
-@propagate_inbounds isslotfilled(h::OrderedDict, i::Int) = h.slots[i] > 0
+@propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0
+@propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] > 0
 
-const Dict = OrderedDict
 const AnyDict = Dict{Any,Any}
