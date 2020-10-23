@@ -893,15 +893,28 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # issue #26939
     d26939 = WeakKeyDict()
-    d26939[big"1.0" + 1.1] = 1
-    GC.gc() # make sure this doesn't segfault
+    (@noinline d -> d[big"1.0" + 1.1] = 1)(d26939)
+    GC.gc() # primarily to make sure this doesn't segfault
+    @test length(d26939.ht) == 1
+    @test length(d26939) == 1
+    @test !isempty(d26939)
+    @test count(d26939) == 0
+    empty!(d26939)
+    (@noinline d -> d[big(12345)] = 1)(d26939)
+    (@noinline d -> d[big(54321)] = 1)(d26939)
+    lock(GC.gc, d26939)
+    @test length(d26939.ht) == 2
+    @test length(d26939) == 2
+    @test !isempty(d26939)
+    @test count(d26939) == 0
+    Base._cleanup_locked(d26939)
+    @test length(d26939.ht) == 0
 
     # WeakKeyDict does not convert keys on setting
     @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
     wkd = WeakKeyDict(A=>2)
     @test_throws ArgumentError get!(wkd, [2.0], 2)
-    @test_throws ArgumentError get!(wkd, [1.0], 2) # get! fails even if the key is only
-                                                   # used for getting and not setting
+    @test get!(wkd, [1.0], 2) === 2
 
     # WeakKeyDict does convert on getting
     wkd = WeakKeyDict(A=>2)
@@ -913,16 +926,18 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # map! on values of WKD
     wkd = WeakKeyDict(A=>2, B=>3)
-    map!(v->v-1, values(wkd))
+    map!(v -> v-1, values(wkd))
     @test wkd == WeakKeyDict(A=>1, B=>2)
 
     # get!
     wkd = WeakKeyDict(A=>2)
-    get!(wkd, B, 3)
+    @test get!(wkd, B, 3) == 3
     @test wkd == WeakKeyDict(A=>2, B=>3)
-    get!(()->4, wkd, C)
+    @test get!(()->4, wkd, C) == 4
     @test wkd == WeakKeyDict(A=>2, B=>3, C=>4)
-    @test_throws ArgumentError get!(()->5, wkd, [1.0])
+    @test get!(()->5, wkd, [1.0]) == 2
+
+    GC.@preserve A B C D nothing
 end
 
 @testset "issue #19995, hash of dicts" begin
