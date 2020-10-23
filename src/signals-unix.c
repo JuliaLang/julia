@@ -72,9 +72,12 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.arm_sp;
-#elif defined(_OS_DARWIN_)
+#elif defined(_OS_DARWIN_) && defined(_CPU_X86_64_)
     const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
     return ctx->uc_mcontext64->__ss.__rsp;
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
+    return ctx->uc_mcontext64->__ss.__sp;
 #else
     // TODO Add support for FreeBSD and PowerPC(64)?
     return 0;
@@ -150,7 +153,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ctx->uc_mcontext.arm_sp = rsp;
     ctx->uc_mcontext.arm_lr = 0; // Clear link register
     ctx->uc_mcontext.arm_pc = target;
-#elif defined(_OS_DARWIN_)
+#elif defined(_OS_DARWIN_) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
     // Only used for SIGFPE.
     // This doesn't seems to be reliable when the SIGFPE is generated
     // from a divide-by-zero exception, which is now handled by
@@ -159,8 +162,13 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ucontext64_t *ctx = (ucontext64_t*)_ctx;
     rsp -= sizeof(void*);
     *(void**)rsp = NULL;
+#if defined(_CPU_X86_64_)
     ctx->uc_mcontext64->__ss.__rsp = rsp;
     ctx->uc_mcontext64->__ss.__rip = (uintptr_t)fptr;
+#else
+    ctx->uc_mcontext64->__ss.__sp = rsp;
+    ctx->uc_mcontext64->__ss.__pc = (uintptr_t)fptr;
+#endif
 #else
 #warning "julia: throw-in-context not supported on this platform"
     // TODO Add support for PowerPC(64)?
@@ -176,7 +184,7 @@ static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx
 {
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx), ptls->pgcstack, 0);
+                                          jl_to_bt_context(sigctx), ptls->pgcstack);
     ptls->sig_exception = e;
     jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }
@@ -665,6 +673,8 @@ static void *signal_listener(void *arg)
         unw_context_t *signal_context;
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
+        if (critical || profile)
+            jl_lock_profile();
         for (int i = jl_n_threads; i-- > 0; ) {
             // notify thread to stop
             jl_thread_suspend_and_get_state(i, &signal_context);
@@ -674,7 +684,7 @@ static void *signal_listener(void *arg)
             if (critical) {
                 bt_size += rec_backtrace_ctx(bt_data + bt_size,
                         JL_MAX_BT_SIZE / jl_n_threads - 1,
-                        signal_context, NULL, 1);
+                        signal_context, NULL);
                 bt_data[bt_size++].uintptr = 0;
             }
 
@@ -693,7 +703,7 @@ static void *signal_listener(void *arg)
                     } else {
                         // Get backtrace data
                         bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                                bt_size_max - bt_size_cur - 1, signal_context, NULL, 1);
+                                bt_size_max - bt_size_cur - 1, signal_context, NULL);
                     }
                     ptls->safe_restore = old_buf;
 
@@ -709,6 +719,8 @@ static void *signal_listener(void *arg)
             // notify thread to resume
             jl_thread_resume(i, sig);
         }
+        if (critical || profile)
+            jl_unlock_profile();
 #endif
 
         // this part is async with the running of the rest of the program

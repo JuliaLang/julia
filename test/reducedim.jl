@@ -4,6 +4,10 @@ using Random
 
 # main tests
 
+# issue #35800
+# tested very early since it can be state-dependent
+@test @inferred(mapreduce(x->count(!iszero,x), +, [rand(1)]; init = 0.)) == 1.0
+
 function safe_mapslices(op, A, region)
     newregion = intersect(region, 1:ndims(A))
     return isempty(newregion) ? A : mapslices(op, A, dims = newregion)
@@ -74,6 +78,11 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     @test @inferred(minimum(abs, Areduc, dims=region)) ≈ safe_minabs(Areduc, region)
     @test @inferred(count(!, Breduc, dims=region)) ≈ safe_count(.!Breduc, region)
 end
+
+# Combining dims and init
+A = Array{Int}(undef, 0, 3)
+@test_throws ArgumentError maximum(A; dims=1)
+@test maximum(A; dims=1, init=-1) == reshape([-1,-1,-1], 1, 3)
 
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16

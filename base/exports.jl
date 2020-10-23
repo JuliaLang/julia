@@ -22,6 +22,8 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
+    AbstractMatch,
+    AbstractPattern,
     AbstractDict,
     BigFloat,
     BigInt,
@@ -38,6 +40,7 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
+    ComposedFunction,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -329,6 +332,7 @@ export
     sinc,
     sincos,
     sincosd,
+    sincospi,
     sind,
     sinh,
     sinpi,
@@ -456,13 +460,16 @@ export
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     startswith,
 
 # linear algebra
     var"'", # to enable syntax a' for adjoint
     adjoint,
+    var"'ᵀ",
     transpose,
     kron,
+    kron!,
 
 # bitarrays
     falses,
@@ -472,6 +479,7 @@ export
     append!,
     insert!,
     pop!,
+    popat!,
     prepend!,
     push!,
     resize!,
@@ -780,6 +788,7 @@ export
     close,
     countlines,
     eachline,
+    readeach,
     eof,
     fd,
     fdio,
@@ -910,6 +919,7 @@ export
     process_running,
     run,
     setenv,
+    addenv,
     success,
     withenv,
 

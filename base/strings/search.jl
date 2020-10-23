@@ -88,7 +88,7 @@ end
 
 """
     findfirst(pattern::AbstractString, string::AbstractString)
-    findfirst(pattern::Regex, string::String)
+    findfirst(pattern::AbstractPattern, string::String)
 
 Find the first occurrence of `pattern` in `string`. Equivalent to
 [`findnext(pattern, string, firstindex(s))`](@ref).
@@ -144,14 +144,14 @@ function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s,lastindex(s)) ? i :
+        return 1 <= i <= nextind(s,lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
     t1, trest = Iterators.peel(t)
     while true
         i = findnext(isequal(t1),s,i)
         if i === nothing return 0 end
-        ii = nextind(s, i)
+        ii = nextind(s, i)::Int
         a = Iterators.Stateful(trest)
         matched = all(splat(==), zip(SubString(s, ii), a))
         (isempty(a) && matched) && return i
@@ -250,7 +250,7 @@ end
 
 """
     findnext(pattern::AbstractString, string::AbstractString, start::Integer)
-    findnext(pattern::Regex, string::String, start::Integer)
+    findnext(pattern::AbstractPattern, string::String, start::Integer)
 
 Find the next occurrence of `pattern` in `string` starting at position `start`.
 `pattern` can be either a string, or a regular expression, in which case `string`
@@ -351,21 +351,21 @@ function _rsearchindex(s::AbstractString,
                        t::Union{AbstractString,AbstractChar,Int8,UInt8},
                        i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s, lastindex(s)) ? i :
+        return 1 <= i <= nextind(s, lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
     t1, trest = Iterators.peel(Iterators.reverse(t))
     while true
         i = findprev(isequal(t1), s, i)
         i === nothing && return 0
-        ii = prevind(s, i)
+        ii = prevind(s, i)::Int
         a = Iterators.Stateful(trest)
         b = Iterators.Stateful(Iterators.reverse(
             pairs(SubString(s, 1, ii))))
         matched = all(splat(==), zip(a, (x[2] for x in b)))
         if matched && isempty(a)
             isempty(b) && return firstindex(s)
-            return nextind(s, popfirst!(b)[1])
+            return nextind(s, popfirst!(b)[1])::Int
         end
         i = ii
     end
@@ -507,7 +507,7 @@ findprev(ch::AbstractChar, string::AbstractString, ind::Integer) =
     findprev(==(ch), string, ind)
 
 """
-    occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
+    occursin(needle::Union{AbstractString,AbstractPattern,AbstractChar}, haystack::AbstractString)
 
 Determine whether the first argument is a substring of the second. If `needle`
 is a regular expression, checks whether `haystack` contains a match.

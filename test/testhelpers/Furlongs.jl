@@ -14,7 +14,7 @@ struct Furlong{p,T<:Number} <: Number
 end
 Furlong(x::T) where {T<:Number} = Furlong{1,T}(x)
 Furlong(x::Furlong) = x
-(::Type{T})(x::Furlong) where {T<:Number} = T(x.val)
+(::Type{T})(x::Furlong) where {T<:Number} = T(x.val)::T
 Furlong{p}(v::Number) where {p} = Furlong{p,typeof(v)}(v)
 Furlong{p}(x::Furlong{q}) where {p,q} = (@assert(p==q); Furlong{p,typeof(x.val)}(x.val))
 Furlong{p,T}(x::Furlong{q}) where {T,p,q} = (@assert(p==q); Furlong{p,T}(T(x.val)))

@@ -27,6 +27,7 @@ export # also exported by Base
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     # order & algorithm:
     sort,
     sort!,
@@ -113,7 +114,7 @@ array.
 # Examples
 ```jldoctest
 julia> a = [1, 2, 4, 3, 4]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  4
@@ -124,7 +125,7 @@ julia> partialsort!(a, 4)
 4
 
 julia> a
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -132,7 +133,7 @@ julia> a
  4
 
 julia> a = [1, 2, 4, 3, 4]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  4
@@ -143,7 +144,7 @@ julia> partialsort!(a, 4, rev=true)
 2
 
 julia> a
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  4
  4
  3
@@ -244,7 +245,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
         n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
-        lt(o, a[n] ,x) ? n + 1 : n
+        lt(o, a[n], x) ? n + 1 : n
     end
 end
 
@@ -407,6 +408,39 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 ```
 """ searchsortedlast
 
+"""
+    insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+
+Determine whether an item is in the given sorted collection, in the sense that
+it is [`==`](@ref) to one of the values of the collection according to the order
+specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
+sorted in that order, see [`sort`](@ref) for the keywords. See also
+[`in`](@ref). Returns a `Bool` value.
+
+# Examples
+```jldoctest
+julia> insorted(4, [1, 2, 4, 5, 5, 7]) # single match
+true
+
+julia> insorted(5, [1, 2, 4, 5, 5, 7]) # multiple matches
+true
+
+julia> insorted(3, [1, 2, 4, 5, 5, 7]) # no match
+false
+
+julia> insorted(9, [1, 2, 4, 5, 5, 7]) # no match
+false
+
+julia> insorted(0, [1, 2, 4, 5, 5, 7]) # no match
+false
+```
+
+!!! compat "Julia 1.6"
+     `insorted` was added in Julia 1.6.
+"""
+function insorted end
+insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
+insorted(x, r::AbstractRange) = in(x, r)
 
 ## sorting algorithms ##
 
@@ -616,31 +650,8 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::MergeSortAlg, o::
     return v
 end
 
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{<:Integer},
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                o::Ordering)
-    @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-        j = partition!(v, lo, hi, o)
-        if j >= a.k
-            # we don't need to sort anything bigger than j
-            hi = j-1
-        elseif j-lo < hi-j
-            # recurse on the smaller chunk
-            # this is necessary to preserve O(log(n))
-            # stack space in the worst case (rather than O(n))
-            lo < (j-1) && sort!(v, lo, j-1, a, o)
-            lo = j+1
-        else
-            (j+1) < hi && sort!(v, j+1, hi, a, o)
-            hi = j-1
-        end
-    end
-    return v
-end
-
-
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{T},
-               o::Ordering) where T<:OrdinalRange
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
@@ -650,6 +661,9 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort{
         elseif j >= last(a.k)
             hi = j-1
         else
+            # recurse on the smaller chunk
+            # this is necessary to preserve O(log(n))
+            # stack space in the worst case (rather than O(n))
             if j-lo < hi-j
                 lo < (j-1) && sort!(v, lo, j-1, a, o)
                 lo = j+1
@@ -688,25 +702,25 @@ and `lt` are specified, the `lt` function is applied to the result of the `by` f
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2]; sort!(v); v
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> v = [3, 1, 2]; sort!(v, rev = true); v
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  2
  1
 
 julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[1]); v
-3-element Array{Tuple{Int64,String},1}:
+3-element Vector{Tuple{Int64, String}}:
  (1, "c")
  (2, "b")
  (3, "a")
 
 julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
-3-element Array{Tuple{Int64,String},1}:
+3-element Vector{Tuple{Int64, String}}:
  (3, "a")
  (2, "b")
  (1, "c")
@@ -765,13 +779,13 @@ Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself 
 julia> v = [3, 1, 2];
 
 julia> sort(v)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> v
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  1
  2
@@ -800,13 +814,13 @@ julia> v[partialsortperm(v, 1)]
 1
 
 julia> p = partialsortperm(v, 1:3)
-3-element view(::Array{Int64,1}, 1:3) with eltype Int64:
+3-element view(::Vector{Int64}, 1:3) with eltype Int64:
  2
  4
  3
 
 julia> v[p]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  1
  2
@@ -855,7 +869,7 @@ julia> partialsortperm!(ix, v, 1)
 julia> ix = [1:4;];
 
 julia> partialsortperm!(ix, v, 2:3, initialized=true)
-2-element view(::Array{Int64,1}, 2:3) with eltype Int64:
+2-element view(::Vector{Int64}, 2:3) with eltype Int64:
  4
  3
 ```
@@ -900,13 +914,13 @@ See also [`sortperm!`](@ref).
 julia> v = [3, 1, 2];
 
 julia> p = sortperm(v)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  1
 
 julia> v[p]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -950,13 +964,13 @@ Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `init
 julia> v = [3, 1, 2]; p = zeros(Int, 3);
 
 julia> sortperm!(p, v); p
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  1
 
 julia> v[p]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -1020,17 +1034,17 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  1  2
 
 julia> sort(A, dims = 1)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  4  3
 
 julia> sort(A, dims = 2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  4
  1  2
 ```
@@ -1080,17 +1094,17 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 # Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  1  2
 
 julia> sort!(A, dims = 1); A
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  4  3
 
 julia> sort!(A, dims = 2); A
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```

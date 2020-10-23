@@ -68,13 +68,13 @@ Construct a `LowerTriangular` view of the matrix `A`.
 # Examples
 ```jldoctest
 julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
  7.0  8.0  9.0
 
 julia> LowerTriangular(A)
-3×3 LowerTriangular{Float64,Array{Float64,2}}:
+3×3 LowerTriangular{Float64, Matrix{Float64}}:
  1.0   ⋅    ⋅
  4.0  5.0   ⋅
  7.0  8.0  9.0
@@ -89,13 +89,13 @@ Construct an `UpperTriangular` view of the matrix `A`.
 # Examples
 ```jldoctest
 julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
  7.0  8.0  9.0
 
 julia> UpperTriangular(A)
-3×3 UpperTriangular{Float64,Array{Float64,2}}:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
  1.0  2.0  3.0
   ⋅   5.0  6.0
   ⋅    ⋅   9.0
@@ -112,13 +112,13 @@ of `A` on its diagonal.
 # Examples
 ```jldoctest
 julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
  7.0  8.0  9.0
 
 julia> UnitLowerTriangular(A)
-3×3 UnitLowerTriangular{Float64,Array{Float64,2}}:
+3×3 UnitLowerTriangular{Float64, Matrix{Float64}}:
  1.0   ⋅    ⋅
  4.0  1.0   ⋅
  7.0  8.0  1.0
@@ -135,13 +135,13 @@ of `A` on its diagonal.
 # Examples
 ```jldoctest
 julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
  7.0  8.0  9.0
 
 julia> UnitUpperTriangular(A)
-3×3 UnitUpperTriangular{Float64,Array{Float64,2}}:
+3×3 UnitUpperTriangular{Float64, Matrix{Float64}}:
  1.0  2.0  3.0
   ⋅   1.0  6.0
   ⋅    ⋅   1.0
@@ -467,12 +467,12 @@ end
 
 # Define `mul!` for (Unit){Upper,Lower}Triangular matrices times a
 # number.
-for (Trig, UnitTrig) in [(UpperTriangular, UnitUpperTriangular),
-                         (LowerTriangular, UnitLowerTriangular)]
-    for (TB, TC) in [(Trig, Number),
-                     (Number, Trig),
-                     (UnitTrig, Number),
-                     (Number, UnitTrig)]
+for (Trig, UnitTrig) in Any[(UpperTriangular, UnitUpperTriangular),
+                            (LowerTriangular, UnitLowerTriangular)]
+    for (TB, TC) in Any[(Trig, Number),
+                        (Number, Trig),
+                        (UnitTrig, Number),
+                        (Number, UnitTrig)]
         @eval @inline mul!(A::$Trig, B::$TB, C::$TC, alpha::Number, beta::Number) =
             _mul!(A, B, C, MulAddMul(alpha, beta))
     end
@@ -1820,6 +1820,14 @@ for (f, f2!) in ((:*, :lmul!), (:\, :ldiv!))
             return LowerTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
         end
 
+        function $(f)(A::UnitLowerTriangular, B::UnitLowerTriangular)
+            TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
+                         (*)(zero(eltype(A)), zero(eltype(B))))
+            BB = similar(B, TAB, size(B))
+            copyto!(BB, B)
+            return UnitLowerTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
+        end
+
         function ($f)(A::UpperTriangular, B::UpperTriangular)
             TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
                          ($f)(zero(eltype(A)), zero(eltype(B))))
@@ -1834,6 +1842,14 @@ for (f, f2!) in ((:*, :lmul!), (:\, :ldiv!))
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             return UpperTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
+        end
+
+        function ($f)(A::UnitUpperTriangular, B::UnitUpperTriangular)
+            TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
+                         (*)(zero(eltype(A)), zero(eltype(B))))
+            BB = similar(B, TAB, size(B))
+            copyto!(BB, B)
+            return UnitUpperTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
         end
     end
 end
@@ -1955,23 +1971,24 @@ for (ipop, op, xformtype, xformop) in (
     end
 end
 
+_inner_type_promotion(A,B) = promote_type(eltype(A), eltype(B), typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B))))
 ## The general promotion methods
 function *(A::AbstractTriangular, B::AbstractTriangular)
-    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    TAB = _inner_type_promotion(A,B)
     BB = similar(B, TAB, size(B))
     copyto!(BB, B)
     lmul!(convert(AbstractArray{TAB}, A), BB)
 end
 function *(adjA::Adjoint{<:Any,<:AbstractTriangular}, B::AbstractTriangular)
     A = adjA.parent
-    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    TAB = _inner_type_promotion(A,B)
     BB = similar(B, TAB, size(B))
     copyto!(BB, B)
     lmul!(adjoint(convert(AbstractArray{TAB}, A)), BB)
 end
 function *(transA::Transpose{<:Any,<:AbstractTriangular}, B::AbstractTriangular)
     A = transA.parent
-    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    TAB = _inner_type_promotion(A,B)
     BB = similar(B, TAB, size(B))
     copyto!(BB, B)
     lmul!(transpose(convert(AbstractArray{TAB}, A)), BB)
@@ -1979,14 +1996,14 @@ end
 
 function *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractTriangular})
     B = adjB.parent
-    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    TAB = _inner_type_promotion(A,B)
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     rmul!(AA, adjoint(convert(AbstractArray{TAB}, B)))
 end
 function *(A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractTriangular})
     B = transB.parent
-    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    TAB = _inner_type_promotion(A,B)
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     rmul!(AA, transpose(convert(AbstractArray{TAB}, B)))
@@ -1997,7 +2014,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
     @eval begin
         function *(A::AbstractTriangular, B::$mat)
             require_one_based_indexing(B)
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            TAB = _inner_type_promotion(A,B)
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             lmul!(convert(AbstractArray{TAB}, A), BB)
@@ -2005,7 +2022,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function *(adjA::Adjoint{<:Any,<:AbstractTriangular}, B::$mat)
             require_one_based_indexing(B)
             A = adjA.parent
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            TAB = _inner_type_promotion(A,B)
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             lmul!(adjoint(convert(AbstractArray{TAB}, A)), BB)
@@ -2013,7 +2030,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function *(transA::Transpose{<:Any,<:AbstractTriangular}, B::$mat)
             require_one_based_indexing(B)
             A = transA.parent
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            TAB = _inner_type_promotion(A,B)
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             lmul!(transpose(convert(AbstractArray{TAB}, A)), BB)
@@ -2023,7 +2040,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
     @eval begin
         function \(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
             require_one_based_indexing(B)
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            TAB = _inner_type_promotion(A,B)
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             ldiv!(convert(AbstractArray{TAB}, A), BB)
@@ -2031,7 +2048,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function \(adjA::Adjoint{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, B::$mat)
             require_one_based_indexing(B)
             A = adjA.parent
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            TAB = _inner_type_promotion(A,B)
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             ldiv!(adjoint(convert(AbstractArray{TAB}, A)), BB)
@@ -2039,7 +2056,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function \(transA::Transpose{<:Any,<:Union{UnitUpperTriangular,UnitLowerTriangular}}, B::$mat)
             require_one_based_indexing(B)
             A = transA.parent
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            TAB = _inner_type_promotion(A,B)
             BB = similar(B, TAB, size(B))
             copyto!(BB, B)
             ldiv!(transpose(convert(AbstractArray{TAB}, A)), BB)
@@ -2075,7 +2092,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
     @eval begin
         function /(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular})
             require_one_based_indexing(A)
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            TAB = _inner_type_promotion(A,B)
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
             rdiv!(AA, convert(AbstractArray{TAB}, B))
@@ -2083,7 +2100,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function /(A::$mat, adjB::Adjoint{<:Any,<:Union{UnitUpperTriangular, UnitLowerTriangular}})
             require_one_based_indexing(A)
             B = adjB.parent
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            TAB = _inner_type_promotion(A,B)
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
             rdiv!(AA, adjoint(convert(AbstractArray{TAB}, B)))
@@ -2091,7 +2108,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
         function /(A::$mat, transB::Transpose{<:Any,<:Union{UnitUpperTriangular, UnitLowerTriangular}})
             require_one_based_indexing(A)
             B = transB.parent
-            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            TAB = _inner_type_promotion(A,B)
             AA = similar(A, TAB, size(A))
             copyto!(AA, A)
             rdiv!(AA, transpose(convert(AbstractArray{TAB}, B)))
@@ -2128,7 +2145,7 @@ end
 # Only for AbstractMatrix, hence outside the above loop.
 function *(A::AbstractMatrix, B::AbstractTriangular)
     require_one_based_indexing(A)
-    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    TAB = _inner_type_promotion(A,B)
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     rmul!(AA, convert(AbstractArray{TAB}, B))
@@ -2136,7 +2153,7 @@ end
 function *(A::AbstractMatrix, adjB::Adjoint{<:Any,<:AbstractTriangular})
     require_one_based_indexing(A)
     B = adjB.parent
-    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    TAB = _inner_type_promotion(A,B)
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     rmul!(AA, adjoint(convert(AbstractArray{TAB}, B)))
@@ -2144,7 +2161,7 @@ end
 function *(A::AbstractMatrix, transB::Transpose{<:Any,<:AbstractTriangular})
     require_one_based_indexing(A)
     B = transB.parent
-    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    TAB = _inner_type_promotion(A,B)
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     rmul!(AA, transpose(convert(AbstractArray{TAB}, B)))

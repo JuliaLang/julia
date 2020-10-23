@@ -277,7 +277,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test sqrt(A1) |> t -> t*t ≈ A1
+        @test sqrt(A1) |> (t -> (t*t)::typeof(t)) ≈ A1
 
         # naivesub errors
         @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(undef,n+1))
@@ -606,13 +606,13 @@ end
 end
 
 @testset "special printing of Lower/UpperTriangular" begin
-    @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64,Array{Int64,2}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
+    @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64, Matrix{Int64}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
                    sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))))
-    @test occursin(r"3×3 (LinearAlgebra\.)?UnitLowerTriangular{Int64,Array{Int64,2}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1",
+    @test occursin(r"3×3 (LinearAlgebra\.)?UnitLowerTriangular{Int64, Matrix{Int64}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1",
                    sprint(show, MIME"text/plain"(), UnitLowerTriangular(2ones(Int64,3,3))))
-    @test occursin(r"3×3 (LinearAlgebra\.)?UpperTriangular{Int64,Array{Int64,2}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2",
+    @test occursin(r"3×3 (LinearAlgebra\.)?UpperTriangular{Int64, Matrix{Int64}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2",
                    sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))))
-    @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64,Array{Int64,2}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
+    @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64, Matrix{Int64}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
                    sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))))
 end
 

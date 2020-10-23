@@ -102,11 +102,11 @@ end
 
 function Base.read!(io::IO, cred::GitCredential)
     # https://git-scm.com/docs/git-credential#IOFMT
-    while !eof(io)
-        key = readuntil(io, '=')
+    while !(eof(io)::Bool)
+        key::AbstractString = readuntil(io, '=')
         if key == "password"
             value = Base.SecretBuffer()
-            while !eof(io) && (c = read(io, UInt8)) != UInt8('\n')
+            while !(eof(io)::Bool) && (c = read(io, UInt8)) != UInt8('\n')
                 write(value, c)
             end
             seekstart(value)

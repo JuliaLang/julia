@@ -261,7 +261,7 @@ Decide whether the concept in question will be written as `MyType` or `MyType()`
 it.
 
 The preferred style is to use instances by default, and only add methods involving `Type{MyType}`
-later if they become necessary to solve some problem.
+later if they become necessary to solve some problems.
 
 If a type is effectively an enumeration, it should be defined as a single (ideally immutable struct or primitive)
 type, with the enumeration values being instances of it. Constructors and conversions can check

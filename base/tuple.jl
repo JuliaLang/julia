@@ -14,6 +14,11 @@ true
 """
 NTuple
 
+# convenience function for extracting N from a Tuple (if defined)
+# else return `nothing` for anything else given (such as Vararg or other non-sized Union)
+_counttuple(::Type{<:NTuple{N,Any}}) where {N} = N
+_counttuple(::Type) = nothing
+
 ## indexing ##
 
 length(@nospecialize t::Tuple) = nfields(t)
@@ -108,15 +113,32 @@ function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
     end
 end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
-function _compute_eltype(t::Type{<:Tuple})
+function _tuple_unique_fieldtypes(@nospecialize t)
     @_pure_meta
-    t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
+    types = IdSet()
     t´ = unwrap_unionall(t)
-    r = Union{}
-    for ti in t´.parameters
-        r = promote_typejoin(r, rewrap_unionall(unwrapva(ti), t))
+    # Given t = Tuple{Vararg{S}} where S<:Real, the various
+    # unwrapping/wrapping/va-handling here will return Real
+    if t isa Union
+        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
+        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
+    else
+        r = Union{}
+        for ti in (t´::DataType).parameters
+            r = push!(types, rewrap_unionall(unwrapva(ti), t))
+        end
     end
-    return r
+    return Core.svec(types...)
+end
+function _compute_eltype(@nospecialize t)
+    @_pure_meta # TODO: the compiler shouldn't need this
+    types = _tuple_unique_fieldtypes(t)
+    return afoldl(types...) do a, b
+        # if we've already reached Any, it can't widen any more
+        a === Any && return Any
+        b === Any && return Any
+        return promote_typejoin(a, b)
+    end
 end
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
@@ -222,6 +244,23 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # NOTE: this means this constructor must be avoided in Core.Compiler!
 if nameof(@__MODULE__) === :Base
 
+function tuple_type_tail(T::Type)
+    @_pure_meta # TODO: this method is wrong (and not @pure)
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_tail(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+    else
+        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+        if isvatuple(T) && length(T.parameters) == 1
+            va = T.parameters[1]
+            (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
+            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
+        end
+        return Tuple{argtail(T.parameters...)...}
+    end
+end
+
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 
 Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
@@ -240,7 +279,7 @@ function _totuple(T, itr, s...)
     @_inline_meta
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
+    return (convert(fieldtype(T, 1), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
 end
 
 # use iterative algorithm for long tuples
@@ -256,6 +295,11 @@ end
 _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
 
 _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
+
+# for types that `apply` knows about, just splatting is faster than collecting first
+_totuple(::Type{Tuple}, itr::Array) = (itr...,)
+_totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
+_totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 
 end
 
@@ -419,6 +463,22 @@ function _tuple_any(f::Function, tf::Bool, a, b...)
     _tuple_any(f, tf | f(a), b...)
 end
 _tuple_any(f::Function, tf::Bool) = tf
+
+
+# a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    @_pure_meta
+    for y in itr
+        y === x && return true
+    end
+    return false
+end
+function in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    return sym_in(x, itr)
+end
+
 
 """
     empty(x::Tuple)

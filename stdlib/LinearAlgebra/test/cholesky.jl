@@ -266,6 +266,8 @@ end
         @test_throws RankDeficientException cholesky!(copy(M), Val(true))
         @test_throws RankDeficientException cholesky(M, Val(true); check = true)
         @test_throws RankDeficientException cholesky!(copy(M), Val(true); check = true)
+        @test !LinearAlgebra.issuccess(cholesky(M, Val(true); check = false))
+        @test !LinearAlgebra.issuccess(cholesky!(copy(M), Val(true); check = false))
         C = cholesky(M, Val(true); check = false)
         @test_throws RankDeficientException chkfullrank(C)
         C = cholesky!(copy(M), Val(true); check = false)
@@ -357,7 +359,7 @@ end
     D = complex(D)
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{Complex{Float64}}
+    @test CD isa Cholesky{ComplexF64}
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
@@ -425,6 +427,24 @@ end
     factorstring = sprint((t, s) -> show(t, "text/plain", s), C.uplo == 'U' ? C.U : C.L)
     permstring   = sprint((t, s) -> show(t, "text/plain", s), C.p)
     @test cholstring == "$(summary(C))\n$rankstring\n$factorstring\npermutation:\n$permstring"
+end
+
+@testset "destructuring for Cholesky[Pivoted]" begin
+    for val in (true, false)
+        A = rand(8, 8)
+        B = A'A
+        C = cholesky(B, Val(val), check=false)
+        l, u = C
+        @test l == C.L
+        @test u == C.U
+    end
+end
+
+@testset "issue #37356, diagonal elements of hermitian generic matrix" begin
+    B = Hermitian(hcat([one(BigFloat) + im]))
+    @test Matrix(cholesky(B)) ≈ B
+    C = Hermitian(hcat([one(BigFloat) + im]), :L)
+    @test Matrix(cholesky(C)) ≈ C
 end
 
 end # module TestCholesky

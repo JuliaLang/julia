@@ -210,3 +210,16 @@ let a = 1
     @test !macroexpand(@__MODULE__, :(@is_dollar_expr $a))
     @test @macroexpand @is_dollar_expr $a
 end
+
+@test Meta.parseatom("@foo", 1, filename=:bar)[1].args[2].file == :bar
+@test Meta.parseall("@foo", filename=:bar).args[1].file == :bar
+
+_lower(m::Module, ex, world::UInt) = ccall(:jl_expand_in_world, Any, (Any, Ref{Module}, Cstring, Cint, Csize_t), ex, m, "none", 0, world)
+
+module TestExpandInWorldModule
+macro m() 1 end
+wa = Base.get_world_counter()
+macro m() 2 end
+end
+
+@test _lower(TestExpandInWorldModule, :(@m), TestExpandInWorldModule.wa) == 1

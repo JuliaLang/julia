@@ -367,6 +367,17 @@ size_t ios_readprep(ios_t *s, size_t n)
     return (size_t)(s->size - s->bpos);
 }
 
+// attempt to fill the buffer. returns the number of bytes available if we
+// have read the whole file, or -1 if there might be more data.
+ssize_t ios_fillbuf(ios_t *s)
+{
+    size_t nb = s->maxsize - s->bpos;
+    size_t got = ios_readprep(s, nb);
+    if (got < nb)
+        return (ssize_t)got;
+    return -1;
+}
+
 static void _write_update_pos(ios_t *s)
 {
     if (s->bpos > s->ndirty) s->ndirty = s->bpos;
@@ -533,6 +544,20 @@ int64_t ios_pos(ios_t *s)
     else if (s->state == bst_rd)
         fdpos -= (s->size - s->bpos);
     return fdpos;
+}
+
+int64_t ios_filesize(ios_t *s)
+{
+    int64_t fdpos = s->fpos;
+    if (fdpos == (int64_t)-1) {
+        fdpos = lseek(s->fd, 0, SEEK_CUR);
+        if (fdpos == (int64_t)-1)
+            return fdpos;
+        s->fpos = fdpos;
+    }
+    off_t sz = lseek(s->fd, 0, SEEK_END);
+    lseek(s->fd, (off_t)fdpos, SEEK_SET);
+    return sz;
 }
 
 int ios_trunc(ios_t *s, size_t size)
@@ -936,6 +961,7 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
         goto open_file_err;
 
     s = ios_fd(s, fd, 1, 1);
+    s->fpos = 0;
     if (!rd)
         s->readable = 0;
     if (!wr)

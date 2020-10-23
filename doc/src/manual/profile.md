@@ -295,7 +295,7 @@ Of course, you can decrease the delay as well as increase it; however, the overh
 grows once the delay becomes similar to the amount of time needed to take a backtrace (~30 microseconds
 on the author's laptop).
 
-# Memory allocation analysis
+## Memory allocation analysis
 
 One of the most common techniques to improve performance is to reduce memory allocation. The
 total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
@@ -321,7 +321,7 @@ you want to analyze, then call [`Profile.clear_malloc_data()`](@ref) to reset al
  Finally, execute the desired commands and quit Julia to trigger the generation of the `.mem`
 files.
 
-# External Profiling
+## External Profiling
 
 Currently Julia supports `Intel VTune`, `OProfile` and `perf` as external profiling tools.
 
@@ -342,7 +342,8 @@ Or similary with `perf` :
 
 ```
 $ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf ./julia /test/fastmath.jl
-$ perf report --call-graph -G
+$ perf inject --jit --input /tmp/perf.data --output /tmp/perf-jit.data
+$ perf report --call-graph -G -i /tmp/perf-jit.data
 ```
 
 There are many more interesting things that you can measure about your program, to get a comprehensive list

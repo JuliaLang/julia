@@ -118,19 +118,34 @@ function retrieve_code_info(linfo::MethodInstance)
     end
 end
 
-function inf_for_methodinstance(interp::AbstractInterpreter, mi::MethodInstance, min_world::UInt, max_world::UInt=min_world)
-    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, min_world, max_world)::Union{Nothing, CodeInstance}
+# Get at the nonfunction_mt, which happens to be the mt of SimpleVector
+const nonfunction_mt = typename(SimpleVector).mt
+
+function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::SimpleVector)
+    isa(atypes, DataType) || return Nothing
+    mt = ccall(:jl_method_table_for, Any, (Any,), atypes)
+    mt === nothing && return nothing
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
+        mt, atypes, sparams, method)
 end
 
-
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false)
+function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false, compilesig::Bool=false)
+    if compilesig
+        new_atypes = get_compileable_sig(method, atypes, sparams)
+        new_atypes === nothing && return nothing
+        atypes = new_atypes
+    end
     if preexisting
         # check cached specializations
         # for an existing result stored there
         return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
     end
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
+end
+
+function specialize_method(match::MethodMatch, preexisting::Bool=false, compilesig::Bool=false)
+    return specialize_method(match.method, match.spec_types, match.sparams, preexisting, compilesig)
 end
 
 # This function is used for computing alternate limit heuristics
@@ -171,9 +186,11 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, src)
     elseif isa(x, Argument)
-        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] : src.argtypes[x.n]
+        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] :
+            isa(src, IRCode) ? src.argtypes[x.n] :
+            slottypes[x.n]
     elseif isa(x, QuoteNode)
-        return AbstractEvalConstant((x::QuoteNode).value)
+        return Const((x::QuoteNode).value)
     elseif isa(x, GlobalRef)
         return abstract_eval_global(x.mod, (x::GlobalRef).name)
     elseif isa(x, PhiNode)
@@ -181,7 +198,7 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
     elseif isa(x, PiNode)
         return x.typ
     else
-        return AbstractEvalConstant(x)
+        return Const(x)
     end
 end
 
@@ -193,6 +210,11 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
     for line in 1:length(body)
         e = body[line]
+        if isa(e, ReturnNode)
+            e = e.val
+        elseif isa(e, GotoIfNot)
+            e = e.cond
+        end
         if isa(e, SSAValue)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
@@ -217,8 +239,75 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
     end
 end
 
+function is_throw_call(e::Expr)
+    if e.head === :call
+        f = e.args[1]
+        if isa(f, GlobalRef)
+            ff = abstract_eval_global(f.mod, f.name)
+            if isa(ff, Const) && ff.val === Core.throw
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
+    stmts = BitSet()
+    n = length(code)
+    try_depth = 0
+    for i in n:-1:1
+        s = code[i]
+        if isa(s, Expr)
+            if s.head === :enter
+                try_depth -= 1
+            elseif s.head === :leave
+                try_depth += (s.args[1]::Int)
+            elseif s.head === :gotoifnot
+                tgt = s.args[2]::Int
+                if i+1 in stmts && tgt in stmts
+                    push!(stmts, i)
+                end
+            elseif s.head === :return
+            elseif is_throw_call(s)
+                if try_depth == 0
+                    push!(stmts, i)
+                end
+            elseif i+1 in stmts
+                push!(stmts, i)
+            end
+        elseif isa(s, ReturnNode)
+            # NOTE: it potentially makes sense to treat unreachable nodes
+            # (where !isdefined(s, :val)) as `throw` points, but that can cause
+            # worse codegen around the call site (issue #37558)
+        elseif isa(s, GotoNode)
+            tgt = s.label
+            if isassigned(ir)
+                tgt = first(ir[].cfg.blocks[tgt].stmts)
+            end
+            if tgt in stmts
+                push!(stmts, i)
+            end
+        elseif isa(s, GotoIfNot)
+            if i+1 in stmts
+                tgt = s.dest::Int
+                if isassigned(ir)
+                    tgt = first(ir[].cfg.blocks[tgt].stmts)
+                end
+                if tgt in stmts
+                    push!(stmts, i)
+                end
+            end
+        elseif i+1 in stmts
+            push!(stmts, i)
+        end
+    end
+    return stmts
+end
+
 # using a function to ensure we can infer this
-@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
+@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
+    isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
 
 ###########
 # options #

@@ -64,7 +64,7 @@ The program name and the individual arguments in a command can be accessed
 and iterated over as if the command were an array of strings:
 ```jldoctest
 julia> collect(`echo "foo bar"`)
-2-element Array{String,1}:
+2-element Vector{String}:
  "echo"
  "foo bar"
 
@@ -124,7 +124,7 @@ to interpolate multiple words? In that case, just use an array (or any other ite
 
 ```jldoctest
 julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
-2-element Array{String,1}:
+2-element Vector{String}:
  "/etc/passwd"
  "/Volumes/External HD/data.csv"
 
@@ -137,7 +137,7 @@ generation:
 
 ```jldoctest
 julia> names = ["foo","bar","baz"]
-3-element Array{String,1}:
+3-element Vector{String}:
  "foo"
  "bar"
  "baz"
@@ -151,13 +151,13 @@ generation behavior is emulated:
 
 ```jldoctest
 julia> names = ["foo","bar","baz"]
-3-element Array{String,1}:
+3-element Vector{String}:
  "foo"
  "bar"
  "baz"
 
 julia> exts = ["aux","log"]
-2-element Array{String,1}:
+2-element Vector{String}:
  "aux"
  "log"
 

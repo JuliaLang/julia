@@ -95,9 +95,11 @@ function Base.wait(idle::UvTestIdle)
     Base.lock(idle.cond)
     try
         idle.active = true
+        Base.iolock_end()
         wait(idle.cond)
     finally
         Base.unlock(idle.cond)
+        Base.iolock_begin()
         Base.unpreserve_handle(idle)
         Base.iolock_end()
     end
