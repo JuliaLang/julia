@@ -1255,7 +1255,7 @@ julia> read("stderr.txt", String)
 
 # Edge cases
 
-It is possible to pass the same exactly same argument to `stdout` and `stderr`:
+It is possible to pass the same argument to `stdout` and `stderr`:
 ```julia
 julia> redirect(stdout="log.txt", stderr="log.txt", stdin=devnull) do
     ...
