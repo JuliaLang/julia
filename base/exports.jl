@@ -818,6 +818,7 @@ export
     readdir,
     readline,
     readlines,
+    input,
     readuntil,
     redirect_stderr,
     redirect_stdin,

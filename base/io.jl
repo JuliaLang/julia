@@ -550,6 +550,16 @@ function readlines(filename::AbstractString; kw...)
 end
 readlines(s=stdin; kw...) = collect(eachline(s; kw...))
 
+"""
+    input(message::AbstractString)
+
+Prints a message to `stdout` and reads a single line of text from `stdin`.
+"""
+function input(message::AbstractString)
+    print(message)
+    return readline()
+end
+
 ## byte-order mark, ntoh & hton ##
 
 let a = UInt32[0x01020304]
