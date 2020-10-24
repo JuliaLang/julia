@@ -1791,10 +1791,12 @@ an iterable containing several dimensions, this allows one to construct block di
 matrices and their higher-dimensional analogues by simultaneously increasing several
 dimensions for every new input array and putting zero blocks elsewhere.
 
-When all input arrays are N-dimensional, `dims` has a default value of `N+1`
+For a vector of arrays, `reduce(cat, A)` will stack them along a new dimension,
+equivalent to `cat(A...; dims = ndims(A[1])+1)`. Like `reduce(hcat, A)` this is done
+efficiently for large `A`.
 
 !!! compat "Julia 1.6"
-     The default value `dims=N+1` requires at least Julia 1.6.
+     `reduce(cat, A)` requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -1812,7 +1814,7 @@ julia> cat([true], trues(2,2), trues(2,4); dims=(1,2))
  0  0  0  1  1  1  1
  0  0  0  1  1  1  1
 
-julia> cat([1 1; 1 1], fill(√2,2,2), [4 8; 16 32])
+julia> reduce(cat, [[1 1; 1 1], fill(√2,2,2), [4 8; 16 32]])
 2×2×3 Array{Float64,3}:
 [:, :, 1] =
  1.0  1.0
@@ -1828,7 +1830,6 @@ julia> cat([1 1; 1 1], fill(√2,2,2), [4 8; 16 32])
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
-@inline cat(A::AbstractArray{<:Any,N}...; dims=N+1) where {N} = _cat(dims, A...)
 
 _cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(T, A...; dims=catdims)
 

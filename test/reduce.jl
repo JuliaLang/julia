@@ -597,7 +597,7 @@ end
     for args in ([1:2], [[1, 2]], [1:2, 3:4], [[3, 4, 5], 1:3], [1:2, [3.5, 4.5]],
                  [[1 2; 3 4], [5 6; 7 8]])
         X = reduce(cat, args)
-        Y = cat(args...)
+        Y = cat(args...; dims=ndims(args[1])+1)
         @test X == Y
         @test typeof(X) === typeof(Y)
     end
