@@ -90,7 +90,9 @@ reset_timings()
 # (This is split into a function so that it can be called both in this module, at the top
 # of `enter_new_timer()`, and once at the Very End of the operation, by whoever started
 # the operation and called `reset_timings()`.)
-function close_current_timer()
+# NOTE: the @inline annotations here are not to make it faster, but to reduce the gap between
+# timer manipulations and the tasks we're timing.
+@inline function close_current_timer()
     stop_time = _time_ns()
     parent_timer = _timings[end]
     accum_time = stop_time - parent_timer.cur_start_time
@@ -109,7 +111,7 @@ function close_current_timer()
     return nothing
 end
 
-function enter_new_timer(frame)
+@inline function enter_new_timer(frame)
     # Very first thing, stop the active timer: get the current time and add in the
     # time since it was last started to its aggregate exclusive time.
     close_current_timer()
@@ -140,7 +142,7 @@ end
 # _expected_frame_ is not needed within this function; it is used in the `@assert`, to
 # assert that indeed we are always returning to a parent after finishing all of its
 # children (that is, asserting that inference proceeds via depth-first-search).
-function exit_current_timer(_expected_frame_)
+@inline function exit_current_timer(_expected_frame_)
     # Finish the new timer
     stop_time = _time_ns()
 
