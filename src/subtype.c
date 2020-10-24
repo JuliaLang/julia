@@ -2931,7 +2931,10 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 jl_value_t *ub=NULL, *lb=NULL;
                 JL_GC_PUSH2(&lb, &ub);
                 ub = intersect_aside(xub, yub, e, 0, xx ? xx->depth0 : 0);
-                lb = simple_join(xlb, ylb);
+                if (xlb == y)
+                    lb = ylb;
+                else
+                    lb = simple_join(xlb, ylb);
                 if (yy) {
                     if (lb != y)
                         yy->lb = lb;

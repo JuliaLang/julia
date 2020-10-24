@@ -2028,6 +2028,8 @@ end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
+@test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector{T} where T}"
+@test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat{T} where T}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
@@ -2039,4 +2041,27 @@ for s in (Symbol("'"), Symbol("'⁻¹"))
     @test !Base.isunaryoperator(s)
     @test !Base.isbinaryoperator(s)
     @test Base.ispostfixoperator(s)
+end
+
+@testset "method printing with non-standard identifiers ($mime)" for mime in (
+    MIME("text/plain"), MIME("text/html"),
+)
+    _show(io, x) = show(io, MIME(mime), x)
+
+    @eval var","(x) = x
+    @test occursin("var\",\"(x)", sprint(_show, methods(var",")))
+
+    @eval f1(var"a.b") = 3
+    @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
+
+    italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
+
+    @eval f2(; var"123") = 5
+    @test occursin("f2(; $(italic("var\"123\"")))", sprint(_show, methods(f2)))
+
+    @eval f3(; var"%!"...) = 7
+    @test occursin("f3(; $(italic("var\"%!\"...")))", sprint(_show, methods(f3)))
+
+    @eval f4(; var"...") = 9
+    @test_broken occursin("f4(; $(italic("var\"...\"")))", sprint(_show, methods(f4)))
 end

@@ -154,8 +154,5 @@ function choosetests(choices = [])
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(skip_tests), tests)
 
-    # Downloads.jl disabled for now
-    filter!(x -> x != "Downloads", tests)
-
     tests, net_on, exit_on_error, use_revise, seed
 end

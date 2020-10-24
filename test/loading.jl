@@ -231,6 +231,7 @@ end
         pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
+        @test Base.compilecache_path(pkg) == Base.compilecache_path(pkg)
     end
     @test identify_package("Baz") == nothing
     @test identify_package("Qux") == nothing

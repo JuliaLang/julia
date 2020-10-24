@@ -277,7 +277,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test sqrt(A1) |> t -> t*t ≈ A1
+        @test sqrt(A1) |> (t -> (t*t)::typeof(t)) ≈ A1
 
         # naivesub errors
         @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(undef,n+1))

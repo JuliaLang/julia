@@ -34,7 +34,7 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
         frame.linfo,
         frame.world,
         copy(frame.sptypes),
-        frame.slottypes[2:end],  # Skip repeating the method instance
+        frame.slottypes,
     )
     return mi_info
 end
@@ -80,7 +80,7 @@ function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
         # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[]),
+        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)]),
         _time_ns()))
     return nothing
 end

@@ -2461,3 +2461,35 @@ import .TestImportAs.Mod2 as M2
     @test Meta.parse("a'ᵀb") == Expr(:call, :*, Expr(:call, Symbol("'ᵀ"), :a), :b)
     @test Meta.parse("a'⁻¹b") == Expr(:call, :*, Expr(:call, Symbol("'⁻¹"), :a), :b)
 end
+
+@testset "issue #37393" begin
+    @test :(for outer i = 1:3; end) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
+    i = :i
+    @test :(for outer $i = 1:3; end) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
+    @test :(for outer = 1:3; end) == Expr(:for, Expr(:(=), :outer, :(1:3)), :(;;))
+    # TIL that this is possible
+    for outer $ i = 1:3
+        @test 1 $ 2 in 1:3
+    end
+
+    # 😭
+    @test Meta.isexpr(Meta.parse("""
+        [i for i
+        in 1:3]"""), :comprehension)
+    @test Meta.isexpr(Meta.parse("""
+        [i for outer
+        in 1:3]"""), :comprehension)
+    @test Meta.isexpr(Meta.parse("""
+        [i for outer
+        i in 1:3]"""), :comprehension)
+    @test Meta.isexpr(Meta.parse("""
+        f(i for i
+        in 1:3)""").args[2], :generator)
+    @test_throws Meta.ParseError Meta.parse("""
+        for i
+            in 1:3
+        end""")
+end
+
+# PR #37973
+@test Meta.parse("1¦2⌿3") == Expr(:call, :¦, 1, Expr(:call, :⌿, 2, 3))

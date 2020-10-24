@@ -24,6 +24,7 @@ MBEDTLS_VER = 2.16.8
 MBEDTLS_BB_REL = 0
 LIBSSH2_VER = 1.9.0
 LIBSSH2_BB_REL = 1
+# Note: keep stdlib/LibCURL_jll/Artifacts.toml in-sync
 CURL_VER = 7.71.1
 CURL_BB_REL = 0
 NGHTTP2_VER = 1.40.0
@@ -42,4 +43,4 @@ P7ZIP_BB_REL = 1
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
-MOZILLA_CACERT_VERSION := 2020-07-22
+MOZILLA_CACERT_VERSION := 2020-10-14

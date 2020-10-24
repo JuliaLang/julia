@@ -1772,3 +1772,17 @@ end
 
 # issue #37255
 @test Type{Union{}} == Type{T} where {Union{}<:T<:Union{}}
+
+# issue #38081
+struct AlmostLU{T, S<:AbstractMatrix{T}}
+end
+let X1 = Tuple{AlmostLU, Vector{T}} where T,
+    X2 = Tuple{AlmostLU{S, X} where X<:Matrix, Vector{S}} where S<:Union{Float32, Float64},
+    I = typeintersect(X1, X2)
+    # TODO: the quality of this intersection is not great; for now just test that it
+    # doesn't stack overflow
+    @test I<:X1 || I<:X2
+    actual = Tuple{AlmostLU{S, X} where X<:Matrix{S}, Vector{S}} where S<:Union{Float32, Float64}
+    @test I >: actual
+    @test_broken I == actual
+end
