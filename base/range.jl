@@ -53,22 +53,9 @@ end
 Construct a `range` from the arguments.
 Mathematically a range is uniquely determined by any three of `start`, `step`, `stop` and `length`.
 Valid invocations of range are:
-* Call `range` with all four arguments. If the arguments are inconsistent, an error will be thrown.
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
 to be one. If all arguments are integers, a [`UnitRange`](@ref) will be returned.
-
-Special care is taken to ensure intermediate values are computed rationally.
-To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
-
-`start` may be specified as either a positional or keyword argument.
-`stop` may be specified as either a positional or keyword argument.
-
-!!! compat "Julia 1.1"
-    `stop` as a positional argument requires at least Julia 1.1.
-
-!!! compat "Julia 1.6"
-    `start` as a keyword argument requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -99,35 +86,54 @@ julia> range(stop=10, step=1, length=5)
 julia> range(start=1, step=1, stop=10)
 1:1:10
 ```
+If `length` is not specified and `stop - start` is not an integer multiple of `step`, a range that ends before `stop` will be produced.
+```jldoctest
+julia> range(1, 3.5, step=2)
+1.0:2.0:3.0
+
+julia> range(1, 2.5)
+1.0:1.0:2.0
+```
+
+Special care is taken to ensure intermediate values are computed rationally.
+To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
+
+`start` may be specified as either a positional or keyword argument.
+`stop` may be specified as either a positional or keyword argument.
+
+!!! compat "Julia 1.1"
+    `stop` as a positional argument requires at least Julia 1.1.
+
+!!! compat "Julia 1.6"
+    `start` as a keyword argument requires at least Julia 1.6.
 """
 function range end
 
 range(start; stop=nothing, length::Union{Integer,Nothing}=nothing, step=nothing) =
-    __range(start, step, stop, length)
+    _range(start, step, stop, length)
 
 range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) =
-    __range(start, step, stop, length)
+    _range(start, step, stop, length)
 
 range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, step=nothing) =
-    __range(start, step, stop, length)
+    _range(start, step, stop, length)
 
-__range(start::Nothing, step::Nothing, stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
-__range(start::Nothing, step::Nothing, stop::Nothing, length         ) = range_error(start, step, stop, length)
-__range(start::Nothing, step::Nothing, stop         , length::Nothing) = range_error(start, step, stop, length)
-__range(start::Nothing, step::Nothing, stop         , length         ) = range_stop_length(stop, length)
-__range(start::Nothing, step         , stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
-__range(start::Nothing, step         , stop::Nothing, length         ) = range_error(start, step, stop, length)
-__range(start::Nothing, step         , stop         , length::Nothing) = range_error(start, step, stop, length)
-__range(start::Nothing, step         , stop         , length         ) = range_step_stop_length(step, stop, length)
-
-__range(start         , step::Nothing, stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
-__range(start         , step::Nothing, stop::Nothing, length         ) = range_start_length(start, length)
-__range(start         , step::Nothing, stop         , length::Nothing) = range_start_stop(start, stop)
-__range(start         , step::Nothing, stop         , length         ) = range_start_stop_length(start, stop, length)
-__range(start         , step         , stop::Nothing, length::Nothing) = range_error(start, step, stop, length)
-__range(start         , step         , stop::Nothing, length         ) = range_start_step_length(start, step, length)
-__range(start         , step         , stop         , length::Nothing) = range_start_step_stop(start, step, stop)
-__range(start         , step         , stop         , length         ) = range_start_step_stop_length(start, step, stop, length)
+_range(start::Nothing, step::Nothing, stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Nothing, stop::Nothing, len::Any    ) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Nothing, stop::Any    , len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Nothing, stop::Any    , len::Any    ) = range_stop_length(stop, len)
+_range(start::Nothing, step::Any    , stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Any    , stop::Nothing, len::Any    ) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Any    , stop::Any    , len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Any    , stop::Any    , len::Any    ) = range_step_stop_length(step, stop, len)
+_range(start::Any    , step::Nothing, stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
+_range(start::Any    , step::Nothing, stop::Nothing, len::Any    ) = range_start_length(start, len)
+_range(start::Any    , step::Nothing, stop::Any    , len::Nothing) = range_start_stop(start, stop)
+_range(start::Any    , step::Nothing, stop::Any    , len::Any    ) = range_start_stop_length(start, stop, len)
+_range(start::Any    , step::Any    , stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
+_range(start::Any    , step::Any    , stop::Nothing, len::Any    ) = range_start_step_length(start, step, len)
+_range(start::Any    , step::Any    , stop::Any    , len::Nothing) = range_start_step_stop(start, step, stop)
+_range(start::Any    , step::Any    , stop::Any    , len::Any    ) = range_error(start, step, stop, len)
 
 range_stop_length(stop, length) = (stop-length+1):stop
 
@@ -139,48 +145,45 @@ range_start_length(a,                len::Integer) = range_start_step_length(a, 
 
 range_start_stop(start, stop) = start:stop
 
-range_start_step_length(a::AbstractFloat, step::AbstractFloat, len::Integer) =
+function range_start_step_length(a::AbstractFloat, step::AbstractFloat, len::Integer)
     range_start_step_length(promote(a, step)..., len)
-range_start_step_length(a::Real,          step::AbstractFloat, len::Integer) =
-    range_start_step_length(float(a), step,      len)
-range_start_step_length(a::AbstractFloat, step::Real,          len::Integer) =
-    range_start_step_length(a, float(step),      len)
-range_start_step_length(a::T,             step::T,             len::Integer) where {T <: AbstractFloat} =
-    _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
-range_start_step_length(a::T,             step,                len::Integer) where {T} =
-    _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
+end
 
-_rangestyle(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
+function range_start_step_length(a::Real, step::AbstractFloat, len::Integer)
+    range_start_step_length(float(a), step, len)
+end
+
+function range_start_step_length(a::AbstractFloat, step::Real, len::Integer)
+    range_start_step_length(a, float(step), len)
+end
+
+function range_start_step_length(a::T, step::T, len::Integer) where {T <: AbstractFloat}
+    _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
+end
+
+function range_start_step_length(a::T, step, len::Integer) where {T}
+    _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
+end
+
+function _rangestyle(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S}
     StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
-_rangestyle(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
+end
+
+function _rangestyle(::Any, ::Any, a::T, step::S, len::Integer) where {T,S}
     StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
+end
 
 range_start_step_stop(start, step, stop) = start:step:stop
 
-function range_start_step_stop_length(start, step, stop, length)
-    r = range_start_stop_length(start, stop, length)
-    if Base.step(r) == step
-        return r
-    else
-        msg = """
-        Could not construct range with arguments
-        start = $start
-        step = $step
-        stop = $stop
-        length = $length
-        Try omitting one argument.
-        Closest candidate was $r.
-        """
-        throw(ArgumentError(msg))
-    end
-end
-
 function range_error(start, step, stop, length)
-    hasstart  = start === nothing
-    hasstep   = step  === nothing
-    hasstop   = stop  === nothing
-    haslength = start === nothing
-    hint = if !hasstop && !haslength
+    hasstart  = start !== nothing
+    hasstep   = step  !== nothing
+    hasstop   = stop  !== nothing
+    haslength = start !== nothing
+
+    hint = if hasstart && hasstep && hasstop && haslength
+        "Try specifying only three arguments"
+    elseif !hasstop && !haslength
         "At least one of `length` or `stop` must be specified."
     elseif !hasstep && !haslength
         "At least one of `length` or `step` must be specified."

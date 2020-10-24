@@ -3,7 +3,6 @@
 @testset "range costruction" begin
     @testset "range(;kw...)" begin
         @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
-        @test range(start=1, step=1, stop=10, length=10) == 1:1:10
         @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
 
         r = 3.0:2:11
@@ -20,12 +19,6 @@
     end
 
     @test range(1, 100) === 1:100 # ArgumentError before 1.6
-    @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=6)
-    r = range(1.0, step=0.25, stop=2.0, length=5) # ArgumentError before 1.6
-    @test first(r) === 1.0
-    @test step(r) === 0.25
-    @test last(r) === 2.0
-    @test length(r) === 5
 end
 
 using Dates, Random
@@ -1446,6 +1439,7 @@ end
     @test_throws ArgumentError range(nothing)
     @test_throws ArgumentError range(1, step=4)
     @test_throws ArgumentError range(nothing, length=2)
+    @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
 end
 
 @testset "issue #23300#issuecomment-371575548" begin
