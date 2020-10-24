@@ -168,7 +168,7 @@ function generate_precompile_statements()
               """)
         tmp = tempname()
         s = """
-            push!(DEPOT_PATH, $(repr(prec_path)));
+            pushfirst!(DEPOT_PATH, $(repr(prec_path)));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             $precompile_script
