@@ -42,18 +42,19 @@ H_OVERFLOW_X(::Type{Float64}) = 710.475860073944 # nextfloat(710.4758600739439)
 H_LARGE_X(::Type{Float32}) = 88.72283f0
 H_OVERFLOW_X(::Type{Float32}) = 89.415985f0
 
-SINH_SMALL_X(::Type{Float64}) = 2.0
+SINH_SMALL_X(::Type{Float64}) = 2.1
 SINH_SMALL_X(::Type{Float32}) = 3.0f0
 
 # For Float64, use DoubleFloat scheme for extra accuracy
 function sinh_kernel(x::Float64)
     x2 = x*x
-    hi_order = evalpoly(x2, (8.333333333337979e-3, 1.984126984007895e-4,
-                             2.755731937687675e-6, 2.5052097364218946e-8,
-                             1.6059510146369204e-10, 7.635683932974871e-13,
-                             2.9632282505934393e-15))
-    hi,lo = exthorner(x2, (1.0, 0.16666666666666596, hi_order))
-    return muladd(x, hi, x*lo)
+    x2lo = fma(x,x,-x2)
+    hi_order = evalpoly(x2, (8333333333336817e-3, 19841269840165435e-4,
+                             2.7557319381151335e-6, 2.5052096530035283e-8,
+                             1.6059550718903307e-10, 7.634842144412119e-13,
+                             2.9696954760355812e-15))
+    hi,lo = exthorner(x2, (1.0, 0.16666666666666635, hi_order))
+    return muladd(x, hi, muladd(x, lo, x*x2lo*0.16666666666666635))
 end
 # For Float32, using Float64 is simpler, faster, and doesn't require FMA
 function sinh_kernel(x::Float32)
