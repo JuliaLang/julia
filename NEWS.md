@@ -28,6 +28,11 @@ New language features
 * The postfix conjugate transpose operator `'` now accepts Unicode modifiers as
   suffixes, so e.g. `a'ᵀ` is parsed as `var"'ᵀ"(a)`, which can be defined by the
   user. `a'ᵀ` parsed as `a' * ᵀ` before, so this is a minor change ([#37247]).
+* It is now possible to use varargs on the left-hand side of assignments for taking any
+  number of items from the front of an iterable collection, while also collecting the rest,
+  like `a, b... = [1, 2, 3]`, for example. This syntax is implemented using `Base.rest`,
+  which can be overloaded to customize its behavior for different collection types
+  ([#37410]).
 
 Language changes
 ----------------
@@ -96,6 +101,8 @@ New library functions
   efficiently ([#35816]).
 * New function `addenv` for adding environment mappings into a `Cmd` object, returning the new `Cmd` object.
 * New function `insorted` for determining whether an element is in a sorted collection or not ([#37490]).
+* New function `Base.rest` for taking the rest of a collection, starting from a specific
+  iteration state, in a generic way ([#37410]).
 
 New library features
 --------------------
