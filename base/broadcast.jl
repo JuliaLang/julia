@@ -720,7 +720,7 @@ end
         if U === Union{}
             ci = Union{}
         elseif U isa Union
-            ci = typejoin(Base.rewrap_unionall(U.a, T), Base.rewrap_unionall(U.b, T))
+            ci = typejoin(U.a, U.b)
         else
             ci = U
         end
