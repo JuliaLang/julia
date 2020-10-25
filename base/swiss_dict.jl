@@ -652,3 +652,25 @@ Base.@propagate_inbounds function Base.iterate(v::Union{KeySet{<:Any, <:ODict}, 
     i, s = is
     return (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], s)
 end
+
+
+#moved from abstractdict.jl (where I first added):
+
+#TODO: better way to do, than copy and change similar in
+#abstractdict.jl that shouldn't either be there?
+mergewith(combine, d::ODict, others::AbstractDict...) =
+    mergewith!(combine, _typeddict(d, others...), others...)
+#mergewith(combine) = (args...) -> mergewith(combine, args...)
+merge(combine::Base.Callable, d::ODict, others::AbstractDict...) =
+    merge!(combine, _typeddict(d, others...), others...)
+
+function _typeddict(d::ODict, others::AbstractDict...)
+    K = promoteK(keytype(d), others...)
+    V = promoteV(valtype(d), others...)
+    ODict{K,V}(d)
+end
+
+# Not needed?
+merge(d::ODict, others::AbstractDict...) =
+    merge!(_typeddict(d, others...), others...)
+

@@ -361,24 +361,6 @@ function _typeddict(d::AbstractDict, others::AbstractDict...)
     Dict{K,V}(d)
 end
 
-#TODO: better way to do, than copy and change from above:
-mergewith(combine, d::ODict, others::AbstractDict...) =
-    mergewith!(combine, _typeddict(d, others...), others...)
-#mergewith(combine) = (args...) -> mergewith(combine, args...)
-merge(combine::Base.Callable, d::ODict, others::AbstractDict...) =
-    merge!(combine, _typeddict(d, others...), others...)
-
-function _typeddict(d::ODict, others::AbstractDict...)
-    K = promoteK(keytype(d), others...)
-    V = promoteV(valtype(d), others...)
-    ODict{K,V}(d)
-end
-
-# Not needed?
-merge(d::ODict, others::AbstractDict...) =
-    merge!(_typeddict(d, others...), others...)
-
-
 """
     filter!(f, d::AbstractDict)
 
