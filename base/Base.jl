@@ -168,7 +168,9 @@ using .Multimedia
 # Some type
 include("some.jl")
 
-include("dict.jl")
+include("dict.jl") # UDict
+include("swiss_dict.jl") # ODict
+
 include("abstractset.jl")
 include("set.jl")
 
