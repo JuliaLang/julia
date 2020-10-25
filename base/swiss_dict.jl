@@ -363,7 +363,7 @@ ODict{String, Int64} with 2 entries:
 julia> empty!(A);
 
 julia> A
-ODict{String, Int64} with 0 entries
+ODict{String, Int64}()
 ```
 """
 function Base.empty!(h::ODict{K,V}) where {K, V}
