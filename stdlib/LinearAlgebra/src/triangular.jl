@@ -2180,8 +2180,13 @@ factorize(A::AbstractTriangular) = A
 *(A::AbstractTriangular, B::TransposeAbsVec) = transpose(transpose(B) * transpose(A))
 
 # disambiguation methods: /(Adjoint of AbsVec, <:AbstractTriangular)
-/(u::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) \ u.parent)
-# disambiguation methods: /(Adjoint of AbsVec, Adj/Trans of <:AbstractTriangular)
-/(u::TransposeAbsVec, A::AbstractTriangular) = transpose(transpose(A) \ u.parent)
+/(u::AdjointAbsVec, A::Union{LowerTriangular,UpperTriangular}) = adjoint(adjoint(A) \ u.parent)
+/(u::AdjointAbsVec, A::Union{UnitLowerTriangular,UnitUpperTriangular}) = adjoint(adjoint(A) \ u.parent)
 # disambiguation methods: /(Transpose of AbsVec, Adj/Trans of <:AbstractTriangular)
-/(u::TransposeAbsVec, A::AbstractTriangular{<:Any,<:Adjoint}) = transpose(conj(A.parent) \ u.parent)
+for (tritype, comptritype) in ((:LowerTriangular, :UpperTriangular),
+                               (:UnitLowerTriangular, :UnitUpperTriangular),
+                               (:UpperTriangular, :LowerTriangular),
+                               (:UnitUpperTriangular, :UnitLowerTriangular))
+    @eval /(u::TransposeAbsVec, A::$tritype{<:Any,<:Adjoint}) = transpose($comptritype(conj(parent(parent(A)))) \ u.parent)
+    @eval /(u::TransposeAbsVec, A::$tritype{<:Any,<:Transpose}) = transpose(transpose(A) \ u.parent)
+end
