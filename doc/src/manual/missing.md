@@ -262,6 +262,7 @@ julia> Array{Union{Missing, String}}(missing, 2, 3)
     `Union{Missing, T}` creates an array filled with `missing`. If `T` is a
     singleton type the value that is used to fill the array is undefined and
     could change in the future, so it should not be relied upon.
+
 An array allowing for `missing` values but which does not contain any such value
 can be converted back to an array which does not allow for missing values using
 [`convert`](@ref). If the array contains `missing` values, a `MethodError` is thrown
