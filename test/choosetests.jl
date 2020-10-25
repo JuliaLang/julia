@@ -40,7 +40,7 @@ function choosetests(choices = [])
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
-        "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",
+        "odict", "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",
         "sorting", "spawn", "backtrace", "exceptions",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
@@ -146,7 +146,7 @@ function choosetests(choices = [])
             end
         end
     end
-    filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+    filter!(x -> (x != "stdlib" && !(x in STDLIBS)), tests)
     append!(tests, new_tests)
     explicit_pkg3    || filter!(x -> x != "Pkg/pkg",       tests)
     explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
