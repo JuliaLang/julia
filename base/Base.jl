@@ -168,8 +168,8 @@ using .Multimedia
 # Some type
 include("some.jl")
 
-include("dict.jl") # UDict
-include("swiss_dict.jl") # ODict
+include("dict.jl") # TODO: Dict should be renamed UDict by Julia 2.0
+include("swiss_dict.jl") # Provides ODict implemented by SwissDict, just renamed in the file
 
 include("abstractset.jl")
 include("set.jl")
