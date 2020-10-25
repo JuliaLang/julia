@@ -23,6 +23,7 @@ export
     AbstractVecOrMat,
     Array,
     AbstractDict,
+    AbstractOrderedDict,
     BigFloat,
     BigInt,
     BitArray,
