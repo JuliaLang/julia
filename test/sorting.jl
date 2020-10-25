@@ -5,6 +5,7 @@ module SortingTests
 using Base.Order
 using Random
 using Test
+using Dates
 
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
@@ -540,6 +541,35 @@ end
     a = OffsetArray([9:-1:0;], -5)
     Base.Sort.sort_int_range!(a, 10, 0, identity)
     @test issorted(a)
+end
+
+@testset "OrderStyle tests" begin
+    @test Base.OrderStyle(Union{}) == Base.Ordered()
+    @test Base.OrderStyle(1) == Base.Ordered()
+    @test Base.OrderStyle(Int) == Base.Ordered()
+    @test Base.OrderStyle(Union{Missing, Int}) == Base.Ordered()
+    @test Base.OrderStyle("a") == Base.Ordered()
+    @test Base.OrderStyle(String) == Base.Ordered()
+    @test Base.OrderStyle(Union{Missing, String}) == Base.Ordered()
+    @test Base.OrderStyle('a') == Base.Ordered()
+    @test Base.OrderStyle(Char) == Base.Ordered()
+    @test Base.OrderStyle(Union{Missing, Char}) == Base.Ordered()
+    @test Base.OrderStyle(:a) == Base.Ordered()
+    @test Base.OrderStyle(Symbol) == Base.Ordered()
+    @test Base.OrderStyle(Union{Missing, Symbol}) == Base.Ordered()
+    @test Base.OrderStyle(missing) == Base.Ordered()
+    @test Base.OrderStyle(Missing) == Base.Ordered()
+    @test Base.OrderStyle(Day(1)) == Base.Ordered()
+    @test Base.OrderStyle(Day) == Base.Ordered()
+    @test Base.OrderStyle(Union{Missing, Day}) == Base.Ordered()
+    @test Base.OrderStyle(Date(2020,10,25)) == Base.Ordered()
+    @test Base.OrderStyle(Date) == Base.Ordered()
+    @test Base.OrderStyle(Union{Missing, Date}) == Base.Ordered()
+    @test Base.OrderStyle(Any) = Base.Unordered()
+    @test Base.OrderStyle([1,2,3]) = Base.Unordered()
+    @test Base.OrderStyle(Vector{Int}) = Base.Unordered()
+    @test Base.OrderStyle(Union{Int, Float64}) = Base.Ordered()
+    @test Base.OrderStyle(Union{Int, Char}) = Base.Unordered()
 end
 
 end
