@@ -882,4 +882,19 @@ end
     y = rand!(rng, x, s)
     @test y === x
     @test 1 <= x < 2
+
+    old_prec = precision(BigFloat)
+    setprecision(100) do
+        x = rand(s) # should use precision of s
+        @test precision(x) == old_prec
+        x = BigFloat()
+        @test_throws ArgumentError rand!(rng, x, s) # incompatible precision
+    end
+    s = setprecision(100) do
+        Random.Sampler(MersenneTwister, Random.CloseOpen01(BigFloat))
+    end
+    x = rand(s) # should use precision of s
+    @test precision(x) == 100
+    x = BigFloat()
+    @test_throws ArgumentError rand!(rng, x, s) # incompatible precision
 end
