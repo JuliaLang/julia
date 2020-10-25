@@ -216,10 +216,10 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    :(Core.eval($__module__, $(Expr(:quote,ex))))
+    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))
 end
 macro eval(mod, ex)
-    :(Core.eval($(esc(mod)), $(Expr(:quote,ex))))
+    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
 end
 
 argtail(x, rest...) = rest
@@ -420,8 +420,6 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 ```
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
-reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
-reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
 """
     sizeof(T::DataType)
@@ -616,6 +614,8 @@ end
 map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
 
 getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]...)
+
+unsafe_convert(::Type{Ptr{Any}}, sv::SimpleVector) = convert(Ptr{Any},pointer_from_objref(sv)) + sizeof(Ptr)
 
 """
     isassigned(array, i) -> Bool

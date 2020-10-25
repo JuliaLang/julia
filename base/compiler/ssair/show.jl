@@ -327,7 +327,7 @@ end
 Base.show(io::IO, code::IRCode) = show_ir(io, code)
 
 
-lineinfo_disabled(io::IO, linestart::String, lineidx::Int32) = ""
+lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
 
 function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
     context = LineInfoNode[]
@@ -656,6 +656,11 @@ end
 
 # Show a single statement, code.code[idx], in the context of the whole CodeInfo.
 # Returns the updated value of bb_idx.
+# line_info_preprinter(io::IO, indent::String, idx::Int) may print relevant info
+#   at the beginning of the line, and should at least print `indent`. It returns a
+#   string that will be printed after the final basic-block annotation.
+# line_info_postprinter(io::IO, typ, used::Bool) prints the type-annotation at the end
+#   of the statement
 function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, line_info_postprinter, used::BitSet, cfg::CFG, bb_idx::Int)
     ds = get(io, :displaysize, (24, 80))::Tuple{Int,Int}
     cols = ds[2]
@@ -681,7 +686,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
     if bb_idx > length(cfg.blocks)
         # If invariants are violated, print a special leader
         linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
-        inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+        inlining_indent = line_info_preprinter(io, linestart, idx)
         printstyled(io, "!!! ", "─"^max_bb_idx_size, color=:light_black)
     else
         bbrange = cfg.blocks[bb_idx].stmts
@@ -689,7 +694,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
         # Print line info update
         linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:light_black), context=io)
         linestart *= " "^max_bb_idx_size
-        inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+        inlining_indent = line_info_preprinter(io, linestart, idx)
         if idx == first(bbrange)
             bb_idx_str = string(bb_idx)
             bb_pad = max_bb_idx_size - length(bb_idx_str)
@@ -733,7 +738,13 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
     return bb_idx
 end
 
-function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(code.linetable), line_info_postprinter=default_expr_type_printer)
+function statementidx_lineinfo_printer(f, code::CodeInfo)
+    printer = f(code.linetable)
+    return (io::IO, indent::String, idx::Int) -> printer(io, indent, idx > 0 ? code.codelocs[idx] : typemin(Int32))
+end
+statementidx_lineinfo_printer(code::CodeInfo) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
+
+function show_ir(io::IO, code::CodeInfo, line_info_preprinter=statementidx_lineinfo_printer(code), line_info_postprinter=default_expr_type_printer)
     ioctx = IOContext(io, :displaysize => displaysize(io)::Tuple{Int,Int})
     stmts = code.code
     used = BitSet()
@@ -748,7 +759,7 @@ function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(
     end
 
     max_bb_idx_size = length(string(length(cfg.blocks)))
-    line_info_preprinter(io, " "^(max_bb_idx_size + 2), typemin(Int32))
+    line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
     nothing
 end
 

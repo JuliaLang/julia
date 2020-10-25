@@ -55,7 +55,7 @@ function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
     while !(curblock in allblocks)
-        curblock = domtree.idoms[curblock]
+        curblock = domtree.idoms_bb[curblock]
     end
     return curblock
 end
@@ -84,7 +84,9 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{I
     # Find the first dominating def
     curblock = stmtblock = block_for_inst(ir.cfg, use_idx)
     curblock = find_curblock(domtree, allblocks, curblock)
-    defblockdefs = Int[stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
+    defblockdefs = let curblock = curblock
+        Int[stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
+    end
     def = 0
     if !isempty(defblockdefs)
         if curblock != stmtblock
@@ -726,7 +728,7 @@ function getfield_elim_pass!(ir::IRCode)
     # IR. This needs to be after we iterate through the IR with
     # `IncrementalCompact` because removing dead blocks can invalidate the
     # domtree.
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
+    @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
 
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
@@ -832,7 +834,9 @@ function getfield_elim_pass!(ir::IRCode)
         for (use, new_preserves) in preserve_uses
             useexpr = ir[SSAValue(use)]
             nccallargs = length(useexpr.args[3]::SimpleVector)
-            old_preserves = filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
+            old_preserves = let intermediaries = intermediaries
+                filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
+            end
             new_expr = Expr(:foreigncall, useexpr.args[1:(6+nccallargs-1)]...,
                 old_preserves..., new_preserves...)
             ir[SSAValue(use)] = new_expr

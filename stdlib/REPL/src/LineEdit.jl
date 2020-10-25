@@ -97,7 +97,7 @@ mutable struct PromptState <: ModeState
     # indentation of lines which do not include the prompt
     # if negative, the width of the prompt is used
     indent::Int
-    refresh_lock::Threads.AbstractLock
+    refresh_lock::Threads.SpinLock
     # this would better be Threads.Atomic{Float64}, but not supported on some platforms
     beeping::Float64
     # this option is to detect when code is pasted in non-"bracketed paste mode" :
@@ -1380,7 +1380,7 @@ function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
     return ret
 end
 
-function add_nested_key!(keymap::Dict, key, value; override = false)
+function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override = false)
     y = iterate(key)
     while y !== nothing
         c, i = y
@@ -1512,9 +1512,10 @@ function fixup_keymaps!(dict::Dict{Char,Any}, level, s, subkeymap)
     nothing
 end
 
-function add_specialisations(dict::Dict{Char,Any}, subdict, level)
+function add_specialisations(dict::Dict{Char,Any}, subdict::Dict{Char,Any}, level::Int)
     default_branch = subdict[wildcard]
     if isa(default_branch, Dict)
+        default_branch = default_branch::Dict{Char,Any}
         # Go through all the keymaps in the default branch
         # and copy them over to dict
         for s in keys(default_branch)
@@ -1549,7 +1550,7 @@ end
 
 # `target` is the total keymap being built up, already being a nested tree of Dicts.
 # source is the keymap specified by the user (with normalized keys)
-function keymap_merge(target::Dict{Char,Any}, source::Dict)
+function keymap_merge(target::Dict{Char,Any}, source::Union{Dict{Char,Any},AnyDict})
     ret = copy(target)
     direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Nothing}), source)
     # first direct entries
@@ -1558,13 +1559,14 @@ function keymap_merge(target::Dict{Char,Any}, source::Dict)
     end
     # then redirected entries
     for key in setdiff(keys(source), keys(direct_keys))
+        key::Union{String, Char}
         # We first resolve redirects in the source
         value = source[key]
         visited = Vector{Any}()
         while isa(value, Union{Char,String})
             value = normalize_key(value)
             if value in visited
-                error("Eager redirection cycle detected for key " * escape_string(key))
+                throw_eager_redirection_cycle(key)
             end
             push!(visited,value)
             if !haskey(source,value)
@@ -1576,13 +1578,18 @@ function keymap_merge(target::Dict{Char,Any}, source::Dict)
         if isa(value, Union{Char,String})
             value = getEntry(ret, value)
             if value === nothing
-                error("Could not find redirected value " * escape_string(source[key]))
+                throw_could_not_find_redirected_value(key)
             end
         end
         add_nested_key!(ret, key, value; override = true)
     end
     return ret
 end
+
+throw_eager_redirection_cycle(key::Union{Char, String}) =
+    error("Eager redirection cycle detected for key ", repr(key))
+throw_could_not_find_redirected_value(key::Union{Char, String}) =
+    error("Could not find redirected value ", repl(key))
 
 function keymap_unify(keymaps)
     ret = Dict{Char,Any}()

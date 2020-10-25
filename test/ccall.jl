@@ -1325,6 +1325,29 @@ for i in 1:3
     ccall((:test_echo_p, libccalltest), Ptr{Cvoid}, (Any,), f17413())
 end
 
+let r = Ref{Any}(10)
+    @GC.preserve r begin
+        pa = Base.unsafe_convert(Ptr{Any}, r) # pointer to value
+        pv = Base.unsafe_convert(Ptr{Cvoid}, r) # pointer to data
+        @test Ptr{Cvoid}(pa) != pv
+        @test unsafe_load(pa) === 10
+        @test unsafe_load(Ptr{Ptr{Cvoid}}(pa)) === pv
+        @test unsafe_load(Ptr{Int}(pv)) === 10
+    end
+end
+
+let r = Ref{Any}("123456789")
+    @GC.preserve r begin
+        pa = Base.unsafe_convert(Ptr{Any}, r) # pointer to value
+        pv = Base.unsafe_convert(Ptr{Cvoid}, r) # pointer to data
+        @test Ptr{Cvoid}(pa) != pv
+        @test unsafe_load(pa) === r[]
+        @test unsafe_load(Ptr{Ptr{Cvoid}}(pa)) === pv
+        @test unsafe_load(Ptr{Int}(pv)) === length(r[])
+    end
+end
+
+
 struct SpillPint
     a::Ptr{Cint}
     b::Ptr{Cint}
@@ -1687,15 +1710,15 @@ end
     @test str == "hi+1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-1.1-2.2-3.3-4.4-5.5-6.6-7.7-8.8-9.9\n"
 end
 
+
 @testset "Cwstring" begin
-    n = 100
-    buffer = Array{Cwchar_t}(undef, n)
-    if Sys.iswindows()
-        # sprintf throws an error on Windows, see https://github.com/JuliaLang/julia/pull/36040#issuecomment-634774055
-        len = @ccall swprintf_s(buffer::Ptr{Cwchar_t}, n::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
-    else
-        len = @ccall swprintf(buffer::Ptr{Cwchar_t}, n::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
-    end
+    buffer = Array{Cwchar_t}(undef, 100)
+    len = @static if Sys.iswindows()
+            @ccall swprintf_s(buffer::Ptr{Cwchar_t}, length(buffer)::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
+        else
+            @ccall swprintf(buffer::Ptr{Cwchar_t}, length(buffer)::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
+        end
+    Libc.systemerror("swprintf", len < 0)
     str = GC.@preserve buffer unsafe_string(pointer(buffer), len)
     @test str == "α+β=15"
     str = GC.@preserve buffer unsafe_string(Cwstring(pointer(buffer)))

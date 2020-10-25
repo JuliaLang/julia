@@ -1960,6 +1960,40 @@ function _mapreducecols!(f, op::typeof(+), R::AbstractArray, A::AbstractSparseMa
     R
 end
 
+# any(pred, A, dims = 1) => mapreduce(pred, |, A, dims = 1)
+# final argument `post` is to allow post-mapping each columnar mapreduce
+function _mapreducerows!(pred::P, ::typeof(|), R::AbstractMatrix{Bool}, A::AbstractSparseMatrixCSC{Tv},
+                         post::F = identity) where {P, F, Tv}
+    nzval = nonzeros(A)
+    colptr = getcolptr(A)
+    m, n = size(A)
+    @inbounds for ii in 1:n
+        bi, ei = colptr[ii], colptr[ii+1]
+        len = ei - bi
+        # An empty column is trivial
+        if len == 0
+            R[1, ii] = post(pred(zero(Tv)))
+            continue
+        end
+        # If predicate on zero is true, then sparse column can be short-circuited
+        if pred(zero(Tv)) && len < m
+            R[1, ii] = post(true)
+            continue
+        end
+        # Otherwise reduce over the stored values
+        r = false
+        for jj in bi:(ei - 1)
+            r = pred(nzval[jj])
+            r && break
+        end
+        R[1, ii] = post(r)
+    end
+    return R
+end
+# all(pred, A, dims = 1) => mapreduce(pred, &, A, dims = 1) == .!mapreduce(!pred, |, A, dims = 1)
+_mapreducerows!(pred::P, ::typeof(&), R::AbstractMatrix{Bool},
+                A::AbstractSparseMatrixCSC) where {P} = _mapreducerows!(!pred, |, R, A, !)
+
 # findmax/min and argmax/min methods
 # find first zero value in sparse matrix - return linear index in full matrix
 # non-structural zeros are identified by x == 0 in line with the sparse constructors.
@@ -2571,7 +2605,7 @@ function _insert!(v::Vector, pos::Integer, item, nz::Integer)
     end
 end
 
-function Base.fill!(V::SubArray{Tv, <:Any, <:AbstractSparseMatrixCSC, Tuple{Vararg{Union{Integer, AbstractVector{<:Integer}},2}}}, x) where Tv
+function Base.fill!(V::SubArray{Tv, <:Any, <:AbstractSparseMatrixCSC{Tv}, <:Tuple{Vararg{Union{Integer, AbstractVector{<:Integer}},2}}}, x) where Tv
     A = V.parent
     I, J = V.indices
     if isempty(I) || isempty(J); return A; end
@@ -2588,7 +2622,7 @@ function Base.fill!(V::SubArray{Tv, <:Any, <:AbstractSparseMatrixCSC, Tuple{Vara
     end
 end
 """
-Helper method for immediately preceding setindex! method. For all (i,j) such that i in I and
+Helper method for immediately preceding fill! method. For all (i,j) such that i in I and
 j in J, assigns zero to A[i,j] if A[i,j] is a presently-stored entry, and otherwise does nothing.
 """
 function _spsetz_setindex!(A::AbstractSparseMatrixCSC,
@@ -2624,7 +2658,7 @@ function _spsetz_setindex!(A::AbstractSparseMatrixCSC,
     end
 end
 """
-Helper method for immediately preceding setindex! method. For all (i,j) such that i in I
+Helper method for immediately preceding fill! method. For all (i,j) such that i in I
 and j in J, assigns x to A[i,j] if A[i,j] is a presently-stored entry, and allocates and
 assigns x to A[i,j] if A[i,j] is not presently stored.
 """
@@ -2657,8 +2691,10 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
                     resize!(nzvalA, nnzA)
                 end
                 r = rowidx:(rowidx+nincl-1)
-                rowvalA[r] = I
-                nzvalA[r] = x
+                rowvalA[r] .= I
+                for rr in r
+                    nzvalA[rr] = x
+                end
                 rowidx += nincl
                 nadd += nincl
             else # set old + new vals
@@ -2702,8 +2738,10 @@ function _spsetnz_setindex!(A::AbstractSparseMatrixCSC{Tv}, x::Tv,
                                 resize!(nzvalA, nnzA)
                             end
                             r = rowidx:(rowidx+(new_stop-new_ptr))
-                            rowvalA[r] = I[new_ptr:new_stop]
-                            nzvalA[r] = x
+                            rowvalA[r] .= I isa Number ? I : I[new_ptr:new_stop]
+                            for rr in r
+                                nzvalA[rr] = x
+                            end
                             rowidx += length(r)
                             nadd += length(r)
                         end
@@ -3491,37 +3529,55 @@ function istril(A::AbstractSparseMatrixCSC)
     return true
 end
 
+_nnz(v::AbstractSparseVector) = nnz(v)
+_nnz(v::AbstractVector) = length(v)
+
+function _indices(v::AbstractSparseVector, row, col)
+    ix = nonzeroinds(v)
+    return (row .+ ix, col .+ ix)
+end
+function _indices(v::AbstractVector, row, col)
+    veclen = length(v)
+    return (row+1:row+veclen, col+1:col+veclen)
+end
+
+_nzvals(v::AbstractSparseVector) = nonzeros(v)
+_nzvals(v::AbstractVector) = v
 
 function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
     for p in kv
-        ncoeffs += length(p.second)
+        ncoeffs += _nnz(p.second)
     end
     I = Vector{Int}(undef, ncoeffs)
     J = Vector{Int}(undef, ncoeffs)
     V = Vector{promote_type(map(x -> eltype(x.second), kv)...)}(undef, ncoeffs)
     i = 0
+    m = 0
+    n = 0
     for p in kv
-        dia = p.first
-        vect = p.second
-        numel = length(vect)
-        if dia < 0
-            row = -dia
+        k = p.first
+        v = p.second
+        if k < 0
+            row = -k
             col = 0
-        elseif dia > 0
+        elseif k > 0
             row = 0
-            col = dia
+            col = k
         else
             row = 0
             col = 0
         end
+        numel = _nnz(v)
         r = 1+i:numel+i
-        I[r] = row+1:row+numel
-        J[r] = col+1:col+numel
-        copyto!(view(V, r), vect)
+        I[r], J[r] = _indices(v, row, col)
+        copyto!(view(V, r), _nzvals(v))
+        veclen = length(v)
+        m = max(m, row + veclen)
+        n = max(n, col + veclen)
         i += numel
     end
-    return I, J, V
+    return I, J, V, m, n
 end
 
 """
@@ -3547,9 +3603,39 @@ julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
 """
 spdiagm(kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm(nothing, kv...)
 spdiagm(m::Integer, n::Integer, kv::Pair{<:Integer,<:AbstractVector}...) = _spdiagm((Int(m),Int(n)), kv...)
+
+"""
+    spdiagm(v::AbstractVector)
+    spdiagm(m::Integer, n::Integer, v::AbstractVector)
+
+Construct a sparse matrix with elements of the vector as diagonal elements.
+By default (no given `m` and `n`), the matrix is square and its size is given
+by `length(v)`, but a non-square size `m`×`n` can be specified by passing `m`
+and `n` as the first arguments.
+
+!!! compat "Julia 1.6"
+    These functions require at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> spdiagm([1,2,3])
+3×3 SparseMatrixCSC{Int64, Int64} with 3 stored entries:
+ 1  ⋅  ⋅
+ ⋅  2  ⋅
+ ⋅  ⋅  3
+
+julia> spdiagm(sparse([1,0,3]))
+3×3 SparseMatrixCSC{Int64, Int64} with 2 stored entries:
+ 1  ⋅  ⋅
+ ⋅  ⋅  ⋅
+ ⋅  ⋅  3
+```
+"""
+spdiagm(v::AbstractVector) = _spdiagm(nothing, 0 => v)
+spdiagm(m::Integer, n::Integer, v::AbstractVector) = _spdiagm((Int(m), Int(n)), 0 => v)
+
 function _spdiagm(size, kv::Pair{<:Integer,<:AbstractVector}...)
-    I, J, V = spdiagm_internal(kv...)
-    mmax, nmax = dimlub(I), dimlub(J)
+    I, J, V, mmax, nmax = spdiagm_internal(kv...)
     mnmax = max(mmax, nmax)
     m, n = something(size, (mnmax,mnmax))
     (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))

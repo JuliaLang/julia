@@ -1266,7 +1266,7 @@ else
     # fixpoint.
     approx_iter_type(itrT::Type) = _approx_iter_type(itrT, Base._return_type(iterate, Tuple{itrT}))
     # Not actually called, just passed to return type to avoid
-    # having to typesubtract
+    # having to typesplit on Nothing
     function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
         valstate === nothing && return nothing
         val, st = valstate

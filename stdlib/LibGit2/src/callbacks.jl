@@ -275,8 +275,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
         p.url = unsafe_string(url_ptr)
         m = match(URL_REGEX, p.url)
 
-        p.scheme = something(m[:scheme], "")
-        p.username = something(m[:user], "")
+        p.scheme = something(m[:scheme], SubString(""))
+        p.username = something(m[:user], SubString(""))
         p.host = m[:host]
 
         # When an explicit credential is supplied we will make sure to use the given
@@ -287,7 +287,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
             cred = p.explicit
 
             # Copy explicit credentials to avoid mutating approved credentials.
-            p.credential = deepcopy(cred)
+            # invalidation fix from cred being non-inferrable
+            p.credential = Base.invokelatest(deepcopy, cred)
 
             if isa(cred, SSHCredential)
                 allowed_types &= Cuint(Consts.CREDTYPE_SSH_KEY)
@@ -301,7 +302,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
 
             # Perform a deepcopy as we do not want to mutate approved cached credentials
             if haskey(p.cache, cred_id)
-                p.credential = deepcopy(p.cache[cred_id])
+                # invalidation fix from p.cache[cred_id] being non-inferrable
+                p.credential = Base.invokelatest(deepcopy, p.cache[cred_id])
             end
         end
 

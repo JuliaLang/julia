@@ -85,6 +85,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, :compact => true)
     end
+    recur_io_k = IOContext(recur_io, :typeinfo=>keytype(t))
+    recur_io_v = IOContext(recur_io, :typeinfo=>valtype(t))
 
     summary(io, t)
     isempty(t) && return
@@ -105,8 +107,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         vallen = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
-            ks[i] = sprint(show, k, context=recur_io, sizehint=0)
-            vs[i] = sprint(show, v, context=recur_io, sizehint=0)
+            ks[i] = sprint(show, k, context=recur_io_k, sizehint=0)
+            vs[i] = sprint(show, v, context=recur_io_v, sizehint=0)
             keylen = clamp(length(ks[i]), keylen, cols)
             vallen = clamp(length(vs[i]), vallen, cols)
         end
@@ -127,7 +129,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
         else
-            key = sprint(show, k, context=recur_io, sizehint=0)
+            key = sprint(show, k, context=recur_io_k, sizehint=0)
         end
         print(recur_io, key)
         print(io, " => ")
@@ -136,7 +138,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
             val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
             print(io, val)
         else
-            show(recur_io, v)
+            show(recur_io_v, v)
         end
     end
 end
@@ -414,7 +416,7 @@ function _show_default(io::IO, @nospecialize(x))
         end
     else
         print(io, "0x")
-        r = Ref(x)
+        r = Ref{Any}(x)
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
             for i in (nb - 1):-1:0
@@ -646,8 +648,10 @@ function make_typealiases(@nospecialize(x::Type))
     aliases = SimpleVector[]
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
+    each = Any[]
     for p in uniontypes(unwrap_unionall(x))
         p isa UnionAll && push!(xenv, p)
+        push!(each, rewrap_unionall(p, x))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
@@ -680,7 +684,12 @@ function make_typealiases(@nospecialize(x::Type))
                     has_free_typevars(applied) && continue
                     applied <: x || continue # parameter matching didn't make a subtype
                     print_without_params(x) && (env = Core.svec())
-                    push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                    for typ in each # check that the alias also fully subsumes at least component of the input
+                        if typ <: applied
+                            push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                            break
+                        end
+                    end
                 end
             end
         end
@@ -740,8 +749,9 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     if !print_without_params(x) && get(io, :compact, true)
         properx = makeproper(io, x)
         if make_typealias(properx) !== nothing || x <: make_typealiases(properx)[2]
-            print(io, " = ")
+            print(io, " (alias for ")
             show(IOContext(io, :compact => false), x)
+            print(io, ")")
         end
     end
 
@@ -1128,6 +1138,10 @@ function isidentifier(s::AbstractString)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
+is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
+
+_isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
 """
     isoperator(s::Symbol)
 
@@ -1139,7 +1153,7 @@ julia> Base.isoperator(:+), Base.isoperator(:f)
 (true, false)
 ```
 """
-isoperator(s::Union{Symbol,AbstractString}) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+isoperator(s::Union{Symbol,AbstractString}) = _isoperator(s) || ispostfixoperator(s)
 
 """
     isunaryoperator(s::Symbol)
@@ -1166,7 +1180,26 @@ julia> Base.isbinaryoperator(:-), Base.isbinaryoperator(:√), Base.isbinaryoper
 (true, false, false)
 ```
 """
-isbinaryoperator(s::Symbol) = isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s))
+function isbinaryoperator(s::Symbol)
+    return _isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s)) &&
+        s !== Symbol("'")
+end
+
+"""
+    ispostfixoperator(s::Union{Symbol,AbstractString})
+
+Return `true` if the symbol can be used as a postfix operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.ispostfixoperator(Symbol("'")), Base.ispostfixoperator(Symbol("'ᵀ")), Base.ispostfixoperator(:-)
+(true, true, false)
+```
+"""
+function ispostfixoperator(s::Union{Symbol,AbstractString})
+    s = String(s)
+    return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
+end
 
 """
     operator_precedence(s::Symbol)
@@ -1444,7 +1477,10 @@ function show_generator(io, ex::Expr, indent, quote_level)
     end
 end
 
-function valid_import_path(@nospecialize ex)
+function valid_import_path(@nospecialize(ex), allow_as = true)
+    if allow_as && is_expr(ex, :as) && length((ex::Expr).args) == 2
+        ex = (ex::Expr).args[1]
+    end
     return is_expr(ex, :(.)) && length((ex::Expr).args) > 0 && all(a->isa(a,Symbol), (ex::Expr).args)
 end
 
@@ -1508,7 +1544,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && (nargs != 2 || !is_expr(args[2], :tuple))
-        if nargs == 2 && is_quoted(args[2])
+        # standalone .op
+        if nargs == 1 && args[1] isa Symbol && isoperator(args[1])
+            print(io, "(.", args[1], ")")
+        elseif nargs == 2 && is_quoted(args[2])
             item = args[1]
             # field
             field = unquoted(args[2])
@@ -1585,6 +1624,20 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         end
         head !== :row && print(io, cl)
 
+    # transpose
+    elseif (head === Symbol("'") && nargs == 1) || (
+        # ' with unicode suffix is a call expression
+        head === :call && nargs == 2 && args[1] isa Symbol &&
+        ispostfixoperator(args[1]) && args[1] !== Symbol("'")
+    )
+        op, arg1 = head === Symbol("'") ? (head, args[1]) : (args[1], args[2])
+        if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
+            show_enclosed_list(io, '(', [arg1], ", ", ')', indent, 0)
+        else
+            show_unquoted(io, arg1, indent, 0, quote_level)
+        end
+        print(io, op)
+
     # function call
     elseif head === :call && nargs >= 1
         func = args[1]
@@ -1613,7 +1666,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             end
 
         # unary operator (i.e. "!z")
-        elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
+        elseif isa(func,Symbol) && length(func_args) == 1 && func in uni_ops
             show_unquoted(io, func, indent, 0, quote_level)
             arg1 = func_args[1]
             if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
@@ -1950,17 +2003,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             parens && print(io, ")")
         end
 
-    # transpose
-    elseif head === Symbol('\'') && nargs == 1
-        if isa(args[1], Symbol)
-            show_unquoted(io, args[1], 0, 0, quote_level)
-        else
-            print(io, "(")
-            show_unquoted(io, args[1], 0, 0, quote_level)
-            print(io, ")")
-        end
-        print(io, head)
-
     # `where` syntax
     elseif head === :where && nargs > 1
         parens = 1 <= prec
@@ -1992,6 +2034,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             first = false
             show_import_path(io, a, quote_level)
         end
+    elseif head === :as && nargs == 2 && valid_import_path(args[1], false)
+        show_import_path(io, args[1], quote_level)
+        print(io, " as ")
+        show_unquoted(io, args[2], indent, 0, quote_level)
     elseif head === :meta && nargs >= 2 && args[1] === :push_loc
         print(io, "# meta: location ", join(args[2:end], " "))
     elseif head === :meta && nargs == 1 && args[1] === :pop_loc
@@ -2025,7 +2071,8 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
         isdefined(uw.name.module, uw.name.mt.name) &&
         ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
+        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
+        print_within_stacktrace(io, s, bold=true)
     elseif isa(ft, DataType) && ft.name === Type.body.name &&
         (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
@@ -2037,19 +2084,20 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         if html
             print(io, "($fargname::<b>", ft, "</b>)")
         else
-            print(io, "($fargname::", ft, ")")
+            print_within_stacktrace(io, "($fargname::", ft, ")", bold=true)
         end
     end
     nothing
 end
 
-function print_within_stacktrace(io, s...; color, bold=false)
+function print_within_stacktrace(io, s...; color=:normal, bold=false)
     if get(io, :backtrace, false)::Bool
         printstyled(io, s...; color, bold)
     else
         print(io, s...)
     end
 end
+
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing, argnames=nothing)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
@@ -2066,16 +2114,16 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     sig = (sig::DataType).parameters
     show_signature_function(env_io, sig[1], demangle)
     first = true
-    print_within_stacktrace(io, "(", color=:light_black)
+    print_within_stacktrace(io, "(", bold=true)
     show_argnames = argnames !== nothing && length(argnames) == length(sig)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         if show_argnames
-            print_within_stacktrace(io, argnames[i]; bold=true, color=:light_black)
+            print_within_stacktrace(io, argnames[i]; color=:light_black)
         end
         print(io, "::")
-        print_within_stacktrace(env_io, sig[i]; color=:light_black)
+        print_type_stacktrace(env_io, sig[i])
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -2083,14 +2131,25 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         for (k, t) in kwargs
             first || print(io, ", ")
             first = false
-            print_within_stacktrace(io, k; bold=true, color=:light_black)
+            print_within_stacktrace(io, k; color=:light_black)
             print(io, "::")
-            print_within_stacktrace(io, t; color=:light_black)
+            print_type_stacktrace(io, t)
         end
     end
-    print_within_stacktrace(io, ")", color=:light_black)
+    print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     nothing
+end
+
+function print_type_stacktrace(io, type; color=:normal)
+    str = sprint(show, type, context=io)
+    i = findfirst('{', str)
+    if isnothing(i) || !get(io, :backtrace, false)::Bool
+        printstyled(io, str; color=color)
+    else
+        printstyled(io, str[1:i-1]; color=color)
+        printstyled(io, str[i:end]; color=:light_black)
+    end
 end
 
 resolvebinding(@nospecialize(ex)) = ex
@@ -2169,9 +2228,9 @@ module IRShow
     include("compiler/ssair/show.jl")
 
     const __debuginfo = Dict{Symbol, Any}(
-        # :full => src -> Base.IRShow.DILineInfoPrinter(src.linetable), # and add variable slot information
-        :source => src -> Base.IRShow.DILineInfoPrinter(src.linetable),
-        # :oneliner => src -> Base.IRShow.PartialLineInfoPrinter(src.linetable),
+        # :full => src -> Base.IRShow.statementidx_lineinfo_printer(src), # and add variable slot information
+        :source => src -> Base.IRShow.statementidx_lineinfo_printer(src),
+        # :oneliner => src -> Base.IRShow.statementidx_lineinfo_printer(Base.IRShow.PartialLineInfoPrinter, src),
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
     const default_debuginfo = Ref{Symbol}(:none)
@@ -2460,7 +2519,6 @@ function summary(x)
     summary(io, x)
     String(take!(io))
 end
-summary(io::IO, t::Tuple) = print(io, t)
 
 ## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
@@ -2560,10 +2618,17 @@ function showarg(io::IO, r::ReshapedArray, toplevel)
     toplevel && print(io, " with eltype ", eltype(r))
 end
 
-function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
+function showarg(io::IO, r::NonReshapedReinterpretArray{T}, toplevel) where {T}
     print(io, "reinterpret(", T, ", ")
     showarg(io, parent(r), false)
     print(io, ')')
+end
+
+function showarg(io::IO, r::ReshapedReinterpretArray{T}, toplevel) where {T}
+    print(io, "reinterpret(reshape, ", T, ", ")
+    showarg(io, parent(r), false)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(r))
 end
 
 # printing iterators from Base.Iterators

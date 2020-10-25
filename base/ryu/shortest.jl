@@ -233,6 +233,18 @@ end
     neg = signbit(x)
     # special cases
     if x == 0
+        if typed && x isa Float16
+            buf[pos] = UInt8('F')
+            buf[pos + 1] = UInt8('l')
+            buf[pos + 2] = UInt8('o')
+            buf[pos + 3] = UInt8('a')
+            buf[pos + 4] = UInt8('t')
+            buf[pos + 5] = UInt8('1')
+            buf[pos + 6] = UInt8('6')
+            buf[pos + 7] = UInt8('(')
+            pos += 8
+        end
+
         if neg
             buf[pos] = UInt8('-')
             pos += 1
@@ -257,9 +269,13 @@ end
                 buf[pos + 1] = UInt8('0')
                 pos += 2
             end
+            if typed && x isa Float16
+                buf[pos] = UInt8(')')
+                pos += 1
+            end
             return pos
         end
-        while precision > 1
+        while hash && precision > 1
             buf[pos] = UInt8('0')
             pos += 1
             precision -= 1
@@ -268,6 +284,10 @@ end
             buf[pos] = UInt8('f')
             buf[pos + 1] = UInt8('0')
             pos += 2
+        end
+        if typed && x isa Float16
+            buf[pos] = UInt8(')')
+            pos += 1
         end
         return pos
     elseif isnan(x)

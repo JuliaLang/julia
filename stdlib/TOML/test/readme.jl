@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # This test stuff in the TOML README at https://github.com/toml-lang/toml
 @testset "README" begin
 

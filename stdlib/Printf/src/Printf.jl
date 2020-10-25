@@ -2,1297 +2,861 @@
 
 module Printf
 
+using Base.Ryu
+
 export @printf, @sprintf
-using Base.Grisu
-using Base.GMP
-using Unicode: textwidth
 
-### printf formatter generation ###
-const SmallFloatingPoint = Union{Float64,Float32,Float16}
-const SmallNumber = Union{SmallFloatingPoint,Base.BitInteger}
+# format specifier categories
+const Ints = Union{Val{'d'}, Val{'i'}, Val{'u'}, Val{'x'}, Val{'X'}, Val{'o'}}
+const Floats = Union{Val{'e'}, Val{'E'}, Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'}, Val{'a'}, Val{'A'}}
+const Chars = Union{Val{'c'}, Val{'C'}}
+const Strings = Union{Val{'s'}, Val{'S'}}
+const Pointer = Val{'p'}
+const HexBases = Union{Val{'x'}, Val{'X'}, Val{'a'}, Val{'A'}}
 
-function gen(s::AbstractString)
-    args = []
-    blk = Expr(:block, :(local neg, pt, len, exp, do_out, args, buf))
-    gotbuf = false
-    for x in parse(s)
-        if isa(x,AbstractString)
-            push!(blk.args, :(print(out, $(length(x)==1 ? x[1] : x))))
-        else
-            c = lowercase(x[end])
-            f = c=='f' ? gen_f :
-                c=='e' ? gen_e :
-                c=='a' ? gen_a :
-                c=='g' ? gen_g :
-                c=='c' ? gen_c :
-                c=='s' ? gen_s :
-                c=='p' ? gen_p :
-                         gen_d
-            if !gotbuf && c != 'c' && c != 's' && c != 'p'
-                push!(blk.args, :(buf = $Grisu.getbuf()))
-                gotbuf = true
-            end
-            arg, ex = f(x...)
-            push!(args, arg)
-            push!(blk.args, ex)
-        end
-    end
-    push!(blk.args, :nothing)
-    return args, blk
+"""
+Typed representation of a format specifier.
+
+`T` is a `Val{'_'}`, where `_` is a valid format specifier character.
+
+Fields are the various modifiers allowed for various format specifiers.
+"""
+struct Spec{T} # T => %type => Val{'type'}
+    leftalign::Bool
+    plus::Bool
+    space::Bool
+    zero::Bool
+    hash::Bool
+    width::Int
+    precision::Int
 end
 
-### printf format string parsing ###
+# recreate the format specifier string from a typed Spec
+Base.string(f::Spec{T}; modifier::String="") where {T} =
+    string("%", f.leftalign ? "-" : "", f.plus ? "+" : "", f.space ? " " : "",
+        f.zero ? "0" : "", f.hash ? "#" : "", f.width > 0 ? f.width : "",
+        f.precision == 0 ? ".0" : f.precision > 0 ? ".$(f.precision)" : "", modifier, char(T))
+Base.show(io::IO, f::Spec) = print(io, string(f))
 
-function parse(s::AbstractString)
-    # parse format string into strings and format tuples
-    list = []
-    a = Iterators.Stateful(pairs(s))
-    lastparse = firstindex(s)
-    lastidx = 0 # invariant: lastidx == prevind(s, idx)
-    for (idx, c) in a
-        if c == '%'
-            lastparse > lastidx || push!(list, s[lastparse:lastidx])
-            flags, width, precision, conversion = parse1!(s,  a)
-            '\'' in flags && error("printf format flag ' not yet supported")
-            conversion == 'n'    && error("printf feature %n not supported")
-            push!(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
-            lastparse = isempty(a) ? lastindex(s)+1 : peek(a)[1]
+floatfmt(s::Spec{T}) where {T} =
+    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.width, 0)
+ptrfmt(s::Spec{T}, x) where {T} =
+    Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.width, sizeof(x) == 8 ? 16 : 8)
+
+"""
+    Printf.Format(format_str)
+
+Create a C printf-compatible format object that can be used for formatting values.
+
+The input `format_str` can include any valid format specifier character and modifiers.
+
+A `Format` object can be passed to `Printf.format(f::Format, args...)` to produce a
+formatted string, or `Printf.format(io::IO, f::Format, args...)` to print the
+formatted string directly to `io`.
+
+For convenience, the `Printf.format"..."` string macro form can be used for building
+a `Printf.Format` object at macro-expansion-time.
+"""
+struct Format{S, T}
+    str::S # original full format string as CodeUnits
+    # keep track of non-format specifier strings to print
+    # length(substringranges) == length(formats) + 1
+    # so when printing, we start with printing
+      # str[substringranges[1]], then formats[1] + args[1]
+      # then str[substringranges[2]], then formats[2] + args[2]
+      # and so on, then at the end, str[substringranges[end]]
+    substringranges::Vector{UnitRange{Int}}
+    formats::T # Tuple of Specs
+end
+
+# what number base should be used for a given format specifier?
+base(T) = T <: HexBases ? 16 : T <: Val{'o'} ? 8 : 10
+char(::Type{Val{c}}) where {c} = c
+
+# parse format string
+function Format(f::AbstractString)
+    isempty(f) && throw(ArgumentError("empty format string"))
+    bytes = codeunits(f)
+    len = length(bytes)
+    pos = 1
+    b = 0x00
+    while pos <= len
+        b = bytes[pos]
+        pos += 1
+        if b == UInt8('%')
+            pos > len && throw(ArgumentError("invalid format string: '$f'"))
+            if bytes[pos] == UInt8('%')
+                # escaped '%'
+                b = bytes[pos]
+                pos += 1
+            else
+                break
+            end
         end
-        lastidx = idx
     end
-    lastparse > lastindex(s) || push!(list, s[lastparse:end])
-    # coalesce adjacent strings
-    i = j = 1
-    while i < length(list)
-        if isa(list[i],AbstractString)
-            for outer j = i+1:length(list)
-                if !isa(list[j],AbstractString)
-                    j -= 1
+    strs = [1:pos - 1 - (b == UInt8('%'))]
+    fmts = []
+    while pos <= len
+        b = bytes[pos]
+        pos += 1
+        # positioned at start of first format str %
+        # parse flags
+        leftalign = plus = space = zero = hash = false
+        while true
+            if b == UInt8('-')
+                leftalign = true
+            elseif b == UInt8('+')
+                plus = true
+            elseif b == UInt8(' ')
+                space = true
+            elseif b == UInt8('0')
+                zero = true
+            elseif b == UInt8('#')
+                hash = true
+            else
+                break
+            end
+            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+            b = bytes[pos]
+            pos += 1
+        end
+        if leftalign
+            zero = false
+        end
+        # parse width
+        width = 0
+        while b - UInt8('0') < 0x0a
+            width = 10 * width + (b - UInt8('0'))
+            b = bytes[pos]
+            pos += 1
+            pos > len && break
+        end
+        # parse precision
+        precision = 0
+        parsedprecdigits = false
+        if b == UInt8('.')
+            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+            parsedprecdigits = true
+            b = bytes[pos]
+            pos += 1
+            if pos <= len
+                while b - UInt8('0') < 0x0a
+                    precision = 10precision + (b - UInt8('0'))
+                    b = bytes[pos]
+                    pos += 1
+                    pos > len && break
+                end
+            end
+        end
+        # parse length modifier (ignored)
+        if b == UInt8('h') || b == UInt8('l')
+            prev = b
+            b = bytes[pos]
+            pos += 1
+            if b == prev
+                pos > len && throw(ArgumentError("invalid format string: '$f'"))
+                b = bytes[pos]
+                pos += 1
+            end
+        elseif b in b"Ljqtz"
+            b = bytes[pos]
+            pos += 1
+        end
+        # parse type
+        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("invalid format string: '$f', invalid type specifier: '$(Char(b))'"))
+        type = Val{Char(b)}
+        if type <: Ints && precision > 0
+            zero = false
+        elseif (type <: Strings || type <: Chars) && !parsedprecdigits
+            precision = -1
+        elseif type <: Union{Val{'a'}, Val{'A'}} && !parsedprecdigits
+            precision = -1
+        elseif type <: Floats && !parsedprecdigits
+            precision = 6
+        end
+        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision))
+        start = pos
+        while pos <= len
+            b = bytes[pos]
+            pos += 1
+            if b == UInt8('%')
+                pos > len && throw(ArgumentError("invalid format string: '$f'"))
+                if bytes[pos] == UInt8('%')
+                    # escaped '%'
+                    b = bytes[pos]
+                    pos += 1
+                else
                     break
                 end
-                list[i] *= list[j]
-            end
-            deleteat!(list,i+1:j)
-        end
-        i += 1
-    end
-    return list
-end
-
-## parse a single printf specifier ##
-
-# printf specifiers:
-#   %                       # start
-#   (\d+\$)?                # arg (not supported)
-#   [\-\+#0' ]*             # flags
-#   (\d+)?                  # width
-#   (\.\d*)?                # precision
-#   (h|hh|l|ll|L|j|t|z|q)?  # modifier (ignored)
-#   [diouxXeEfFgGaAcCsSp%]  # conversion
-
-pop_or_die!(s, a) = !isempty(a) ? popfirst!(a) :
-    throw(ArgumentError("invalid printf format string: $(repr(s))"))
-
-function parse1!(s, a)
-    width = 0
-    precision = -1
-    k, c = pop_or_die!(s, a)
-    j = k
-    # handle %%
-    if c == '%'
-        return "", width, precision, c
-    end
-    # parse flags
-    while c in "#0- + '"
-        k, c = pop_or_die!(s, a)
-    end
-    flags = String(s[j:k-1]) # All flags are 1 byte
-    # parse width
-    while '0' <= c <= '9'
-        width = 10*width + c-'0'
-        _, c = pop_or_die!(s, a)
-    end
-    # parse precision
-    if c == '.'
-        _, c = pop_or_die!(s, a)
-        if '0' <= c <= '9'
-            precision = 0
-            while '0' <= c <= '9'
-                precision = 10*precision + c-'0'
-                _, c = pop_or_die!(s, a)
             end
         end
+        push!(strs, start:pos - 1 - (b == UInt8('%')))
     end
-    # parse length modifer (ignored)
-    if c == 'h' || c == 'l'
-        prev = c
-        _, c = pop_or_die!(s, a)
-        if c == prev
-            _, c = pop_or_die!(s, a)
-        end
-    elseif c in "Ljqtz"
-        _, c = pop_or_die!(s, a)
-    end
-    # validate conversion
-    if !(c in "diouxXDOUeEfFgGaAcCsSpn")
-        throw(ArgumentError("invalid printf format string: $(repr(s))"))
-    end
-    # TODO: warn about silly flag/conversion combinations
-    flags, width, precision, c
+    return Format(bytes, strs, Tuple(fmts))
 end
 
-### printf formatter generation ###
-
-function special_handler(flags::String, width::Int)
-    @gensym x
-    blk = Expr(:block)
-    pad = '-' in flags ? rpad : lpad
-    pos = '+' in flags ? "+" :
-          ' ' in flags ? " " : ""
-    abn = quote
-        isnan($x) ? $(pad("NaN", width)) :
-         $x < 0   ? $(pad("-Inf", width)) :
-                    $(pad("$(pos)Inf", width))
-    end
-    ex = :(isfinite($x) ? $blk : print(out, $abn))
-    x, ex, blk
+macro format_str(str)
+    Format(str)
 end
 
-function pad(m::Int, n, c::Char)
-    if m <= 1
-        :($n > 0 && print(out,$c))
-    else
-        @gensym i
-        quote
-            $i = $n
-            while $i > 0
-                print(out,$c)
-                $i -= 1
-            end
+const hex = b"0123456789abcdef"
+const HEX = b"0123456789ABCDEF"
+
+# write out a single arg according to format options
+# char
+@inline function writechar(buf, pos, c)
+    u = bswap(reinterpret(UInt32, c))
+    while true
+        buf[pos] = u % UInt8
+        pos += 1
+        (u >>= 8) == 0 && break
+    end
+    return pos
+end
+
+@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
+    leftalign, width = spec.leftalign, spec.width
+    if !leftalign && width > 1
+        for _ = 1:(width - 1)
+            buf[pos] = UInt8(' ')
+            pos += 1
         end
     end
+    pos = writechar(buf, pos, arg isa String ? arg[1] : Char(arg))
+    if leftalign && width > 1
+        for _ = 1:(width - 1)
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
+    end
+    return pos
 end
 
-function dynamic_pad(m, val, c::Char)
-    @gensym i
-    quote
-        if $m <= 1
-            $val > 0 && print(out,$c)
+# strings
+@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
+    leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
+    str = string(arg)
+    op = p = prec == -1 ? (length(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)) : prec
+    if !leftalign && width > p
+        for _ = 1:(width - p)
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
+    end
+    if hash
+        if arg isa Symbol
+            buf[pos] = UInt8(':')
+            pos += 1
+            p -= 1
+        elseif arg isa AbstractString
+            buf[pos] = UInt8('"')
+            pos += 1
+            p -= 1
+        end
+    end
+    for c in str
+        p == 0 && break
+        pos = writechar(buf, pos, c)
+        p -= 1
+    end
+    if hash && arg isa AbstractString && p > 0
+        buf[pos] = UInt8('"')
+        pos += 1
+    end
+    if leftalign && width > op
+        for _ = 1:(width - op)
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
+    end
+    return pos
+end
+
+# integers
+toint(x) = x
+toint(x::Rational) = Integer(x)
+
+fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
+    fmt(buf, pos, arg, floatfmt(spec))
+
+@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
+    leftalign, plus, space, zero, hash, width, prec =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+    bs = base(T)
+    arg2 = toint(arg)
+    n = i = ndigits(arg2, base=bs, pad=1)
+    x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
+    arglen = n + (neg || (plus | space)) +
+        (T == Val{'o'} && hash ? 1 : 0) +
+        (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
+    arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) : arglen
+    if !leftalign && !zero && arglen2 < width
+        # pad left w/ spaces
+        for _ = 1:(width - arglen2)
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
+    end
+    if neg
+        buf[pos] = UInt8('-'); pos += 1
+    elseif plus # plus overrides space
+        buf[pos] = UInt8('+'); pos += 1
+    elseif space
+        buf[pos] = UInt8(' '); pos += 1
+    end
+    if T == Val{'o'} && hash
+        buf[pos] = UInt8('0')
+        pos += 1
+    elseif T == Val{'x'} && hash
+        buf[pos] = UInt8('0')
+        buf[pos + 1] = UInt8('x')
+        pos += 2
+    elseif T == Val{'X'} && hash
+        buf[pos] = UInt8('0')
+        buf[pos + 1] = UInt8('X')
+        pos += 2
+    end
+    if zero && arglen2 < width
+        for _ = 1:(width - arglen2)
+            buf[pos] = UInt8('0')
+            pos += 1
+        end
+    elseif n < prec
+        for _ = 1:(prec - n)
+            buf[pos] = UInt8('0')
+            pos += 1
+        end
+    elseif arglen < arglen2
+        for _ = 1:(arglen2 - arglen)
+            buf[pos] = UInt8('0')
+            pos += 1
+        end
+    end
+    while i > 0
+        @inbounds buf[pos + i - 1] = bs == 16 ?
+            (T == Val{'x'} ? hex[(x & 0x0f) + 1] : HEX[(x & 0x0f) + 1]) :
+            (48 + (bs == 8 ? (x & 0x07) : rem(x, 10)))
+        if bs == 8
+            x >>= 3
+        elseif bs == 16
+            x >>= 4
         else
-            $i = $val
-            while $i > 0
-                print(out,$c)
-                $i -= 1
+            x = oftype(x, div(x, 10))
+        end
+        i -= 1
+    end
+    pos += n
+    if leftalign && arglen2 < width
+        # pad right
+        for _ = 1:(width - arglen2)
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
+    end
+    return pos
+end
+
+# floats
+"""
+    Printf.tofloat(x)
+
+Convert an argument to a Base float type for printf formatting.
+By default, arguments are converted to `Float64` via `Float64(x)`.
+Custom numeric types that have a conversion to a Base float type
+that wish to hook into printf formatting can extend this method like:
+
+```julia
+Printf.tofloat(x::MyCustomType) = convert_my_custom_type_to_float(x)
+```
+
+For arbitrary precision numerics, you might extend the method like:
+
+```julia
+Printf.tofloat(x::MyArbitraryPrecisionType) = BigFloat(x)
+```
+"""
+tofloat(x) = Float64(x)
+tofloat(x::Base.IEEEFloat) = x
+tofloat(x::BigFloat) = x
+
+_snprintf(ptr, siz, str, arg) =
+    @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+                                   arg::Ref{BigFloat})::Cint
+
+const __BIG_FLOAT_MAX__ = 8192
+
+@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
+    leftalign, plus, space, zero, hash, width, prec =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+    x = tofloat(arg)
+    if x isa BigFloat
+        if isfinite(x)
+            GC.@preserve buf begin
+                siz = length(buf) - pos + 1
+                str = string(spec; modifier="R")
+                len = _snprintf(pointer(buf, pos), siz, str, x)
+                if len > siz
+                    maxout = max(__BIG_FLOAT_MAX__,
+                                 ceil(Int, precision(x) * log(2) / log(10)) + 25)
+                    len > maxout &&
+                        error("Over $maxout bytes $len needed to output BigFloat $x")
+                    resize!(buf, len + 1)
+                    len = _snprintf(pointer(buf, pos), len + 1, str, x)
+                end
+                len > 0 || throw(ArgumentError("invalid printf formatting $str for BigFloat"))
+                return pos + len
+            end
+        end
+        x = Float64(x)
+    end
+    if T == Val{'e'} || T == Val{'E'}
+        newpos = Ryu.writeexp(buf, pos, x, prec, plus, space, hash, char(T), UInt8('.'))
+    elseif T == Val{'f'} || T == Val{'F'}
+        newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
+    elseif T == Val{'g'} || T == Val{'G'}
+        prec = prec == 0 ? 1 : prec
+        x = round(x, sigdigits=prec)
+        newpos = Ryu.writeshortest(buf, pos, x, plus, space, hash, prec, T == Val{'g'} ? UInt8('e') : UInt8('E'), true, UInt8('.'))
+    elseif T == Val{'a'} || T == Val{'A'}
+        x, neg = x < 0 ? (-x, true) : (x, false)
+        newpos = pos
+        if neg
+            buf[newpos] = UInt8('-')
+            newpos += 1
+        elseif plus
+            buf[newpos] = UInt8('+')
+            newpos += 1
+        elseif space
+            buf[newpos] = UInt8(' ')
+            newpos += 1
+        end
+        if isnan(x)
+            buf[newpos] = UInt8('N')
+            buf[newpos + 1] = UInt8('a')
+            buf[newpos + 2] = UInt8('N')
+            newpos += 3
+        elseif !isfinite(x)
+            buf[newpos] = UInt8('I')
+            buf[newpos + 1] = UInt8('n')
+            buf[newpos + 2] = UInt8('f')
+            newpos += 3
+        else
+            buf[newpos] = UInt8('0')
+            newpos += 1
+            buf[newpos] = T <: Val{'a'} ? UInt8('x') : UInt8('X')
+            newpos += 1
+            if arg == 0
+                buf[newpos] = UInt8('0')
+                newpos += 1
+                if prec > 0
+                    while prec > 0
+                        buf[newpos] = UInt8('0')
+                        newpos += 1
+                        prec -= 1
+                    end
+                end
+                buf[newpos] = T <: Val{'a'} ? UInt8('p') : UInt8('P')
+                buf[newpos + 1] = UInt8('+')
+                buf[newpos + 2] = UInt8('0')
+            else
+                if prec > -1
+                    s, p = frexp(x)
+                    sigbits = 4 * min(prec, 13)
+                    s = 0.25 * round(ldexp(s, 1 + sigbits))
+                    # ensure last 2 exponent bits either 01 or 10
+                    u = (reinterpret(UInt64, s) & 0x003f_ffff_ffff_ffff) >> (52 - sigbits)
+                    i = n = (sizeof(u) << 1) - (leading_zeros(u) >> 2)
+                else
+                    s, p = frexp(x)
+                    s *= 2.0
+                    u = (reinterpret(UInt64, s) & 0x001f_ffff_ffff_ffff)
+                    t = (trailing_zeros(u) >> 2)
+                    u >>= (t << 2)
+                    i = n = 14 - t
+                end
+                frac = u > 9 || hash || prec > 0
+                while i > 1
+                    buf[newpos + i] = T == Val{'a'} ? hex[(u & 0x0f) + 1] : HEX[(u & 0x0f) + 1]
+                    u >>= 4
+                    i -= 1
+                    prec -= 1
+                end
+                if frac
+                    buf[newpos + 1] = UInt8('.')
+                end
+                buf[newpos] = T == Val{'a'} ? hex[(u & 0x0f) + 1] : HEX[(u & 0x0f) + 1]
+                newpos += n + frac
+                while prec > 0
+                    buf[newpos] = UInt8('0')
+                    newpos += 1
+                    prec -= 1
+                end
+                buf[newpos] = T <: Val{'a'} ? UInt8('p') : UInt8('P')
+                newpos += 1
+                p -= 1
+                buf[newpos] = p < 0 ? UInt8('-') : UInt8('+')
+                p = p < 0 ? -p : p
+                newpos += 1
+                n = i = ndigits(p, base=10, pad=1)
+                while i > 0
+                    buf[newpos + i - 1] = 48 + rem(p, 10)
+                    p = oftype(p, div(p, 10))
+                    i -= 1
+                end
+                newpos += n
             end
         end
     end
+    if newpos - pos < width
+        # need to pad
+        if leftalign
+            # easy case, just pad spaces after number
+            for _ = 1:(width - (newpos - pos))
+                buf[newpos] = UInt8(' ')
+                newpos += 1
+            end
+        else
+            # right aligned
+            n = width - (newpos - pos)
+            if zero
+                ex = (arg < 0 || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
+                so = pos + ex
+                len = (newpos - pos) - ex
+                copyto!(buf, so + n, buf, so, len)
+                for i = so:(so + n - 1)
+                    buf[i] = UInt8('0')
+                end
+                newpos += n
+            else
+                copyto!(buf, pos + n, buf, pos, newpos - pos)
+                for i = pos:(pos + n - 1)
+                    buf[i] = UInt8(' ')
+                end
+                newpos += n
+            end
+        end
+    end
+    return newpos
 end
 
-# returns the number of (ASCII) chars output by print_fixed
-function print_fixed_width(precision, pt, ndigits, trailingzeros=true)
-    count = 0
-    if pt <= 0
-        # 0.0dddd0
-        count += 2
-        precision += pt
-        if pt < 0
-            count -= pt
-        end
-        count += ndigits
-        precision -= ndigits
-    elseif ndigits <= pt
-        # dddd000.000000
-        count += ndigits
-        if ndigits < pt
-            count += pt - ndigits
-        end
-        count += trailingzeros
-    else # 0 < pt < ndigits
-        # dd.dd0000
-        ndigits -= pt
-        count += pt + 1 + ndigits
-        precision -= ndigits
-    end
-    if trailingzeros && precision > 0
-        count += precision
-    end
-    return count
-end
+# pointers
+fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, Int(arg), ptrfmt(spec, arg))
 
-# note: if print_fixed is changed, print_fixed_width should be changed accordingly
-function print_fixed(out, precision, pt, ndigits, trailingzeros=true, buf = Grisu.getbuf())
-    pdigits = pointer(buf)
-    if pt <= 0
-        # 0.0dddd0
-        print(out, '0')
-        print(out, '.')
-        precision += pt
+# old Printf compat
+function fix_dec end
+function ini_dec end
+
+# generic fallback
+function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
+    leftalign, plus, space, zero, hash, width, prec =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+    buf2 = Base.StringVector(309 + 17 + 5)
+    ise = T <: Union{Val{'e'}, Val{'E'}}
+    isg = T <: Union{Val{'g'}, Val{'G'}}
+    isf = T <: Val{'f'}
+    if isg
+        prec = prec == 0 ? 1 : prec
+        arg = round(arg, sigdigits=prec)
+    end
+    n, pt, neg = isf ? fix_dec(arg, prec, buf2) : ini_dec(arg, min(prec + ise, length(buf2) - 1), buf2)
+    if isg && !hash
+        while buf2[n] == UInt8('0')
+            n -= 1
+        end
+    end
+    expform = ise || (isg && !(-4 < pt <= prec))
+    n2 = n + (expform ? 4 : 0) + (prec > 0 || hash) + (neg || (plus | space)) +
+        (isf && pt >= n ? prec + 1 : 0)
+    if !leftalign && !zero && n2 < width
+        # pad left w/ spaces
+        for _ = 1:(width - n2)
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
+    end
+    if neg
+        buf[pos] = UInt8('-'); pos += 1
+    elseif plus # plus overrides space
+        buf[pos] = UInt8('+'); pos += 1
+    elseif space
+        buf[pos] = UInt8(' '); pos += 1
+    end
+    if zero && n2 < width
+        for _ = 1:(width - n2)
+            buf[pos] = UInt8('0')
+            pos += 1
+        end
+    end
+    if expform
+        buf[pos] = buf2[1]
+        pos += 1
+        if n > 1 || hash
+            buf[pos] = UInt8('.')
+            pos += 1
+            for i = 2:n
+                buf[pos] = buf2[i]
+                pos += 1
+            end
+        end
+        buf[pos] = T <: Val{'e'} || T <: Val{'g'} ? UInt8('e') : UInt8('E')
+        pos += 1
+        exp = pt - 1
+        buf[pos] = exp < 0 ? UInt8('-') : UInt8('+')
+        pos += 1
+        exp = abs(exp)
+        if exp < 10
+            buf[pos] = UInt8('0')
+            buf[pos + 1] = 48 + exp
+            pos += 2
+        else
+            buf[pos] = 48 + div(exp, 10)
+            buf[pos + 1] = 48 + rem(exp, 10)
+            pos += 2
+        end
+    elseif pt <= 0
+        buf[pos] = UInt8('0')
+        buf[pos + 1] = UInt8('.')
+        pos += 2
         while pt < 0
-            print(out, '0')
+            buf[pos] = UInt8('0')
+            pos += 1
             pt += 1
         end
-        unsafe_write(out, pdigits, ndigits)
-        precision -= ndigits
-    elseif ndigits <= pt
-        # dddd000.000000
-        unsafe_write(out, pdigits, ndigits)
-        while ndigits < pt
-            print(out, '0')
-            ndigits += 1
+        for i = 1:n
+            buf[pos] = buf2[i]
+            pos += 1
         end
-        if trailingzeros
-            print(out, '.')
+    elseif pt >= n
+        for i = 1:n
+            buf[pos] = buf2[i]
+            pos += 1
         end
-    else # 0 < pt < ndigits
-        # dd.dd0000
-        ndigits -= pt
-        unsafe_write(out, pdigits, pt)
-        print(out, '.')
-        unsafe_write(out, pdigits+pt, ndigits)
-        precision -= ndigits
-    end
-    if trailingzeros
-        while precision > 0
-            print(out, '0')
-            precision -= 1
+        while pt > n
+            buf[pos] = UInt8('0')
+            pos += 1
+            n += 1
         end
-    end
-end
-
-function print_exp_e(out, exp::Integer)
-    print(out, exp < 0 ? '-' : '+')
-    exp = abs(exp)
-    d = div(exp,100)
-    if d > 0
-        if d >= 10
-            print(out, exp)
-            return
-        end
-        print(out, Char('0'+d))
-    end
-    exp = rem(exp,100)
-    print(out, Char('0'+div(exp,10)))
-    print(out, Char('0'+rem(exp,10)))
-end
-
-function print_exp_a(out, exp::Integer)
-    print(out, exp < 0 ? '-' : '+')
-    exp = abs(exp)
-    print(out, exp)
-end
-
-
-function gen_d(flags::String, width::Int, precision::Int, c::Char)
-    # print integer:
-    #  [dDiu]: print decimal digits
-    #  [o]:    print octal digits
-    #  [x]:    print hex digits, lowercase
-    #  [X]:    print hex digits, uppercase
-    #
-    # flags:
-    #  (#): prefix hex with 0x/0X; octal leads with 0
-    #  (0): pad left with zeros
-    #  (-): left justify
-    #  ( ): precede non-negative values with " "
-    #  (+): precede non-negative values with "+"
-    #
-    x, ex, blk = special_handler(flags,width)
-    # interpret the number
-    prefix = ""
-    if lowercase(c)=='o'
-        fn = '#' in flags ? :decode_0ct : :decode_oct
-    elseif c=='x'
-        '#' in flags && (prefix = "0x")
-        fn = :decode_hex
-    elseif c=='X'
-        '#' in flags && (prefix = "0X")
-        fn = :decode_HEX
-    else
-        fn = :decode_dec
-    end
-    push!(blk.args, :((do_out, args) = $fn(out, $x, $flags, $width, $precision, $c, buf)))
-    ifblk = Expr(:if, :do_out, Expr(:block))
-    push!(blk.args, ifblk)
-    blk = ifblk.args[2]
-    push!(blk.args, :((len, pt, neg) = args))
-    # calculate padding
-    width -= length(prefix)
-    space_pad = width > max(1,precision) && '-' in flags ||
-                precision < 0 && width > 1 && !('0' in flags) ||
-                precision >= 0 && width > precision
-    padding = nothing
-    if precision < 1; precision = 1; end
-    if space_pad
-        if '+' in flags || ' ' in flags
-            width -= 1
-            if width > precision
-                padding = :($width-(pt > $precision ? pt : $precision))
+        if hash || (isf && prec > 0)
+            buf[pos] = UInt8('.')
+            pos += 1
+            while prec > 0
+                buf[pos] = UInt8('0')
+                pos += 1
+                prec -= 1
             end
+        end
+    else
+        for i = 1:pt
+            buf[pos] = buf2[i]
+            pos += 1
+        end
+        buf[pos] = UInt8('.')
+        pos += 1
+        for i = pt+1:n
+            buf[pos] = buf2[i]
+            pos += 1
+        end
+    end
+
+    if leftalign && n2 < width
+        # pad right
+        for _ = 1:(width - n2)
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
+    end
+    return pos
+end
+
+const UNROLL_UPTO = 16
+# if you have your own buffer + pos, write formatted args directly to it
+@inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
+    # write out first substring
+    escapechar = false
+    for i in f.substringranges[1]
+        b = f.str[i]
+        if !escapechar
+            buf[pos] = b
+            pos += 1
+            escapechar = b === UInt8('%')
         else
-            if width > precision
-                padding = :($width-neg-(pt > $precision ? pt : $precision))
-            end
+            escapechar = false
         end
     end
-    # print space padding
-    if padding !== nothing && !('-' in flags)
-        push!(blk.args, pad(width-precision, padding, ' '))
-    end
-    # print sign
-    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
-                   push!(blk.args, :(neg && print(out, '-')))
-    # print prefix
-    for ch in prefix
-        push!(blk.args, :(print(out, $ch)))
-    end
-    # print zero padding & leading zeros
-    if space_pad && precision > 1
-        push!(blk.args, pad(precision-1, :($precision-pt), '0'))
-    elseif !space_pad && width > 1
-        zeros = '+' in flags || ' ' in flags ? :($(width-1)-pt) : :($width-neg-pt)
-        push!(blk.args, pad(width-1, zeros, '0'))
-    end
-    # print integer
-    push!(blk.args, :(unsafe_write(out, pointer(buf), pt)))
-    # print padding
-    if padding !== nothing && '-' in flags
-        push!(blk.args, pad(width-precision, padding, ' '))
-    end
-    # return arg, expr
-    :(($x)::Real), ex
-end
-
-function gen_f(flags::String, width::Int, precision::Int, c::Char)
-    # print to fixed trailing precision
-    #  [fF]: the only choice
-    #
-    # flags
-    #  (#): always print a decimal point
-    #  (0): pad left with zeros
-    #  (-): left justify
-    #  ( ): precede non-negative values with " "
-    #  (+): precede non-negative values with "+"
-    #
-    x, ex, blk = special_handler(flags,width)
-    # interpret the number
-    if precision < 0; precision = 6; end
-    push!(blk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, $precision, $c, buf)))
-    ifblk = Expr(:if, :do_out, Expr(:block))
-    push!(blk.args, ifblk)
-    blk = ifblk.args[2]
-    push!(blk.args, :((len, pt, neg) = args))
-    # calculate padding
-    padding = nothing
-    if precision > 0 || '#' in flags
-        width -= precision+1
-    end
-    if '+' in flags || ' ' in flags
-        width -= 1
-        if width > 1
-            padding = :($width-(pt > 0 ? pt : 1))
-        end
-    else
-        if width > 1
-            padding = :($width-(pt > 0 ? pt : 1)-neg)
-        end
-    end
-    # print space padding
-    if padding !== nothing && !('-' in flags) && !('0' in flags)
-        push!(blk.args, pad(width-1, padding, ' '))
-    end
-    # print sign
-    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
-                   push!(blk.args, :(neg && print(out, '-')))
-    # print zero padding
-    if padding !== nothing && !('-' in flags) && '0' in flags
-        push!(blk.args, pad(width-1, padding, '0'))
-    end
-    # print digits
-    if precision > 0
-        push!(blk.args, :(print_fixed(out,$precision,pt,len,true,buf)))
-    else
-        push!(blk.args, :(unsafe_write(out, pointer(buf), len)))
-        push!(blk.args, :(while pt >= (len+=1) print(out,'0') end))
-        '#' in flags && push!(blk.args, :(print(out, '.')))
-    end
-    # print space padding
-    if padding !== nothing && '-' in flags
-        push!(blk.args, pad(width-1, padding, ' '))
-    end
-    # return arg, expr
-    :(($x)::Real), ex
-end
-
-function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Bool=false)
-    # print float in scientific form:
-    #  [e]: use 'e' to introduce exponent
-    #  [E]: use 'E' to introduce exponent
-    #
-    # flags:
-    #  (#): always print a decimal point
-    #  (0): pad left with zeros
-    #  (-): left justify
-    #  ( ): precede non-negative values with " "
-    #  (+): precede non-negative values with "+"
-    #
-    x, ex, blk = if inside_g
-        @gensym x
-        blk = Expr(:block)
-        x, blk, blk
-    else
-        special_handler(flags,width)
-    end
-    # interpret the number
-    if precision < 0; precision = 6; end
-    ndigits = min(precision+1,length(Grisu.getbuf())-1)
-    push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c, buf)))
-    push!(blk.args, :(digits = buf))
-    ifblk = Expr(:if, :do_out, Expr(:block))
-    push!(blk.args, ifblk)
-    blk = ifblk.args[2]
-    push!(blk.args, :((len, pt, neg) = args))
-    push!(blk.args, :(exp = pt-1))
-    expmark = isuppercase(c) ? "E" : "e"
-    if precision==0 && '#' in flags
-        expmark = string(".",expmark)
-    end
-    # calculate padding
-    padding = nothing
-    width -= precision+length(expmark)+(precision>0)+4
-    # 4 = leading + expsign + 2 exp digits
-    if '+' in flags || ' ' in flags
-        width -= 1 # for the sign indicator
-        if width > 0
-            padding = quote
-                padn=$width
-                if (exp<=-100)|(100<=exp)
-                    if isa($x,SmallNumber)
-                        padn -= 1
-                    else
-                        padn -= Base.ndigits0z(exp) - 2
-                    end
+    # for each format, write out arg and next substring
+    # unroll up to 16 formats
+    N = length(f.formats)
+    Base.@nexprs 16 i -> begin
+        if N >= i
+            pos = fmt(buf, pos, args[i], f.formats[i])
+            for j in f.substringranges[i + 1]
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
                 end
-                padn
             end
         end
-    else
-        if width > 0
-            padding = quote
-                padn=$width-neg
-                if (exp<=-100)|(100<=exp)
-                    if isa($x,SmallNumber)
-                        padn -= 1
-                    else
-                        padn -= Base.ndigits0z(exp) - 2
-                    end
+    end
+    if N > 16
+        for i = 17:length(f.formats)
+            pos = fmt(buf, pos, args[i], f.formats[i])
+            for j in f.substringranges[i + 1]
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
                 end
-                padn
             end
         end
     end
-    # print space padding
-    if padding !== nothing && !('-' in flags) && !('0' in flags)
-        push!(blk.args, pad(width, padding, ' '))
-    end
-    # print sign
-    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
-                   push!(blk.args, :(neg && print(out, '-')))
-    # print zero padding
-    if padding !== nothing && !('-' in flags) && '0' in flags
-        push!(blk.args, pad(width, padding, '0'))
-    end
-    # print digits
-    push!(blk.args, :(write(out, digits[1])))
-    if precision > 0
-        if inside_g && !('#' in flags)
-            push!(blk.args, :(endidx = $ndigits;
-                              while endidx > 1 && digits[endidx] == UInt8('0')
-                                  endidx -= 1
-                              end;
-                              if endidx > 1
-                                  print(out, '.')
-                                  unsafe_write(out, pointer(digits)+1, endidx-1)
-                              end
-                              ))
-        else
-            push!(blk.args, :(print(out, '.')))
-            push!(blk.args, :(unsafe_write(out, pointer(digits)+1, $(ndigits-1))))
-            if ndigits < precision+1
-                n = precision+1-ndigits
-                push!(blk.args, pad(n, n, '0'))
-            end
+    return pos
+end
+
+plength(f::Spec{T}, x) where {T <: Chars} = max(f.width, 1) + (ncodeunits(x isa AbstractString ? x[1] : Char(x)) - 1)
+plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
+
+function plength(f::Spec{T}, x) where {T <: Strings}
+    str = string(x)
+    p = f.precision == -1 ? (length(str) + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
+    return max(f.width, p) + (sizeof(str) - length(str))
+end
+
+function plength(f::Spec{T}, x) where {T <: Ints}
+    x2 = toint(x)
+    return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
+end
+
+plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
+    max(f.width, 0 + 309 + 17 + f.hash + 5)
+plength(f::Spec{T}, x) where {T <: Floats} =
+    max(f.width, f.precision + 309 + 17 + f.hash + 5)
+
+@inline function computelen(substringranges, formats, args)
+    len = sum(length, substringranges)
+    N = length(formats)
+    # unroll up to 16 formats
+    Base.@nexprs 16 i -> begin
+        if N >= i
+            len += plength(formats[i], args[i])
         end
     end
-    for ch in expmark
-        push!(blk.args, :(print(out, $ch)))
-    end
-    push!(blk.args, :(print_exp_e(out, exp)))
-    # print space padding
-    if padding !== nothing && '-' in flags
-        push!(blk.args, pad(width, padding, ' '))
-    end
-    # return arg, expr
-    :(($x)::Real), ex
-end
-
-function gen_a(flags::String, width::Int, precision::Int, c::Char)
-    # print float in hexadecimal format
-    #  [a]: lowercase hex float, e.g. -0x1.cfp-2
-    #  [A]: uppercase hex float, e.g. -0X1.CFP-2
-    #
-    # flags:
-    #  (#): always print a decimal point
-    #  (0): pad left with zeros
-    #  (-): left justify
-    #  ( ): precede non-negative values with " "
-    #  (+): precede non-negative values with "+"
-    #
-    x, ex, blk = special_handler(flags,width)
-    if c == 'A'
-        hexmark, expmark = "0X", "P"
-        fn = :ini_HEX
-    else
-        hexmark, expmark = "0x", "p"
-        fn = :ini_hex
-    end
-    # if no precision, print max non-zero
-    if precision < 0
-        push!(blk.args, :((do_out, args) = $fn(out,$x, $flags, $width, $precision, $c, buf)))
-    else
-        ndigits = min(precision+1,length(Grisu.getbuf())-1)
-        push!(blk.args, :((do_out, args) = $fn(out,$x,$ndigits, $flags, $width, $precision, $c, buf)))
-    end
-    push!(blk.args, :(digits = buf))
-    ifblk = Expr(:if, :do_out, Expr(:block))
-    push!(blk.args, ifblk)
-    blk = ifblk.args[2]
-    push!(blk.args, :((len, exp, neg) = args))
-    if precision==0 && '#' in flags
-        expmark = string(".",expmark)
-    end
-    # calculate padding
-    padding = nothing
-    if precision > 0
-        width -= precision+length(hexmark)+length(expmark)+4
-        # 4 = leading + expsign + 1 exp digit + decimal
-    else
-        width -= length(hexmark)+length(expmark)+3+(precision<0 && '#' in flags)
-        # 3 = leading + expsign + 1 exp digit
-    end
-    if '+' in flags || ' ' in flags
-        width -= 1 # for the sign indicator
-        if width > 0
-            padding = :($(width+1) - Base.ndigits(exp))
-        end
-    else
-        if width > 0
-            padding = :($(width+1) - neg - Base.ndigits(exp))
+    if N > 16
+        for i = 17:length(formats)
+            len += plength(formats[i], args[i])
         end
     end
-    if precision < 0 && width > 0
-        if '#' in flags
-            padding = :($padding - (len-1))
-        else
-            padding = :($padding - (len>1 ? len : 0))
-        end
-    end
-    # print space padding
-    if padding !== nothing && !('-' in flags) && !('0' in flags)
-        push!(blk.args, pad(width, padding, ' '))
-    end
-    # print sign
-    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
-                    push!(blk.args, :(neg && print(out, '-')))
-    # hex prefix
-    for ch in hexmark
-        push!(blk.args, :(print(out, $ch)))
-    end
-    # print zero padding
-    if padding !== nothing && !('-' in flags) && '0' in flags
-        push!(blk.args, pad(width, padding, '0'))
-    end
-    # print digits: assumes ASCII/UTF8 encoding of digits is okay for `out`
-    push!(blk.args, :(write(out, digits[1])))
-    if precision > 0
-        push!(blk.args, :(print(out, '.')))
-        push!(blk.args, :(unsafe_write(out, pointer(digits)+1, $(ndigits-1))))
-        if ndigits < precision+1
-            n = precision+1-ndigits
-            push!(blk.args, pad(n, n, '0'))
-        end
-    elseif precision < 0
-        ifvpblk = Expr(:if, :(len > 1), Expr(:block))
-        vpblk = ifvpblk.args[2]
-        if '#' in flags
-            push!(blk.args, :(print(out, '.')))
-        else
-            push!(vpblk.args, :(print(out, '.')))
-        end
-        push!(vpblk.args, :(unsafe_write(out, pointer(digits)+1, len-1)))
-        push!(blk.args, ifvpblk)
-    end
-    for ch in expmark
-        push!(blk.args, :(print(out, $ch)))
-    end
-    push!(blk.args, :(print_exp_a(out, exp)))
-    # print space padding
-    if padding !== nothing && '-' in flags
-        push!(blk.args, pad(width, padding, ' '))
-    end
-    # return arg, expr
-    :(($x)::Real), ex
+    return len
 end
 
-function gen_c(flags::String, width::Int, precision::Int, c::Char)
-    # print a character:
-    #  [cC]: both the same for us (Unicode)
-    #
-    # flags:
-    #  (0): pad left with zeros
-    #  (-): left justify
-    #
-    @gensym x
-    blk = Expr(:block, :($x = Char($x)))
-    if width > 1 && !('-' in flags)
-        p = '0' in flags ? '0' : ' '
-        push!(blk.args, pad(width-1, :($width-textwidth($x)), p))
-    end
-    push!(blk.args, :(print(out, $x)))
-    if width > 1 && '-' in flags
-        push!(blk.args, pad(width-1, :($width-textwidth($x)), ' '))
-    end
-    :(($x)::Integer), blk
+@noinline argmismatch(a, b) =
+    throw(ArgumentError("mismatch between # of format specifiers and provided args: $a != $b"))
+
+"""
+    Printf.format(f::Printf.Format, args...) => String
+    Printf.format(io::IO, f::Printf.Format, args...)
+
+Apply a printf format object `f` to provided `args` and return the formatted string
+(1st method), or print directly to an `io` object (2nd method). See [`@printf`](@ref)
+for more details on C `printf` support.
+"""
+function format end
+
+function format(io::IO, f::Format, args...) # => Nothing
+    length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
+    buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
+    pos = format(buf, 1, f, args...)
+    write(io, resize!(buf, pos - 1))
+    return
 end
 
-function _limit(s, prec)
-    prec >= sizeof(s) && return s
-    p = prevind(s, prec+1)
-    n = nextind(s, p)-1
-    s[1:(prec>=n ? n : prevind(s,p))]
-end
-
-function gen_s(flags::String, width::Int, precision::Int, c::Char)
-    # print a string:
-    #  [sS]: both the same for us (Unicode)
-    #
-    # flags:
-    #  (-): left justify
-    #  (#): use `show`/`repr` instead of `print`/`string`
-    #
-    @gensym x
-    blk = Expr(:block)
-    if width > 0
-        if !('#' in flags)
-            push!(blk.args, :($x = string($x)))
-        else
-            push!(blk.args, :($x = repr($x)))
-        end
-        if precision!=-1
-            push!(blk.args, :($x = _limit($x, $precision)))
-        end
-        if !('-' in flags)
-            push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
-        end
-        push!(blk.args, :(print(out, $x)))
-        if '-' in flags
-            push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
-        end
-    else
-        if precision!=-1
-            push!(blk.args, :(io = IOBuffer()))
-        else
-            push!(blk.args, :(io = out))
-        end
-        if !('#' in flags)
-            push!(blk.args, :(print(io, $x)))
-        else
-            push!(blk.args, :(show(io, $x)))
-        end
-        if precision!=-1
-            push!(blk.args, :(print(out, _limit(String(take!(io)), $precision))))
-        end
-    end
-    :(($x)::Any), blk
-end
-
-# TODO: faster pointer printing.
-
-function gen_p(flags::String, width::Int, precision::Int, c::Char)
-    # print pointer:
-    #  [p]: the only option
-    #
-    # flags:
-    #  (-): left justify
-    #
-    @gensym x
-    blk = Expr(:block)
-    ptrwidth = Sys.WORD_SIZE>>2
-    width -= ptrwidth+2
-    if width > 0 && !('-' in flags)
-        push!(blk.args, pad(width, width, ' '))
-    end
-    push!(blk.args, :(print(out, '0')))
-    push!(blk.args, :(print(out, 'x')))
-    push!(blk.args, :(print(out, String(string(unsigned($x), pad = $ptrwidth, base = 16)))))
-    if width > 0 && '-' in flags
-        push!(blk.args, pad(width, width, ' '))
-    end
-    :(($x)::Ptr), blk
-end
-
-function gen_g(flags::String, width::Int, precision::Int, c::Char)
-    # print to fixed trailing precision
-    #  [g]: lower case e on scientific
-    #  [G]: Upper case e on scientific
-    #
-    # flags
-    #  (#): always print a decimal point
-    #  (0): pad left with zeros
-    #  (-): left justify
-    #  ( ): precede non-negative values with " "
-    #  (+): precede non-negative values with "+"
-    #
-    x, ex, blk = special_handler(flags,width)
-    if precision < 0; precision = 6; end
-    ndigits = min(precision+1,length(Grisu.getbuf())-1)
-    # See if anyone else wants to handle it
-    push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c, buf)))
-    ifblk = Expr(:if, :do_out, Expr(:block))
-    push!(blk.args, ifblk)
-    blk = ifblk.args[2]
-    push!(blk.args, :((len, pt, neg) = args))
-    push!(blk.args, :(exp = pt-1))
-    push!(blk.args, :(do_f = $precision > exp >= -4)) # Should we interpret like %f or %e?
-    feblk = Expr(:if, :do_f, Expr(:block), Expr(:block))
-    push!(blk.args, feblk)
-    fblk = feblk.args[2]
-    eblk = feblk.args[3]
-
-    ### %f branch
-    # Follow the same logic as gen_f() but more work has to be deferred until runtime
-    # because precision is unknown until then.
-    push!(fblk.args, :(fprec = $precision - (exp+1)))
-    push!(fblk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, fprec, $c - 1, buf)))
-    fifblk = Expr(:if, :do_out, Expr(:block))
-    push!(fblk.args, fifblk)
-    blk = fifblk.args[2]
-    push!(blk.args, :((len, pt, neg) = args))
-    push!(blk.args, :(padding = 0))
-    push!(blk.args, :(width = $width))
-    # need to compute value before left-padding since trailing zeros are elided
-    push!(blk.args, :(width -= print_fixed_width(fprec,pt,len,$('#' in flags))))
-    if '+' in flags || ' ' in flags
-        push!(blk.args, :(width -= 1))
-    else
-        push!(blk.args, :(if neg width -= 1; end))
-    end
-    push!(blk.args, :(if width >= 1 padding = width; end))
-    # print space padding
-    if !('-' in flags) && !('0' in flags)
-        padexpr = dynamic_pad(:width, :padding, ' ')
-        push!(blk.args, :(if padding > 0
-                          $padexpr; end))
-    end
-    # print sign
-    '+' in flags ? push!(blk.args, :(print(out, neg ? '-' : '+'))) :
-    ' ' in flags ? push!(blk.args, :(print(out, neg ? '-' : ' '))) :
-                   push!(blk.args, :(neg && print(out, '-')))
-    # print zero padding
-    if !('-' in flags) && '0' in flags
-        padexpr = dynamic_pad(:width, :padding, '0')
-        push!(blk.args, :(if padding > 0
-                          $padexpr; end))
-    end
-    # finally print value
-    push!(blk.args, :(print_fixed(out,fprec,pt,len,$('#' in flags),buf)))
-    # print space padding
-    if '-' in flags
-        padexpr = dynamic_pad(:width, :padding, ' ')
-        push!(blk.args, :(if padding > 0
-                          $padexpr; end))
-    end
-
-    ### %e branch
-    # Here we can do all the work at macro expansion time
-    var, eex = gen_e(flags, width, precision-1, c, true)
-    push!(eblk.args, :($(var.args[1]) = $x))
-    push!(eblk.args, eex)
-
-    :(($x)::Real), ex
-end
-
-### core unsigned integer decoding functions ###
-
-macro handle_zero(ex, digits)
-    quote
-        if $(esc(ex)) == 0
-            $(esc(digits))[1] = '0'
-            return Int32(1), Int32(1), $(esc(:neg))
-        end
-    end
-end
-
-decode_oct(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_oct(d, digits))
-decode_0ct(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_0ct(d, digits))
-decode_dec(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_dec(d, digits))
-decode_hex(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_hex(d, digits))
-decode_HEX(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, decode_HEX(d, digits))
-fix_dec(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, fix_dec(d, precision, digits))
-ini_dec(out, d, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_dec(d, ndigits, digits))
-ini_hex(out, d, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_hex(d, ndigits, digits))
-ini_HEX(out, d, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_HEX(d, ndigits, digits))
-ini_hex(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_hex(d, digits))
-ini_HEX(out, d, flags::String, width::Int, precision::Int, c::Char, digits) = (true, ini_HEX(d, digits))
-
-
-# fallbacks for Real types without explicit decode_* implementation
-decode_oct(d::Real, digits) = decode_oct(Integer(d), digits)
-decode_0ct(d::Real, digits) = decode_0ct(Integer(d), digits)
-decode_dec(d::Real, digits) = decode_dec(Integer(d), digits)
-decode_hex(d::Real, digits) = decode_hex(Integer(d), digits)
-decode_HEX(d::Real, digits) = decode_HEX(Integer(d), digits)
-
-handlenegative(d::Unsigned) = (false, d)
-function handlenegative(d::Integer)
-    if d < 0
-        return true, unsigned(oftype(d,-d))
-    else
-        return false, unsigned(d)
-    end
-end
-
-function decode_oct(d::Integer, digits)
-    neg, x = handlenegative(d)
-    @handle_zero x digits
-    pt = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
-    while i > 0
-        digits[i] = 48+(x&0x7)
-        x >>= 3
-        i -= 1
-    end
-    return Int32(pt), Int32(pt), neg
-end
-
-function decode_0ct(d::Integer, digits)
-    neg, x = handlenegative(d)
-    # doesn't need special handling for zero
-    pt = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
-    while i > 0
-        digits[i] = 48+(x&0x7)
-        x >>= 3
-        i -= 1
-    end
-    return Int32(pt), Int32(pt), neg
-end
-
-function decode_dec(d::Integer, digits)
-    neg, x = handlenegative(d)
-    @handle_zero x digits
-    pt = i = Base.ndigits0z(x)
-    while i > 0
-        digits[i] = 48+rem(x,10)
-        x = div(x,10)
-        i -= 1
-    end
-    return Int32(pt), Int32(pt), neg
-end
-
-function decode_hex(d::Integer, symbols::AbstractArray{UInt8,1}, digits)
-    neg, x = handlenegative(d)
-    @handle_zero x digits
-    pt = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
-    while i > 0
-        digits[i] = symbols[(x&0xf)+1]
-        x >>= 4
-        i -= 1
-    end
-    return Int32(pt), Int32(pt), neg
-end
-
-const hex_symbols = b"0123456789abcdef"
-const HEX_symbols = b"0123456789ABCDEF"
-
-decode_hex(x::Integer, digits) = decode_hex(x,hex_symbols,digits)
-decode_HEX(x::Integer, digits) = decode_hex(x,HEX_symbols,digits)
-
-function decode(b::Int, x::BigInt, digits)
-    neg = x.size < 0
-    pt = Base.ndigits(x, base=abs(b))
-    length(digits) < pt+1 && resize!(digits, pt+1)
-    neg && (x.size = -x.size)
-    GMP.MPZ.get_str!(digits, b, x)
-    neg && (x.size = -x.size)
-    return Int32(pt), Int32(pt), neg
-end
-decode_oct(x::BigInt, digits) = decode(8, x, digits)
-decode_dec(x::BigInt, digits) = decode(10, x, digits)
-decode_hex(x::BigInt, digits) = decode(16, x, digits)
-decode_HEX(x::BigInt, digits) = decode(-16, x, digits)
-
-function decode_0ct(x::BigInt, digits)
-    neg = x.size < 0
-    digits[1] = '0'
-    if x.size == 0
-        return Int32(1), Int32(1), neg
-    end
-    pt = Base.ndigits0z(x, 8) + 1
-    length(digits) < pt+1 && resize!(digits, pt+1)
-    neg && (x.size = -x.size)
-    GC.@preserve digits begin
-        p = pointer(digits,2)
-        GMP.MPZ.get_str!(p, 8, x)
-    end
-    neg && (x.size = -x.size)
-    return Int32(pt), Int32(pt), neg
-end
-
-### decoding functions directly used by printf generated code ###
-
-# decode_*(x)=> fixed precision, to 0th place, filled out
-# fix_*(x,n) => fixed precision, to nth place, not filled out
-# ini_*(x,n) => n initial digits, filled out
-
-# alternate versions:
-#   *_0ct(x,n) => ensure that the first octal digits is zero
-#   *_HEX(x,n) => use uppercase digits for hexadecimal
-
-# - returns (len, point, neg)
-# - implies len = point
-#
-
-function decode_dec(x::SmallFloatingPoint, digits)
-    if x == 0.0
-        digits[1] = '0'
-        return (Int32(1), Int32(1), false)
-    end
-    len,pt,neg = grisu(x,Grisu.FIXED,0,digits)
-    if len == 0
-        digits[1] = '0'
-        return (Int32(1), Int32(1), false)
-    else
-        for i = len+1:pt
-            digits[i] = '0'
-        end
-    end
-    return Int32(len), Int32(pt), neg
-end
-# TODO: implement decode_oct, decode_0ct, decode_hex, decode_HEX for SmallFloatingPoint
-
-## fix decoding functions ##
-#
-# - returns (neg, point, len)
-# - if len less than point, trailing zeros implied
-#
-
-# fallback for Real types without explicit fix_dec implementation
-fix_dec(x::Real, n::Int, digits) = fix_dec(float(x),n,digits)
-
-fix_dec(x::Integer, n::Int, digits) = decode_dec(x, digits)
-
-function fix_dec(x::SmallFloatingPoint, n::Int, digits)
-    if n > length(digits)-1; n = length(digits)-1; end
-    len,pt,neg = grisu(x,Grisu.FIXED,n,digits)
-    if len == 0
-        digits[1] = '0'
-        return (Int32(1), Int32(1), neg)
-    end
-    return Int32(len), Int32(pt), neg
-end
-
-## ini decoding functions ##
-#
-# - returns (neg, point, len)
-# - implies len = n (requested digits)
-#
-
-# fallback for Real types without explicit fix_dec implementation
-ini_dec(x::Real, n::Int, digits) = ini_dec(float(x),n,digits)
-
-function ini_dec(d::Integer, n::Int, digits)
-    neg, x = handlenegative(d)
-    k = ndigits(x)
-    if k <= n
-        pt = k
-        for i = k:-1:1
-            digits[i] = '0'+rem(x,10)
-            x = div(x,10)
-        end
-        for i = k+1:n
-            digits[i] = '0'
-        end
-    else
-        p = Base.powers_of_ten[k-n+1]
-        r = rem(x,p)
-        if r >= (p>>1)
-            x += p
-            if x >= Base.powers_of_ten[k+1]
-                p *= 10
-                k += 1
-            end
-        end
-        pt = k
-        x = div(x,p)
-        for i = n:-1:1
-            digits[i] = '0'+rem(x,10)
-            x = div(x,10)
-        end
-    end
-    return n, pt, neg
-end
-
-function ini_dec(x::SmallFloatingPoint, n::Int, digits)
-    if x == 0.0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
-        return Int32(1), Int32(1), signbit(x)
-    else
-        len,pt,neg = grisu(x,Grisu.PRECISION,n,digits)
-    end
-    return Int32(len), Int32(pt), neg
-end
-
-function ini_dec(x::BigInt, n::Int, digits)
-    if x.size == 0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
-        return Int32(1), Int32(1), false
-    end
-    d = Base.ndigits0z(x)
-    if d <= n
-        len,pt,neg = decode_dec(x, digits)
-        d == n && return (len,pt,neg)
-
-        GC.@preserve digits begin
-            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), pointer(digits, pt+1), '0', n - pt)
-        end
-        return (len,pt,neg)
-    end
-    _, _, neg = decode_dec(round(BigInt,x/big(10)^(d-n)), digits)
-    return (n, d, neg)
-end
-
-
-ini_hex(x::Real, n::Int, digits) = ini_hex(x,n,hex_symbols,digits)
-ini_HEX(x::Real, n::Int, digits) = ini_hex(x,n,HEX_symbols,digits)
-
-ini_hex(x::Real, digits) = ini_hex(x,hex_symbols,digits)
-ini_HEX(x::Real, digits) = ini_hex(x,HEX_symbols,digits)
-
-ini_hex(x::Real, n::Int, symbols::AbstractArray{UInt8,1}, digits) = ini_hex(float(x), n, symbols, digits)
-ini_hex(x::Real, symbols::AbstractArray{UInt8,1}, digits) = ini_hex(float(x), symbols, digits)
-
-function ini_hex(x::SmallFloatingPoint, n::Int, symbols::AbstractArray{UInt8,1}, digits)
-    x = Float64(x)
-    if x == 0.0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
-        return Int32(1), Int32(0), signbit(x)
-    else
-        s, p = frexp(x)
-        sigbits = 4*min(n-1,13)
-        s = 0.25*round(ldexp(s,1+sigbits))
-        # ensure last 2 exponent bits either 01 or 10
-        u = (reinterpret(UInt64,s) & 0x003f_ffff_ffff_ffff) >> (52-sigbits)
-        if n > 14
-            ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', n)
-        end
-        i = (sizeof(u)<<1)-(leading_zeros(u)>>2)
-        while i > 0
-            digits[i] = symbols[(u&0xf)+1]
-            u >>= 4
-            i -= 1
-        end
-        # pt is the binary exponent
-        return Int32(n), Int32(p-1), x < 0.0
-    end
-end
-
-function ini_hex(x::SmallFloatingPoint, symbols::AbstractArray{UInt8,1}, digits)
-    x = Float64(x)
-    if x == 0.0
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), digits, '0', 1)
-        return Int32(1), Int32(0), signbit(x)
-    else
-        s, p = frexp(x)
-        s *= 2.0
-        u = (reinterpret(UInt64,s) & 0x001f_ffff_ffff_ffff)
-        t = (trailing_zeros(u) >> 2)
-        u >>= (t<<2)
-        n = 14-t
-        for i = n:-1:1
-            digits[i] = symbols[(u&0xf)+1]
-            u >>= 4
-        end
-        # pt is the binary exponent
-        return Int32(n), Int32(p-1), x < 0.0
-    end
-end
-
-function ini_hex(x::Integer, digits)
-    len,pt,neg = decode_hex(x, digits)
-    pt = (len-1)<<2
-    len,pt,neg
-end
-function ini_HEX(x::Integer, digits)
-    len,pt,neg = decode_HEX(x, digits)
-    pt = (len-1)<<2
-    len,pt,neg
-end
-
-# not implemented
-ini_hex(x::Integer,ndigits::Int,digits) = throw(MethodError(ini_hex,(x,ndigits,digits)))
-
-#BigFloat
-fix_dec(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
-ini_dec(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
-ini_hex(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
-ini_HEX(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
-ini_hex(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
-ini_HEX(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits) = bigfloat_printf(out, d, flags, width, precision, c, digits)
-function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char, digits)
-    fmt_len = sizeof(flags)+4
-    if width > 0
-        fmt_len += ndigits(width)
-    end
-    if precision >= 0
-        fmt_len += ndigits(precision)+1
-    end
-    fmt = IOBuffer(maxsize=fmt_len)
-    print(fmt, '%')
-    print(fmt, flags)
-    if width > 0
-        print(fmt, width)
-    end
-    if precision == 0
-        print(fmt, '.')
-        print(fmt, '0')
-    elseif precision > 0
-        print(fmt, '.')
-        print(fmt, precision)
-    end
-    print(fmt, 'R')
-    print(fmt, c)
-    write(fmt, UInt8(0))
-    printf_fmt = take!(fmt)
-    @assert length(printf_fmt) == fmt_len
-    bufsiz = length(digits)
-    lng = ccall((:mpfr_snprintf,:libmpfr), Int32,
-                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
-                digits, bufsiz, printf_fmt, d)
-    lng > 0 || error("invalid printf formatting for BigFloat")
-    unsafe_write(out, pointer(digits), min(lng, bufsiz-1))
-    return (false, ())
-end
-
-### external printf interface ###
-
-is_str_expr(ex) =
-    isa(ex,Expr) && (ex.head === :string || (ex.head === :macrocall && isa(ex.args[1],Symbol) &&
-    endswith(string(ex.args[1]),"str")))
-
-function _printf(macroname, io, fmt, args)
-    isa(fmt, AbstractString) || throw(ArgumentError("$macroname: format must be a plain static string (no interpolation or prefix)"))
-    sym_args, blk = gen(fmt)
-
-    has_splatting = false
-    for arg in args
-       if isa(arg, Expr) && arg.head === :...
-          has_splatting = true
-          break
-       end
-    end
-
-    #
-    #  Immediately check for corresponding arguments if there is no splatting
-    #
-    if !has_splatting && length(sym_args) != length(args)
-       throw(ArgumentError("$macroname: wrong number of arguments ($(length(args))) should be ($(length(sym_args)))"))
-    end
-
-    for i = length(sym_args):-1:1
-        var = sym_args[i].args[1]
-        if has_splatting
-           pushfirst!(blk.args, :($var = G[$i]))
-        else
-           pushfirst!(blk.args, :($var = $(esc(args[i]))))
-        end
-    end
-
-    #
-    #  Delay generation of argument list and check until evaluation time instead of macro
-    #  expansion time if there is splatting.
-    #
-    if has_splatting
-       x = Expr(:call,:tuple,args...)
-       pushfirst!(blk.args,
-          quote
-             G = $(esc(x))
-             if length(G) != $(length(sym_args))
-                 throw(ArgumentError(string($macroname,": wrong number of arguments (",length(G),") should be (",$(length(sym_args)),")")))
-             end
-          end
-       )
-    end
-
-    pushfirst!(blk.args, :(out = $io))
-    Expr(:let, Expr(:block), blk)
+function format(f::Format, args...) # => String
+    length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
+    buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
+    pos = format(buf, 1, f, args...)
+    return String(resize!(buf, pos - 1))
 end
 
 """
-    @printf([io::IOStream], "%Fmt", args...)
+    @printf([io::IO], "%Fmt", args...)
 
-Print `args` using C `printf` style format specification string, with some caveats:
+Print `args` using C `printf` style format specification string.
+Optionally, an `IO` may be passed as the first argument to redirect output.
+
+# Examples
+```jldoctest
+julia> @printf "Hello %s" "world"
+Hello world
+
+julia> @printf "Scientific notation %e" 1.234
+Scientific notation 1.234000e+00
+
+julia> @printf "Scientific notation three digits %.3e" 1.23456
+Scientific notation three digits 1.235e+00
+
+julia> @printf "Decimal two digits %.2f" 1.23456
+Decimal two digits 1.23
+
+julia> @printf "Padded to length 5 %5i" 123
+Padded to length 5   123
+
+julia> @printf "Padded with zeros to length 6 %06i" 123
+Padded with zeros to length 6 000123
+
+julia> @printf "Use shorter of decimal or scientific %g %g" 1.23 12300000.0
+Use shorter of decimal or scientific 1.23 1.23e+07
+```
+
+For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
+See also: [`@sprintf`](@ref).
+
+# Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
 equally close to the numeric values of two possible output strings, the output
 string further away from zero is chosen.
 
-Optionally, an [`IOStream`](@ref)
-may be passed as the first argument to redirect output.
-
-See also: [`@sprintf`](@ref)
-
 # Examples
 ```jldoctest
-julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
-Inf Inf NaN NaN\n
+julia> @printf("%f %F %f %F", Inf, Inf, NaN, NaN)
+Inf Inf NaN NaN
 
-julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
-1 0.0 -0.007813
+julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
+0 0.0 -0.007812
 ```
 """
-macro printf(args...)
-    isempty(args) && throw(ArgumentError("@printf: called with no arguments"))
-    if isa(args[1], AbstractString) || is_str_expr(args[1])
-        _printf("@printf", :stdout, args[1], args[2:end])
+macro printf(io_or_fmt, args...)
+    if io_or_fmt isa String
+        fmt = Format(io_or_fmt)
+        return esc(:($Printf.format(stdout, $fmt, $(args...))))
     else
-        (length(args) >= 2 && (isa(args[2], AbstractString) || is_str_expr(args[2]))) ||
-            throw(ArgumentError("@printf: first or second argument must be a format string"))
-        _printf("@printf", esc(args[1]), args[2], args[3:end])
+        io = io_or_fmt
+        isempty(args) && throw(ArgumentError("must provide required format string"))
+        fmt = Format(args[1])
+        return esc(:($Printf.format($io, $fmt, $(Base.tail(args)...))))
     end
 end
 
 """
     @sprintf("%Fmt", args...)
 
-Return `@printf` formatted output as string.
+Return [`@printf`](@ref) formatted output as string.
 
 # Examples
 ```jldoctest
-julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
-
-julia> println(s)
-this is a test            34.6
+julia> @sprintf "this is a %s %15.1f" "test" 34.567
+"this is a test            34.6"
 ```
 """
-macro sprintf(args...)
-    isempty(args) && throw(ArgumentError("@sprintf: called with zero arguments"))
-    isa(args[1], AbstractString) || is_str_expr(args[1]) ||
-        throw(ArgumentError("@sprintf: first argument must be a format string"))
-    letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(letexpr.args[2].args, :(String(take!(out))))
-    letexpr
+macro sprintf(fmt, args...)
+    f = Format(fmt)
+    return esc(:($Printf.format($f, $(args...))))
 end
 
-end
+end # module

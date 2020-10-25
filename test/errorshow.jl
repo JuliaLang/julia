@@ -86,7 +86,7 @@ method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cfile$(c2line+5)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  ..."
+@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cfile$(c2line+5)\n  ..."
 
 c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
@@ -124,7 +124,7 @@ PR16155line2 = @__LINE__() + 1
 (::Type{T})(arg::Any) where {T<:PR16155} = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line"
+@test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
 @test String(take!(buf)) == "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  (::Type{T})(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2"
@@ -291,7 +291,7 @@ let undefvar
     @test occursin("DomainError with [0.0 -1.0 …", err_str)
 
     err_str = @except_str (1, 2, 3)[4] BoundsError
-    @test err_str == "BoundsError: attempt to access (1, 2, 3) at index [4]"
+    @test err_str == "BoundsError: attempt to access Tuple{$Int, $Int, $Int} at index [4]"
 
     err_str = @except_str [5, 4, 3][-2, 1] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [-2, 1]"
@@ -426,7 +426,7 @@ let err_str,
     @test startswith(sprint(show, which(Complex{Int}, Tuple{Int})),
                      "Complex{T}(")
     @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Module, Vararg{Any}})),
-                     "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
+                     "var\"@doc\"(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
     @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),

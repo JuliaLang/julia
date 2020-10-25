@@ -50,14 +50,15 @@ function showvalue(io, e::Tuple{Exception,Any})
 end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
-function default_logcolor(level)
+function default_logcolor(level::LogLevel)
     level < Info  ? Base.debug_color() :
     level < Warn  ? Base.info_color()  :
     level < Error ? Base.warn_color()  :
                     Base.error_color()
 end
 
-function default_metafmt(level, _module, group, id, file, line)
+function default_metafmt(level::LogLevel, _module, group, id, file, line)
+    @nospecialize
     color = default_logcolor(level)
     prefix = (level == Warn ? "Warning" : string(level))*':'
     suffix = ""
@@ -96,8 +97,11 @@ function termlength(str)
 end
 
 function handle_message(logger::ConsoleLogger, level, message, _module, group, id,
-                        filepath, line; maxlog=nothing, kwargs...)
-    if maxlog !== nothing && maxlog isa Integer
+                        filepath, line; kwargs...)
+    @nospecialize
+    hasmaxlog = haskey(kwargs, :maxlog) ? 1 : 0
+    maxlog = get(kwargs, :maxlog, nothing)
+    if maxlog isa Integer
         remaining = get!(logger.message_limits, id, maxlog)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
@@ -105,29 +109,30 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
 
     # Generate a text representation of the message and all key value pairs,
     # split into lines.
-    msglines = [(indent=0,msg=l) for l in split(chomp(string(message)), '\n')]
+    msglines = [(indent=0, msg=l) for l in split(chomp(string(message)), '\n')]
     dsize = displaysize(logger.stream)::Tuple{Int,Int}
-    if !isempty(kwargs)
+    if length(kwargs) > hasmaxlog
         valbuf = IOBuffer()
-        rows_per_value = max(1, dsize[1]÷(length(kwargs)+1))
+        rows_per_value = max(1, dsize[1] ÷ (length(kwargs) + 1 - hasmaxlog))
         valio = IOContext(IOContext(valbuf, logger.stream),
-                          :displaysize => (rows_per_value,dsize[2]-5),
+                          :displaysize => (rows_per_value, dsize[2] - 5),
                           :limit => logger.show_limited)
-        for (key,val) in pairs(kwargs)
+        for (key, val) in kwargs
+            key === :maxlog && continue
             showvalue(valio, val)
             vallines = split(String(take!(valbuf)), '\n')
             if length(vallines) == 1
-                push!(msglines, (indent=2,msg=SubString("$key = $(vallines[1])")))
+                push!(msglines, (indent=2, msg=SubString("$key = $(vallines[1])")))
             else
-                push!(msglines, (indent=2,msg=SubString("$key =")))
-                append!(msglines, ((indent=3,msg=line) for line in vallines))
+                push!(msglines, (indent=2, msg=SubString("$key =")))
+                append!(msglines, ((indent=3, msg=line) for line in vallines))
             end
         end
     end
 
     # Format lines as text with appropriate indentation and with a box
     # decoration on the left.
-    color,prefix,suffix = logger.meta_formatter(level, _module, group, id, filepath, line)::Tuple{Union{Symbol,Int},String,String}
+    color, prefix, suffix = logger.meta_formatter(level, _module, group, id, filepath, line)::Tuple{Union{Symbol,Int},String,String}
     minsuffixpad = 2
     buf = IOBuffer()
     iob = IOContext(buf, logger.stream)
@@ -136,11 +141,11 @@ function handle_message(logger::ConsoleLogger, level, message, _module, group, i
                   (isempty(suffix) ? 0 : length(suffix)+minsuffixpad)
     justify_width = min(logger.right_justify, dsize[2])
     if nonpadwidth > justify_width && !isempty(suffix)
-        push!(msglines, (indent=0,msg=SubString("")))
+        push!(msglines, (indent=0, msg=SubString("")))
         minsuffixpad = 0
         nonpadwidth = 2 + length(suffix)
     end
-    for (i,(indent,msg)) in enumerate(msglines)
+    for (i, (indent, msg)) in enumerate(msglines)
         boxstr = length(msglines) == 1 ? "[ " :
                  i == 1                ? "┌ " :
                  i < length(msglines)  ? "│ " :

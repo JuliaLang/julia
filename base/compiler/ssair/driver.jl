@@ -10,8 +10,9 @@ else
     end
 end
 
-include("compiler/ssair/ir.jl")
+include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
+include("compiler/ssair/ir.jl")
 include("compiler/ssair/slot2ssa.jl")
 include("compiler/ssair/queries.jl")
 include("compiler/ssair/passes.jl")
@@ -111,7 +112,7 @@ end
 
 function slot2reg(ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
-    @timeit "domtree 1" domtree = construct_domtree(ir.cfg)
+    @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes) # consumes `ir`
     return ir
@@ -124,7 +125,7 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
-    @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv)
+    @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     #@timeit "verify 2" verify_ir(ir)
     ir = compact!(ir)
     #@Base.show ("before_sroa", ir)

@@ -66,7 +66,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
     # Verify CFG
     last_end = 0
     # Verify statements
-    domtree = construct_domtree(ir.cfg)
+    domtree = construct_domtree(ir.cfg.blocks)
     for (idx, block) in pairs(ir.cfg.blocks)
         if first(block.stmts) != last_end + 1
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
@@ -206,6 +206,9 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     # We allow gc_preserve_end tokens to span across try/catch
                     # blocks, which isn't allowed for regular SSA values, so
                     # we skip the validation below.
+                    continue
+                elseif stmt.head === :isdefined && length(stmt.args) == 1 && stmt.args[1] isa GlobalRef
+                    # a GlobalRef isdefined check does not evaluate its argument
                     continue
                 end
             end

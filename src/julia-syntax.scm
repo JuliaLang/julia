@@ -746,13 +746,17 @@
                 ,@locs
                 (call (curly ,name ,@params) ,@field-names)))))
 
+(define (num-non-varargs args)
+  (count (lambda (a) (not (vararg? a))) args))
+
 (define (new-call Tname type-params sparams params args field-names field-types)
   (if (any kwarg? args)
       (error "\"new\" does not accept keyword arguments"))
-  (if (length> params (length type-params))
-      (error "too few type parameters specified in \"new{...}\""))
-  (if (length> type-params (length params))
-      (error "too many type parameters specified in \"new{...}\""))
+  (let ((nnv (num-non-varargs type-params)))
+    (if (and (not (any vararg? type-params)) (length> params nnv))
+        (error "too few type parameters specified in \"new{...}\""))
+    (if (> nnv (length params))
+        (error "too many type parameters specified in \"new{...}\"")))
   (let* ((Texpr (if (null? type-params)
                     `(outerref ,Tname)
                     `(curly (outerref ,Tname)
@@ -767,7 +771,7 @@
                                               ; local variable (currently just handles sparam) for the bijection of params to type-params
                                           `(call (core fieldtype) ,tn ,(+ fld 1)))
                                      ,val)))))
-    (cond ((length> (filter (lambda (a) (not (vararg? a))) args) (length field-names))
+    (cond ((> (num-non-varargs args) (length field-names))
            `(call (core throw) (call (top ArgumentError)
                                      ,(string "new: too many arguments (expected " (length field-names) ")"))))
           ((any vararg? args)
@@ -1450,7 +1454,9 @@
                    (loop (cdr lhss)
                          (cons L assigned)
                          (cdr rhss)
-                         (cons (make-assignment temp R) stmts)
+                         (if (symbol? temp)
+                             (list* (make-assignment temp R) `(local-def ,temp) stmts)
+                             (cons  (make-assignment temp R) stmts))
                          (cons (make-assignment L temp) after)
                          (cons temp elts)))))))))
 
@@ -1468,6 +1474,7 @@
                         ;; issue #22032
                         (let ((temp (gensy)))
                           `(block
+                            (local-def ,temp)
                             (= ,temp (call (core getfield) ,t ,i))
                             (= ,(car lhs) ,temp)))
                         `(= ,(car lhs)
@@ -1664,6 +1671,7 @@
                              ,body))
                          `(scope-block ,body))))
                `(block (= ,coll ,(car itrs))
+                       (local ,next)
                        (= ,next (call (top iterate) ,coll))
                        ;; TODO avoid `local declared twice` error from this
                        ;;,@(if outer `((local ,lhs)) '())
@@ -1763,7 +1771,7 @@
              (args (map dot-to-fuse (cdr kws+args)))
              (make `(call (top ,(if (null? kws) 'broadcasted 'broadcasted_kwsyntax)) ,@kws ,f ,@args)))
         (if top (cons 'fuse make) make)))
-    (if (and (pair? e) (eq? (car e) '|.|))
+    (if (and (length= e 3) (eq? (car e) '|.|))
         (let ((f (cadr e)) (x (caddr e)))
           (cond ((or (atom? x) (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
                  `(call (top getproperty) ,f ,x))
@@ -1774,12 +1782,21 @@
                      (make-fuse f (cdr x))))
                 (else
                  (error (string "invalid syntax \"" (deparse e) "\"")))))
-        (if (and (pair? e) (eq? (car e) 'call) (dotop-named? (cadr e)))
-            (let ((f (undotop (cadr e))) (x (cddr e)))
-              (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
-                  (make-fuse '(top literal_pow)
-                             (list f (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
-                  (make-fuse f x)))
+        (if (and (pair? e) (eq? (car e) 'call))
+            (begin
+              (define (make-fuse- f x)
+                (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
+                    (make-fuse '(top literal_pow)
+                               (list f (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
+                    (make-fuse f x)))
+              (let ((f (cadr e)))
+                (cond ((dotop-named? f)
+                       (make-fuse- (undotop f) (cddr e)))
+                      ;; (.+)(a, b) is parsed as (call (|.| +) a b), but we still want it to fuse
+                      ((and (length= f 2) (eq? (car f) '|.|))
+                       (make-fuse- (cadr f) (cddr e)))
+                      (else
+                        e))))
             e)))
   (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
@@ -1902,11 +1919,17 @@
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
 (define (expand-if e)
-  (if (and (pair? (cadr e)) (eq? (car (cadr e)) '&&))
-      (let ((clauses (cdr (flatten-ex '&& (cadr e)))))
-        `(if (&& ,@(map expand-forms clauses))
-             ,@(map expand-forms (cddr e))))
-      (cons (car e) (map expand-forms (cdr e)))))
+  (let* ((test (cadr e))
+         (blk? (and (pair? test) (eq? (car test) 'block)))
+         (stmts (if blk? (cdr (butlast test)) '()))
+         (test  (if blk? (last test) test)))
+    (if (and (pair? test) (eq? (car test) '&&))
+        (let ((clauses `(&& ,@(map expand-forms (cdr (flatten-ex '&& test))))))
+          `(if ,(if blk?
+                    `(block ,@(map expand-forms stmts) ,clauses)
+                    clauses)
+               ,@(map expand-forms (cddr e))))
+        (cons (car e) (map expand-forms (cdr e))))))
 
 ;; move an assignment into the last statement of a block to keep more statements at top level
 (define (sink-assignment lhs rhs)
@@ -1953,8 +1976,12 @@
                   (map expand-forms (cdr e))))))
 
    '|.|
-   (lambda (e) ; e = (|.| f x)
-     (expand-fuse-broadcast '() e))
+   (lambda (e)
+     (if (length= e 2)
+         ;; e = (|.| op)
+         `(call (top BroadcastFunction) ,(cadr e))
+         ;; e = (|.| f x)
+         (expand-fuse-broadcast '() e)))
 
    '.=
    (lambda (e)
@@ -2154,6 +2181,9 @@
          (let ((f (cadr e)))
            (cond ((dotop-named? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
+                 ;; "(.op)(...)"
+                 ((and (length= f 2) (eq? (car f) '|.|))
+                  (expand-fuse-broadcast '() `(|.| ,(cadr f) (tuple ,@(cddr e)))))
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
@@ -2688,8 +2718,7 @@
                 (implicit-globals (if toplevel? nonloc-assigned '()))
                 (implicit-locals
                  (filter (if toplevel?
-                             ;; make only assigned gensyms implicitly local at top level
-                             some-gensym?
+                             (lambda (v) #f)  ;; no implicit locals at top level
                              (lambda (v) (and (memq (var-kind v scope #t) '(none static-parameter))
                                               (not (and soft?
                                                         (or (memq v (scope:implicit-globals scope))
@@ -3199,7 +3228,7 @@ f(x) = yt(x)
                    (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))
 
 (define lambda-opt-ignored-exprs
-  (Set '(quote top core line inert local local-def unnecessary copyast
+  (Set '(quote top core line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
@@ -3227,6 +3256,7 @@ f(x) = yt(x)
   ;; are never used undef.
   (let ((vi     (car (lam:vinfo lam)))
         (args   (lam:argnames lam))
+        (decl   (table))
         (unused (table))  ;; variables not (yet) used (read from) in the current block
         (live   (table))  ;; variables that have been set in the current block
         (seen   (table))) ;; all variables we've seen assignments to
@@ -3261,6 +3291,17 @@ f(x) = yt(x)
           (begin (put! live var #t)
                  (put! seen var #t)
                  (del! unused var))))
+    (define (declare! var)
+      (if (has? unused var)
+          (put! decl var #t)))
+    (define (leave-loop! old-decls)
+      ;; at the end of a loop, remove live variables that were declared outside,
+      ;; since those might be assigned multiple times (issue #37690)
+      (for-each (lambda (k)
+                  (if (has? old-decls k)
+                      (del! live k)))
+                (table.keys live))
+      (set! decl old-decls))
     (define (visit e)
       ;; returns whether e contained a symboliclabel
       (cond ((atom? e) (if (symbol? e) (mark-used e))
@@ -3269,7 +3310,7 @@ f(x) = yt(x)
              #f)
             ((eq? (car e) 'scope-block)
              (visit (cadr e)))
-            ((memq (car e) '(block call new splatnew _do_while))
+            ((memq (car e) '(block call new splatnew))
              (eager-any visit (cdr e)))
             ((eq? (car e) 'break-block)
              (visit (caddr e)))
@@ -3282,7 +3323,7 @@ f(x) = yt(x)
             ((eq? (car e) 'symboliclabel)
              (kill)
              #t)
-            ((memq (car e) '(if elseif _while trycatch tryfinally))
+            ((memq (car e) '(if elseif trycatch tryfinally))
              (let ((prev (table.clone live)))
                (if (eager-any (lambda (e) (begin0 (visit e)
                                                   (kill)))
@@ -3291,9 +3332,22 @@ f(x) = yt(x)
                    ;; variable initialization
                    (begin (kill) #t)
                    (begin (restore prev) #f))))
+            ((or (eq? (car e) '_while) (eq? (car e) '_do_while))
+             (let ((prev  (table.clone live))
+                   (decl- (table.clone decl)))
+               (let ((result (eager-any visit (cdr e))))
+                 (if (eq? (car e) '_while)
+                     (kill))  ;; body might not have run
+                 (leave-loop! decl-)
+                 (if result
+                     #t
+                     (begin (restore prev) #f)))))
             ((eq? (car e) '=)
              (begin0 (visit (caddr e))
                      (assign! (cadr e))))
+            ((eq? (car e) 'local)
+             (declare! (cadr e))
+             #f)
             ((eq? (car e) 'method)
              (if (length> e 2)
                  (let* ((mn          (method-expr-name e))
@@ -4349,7 +4403,13 @@ f(x) = yt(x)
              (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
        ,@(cdddr lam))))
 
-(define (compact-ir body file line)
+(define (make-lineinfo name file line (inlined-at #f))
+  `(lineinfo (thismodule) ,(if inlined-at '|macro expansion| name) ,file ,line ,(or inlined-at 0)))
+
+(define (set-lineno! lineinfo num)
+  (set-car! (cddddr lineinfo) num))
+
+(define (compact-ir body name file line)
   (let ((code         '(block))
         (locs         '(list))
         (linetable    '(list))
@@ -4364,7 +4424,7 @@ f(x) = yt(x)
     (define (emit e)
       (if (and (null? (cdr linetable))
                (not (and (pair? e) (eq? (car e) 'meta))))
-          (begin (set! linetable (cons `(line ,line ,file) linetable))
+          (begin (set! linetable (cons (make-lineinfo name file line) linetable))
                  (set! current-loc 1)))
       (if (or reachable
               (and (pair? e) (memq (car e) '(meta inbounds gc_preserve_begin gc_preserve_end aliasscope popaliasscope))))
@@ -4378,22 +4438,22 @@ f(x) = yt(x)
                   ((eq? (car e) 'line)
                    (if (and (= current-line 0) (length= e 2) (pair? linetable))
                        ;; (line n) after push_loc just updates the line for the new file
-                       (begin (set-car! (cdr (car linetable)) (cadr e))
+                       (begin (set-lineno! (car linetable) (cadr e))
                               (set! current-line (cadr e)))
                        (begin
                          (set! current-line (cadr e))
                          (if (pair? (cddr e))
                              (set! current-file (caddr e)))
                          (set! linetable (cons (if (null? locstack)
-                                                   `(line ,current-line ,current-file)
-                                                   `(line ,current-line ,current-file ,(caar locstack)))
+                                                   (make-lineinfo name current-file current-line)
+                                                   (make-lineinfo name current-file current-line (caar locstack)))
                                                linetable))
                          (set! current-loc (- (length linetable) 1)))))
                   ((and (length> e 2) (eq? (car e) 'meta) (eq? (cadr e) 'push_loc))
                    (set! locstack (cons (list current-loc current-line current-file) locstack))
                    (set! current-file (caddr e))
                    (set! current-line 0)
-                   (set! linetable (cons `(line ,current-line ,current-file ,current-loc) linetable))
+                   (set! linetable (cons (make-lineinfo name current-file current-line current-loc) linetable))
                    (set! current-loc (- (length linetable) 1)))
                   ((and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'pop_loc))
                    (let ((l (car locstack)))
@@ -4428,7 +4488,9 @@ f(x) = yt(x)
     tbl))
 
 (define (renumber-lambda lam file line)
-  (let* ((stuff (compact-ir (lam:body lam) file line))
+  (let* ((stuff (compact-ir (lam:body lam)
+                            (if (null? (cadr lam)) '|top-level scope| 'none)
+                            file line))
          (code (aref stuff 0))
          (locs (aref stuff 1))
          (linetab (aref stuff 2))

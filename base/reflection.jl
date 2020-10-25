@@ -638,7 +638,13 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
-fieldindex(t::UnionAll, name::Symbol, err::Bool=true) = fieldindex(something(argument_datatype(t)), name, err)
+function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
+    t = argument_datatype(t)
+    if t === nothing
+        throw(ArgumentError("type does not have definite fields"))
+    end
+    return fieldindex(t, name, err)
+end
 
 argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
 
@@ -806,7 +812,7 @@ function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt)
 end
 
 function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt)
-    return _methods_by_ftype(t, lim, world, false, UInt[typemin(UInt)], UInt[typemax(UInt)], Cint[0])
+    return _methods_by_ftype(t, lim, world, false, RefValue{UInt}(typemin(UInt)), RefValue{UInt}(typemax(UInt)), Ptr{Int32}(C_NULL))
 end
 function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool, min::Array{UInt,1}, max::Array{UInt,1}, has_ambig::Array{Int32,1})
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
@@ -849,7 +855,7 @@ A list of modules can also be specified as an array.
     At least Julia 1.4 is required for specifying a module.
 """
 function methods(@nospecialize(f), @nospecialize(t),
-                 @nospecialize(mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing))
+                 mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
@@ -870,16 +876,15 @@ methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
     world = typemax(UInt)
-    min = UInt[typemin(UInt)]
-    max = UInt[typemax(UInt)]
-    has_ambig = Int32[0]
-    ms = _methods_by_ftype(tt, -1, world, true, min, max, has_ambig)
+    min = RefValue{UInt}(typemin(UInt))
+    max = RefValue{UInt}(typemax(UInt))
+    ms = _methods_by_ftype(tt, -1, world, true, min, max, Ptr{Int32}(C_NULL))
     isa(ms, Bool) && return ms
     return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
 end
 
 function methods(@nospecialize(f),
-                 @nospecialize(mod::Union{Module,AbstractArray{Module},Nothing}=nothing))
+                 mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
@@ -947,7 +952,7 @@ const _uncompressed_ast = _uncompressed_ir
 function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
-    for match in _methods_by_ftype(tt, -1, world)
+    for match in _methods_by_ftype(tt, -1, world)::Vector
         instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
             (Any, Any, Any), match.method, match.spec_types, match.sparams)
         push!(results, instance)
@@ -1131,6 +1136,45 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.
     end
     return rt
 end
+
+"""
+    print_statement_costs(io::IO, f, types)
+
+Print type-inferred and optimized code for `f` given argument types `types`,
+prepending each line with its cost as estimated by the compiler's inlining engine.
+"""
+function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwargs...)
+    if isa(f, Core.Builtin)
+        throw(ArgumentError("argument is not a generic function"))
+    end
+    tt = signature_type(f, t)
+    print_statement_costs(io, tt; kwargs...)
+end
+
+function print_statement_costs(io::IO, @nospecialize(tt::Type);
+                               world = get_world_counter(),
+                               interp = Core.Compiler.NativeInterpreter(world))
+    matches = _methods_by_ftype(tt, -1, world)
+    if matches === false
+        error("signature does not correspond to a generic function")
+    end
+    params = Core.Compiler.OptimizationParams(interp)
+    cst = Int[]
+    for match in matches
+        meth = func_for_method_checked(match.method, tt, match.sparams)
+        (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
+        code === nothing && error("inference not successful") # inference disabled?
+        empty!(cst)
+        resize!(cst, length(code.code))
+        maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
+        nd = ndigits(maxcost)
+        println(io, meth)
+        IRShow.show_ir(io, code, (io, linestart, idx) -> (print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " "); return ""))
+        println()
+    end
+end
+
+print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 """
     which(f, types)
@@ -1363,7 +1407,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = UInt[typemin(UInt)]
         max = UInt[typemax(UInt)]
         has_ambig = Int32[0]
-        ms = _methods_by_ftype(ti, -1, typemax(UInt), true, min, max, has_ambig)
+        ms = _methods_by_ftype(ti, -1, typemax(UInt), true, min, max, has_ambig)::Vector
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
             filter!(ms) do m
@@ -1423,7 +1467,12 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         if ti2 <: m1.sig && ti2 <: m2.sig
             ti = ti2
         elseif ti != ti2
-            inner(ti2) || return false
+            # TODO: this would be the correct way to handle this case, but
+            #       people complained so we don't do it
+            # inner(ti2) || return false
+            return false # report that the type system failed to decide if it was ambiguous by saying they definitely aren't
+        else
+            return false # report that the type system failed to decide if it was ambiguous by saying they definitely aren't
         end
     end
     inner(ti) || return false
@@ -1483,7 +1532,7 @@ REPL tab completion on `x.` shows only the `private=false` properties.
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
-propertynames(x, private) = propertynames(x) # ignore private flag by default
+propertynames(x, private::Bool) = propertynames(x) # ignore private flag by default
 
 """
     hasproperty(x, s::Symbol)

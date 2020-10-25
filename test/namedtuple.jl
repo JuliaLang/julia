@@ -156,6 +156,8 @@ let d = [:a=>1, :b=>2, :c=>3]   # use an array to preserve order
     y = (w=30, z=40)
     @test (;t..., y...) == (x=1, y=20, w=30, z=40)
     @test (;t..., y=0, y...) == (x=1, y=0, w=30, z=40)
+
+    @test NamedTuple(d) === (a=1, b=2, c=3)
 end
 
 # inference tests
@@ -165,7 +167,7 @@ namedtuple_get_a(x) = x.a
 @test Base.return_types(namedtuple_get_a, (typeof((b=1,a="")),)) == Any[String]
 
 namedtuple_fieldtype_a(x) = fieldtype(typeof(x), :a)
-@test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Type]
+@test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Union{Type, TypeVar}]
 @test Base.return_types(namedtuple_fieldtype_a, (typeof((b=1,a="")),)) == Any[Type{String}]
 namedtuple_fieldtype__(x, y) = fieldtype(typeof(x), y)
 @test Base.return_types(namedtuple_fieldtype__, (typeof((b=1,a="")),Symbol))[1] >: Union{Type{Int}, Type{String}}
@@ -304,3 +306,7 @@ let x = 1, y = 2
     @test Meta.lower(Main, Meta.parse("(; a.y, y)")) == Expr(:error, "field name \"y\" repeated in named tuple")
     @test (; a.y, x) === (y=2, x=1)
 end
+
+# issue #37926
+@test nextind((a=1,), 1) == nextind((1,), 1) == 2
+@test prevind((a=1,), 2) == prevind((1,), 2) == 1

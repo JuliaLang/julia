@@ -70,7 +70,7 @@ abstract type Real <: Number end
 ```
 [`Number`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
 """
-kw"abstract type"
+kw"abstract type", kw"abstract"
 
 """
     module
@@ -106,7 +106,7 @@ kw"module"
 `__init__()` function in your module would executes immediately *after* the module is loaded at
 runtime for the first time (i.e., it is only called once and only after all statements in the
 module have been executed). Because it is called *after* fully importing the module, `__init__`
-functions of submodules will be executed *first*. Two typical uses of __init__ are calling
+functions of submodules will be executed *first*. Two typical uses of `__init__` are calling
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
@@ -150,6 +150,7 @@ include(p) = Base.include(Mod, p)
 ...
 
 end
+```
 """
 kw"baremodule"
 
@@ -646,6 +647,13 @@ otherwise the condition expression `x > y` is evaluated, and if it is true, the
 corresponding block is evaluated; if neither expression is true, the `else` block is
 evaluated. The `elseif` and `else` blocks are optional, and as many `elseif` blocks as
 desired can be used.
+
+In contrast to some other languages conditions must be of type `Bool`. It does not
+suffice for conditions to be convertible to `Bool`.
+```jldoctest
+julia> if 1 end
+ERROR: TypeError: non-boolean (Int64) used in boolean context
+```
 """
 kw"if", kw"elseif", kw"else"
 
@@ -1848,7 +1856,7 @@ Rational{Int64}
 julia> M = [1 2; 3.5 4];
 
 julia> typeof(M)
-Matrix{Float64} = Array{Float64, 2}
+Matrix{Float64} (alias for Array{Float64, 2})
 ```
 """
 typeof
@@ -2392,6 +2400,17 @@ Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
 another named tuple.
 """
 NamedTuple{names}(nt::NamedTuple)
+
+"""
+    NamedTuple(itr)
+
+Construct a named tuple from an iterator of key-value pairs (where the keys must be
+`Symbol`s). Equivalent to `(; itr...)`.
+
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+"""
+NamedTuple(itr)
 
 """
     typeassert(x, type)

@@ -405,15 +405,14 @@ sparse(a::AbstractVector) = sparsevec(a)
 
 function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{Tv}) where {Tv,Ti}
     require_one_based_indexing(s)
-    cap = length(nzind);
+    cap = length(nzind)
     @assert cap == length(nzval)
     n = length(s)
     c = 0
-    @inbounds for i = 1:n
-        v = s[i]
+    @inbounds for (i, v) in enumerate(s)
         if !iszero(v)
             if c >= cap
-                cap *= 2
+                cap = (cap == 0) ? 1 : 2*cap
                 resize!(nzind, cap)
                 resize!(nzval, cap)
             end
@@ -1674,10 +1673,8 @@ function densemv(A::AbstractSparseMatrixCSC, x::AbstractSparseVector; trans::Abs
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
         mul!(y, transpose(A), x)
-    elseif trans == 'C' || trans == 'c'
+    else # trans == 'C' || trans == 'c'
         mul!(y, adjoint(A), x)
-    else
-        throw(ArgumentError("Invalid trans character $trans"))
     end
     y
 end

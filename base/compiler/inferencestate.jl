@@ -283,10 +283,6 @@ function poison_callstack(infstate::InferenceState, topmost::InferenceState, poi
     end
 end
 
-function is_specializable_vararg_slot(@nospecialize(arg), nargs::Int, vargs::Vector{Any})
-    return (isa(arg, Slot) && slot_id(arg) == nargs && !isempty(vargs))
-end
-
 function print_callstack(sv::InferenceState)
     while sv !== nothing
         print(sv.linfo)

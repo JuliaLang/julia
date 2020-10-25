@@ -12,7 +12,7 @@
 TRIPLETS="i686-linux-gnu x86_64-linux-gnu aarch64-linux-gnu armv7l-linux-gnueabihf powerpc64le-linux-gnu i686-linux-musl x86_64-linux-musl aarch64-linux-musl armv7l-linux-musleabihf x86_64-apple-darwin14 x86_64-unknown-freebsd11.1 i686-w64-mingw32 x86_64-w64-mingw32"
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
-BB_PROJECTS="mbedtls libssh2 mpfr curl libgit2 pcre libuv unwind osxunwind dsfmt objconv p7zip zlib suitesparse openlibm"
+BB_PROJECTS="mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind osxunwind dsfmt objconv p7zip zlib suitesparse openlibm"
 BB_GCC_EXPANDED_PROJECTS="openblas"
 BB_CXX_EXPANDED_PROJECTS="gmp llvm"
 
@@ -36,8 +36,9 @@ fi
 CONTRIB_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 # Get the source hash for each project
-for proj in ${BB_PROJECTS}; do
+for proj in ${BB_PROJECTS} ${BB_GCC_EXPANDED_PROJECTS} ${BB_CXX_EXPANDED_PROJECTS}; do
     PROJ="$(echo ${proj} | tr [a-z] [A-Z])"
+    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 uninstall-${proj}
     make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=0 DEPS_GIT=0 extract-${proj}
 done
 
@@ -64,4 +65,10 @@ for triplet in ${TRIPLETS}; do
 		    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 ${PROJ}_BB_TRIPLET=${triplet}-${cxx} BB_TRIPLET_CXXABI=${triplet} install-${proj}
         done
     done
+done
+
+# Reset and cleanup
+for proj in ${BB_PROJECTS} ${BB_GCC_EXPANDED_PROJECTS} ${BB_CXX_EXPANDED_PROJECTS}; do
+    PROJ="$(echo ${proj} | tr [a-z] [A-Z])"
+    make -C "${CONTRIB_DIR}/../deps" USE_BINARYBUILDER_${PROJ}=1 uninstall-${proj}
 done

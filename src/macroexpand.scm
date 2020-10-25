@@ -285,6 +285,7 @@
   (cond ((atom? e)             `(tuple ,e))
         ((eq? (car e) 'where)  `(where ,(tuple-wrap-arrow-arglist (cadr e)) ,@(cddr e)))
         ((eq? (car e) 'tuple)  e)
+        ((eq? (car e) 'escape) `(escape ,(tuple-wrap-arrow-sig (cadr e))))
         (else                  `(tuple ,e))))
 
 (define (new-expansion-env-for x env (outermost #f))

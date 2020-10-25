@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
@@ -697,36 +698,19 @@ end
 
 # issue #27239
 @testset "strftime tests issue #27239" begin
-
-    # save current locales
-    locales = Dict()
-    for cat in 0:9999
-        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, C_NULL)
-        if cstr != C_NULL
-            locales[cat] = unsafe_string(cstr)
-        end
-    end
-
     # change to non-Unicode Korean
-    for (cat, _) in locales
-        korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
-        for lc in korloc
-            cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
-        end
+    korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
+    timestrs = String[]
+    withlocales(korloc) do
+        # system dependent formats
+        push!(timestrs, Libc.strftime(0.0))
+        push!(timestrs, Libc.strftime("%a %A %b %B %p %Z", 0))
     end
-
-    # system dependent formats
-    timestr_c = Libc.strftime(0.0)
-    timestr_aAbBpZ = Libc.strftime("%a %A %b %B %p %Z", 0)
-
-    # recover locales
-    for (cat, lc) in locales
-        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
-    end
-
     # tests
-    @test isvalid(timestr_c)
-    @test isvalid(timestr_aAbBpZ)
+    isempty(timestrs) && @warn "skipping stftime tests: no locale found for testing"
+    for s in timestrs
+        @test isvalid(s)
+    end
 end
 
 
@@ -840,7 +824,7 @@ end
 end
 
 @testset "fieldtypes Module" begin
-    @test fieldtypes(Module) isa Tuple
+    @test fieldtypes(Module) === ()
 end
 
 

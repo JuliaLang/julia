@@ -3,37 +3,30 @@
 @inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
-"""
-Like UnitRange{Int}, but can handle the `last` field, being temporarily
-< first (this can happen during compacting)
-"""
-struct StmtRange <: AbstractUnitRange{Int}
-    start::Int
-    stop::Int
-end
-first(r::StmtRange) = r.start
-last(r::StmtRange) = r.stop
-iterate(r::StmtRange, state=0) = (last(r) - first(r) < state) ? nothing : (first(r) + state, state + 1)
-
-StmtRange(range::UnitRange{Int}) = StmtRange(first(range), last(range))
-
-struct BasicBlock
-    stmts::StmtRange
-    preds::Vector{Int}
-    succs::Vector{Int}
-end
-function BasicBlock(stmts::StmtRange)
-    return BasicBlock(stmts, Int[], Int[])
-end
-function BasicBlock(old_bb, stmts)
-    return BasicBlock(stmts, old_bb.preds, old_bb.succs)
-end
-copy(bb::BasicBlock) = BasicBlock(bb.stmts, copy(bb.preds), copy(bb.succs))
+isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
 
 struct CFG
     blocks::Vector{BasicBlock}
     index::Vector{Int} # map from instruction => basic-block number
                        # TODO: make this O(1) instead of O(log(n_blocks))?
+end
+
+copy(c::CFG) = CFG(BasicBlock[copy(b) for b in c.blocks], copy(c.index))
+
+function cfg_insert_edge!(cfg::CFG, from::Int, to::Int)
+    # Assumes that this edge does not already exist
+    push!(cfg.blocks[to].preds, from)
+    push!(cfg.blocks[from].succs, to)
+    nothing
+end
+
+function cfg_delete_edge!(cfg::CFG, from::Int, to::Int)
+    preds = cfg.blocks[to].preds
+    succs = cfg.blocks[from].succs
+    # Assumes that blocks appear at most once in preds and succs
+    deleteat!(preds, findfirst(x->x === from, preds)::Int)
+    deleteat!(succs, findfirst(x->x === to, succs)::Int)
+    nothing
 end
 
 function block_for_inst(index::Vector{Int}, inst::Int)
@@ -180,13 +173,14 @@ function add!(is::InstructionStream)
     resize!(is, ninst)
     return ninst
 end
-#function copy(is::InstructionStream) # unused
-#    return InstructionStream(
-#        copy_exprargs(is.insts),
-#        copy(is.types),
-#        copy(is.lines),
-#        copy(is.flags))
-#end
+function copy(is::InstructionStream)
+    return InstructionStream(
+        copy_exprargs(is.inst),
+        copy(is.type),
+        copy(is.info),
+        copy(is.line),
+        copy(is.flag))
+end
 function resize!(stmts::InstructionStream, len)
     old_length = length(stmts)
     resize!(stmts.inst, len)
@@ -248,6 +242,7 @@ function add!(new::NewNodeStream, pos::Int, attach_after::Bool)
     push!(new.info, NewNodeInfo(pos, attach_after))
     return Instruction(new.stmts)
 end
+copy(nns::NewNodeStream) = NewNodeStream(copy(nns.stmts), copy(nns.info))
 
 struct IRCode
     stmts::InstructionStream
@@ -264,6 +259,16 @@ struct IRCode
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
         return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
     end
+    global copy
+    copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
+        copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+end
+
+function block_for_inst(ir::IRCode, inst::Int)
+    if inst > length(ir.stmts)
+        inst = ir.new_nodes.info[inst - length(ir.stmts)].pos
+    end
+    block_for_inst(ir.cfg, inst)
 end
 
 function getindex(x::IRCode, s::SSAValue)
@@ -537,8 +542,9 @@ mutable struct IncrementalCompact
         if allow_cfg_transforms
             bb_rename = Vector{Int}(undef, length(blocks))
             cur_bb = 1
+            domtree = construct_domtree(blocks)
             for i = 1:length(bb_rename)
-                if i != 1 && length(blocks[i].preds) == 0
+                if bb_unreachable(domtree, i)
                     bb_rename[i] = -1
                 else
                     bb_rename[i] = cur_bb
@@ -561,7 +567,7 @@ mutable struct IncrementalCompact
                     succs[j] = bb_rename[succs[j]]
                 end
             end
-            let blocks = blocks
+            let blocks = blocks, bb_rename = bb_rename
                 result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
             end
         else
@@ -981,6 +987,11 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 ssa_rename[idx] = pi_val
                 return result_idx
             end
+        elseif isa(pi_val, Argument)
+            if stmt.typ === compact.ir.argtypes[pi_val.n]
+                ssa_rename[idx] = pi_val
+                return result_idx
+            end
         elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef)
             valtyp = isa(pi_val, QuoteNode) ? typeof(pi_val.value) : typeof(pi_val)
             if valtyp === stmt.typ
@@ -1185,8 +1196,8 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         resize!(compact, old_result_idx)
     end
     bb = compact.ir.cfg.blocks[active_bb]
-    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && length(bb.preds) == 0
-        # No predecessors, kill the entire block.
+    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && compact.bb_rename_succ[active_bb] == -1
+        # Dead block, so kill the entire block.
         compact.idx = last(bb.stmts)
         # Pop any remaining insertion nodes
         while compact.new_nodes_idx <= length(compact.perm)

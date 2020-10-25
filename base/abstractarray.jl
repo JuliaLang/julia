@@ -1070,8 +1070,8 @@ function pointer(x::AbstractArray{T}, i::Integer) where T
 end
 
 # The distance from pointer(x) to the element at x[I...] in bytes
-_memory_offset(x::DenseArray, I...) = (_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
-function _memory_offset(x::AbstractArray, I...)
+_memory_offset(x::DenseArray, I::Vararg{Any,N}) where {N} = (_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
+function _memory_offset(x::AbstractArray, I::Vararg{Any,N}) where {N}
     J = _to_subscript_indices(x, I...)
     return sum(map((i, s, o)->s*(i-o), J, strides(x), Tuple(first(CartesianIndices(x)))))*elsize(x)
 end
@@ -1925,6 +1925,11 @@ function cmp(A::AbstractVector, B::AbstractVector)
     return cmp(length(A), length(B))
 end
 
+"""
+    isless(A::AbstractVector, B::AbstractVector)
+
+Returns true when `A` is less than `B` in lexicographic order.
+"""
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)
