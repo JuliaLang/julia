@@ -3,16 +3,15 @@
 ## numeric/object traits
 
 """
-    OrderedStyle()
- 
-An abstract type of a trait that signals if some type `T` guarantees
-that a call `isless(::T, ::T)` will return `true` or `false`.
+    OrderStyle(T::Type) -> OrderStyle
 
-It has two concrete subtypes [`Ordered`](@ref) and
-[`Unordered`](@ref), which is the default.
+Given a type `T`, return one of the following values:
+- [`Ordered()`](@ref) if type `T` guarantees that a call `isless(::T, ::T)`
+will return `true` or `false`.
+- [`Unordered()`](@ref) otherwise (this is the default).
 
-Types supporting [`isless`](@ref) are recommended to support
-[`Ordered`](@ref) trait to enable optimizations.
+Types supporting [`isless`](@ref) are recommended to return
+[`Ordered()`](@ref) to enable optimizations.
 """
 abstract type OrderStyle end
 
