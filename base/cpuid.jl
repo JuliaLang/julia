@@ -26,13 +26,14 @@ include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "features_h.jl"))  # 
 # Keep in sync with `arch_march_isa_mapping`.
 const ISAs_by_family = Dict(
     "i686" => [
-        # Implicit in all sets, because always required: mmx, sse, sse2
-        "i686" => ISA(Set{UInt32}()),
+        # Source: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html.
+        # Implicit in all sets, because always required by Julia: mmx, sse, sse2
+        "pentium4" => ISA(Set{UInt32}()),
         "prescott" => ISA(Set((JL_X86_sse3,))),
     ],
     "x86_64" => [
         # Source: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html.
-        # Implicit in all sets, because always required: mmx, sse, sse2
+        # Implicit in all sets, because always required by x86-64 architecture: mmx, sse, sse2
         "x86_64" => ISA(Set{UInt32}()),
         "core2" => ISA(Set((JL_X86_sse3, JL_X86_ssse3))),
         "nehalem" => ISA(Set((JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt))),

@@ -591,7 +591,7 @@ const arch_march_isa_mapping = let
     end
     Dict(
         "i686" => [
-            "i686" => get_set("i686", "i686"),
+            "pentium4" => get_set("i686", "pentium4"),
             "prescott" => get_set("i686", "prescott"),
         ],
         "x86_64" => [
