@@ -2399,3 +2399,11 @@ function hash(A::AbstractArray, h::UInt)
 
     return h
 end
+
+# The semantics of `collect` are weird. Better to write our own
+function rest(a::AbstractArray{T}, state...) where {T}
+    v = Vector{T}(undef, 0)
+    # assume only very few items are taken from the front
+    sizehint!(v, length(a))
+    return foldl(push!, Iterators.rest(a, state...), init=v)
+end
