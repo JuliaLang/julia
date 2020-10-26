@@ -76,7 +76,7 @@ Then, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
-By default you will be building the latest unstable version of
+By default, you will be building the latest unstable version of
 Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
@@ -110,7 +110,7 @@ are included in the [build documentation](https://github.com/JuliaLang/julia/blo
 
 Julia does not install anything outside the directory it was cloned
 into. Julia can be completely uninstalled by deleting this
-directory. Julia packages are installed in `~/.julia` by default, and
+directory. Julia packages are installed in `~/.julia` by default and
 can be uninstalled by deleting `~/.julia`.
 
 ## Source Code Organization
@@ -136,7 +136,7 @@ The Julia REPL is quite powerful. See the section in the manual on
 [the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
 
-On Windows we highly recommend running Julia in a modern terminal,
+On Windows, we highly recommend running Julia in a modern terminal,
 such as [Windows Terminal from the Microsoft Store](https://aka.ms/terminal).
 
 Support for editing Julia is available for many
