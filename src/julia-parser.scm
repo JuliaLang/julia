@@ -532,42 +532,44 @@
 (define (scolno port) (string " near column " (input-port-column port)))
 
 (define (next-token port s)
-  (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
-  (let ((c (peek-char port)))
-    (cond ((or (eof-object? c) (eqv? c #\newline))  (read-char port))
+  (let loop ((comment-induced-whitespace #f))
+    (aset! s 2 (or (eq? (skip-ws port whitespace-newline) #t)
+                   comment-induced-whitespace))
+    (let ((c (peek-char port)))
+      (cond ((or (eof-object? c) (eqv? c #\newline))  (read-char port))
 
-          ((identifier-start-char? c)     (accum-julia-symbol c port))
+            ((identifier-start-char? c)     (accum-julia-symbol c port))
 
-          ((string.find "()[]{},;\"`@" c) (read-char port))
+            ((string.find "()[]{},;\"`@" c) (read-char port))
 
-          ((string.find "0123456789" c)   (read-number port #f #f))
+            ((string.find "0123456789" c)   (read-number port #f #f))
 
-          ((eqv? c #\#)                   (skip-comment port) (next-token port s))
+            ((eqv? c #\#)                   (skip-comment port) (loop #t))
 
-          ;; . is difficult to handle; it could start a number or operator
-          ((and (eqv? c #\.)
-                (let ((c (read-char port))
-                      (nextc (peek-char port)))
-                  (cond ((eof-object? nextc)
-                         '|.|)
-                        ((char-numeric? nextc)
-                         (read-number port #t #f))
-                        ((opchar? nextc)
-                         (let* ((op (read-operator port c))
-                                (nx (peek-char port)))
-                           (if (and (eq? op '..) (opchar? nx) (not (memv nx '(#\' #\:))))
-                               (error (string "invalid operator \"" op nx "\"" (scolno port))))
-                           op))
-                        (else '|.|)))))
+            ;; . is difficult to handle; it could start a number or operator
+            ((and (eqv? c #\.)
+                  (let ((c (read-char port))
+                        (nextc (peek-char port)))
+                    (cond ((eof-object? nextc)
+                           '|.|)
+                          ((char-numeric? nextc)
+                           (read-number port #t #f))
+                          ((opchar? nextc)
+                           (let* ((op (read-operator port c))
+                                  (nx (peek-char port)))
+                             (if (and (eq? op '..) (opchar? nx) (not (memv nx '(#\' #\:))))
+                                 (error (string "invalid operator \"" op nx "\"" (scolno port))))
+                             op))
+                          (else '|.|)))))
 
-          ((opchar? c)  (read-operator port (read-char port)))
+            ((opchar? c)  (read-operator port (read-char port)))
 
-          (else
-           (let ((cn (input-port-column port)))
-             (read-char port)
-             (if (default-ignorable-char? c)
-                 (error (string "invisible character \\u" (number->string (fixnum c) 16) " near column " (+ 1 cn)))
-                 (error (string "invalid character \"" c "\" near column " (+ 1 cn)))))))))
+            (else
+              (let ((cn (input-port-column port)))
+                (read-char port)
+                (if (default-ignorable-char? c)
+                    (error (string "invisible character \\u" (number->string (fixnum c) 16) " near column " (+ 1 cn)))
+                    (error (string "invalid character \"" c "\" near column " (+ 1 cn))))))))))
 
 ;; --- token stream ---
 
