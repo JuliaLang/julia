@@ -49,7 +49,7 @@ The following two-word sequences are reserved:
 However, you can create variables with names:
 `abstract`, `mutable`, `primitive` and `type`.
 
-Finally,`where` is parsed as an infix operator for writing parametric method
+Finally, `where` is parsed as an infix operator for writing parametric method
 and type definitions. Also `in` and `isa` are parsed as infix operators.
 Creation of a variable named `where`, `in` or `isa` is allowed though.
 
@@ -85,6 +85,7 @@ where
 ...
 ;
 =
+?:
 ```
 
 ## Standard Modules
@@ -146,6 +147,8 @@ Base.identity
 
 ```@docs
 Base.supertype
+Core.Type
+Core.DataType
 Core.:(<:)
 Base.:(>:)
 Base.typejoin
@@ -158,9 +161,11 @@ Base.isdispatchtuple
 ### Declared structure
 
 ```@docs
+Base.ismutable
 Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
+Base.issingletontype
 Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
@@ -206,6 +211,7 @@ Union{}
 Core.UnionAll
 Core.Tuple
 Core.NamedTuple
+Base.@NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -231,6 +237,7 @@ Base.invokelatest
 new
 Base.:(|>)
 Base.:(∘)
+Base.ComposedFunction
 ```
 
 ## Syntax
@@ -250,6 +257,7 @@ Base.@nospecialize
 Base.@specialize
 Base.gensym
 Base.@gensym
+var"name"
 Base.@goto
 Base.@label
 Base.@simd
@@ -266,6 +274,7 @@ Base.missing
 Base.coalesce
 Base.ismissing
 Base.skipmissing
+Base.nonmissingtype
 ```
 
 ## System
@@ -329,6 +338,8 @@ Base.backtrace
 Base.catch_backtrace
 Base.catch_stack
 Base.@assert
+Base.Experimental.register_error_hint
+Base.Experimental.show_error_hints
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError
@@ -392,15 +403,24 @@ Base.functionloc(::Method)
 Base.GC.gc
 Base.GC.enable
 Base.GC.@preserve
+Base.GC.safepoint
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)
 Meta.parse(::AbstractString)
 Meta.ParseError
+Core.QuoteNode
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered
 Base.code_typed
 Base.precompile
+```
+
+## Meta
+```@docs
+Meta.quot
+Meta.isexpr
+Meta.show_sexpr
 ```

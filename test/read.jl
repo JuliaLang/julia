@@ -127,11 +127,11 @@ end
 open_streams = []
 function cleanup()
     for s_ in open_streams
-        try close(s_); catch; end
+        close(s_)
     end
     empty!(open_streams)
     for tsk in tasks
-        Base.wait(tsk)
+        wait(tsk)
     end
     empty!(tasks)
 end
@@ -297,6 +297,12 @@ for (name, f) in l
         @test collect(eachline(io(), keep=true)) == collect(eachline(filename, keep=true))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(@inferred(eachline(io()))) == collect(@inferred(eachline(filename))) #20351
+
+        cleanup()
+
+        verbose && println("$name readeach...")
+        @test collect(readeach(io(), Char)) == Vector{Char}(text)
+        @test collect(readeach(io(), UInt8)) == Vector{UInt8}(text)
 
         cleanup()
 
@@ -574,3 +580,40 @@ end
 
 # issue #26419
 @test Base.return_types(read, (String, Type{String})) == Any[String]
+
+@testset "read! to view" begin
+    x = rand(4, 4)
+    y = rand(10)
+    z = 1:10
+    v = [1.0, 2.0, 3.0, 4.0]
+    io = IOBuffer()
+    write(io, v)
+    flush(io)
+    seekstart(io)
+    read!(io, @view x[:, 3])
+    @test x[:, 3] == v
+    x = rand(3, 3)
+    seekstart(io)
+    read!(io, @view x[1:2, 2:3])
+    @test x[1:2, 2:3][:] == v[:]
+    seekstart(io)
+    read!(io, @view y[4:7])
+    @test y[4:7] == v
+    seekstart(io)
+    @test_throws ErrorException read!(io, @view z[4:6])
+end
+
+# Bulk read from pipe
+let p = Pipe()
+    data = rand(UInt8, Base.SZ_UNBUFFERED_IO + 100)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    t = @async write(p.in, data)
+    @test read(p.out, UInt8) == data[1]
+    data_read = Vector{UInt8}(undef, 10*Base.SZ_UNBUFFERED_IO)
+    nread = readbytes!(p.out, data_read, Base.SZ_UNBUFFERED_IO + 50)
+    @test nread == Base.SZ_UNBUFFERED_IO + 50
+    @test data_read[1:nread] == data[2:nread+1]
+    @test read(p.out, 49) == data[end-48:end]
+    wait(t)
+    close(p)
+end

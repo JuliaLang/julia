@@ -62,20 +62,12 @@
 extern "C" {
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 JL_DLLEXPORT char *dirname(char *);
 #else
 #include <libgen.h>
 #endif
 
-JL_DLLEXPORT uint32_t jl_getutf8(ios_t *s)
-{
-    uint32_t wc=0;
-    ios_getutf8(s, &wc);
-    return wc;
-}
-
-JL_DLLEXPORT int jl_sizeof_uv_mutex(void) { return sizeof(uv_mutex_t); }
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
@@ -118,15 +110,13 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 // --- dir/file stuff ---
 
 JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
-JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req) { uv_fs_req_cleanup(req); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
 JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
-JL_DLLEXPORT ssize_t jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
 
-JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
+JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf) JL_NOTSAFEPOINT
 {
     uv_fs_t req;
     int ret;
@@ -317,16 +307,21 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
     return (jl_value_t*)a;
 }
 
-JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
+JL_DLLEXPORT int jl_ios_buffer_n(ios_t *s, const size_t n)
 {
-    assert(n <= 8);
     size_t space, ret;
     do {
         space = (size_t)(s->size - s->bpos);
         ret = ios_readprep(s, n);
         if (space == ret && ret < n)
-            jl_eof_error();
-    } while(ret < n);
+            return 1;
+    } while (ret < n);
+    return 0;
+}
+
+JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
+{
+    assert(n <= 8);
     uint64_t x = 0;
     uint8_t *buf = (uint8_t*)&s->buf[s->bpos];
     if (n == 8) {
@@ -351,8 +346,8 @@ JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 
 // -- syscall utilities --
 
-JL_DLLEXPORT int jl_errno(void) { return errno; }
-JL_DLLEXPORT void jl_set_errno(int e) { errno = e; }
+JL_DLLEXPORT int jl_errno(void) JL_NOTSAFEPOINT { return errno; }
+JL_DLLEXPORT void jl_set_errno(int e) JL_NOTSAFEPOINT { errno = e; }
 
 // -- get the number of CPU threads (logical cores) --
 
@@ -363,7 +358,7 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-JL_DLLEXPORT int jl_cpu_threads(void)
+JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
@@ -411,7 +406,7 @@ JL_DLLEXPORT uint64_t jl_hrtime(void)
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 extern char **environ;
 #endif
 #endif
@@ -493,13 +488,15 @@ JL_DLLEXPORT long jl_getpagesize(void)
 #else
 JL_DLLEXPORT long jl_getpagesize(void)
 {
-    return sysconf(_SC_PAGESIZE);
+    long page_size = sysconf(_SC_PAGESIZE);
+    assert(page_size != -1);
+    return page_size;
 }
 #endif
 
 #ifdef _OS_WINDOWS_
 static long cachedAllocationGranularity = 0;
-JL_DLLEXPORT long jl_getallocationgranularity(void)
+JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT
 {
     if (!cachedAllocationGranularity) {
         SYSTEM_INFO systemInfo;
@@ -509,7 +506,7 @@ JL_DLLEXPORT long jl_getallocationgranularity(void)
     return cachedAllocationGranularity;
 }
 #else
-JL_DLLEXPORT long jl_getallocationgranularity(void)
+JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT
 {
     return jl_getpagesize();
 }
@@ -535,7 +532,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
     for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT, 0);
+        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD, 0);
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
@@ -545,7 +542,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #elif defined(_OS_WINDOWS_)
 
-    wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
+    wchar_t *pth16 = (wchar_t*)malloc_s(32768 * sizeof(*pth16)); // max long path length
     DWORD n16 = GetModuleFileNameW((HMODULE)handle,pth16,32768);
     if (n16 <= 0) {
         free(pth16);
@@ -557,7 +554,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
         free(pth16);
         return NULL;
     }
-    char *filepath = (char*)malloc(++n8);
+    char *filepath = (char*)malloc_s(++n8);
     if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
         free(pth16);
         free(filepath);
@@ -615,12 +612,12 @@ JL_DLLEXPORT void jl_raise_debugger(void)
 #endif // _OS_WINDOWS_
 }
 
-JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void)
+JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT
 {
     return jl_symbol(JL_BUILD_UNAME);
 }
 
-JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void)
+JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT
 {
     return jl_symbol(JL_BUILD_ARCH);
 }
@@ -651,11 +648,7 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 
 JL_DLLEXPORT int jl_threading_enabled(void)
 {
-#ifdef JULIA_ENABLE_THREADING
     return 1;
-#else
-    return 0;
-#endif
 }
 
 #ifdef __cplusplus

@@ -18,3 +18,9 @@
 /libjulia-release.so
 /libjulia-release.dylib
 /julia_version.h
+/flisp/host
+/support/host
+
+# Clang compilation database
+/compile_commands*.json
+.clangd/

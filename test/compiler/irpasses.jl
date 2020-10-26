@@ -2,7 +2,7 @@
 
 using Test
 using Base.Meta
-using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode
+using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode, ReturnNode, GotoIfNot
 
 # Tests for domsort
 
@@ -13,20 +13,20 @@ let m = Meta.@lower 1 + 1
     src.code = Any[
         # block 1
         Expr(:call, :opaque),
-        Expr(:gotoifnot, Core.SSAValue(1), 10),
+        GotoIfNot(Core.SSAValue(1), 10),
         # block 2
-        Core.PhiNode(Any[8], Any[Core.SSAValue(7)]), # <- This phi must not get replaced by %7
-        Core.PhiNode(Any[2, 8], Any[true, false]),
-        Expr(:gotoifnot, Core.SSAValue(1), 7),
+        Core.PhiNode(Int32[8], Any[Core.SSAValue(7)]), # <- This phi must not get replaced by %7
+        Core.PhiNode(Int32[2, 8], Any[true, false]),
+        GotoIfNot(Core.SSAValue(1), 7),
         # block 3
         Expr(:call, :+, Core.SSAValue(3), 1),
         # block 4
-        Core.PhiNode(Any[5, 6], Any[0, Core.SSAValue(6)]),
+        Core.PhiNode(Int32[5, 6], Any[0, Core.SSAValue(6)]),
         Expr(:call, >, Core.SSAValue(7), 10),
-        Expr(:gotoifnot, Core.SSAValue(8), 3),
+        GotoIfNot(Core.SSAValue(8), 3),
         # block 5
-        Core.PhiNode(Any[2, 8], Any[0, Core.SSAValue(7)]),
-        Expr(:return, Core.SSAValue(10)),
+        Core.PhiNode(Int32[2, 8], Any[0, Core.SSAValue(7)]),
+        ReturnNode(Core.SSAValue(10)),
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
@@ -34,10 +34,11 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
-    @test isa(ir.stmts[3], Core.PhiNode) && length(ir.stmts[3].edges) == 1
+    phi = ir.stmts.inst[3]
+    @test isa(phi, Core.PhiNode) && length(phi.edges) == 1
 end
 
 # test that we don't stack-overflow in SNCA with large functions.
@@ -48,11 +49,11 @@ let m = Meta.@lower 1 + 1
     N = 2^15
     for i in 1:2:N
         push!(code, Expr(:call, :opaque))
-        push!(code, Expr(:gotoifnot, Core.SSAValue(i), N+2)) # skip one block
+        push!(code, GotoIfNot(Core.SSAValue(i), N+2)) # skip one block
     end
     # all goto here
     push!(code, Expr(:call, :opaque))
-    push!(code, Expr(:return))
+    push!(code, ReturnNode(nothing))
     src.code = code
 
     nstmts = length(src.code)
@@ -61,7 +62,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end
@@ -135,7 +136,7 @@ struct FooPartial
     f_partial(x) = new(x, 2).x
 end
 let ci = code_typed(f_partial, Tuple{Float64})[1].first
-    @test length(ci.code) == 1 && isexpr(ci.code[1], :return)
+    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode)
 end
 
 # A SSAValue after the compaction line
@@ -146,9 +147,9 @@ let m = Meta.@lower 1 + 1
         # block 1
         nothing,
         # block 2
-        PhiNode(Any[1, 7], Any[Core.SlotNumber(2), SSAValue(9)]),
+        PhiNode(Int32[1, 7], Any[Core.Argument(2), SSAValue(9)]),
         Expr(:call, isa, SSAValue(2), UnionAll),
-        Expr(:gotoifnot, Core.SSAValue(3), 11),
+        GotoIfNot(Core.SSAValue(3), 11),
         # block 3
         nothing,
         nothing,
@@ -159,7 +160,7 @@ let m = Meta.@lower 1 + 1
                      # the phinode here
         GotoNode(2),
         # block 5
-        Expr(:return, Core.SSAValue(2)),
+        ReturnNode(Core.SSAValue(2)),
     ]
     src.ssavaluetypes = Any[
         Nothing,
@@ -179,8 +180,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
     @test Core.Compiler.verify_ir(ir) === nothing
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
-    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir, domtree)
+    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
@@ -213,7 +213,7 @@ let m = Meta.@lower 1 + 1
         Core.Compiler.GotoNode(5),
         Core.Compiler.GotoNode(6),
         Core.Compiler.GotoNode(7),
-        Expr(:return, 2)
+        ReturnNode(2)
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
@@ -224,7 +224,7 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     ir = Core.Compiler.compact!(ir)
-    @test length(ir.cfg.blocks) == 1 && length(ir.stmts) == 1
+    @test length(ir.cfg.blocks) == 1 && Core.Compiler.length(ir.stmts) == 1
 end
 
 let m = Meta.@lower 1 + 1
@@ -234,14 +234,14 @@ let m = Meta.@lower 1 + 1
     src.code = Any[
         Core.Compiler.GotoIfNot(Core.Compiler.Argument(2), 3),
         Core.Compiler.GotoNode(4),
-        Expr(:return, 1),
+        ReturnNode(1),
         Core.Compiler.GotoNode(5),
         Core.Compiler.GotoIfNot(Core.Compiler.Argument(2), 7),
         # This fall through block of the previous GotoIfNot
         # must be moved up along with it, when we merge it
         # into the goto 4 block.
-        Expr(:return, 2),
-        Expr(:return, 3)
+        ReturnNode(2),
+        ReturnNode(3)
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
@@ -252,6 +252,93 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 5
-    ret_2 = ir.stmts[ir.cfg.blocks[3].stmts[end]]
+    ret_2 = ir.stmts.inst[ir.cfg.blocks[3].stmts[end]]
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
+end
+
+let m = Meta.@lower 1 + 1
+    # Test that CFG simplify doesn't try to merge every block in a loop into
+    # its predecessor
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::Core.CodeInfo
+    src.code = Any[
+        # Block 1
+        Core.Compiler.GotoNode(2),
+        # Block 2
+        Core.Compiler.GotoNode(3),
+        # Block 3
+        Core.Compiler.GotoNode(1)
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 1
+end
+
+# Issue #29213
+function f_29213()
+    while true
+        try
+            break
+        finally
+        end
+    end
+
+    while 1==1
+        try
+            ed = (_not_defined,)
+        finally
+            break
+        end
+    end
+
+    ed = string(ed)
+end
+
+@test_throws UndefVarError f_29213()
+
+function test_29253(K)
+    if true
+        try
+            error()
+        catch e
+        end
+    end
+    size(K,1)
+end
+let K = rand(2,2)
+    @test test_29253(K) == 2
+end
+
+# check getfield elim handling of GlobalRef
+const _some_coeffs = (1,[2],3,4)
+splat_from_globalref(x) = (x, _some_coeffs...,)
+@test splat_from_globalref(0) == (0, 1, [2], 3, 4)
+
+function pi_on_argument(x)
+    if isa(x, Core.Argument)
+        return x.n
+    end
+    return -2
+end
+let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
+    nisa = 0, found_pi = false
+    for stmt in code
+        if Meta.isexpr(stmt, :call)
+            callee = stmt.args[1]
+            if (callee === isa || callee === :isa || (isa(callee, GlobalRef) &&
+                                                      callee.name === :isa))
+                nisa += 1
+            end
+        elseif stmt === Core.PiNode(Core.Argument(2), Core.Argument)
+            found_pi = true
+        end
+    end
+    @test nisa == 1
+    @test found_pi
 end

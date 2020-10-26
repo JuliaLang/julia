@@ -22,11 +22,7 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
 
-as well as the negation on [`Bool`](@ref) types:
-
-| Expression | Name     | Description                              |
-|:---------- |:-------- |:---------------------------------------- |
-| `!x`       | negation | changes `true` to `false` and vice versa |
+A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
 naturally and automatically. See [Conversion and Promotion](@ref conversion-and-promotion) for details of the promotion
@@ -48,6 +44,32 @@ julia> 3*2/12
 (By convention, we tend to space operators more tightly if they get applied before other nearby
 operators. For instance, we would generally write `-x + 2` to reflect that first `x` gets negated,
 and then `2` is added to that result.)
+
+When used in multiplication, `false` acts as a *strong zero*:
+
+```jldoctest
+julia> NaN * false
+0.0
+
+julia> false * Inf
+0.0
+```
+
+This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
+
+## Boolean Operators
+
+The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on [`Bool`](@ref) types:
+
+| Expression | Name                                                    |
+|:---------- |:--------------------------------------------------------|
+| `!x`       | negation                                                |
+| `x && y`   | [short-circuiting and](@ref man-conditional-evaluation) |
+| `x \|\| y` | [short-circuiting or](@ref man-conditional-evaluation)  |
+
+Negation changes `true` to `false` and vice versa. The short-circuiting opeations are explained on the linked page.
+
+Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
 
 ## Bitwise Operators
 
@@ -142,7 +164,7 @@ applies the operator elementwise.
 
 ```jldoctest
 julia> [1,2,3] .^ 3
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   1
   8
  27
@@ -231,7 +253,7 @@ are compared according to the [IEEE 754 standard](https://en.wikipedia.org/wiki/
   * Finite numbers are ordered in the usual manner.
   * Positive zero is equal but not greater than negative zero.
   * `Inf` is equal to itself and greater than everything else except `NaN`.
-  * `-Inf` is equal to itself and less then everything else except `NaN`.
+  * `-Inf` is equal to itself and less than everything else except `NaN`.
   * `NaN` is not equal to, not less than, and not greater than anything, including itself.
 
 The last point is potentially surprising and thus worth noting:
@@ -250,7 +272,7 @@ julia> NaN > NaN
 false
 ```
 
-and can cause especial headaches with [arrays](@ref man-multi-dim-arrays):
+and can cause headaches when working with [arrays](@ref man-multi-dim-arrays):
 
 ```jldoctest
 julia> [1 NaN] == [1 NaN]
@@ -376,13 +398,16 @@ Julia applies the following order and associativity of operations, from highest 
     c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
-[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
+[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm). Note that some of the operators there are not defined
+in the `Base` module but may be given definitions by standard libraries, packages or user code.
+
+[Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, and also have higher precedence than `^`.
 
 You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
 
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(11, 13, 17)
+(11, 12, 17)
 
 julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
 (0, 1, 1)
@@ -481,7 +506,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`rem(x,y)`](@ref)        | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
 | [`mod(x,y)`](@ref)        | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
 | [`mod1(x,y)`](@ref)       | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)`   |
-| [`mod2pi(x)`](@ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
+| [`mod2pi(x)`](@ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x) < 2pi`                                                      |
 | [`divrem(x,y)`](@ref)     | returns `(div(x,y),rem(x,y))`                                                                             |
 | [`fldmod(x,y)`](@ref)     | returns `(fld(x,y),mod(x,y))`                                                                             |
 | [`gcd(x,y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |

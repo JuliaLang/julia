@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 nested_error_expr = quote
     try
         __not_a_binding__
@@ -9,8 +11,8 @@ end
 nested_error_pattern = r"""
     ERROR: DivideError: integer division error
     Stacktrace:.*
-    caused by \[exception 1\]
-    UndefVarError: __not_a_binding__ not defined
+
+    caused by: UndefVarError: __not_a_binding__ not defined
     Stacktrace:.*
     """s
 

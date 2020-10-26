@@ -269,10 +269,10 @@ Constructing infinite rational values is acceptable:
 julia> 5//0
 1//0
 
-julia> -3//0
+julia> x = -3//0
 -1//0
 
-julia> typeof(ans)
+julia> typeof(x)
 Rational{Int64}
 ```
 

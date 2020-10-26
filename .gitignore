@@ -17,6 +17,7 @@
 *.dwo
 *.do
 *.o
+*.o.tmp
 *.obj
 *.so
 *.dylib
@@ -29,3 +30,4 @@
 
 /perf*
 .DS_Store
+.idea/*

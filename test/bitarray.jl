@@ -32,12 +32,12 @@ macro check_bit_operation(ex)
     Expr(:call, :check_bitop_call, nothing, map(esc, ex.args)...)
 end
 
-let t0 = time()
+let t0 = time_ns()
     global timesofar
     function timesofar(str)
         return # no-op, comment to see timings
-        t1 = time()
-        println(str, ": ", t1-t0, " seconds")
+        t1 = time_ns()
+        println(str, ": ", (t1-t0)/1e9, " seconds")
         t0 = t1
     end
 end
@@ -200,6 +200,12 @@ timesofar("utils")
         end
     end
 
+    @testset "constructor from NTuple" begin
+        for nt in ((true, false, false), NTuple{0,Bool}(), (false,), (true,))
+            @test BitVector(nt) == BitVector(collect(nt))
+        end
+    end
+
     @testset "one" begin
         @test Array(one(BitMatrix(undef, 2,2))) == Matrix(I, 2, 2)
         @test_throws DimensionMismatch one(BitMatrix(undef, 2,3))
@@ -213,6 +219,10 @@ timesofar("utils")
     # issue #24062
     @test_throws InexactError BitArray([0, 1, 2, 3])
     @test_throws MethodError BitArray([0, ""])
+
+    # construction with poor inference
+    f(c) = BitVector(c[1])
+    @test @inferred(f(AbstractVector[[0,1]])) == [false, true]
 end
 
 timesofar("constructors")
@@ -553,8 +563,17 @@ timesofar("indexing")
         b2 = bitrand(m2)
         i1 = Array(b1)
         i2 = Array(b2)
+        # Append from array
         @test isequal(Array(append!(b1, b2)), append!(i1, i2))
         @test isequal(Array(append!(b1, i2)), append!(i1, b2))
+        @test bitcheck(b1)
+        # Append from HasLength iterator
+        @test isequal(Array(append!(b1, (v for v in b2))), append!(i1, i2))
+        @test isequal(Array(append!(b1, (v for v in i2))), append!(i1, b2))
+        @test bitcheck(b1)
+        # Append from SizeUnknown iterator
+        @test isequal(Array(append!(b1, (v for v in b2 if true))), append!(i1, i2))
+        @test isequal(Array(append!(b1, (v for v in i2 if true))), append!(i1, b2))
         @test bitcheck(b1)
     end
 
@@ -651,6 +670,8 @@ timesofar("indexing")
     b1 = bitrand(v1)
     @test_throws ArgumentError deleteat!(b1, [1, 1, 2])
     @test_throws BoundsError deleteat!(b1, [1, length(b1)+1])
+    @test_throws BoundsError deleteat!(b1, [length(b1)+rand(1:100)])
+    @test_throws BoundsError deleteat!(bitrand(1), [-1, 0, 1])
 
     @test_throws BoundsError deleteat!(BitVector(), 1)
     @test_throws BoundsError deleteat!(BitVector(), [1])
@@ -1291,6 +1312,21 @@ timesofar("find")
     @test findnext(x->false, b1, 11) == nothing
     @test_throws BoundsError findprev(x->true, b1, 11)
     @test_throws BoundsError findnext(x->true, b1, -1)
+
+    @testset "issue 32568" for T = (UInt, BigInt)
+        for x = (1, 2)
+            @test findnext(evens, T(x)) isa keytype(evens)
+            @test findnext(iseven, evens, T(x)) isa keytype(evens)
+            @test findnext(isequal(true), evens, T(x)) isa keytype(evens)
+            @test findnext(isequal(false), evens, T(x)) isa keytype(evens)
+        end
+        for x = (3, 4)
+            @test findprev(evens, T(x)) isa keytype(evens)
+            @test findprev(iseven, evens, T(x)) isa keytype(evens)
+            @test findprev(isequal(true), evens, T(x)) isa keytype(evens)
+            @test findprev(isequal(false), evens, T(x)) isa keytype(evens)
+        end
+    end
 
     for l = [1, 63, 64, 65, 127, 128, 129]
         f = falses(l)

@@ -34,8 +34,8 @@ function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
     p = pointer(a)
-    q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
-    q == C_NULL ? 0 : Int(q-p+1)
+    q = GC.@preserve a ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
+    return q == C_NULL ? 0 : Int(q-p+1)
 end
 
 function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
@@ -74,8 +74,8 @@ function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer =
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
     p = pointer(a)
-    q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
-    q == C_NULL ? 0 : Int(q-p+1)
+    q = GC.@preserve a ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
+    return q == C_NULL ? 0 : Int(q-p+1)
 end
 
 function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
@@ -88,7 +88,7 @@ end
 
 """
     findfirst(pattern::AbstractString, string::AbstractString)
-    findfirst(pattern::Regex, string::String)
+    findfirst(pattern::AbstractPattern, string::String)
 
 Find the first occurrence of `pattern` in `string`. Equivalent to
 [`findnext(pattern, string, firstindex(s))`](@ref).
@@ -104,18 +104,39 @@ julia> findfirst("Julia", "JuliaLang")
 findfirst(pattern::AbstractString, string::AbstractString) =
     findnext(pattern, string, firstindex(string))
 
+"""
+    findfirst(ch::AbstractChar, string::AbstractString)
+
+Find the first occurrence of character `ch` in `string`.
+
+!!! compat "Julia 1.3"
+    This method requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> findfirst('a', "happy")
+2
+
+julia> findfirst('z', "happy") === nothing
+true
+```
+"""
+findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
+
 # AbstractString implementation of the generic findnext interface
 function findnext(testf::Function, s::AbstractString, i::Integer)
+    i = Int(i)
     z = ncodeunits(s) + 1
-    1 ≤ i ≤ z || throw(BoundsError(s, i))
+    1 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
-    for (j, d) in pairs(SubString(s, i))
-        if testf(d)
-            return i + j - 1
-        end
+    e = lastindex(s)
+    while i <= e
+        testf(@inbounds s[i]) && return i
+        i = @inbounds nextind(s, i)
     end
     return nothing
 end
+
 
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 
@@ -123,14 +144,14 @@ function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s,lastindex(s)) ? i :
+        return 1 <= i <= nextind(s,lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
     t1, trest = Iterators.peel(t)
     while true
         i = findnext(isequal(t1),s,i)
         if i === nothing return 0 end
-        ii = nextind(s, i)
+        ii = nextind(s, i)::Int
         a = Iterators.Stateful(trest)
         matched = all(splat(==), zip(SubString(s, ii), a))
         (isempty(a) && matched) && return i
@@ -229,7 +250,7 @@ end
 
 """
     findnext(pattern::AbstractString, string::AbstractString, start::Integer)
-    findnext(pattern::Regex, string::String, start::Integer)
+    findnext(pattern::AbstractPattern, string::String, start::Integer)
 
 Find the next occurrence of `pattern` in `string` starting at position `start`.
 `pattern` can be either a string, or a regular expression, in which case `string`
@@ -253,7 +274,27 @@ julia> findnext("Lang", "JuliaLang", 2)
 6:9
 ```
 """
-findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
+findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, Int(i))
+
+"""
+    findnext(ch::AbstractChar, string::AbstractString, start::Integer)
+
+Find the next occurrence of character `ch` in `string` starting at position `start`.
+
+!!! compat "Julia 1.3"
+    This method requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> findnext('z', "Hello to the world", 1) === nothing
+true
+
+julia> findnext('o', "Hello to the world", 6)
+8
+```
+"""
+findnext(ch::AbstractChar, string::AbstractString, ind::Integer) =
+    findnext(==(ch), string, ind)
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
@@ -273,41 +314,58 @@ julia> findfirst("Julia", "JuliaLang")
 findlast(pattern::AbstractString, string::AbstractString) =
     findprev(pattern, string, lastindex(string))
 
+"""
+    findlast(ch::AbstractChar, string::AbstractString)
+
+Find the last occurrence of character `ch` in `string`.
+
+!!! compat "Julia 1.3"
+    This method requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> findlast('p', "happy")
+4
+
+julia> findlast('z', "happy") === nothing
+true
+```
+"""
+findlast(ch::AbstractChar, string::AbstractString) = findlast(==(ch), string)
+
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
-    if i < 1
-        return i == 0 ? nothing : throw(BoundsError(s, i))
+    i = Int(i)
+    z = ncodeunits(s) + 1
+    0 ≤ i ≤ z || throw(BoundsError(s, i))
+    i == z && return nothing
+    @inbounds i == 0 || isvalid(s, i) || string_index_err(s, i)
+    while i >= 1
+        testf(@inbounds s[i]) && return i
+        i = @inbounds prevind(s, i)
     end
-    n = ncodeunits(s)
-    if i > n
-        return i == n+1 ? nothing : throw(BoundsError(s, i))
-    end
-    # r[reverseind(r,i)] == reverse(r)[i] == s[i]
-    # s[reverseind(s,j)] == reverse(s)[j] == r[j]
-    r = reverse(s)
-    j = findnext(testf, r, reverseind(r, i))
-    j === nothing ? nothing : reverseind(s, j)
+    return nothing
 end
 
 function _rsearchindex(s::AbstractString,
                        t::Union{AbstractString,AbstractChar,Int8,UInt8},
                        i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s, lastindex(s)) ? i :
+        return 1 <= i <= nextind(s, lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
     t1, trest = Iterators.peel(Iterators.reverse(t))
     while true
         i = findprev(isequal(t1), s, i)
         i === nothing && return 0
-        ii = prevind(s, i)
+        ii = prevind(s, i)::Int
         a = Iterators.Stateful(trest)
         b = Iterators.Stateful(Iterators.reverse(
             pairs(SubString(s, 1, ii))))
         matched = all(splat(==), zip(a, (x[2] for x in b)))
         if matched && isempty(a)
             isempty(b) && return firstindex(s)
-            return nextind(s, popfirst!(b)[1])
+            return nextind(s, popfirst!(b)[1])::Int
         end
         i = ii
     end
@@ -426,10 +484,30 @@ julia> findprev("Julia", "JuliaLang", 6)
 1:5
 ```
 """
-findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
+findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, Int(i))
 
 """
-    occursin(needle::Union{AbstractString,Regex,AbstractChar}, haystack::AbstractString)
+    findprev(ch::AbstractChar, string::AbstractString, start::Integer)
+
+Find the previous occurrence of character `ch` in `string` starting at position `start`.
+
+!!! compat "Julia 1.3"
+    This method requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> findprev('z', "Hello to the world", 18) === nothing
+true
+
+julia> findprev('o', "Hello to the world", 18)
+15
+```
+"""
+findprev(ch::AbstractChar, string::AbstractString, ind::Integer) =
+    findprev(==(ch), string, ind)
+
+"""
+    occursin(needle::Union{AbstractString,AbstractPattern,AbstractChar}, haystack::AbstractString)
 
 Determine whether the first argument is a substring of the second. If `needle`
 is a regular expression, checks whether `haystack` contains a match.
@@ -448,6 +526,8 @@ true
 julia> occursin(r"a.a", "abba")
 false
 ```
+
+See also: [`contains`](@ref).
 """
 occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
     _searchindex(haystack, needle, firstindex(haystack)) != 0

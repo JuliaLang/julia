@@ -169,6 +169,12 @@ int main()
         checked_eval_string("LocalModule.myapp()");
     }
 
+    {
+        // Main.include and Main.eval exist (#28825)
+        checked_eval_string("include(\"include_and_eval.jl\")");
+        checked_eval_string("f28825()");
+    }
+
     int ret = 0;
     jl_atexit_hook(ret);
     return ret;

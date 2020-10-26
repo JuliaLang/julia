@@ -43,6 +43,28 @@ for str in [astr, GenericString(astr)]
     @test_throws BoundsError findnext(isequal('a'), str, nextind(str,lastindex(str))+1)
 end
 
+for str in [astr, GenericString(astr)]
+    @test_throws BoundsError findnext('z', str, 0)
+    @test_throws BoundsError findnext('∀', str, 0)
+    @test findfirst('x', str) == nothing
+    @test findfirst('\0', str) == nothing
+    @test findfirst('\u80', str) == nothing
+    @test findfirst('∀', str) == nothing
+    @test findfirst('H', str) == 1
+    @test findfirst('l', str) == 3
+    @test findfirst('e', str) == 2
+    @test findfirst('u', str) == nothing
+    @test findnext('l', str, 4) == 4
+    @test findnext('l', str, 5) == 11
+    @test findnext('l', str, 12) == nothing
+    @test findfirst(',', str) == 6
+    @test findnext(',', str, 7) == nothing
+    @test findfirst('\n', str) == 14
+    @test findnext('\n', str, 15) == nothing
+    @test_throws BoundsError findnext('ε', str, nextind(str,lastindex(str))+1)
+    @test_throws BoundsError findnext('a', str, nextind(str,lastindex(str))+1)
+end
+
 # ascii backward search
 for str in [astr]
     @test findlast(isequal('x'), str) == nothing
@@ -59,6 +81,23 @@ for str in [astr]
     @test findlast(isequal(','), str) == 6
     @test findprev(isequal(','), str, 5) == nothing
     @test findlast(isequal('\n'), str) == 14
+end
+
+for str in [astr]
+    @test findlast('x', str) == nothing
+    @test findlast('\0', str) == nothing
+    @test findlast('\u80', str) == nothing
+    @test findlast('∀', str) == nothing
+    @test findlast('H', str) == 1
+    @test findprev('H', str, 0) == nothing
+    @test findlast('l', str) == 11
+    @test findprev('l', str, 5) == 4
+    @test findprev('l', str, 4) == 4
+    @test findprev('l', str, 3) == 3
+    @test findprev('l', str, 2) == nothing
+    @test findlast(',', str) == 6
+    @test findprev(',', str, 5) == nothing
+    @test findlast('\n', str) == 14
 end
 
 # utf-8 forward search
@@ -208,7 +247,7 @@ end
 for i = 1:lastindex(u8str)
     @test findnext("", u8str, i) == i:i-1
 end
-@test findfirst("", "") == 1:0
+@test findfirst("", "") === 1:0
 
 # string backward search with a zero-char string
 for i = 1:lastindex(astr)
@@ -217,7 +256,7 @@ end
 for i = 1:lastindex(u8str)
     @test findprev("", u8str, i) == i:i-1
 end
-@test findlast("", "") == 1:0
+@test findlast("", "") === 1:0
 
 # string forward search with a zero-char regex
 for i = 1:lastindex(astr)
@@ -317,6 +356,13 @@ end
 @test occursin("o", "foo")
 @test occursin('o', "foo")
 
+# contains
+@test contains("foo", "o")
+@test contains("foo", 'o')
+# contains in curried form
+@test contains("o")("foo")
+@test contains('o')("foo")
+
 @test_throws ErrorException "ab" ∈ "abc"
 
 # issue #15723
@@ -333,3 +379,32 @@ end
 s_18109 = "fooα🐨βcd3"
 @test findlast(isequal('o'), s_18109) == 3
 @test findfirst(isequal('d'), s_18109) == 13
+
+# findall (issue #31788)
+@testset "findall" begin
+    @test findall("fooo", "foo") == UnitRange{Int}[]
+    @test findall("ing", "Spinning laughing dancing") == [6:8, 15:17, 23:25]
+    @test all(findall("", "foo") .=== [1:0, 2:1, 3:2, 4:3]) # use === to compare empty ranges
+    @test findall("αβ", "blαh blαβ blαββy") == findall("αβ", "blαh blαβ blαββy", overlap=true) == [9:11, 16:18]
+    @test findall("aa", "aaaaaa") == [1:2, 3:4, 5:6]
+    @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
+end
+
+# issue 32568
+for T = (UInt, BigInt)
+    for x = (4, 5)
+        @test eltype(findnext(r"l", astr, T(x))) == Int
+        @test findnext(isequal('l'), astr, T(x)) isa Int
+        @test findprev(isequal('l'), astr, T(x)) isa Int
+        @test findnext('l', astr, T(x)) isa Int
+        @test findprev('l', astr, T(x)) isa Int
+    end
+    for x = (5, 6)
+        @test eltype(findprev(",b", "foo,bar,baz", T(x))) == Int
+    end
+    for x = (7, 8)
+        @test eltype(findnext(",b", "foo,bar,baz", T(x))) == Int
+        @test findnext(isletter, astr, T(x)) isa Int
+        @test findprev(isletter, astr, T(x)) isa Int
+    end
+end

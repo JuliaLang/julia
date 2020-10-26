@@ -1,10 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #include "llvm-version.h"
 
 #define DEBUG_TYPE "lower_simd_loop"
-#if JL_LLVM_VERSION < 70000
-#define LLVM_DEBUG DEBUG
-#endif
 
 // This file defines a LLVM pass that:
 // 1. Set's loop information in form of metadata
@@ -27,8 +25,6 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/Support/Debug.h>
-
-#include <cstdio>
 
 #include "julia_assert.h"
 

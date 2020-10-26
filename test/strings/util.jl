@@ -41,6 +41,9 @@
     @test rpad("αβ", 8, "¹₂³") == "αβ¹₂³¹₂³"
     @test lpad("αβ", 9, "¹₂³") == "¹₂³¹₂³¹αβ"
     @test rpad("αβ", 9, "¹₂³") == "αβ¹₂³¹₂³¹"
+    # Issue #32160 (unsigned underflow in lpad/rpad)
+    @test lpad("xx", UInt(1), " ") == "xx"
+    @test rpad("xx", UInt(1), " ") == "xx"
 end
 
 # string manipulation
@@ -293,6 +296,9 @@ end
     @test replace("a", 'a' => typeof) == "Char"
     @test replace("a", in("a") => typeof) == "Char"
     @test replace("a", ['a'] => typeof) == "Char"
+
+    # Issue 36953
+    @test replace("abc", "" => "_", count=1) == "_abc"
 
 end
 

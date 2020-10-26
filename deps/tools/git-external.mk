@@ -22,6 +22,8 @@
 #
 define git-external
 include $$(SRCDIR)/$1.version
+$2_SHA1 := $$(strip $$($2_SHA1))
+$2_BRANCH := $$(strip $$($2_BRANCH))
 
 ifneq (,$$(filter $1 1,$$(DEPS_GIT)))
 $2_SRC_DIR := $1

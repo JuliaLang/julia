@@ -11,7 +11,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
-export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d, BroadcastFunction
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
@@ -166,7 +166,7 @@ BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
 # methods that instead specialize on `BroadcastStyle`,
 #    copyto!(dest::AbstractArray, bc::Broadcasted{MyStyle})
 
-struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple}
+struct Broadcasted{Style<:Union{Nothing,BroadcastStyle}, Axes, F, Args<:Tuple} <: Base.AbstractBroadcasted
     f::F
     args::Args
     axes::Axes          # the axes of the resulting object (may be bigger than implied by `args` if this is nested inside a larger `Broadcasted`)
@@ -193,20 +193,24 @@ function Base.show(io::IO, bc::Broadcasted{Style}) where {Style}
 end
 
 ## Allocating the output container
-Base.similar(bc::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}) where {N,ElType} =
-    similar(Array{ElType}, axes(bc))
-Base.similar(bc::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}) where N =
-    similar(BitArray, axes(bc))
+Base.similar(bc::Broadcasted, ::Type{T}) where {T} = similar(bc, T, axes(bc))
+Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}, dims) where {N,ElType} =
+    similar(Array{ElType}, dims)
+Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}, dims) where N =
+    similar(BitArray, dims)
 # In cases of conflict we fall back on Array
-Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{ElType}) where ElType =
-    similar(Array{ElType}, axes(bc))
-Base.similar(bc::Broadcasted{ArrayConflict}, ::Type{Bool}) =
-    similar(BitArray, axes(bc))
+Base.similar(::Broadcasted{ArrayConflict}, ::Type{ElType}, dims) where ElType =
+    similar(Array{ElType}, dims)
+Base.similar(::Broadcasted{ArrayConflict}, ::Type{Bool}, dims) =
+    similar(BitArray, dims)
 
 @inline Base.axes(bc::Broadcasted) = _axes(bc, bc.axes)
 _axes(::Broadcasted, axes::Tuple) = axes
 @inline _axes(bc::Broadcasted, ::Nothing)  = combine_axes(bc.args...)
 _axes(bc::Broadcasted{<:AbstractArrayStyle{0}}, ::Nothing) = ()
+
+@inline Base.axes(bc::Broadcasted{<:Any, <:NTuple{N}}, d::Integer) where N =
+    d <= N ? axes(bc)[d] : OneTo(1)
 
 BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
 BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
@@ -218,6 +222,12 @@ argtype(bc::Broadcasted) = argtype(typeof(bc))
 @inline Base.eachindex(bc::Broadcasted) = _eachindex(axes(bc))
 _eachindex(t::Tuple{Any}) = t[1]
 _eachindex(t::Tuple) = CartesianIndices(t)
+
+Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
+Base.IndexStyle(::Type{<:Broadcasted{<:Any,<:Tuple{Any}}}) = IndexLinear()
+Base.IndexStyle(::Type{<:Broadcasted{<:Any}}) = IndexCartesian()
+
+Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = LinearIndices(axes(bc))::LinearIndices{1}
 
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
@@ -260,8 +270,13 @@ of the `Broadcasted` object empty (populated with [`nothing`](@ref)).
     end
     return Broadcasted{Style}(bc.f, bc.args, axes)
 end
-instantiate(bc::Broadcasted{<:Union{AbstractArrayStyle{0}, Style{Tuple}}}) = bc
-
+instantiate(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc
+# Tuples don't need axes, but when they have axes (for .= assignment), we need to check them (#33020)
+instantiate(bc::Broadcasted{Style{Tuple}, Nothing}) = bc
+function instantiate(bc::Broadcasted{Style{Tuple}})
+    check_broadcast_axes(bc.axes, bc.args...)
+    return bc
+end
 ## Flattening
 
 """
@@ -466,6 +481,7 @@ julia> Broadcast.combine_axes(1, 1, 1)
 ```
 """
 @inline combine_axes(A, B...) = broadcast_shape(axes(A), combine_axes(B...))
+@inline combine_axes(A, B) = broadcast_shape(axes(A), axes(B))
 combine_axes(A) = axes(A)
 
 # shape (i.e., tuple-of-indices) inputs
@@ -479,10 +495,10 @@ function _bcs(shape::Tuple, newshape::Tuple)
     return (_bcs1(shape[1], newshape[1]), _bcs(tail(shape), tail(newshape))...)
 end
 # _bcs1 handles the logic for a single dimension
-_bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size"))))
-_bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
+_bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $b"))))
+_bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $(length(b))")))
 _bcs1(a, b::Integer) = _bcs1(b, a)
-_bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : (_bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
+_bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : (_bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $(length(a)) and $(length(b))")))
 # _bcsm tests whether the second index is consistent with the first
 _bcsm(a, b) = a == b || length(b) == 1
 _bcsm(a, b::Number) = b == 1
@@ -491,6 +507,7 @@ _bcsm(a::Number, b::Number) = a == b || b == 1
 # (We may not want to define general promotion rules between, say, OneTo and Slice, but if
 #  we get here we know the axes are at least consistent for the purposes of broadcasting)
 axistype(a::T, b::T) where T = a
+axistype(a::OneTo, b::OneTo) = OneTo{Int}(a)
 axistype(a, b) = UnitRange{Int}(a)
 
 ## Check that all arguments are broadcast compatible with shape
@@ -503,7 +520,7 @@ function check_broadcast_shape(shp, Ashp::Tuple)
     _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
     check_broadcast_shape(tail(shp), tail(Ashp))
 end
-check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
+@inline check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
 # comparing many inputs
 @inline function check_broadcast_axes(shp, A, As...)
     check_broadcast_axes(shp, A)
@@ -550,14 +567,20 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 @inline function _newindexer(indsA::Tuple)
     ind1 = indsA[1]
     keep, Idefault = _newindexer(tail(indsA))
-    (Base.length(ind1)!=1, keep...), (first(ind1), Idefault...)
+    (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
 @inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
 end
-Base.@propagate_inbounds Base.getindex(bc::Broadcasted, i1::Integer, i2::Integer, I::Integer...) = bc[CartesianIndex((i1, i2, I...))]
+Base.@propagate_inbounds Base.getindex(
+    bc::Broadcasted,
+    i1::Union{Integer,CartesianIndex},
+    i2::Union{Integer,CartesianIndex},
+    I::Union{Integer,CartesianIndex}...,
+) =
+    bc[CartesianIndex((i1, i2, I...))]
 Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
 
 @inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
@@ -640,7 +663,7 @@ Further, if `x` defines its own [`BroadcastStyle`](@ref), then it must define it
 # Examples
 ```jldoctest
 julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already support axes and indexing
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -652,7 +675,7 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,Regex}) = Ref(x)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
@@ -701,7 +724,7 @@ single broadcast loop.
 # Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -709,7 +732,7 @@ julia> A = [1, 2, 3, 4, 5]
  5
 
 julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
  1   2
  3   4
  5   6
@@ -717,7 +740,7 @@ julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
  9  10
 
 julia> broadcast(+, A, B)
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
   2   3
   5   6
   8   9
@@ -725,7 +748,7 @@ julia> broadcast(+, A, B)
  14  15
 
 julia> parse.(Int, ["1", "2"])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -736,12 +759,12 @@ julia> broadcast(+, 1.0, (0, -2.0))
 (1.0, -1.0)
 
 julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
-2-element Array{Array{Int64,1},1}:
+2-element Vector{Vector{Int64}}:
  [1, 1]
  [2, 2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
-4-element Array{String,1}:
+4-element Vector{String}:
  "one: 1"
  "two: 2"
  "three: 3"
@@ -771,24 +794,40 @@ julia> A = [1.0; 0.0]; B = [0.0; 0.0];
 julia> broadcast!(+, B, A, (0, -2.0));
 
 julia> B
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   1.0
  -2.0
 
 julia> A
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  1.0
  0.0
 
 julia> broadcast!(+, A, A, (0, -2.0));
 
 julia> A
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   1.0
  -2.0
 ```
 """
 broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = (materialize!(dest, broadcasted(f, As...)); dest)
+
+"""
+    broadcast_preserving_zero_d(f, As...)
+
+Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it returns a 0-dimensional container
+
+Broadcast automatically unwraps zero-dimensional results to be just the element itself,
+but in some cases it is necessary to always return a container — even in the 0-dimensional case.
+"""
+@inline function broadcast_preserving_zero_d(f, As...)
+    bc = broadcasted(f, As...)
+    r = materialize(bc)
+    return length(axes(bc)) == 0 ? fill!(similar(bc, typeof(r)), r) : r
+end
+@inline broadcast_preserving_zero_d(f) = fill(f())
+@inline broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
 
 """
     Broadcast.materialize(bc)
@@ -797,11 +836,16 @@ Take a lazy `Broadcasted` object and compute the result
 """
 @inline materialize(bc::Broadcasted) = copy(instantiate(bc))
 materialize(x) = x
-@inline function materialize!(dest, bc::Broadcasted{Style}) where {Style}
-    return copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
-end
+
 @inline function materialize!(dest, x)
-    return copyto!(dest, instantiate(Broadcasted(identity, (x,), axes(dest))))
+    return materialize!(dest, instantiate(Broadcasted(identity, (x,), axes(dest))))
+end
+
+@inline function materialize!(dest, bc::Broadcasted{Style}) where {Style}
+    return materialize!(combine_styles(dest, bc), dest, bc)
+end
+@inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{Style}) where {Style}
+    return copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
 end
 
 ## general `copy` methods
@@ -895,22 +939,22 @@ end
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
     tmp = Vector{Bool}(undef, bitcache_size)
     destc = dest.chunks
-    ind = cind = 1
+    cind = 1
     bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
-        @inbounds tmp[ind] = bc′[I]
-        ind += 1
-        if ind > bitcache_size
-            dumpbitcache(destc, cind, tmp)
-            cind += bitcache_chunks
-            ind = 1
+    for P in Iterators.partition(eachindex(bc′), bitcache_size)
+        ind = 1
+        @simd for I in P
+            @inbounds tmp[ind] = bc′[I]
+            ind += 1
         end
-    end
-    if ind > 1
-        @inbounds tmp[ind:bitcache_size] .= false
+        @simd for i in ind:bitcache_size
+            @inbounds tmp[i] = false
+        end
         dumpbitcache(destc, cind, tmp)
+        cind += bitcache_chunks
     end
     return dest
 end
@@ -985,7 +1029,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
         else
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
-            newdest = Base.similar(dest, promote_typejoin(T, typeof(val)))
+            newdest = Base.similar(bc, promote_typejoin(T, typeof(val)))
             return restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
         end
         count += 1
@@ -1068,7 +1112,7 @@ broadcasted(::typeof(+), j::CartesianIndex{N}, I::CartesianIndices{N}) where N =
 broadcasted(::typeof(-), I::CartesianIndices{N}, j::CartesianIndex{N}) where N =
     CartesianIndices(map((rng, offset)->rng .- offset, I.indices, Tuple(j)))
 function broadcasted(::typeof(-), j::CartesianIndex{N}, I::CartesianIndices{N}) where N
-    diffrange(offset, rng) = range(offset-last(rng), length=length(rng))
+    diffrange(offset, rng) = range(offset-last(rng), length=length(rng), step=step(rng))
     Iterators.reverse(CartesianIndices(map(diffrange, Tuple(j), I.indices)))
 end
 
@@ -1123,36 +1167,39 @@ Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
 # don't add dots to dot operators
 dottable(x::Symbol) = (!isoperator(x) || first(string(x)) != '.' || x === :..) && x !== :(:)
-dottable(x::Expr) = x.head != :$
+dottable(x::Expr) = x.head !== :$
 undot(x) = x
 function undot(x::Expr)
-    if x.head == :.=
+    if x.head === :.=
         Expr(:(=), x.args...)
-    elseif x.head == :block # occurs in for x=..., y=...
-        Expr(:block, map(undot, x.args)...)
+    elseif x.head === :block # occurs in for x=..., y=...
+        Expr(:block, Base.mapany(undot, x.args)...)
     else
         x
     end
 end
 __dot__(x) = x
 function __dot__(x::Expr)
-    dotargs = map(__dot__, x.args)
-    if x.head == :call && dottable(x.args[1])
+    dotargs = Base.mapany(__dot__, x.args)
+    if x.head === :call && dottable(x.args[1])
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
-    elseif x.head == :comparison
+    elseif x.head === :comparison
         Expr(:comparison, (iseven(i) && dottable(arg) && arg isa Symbol && isoperator(arg) ?
                                Symbol('.', arg) : arg for (i, arg) in pairs(dotargs))...)
-    elseif x.head == :$
+    elseif x.head === :$
         x.args[1]
-    elseif x.head == :let # don't add dots to `let x=...` assignments
+    elseif x.head === :let # don't add dots to `let x=...` assignments
         Expr(:let, undot(dotargs[1]), dotargs[2])
-    elseif x.head == :for # don't add dots to for x=... assignments
+    elseif x.head === :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
-    elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
+    elseif (x.head === :(=) || x.head === :function || x.head === :macro) &&
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])
+    elseif x.head === :(<:) || x.head === :(>:)
+        tmp = x.head === :(<:) ? :.<: : :.>:
+        Expr(:call, tmp, dotargs...)
     else
-        if x.head == :&& || x.head == :||
+        if x.head === :&& || x.head === :||
             error("""
                 Using `&&` and `||` is disallowed in `@.` expressions.
                 Use `&` or `|` for elementwise logical operations.
@@ -1185,7 +1232,7 @@ If you want to *avoid* adding dots for selected function calls in
 julia> x = 1.0:3.0; y = similar(x);
 
 julia> @. y = x + 3 * sin(x)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  3.5244129544236893
  4.727892280477045
  3.4233600241796016
@@ -1216,5 +1263,45 @@ end
     broadcasted(combine_styles(arg1′, arg2′, args′...), f, arg1′, arg2′, args′...)
 end
 @inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
+
+"""
+    BroadcastFunction{F} <: Function
+
+Represents the "dotted" version of an operator, which broadcasts the operator over its
+arguments, so `BroadcastFunction(op)` is functionally equivalent to `(x...) -> (op).(x...)`.
+
+Can be created by just passing an operator preceded by a dot to a higher-order function.
+
+# Examples
+```jldoctest
+julia> a = [[1 3; 2 4], [5 7; 6 8]];
+
+julia> b = [[9 11; 10 12], [13 15; 14 16]];
+
+julia> map(.*, a, b)
+2-element Vector{Matrix{Int64}}:
+ [9 33; 20 48]
+ [65 105; 84 128]
+
+julia> Base.BroadcastFunction(+)(a, b) == a .+ b
+true
+```
+
+!!! compat "Julia 1.6"
+    `BroadcastFunction` and the standalone `.op` syntax are available as of Julia 1.6.
+"""
+struct BroadcastFunction{F} <: Function
+    f::F
+end
+
+@inline (op::BroadcastFunction)(x...; kwargs...) = op.f.(x...; kwargs...)
+
+function Base.show(io::IO, op::BroadcastFunction)
+    print(io, BroadcastFunction, '(')
+    show(io, op.f)
+    print(io, ')')
+    nothing
+end
+Base.show(io::IO, ::MIME"text/plain", op::BroadcastFunction) = show(io, op)
 
 end # module

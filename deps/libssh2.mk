@@ -29,17 +29,7 @@ ifeq ($(LIBSSH2_ENABLE_TESTS), 0)
 LIBSSH2_OPTS += -DBUILD_TESTING=OFF
 endif
 
-$(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
-	cd $(SRCCACHE)/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
-	echo 1 > $@
-
-# Patch submitted upstream: https://github.com/libssh2/libssh2/pull/148
-# Remove the patch here once we're using a version of libssh2 that includes the upstream patch
-$(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
-	cd $(SRCCACHE)/$(LIBSSH2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libssh2-netinet-in.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
@@ -74,7 +64,7 @@ check-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked
 
 else # USE_BINARYBUILDER_LIBSSH2
 
-LIBSSH2_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibSSH2-v$(LIBSSH2_VER)-$(LIBSSH2_BB_REL)
+LIBSSH2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibSSH2_jll.jl/releases/download/LibSSH2-v$(LIBSSH2_VER)+$(LIBSSH2_BB_REL)
 LIBSSH2_BB_NAME := LibSSH2.v$(LIBSSH2_VER)
 
 $(eval $(call bb-install,libssh2,LIBSSH2,false))

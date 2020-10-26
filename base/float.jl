@@ -47,14 +47,48 @@ A not-a-number value of type [`Float64`](@ref).
 """
 NaN, NaN64
 
-## conversions to floating-point ##
-Float16(x::Integer) = convert(Float16, convert(Float32, x))
-for t in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
-    @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float16
-end
-promote_rule(::Type{Float16}, ::Type{Bool}) = Float16
+# bit patterns
+reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64, x)
+reinterpret(::Type{Unsigned}, x::Float32) = reinterpret(UInt32, x)
+reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16, x)
+reinterpret(::Type{Signed}, x::Float64) = reinterpret(Int64, x)
+reinterpret(::Type{Signed}, x::Float32) = reinterpret(Int32, x)
+reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16, x)
 
-for t1 in (Float32, Float64)
+sign_mask(::Type{Float64}) =        0x8000_0000_0000_0000
+exponent_mask(::Type{Float64}) =    0x7ff0_0000_0000_0000
+exponent_one(::Type{Float64}) =     0x3ff0_0000_0000_0000
+exponent_half(::Type{Float64}) =    0x3fe0_0000_0000_0000
+significand_mask(::Type{Float64}) = 0x000f_ffff_ffff_ffff
+
+sign_mask(::Type{Float32}) =        0x8000_0000
+exponent_mask(::Type{Float32}) =    0x7f80_0000
+exponent_one(::Type{Float32}) =     0x3f80_0000
+exponent_half(::Type{Float32}) =    0x3f00_0000
+significand_mask(::Type{Float32}) = 0x007f_ffff
+
+sign_mask(::Type{Float16}) =        0x8000
+exponent_mask(::Type{Float16}) =    0x7c00
+exponent_one(::Type{Float16}) =     0x3c00
+exponent_half(::Type{Float16}) =    0x3800
+significand_mask(::Type{Float16}) = 0x03ff
+
+for T in (Float16, Float32, Float64)
+    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
+    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
+    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
+    # maximum float exponent
+    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
+    # maximum float exponent without bias
+    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
+end
+
+## conversions to floating-point ##
+
+# TODO: deprecate in 2.0
+Float16(x::Integer) = convert(Float16, convert(Float32, x)::Float32)
+
+for t1 in (Float16, Float32, Float64)
     for st in (Int8, Int16, Int32, Int64)
         @eval begin
             (::Type{$t1})(x::($st)) = sitofp($t1, x)
@@ -68,7 +102,6 @@ for t1 in (Float32, Float64)
         end
     end
 end
-(::Type{T})(x::Float16) where {T<:Integer} = T(Float32(x))
 
 Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
@@ -76,6 +109,8 @@ promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
 promote_rule(::Type{Float32}, ::Type{UInt128}) = Float32
 promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
+promote_rule(::Type{Float16}, ::Type{UInt128}) = Float16
+promote_rule(::Type{Float16}, ::Type{Int128}) = Float16
 
 function Float64(x::UInt128)
     x == 0 && return 0.0
@@ -137,117 +172,17 @@ function Float32(x::Int128)
     reinterpret(Float32, s | d + y)
 end
 
-function Float16(val::Float32)
-    f = reinterpret(UInt32, val)
-    if isnan(val)
-        t = 0x8000 ⊻ (0x8000 & ((f >> 0x10) % UInt16))
-        return reinterpret(Float16, t ⊻ ((f >> 0xd) % UInt16))
-    end
-    i = (f >> 23) & 0x1ff + 1
-    @inbounds sh = shifttable[i]
-    f &= 0x007fffff
-    @inbounds h = (basetable[i] + (f >> sh)) % UInt16
-    # round
-    # NOTE: we maybe should ignore NaNs here, but the payload is
-    # getting truncated anyway so "rounding" it might not matter
-    nextbit = (f >> (sh-1)) & 1
-    if nextbit != 0
-        # Round halfway to even or check lower bits
-        if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
-            h += UInt16(1)
-        end
-    end
-    reinterpret(Float16, h)
-end
+# TODO: optimize
+Float16(x::UInt128) = convert(Float16, Float32(x))
+Float16(x::Int128)  = convert(Float16, Float32(x))
 
-function Float32(val::Float16)
-    local ival::UInt32 = reinterpret(UInt16, val)
-    local sign::UInt32 = (ival & 0x8000) >> 15
-    local exp::UInt32  = (ival & 0x7c00) >> 10
-    local sig::UInt32  = (ival & 0x3ff) >> 0
-    local ret::UInt32
-
-    if exp == 0
-        if sig == 0
-            sign = sign << 31
-            ret = sign | exp | sig
-        else
-            n_bit = 1
-            bit = 0x0200
-            while (bit & sig) == 0
-                n_bit = n_bit + 1
-                bit = bit >> 1
-            end
-            sign = sign << 31
-            exp = ((-14 - n_bit + 127) << 23) % UInt32
-            sig = ((sig & (~bit)) << n_bit) << (23 - 10)
-            ret = sign | exp | sig
-        end
-    elseif exp == 0x1f
-        if sig == 0  # Inf
-            if sign == 0
-                ret = 0x7f800000
-            else
-                ret = 0xff800000
-            end
-        else  # NaN
-            ret = 0x7fc00000 | (sign<<31) | (sig<<(23-10))
-        end
-    else
-        sign = sign << 31
-        exp  = ((exp - 15 + 127) << 23) % UInt32
-        sig  = sig << (23 - 10)
-        ret = sign | exp | sig
-    end
-    return reinterpret(Float32, ret)
-end
-
-# Float32 -> Float16 algorithm from:
-#   "Fast Half Float Conversion" by Jeroen van der Zijp
-#   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
-
-let _basetable = Vector{UInt16}(undef, 512),
-    _shifttable = Vector{UInt8}(undef, 512)
-    for i = 0:255
-        e = i - 127
-        if e < -24  # Very small numbers map to zero
-            _basetable[i|0x000+1] = 0x0000
-            _basetable[i|0x100+1] = 0x8000
-            _shifttable[i|0x000+1] = 24
-            _shifttable[i|0x100+1] = 24
-        elseif e < -14  # Small numbers map to denorms
-            _basetable[i|0x000+1] = (0x0400>>(-e-14))
-            _basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
-            _shifttable[i|0x000+1] = -e-1
-            _shifttable[i|0x100+1] = -e-1
-        elseif e <= 15  # Normal numbers just lose precision
-            _basetable[i|0x000+1] = ((e+15)<<10)
-            _basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-            _shifttable[i|0x000+1] = 13
-            _shifttable[i|0x100+1] = 13
-        elseif e < 128  # Large numbers map to Infinity
-            _basetable[i|0x000+1] = 0x7C00
-            _basetable[i|0x100+1] = 0xFC00
-            _shifttable[i|0x000+1] = 24
-            _shifttable[i|0x100+1] = 24
-        else  # Infinity and NaN's stay Infinity and NaN's
-            _basetable[i|0x000+1] = 0x7C00
-            _basetable[i|0x100+1] = 0xFC00
-            _shifttable[i|0x000+1] = 13
-            _shifttable[i|0x100+1] = 13
-        end
-    end
-    global const shifttable = (_shifttable...,)
-    global const basetable = (_basetable...,)
-end
-
-#convert(::Type{Float16}, x::Float32) = fptrunc(Float16, x)
+Float16(x::Float32) = fptrunc(Float16, x)
+Float16(x::Float64) = fptrunc(Float16, x)
 Float32(x::Float64) = fptrunc(Float32, x)
-Float16(x::Float64) = Float16(Float32(x))
 
-#convert(::Type{Float32}, x::Float16) = fpext(Float32, x)
+Float32(x::Float16) = fpext(Float32, x)
 Float64(x::Float32) = fpext(Float64, x)
-Float64(x::Float16) = Float64(Float32(x))
+Float64(x::Float16) = fpext(Float64, x)
 
 AbstractFloat(x::Bool)    = Float64(x)
 AbstractFloat(x::Int8)    = Float64(x)
@@ -279,7 +214,7 @@ Equivalent to `typeof(float(zero(T)))`.
 # Examples
 ```jldoctest
 julia> float(Complex{Int})
-Complex{Float64}
+ComplexF64 (alias for Complex{Float64})
 
 julia> float(Int)
 Float64
@@ -299,14 +234,14 @@ function unsafe_trunc end
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
-        unsafe_trunc(::Type{$Ti}, x::Float16) = unsafe_trunc($Ti, Float32(x))
+        unsafe_trunc(::Type{$Ti}, x::Float16) = fptosi($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float32) = fptosi($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float64) = fptosi($Ti, x)
     end
 end
 for Ti in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
-        unsafe_trunc(::Type{$Ti}, x::Float16) = unsafe_trunc($Ti, Float32(x))
+        unsafe_trunc(::Type{$Ti}, x::Float16) = fptoui($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float32) = fptoui($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float64) = fptoui($Ti, x)
     end
@@ -345,35 +280,33 @@ unsafe_trunc(::Type{Int128}, x::Float16) = unsafe_trunc(Int128, Float32(x))
 
 # matches convert methods
 # also determines floor, ceil, round
+trunc(::Type{Signed}, x::Float16) = trunc(Int,x)
 trunc(::Type{Signed}, x::Float32) = trunc(Int,x)
 trunc(::Type{Signed}, x::Float64) = trunc(Int,x)
+trunc(::Type{Unsigned}, x::Float16) = trunc(UInt,x)
 trunc(::Type{Unsigned}, x::Float32) = trunc(UInt,x)
 trunc(::Type{Unsigned}, x::Float64) = trunc(UInt,x)
+trunc(::Type{Integer}, x::Float16) = trunc(Int,x)
 trunc(::Type{Integer}, x::Float32) = trunc(Int,x)
 trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
-trunc(::Type{T}, x::Float16) where {T<:Integer} = trunc(T, Float32(x))
 
 # fallbacks
 floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
-floor(::Type{T}, x::Float16) where {T<:Integer} = floor(T, Float32(x))
 ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
-ceil(::Type{T}, x::Float16) where {T<:Integer} = ceil(T, Float32(x))
 round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
-round(::Type{T}, x::Float16) where {T<:Integer} = round(T, Float32(x))
 
 round(x::Float64, r::RoundingMode{:ToZero})  = trunc_llvm(x)
 round(x::Float32, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+round(x::Float16, r::RoundingMode{:ToZero})  = trunc_llvm(x)
 round(x::Float64, r::RoundingMode{:Down})    = floor_llvm(x)
 round(x::Float32, r::RoundingMode{:Down})    = floor_llvm(x)
+round(x::Float16, r::RoundingMode{:Down})    = floor_llvm(x)
 round(x::Float64, r::RoundingMode{:Up})      = ceil_llvm(x)
 round(x::Float32, r::RoundingMode{:Up})      = ceil_llvm(x)
+round(x::Float16, r::RoundingMode{:Up})      = ceil_llvm(x)
 round(x::Float64, r::RoundingMode{:Nearest}) = rint_llvm(x)
 round(x::Float32, r::RoundingMode{:Nearest}) = rint_llvm(x)
-
-round(x::Float16, r::RoundingMode{:ToZero}) = Float16(round(Float32(x), r))
-round(x::Float16, r::RoundingMode{:Down}) = Float16(round(Float32(x), r))
-round(x::Float16, r::RoundingMode{:Up}) = Float16(round(Float32(x), r))
-round(x::Float16, r::RoundingMode{:Nearest}) = Float16(round(Float32(x), r))
+round(x::Float16, r::RoundingMode{:Nearest}) = rint_llvm(x)
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
@@ -386,36 +319,30 @@ widen(::Type{Float32}) = Float64
 ## floating point arithmetic ##
 -(x::Float64) = neg_float(x)
 -(x::Float32) = neg_float(x)
--(x::Float16) = reinterpret(Float16, reinterpret(UInt16, x) ⊻ 0x8000)
+-(x::Float16) = neg_float(x)
 
-for op in (:+, :-, :*, :/, :\, :^)
-    @eval ($op)(a::Float16, b::Float16) = Float16(($op)(Float32(a), Float32(b)))
-end
++(x::Float16, y::Float16) = add_float(x, y)
 +(x::Float32, y::Float32) = add_float(x, y)
 +(x::Float64, y::Float64) = add_float(x, y)
+-(x::Float16, y::Float16) = sub_float(x, y)
 -(x::Float32, y::Float32) = sub_float(x, y)
 -(x::Float64, y::Float64) = sub_float(x, y)
+*(x::Float16, y::Float16) = mul_float(x, y)
 *(x::Float32, y::Float32) = mul_float(x, y)
 *(x::Float64, y::Float64) = mul_float(x, y)
+/(x::Float16, y::Float16) = div_float(x, y)
 /(x::Float32, y::Float32) = div_float(x, y)
 /(x::Float64, y::Float64) = div_float(x, y)
 
+muladd(x::Float16, y::Float16, z::Float16) = muladd_float(x, y, z)
 muladd(x::Float32, y::Float32, z::Float32) = muladd_float(x, y, z)
 muladd(x::Float64, y::Float64, z::Float64) = muladd_float(x, y, z)
-function muladd(a::Float16, b::Float16, c::Float16)
-    Float16(muladd(Float32(a), Float32(b), Float32(c)))
-end
 
 # TODO: faster floating point div?
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
 
-for func in (:div,:fld,:cld,:rem,:mod)
-    @eval begin
-        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(b)))
-    end
-end
-
+rem(x::Float16, y::Float16) = rem_float(x, y)
 rem(x::Float32, y::Float32) = rem_float(x, y)
 rem(x::Float64, y::Float64) = rem_float(x, y)
 
@@ -433,33 +360,25 @@ function mod(x::T, y::T) where T<:AbstractFloat
 end
 
 ## floating point comparisons ##
-function ==(x::Float16, y::Float16)
-    ix = reinterpret(UInt16,x)
-    iy = reinterpret(UInt16,y)
-    if (ix|iy)&0x7fff > 0x7c00 #isnan(x) || isnan(y)
-        return false
-    end
-    if (ix|iy)&0x7fff == 0x0000
-        return true
-    end
-    return ix == iy
-end
+==(x::Float16, y::Float16) = eq_float(x, y)
 ==(x::Float32, y::Float32) = eq_float(x, y)
 ==(x::Float64, y::Float64) = eq_float(x, y)
+!=(x::Float16, y::Float16) = ne_float(x, y)
 !=(x::Float32, y::Float32) = ne_float(x, y)
 !=(x::Float64, y::Float64) = ne_float(x, y)
+<( x::Float16, y::Float16) = lt_float(x, y)
 <( x::Float32, y::Float32) = lt_float(x, y)
 <( x::Float64, y::Float64) = lt_float(x, y)
+<=(x::Float16, y::Float16) = le_float(x, y)
 <=(x::Float32, y::Float32) = le_float(x, y)
 <=(x::Float64, y::Float64) = le_float(x, y)
 
+isequal(x::Float16, y::Float16) = fpiseq(x, y)
 isequal(x::Float32, y::Float32) = fpiseq(x, y)
 isequal(x::Float64, y::Float64) = fpiseq(x, y)
+isless( x::Float16, y::Float16) = fpislt(x, y)
 isless( x::Float32, y::Float32) = fpislt(x, y)
 isless( x::Float64, y::Float64) = fpislt(x, y)
-for op in (:<, :<=, :isless)
-    @eval ($op)(a::Float16, b::Float16) = ($op)(Float32(a), Float32(b))
-end
 
 # Exact Float (Tf) vs Integer (Ti) comparisons
 # Assumes:
@@ -475,7 +394,7 @@ end
 #  b. unsafe_convert undefined behaviour if fy == Tf(typemax(Ti))
 #     (but consequently x == fy > y)
 for Ti in (Int64,UInt64,Int128,UInt128)
-    for Tf in (Float32,Float64)
+    for Tf in (Float16,Float32,Float64)
         @eval begin
             function ==(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
@@ -517,35 +436,20 @@ for op in (:(==), :<, :<=)
 end
 
 
-abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16, x) & 0x7fff)
+abs(x::Float16) = abs_float(x)
 abs(x::Float32) = abs_float(x)
 abs(x::Float64) = abs_float(x)
 
 """
     isnan(f) -> Bool
 
-Test whether a floating point number is not a number (NaN).
+Test whether a number value is a NaN, an indeterminate value which is neither an infinity
+nor a finite number ("not a number").
 """
-isnan(x::AbstractFloat) = x != x
-isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
+isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Real) = false
 
-"""
-    isfinite(f) -> Bool
-
-Test whether a number is finite.
-
-# Examples
-```jldoctest
-julia> isfinite(5)
-true
-
-julia> isfinite(NaN32)
-false
-```
-"""
 isfinite(x::AbstractFloat) = x - x == 0
-isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
@@ -572,7 +476,7 @@ hash(x::Float32, h::UInt) = hash(Float64(x), h)
     precision(num::AbstractFloat)
 
 Get the precision of a floating point number, as defined by the effective number of bits in
-the mantissa.
+the significand.
 """
 function precision end
 
@@ -662,7 +566,7 @@ such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then return `x`.
 prevfloat(x::AbstractFloat) = nextfloat(x,-1)
 
 for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
-    for Tf in (Float32, Float64)
+    for Tf in (Float16, Float32, Float64)
         if Ti <: Unsigned || sizeof(Ti) < sizeof(Tf)
             # Here `Tf(typemin(Ti))-1` is exact, so we can compare the lower-bound
             # directly. `Tf(typemax(Ti))+1` is either always exactly representable, or
@@ -718,6 +622,8 @@ function issubnormal(x::T) where {T<:IEEEFloat}
     (y & exponent_mask(T) == 0) & (y & significand_mask(T) != 0)
 end
 
+ispow2(x::AbstractFloat) = !iszero(x) && frexp(x)[1] == 0.5
+
 @eval begin
     typemin(::Type{Float16}) = $(bitcast(Float16, 0xfc00))
     typemax(::Type{Float16}) = $(Inf16)
@@ -743,17 +649,29 @@ end
 end
 
 """
-    floatmin(T)
+    floatmin(T = Float64)
 
-The smallest in absolute value non-subnormal value representable by the given
-floating-point DataType `T`.
+Return the smallest positive normal number representable by the floating-point
+type `T`.
+
+# Examples
+```jldoctest
+julia> floatmin(Float16)
+Float16(6.104e-5)
+
+julia> floatmin(Float32)
+1.1754944f-38
+
+julia> floatmin()
+2.2250738585072014e-308
+```
 """
 floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 """
-    floatmax(T)
+    floatmax(T = Float64)
 
-The highest finite value representable by the given floating-point DataType `T`.
+Return the largest finite number representable by the floating-point type `T`.
 
 # Examples
 ```jldoctest
@@ -762,6 +680,9 @@ Float16(6.55e4)
 
 julia> floatmax(Float32)
 3.4028235f38
+
+julia> floatmax()
+1.7976931348623157e308
 ```
 """
 floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)
@@ -843,36 +764,10 @@ eps(::AbstractFloat)
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::IEEEFloat) = bswap_int(x)
 
-# bit patterns
-reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64, x)
-reinterpret(::Type{Unsigned}, x::Float32) = reinterpret(UInt32, x)
-reinterpret(::Type{Signed}, x::Float64) = reinterpret(Int64, x)
-reinterpret(::Type{Signed}, x::Float32) = reinterpret(Int32, x)
-
-sign_mask(::Type{Float64}) =        0x8000_0000_0000_0000
-exponent_mask(::Type{Float64}) =    0x7ff0_0000_0000_0000
-exponent_one(::Type{Float64}) =     0x3ff0_0000_0000_0000
-exponent_half(::Type{Float64}) =    0x3fe0_0000_0000_0000
-significand_mask(::Type{Float64}) = 0x000f_ffff_ffff_ffff
-
-sign_mask(::Type{Float32}) =        0x8000_0000
-exponent_mask(::Type{Float32}) =    0x7f80_0000
-exponent_one(::Type{Float32}) =     0x3f80_0000
-exponent_half(::Type{Float32}) =    0x3f00_0000
-significand_mask(::Type{Float32}) = 0x007f_ffff
-
-sign_mask(::Type{Float16}) =        0x8000
-exponent_mask(::Type{Float16}) =    0x7c00
-exponent_one(::Type{Float16}) =     0x3c00
-exponent_half(::Type{Float16}) =    0x3800
-significand_mask(::Type{Float16}) = 0x03ff
-
 # integer size of float
 uinttype(::Type{Float64}) = UInt64
 uinttype(::Type{Float32}) = UInt32
 uinttype(::Type{Float16}) = UInt16
-
-Base.iszero(x::Float16) = reinterpret(UInt16, x) & ~sign_mask(Float16) == 0x0000
 
 ## Array operations on floating point numbers ##
 

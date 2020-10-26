@@ -4,13 +4,20 @@
 # structs/constants #
 #####################
 
-# The type of a value might be constant
-struct Const
-    val
-    actual::Bool  # if true, we obtained `val` by actually calling a @pure function
-    Const(@nospecialize(v)) = new(v, false)
-    Const(@nospecialize(v), a::Bool) = new(v, a)
-end
+# N.B.: Const/PartialStruct are defined in Core, to allow them to be used
+# inside the global code cache.
+#
+# # The type of a value might be constant
+# struct Const
+#     val
+# end
+#
+# struct PartialStruct
+#     typ
+#     fields::Vector{Any} # elements are other type lattice members
+# end
+import Core: Const, PartialStruct
+
 
 # The type of this value might be Bool.
 # However, to enable a limited amount of back-propagagation,
@@ -70,14 +77,14 @@ struct StateUpdate
     state::VarTable
 end
 
-struct PartialStruct
-    typ
-    fields::Vector{Any} # elements are other type lattice members
-end
-
 struct NotFound end
 
 const NOT_FOUND = NotFound()
+
+const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStruct}
+==(x::CompilerTypes, y::CompilerTypes) = x === y
+==(x::Type, y::CompilerTypes) = false
+==(x::CompilerTypes, y::Type) = false
 
 #################
 # lattice logic #
@@ -168,6 +175,8 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             return a.instance === b.val
         end
         return false
+    elseif isa(a, PartialTypeVar) && b === TypeVar
+        return true
     elseif !(isa(a, Type) || isa(a, TypeVar)) ||
            !(isa(b, Type) || isa(b, TypeVar))
         return a === b
@@ -209,7 +218,8 @@ end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
-widenconst(@nospecialize(t)) = t
+widenconst(t::Type) = t
+widenconst(t::TypeVar) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 
@@ -227,9 +237,9 @@ end
 
 widenconditional(@nospecialize typ) = typ
 function widenconditional(typ::Conditional)
-    if typ.vtype == Union{}
+    if typ.vtype === Union{}
         return Const(false)
-    elseif typ.elsetype == Union{}
+    elseif typ.elsetype === Union{}
         return Const(true)
     else
         return Bool

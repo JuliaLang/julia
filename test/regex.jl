@@ -46,8 +46,39 @@
     @test_throws ArgumentError match(r"test", GenericString("this is a test"))
     @test_throws ArgumentError findfirst(r"test", GenericString("this is a test"))
 
+    # Issue 27125
+    msg = "#Hello# from Julia"
+    re = r"#(.+)# from (?<name>\w+)"
+    subst = s"FROM: \g<name>\n MESSAGE: \1"
+    @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
+
+    # findall
+    @test findall(r"\w+", "foo bar") == [1:3, 5:7]
+    @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
+    @test all(findall(r"\w*", "foo bar") .=== [1:3, 4:3, 5:7, 8:7]) # use === to compare empty ranges
+    @test all(findall(r"\b", "foo bar") .=== [1:0, 4:3, 5:4, 8:7])  # use === to compare empty ranges
+
+    # count
+    @test count(r"\w+", "foo bar") == 2
+    @test count(r"\w+", "foo bar", overlap=true) == 6
+    @test count(r"\w*", "foo bar") == 4
+    @test count(r"\b", "foo bar") == 4
+
+    # Unnamed subpatterns
+    let m = match(r"(.)(.)(.)", "xyz")
+        @test haskey(m, 1)
+        @test haskey(m, 2)
+        @test haskey(m, 3)
+        @test !haskey(m, 44)
+        @test (m[1], m[2], m[3]) == ("x", "y", "z")
+        @test sprint(show, m) == "RegexMatch(\"xyz\", 1=\"x\", 2=\"y\", 3=\"z\")"
+    end
+
     # Named subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
+        @test haskey(m, :a)
+        @test haskey(m, "b")
+        @test !haskey(m, "foo")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
         @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
     end
@@ -78,7 +109,50 @@
     @test !endswith("abc", r"C")
     @test endswith("abc", r"C"i)
 
+    @testset "multiplication & exponentiation" begin
+        @test *(r"a") == r"a"
+
+        @test r"a" * r"b" == r"(?:a)(?:b)"
+        @test r"a" * "b"  == r"(?:a)\Qb\E"
+        @test r"a" * 'b'  == r"(?:a)\Qb\E"
+        @test "a"  * r"b" == r"\Qa\E(?:b)"
+        @test 'a'  * r"b" == r"\Qa\E(?:b)"
+        for a = (r"a", "a", 'a'),
+            b = (r"b", "b", 'b'),
+            c = (r"c", "c", 'c')
+            a isa Regex || b isa Regex || c isa Regex || continue
+            @test match(a * b * c, "abc") !== nothing
+        end
+        for s = ["thiscat", "thishat", "thatcat", "thathat"]
+            @test match(r"this|that" * r"cat|hat", s) !== nothing
+        end
+
+        @test r"a"i * r"b"i == r"(?:a)(?:b)"i
+        @test r"a"i * "b"   == r"(?:a)\Qb\E"i
+        @test r"a"i * 'b'   == r"(?:a)\Qb\E"i
+        @test "a"   * r"b"i == r"\Qa\E(?:b)"i
+        @test 'a'   * r"b"i == r"\Qa\E(?:b)"i
+
+        @test r"a"i  * r"b"m  == r"(?i:a)(?m:b)"
+        @test r"a"im * r"b"m  == r"(?i:a)(?:b)"m
+        @test r"a"im * r"b"im == r"(?:a)(?:b)"im
+        @test r"a"im * r"b"i  == r"(?m:a)(?:b)"i
+
+        r = r"" * raw"a\Eb|c"
+        @test match(r, raw"a\Eb|c").match == raw"a\Eb|c"
+        @test match(r, raw"c") == nothing
+
+        # error for really incompatible options
+        @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS & ~Base.PCRE.UCP, Base.DEFAULT_MATCH_OPTS)
+        @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS, Base.DEFAULT_MATCH_OPTS & ~Base.PCRE.NO_UTF_CHECK)
+
+        @test r"this|that"^2 == r"(?:this|that){2}"
+    end
+
     # Test that PCRE throws the correct kind of error
     # TODO: Uncomment this once the corresponding change has propagated to CI
     #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
+
+    # test that we can get the error message of negative error codes
+    @test Base.PCRE.err_message(Base.PCRE.ERROR_NOMEMORY) isa String
 end
