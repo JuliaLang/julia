@@ -1567,4 +1567,5 @@ function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
     rmul!(Q*(Y * adjoint(Q)), inv(scale))
 end
 lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
+lyap(A::Adjoint{T,Matrix{T}}, C::Adjoint{T,Matrix{T}}) where T = lyap(Matrix(A), Matrix(C))
 lyap(a::T, c::T) where {T<:Number} = -c/(2a)
