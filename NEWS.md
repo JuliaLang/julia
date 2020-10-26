@@ -114,6 +114,8 @@ New library features
 * New `append!(vector, collections...)` and `prepend!(vector, collections...)` methods accept multiple
   collections to be appended or prepended ([#36227]).
 * The postfix operator `'ᵀ` can now be used as an alias for `transpose` ([#38043]).
+* `keys(io::IO)` has been added, which returns all keys of `io` if `io` is an `IOContext` and an empty
+  `Base.KeySet` otherwise ([#37753]).
 
 Standard library changes
 ------------------------
