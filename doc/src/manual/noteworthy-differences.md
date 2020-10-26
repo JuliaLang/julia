@@ -285,6 +285,9 @@ For users coming to Julia from R, these are some noteworthy differences:
     literals are rounded (and not promoted to the `BigFloat` type) if they can not be exactly represented.
      Floating point literals are closer in behavior to C/C++. Octal (prefixed with `0o`) and binary
     (prefixed with `0b`) literals are also treated as unsigned (or `BigInt` for more than 128 bits).
+  * In Julia, the division operator [`/`](@ref) always returns a floating point number.  To perform
+    integer division, use [`div`](@ref) or [`÷`](@ref). Indexing an array with an expression
+    involving `/` as in `a[i/2]`, will cause an error in Julia.
   * String literals can be delimited with either `"`  or `"""`, `"""` delimited literals can contain
     `"` characters without quoting it like `"\""`. String literals can have values of other variables
     or expressions interpolated into them, indicated by `$variablename` or `$(expression)`, which
