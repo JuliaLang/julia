@@ -247,11 +247,14 @@ function del_clients(pairs::Vector)
     end
 end
 
-const any_gc_flag = Condition()
+const any_gc_flag = Threads.Condition()
 function start_gc_msgs_task()
-    @async while true
-        wait(any_gc_flag)
-        flush_gc_msgs()
+    @async begin
+        lock(any_gc_flag)
+        while true
+            wait(any_gc_flag)
+            flush_gc_msgs()
+        end
     end
 end
 
@@ -262,7 +265,12 @@ function send_del_client(rr)
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (remoteref_id(rr), myid()))
         w.gcflag = true
-        notify(any_gc_flag)
+        lock(any_gc_flag)
+        try
+            notify(any_gc_flag)
+        finally
+            unlock(any_gc_flag)
+        end
     end
 end
 
@@ -290,7 +298,12 @@ function send_add_client(rr::AbstractRemoteRef, i)
         w = worker_from_id(rr.where)
         push!(w.add_msgs, (remoteref_id(rr), i))
         w.gcflag = true
-        notify(any_gc_flag)
+        lock(any_gc_flag)
+        try
+            notify(any_gc_flag)
+        finally
+            unlock(any_gc_flag)
+        end
     end
 end
 
