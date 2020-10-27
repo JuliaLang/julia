@@ -401,7 +401,15 @@ For a complete list of *every* Julia operator's precedence, see the top of this 
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm). Note that some of the operators there are not defined
 in the `Base` module but may be given definitions by standard libraries, packages or user code.
 
-[Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, and also have higher precedence than `^`.
+[Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, with the exception of `^` where they have higher precedence only as the exponent.
+
+```jldoctest
+julia> let x = 3; 2x^2 end
+18
+
+julia> let x = 3; 2^2x end
+64
+```
 
 You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
 
