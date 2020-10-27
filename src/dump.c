@@ -2072,11 +2072,12 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
         }
     }
     JL_CATCH {
-        jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
-        jl_static_show(JL_STDERR, v);
-        jl_printf(JL_STDERR, ":\n");
-        jl_static_show(JL_STDERR, jl_current_exception());
-        jl_printf(JL_STDERR, "\n");
+        jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: error while reinitializing value ");
+        jl_static_show((JL_STREAM*)STDERR_FILENO, v);
+        jl_printf((JL_STREAM*)STDERR_FILENO, ":\n");
+        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+        jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+        jlbacktrace(); // written to STDERR_FILENO
     }
 }
 
