@@ -1082,6 +1082,8 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
     C
 end
 
+const RealOrComplex = Union{Real,Complex}
+
 # Three-argument *
 """
     *(A, B::AbstractMatrix, C)
@@ -1100,8 +1102,10 @@ or examining `size.((A,B,C,D))` to choose which to multiply first.
 
 *(A::AbstractMatrix, x::AbstractVector, γ::Number) = mat_vec_scalar(A,x,γ)
 *(A::AbstractMatrix, B::AbstractMatrix, γ::Number) = mat_mat_scalar(A,B,γ)
-*(α::Union{Real,Complex}, B::AbstractMatrix, C::AbstractVector) = mat_vec_scalar(B,C,α)
-*(α::Union{Real,Complex}, B::AbstractMatrix, C::AbstractMatrix) = mat_mat_scalar(B,C,α)
+*(α::RealOrComplex, B::AbstractMatrix{<:RealOrComplex}, C::AbstractVector{<:RealOrComplex}) =
+    mat_vec_scalar(B,C,α)
+*(α::RealOrComplex, B::AbstractMatrix{<:RealOrComplex}, C::AbstractMatrix{<:RealOrComplex}) =
+    mat_mat_scalar(B,C,α)
 
 *(α::Number, u::AbstractVector, tv::AdjOrTransAbsVec) = broadcast(*, α, u, tv)
 *(u::AbstractVector, tv::AdjOrTransAbsVec, γ::Number) = broadcast(*, u, tv, γ)
@@ -1160,7 +1164,8 @@ mat_mat_scalar(A::TransposeAbsVec, B::StridedMaybeAdjOrTransMat, γ::Union{Real,
 *(α::Number, β::Number, C::AbstractMatrix, D::AbstractMatrix) = (α*β) * C * D
 *(α::Number, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = α * B * (C*x)
 *(α::Number, vt::AdjOrTransAbsVec, C::AbstractMatrix, x::AbstractVector) = α * (vt*C*x)
-*(α::Union{Real,Complex}, vt::AdjOrTransAbsVec, C::AbstractMatrix, D::AbstractMatrix) = (α*vt*C) * D
+*(α::RealOrComplex, vt::AdjOrTransAbsVec{<:RealOrComplex}, C::AbstractMatrix{<:RealOrComplex}, D::AbstractMatrix{<:RealOrComplex}) =
+    (α*vt*C) * D # solves an ambiguity
 
 *(A::AbstractMatrix, x::AbstractVector, γ::Number, δ::Number) = A * x * (γ*δ)
 *(A::AbstractMatrix, B::AbstractMatrix, γ::Number, δ::Number) = A * B * (γ*δ)
@@ -1173,9 +1178,11 @@ mat_mat_scalar(A::TransposeAbsVec, B::StridedMaybeAdjOrTransMat, γ::Union{Real,
 *(vt::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = vt * B * (C*x)
 
 # Four-argument *, by size
-*(α::Union{Real,Complex}, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) = _tri_matmul(B,C,D,α)
 *(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, δ::Number) = _tri_matmul(A,B,C,δ)
-*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) = _quad_matmul(A,B,C,D)
+*(α::RealOrComplex, B::AbstractMatrix{<:RealOrComplex}, C::AbstractMatrix{<:RealOrComplex}, D::AbstractMatrix{<:RealOrComplex}) =
+    _tri_matmul(B,C,D,α)
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) =
+    _quad_matmul(A,B,C,D)
 
 function _quad_matmul(A,B,C,D)
     c1 = _mul_cost((A,B),(C,D))
@@ -1201,4 +1208,3 @@ end
 @inline _mul_cost(A,B) = _mul_cost(A) + _mul_cost(B) + *(_mul_sizes(A)..., last(_mul_sizes(B)))
 @inline _mul_sizes(A::AbstractMatrix) = size(A)
 @inline _mul_sizes((A,B)::Tuple) = first(_mul_sizes(A)), last(_mul_sizes(B))
-
