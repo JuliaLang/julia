@@ -17,8 +17,6 @@
         @test r  == range(start=first(r), stop=last(r), length=length(r))
         @test r === range(                stop=last(r), length=length(r))
     end
-
-    @test range(1, 100) === 1:100 # ArgumentError before 1.6
 end
 
 using Dates, Random
@@ -1618,6 +1616,8 @@ end
             end
         end
     end
+    # require a keyword arg
+    @test_throws ArgumentError range(1, 100)
 end
 
 @testset "Reverse empty ranges" begin

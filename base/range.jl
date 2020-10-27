@@ -90,16 +90,14 @@ If `length` is not specified and `stop - start` is not an integer multiple of `s
 ```jldoctest
 julia> range(1, 3.5, step=2)
 1.0:2.0:3.0
-
-julia> range(1, 2.5)
-1.0:1.0:2.0
 ```
 
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 
 `start` may be specified as either a positional or keyword argument.
-`stop` may be specified as either a positional or keyword argument.
+`stop` may be specified as either a positional or keyword argument. If it is specified as a positional argument,
+one of `step` or `length` must also be provided.
 
 !!! compat "Julia 1.1"
     `stop` as a positional argument requires at least Julia 1.1.
@@ -112,8 +110,20 @@ function range end
 range(start; stop=nothing, length::Union{Integer,Nothing}=nothing, step=nothing) =
     _range(start, step, stop, length)
 
-range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) =
+function range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing)
+    # For code clarity, the user must pass step or length
+    # See https://github.com/JuliaLang/julia/pull/28708#issuecomment-420034562
+    if step === length === nothing
+        msg = """
+        Neither step nor length were provided. To fix this do one of the following:
+        * Pass one of them
+        * Use `$(start):$(stop)`
+        * Use `range($start, stop=$stop)`
+        """
+        throw(ArgumentError(msg))
+    end
     _range(start, step, stop, length)
+end
 
 range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, step=nothing) =
     _range(start, step, stop, length)
