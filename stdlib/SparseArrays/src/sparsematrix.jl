@@ -361,7 +361,7 @@ copy(S::AbstractSparseMatrixCSC) =
 function copyto!(A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
     # If the two matrices have the same length then all the
     # elements in A will be overwritten.
-    if length(A) == length(B)
+    if widelength(A) == widelength(B)
         resize!(nonzeros(A), length(nonzeros(B)))
         resize!(rowvals(A), length(rowvals(B)))
         if size(A) == size(B)
@@ -373,13 +373,13 @@ function copyto!(A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
             sparse_compute_reshaped_colptr_and_rowval(getcolptr(A), rowvals(A), size(A, 1), size(A, 2), getcolptr(B), rowvals(B), size(B, 1), size(B, 2))
         end
     else
-        length(A) >= length(B) || throw(BoundsError())
-        lB = length(B)
+        widelength(A) >= widelength(B) || throw(BoundsError())
+        lB = widelength(B)
         nnzA = nnz(A)
         nnzB = nnz(B)
         # Up to which col, row, and ptr in rowval/nzval will A be overwritten?
-        lastmodcolA = div(lB - 1, size(A, 1)) + 1
-        lastmodrowA = mod(lB - 1, size(A, 1)) + 1
+        lastmodcolA = Int(div(lB - 1, size(A, 1))) + 1
+        lastmodrowA = Int(mod(lB - 1, size(A, 1))) + 1
         lastmodptrA = getcolptr(A)[lastmodcolA]
         while lastmodptrA < getcolptr(A)[lastmodcolA+1] && rowvals(A)[lastmodptrA] <= lastmodrowA
             lastmodptrA += 1
@@ -416,7 +416,7 @@ function _sparse_copyto!(dest::AbstractMatrix, src::AbstractSparseMatrixCSC)
     isrc = LinearIndices(src)
     checkbounds(dest, isrc)
     # If src is not dense, zero out the portion of dest spanned by isrc
-    if length(src) > nnz(src)
+    if widelength(src) > nnz(src)
         for i in isrc
             @inbounds dest[i] = z
         end
@@ -1802,7 +1802,7 @@ end
 
 function Base._mapreduce(f, op, ::Base.IndexCartesian, A::AbstractSparseMatrixCSC{T}) where T
     z = nnz(A)
-    n = length(A)
+    n = widelength(A)
     if z == 0
         if n == 0
             Base.mapreduce_empty(f, op, T)
@@ -1821,7 +1821,7 @@ _mapreducezeros(f, ::typeof(*), ::Type{T}, nzeros::Integer, v0) where {T} =
     nzeros == 0 ? v0 : f(zero(T))^nzeros * v0
 
 function Base._mapreduce(f, op::typeof(*), A::AbstractSparseMatrixCSC{T}) where T
-    nzeros = length(A)-nnz(A)
+    nzeros = widelength(A)-nnz(A)
     if nzeros == 0
         # No zeros, so don't compute f(0) since it might throw
         Base._mapreduce(f, op, nzvalview(A))
@@ -2025,7 +2025,7 @@ function _findr(op, A, region, Tv)
     Ti = eltype(keys(A))
     i1 = first(keys(A))
     N = nnz(A)
-    L = length(A)
+    L = widelength(A)
     if L == 0
         if prod(map(length, Base.reduced_indices(A, region))) != 0
             throw(ArgumentError("array slices must be non-empty"))
@@ -2079,7 +2079,7 @@ function _findr(op, A, region, Tv)
         return (reshape(S,m,1), reshape(I,m,1))
     elseif region == (1,2)
         (N == 0) && (return (fill(zval,1,1), fill(i1,1,1)))
-        hasz = nnz(A) != length(A)
+        hasz = nnz(A) != widelength(A)
         Sv = hasz ? zval : nzval[1]
         Iv::(Ti) = hasz ? _findz(A) : i1
         @inbounds for i = 1 : size(A, 2), j = colptr[i] : (colptr[i+1]-1)
@@ -3030,7 +3030,7 @@ function setindex!(A::AbstractSparseMatrixCSC, x::AbstractArray, Ix::AbstractVec
     S = issorted(I) ? (1:n) : sortperm(I)
     sxidx = r1 = r2 = 0
 
-    if (!isempty(I) && (I[S[1]] < 1 || I[S[end]] > length(A)))
+    if (!isempty(I) && (I[S[1]] < 1 || I[S[end]] > widelength(A)))
         throw(BoundsError(A, I))
     end
 
