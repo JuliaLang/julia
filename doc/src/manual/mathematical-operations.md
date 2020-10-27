@@ -404,10 +404,10 @@ in the `Base` module but may be given definitions by standard libraries, package
 [Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, with the exception of `^` where they have higher precedence only as the exponent.
 
 ```jldoctest
-julia> let x = 3; 2x^2 end
+julia> x = 3; 2x^2
 18
 
-julia> let x = 3; 2^2x end
+julia> x = 3; 2^2x
 64
 ```
 
