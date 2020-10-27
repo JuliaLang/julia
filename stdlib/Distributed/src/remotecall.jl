@@ -251,9 +251,13 @@ const any_gc_flag = Threads.Condition()
 function start_gc_msgs_task()
     @async begin
         lock(any_gc_flag)
-        while true
-            wait(any_gc_flag)
-            flush_gc_msgs()
+        try
+            while true
+                wait(any_gc_flag)
+                flush_gc_msgs()
+            end
+        finally
+            unlock(any_gc_flag)
         end
     end
 end
