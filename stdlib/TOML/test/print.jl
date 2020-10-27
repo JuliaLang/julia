@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 toml_str(a; kwargs...) = sprint(io -> TOML.print(io, a; kwargs...))
 toml_str(f, a; kwargs...) = sprint(io -> TOML.print(f, io, a; kwargs...))
 

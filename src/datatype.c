@@ -235,13 +235,13 @@ STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
     }
 }
 
-static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align) JL_NOTSAFEPOINT
+static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align, int asfield) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(ty)) {
-        unsigned na = union_isinlinable(((jl_uniontype_t*)ty)->a, 1, nbytes, align);
+        unsigned na = union_isinlinable(((jl_uniontype_t*)ty)->a, 1, nbytes, align, asfield);
         if (na == 0)
             return 0;
-        unsigned nb = union_isinlinable(((jl_uniontype_t*)ty)->b, 1, nbytes, align);
+        unsigned nb = union_isinlinable(((jl_uniontype_t*)ty)->b, 1, nbytes, align, asfield);
         if (nb == 0)
             return 0;
         return na + nb;
@@ -249,6 +249,9 @@ static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbyte
     if (jl_is_datatype(ty) && jl_datatype_isinlinealloc(ty) && (!pointerfree || ((jl_datatype_t*)ty)->layout->npointers == 0)) {
         size_t sz = jl_datatype_size(ty);
         size_t al = jl_datatype_align(ty);
+        // primitive types in struct slots need their sizes aligned. issue #37974
+        if (asfield && jl_is_primitivetype(ty))
+            sz = LLT_ALIGN(sz, al);
         if (*nbytes < sz)
             *nbytes = sz;
         if (*align < al)
@@ -258,9 +261,15 @@ static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbyte
     return 0;
 }
 
+int jl_uniontype_size(jl_value_t *ty, size_t *sz) JL_NOTSAFEPOINT
+{
+    size_t al = 0;
+    return union_isinlinable(ty, 0, sz, &al, 0) != 0;
+}
+
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al) JL_NOTSAFEPOINT
 {
-    unsigned countbits = union_isinlinable(eltype, 0, fsz, al);
+    unsigned countbits = union_isinlinable(eltype, 0, fsz, al, 1);
     return (countbits > 0 && countbits < 127) ? countbits : 0;
 }
 

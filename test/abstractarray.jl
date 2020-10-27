@@ -1193,3 +1193,10 @@ end
     @test last(itr, 1) == [itr[end]]
     @test_throws ArgumentError last(itr, -6)
 end
+
+@testset "Base.rest" begin
+    a = reshape(1:4, 2, 2)'
+    @test Base.rest(a) == a[:]
+    _, st = iterate(a)
+    @test Base.rest(a, st) == [3, 2, 4]
+end

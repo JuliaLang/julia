@@ -32,6 +32,8 @@ hardcoded_precompile_statements = """
 repl_script = """
 2+2
 print("")
+display([1])
+display([1 2; 3 4])
 @time 1+1
 ; pwd
 ? reinterpret
@@ -166,7 +168,7 @@ function generate_precompile_statements()
               """)
         tmp = tempname()
         s = """
-            push!(DEPOT_PATH, $(repr(prec_path)));
+            pushfirst!(DEPOT_PATH, $(repr(prec_path)));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             $precompile_script

@@ -2365,6 +2365,45 @@ end
 # issue #37656
 @test :(if true 'a' else 1 end) == Expr(:if, true, quote 'a' end, quote 1 end)
 
+# issue #37664
+@test_throws ParseError("extra token \"b\" after end of expression") Meta.parse("a b")
+@test_throws ParseError("extra token \"b\" after end of expression") Meta.parse("a#==#b")
+@test_throws ParseError("extra token \"b\" after end of expression") Meta.parse("a #==#b")
+@test_throws ParseError("extra token \"b\" after end of expression") Meta.parse("a#==# b")
+
+@test_throws ParseError("extra token \"2\" after end of expression") Meta.parse("1 2")
+@test_throws ParseError("extra token \"2\" after end of expression") Meta.parse("1#==#2")
+@test_throws ParseError("extra token \"2\" after end of expression") Meta.parse("1 #==#2")
+@test_throws ParseError("extra token \"2\" after end of expression") Meta.parse("1#==# 2")
+
+@test size([1#==#2#==#3]) == size([1 2 3])
+@test size([1#==#2#==#3]) == size([1	2	3]) # tabs
+@test size([1#==#2#==#3]) == size([1	2 3]) # tabs and spaces
+@test size([1#==#2#==#3]) == size([1 2	3]) # tabs and spaces
+@test [zeros(Int,2,2)#==#[1;2]
+       [3#==#4]#==#5]          == [zeros(Int,2,2) [1; 2]
+                                   [3 4]          5     ] == [0 0 1
+                                                              0 0 2
+                                                              3 4 5]
+
+@test Meta.parse("for x in 1:10 g(x) end") ==
+  Meta.parse("for#==#x#==#in#==#1:10#==#g(x)#==#end")
+@test Meta.parse("(f->f(1))() do x x+1 end") ==
+  Meta.parse("(f->f(1))()#==#do#==#x#==#x+1#==#end")
+@test Meta.parse("while i < 10 i += 1 end") ==
+  Meta.parse("while#==#i#==#<#==#10#==#i#==#+=#==#1#==#end")
+@test Meta.parse("begin x=1 end") == Meta.parse("begin#==#x=1#==#end")
+@test Meta.parse("if x<y x+1 elseif y>0 y+1 else z end") ==
+  Meta.parse("if#==#x<y#==#x+1#==#elseif#==#y>0#==#y+1#==#else#==#z#==#end")
+@test Meta.parse("function(x) x end") == Meta.parse("function(x)#==#x#==#end")
+@test Meta.parse("a ? b : c") == Meta.parse("a#==#?#==#b#==#:#==#c")
+@test_throws ParseError("space before \"(\" not allowed in \"f (\" at none:1") begin
+  Meta.parse("f#==#(x)=x")
+end
+@test Meta.parse("try f() catch e g() finally h() end") ==
+  Meta.parse("try#==#f()#==#catch#==#e#==#g()#==#finally#==#h()#==#end")
+@test Meta.parse("@m a b") == Meta.parse("@m#==#a#==#b")
+
 # issue #37540
 macro m37540()
     quote
@@ -2460,4 +2499,87 @@ import .TestImportAs.Mod2 as M2
     @test Meta.parse("a'⁻¹") == Expr(:call, Symbol("'⁻¹"), :a)
     @test Meta.parse("a'ᵀb") == Expr(:call, :*, Expr(:call, Symbol("'ᵀ"), :a), :b)
     @test Meta.parse("a'⁻¹b") == Expr(:call, :*, Expr(:call, Symbol("'⁻¹"), :a), :b)
+end
+
+@testset "issue #37393" begin
+    @test :(for outer i = 1:3; end) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
+    i = :i
+    @test :(for outer $i = 1:3; end) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
+    @test :(for outer = 1:3; end) == Expr(:for, Expr(:(=), :outer, :(1:3)), :(;;))
+    # TIL that this is possible
+    for outer $ i = 1:3
+        @test 1 $ 2 in 1:3
+    end
+
+    # 😭
+    @test Meta.isexpr(Meta.parse("""
+        [i for i
+        in 1:3]"""), :comprehension)
+    @test Meta.isexpr(Meta.parse("""
+        [i for outer
+        in 1:3]"""), :comprehension)
+    @test Meta.isexpr(Meta.parse("""
+        [i for outer
+        i in 1:3]"""), :comprehension)
+    @test Meta.isexpr(Meta.parse("""
+        f(i for i
+        in 1:3)""").args[2], :generator)
+    @test_throws Meta.ParseError Meta.parse("""
+        for i
+            in 1:3
+        end""")
+end
+
+# PR #37973
+@test Meta.parse("1¦2⌿3") == Expr(:call, :¦, 1, Expr(:call, :⌿, 2, 3))
+
+@testset "slurp in assignments" begin
+    res = begin x, y, z... = 1:7 end
+    @test res == 1:7
+    @test x == 1 && y == 2
+    @test z == Vector(3:7)
+
+    res = begin x, y, z... = [1, 2] end
+    @test res == [1, 2]
+    @test x == 1 && y == 2
+    @test z == Int[]
+
+    x = 1
+    res = begin x..., = x end
+    @test res == 1
+    @test x == 1
+
+    x, y, z... = 1:7
+    res = begin y, z, x... = z..., x, y end
+    @test res == ((3:7)..., 1, 2)
+    @test y == 3
+    @test z == 4
+    @test x == ((5:7)..., 1, 2)
+
+    res = begin x, _, y... = 1, 2 end
+    @test res == (1, 2)
+    @test x == 1
+    @test y == ()
+
+    res = begin x, y... = 1 end
+    @test res == 1
+    @test x == 1
+    @test y == Iterators.rest(1, nothing)
+
+    res = begin x, y, z... = 1, 2, 3:5 end
+    @test res == (1, 2, 3:5)
+    @test x == 1 && y == 2
+    @test z == (3:5,)
+
+    @test Meta.isexpr(Meta.@lower(begin a, b..., c = 1:3 end), :error)
+    @test Meta.isexpr(Meta.@lower(begin a, b..., c = 1, 2, 3 end), :error)
+    @test Meta.isexpr(Meta.@lower(begin a, b..., c... = 1, 2, 3 end), :error)
+
+    @test_throws BoundsError begin x, y, z... = 1:1 end
+    @test_throws BoundsError begin x, y, _, z... = 1, 2 end
+
+    car((a, d...)) = a
+    cdr((a, d...)) = d
+    @test car(1:3) == 1
+    @test cdr(1:3) == [2, 3]
 end
