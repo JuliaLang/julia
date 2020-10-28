@@ -30,7 +30,7 @@ Base.print(io::IO, x::Enum) = print(io, Symbol(x))
 function Base.show(io::IO, x::Enum)
     sym = Symbol(x)
     if !(get(io, :compact, false)::Bool)
-        from = get(io, :module, Main)
+        from = get(io, :module, Base.active_module())
         def = typeof(x).name.module
         if from === nothing || !Base.isvisible(sym, def, from)
             show(io, def)

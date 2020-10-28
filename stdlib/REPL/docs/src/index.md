@@ -627,12 +627,35 @@ Types that are derived from `TerminalMenus.ConfiguredMenu` configure the menu op
 Prior to Julia 1.6, and still supported throughout Julia 1.x, one can also configure menus by calling
 `TerminalMenus.config()`.
 
+## Changing the contextual module which is active at the REPL
+
+When entering expressions at the REPL, they are by default evaluated in the `Main` module.
+It is possible to change this contextual module via the `REPL.activate` function:
+
+```julia
+julia> <(0)
+(::Base.Fix2{typeof(<), Int64}) (generic function with 1 method)
+
+julia> import REPL; REPL.activate(Base)
+
+Base> <(0) # note `Fix2` is printed without the "Base." prefix
+(::Fix2{typeof(<), Int64}) (generic function with 1 method)
+
+Base> struct X end; parentmodule(X)
+Base
+```
+
+It is also possible to activate a module by typing the name of the module and
+using the `meta-mm` (`meta-m` followed by `m`) keybinding (the cursor must be on
+the name).
+
 ## References
 
 ### REPL
 
 ```@docs
 Base.atreplinit
+Base.activate_module
 ```
 
 ### TerminalMenus

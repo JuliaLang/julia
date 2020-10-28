@@ -28,11 +28,11 @@ to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
-function varinfo(m::Module=Main, pattern::Regex=r"")
+function varinfo(m::Module=Base.active_module(), pattern::Regex=r"")
     rows =
         Any[ let value = getfield(m, v)
                  Any[string(v),
-                     (value===Base || value===Main || value===Core ? "" : format_bytes(summarysize(value))),
+                     (value===Base || value===Base.active_module() || value===Core ? "" : format_bytes(summarysize(value))),
                      summary(value)]
              end
              for v in sort!(names(m)) if isdefined(m, v) && occursin(pattern, string(v)) ]
@@ -41,7 +41,7 @@ function varinfo(m::Module=Main, pattern::Regex=r"")
 
     return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
 end
-varinfo(pat::Regex) = varinfo(Main, pat)
+varinfo(pat::Regex) = varinfo(Base.active_module(), pat)
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)
@@ -266,7 +266,7 @@ end
 function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested
-    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
+    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Base.active_module(), n, indent)
     nothing
 end
 

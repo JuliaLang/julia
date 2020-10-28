@@ -198,6 +198,8 @@ Standard library changes
 
 * Windows REPL now supports 24-bit colors, by correctly interpreting virtual terminal escapes.
 
+* The contextual module which is active at the REPL can be changed (it is `Main` by default),
+  via the `REPL.activate` function or via a keybinding ([#33872]).
 
 #### SparseArrays
 
