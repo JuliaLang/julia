@@ -361,12 +361,12 @@ end
 struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
-    @test_throws MyErrorTypeTest Base.wait(schedule(t))
+    @test_throws TaskFailedException(t) Base.wait(schedule(t))
+    @test isa(t.exception, MyErrorTypeTest)
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
     @test r.state == :failed
-    @test isa(t.exception, MyErrorTypeTest)
 end
 
 # corner case: undefined inside immutable struct
@@ -425,6 +425,17 @@ create_serialization_stream() do s
     C = deserialize(s)
     @test C == B
     @test C[1] === C[2]
+end
+
+mutable struct MSingle end
+create_serialization_stream() do s
+    x = MSingle()
+    A = [x, x, MSingle()]
+    serialize(s, A)
+    seekstart(s)
+    C = deserialize(s)
+    @test A[1] === x === A[2] !== A[3]
+    @test x !== C[1] === C[2] !== C[3]
 end
 
 # Regex
@@ -518,8 +529,8 @@ let x = T20324[T20324(1) for i = 1:2]
     @test y == x
 end
 
-# serializer header
-let io = IOBuffer()
+@testset "serializer header" begin
+    io = IOBuffer()
     serialize(io, ())
     seekstart(io)
     b = read(io)
@@ -530,6 +541,25 @@ let io = IOBuffer()
     @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
     @test (b[5] & 0xf0) == 0
     @test all(b[6:8] .== 0)
+
+    # Detection of incompatible binary serializations
+    function corrupt_header(bytes, offset, val)
+        b = copy(bytes)
+        b[offset] = val
+        IOBuffer(b)
+    end
+    @test_throws(
+        ErrorException("""Cannot read stream serialized with a newer version of Julia.
+                          Got data version 255 > current version $(Serialization.ser_version)"""),
+        deserialize(corrupt_header(b, 4, 0xff)))
+    @test_throws(ErrorException("Unknown word size flag in header"),
+                 deserialize(corrupt_header(b, 5, 2<<2)))
+    @test_throws(ErrorException("Unknown endianness flag in header"),
+                 deserialize(corrupt_header(b, 5, 2)))
+    other_wordsize = sizeof(Int) == 8 ? 4 : 8
+    other_endianness = bswap(ENDIAN_BOM)
+    @test_throws(ErrorException("Serialized byte order mismatch ($(repr(other_endianness)))"),
+                 deserialize(corrupt_header(b, 5, UInt8(ENDIAN_BOM != 0x01020304))))
 end
 
 # issue #26979
@@ -561,4 +591,21 @@ let f_data
     end
     f = deserialize(IOBuffer(base64decode(f_data)))
     @test f(10,3) == 23
+end
+
+# issue #33466, IdDict
+let d = IdDict([1] => 2, [3] => 4), io = IOBuffer()
+    serialize(io, d)
+    seekstart(io)
+    ds = deserialize(io)
+    @test Dict(d) == Dict(ds)
+    @test all([k in keys(ds) for k in keys(ds)])
+end
+
+# issue #35030, shared references to Strings
+let s = join(rand('a':'z', 1024)), io = IOBuffer()
+    serialize(io, (s, s))
+    seekstart(io)
+    s2 = deserialize(io)
+    @test Base.summarysize(s2) < 2*sizeof(s)
 end

@@ -168,11 +168,21 @@ for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, T) === Union{Int, T}
     @test Base.promote_typejoin(T, String) === Union{T, String}
     @test Base.promote_typejoin(Vector{Int}, T) === Union{Vector{Int}, T}
-    @test Base.promote_typejoin(Vector, T) === Any
-    @test Base.promote_typejoin(Real, T) === Any
-    @test Base.promote_typejoin(Int, String) === Any
-    @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
-    @test Base.promote_typejoin(Int, Union{String, T}) === Any
+    @test Base.promote_typejoin(Vector, T) === Union{Vector, T}
+    @test Base.promote_typejoin(Real, T) === Union{Real, T}
+    for U in (String, Float64)
+        @test Base.promote_typejoin(Int, U) === typejoin(Int, U)
+        @test Base.promote_typejoin(Int, Union{U, T}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{Int, U}, T) === Union{Union{Int, U}, T}
+        @test Base.promote_typejoin(Union{T, U}, Int) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{T, Int}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{Missing, Int}) ===
+            Union{typejoin(Int, U), T, Missing}
+        @test Base.promote_typejoin(Union{T, U}, Union{Nothing, Int}) ===
+            Union{typejoin(Int, U), T, Nothing}
+        @test Base.promote_typejoin(Union{T, Nothing, U}, Union{Nothing, Missing, Int}) ===
+            Union{typejoin(Int, U), T, Nothing, Missing}
+    end
     @test Base.promote_typejoin(T, Union{}) === T
     @test Base.promote_typejoin(Union{}, T) === T
 end
@@ -234,12 +244,12 @@ end
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
 end
-@test A3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test A3890{Float64}.types[1] === Array{ComplexF64,2}
 # make sure the field type Matrix{Complex{T1}} isn't cached
 mutable struct B3890{T2}
     x::Matrix{Complex{T2}}
 end
-@test B3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test B3890{Float64}.types[1] === Array{ComplexF64,2}
 
 # issue #786
 mutable struct Node{T}
@@ -301,7 +311,7 @@ function bar(x::T) where T
 end
 @test bar(3.0) == Complex(3.0,0.0)
 
-z = convert(Complex{Float64},2)
+z = convert(ComplexF64,2)
 @test z == Complex(2.0,0.0)
 
 function typeassert_instead_of_decl()
@@ -669,15 +679,16 @@ end
 
 # isassigned, issue #11167
 mutable struct Type11167{T,N} end
-Type11167{Int,2}
-let tname = Type11167.body.body.name
-    @test !isassigned(tname.cache, 0)
-    @test isassigned(tname.cache, 1)
-    @test !isassigned(tname.cache, 2)
-    Type11167{Float32,5}
-    @test isassigned(tname.cache, 2)
-    @test !isassigned(tname.cache, 3)
+function count11167()
+    let cache = Type11167.body.body.name.cache
+        return sum(i -> isassigned(cache, i), 0:length(cache))
+    end
 end
+@test count11167() == 0
+Type11167{Int,2}
+@test count11167() == 1
+Type11167{Float32,5}
+@test count11167() == 2
 
 # dispatch
 let
@@ -1085,8 +1096,8 @@ let
     @test_throws BoundsError(z, -1) getfield(z, -1)
     @test_throws BoundsError(z, 0) getfield(z, 0)
     @test_throws BoundsError(z, 3) getfield(z, 3)
-
-    strct = LoadError("yofile", 0, "bad")
+end
+let strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
     @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
@@ -1098,8 +1109,8 @@ let
     @test getfield(strct, 1) == "yofile"
     @test getfield(strct, 2) === 0
     @test getfield(strct, 3) == "bad"
-
-    mstrct = TestMutable("melm", 1, nothing)
+end
+let mstrct = TestMutable("melm", 1, nothing)
     @test Base.setproperty!(mstrct, :line, 8.0) === 8
     @test mstrct.line === 8
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, :line, 8.0)
@@ -1111,6 +1122,14 @@ let
     @test_throws BoundsError(mstrct, 10) getfield(mstrct, 10)
     @test_throws BoundsError(mstrct, 0) setfield!(mstrct, 0, "")
     @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
+end
+let strct = LoadError("yofile", 0, "bad")
+    @test_throws(ErrorException("setfield! immutable struct of type LoadError cannot be changed"),
+                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), strct, 0, ""))
+end
+let mstrct = TestMutable("melm", 1, nothing)
+    @test_throws(BoundsError(mstrct, 4),
+                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), mstrct, 3, ""))
 end
 
 # test getfield-overloading
@@ -1447,7 +1466,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Vector{Foo2517}(undef, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
+@test repr(Vector{Foo2517}(undef, 1)) == "[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -2111,7 +2130,7 @@ f5577(::Type) = true
 # issue #6426
 f6426(x,args...) = f6426(x,map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 f6426(x,t::Tuple{Vararg{Type}}) = string(t)
-@test f6426(1, (1.,2.)) == "(Tuple{Float64,Float64},)"
+@test f6426(1, (1.,2.)) == "(Tuple{Float64, Float64},)"
 
 # issue #6502
 f6502() = convert(Tuple{Vararg{Int}}, (10,))
@@ -2254,7 +2273,7 @@ end
 @test ttt7049(init="a") == "init=a"
 
 # issue #7074
-let z(A::StridedMatrix{T}) where {T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}} = T,
+let z(A::StridedMatrix{T}) where {T<:Union{Float64,ComplexF64,Float32,ComplexF32}} = T,
     S = zeros(Complex,2,2)
     @test_throws MethodError z(S)
 end
@@ -2402,6 +2421,20 @@ for f in (:Any, :Function, :(Core.Builtin), :(Union{Nothing, Type}), :(Union{typ
 end
 for f in (:(Core.arrayref), :((::typeof(Core.arrayref))), :((::Core.IntrinsicFunction)))
     @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
+end
+
+# issue #33370
+abstract type B33370 end
+
+let n = gensym(), c(x) = B33370[x][1]()
+    @eval begin
+        struct $n <: B33370
+        end
+
+        function (::$n)()
+        end
+    end
+    @test c(eval(n)()) === nothing
 end
 
 # issue #8798
@@ -3600,10 +3633,19 @@ end
         return nothing
     end
 end
-@test_throws TypeError f1()
-@test_throws TypeError f2()
-@test_throws TypeError f3()
-@test_throws TypeError eval(Expr(:new, B, 1))
+@test_throws TypeError("new", A, 1) f1()
+@test_throws TypeError("new", A, 1) f2()
+@test_throws TypeError("new", A, 1) f3()
+@test_throws TypeError("new", A, 1) eval(Expr(:new, B, 1))
+
+# some tests for handling of malformed syntax--these cases should not be possible in normal code
+@test eval(Expr(:new, B, A())) == B(A())
+@test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B))
+@test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B, A(), A()))
+@test_throws TypeError("new", DataType, Complex) eval(Expr(:new, Complex))
+@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:new, Complex.body))
+@test_throws TypeError("new", DataType, Complex) eval(Expr(:splatnew, Complex, ()))
+@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:splatnew, Complex.body, ()))
 
 end
 
@@ -4102,82 +4144,90 @@ function f15180(x::T) where T
 end
 @test map(f15180(1), [1,2]) == [(Int,1),(Int,1)]
 
-let ary = Vector{Any}(undef, 10)
-    check_undef_and_fill(ary, rng) = for i in rng
-        @test !isassigned(ary, i)
-        ary[i] = (Float64(i), i) # some non-cached content
-        @test isassigned(ary, i)
-    end
-    # Check if the memory is initially zerod and fill it with value
-    # to check if these values are not reused later.
-    check_undef_and_fill(ary, 1:10)
-    # Check if the memory grown at the end are zerod
-    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
-    check_undef_and_fill(ary, 11:20)
-    # Make sure the content of the memory deleted at the end are not reused
-    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 5)
-    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 5)
-    check_undef_and_fill(ary, 16:20)
-
-    # Now check grow/del_end
-    ary = Vector{Any}(undef, 1010)
-    check_undef_and_fill(ary, 1:1010)
-    # This del_beg should move the buffer
-    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 1000)
-    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 1000)
-    check_undef_and_fill(ary, 1:1000)
-    ary = Vector{Any}(undef, 1010)
-    check_undef_and_fill(ary, 1:1010)
-    # This del_beg should not move the buffer
-    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
-    check_undef_and_fill(ary, 1:10)
-
-    ary = Vector{Any}(undef, 1010)
-    check_undef_and_fill(ary, 1:1010)
-    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
-    check_undef_and_fill(ary, 1011:1020)
-    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
-    check_undef_and_fill(ary, 1:10)
-
-    # Make sure newly malloc'd buffers are filled with 0
-    # test this for a few different sizes since we need to make sure
-    # we are malloc'ing the buffer after the grow_end and malloc is not using
-    # mmap directly (which may return a zero'd new page).
-    for n in [50, 51, 100, 101, 200, 201, 300, 301]
-        ary = Vector{Any}(undef, n)
-        # Try to free the previous buffer that was filled with random content
-        # and to increase the chance of getting a non-zero'd buffer next time
-        GC.gc()
-        GC.gc()
-        GC.gc()
-        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, n)
-        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
-        check_undef_and_fill(ary, 1:(2n + 4))
-    end
-
-    ary = Vector{Any}(undef, 100)
-    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10000)
-    ary[:] = 1:length(ary)
-    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10000)
-    # grow on the back until a buffer reallocation happens
-    cur_ptr = pointer(ary)
-    while cur_ptr == pointer(ary)
-        len = length(ary)
+struct ValueWrapper
+    vpadding::NTuple{2,VecElement{UInt}}
+    value
+    ValueWrapper(value) = new((typemax(UInt), typemax(UInt)), value)
+end
+Base.convert(::Type{ValueWrapper}, x) = ValueWrapper(x)
+for T in (Any, ValueWrapper)
+    let ary = Vector{T}(undef, 10)
+        check_undef_and_fill(ary, rng) = for i in rng
+            @test !isassigned(ary, i)
+            ary[i] = (Float64(i), i) # some non-cached content
+            @test isassigned(ary, i)
+        end
+        # Check if the memory is initially zerod and fill it with value
+        # to check if these values are not reused later.
+        check_undef_and_fill(ary, 1:10)
+        # Check if the memory grown at the end are zerod
         ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
-        for i in (len + 1):(len + 10)
+        check_undef_and_fill(ary, 11:20)
+        # Make sure the content of the memory deleted at the end are not reused
+        ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 5)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 5)
+        check_undef_and_fill(ary, 16:20)
+
+        # Now check grow/del_end
+        ary = Vector{T}(undef, 1010)
+        check_undef_and_fill(ary, 1:1010)
+        # This del_beg should move the buffer
+        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 1000)
+        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 1000)
+        check_undef_and_fill(ary, 1:1000)
+        ary = Vector{T}(undef, 1010)
+        check_undef_and_fill(ary, 1:1010)
+        # This del_beg should not move the buffer
+        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10)
+        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
+        check_undef_and_fill(ary, 1:10)
+
+        ary = Vector{T}(undef, 1010)
+        check_undef_and_fill(ary, 1:1010)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
+        check_undef_and_fill(ary, 1011:1020)
+        ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 10)
+        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
+        check_undef_and_fill(ary, 1:10)
+
+        # Make sure newly malloc'd buffers are filled with 0
+        # test this for a few different sizes since we need to make sure
+        # we are malloc'ing the buffer after the grow_end and malloc is not using
+        # mmap directly (which may return a zero'd new page).
+        for n in [50, 51, 100, 101, 200, 201, 300, 301]
+            ary = Vector{T}(undef, n)
+            # Try to free the previous buffer that was filled with random content
+            # and to increase the chance of getting a non-zero'd buffer next time
+            GC.gc()
+            GC.gc()
+            GC.gc()
+            ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
+            ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 4)
+            ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, n)
+            ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
+            check_undef_and_fill(ary, 1:(2n + 4))
+        end
+
+        ary = Vector{T}(undef, 100)
+        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10000)
+        ary[:] = 1:length(ary)
+        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10000)
+        # grow on the back until a buffer reallocation happens
+        cur_ptr = pointer(ary)
+        while cur_ptr == pointer(ary)
+            len = length(ary)
+            ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
+            for i in (len + 1):(len + 10)
+                @test !isassigned(ary, i)
+            end
+        end
+
+        ary = Vector{T}(undef, 100)
+        ary[:] = 1:length(ary)
+        ccall(:jl_array_grow_at, Cvoid, (Any, Csize_t, Csize_t), ary, 50, 10)
+        for i in 51:60
             @test !isassigned(ary, i)
         end
-    end
-
-    ary = Vector{Any}(undef, 100)
-    ary[:] = 1:length(ary)
-    ccall(:jl_array_grow_at, Cvoid, (Any, Csize_t, Csize_t), ary, 50, 10)
-    for i in 51:60
-        @test !isassigned(ary, i)
     end
 end
 
@@ -4341,6 +4391,7 @@ function test_copy_alias(::Type{T}) where T
 end
 test_copy_alias(Int)
 test_copy_alias(Any)
+test_copy_alias(Union{Int,Nothing})
 
 # issue #15370
 @test isdefined(Core, :Box)
@@ -4667,6 +4718,11 @@ let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
 
+# `where` syntax in constructor definitions
+(A12238{T} where T<:Real)(x) = 0
+@test A12238{<:Real}(0) == 0
+@test_throws MethodError A12238{<:Integer}(0)
+
 # issue #16315
 let a = Any[]
     @noinline f() = a[end]
@@ -4942,7 +4998,7 @@ gVararg(a::fVararg(Int)) = length(a)
     false
 catch e
     (e::ErrorException).msg
-end == "generated function body is not pure. this likely means it contains a closure or comprehension."
+end == "The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension."
 
 let x = 1
     global g18444
@@ -5005,13 +5061,15 @@ end
 # when calculating total allocation size.
 @noinline function f17255(n)
     GC.enable(false)
-    b0 = Base.gc_bytes()
+    b0 = Ref{Int64}(0)
+    b1 = Ref{Int64}(0)
+    Base.gc_bytes(b0)
     local a
     for i in 1:n
         a, t, allocd = @timed [Ref(1) for i in 1:1000]
         @test allocd > 0
-        b1 = Base.gc_bytes()
-        if b1 < b0
+        Base.gc_bytes(b1)
+        if b1[] < b0[]
             return false, a
         end
     end
@@ -5129,6 +5187,36 @@ end
 @test let_Box4()() == 44
 @test let_Box5()() == 46
 @test let_noBox()() == 21
+
+# issue #37690
+function foo37690()
+    local f
+    local x
+    for k = 1:2
+        x = k
+        if k == 1
+            f = () -> x
+        end
+    end
+    f
+end
+@test foo37690()() == 2
+
+function g37690()
+    local x
+    local f
+    for k = 1:2
+    end
+    x = 0
+    ()->x
+end
+@test g37690().x === 0
+
+function _assigns_and_captures_arg(a)
+    a = a
+    return ()->a
+end
+@test !any(contains_Box, code_lowered(_assigns_and_captures_arg,(Any,))[1].code)
 
 module TestModuleAssignment
 using Test
@@ -5852,9 +5940,9 @@ let
     b3 = B23367[b][1] # copy b via array assignment
     addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
     @test addr(b)  == addr(b)
-    @test addr(b)  == addr(b2)
-    @test addr(b)  == addr(b3)
-    @test addr(b2) == addr(b3)
+    # @test addr(b)  == addr(b2)
+    # @test addr(b)  == addr(b3)
+    # @test addr(b2) == addr(b3)
 
     @test b === b2 === b3 === b
     @test egal(b, b2) && egal(b2, b3) && egal(b3, b)
@@ -5863,7 +5951,7 @@ let
     @test b.x === Int8(91)
     @test b.z === Int8(23)
     @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
-    @test sizeof(b) == sizeof(Int) * 3
+    @test sizeof(b) == 12
     @test A23367(Int8(1)).x === Int8(1)
     @test A23367(Int8(0)).x === Int8(0)
     @test A23367(Int16(1)).x === Int16(1)
@@ -5889,6 +5977,43 @@ for U in boxedunions
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
     end
+end
+
+struct UnionFieldInlineStruct
+    x::Int64
+    y::Union{Float64, Missing}
+end
+
+@test sizeof(Vector{UnionFieldInlineStruct}(undef, 2)) == sizeof(UnionFieldInlineStruct) * 2
+
+let x = UnionFieldInlineStruct(1, 3.14)
+    AInlineUnion = [x for i = 1:10]
+    @test sizeof(AInlineUnion) == sizeof(UnionFieldInlineStruct) * 10
+    BInlineUnion = Vector{UnionFieldInlineStruct}(undef, 10)
+    copyto!(BInlineUnion, AInlineUnion)
+    @test AInlineUnion == BInlineUnion
+    @test BInlineUnion[end] == x
+    CInlineUnion = vcat(AInlineUnion, BInlineUnion)
+    @test sizeof(CInlineUnion) == sizeof(UnionFieldInlineStruct) * 20
+    @test CInlineUnion[end] == x
+end
+
+# issue 33709
+struct A33709
+    a::Union{Nothing,A33709}
+end
+let a33709 = A33709(A33709(nothing))
+    @test isnothing(a33709.a.a)
+end
+
+# issue #35793
+struct A35793
+    x::Union{Nothing, Missing}
+end
+let x = A35793(nothing), y = A35793(missing)
+    @test x isa A35793
+    @test x.x === nothing
+    @test y.x === missing
 end
 
 # issue 31583
@@ -6442,6 +6567,31 @@ let A=[0, missing], B=[missing, 0], C=Vector{Union{Int, Missing}}(undef, 6)
     @test isequal(C, [0, missing, missing, missing, 0, missing])
 end
 
+# non-power-of-2 element sizes, issue #26026
+primitive type TypeWith24Bits 24 end
+TypeWith24Bits(x::UInt32) = Core.Intrinsics.trunc_int(TypeWith24Bits, x)
+let x = TypeWith24Bits(0x112233), y = TypeWith24Bits(0x445566), z = TypeWith24Bits(0x778899)
+    a = [x, x]
+    Core.arrayset(true, a, y, 2)
+    @test a == [x, y]
+    a[2] = z
+    @test a == [x, z]
+    @test pointer(a, 2) - pointer(a, 1) == 4
+
+    b = [(x, x), (x, x)]
+    Core.arrayset(true, b, (x, y), 2)
+    @test b == [(x, x), (x, y)]
+    b[2] = (y, z)
+    @test b == [(x, x), (y, z)]
+
+    V = Vector{TypeWith24Bits}(undef, 1000)
+    p = Ptr{UInt8}(pointer(V))
+    for i = 1:sizeof(V)
+        unsafe_store!(p, i % UInt8, i)
+    end
+    @test V[1:4] == [TypeWith24Bits(0x030201), TypeWith24Bits(0x070605), TypeWith24Bits(0x0b0a09), TypeWith24Bits(0x0f0e0d)]
+end
+
 # issue #29718
 function f29718()
     nt = NamedTuple{(:a, :b, :c, :d, :e, :f,),
@@ -6492,6 +6642,17 @@ end
 # issue #26518
 function f26518((a,b)) end
 @test f26518((1,2)) === nothing
+# issue #36572 - destructuring called object
+struct Foo36572
+    a
+    b
+end
+function Base.iterate(f::Foo36572, i=1)
+    i == 1 ? (f.a, 2) :
+    i == 2 ? (f.b, 3) : nothing
+end
+((a,b)::Foo36572)(x) = a*x + b
+@test Foo36572(10,2)(3) == 32
 
 # issue 22098
 macro m22098 end
@@ -6701,7 +6862,7 @@ function f27597(y)
     return y
 end
 @test f27597([1]) == [1]
-@test f27597([]) == 1:0
+@test f27597([]) === 1:0
 
 # issue #22291
 wrap22291(ind) = (ind...,)
@@ -7022,5 +7183,328 @@ let code = code_lowered(FieldConvert)[1].code
     @test code[8] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
     @test code[9] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(8), Core.SlotNumber(6))
     @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
-    @test code[11] == Expr(:return, Core.SSAValue(10))
+    @test code[11] == Core.ReturnNode(Core.SSAValue(10))
  end
+
+# Issue #32820
+function f32820(refs)
+    local x
+    for r in refs
+        try
+            error()
+        catch e
+            if !@isdefined(x)
+                x = []
+            end
+            push!(x, 1)
+        end
+    end
+    x
+end
+@test f32820(Any[1,2]) == Any[1, 1]
+
+# Splatting with bad iterate
+struct SplatBadIterate; end
+Base.iterate(s::SplatBadIterate, args...) = ()
+@test_throws BoundsError (SplatBadIterate()...,)
+
+# issue #33954, layout with circular type parameters but not fields
+struct P33954{T}
+end
+struct A33954
+    x::P33954{A33954}
+end
+@test isbitstype(Tuple{A33954})
+struct Q33954{T}
+    x::Int
+end
+struct B33954
+    x::Q33954{B33954}
+end
+@test_broken isbitstype(Tuple{B33954})
+@test_broken isbitstype(B33954)
+
+# Issue #34206/34207
+function mre34206(a, n)
+    va = view(a, :)
+    b = ntuple(_ -> va, n)::Tuple{Vararg{typeof(va)}}
+    return b[1].offset1
+end
+@test mre34206([44], 1) == 0
+
+# Issue #34247
+function f34247(a)
+    GC.@preserve a try
+    catch
+    end
+    true
+end
+@test f34247("")
+
+# Issue #34482
+function f34482()
+    Base.not_int("ABC")
+    1
+end
+function g34482()
+    Core.Intrinsics.arraylen(1)
+    1
+end
+function h34482()
+    Core.Intrinsics.bitcast(1, 1)
+    1
+end
+@test_throws ErrorException f34482()
+@test_throws TypeError g34482()
+@test_throws TypeError h34482()
+
+struct NFANode34126
+    edges::Vector{Tuple{Nothing,NFANode34126}}
+    NFANode34126() = new(Tuple{Nothing,NFANode34126}[])
+end
+
+@test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing, $NFANode34126}[])"
+
+# issue #35416
+struct Node35416{T,K,X}
+end
+struct AVL35416{K,V}
+    avl:: Union{Nothing,Node35416{AVL35416{K,V},<:K,<:V}}
+end
+@test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}
+
+# issue #31696
+foo31696(x::Int8, y::Int8) = 1
+foo31696(x::T, y::T) where {T <: Int8} = 2
+@test length(methods(foo31696)) == 1
+let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
+    b .= a
+    @test b[1] == (1,)
+    a .= b
+    @test a[1] == (1,)
+end
+
+# issue #36104
+module M36104
+struct T36104
+    v::Vector{M36104.T36104}
+end
+struct T36104   # check that redefining it works, issue #21816
+    v::Vector{T36104}
+end
+end
+@test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
+@test_throws ErrorException("expected") @eval(struct X36104; x::error("expected"); end)
+@test @isdefined(X36104)
+struct X36104; x::Int; end
+@test fieldtypes(X36104) == (Int,)
+primitive type P36104 8 end
+@test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+
+# Malformed invoke
+f_bad_invoke(x::Int) = invoke(x, (Any,), x)
+@test_throws TypeError f_bad_invoke(1)
+
+# Fixup for #37044, make sure mutation of `types` field of `DataType` is respected.
+struct A37044{T1,T2}
+    x::T1
+    y::T2
+end
+struct Ref37044
+    x::DataType
+end
+function f37044(r)
+    t = r.x
+    if !isdefined(t, :types)
+        Base.datatype_fieldtypes(t)
+    end
+    return t.types
+end
+r37044 = Ref37044(A37044{Int}.body)
+@test f37044(r37044)[1] === Int
+
+a37265() = 0
+b37265() = 0
+function c37265(d)
+    if d == 1
+        e = a37265
+    elseif d == 2
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws UndefVarError c37265(0)
+@test c37265(1) === a37265
+@test c37265(2) === b37265
+
+function c37265_2(d)
+    if 0
+        e = a37265
+    elseif 0
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws TypeError c37265_2(0)
+
+struct PointerImmutable
+    a::Any
+    b::Int
+end
+struct NullableHomogeneousPointerImmutable
+    x1::PointerImmutable
+    x2::PointerImmutable
+    x3::PointerImmutable
+    NullableHomogeneousPointerImmutable() = new()
+    NullableHomogeneousPointerImmutable(x1) = new(x1)
+    NullableHomogeneousPointerImmutable(x1, x2) = new(x1, x2)
+    NullableHomogeneousPointerImmutable(x1, x2, x3) = new(x1, x2, x3)
+end
+
+function getfield_knownindex_unused(v)
+    v.x1
+    return
+end
+
+function getfield_unknownindex_unused(v, n)
+    getfield(v, n)
+    return
+end
+
+function getfield_knownindex_used1(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld
+end
+
+function getfield_knownindex_used2(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld.a
+end
+
+function getfield_knownindex_used3(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld.b
+end
+
+let v = NullableHomogeneousPointerImmutable(),
+    v2 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2)),
+    r = Ref(0)
+    @test_throws UndefRefError getfield_knownindex_unused(v)
+    @test_throws UndefRefError getfield_unknownindex_unused(v, 1)
+    @test_throws UndefRefError getfield_unknownindex_unused(v, :x1)
+    @test_throws UndefRefError getfield_knownindex_used1(r, v)
+    @test r[] == 0
+    @test_throws UndefRefError getfield_knownindex_used2(r, v)
+    @test r[] == 0
+    @test_throws UndefRefError getfield_knownindex_used3(r, v)
+    @test r[] == 0
+
+    @test getfield_knownindex_unused(v2) === nothing
+    @test getfield_unknownindex_unused(v2, 1) === nothing
+    @test getfield_unknownindex_unused(v2, :x1) === nothing
+    @test getfield_knownindex_used1(r, v2) === PointerImmutable(1, 2)
+    @test r[] == 1
+    @test getfield_knownindex_used2(r, v2) === 1
+    @test r[] == 2
+    @test getfield_knownindex_used3(r, v2) === 2
+    @test r[] == 3
+end
+
+struct RedefinedSingleton
+end
+redefined_singleton_ref = Ref{Any}(RedefinedSingleton())
+struct RedefinedSingleton
+end
+cmp_refs(a::Ref{Any}) = a[] === RedefinedSingleton()
+@test cmp_refs(redefined_singleton_ref)
+
+struct PointerNopadding{T}
+    a::Symbol
+    b::T
+end
+struct ContainsPointerNopadding{T}
+    a::PointerNopadding{T}
+    ContainsPointerNopadding{T}() where T = new{T}()
+    ContainsPointerNopadding{T}(a) where T = new{T}(a)
+end
+
+@test !Base.datatype_haspadding(PointerNopadding{Symbol})
+@test !Base.datatype_haspadding(PointerNopadding{Int})
+# Sanity check to make sure the meaning of haspadding didn't change.
+@test Base.datatype_haspadding(PointerNopadding{Any})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Symbol}})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Int}})
+@test !Base.datatype_haspadding(ContainsPointerNopadding{Symbol})
+@test Base.datatype_haspadding(ContainsPointerNopadding{Int})
+
+# Test the codegen optimized version as well as the unoptimized version of `jl_egal`
+@noinline unopt_jl_egal(@nospecialize(a), @nospecialize(b)) =
+    ccall(:jl_egal, Cint, (Any, Any), a, b) != 0
+@noinline opt_jl_egal(a, b) = a === b
+
+let aint = ContainsPointerNopadding{Int}(), asym = ContainsPointerNopadding{Symbol}(),
+    hint = objectid(aint), hsym = objectid(asym)
+    # Test that the uninitialized bits field doesn't affect the objectid or ===
+    for i in 1:100
+        local i
+        # Increase the chance one of the objects contains garbage int
+        local bint = ContainsPointerNopadding{Int}()
+        local bsym = ContainsPointerNopadding{Symbol}()
+        @test objectid(bint) === hint
+        @test objectid(bsym) === hsym
+        @test aint === bint
+        @test asym === bsym
+        @test unopt_jl_egal(aint, bint)
+        @test unopt_jl_egal(asym, bsym)
+        @test opt_jl_egal(aint, bint)
+        @test opt_jl_egal(asym, bsym)
+        aint = bint
+        asym = bsym
+    end
+end
+
+# Check === for potentially NULL field
+let vnull1 = NullableHomogeneousPointerImmutable(),
+    vnull2 = NullableHomogeneousPointerImmutable(),
+    v1 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2)),
+    v2 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2))
+
+    @test vnull1 === vnull2
+    @test unopt_jl_egal(vnull1, vnull2)
+    @test opt_jl_egal(vnull1, vnull2)
+    @test v1 === v2
+    @test unopt_jl_egal(v1, v2)
+    @test opt_jl_egal(v1, v2)
+
+    @test vnull1 !== v1
+    @test !unopt_jl_egal(vnull1, v1)
+    @test !opt_jl_egal(vnull1, v1)
+    @test vnull2 !== v2
+    @test !unopt_jl_egal(vnull2, v2)
+    @test !opt_jl_egal(vnull2, v2)
+end
+
+# Make sure non-allbits union is handled correctly
+@noinline returns_union37557(r) = r[]
+@noinline compare_union37557(r1, r2) = returns_union37557(r1) === returns_union37557(r2)
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(Int[]), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                          Ref{Union{Int,Vector{Int}}}(3))
+let array = Int[]
+    @test compare_union37557(Ref{Union{Int,Vector{Int}}}(array),
+                             Ref{Union{Int,Vector{Int}}}(array))
+end
+@test compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                         Ref{Union{Int,Vector{Int}}}(1))

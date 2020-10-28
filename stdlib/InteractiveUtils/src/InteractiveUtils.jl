@@ -2,8 +2,10 @@
 
 module InteractiveUtils
 
+Base.Experimental.@optlevel 1
+
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
-    versioninfo, subtypes, @which, @edit, @less, @functionloc, @code_warntype,
+    versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
     @code_typed, @code_lowered, @code_llvm, @code_native, clipboard
 
 import Base.Docs.apropos
@@ -231,13 +233,33 @@ are included, including those not visible in the current module.
 # Examples
 ```jldoctest
 julia> subtypes(Integer)
-3-element Array{Any,1}:
+3-element Vector{Any}:
  Bool
  Signed
  Unsigned
 ```
 """
 subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
+
+"""
+    supertypes(T::Type)
+
+Return a tuple `(T, ..., Any)` of `T` and all its supertypes, as determined by
+successive calls to the [`supertype`](@ref) function, listed in order of `<:`
+and terminated by `Any`.
+
+# Examples
+```jldoctest
+julia> supertypes(Int)
+(Int64, Signed, Integer, Real, Number, Any)
+```
+"""
+function supertypes(T::Type)
+    S = supertype(T)
+    # note: we return a tuple here, not an Array as for subtypes, because in
+    #       the future we could evaluate this function statically if desired.
+    return S === T ? (T,) : (T, supertypes(S)...)
+end
 
 # dumptype is for displaying abstract type hierarchies,
 # based on Jameson Nash's typetree.jl in https://github.com/JuliaArchive/Examples
@@ -327,6 +349,31 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
             Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
         return LinearAlgebra.peakflops(n; parallel = parallel)
     end
+end
+
+function report_bug(kind)
+    @info "Loading BugReporting package..."
+    BugReportingId = Base.PkgId(
+        Base.UUID((0xbcf9a6e7_4020_453c,0xb88e_690564246bb8)), "BugReporting")
+    # Check if the BugReporting package exists in the current environment
+    local BugReporting
+    if Base.locate_package(BugReportingId) === nothing
+        @info "Package `BugReporting` not found - attempting temporary installation"
+        # Create a temporary environment and add BugReporting
+        let Pkg = Base.require(Base.PkgId(
+            Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))
+            mktempdir() do tmp
+                old_load_path = copy(LOAD_PATH)
+                push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
+                Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
+                BugReporting = Base.require(BugReportingId)
+                append!(empty!(LOAD_PATH), old_load_path)
+            end
+        end
+    else
+        BugReporting = Base.require(BugReportingId)
+    end
+    return Base.invokelatest(BugReporting.make_interactive_report, kind)
 end
 
 end

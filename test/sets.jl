@@ -96,7 +96,8 @@ end
     @test ===(eltype(s3), Float32)
 end
 @testset "show" begin
-    @test sprint(show, Set()) == "Set(Any[])"
+    @test sprint(show, Set()) == "Set{Any}()"
+    @test repr([Set(),Set()]) == "Set{Any}[Set(), Set()]"
     @test sprint(show, Set(['a'])) == "Set(['a'])"
 end
 @testset "isempty, length, in, push, pop, delete" begin
@@ -151,6 +152,9 @@ end
     s = Set([1])
     @test isequal(sizehint!(s, 10), Set([1]))
     @test isequal(empty!(s), Set())
+    s2 = GenericSet(s)
+    sizehint!(s2, 10)
+    @test s2 == GenericSet(s)
 end
 @testset "rehash!" begin
     # Use a pointer type to have defined behavior for uninitialized
@@ -213,6 +217,9 @@ end
     # union must uniquify
     @test union([1, 2, 1]) == union!([1, 2, 1]) == [1, 2]
     @test union([1, 2, 1], [2, 2]) == union!([1, 2, 1], [2, 2]) == [1, 2]
+    s2 = Set([nothing])
+    union!(s2, [nothing])
+    @test s2 == Set([nothing])
 end
 
 @testset "intersect" begin
@@ -301,13 +308,15 @@ end
     @test !(Set([1,2,3]) <= Set([1,2,4]))
 end
 
-@testset "issubset, symdiff" begin
+@testset "issubset, symdiff, isdisjoint" begin
     for S in (Set, BitSet, Vector)
         for (l,r) in ((S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2]),     S([3,4])),
                       (S([5,6,7,8]), S([7,8,9])),
                       (S([1,2,3]),   S()),
+                      (S(),          S()),
+                      (S(),          S([1,2,3])),
                       (S([1,2,3]),   S([1])),
                       (S([1,2,3]),   S([1,2])),
                       (S([1,2,3]),   S([1,2,3])),
@@ -317,6 +326,8 @@ end
             @test issubset(intersect(l,r), r)
             @test issubset(l, union(l,r))
             @test issubset(r, union(l,r))
+            @test isdisjoint(l,l) == isempty(l)
+            @test isdisjoint(l,r) == isempty(intersect(l,r))
             if S === Vector
                 @test sort(union(intersect(l,r),symdiff(l,r))) == sort(union(l,r))
             else
@@ -347,30 +358,63 @@ end
     # symdiff must NOT uniquify
     @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [2]
     @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [2]
+
+    # Base.hasfastin
+    @test all(Base.hasfastin, Any[Dict(1=>2), Set(1), BitSet(1), 1:9, 1:2:9,
+                                  Dict, Set, BitSet, UnitRange, StepRange])
+    @test !any(Base.hasfastin, Any[[1, 2, 3], "123",
+                                   Array, String])
+
+    # tests for Dict
+    d1 = Dict(1=>nothing, 2=>nothing)
+    d2 = Dict(1=>nothing, 3=>nothing)
+    d3 = Dict(1=>nothing, 2=>nothing, 3=>nothing)
+    @test d3 == merge(d1, d2)
+    @test !issubset(d1, d2)
+    @test !issubset(d2, d1)
+    @test !issubset(d3, d1)
+    @test !issubset(d3, d2)
+    @test issubset(d1, d3)
+    @test issubset(d2, d3)
+
+    # no fast in, long enough container
+    @test issubset(Set(Bool[]), rand(Bool, 100)) == true
+    # neither has a fast in, right doesn't have a length
+    @test isdisjoint([1, 3, 5, 7, 9], Iterators.filter(iseven, 1:10))
 end
 
 @testset "unique" begin
-    u = unique([1, 1, 2])
+    u = @inferred(unique([1, 1, 2]))
     @test in(1, u)
     @test in(2, u)
     @test length(u) == 2
-    @test unique(iseven, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 8]
-    @test unique(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 1, 9]
+    @test @inferred(unique(iseven, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])) == [5, 8]
+    @test @inferred(unique(x->x^2, Integer[3, -4, 5, 4])) == Integer[3, -4, 5]
+    @test @inferred(unique(iseven, Integer[3, -4, 5, 4]; seen=Set{Bool}())) == Integer[3, -4]
+    @test @inferred(unique(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])) == [5, 1, 9]
+    for r = (Base.OneTo(-1), Base.OneTo(0), Base.OneTo(1), Base.OneTo(5),
+             1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
+             StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
+             StepRangeLen(1.0, 0.0, 0), StepRangeLen(1.0, -0.0, 1), StepRangeLen(1.0, 0.0, 2),
+             LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
+        @test @inferred(unique(r)) == invoke(unique, Tuple{Any}, r)
+    end
 end
 
 @testset "issue 20105" begin
     @test @inferred(unique(x for x in 1:1)) == [1]
     @test unique(x for x in Any[1, 1.0])::Vector{Real} == [1]
     @test unique(x for x in Real[1, 1.0])::Vector{Real} == [1]
-    @test unique(Integer[1, 1, 2])::Vector{Integer} == [1, 2]
+    @test @inferred(unique(Integer[1, 1, 2]))::Vector{Integer} == [1, 2]
+    @test unique(x for x in []) isa Vector{Any}
 end
 
 @testset "unique!" begin
     u = [1,1,3,2,1]
-    unique!(u)
+    @inferred(unique!(u))
     @test u == [1,3,2]
-    @test unique!([]) == []
-    @test unique!(Float64[]) == Float64[]
+    @test @inferred(unique!([])) == []
+    @test @inferred(unique!(Float64[])) == Float64[]
     u = [1,2,2,3,5,5]
     @test unique!(u) === u
     @test u == [1,2,3,5]
@@ -400,8 +444,12 @@ end
     u = [1,2,5,1,3,2]
     @test unique!(x -> x ^ 2, [1, -1, 3, -3, 5, -5]) == [1, 3, 5]
     @test unique!(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 1, 9]
-    @test unique!(iseven, [2, 3, 5, 7, 9]) == [2, 3]
-    @test unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1]) == [1, 2]
+    @test @inferred(unique!(iseven, [2, 3, 5, 7, 9])) == [2, 3]
+    @test @inferred(unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1])) == [1, 2]
+    @test @inferred(unique!(x -> x % 2 == 0 ? :even : "odd", [1, 2, 3, 4, 2, 2, 1]; seen=Set{Union{Symbol,String}}())) == [1, 2]
+
+    @test isempty(unique!(Union{}[]))
+    @test eltype(unique!([i for i in ["1"] if i isa Int])) <: Union{}
 end
 
 @testset "allunique" begin
@@ -419,6 +467,14 @@ end
     @test allunique(7:-1:1)       # negative step
     @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
+    @test allunique(('a':1:'c')[1:2]) == true
+    for r = (Base.OneTo(-1), Base.OneTo(0), Base.OneTo(1), Base.OneTo(5),
+             1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
+             StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
+             StepRangeLen(1.0, 0.0, 0), StepRangeLen(1.0, -0.0, 1), StepRangeLen(1.0, 0.0, 2),
+             LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
+        @test allunique(r) == invoke(allunique, Tuple{Any}, r)
+    end
 end
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
@@ -557,8 +613,12 @@ end
     @test s == Set([2, 3])
     @test replace!(x->2x, s, count=0x1) in [Set([4, 3]), Set([2, 6])]
 
-    for count = (0, 0x0, big(0))
-        @test replace([1, 2], 1=>0, 2=>0, count=count) == [1, 2] # count=0 --> no replacements
+    for count = (0, 0x0, big(0)) # count == 0 --> no replacements
+        @test replace([1, 2], 1=>0, 2=>0; count) == [1, 2]
+        for dict = (Dict(1=>2, 2=>3), IdDict(1=>2, 2=>3))
+            @test replace(dict, (1=>2) => (1=>3); count) == dict
+        end
+        @test replace(Set([1, 2]), 2=>-1; count) == Set([1, 2])
     end
 
     # test collisions with AbstractSet/AbstractDict
@@ -592,11 +652,16 @@ end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
-    a = [1, 2]
-    b = [2, 1, 3]
-    for C = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
-        A = C(a)
-        B = C(b)
+    a = [2, 1, 2]
+    b = [2, 3, 1, 3]
+    ua = unique(a)
+    ub = unique(b)
+    for TA in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        TB in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+        uA = false:true,
+        uB = false:true
+        A = TA(uA ? ua : a)
+        B = TB(uB ? ub : b)
         @test A ⊆ B
         @test A ⊊ B
         @test !(A ⊈ B)
@@ -611,6 +676,10 @@ end
         @test !(B ⊉ A)
         @test !issetequal(A, B)
         @test !issetequal(B, A)
+        for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
+            @test issetequal(A, T(A))
+            @test issetequal(B, T(B))
+        end
         if A isa AbstractSet && B isa AbstractSet
             @test A <= B
             @test A <  B
@@ -621,11 +690,11 @@ end
             @test B >= A
             @test B >  A
         end
-        for D = (Tuple, identity, Set, BitSet)
-            @test issetequal(A, D(A))
-            @test !issetequal(A, D(B))
-        end
     end
+    # first doesn't have length
+    @test issetequal(Iterators.filter(iseven, 1:10), [2, 4, 6, 8, 10])
+    # both don't have length
+    @test issetequal(Iterators.filter(iseven, 1:10), Iterators.filter(iseven, 1:10))
 end
 
 @testset "optimized union! with max_values" begin

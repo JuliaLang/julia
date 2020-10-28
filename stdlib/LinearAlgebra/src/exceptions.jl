@@ -3,7 +3,8 @@
 export LAPACKException,
        SingularException,
        PosDefException,
-       RankDeficientException
+       RankDeficientException,
+       ZeroPivotException
 
 struct LAPACKException <: Exception
     info::BlasInt
@@ -42,4 +43,20 @@ end
 
 struct RankDeficientException <: Exception
     info::BlasInt
+end
+
+"""
+    ZeroPivotException <: Exception
+
+Exception thrown when a matrix factorization/solve encounters a zero in a pivot (diagonal)
+position and cannot proceed.  This may *not* mean that the matrix is singular:
+it may be fruitful to switch to a diffent factorization such as pivoted LU
+that can re-order variables to eliminate spurious zero pivots.
+The `info` field indicates the location of (one of) the zero pivot(s).
+"""
+struct ZeroPivotException <: Exception
+    info::BlasInt
+end
+function Base.showerror(io::IO, ex::ZeroPivotException)
+    print(io, "ZeroPivotException: factorization encountered one or more zero pivots. Consider switching to a pivoted LU factorization.")
 end

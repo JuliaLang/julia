@@ -109,5 +109,5 @@ See code comments for each components for more implementation details.
     parsing the metadata saved during system image generation.
     Host feature detection and selection decision are done in `src/processor_*.cpp`
     depending on the ISA. The target selection will prefer exact CPU name match,
-    larger vector register size, and larget number of features.
+    larger vector register size, and larger number of features.
     An overview of this process is in `src/processor.cpp`.

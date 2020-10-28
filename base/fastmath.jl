@@ -19,12 +19,15 @@
 #       zero argument or result as insignificant.
 # arcp: Allow Reciprocal - Allow optimizations to use the reciprocal
 #       of an argument rather than perform division.
+# fast: Fast - Allow algebraically equivalent transformations that may
+#       dramatically change results in floating point (e.g.
+#       reassociate). This flag implies all the others.
 
 module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: sqrt_llvm, neg_float_fast,
+import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
     add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
@@ -91,7 +94,7 @@ const rewrite_op =
 function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
-    elseif expr.head == :call && expr.args[1] == :^ && expr.args[3] isa Integer
+    elseif expr.head === :call && expr.args[1] === :^ && expr.args[3] isa Integer
         # mimic Julia's literal_pow lowering of literal integer powers
         return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(expr.args[2]), Val{expr.args[3]}())
     end
@@ -103,19 +106,20 @@ function make_fastmath(expr::Expr)
             # simple assignment
             expr = :($var = $op($var, $rhs))
         elseif isa(var, Expr) && var.head === :ref
+            var = var::Expr
             # array reference
             arr = var.args[1]
             inds = var.args[2:end]
             arrvar = gensym()
-            indvars = Any[gensym() for i in inds]
+            indvars = Any[gensym() for _ in inds]
             expr = quote
                 $(Expr(:(=), arrvar, arr))
-                $(Expr(:(=), Expr(:tuple, indvars...), Expr(:tuple, inds...)))
+                $(Expr(:(=), Base.exprarray(:tuple, indvars), Base.exprarray(:tuple, inds)))
                 $arrvar[$(indvars...)] = $op($arrvar[$(indvars...)], $rhs)
             end
         end
     end
-    Expr(make_fastmath(expr.head), map(make_fastmath, expr.args)...)
+    Base.exprarray(make_fastmath(expr.head), Base.mapany(make_fastmath, expr.args))
 end
 function make_fastmath(symb::Symbol)
     fast_symb = get(fast_op, symb, :nothing)
@@ -154,7 +158,7 @@ end
 
 # Basic arithmetic
 
-const FloatTypes = Union{Float32,Float64}
+const FloatTypes = Union{Float16,Float32,Float64}
 
 sub_fast(x::FloatTypes) = neg_float_fast(x)
 
@@ -277,7 +281,7 @@ pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Fl
 pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
 @inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 
-sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
+sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
 
 # libm
 

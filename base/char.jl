@@ -46,7 +46,7 @@ represents a valid Unicode character.
 Char
 
 (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
-(::Type{AbstractChar})(x::Number) = Char(x)
+AbstractChar(x::Number) = Char(x)
 (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 
@@ -218,10 +218,10 @@ isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
 hash(x::AbstractChar, h::UInt) = hash(Char(x), h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
--(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
--(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) - Int32(y))
-+(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) + Int32(y))
-+(x::Integer, y::AbstractChar) = y + x
+@inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
+@inline -(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) - Int32(y))
+@inline +(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) + Int32(y))
+@inline +(x::Integer, y::AbstractChar) = y + x
 
 # `print` should output UTF-8 by default for all AbstractChar types.
 # (Packages may implement other IO subtypes to specify different encodings.)
@@ -295,6 +295,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
     show(io, c)
+    get(io, :compact, false) && return
     if !ismalformed(c)
         print(io, ": ")
         if isoverlong(c)
@@ -304,7 +305,7 @@ function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
         else
             u = codepoint(c)
         end
-        h = string(u, base = 16, pad = u ≤ 0xffff ? 4 : 6)
+        h = uppercase(string(u, base = 16, pad = 4))
         print(io, (isascii(c) ? "ASCII/" : ""), "Unicode U+", h)
     else
         print(io, ": Malformed UTF-8")

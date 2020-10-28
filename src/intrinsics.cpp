@@ -7,32 +7,28 @@ namespace JL_I {
 #include "ccall.cpp"
 
 using namespace JL_I;
-static Function *runtime_func[num_intrinsics];
-static bool float_func[num_intrinsics];
-static void jl_init_intrinsic_functions_codegen(Module *m)
-{
-    std::vector<Type *> args1(0); \
-    args1.push_back(T_prjlvalue); \
-    std::vector<Type *> args2(0); \
-    args2.push_back(T_prjlvalue); \
-    args2.push_back(T_prjlvalue); \
-    std::vector<Type *> args3(0); \
-    args3.push_back(T_prjlvalue); \
-    args3.push_back(T_prjlvalue); \
-    args3.push_back(T_prjlvalue); \
-    std::vector<Type *> args4(0); \
-    args4.push_back(T_prjlvalue); \
-    args4.push_back(T_prjlvalue); \
-    args4.push_back(T_prjlvalue); \
-    args4.push_back(T_prjlvalue);
 
-#define ADD_I(name, nargs) do { \
-        Function *func = Function::Create(FunctionType::get(T_prjlvalue, args##nargs, false), \
-                                          Function::ExternalLinkage, "jl_"#name, m); \
-        runtime_func[name] = func; \
-        add_named_global(func, &jl_##name); \
-    } while (0);
+FunctionType *get_intr_args1(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue}, false); }
+FunctionType *get_intr_args2(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue}, false); }
+FunctionType *get_intr_args3(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
+FunctionType *get_intr_args4(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
+
+static JuliaFunction *runtime_func[num_intrinsics] = {
+#define ADD_I(name, nargs) new JuliaFunction{"jl_"#name, get_intr_args##nargs, nullptr},
 #define ADD_HIDDEN ADD_I
+#define ALIAS(alias, base) nullptr,
+    INTRINSICS
+#undef ADD_I
+#undef ADD_HIDDEN
+#undef ALIAS
+};
+
+static bool float_func[num_intrinsics];
+
+static void jl_init_intrinsic_functions_codegen(void)
+{
+#define ADD_I(name, nargs)
+#define ADD_HIDDEN(name, nargs)
 #define ALIAS(alias, base) runtime_func[alias] = runtime_func[base];
     INTRINSICS
 #undef ADD_I
@@ -70,6 +66,7 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     float_func[trunc_llvm] = true;
     float_func[rint_llvm] = true;
     float_func[sqrt_llvm] = true;
+    float_func[sqrt_llvm_fast] = true;
 }
 
 extern "C"
@@ -109,10 +106,8 @@ static Type *FLOATT(Type *t)
         return T_float64;
     if (nb == 32)
         return T_float32;
-#ifndef DISABLE_FLOAT16
     if (nb == 16)
         return T_float16;
-#endif
     if (nb == 128)
         return T_float128;
     return NULL;
@@ -146,34 +141,34 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
     return ctx.builder.CreateZExt(x, to);
 }
 
-static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
+static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_datatype_t *bt)
 {
-    // assumes `jl_justbits(bt)`.
+    // assumes `jl_is_pointerfree(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
     // make sure to return exactly the type specified by
     // julia_type_to_llvm as this will be assumed by the callee.
     if (bt == jl_bool_type)
         return ConstantInt::get(T_int8, (*(const uint8_t*)ptr) ? 1 : 0);
 
-    if (jl_is_vecelement_type((jl_value_t*)bt))
-        bt = (jl_datatype_t*)jl_tparam0(bt);
+    Type *lt = julia_struct_to_llvm(ctx, (jl_value_t*)bt, NULL, NULL);
 
-    Type *lt = julia_struct_to_llvm((jl_value_t*)bt, NULL, NULL);
+    if (jl_is_vecelement_type((jl_value_t*)bt) && !jl_is_uniontype(jl_tparam0(bt)))
+        bt = (jl_datatype_t*)jl_tparam0(bt);
 
     if (type_is_ghost(lt))
         return UndefValue::get(lt);
 
-    if (jl_is_primitivetype(bt)) {
-        if (lt->isFloatTy()) {
-            uint32_t data32 = *(const uint32_t*)ptr;
-            return ConstantFP::get(jl_LLVMContext,
-                    APFloat(lt->getFltSemantics(), APInt(32, data32)));
-        }
-        if (lt->isDoubleTy()) {
-            uint64_t data64 = *(const uint64_t*)ptr;
-            return ConstantFP::get(jl_LLVMContext,
-                    APFloat(lt->getFltSemantics(), APInt(64, data64)));
-        }
+    if (lt->isFloatTy()) {
+        uint32_t data32 = *(const uint32_t*)ptr;
+        return ConstantFP::get(jl_LLVMContext,
+                APFloat(lt->getFltSemantics(), APInt(32, data32)));
+    }
+    if (lt->isDoubleTy()) {
+        uint64_t data64 = *(const uint64_t*)ptr;
+        return ConstantFP::get(jl_LLVMContext,
+                APFloat(lt->getFltSemantics(), APInt(64, data64)));
+    }
+    if (lt->isFloatingPointTy() || lt->isIntegerTy()) {
         int nb = jl_datatype_size(bt);
         APInt val(8 * nb, 0);
         void *bits = const_cast<uint64_t*>(val.getRawData());
@@ -187,19 +182,23 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
         return ConstantInt::get(lt, val);
     }
 
-    CompositeType *lct = cast<CompositeType>(lt);
     size_t nf = jl_datatype_nfields(bt);
     std::vector<Constant*> fields(0);
     for (size_t i = 0; i < nf; i++) {
         size_t offs = jl_field_offset(bt, i);
-        assert(!jl_field_isptr(bt, i));
         jl_value_t *ft = jl_field_type(bt, i);
-        Type *lft = julia_type_to_llvm(ft);
+        Type *lft = julia_type_to_llvm(ctx, ft);
         if (type_is_ghost(lft))
             continue;
+        assert(!jl_field_isptr(bt, i));
         unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
         while (fields.size() < llvm_idx)
-            fields.push_back(UndefValue::get(lct->getTypeAtIndex(fields.size())));
+            fields.push_back(
+#if JL_LLVM_VERSION >= 110000
+                UndefValue::get(GetElementPtrInst::getTypeAtIndex(lt, fields.size())));
+#else
+                UndefValue::get(cast<CompositeType>(lt)->getTypeAtIndex(fields.size())));
+#endif
         const uint8_t *ov = (const uint8_t*)ptr + offs;
         if (jl_is_uniontype(ft)) {
             // compute the same type layout as julia_struct_to_llvm
@@ -249,29 +248,29 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
             fields.push_back(ConstantInt::get(T_int8, sel));
         }
         else {
-            Constant *val = julia_const_to_llvm(ov, (jl_datatype_t*)ft);
+            Constant *val = julia_const_to_llvm(ctx, ov, (jl_datatype_t*)ft);
             fields.push_back(val);
         }
     }
 
-    if (lct->isVectorTy())
+    if (lt->isVectorTy())
         return ConstantVector::get(fields);
-    if (StructType *st = dyn_cast<StructType>(lct))
+    if (StructType *st = dyn_cast<StructType>(lt))
         return ConstantStruct::get(st, fields);
-    ArrayType *at = cast<ArrayType>(lct);
+    ArrayType *at = cast<ArrayType>(lt);
     return ConstantArray::get(at, fields);
 }
 
-static Constant *julia_const_to_llvm(jl_value_t *e)
+static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e)
 {
     if (e == jl_true)
         return ConstantInt::get(T_int8, 1);
     if (e == jl_false)
         return ConstantInt::get(T_int8, 0);
     jl_value_t *bt = jl_typeof(e);
-    if (!jl_justbits(bt))
+    if (!jl_is_pointerfree(bt))
         return NULL;
-    return julia_const_to_llvm(e, (jl_datatype_t*)bt);
+    return julia_const_to_llvm(ctx, e, (jl_datatype_t*)bt);
 }
 
 static jl_cgval_t ghostValue(jl_value_t *ty);
@@ -308,7 +307,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         Type *INTT_to = INTT(to);
         if (to != INTT_to)
             unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
-        unboxed = ctx.builder.CreateIntToPtr(unboxed, to);
+        unboxed = emit_inttoptr(ctx, unboxed, to);
     }
     else if (ty != to) {
         unboxed = ctx.builder.CreateBitCast(unboxed, to);
@@ -332,15 +331,15 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         return UndefValue::get(to); // type mismatch error
     }
 
-    Constant *c = x.constant ? julia_const_to_llvm(x.constant) : NULL;
+    Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : NULL;
     if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
-        Value *unboxed = emit_unboxed_coercion(ctx, to, c ? c : x.V);
+        Value *unboxed = c ? c : x.V;
         if (!dest)
-            return unboxed;
+            return emit_unboxed_coercion(ctx, to, unboxed);
         Type *dest_ty = unboxed->getType()->getPointerTo();
         if (dest->getType() != dest_ty)
             dest = emit_bitcast(ctx, dest, dest_ty);
-        tbaa_decorate(tbaa_dest, ctx.builder.CreateStore(unboxed, dest));
+        tbaa_decorate(tbaa_dest, ctx.builder.CreateAlignedStore(unboxed, dest, Align(julia_alignment(jt))));
         return NULL;
     }
 
@@ -386,12 +385,12 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
                     (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
                     (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
                     DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
-                Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
+                Instruction *load = ctx.builder.CreateAlignedLoad(p, Align(alignment));
                 return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
             }
         }
         p = maybe_bitcast(ctx, p, ptype);
-        Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
+        Instruction *load = ctx.builder.CreateAlignedLoad(p, Align(alignment));
         return tbaa_decorate(x.tbaa, load);
     }
 }
@@ -409,7 +408,7 @@ static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs)
 {
-    Value *func = prepare_call(runtime_func[f]);
+    Function *func = prepare_call(runtime_func[f]);
     Value **argvalues = (Value**)alloca(sizeof(Value*) * nargs);
     for (size_t i = 0; i < nargs; ++i) {
         argvalues[i] = boxed(ctx, argv[i]);
@@ -435,7 +434,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
 
     // Examine the second argument //
     bool isboxed;
-    Type *vxt = julia_type_to_llvm(v.typ, &isboxed);
+    Type *vxt = julia_type_to_llvm(ctx, v.typ, &isboxed);
 
     if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
         Value *typ = emit_typeof_boxed(ctx, v);
@@ -468,7 +467,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     if (!v.ispointer())
         vx = v.V;
     else if (v.constant)
-        vx = julia_const_to_llvm(v.constant);
+        vx = julia_const_to_llvm(ctx, v.constant);
 
     if (v.ispointer() && vx == NULL) {
         // try to load as original Type, to preserve llvm optimizations
@@ -489,7 +488,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         else if (vxt->isPointerTy() && !llvmt->isPointerTy())
             vx = ctx.builder.CreatePtrToInt(vx, llvmt);
         else if (!vxt->isPointerTy() && llvmt->isPointerTy())
-            vx = ctx.builder.CreateIntToPtr(vx, llvmt);
+            vx = emit_inttoptr(ctx, vx, llvmt);
         else
             vx = emit_bitcast(ctx, vx, llvmt);
     }
@@ -579,7 +578,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
         return mark_julia_type(
                 ctx,
-                ctx.builder.CreateAlignedLoad(ctx.builder.CreateGEP(T_prjlvalue, thePtr, im1), align_nb),
+                ctx.builder.CreateAlignedLoad(ctx.builder.CreateInBoundsGEP(T_prjlvalue, thePtr, im1), Align(align_nb)),
                 true,
                 ety);
     }
@@ -595,14 +594,14 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
-        thePtr = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, thePtr, T_pint8), im1);
+        thePtr = ctx.builder.CreateInBoundsGEP(T_int8, emit_bitcast(ctx, thePtr, T_pint8), im1);
         MDNode *tbaa = best_tbaa(ety);
         emit_memcpy(ctx, strct, tbaa, thePtr, nullptr, size, 1);
         return mark_julia_type(ctx, strct, true, ety);
     }
     else {
         bool isboxed;
-        Type *ptrty = julia_type_to_llvm(ety, &isboxed);
+        Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
@@ -653,8 +652,8 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
         thePtr = emit_unbox(ctx, T_psize, e, e.typ);
         Instruction *store = ctx.builder.CreateAlignedStore(
-          emit_pointer_from_objref(ctx, boxed(ctx, x)),
-            ctx.builder.CreateGEP(T_size, thePtr, im1), align_nb);
+          ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), T_size),
+            ctx.builder.CreateInBoundsGEP(T_size, thePtr, im1), Align(align_nb));
         tbaa_decorate(tbaa_data, store);
     }
     else if (!jl_isbits(ety)) {
@@ -666,11 +665,11 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
-        emit_memcpy(ctx, ctx.builder.CreateGEP(T_int8, thePtr, im1), nullptr, x, size, align_nb);
+        emit_memcpy(ctx, ctx.builder.CreateInBoundsGEP(T_int8, thePtr, im1), nullptr, x, size, align_nb);
     }
     else {
         bool isboxed;
-        Type *ptrty = julia_type_to_llvm(ety, &isboxed);
+        Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
@@ -764,10 +763,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     }
 
     Value *ifelse_result;
-    bool isboxed;
-    Type *llt1 = julia_type_to_llvm(t1, &isboxed);
-    if (t1 != t2)
-        isboxed = true;
+    bool isboxed = t1 != t2 || !deserves_stack(t1);
+    Type *llt1 = isboxed ? T_prjlvalue : julia_type_to_llvm(ctx, t1);
     if (!isboxed) {
         if (type_is_ghost(llt1))
             return x;
@@ -805,8 +802,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 ifelse_tbaa = x.tbaa;
             }
             else {
-                x_ptr = decay_derived(x_ptr);
-                y_ptr = decay_derived(y_ptr);
+                x_ptr = decay_derived(ctx, x_ptr);
+                y_ptr = decay_derived(ctx, y_ptr);
                 if (x_ptr->getType() != y_ptr->getType())
                     y_ptr = ctx.builder.CreateBitCast(y_ptr, x_ptr->getType());
                 ifelse_result = ctx.builder.CreateSelect(isfalse, y_ptr, x_ptr);
@@ -848,8 +845,9 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                     tindex = compute_tindex_unboxed(ctx, x, rt_hint);
                 }
                 tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
-                ret->addIncoming(tindex, compute);
+                compute = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.CreateBr(post);
+                ret->addIncoming(tindex, compute);
                 ctx.builder.SetInsertPoint(post);
                 ctx.builder.Insert(ret);
                 tindex = ret;
@@ -861,6 +859,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 if (!y_vboxed)
                     y_vboxed = ConstantPointerNull::get(cast<PointerType>(x_vboxed->getType()));
                 ret.Vboxed = ctx.builder.CreateSelect(isfalse, y_vboxed, x_vboxed);
+                assert(ret.Vboxed->getType() == T_prjlvalue);
             }
             return ret;
         }
@@ -896,8 +895,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     // return emit_runtime_call(ctx, f, argv, nargs);
 
     switch (f) {
-    case arraylen:
-        return mark_julia_type(ctx, emit_arraylen(ctx, argv[0]), false, jl_long_type);
+    case arraylen: {
+        const jl_cgval_t &x = argv[0];
+        jl_value_t *typ = jl_unwrap_unionall(x.typ);
+        if (!jl_is_datatype(typ) || ((jl_datatype_t*)typ)->name != jl_array_typename)
+            return emit_runtime_call(ctx, f, argv, nargs);
+        return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
+    }
     case pointerref:
         return emit_pointerref(ctx, argv);
     case pointerset:
@@ -1023,19 +1027,18 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case add_ptr: {
         return ctx.builder.CreatePtrToInt(
             ctx.builder.CreateGEP(T_int8,
-                ctx.builder.CreateIntToPtr(x, T_pint8), y), t);
+                emit_inttoptr(ctx, x, T_pint8), y), t);
 
     }
 
     case sub_ptr: {
         return ctx.builder.CreatePtrToInt(
             ctx.builder.CreateGEP(T_int8,
-                ctx.builder.CreateIntToPtr(x, T_pint8), ctx.builder.CreateNeg(y)), t);
+                emit_inttoptr(ctx, x, T_pint8), ctx.builder.CreateNeg(y)), t);
 
     }
 
-// Implements IEEE negate. See issue #7868
-    case neg_float: return math_builder(ctx)().CreateFSub(ConstantFP::get(t, -0.0), x);
+    case neg_float: return math_builder(ctx)().CreateFNeg(x);
     case neg_float_fast: return math_builder(ctx, true)().CreateFNeg(x);
     case add_float: return math_builder(ctx)().CreateFAdd(x, y);
     case sub_float: return math_builder(ctx)().CreateFSub(x, y);
@@ -1050,7 +1053,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case fma_float: {
         assert(y->getType() == x->getType());
         assert(z->getType() == y->getType());
-        Value *fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma, makeArrayRef(t));
+        FunctionCallee fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma, makeArrayRef(t));
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
@@ -1080,7 +1083,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
                 (f == checked_smul_int ?
                  Intrinsic::smul_with_overflow :
                  Intrinsic::umul_with_overflow)))));
-        Value *intr = Intrinsic::getDeclaration(jl_Module, intr_id, makeArrayRef(t));
+        FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, intr_id, makeArrayRef(t));
         Value *res = ctx.builder.CreateCall(intr, {x, y});
         Value *val = ctx.builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
         Value *obit = ctx.builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
@@ -1093,7 +1096,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         *newtyp = tuptyp;
 
         Value *tupval;
-        tupval = UndefValue::get(julia_type_to_llvm((jl_value_t*)tuptyp));
+        tupval = UndefValue::get(julia_type_to_llvm(ctx, (jl_value_t*)tuptyp));
         tupval = ctx.builder.CreateInsertValue(tupval, val, ArrayRef<unsigned>(0));
         tupval = ctx.builder.CreateInsertValue(tupval, obyte, ArrayRef<unsigned>(1));
         return tupval;
@@ -1177,46 +1180,66 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case or_int:  return ctx.builder.CreateOr(x, y);
     case xor_int: return ctx.builder.CreateXor(x, y);
 
-    case shl_int:
-        return ctx.builder.CreateSelect(
-                ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
-                                                          t->getPrimitiveSizeInBits())),
-                ConstantInt::get(t, 0),
-                ctx.builder.CreateShl(x, uint_cnvt(ctx, t, y)));
-    case lshr_int:
-        return ctx.builder.CreateSelect(
-                ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
-                                                          t->getPrimitiveSizeInBits())),
-                ConstantInt::get(t, 0),
-                ctx.builder.CreateLShr(x, uint_cnvt(ctx, t, y)));
-    case ashr_int:
-        return ctx.builder.CreateSelect(
-                ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
-                                                          t->getPrimitiveSizeInBits())),
-                ctx.builder.CreateAShr(x, ConstantInt::get(t, t->getPrimitiveSizeInBits() - 1)),
-                ctx.builder.CreateAShr(x, uint_cnvt(ctx, t, y)));
-
+    case shl_int: {
+        Value *the_shl = ctx.builder.CreateShl(x, uint_cnvt(ctx, t, y));
+        if (ConstantInt::isValueValidForType(y->getType(), t->getPrimitiveSizeInBits())) {
+            return ctx.builder.CreateSelect(
+                    ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
+                                                                  t->getPrimitiveSizeInBits())),
+                    ConstantInt::get(t, 0),
+                    the_shl);
+        }
+        else {
+            return the_shl;
+        }
+    }
+    case lshr_int: {
+        Value *the_shr = ctx.builder.CreateLShr(x, uint_cnvt(ctx, t, y));
+        if (ConstantInt::isValueValidForType(y->getType(), t->getPrimitiveSizeInBits())) {
+            return ctx.builder.CreateSelect(
+                    ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
+                                                                  t->getPrimitiveSizeInBits())),
+                    ConstantInt::get(t, 0),
+                    the_shr);
+        }
+        else {
+            return the_shr;
+        }
+    }
+    case ashr_int: {
+        Value *the_shr = ctx.builder.CreateAShr(x, uint_cnvt(ctx, t, y));
+        if (ConstantInt::isValueValidForType(y->getType(), t->getPrimitiveSizeInBits())) {
+            return ctx.builder.CreateSelect(
+                    ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
+                                                                  t->getPrimitiveSizeInBits())),
+                    ctx.builder.CreateAShr(x, ConstantInt::get(t, t->getPrimitiveSizeInBits() - 1)),
+                    the_shr);
+        }
+        else {
+            return the_shr;
+        }
+    }
     case bswap_int: {
-        Value *bswapintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, makeArrayRef(t));
+        FunctionCallee bswapintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, makeArrayRef(t));
         return ctx.builder.CreateCall(bswapintr, x);
     }
     case ctpop_int: {
-        Value *ctpopintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, makeArrayRef(t));
+        FunctionCallee ctpopintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, makeArrayRef(t));
         return ctx.builder.CreateCall(ctpopintr, x);
     }
     case ctlz_int: {
-        Value *ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, makeArrayRef(t));
+        FunctionCallee ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, makeArrayRef(t));
         y = ConstantInt::get(T_int1, 0);
         return ctx.builder.CreateCall(ctlz, {x, y});
     }
     case cttz_int: {
-        Value *cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, makeArrayRef(t));
+        FunctionCallee cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, makeArrayRef(t));
         y = ConstantInt::get(T_int1, 0);
         return ctx.builder.CreateCall(cttz, {x, y});
     }
 
     case abs_float: {
-        Value *absintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs, makeArrayRef(t));
+        FunctionCallee absintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs, makeArrayRef(t));
         return ctx.builder.CreateCall(absintr, x);
     }
     case copysign_float: {
@@ -1245,24 +1268,28 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateXor(ctx.builder.CreateAdd(x, tmp), tmp);
     }
     case ceil_llvm: {
-        Value *ceilintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil, makeArrayRef(t));
+        FunctionCallee ceilintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil, makeArrayRef(t));
         return ctx.builder.CreateCall(ceilintr, x);
     }
     case floor_llvm: {
-        Value *floorintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::floor, makeArrayRef(t));
+        FunctionCallee floorintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::floor, makeArrayRef(t));
         return ctx.builder.CreateCall(floorintr, x);
     }
     case trunc_llvm: {
-        Value *truncintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc, makeArrayRef(t));
+        FunctionCallee truncintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc, makeArrayRef(t));
         return ctx.builder.CreateCall(truncintr, x);
     }
     case rint_llvm: {
-        Value *rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, makeArrayRef(t));
+        FunctionCallee rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, makeArrayRef(t));
         return ctx.builder.CreateCall(rintintr, x);
     }
     case sqrt_llvm: {
-        Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
         return ctx.builder.CreateCall(sqrtintr, x);
+    }
+    case sqrt_llvm_fast: {
+        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        return math_builder(ctx, true)().CreateCall(sqrtintr, x);
     }
 
     default:
@@ -1272,26 +1299,199 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     assert(0 && "unreachable");
 }
 
-#define BOX_F(ct,jl_ct,rt)                                      \
-    box_##ct##_func = boxfunc_llvm(ft1arg(rt, T_##jl_ct),       \
-                                   "jl_box_"#ct, &jl_box_##ct, m);
 
-#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
-#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct,T_prjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
-#define SBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::SExt);
-#define UBOX_F_PERM(ct,jl_ct) BOX_F(ct,jl_ct,T_pjlvalue); box_##ct##_func->addAttribute(1, Attribute::ZExt);
+// float16 intrinsics
+// TODO: use LLVM's compiler-rt
 
-template<typename T>
-static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
-                              T *addr, Module *m)
+static inline float half_to_float(uint16_t ival)
 {
-    Function *f =
-        Function::Create(ft, Function::ExternalLinkage, cname, m);
-    add_named_global(f, addr);
-    return f;
+    uint32_t sign = (ival & 0x8000) >> 15;
+    uint32_t exp = (ival & 0x7c00) >> 10;
+    uint32_t sig = (ival & 0x3ff) >> 0;
+    uint32_t ret;
+
+    if (exp == 0) {
+        if (sig == 0) {
+            sign = sign << 31;
+            ret = sign | exp | sig;
+        }
+        else {
+            int n_bit = 1;
+            uint16_t bit = 0x0200;
+            while ((bit & sig) == 0) {
+                n_bit = n_bit + 1;
+                bit = bit >> 1;
+            }
+            sign = sign << 31;
+            exp = ((-14 - n_bit + 127) << 23);
+            sig = ((sig & (~bit)) << n_bit) << (23 - 10);
+            ret = sign | exp | sig;
+        }
+    }
+    else if (exp == 0x1f) {
+        if (sig == 0) { // Inf
+            if (sign == 0)
+                ret = 0x7f800000;
+            else
+                ret = 0xff800000;
+        }
+        else // NaN
+            ret = 0x7fc00000 | (sign << 31) | (sig << (23 - 10));
+    }
+    else {
+        sign = sign << 31;
+        exp = ((exp - 15 + 127) << 23);
+        sig = sig << (23 - 10);
+        ret = sign | exp | sig;
+    }
+
+    float fret;
+    memcpy(&fret, &ret, sizeof(float));
+    return fret;
 }
 
-static FunctionType *ft1arg(Type *ret, Type *arg)
+// float to half algorithm from:
+//   "Fast Half Float Conversion" by Jeroen van der Zijp
+//   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
+//
+// With adjustments for round-to-nearest, ties to even.
+
+static uint16_t basetable[512] = {
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0400, 0x0800, 0x0c00, 0x1000, 0x1400, 0x1800, 0x1c00, 0x2000,
+    0x2400, 0x2800, 0x2c00, 0x3000, 0x3400, 0x3800, 0x3c00, 0x4000, 0x4400, 0x4800, 0x4c00,
+    0x5000, 0x5400, 0x5800, 0x5c00, 0x6000, 0x6400, 0x6800, 0x6c00, 0x7000, 0x7400, 0x7800,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8400, 0x8800, 0x8c00, 0x9000, 0x9400,
+    0x9800, 0x9c00, 0xa000, 0xa400, 0xa800, 0xac00, 0xb000, 0xb400, 0xb800, 0xbc00, 0xc000,
+    0xc400, 0xc800, 0xcc00, 0xd000, 0xd400, 0xd800, 0xdc00, 0xe000, 0xe400, 0xe800, 0xec00,
+    0xf000, 0xf400, 0xf800, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00};
+
+static uint8_t shifttable[512] = {
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x0f,
+    0x0e, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x0d, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13,
+    0x12, 0x11, 0x10, 0x0f, 0x0e, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x0d};
+
+static inline uint16_t float_to_half(float param)
 {
-    return FunctionType::get(ret, { arg }, false);
+    uint32_t f;
+    memcpy(&f, &param, sizeof(float));
+    if (isnan(param)) {
+        uint32_t t = 0x8000 ^ (0x8000 & ((uint16_t)(f >> 0x10)));
+        return t ^ ((uint16_t)(f >> 0xd));
+    }
+    int i = ((f & ~0x007fffff) >> 23);
+    uint8_t sh = shifttable[i];
+    f &= 0x007fffff;
+    // If `val` is subnormal, the tables are set up to force the
+    // result to 0, so the significand has an implicit `1` in the
+    // cases we care about.
+    f |= 0x007fffff + 0x1;
+    uint16_t h = (uint16_t)(basetable[i] + ((f >> sh) & 0x03ff));
+    // round
+    // NOTE: we maybe should ignore NaNs here, but the payload is
+    // getting truncated anyway so "rounding" it might not matter
+    int nextbit = (f >> (sh - 1)) & 1;
+    if (nextbit != 0 && (h & 0x7C00) != 0x7C00) {
+        // Round halfway to even or check lower bits
+        if ((h & 1) == 1 || (f & ((1 << (sh - 1)) - 1)) != 0)
+            h += UINT16_C(1);
+    }
+    return h;
 }
+
+#if !defined(_OS_DARWIN_)   // xcode already links compiler-rt
+
+extern "C" JL_DLLEXPORT float __gnu_h2f_ieee(uint16_t param)
+{
+    return half_to_float(param);
+}
+
+extern "C" JL_DLLEXPORT float __extendhfsf2(uint16_t param)
+{
+    return half_to_float(param);
+}
+
+extern "C" JL_DLLEXPORT uint16_t __gnu_f2h_ieee(float param)
+{
+    return float_to_half(param);
+}
+
+extern "C" JL_DLLEXPORT uint16_t __truncdfhf2(double param)
+{
+    return float_to_half((float)param);
+}
+
+#endif

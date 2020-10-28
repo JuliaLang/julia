@@ -80,6 +80,8 @@ enum {
     GC_MARK_L_scan_only,
     GC_MARK_L_finlist,
     GC_MARK_L_objarray,
+    GC_MARK_L_array8,
+    GC_MARK_L_array16,
     GC_MARK_L_obj8,
     GC_MARK_L_obj16,
     GC_MARK_L_obj32,
@@ -113,32 +115,47 @@ typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
     jl_value_t **begin; // The first slot to be scanned.
     jl_value_t **end; // The end address (after the last slot to be scanned)
+    uint32_t step; // Number of pointers to jump between marks
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_objarray_t;
 
 // A normal object with 8bits field descriptors
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
-    jl_fielddesc8_t *begin; // Current field descriptor.
-    jl_fielddesc8_t *end; // End of field descriptor.
+    uint8_t *begin; // Current field descriptor.
+    uint8_t *end; // End of field descriptor.
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_obj8_t;
 
 // A normal object with 16bits field descriptors
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
-    jl_fielddesc16_t *begin; // Current field descriptor.
-    jl_fielddesc16_t *end; // End of field descriptor.
+    uint16_t *begin; // Current field descriptor.
+    uint16_t *end; // End of field descriptor.
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_obj16_t;
 
 // A normal object with 32bits field descriptors
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
-    jl_fielddesc32_t *begin; // Current field descriptor.
-    jl_fielddesc32_t *end; // End of field descriptor.
+    uint32_t *begin; // Current field descriptor.
+    uint32_t *end; // End of field descriptor.
     uintptr_t nptr; // See notes about `nptr` above.
 } gc_mark_obj32_t;
+
+typedef struct {
+    jl_value_t **begin; // The first slot to be scanned.
+    jl_value_t **end; // The end address (after the last slot to be scanned)
+    uint8_t *rebegin;
+    gc_mark_obj8_t elem;
+} gc_mark_array8_t;
+
+typedef struct {
+    jl_value_t **begin; // The first slot to be scanned.
+    jl_value_t **end; // The end address (after the last slot to be scanned)
+    uint16_t *rebegin;
+    gc_mark_obj16_t elem;
+} gc_mark_array16_t;
 
 // Stack frame
 typedef struct {
@@ -153,9 +170,10 @@ typedef struct {
 
 // Exception stack data
 typedef struct {
-    jl_excstack_t *s;  // Stack of exceptions
-    size_t itr;        // Iterator into exception stack
-    size_t i;          // Iterator into backtrace data for exception
+    jl_excstack_t *s;   // Stack of exceptions
+    size_t itr;         // Iterator into exception stack
+    size_t bt_index;    // Current backtrace buffer entry index
+    size_t jlval_index; // Index into GC managed values for current bt entry
 } gc_mark_excstack_t;
 
 // Module bindings. This is also the beginning of module scanning.
@@ -181,6 +199,8 @@ typedef struct {
 union _jl_gc_mark_data {
     gc_mark_marked_obj_t marked;
     gc_mark_objarray_t objarray;
+    gc_mark_array8_t array8;
+    gc_mark_array16_t array16;
     gc_mark_obj8_t obj8;
     gc_mark_obj16_t obj16;
     gc_mark_obj32_t obj32;
@@ -356,14 +376,12 @@ unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 {
-#if defined(_COMPILER_MINGW_)
-    return __builtin_ffs(bitvec) - 1;
-#elif defined(_COMPILER_MICROSOFT_)
+#if defined(_COMPILER_MICROSOFT_)
     unsigned long j;
     _BitScanForward(&j, bitvec);
     return j;
 #else
-    return ffs(bitvec) - 1;
+    return __builtin_ffs(bitvec) - 1;
 #endif
 }
 #endif
@@ -683,6 +701,8 @@ void gc_stats_big_obj(void);
 
 // For debugging
 void gc_count_pool(void);
+
+size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

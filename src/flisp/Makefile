@@ -110,9 +110,11 @@ $(BUILDDIR)/host/Makefile:
 $(BUILDDIR)/host/$(EXENAME): $(BUILDDIR)/host/Makefile
 	make -C $(BUILDDIR)/host $(EXENAME)
 
-ifneq ($(BUILDDIR)$(BUILDING_HOST_TOOLS),.)
+ifneq ($(BUILDDIR),.)
+ifneq ($(BUILDDIR),$(SRCDIR))
 $(BUILDDIR)/flisp.boot: $(SRCDIR)/flisp.boot | $(BUILDDIR)
 	cp $< $@
+endif
 endif
 
 test:

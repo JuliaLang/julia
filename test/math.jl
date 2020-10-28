@@ -22,6 +22,11 @@ end
 
     @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
     @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
+
+    @test clamp(-200, Int8) === typemin(Int8)
+    @test clamp(100, Int8) === Int8(100)
+    @test clamp(200, Int8) === typemax(Int8)
+
     begin
         x = [0.0, 1.0, 2.0, 3.0, 4.0]
         clamp!(x, 1, 3)
@@ -369,9 +374,14 @@ end
 @testset "degree-based trig functions" begin
     @testset "$T" for T = (Float32,Float64,Rational{Int})
         fT = typeof(float(one(T)))
+        fTsc = typeof( (float(one(T)), float(one(T))) )
         for x = -400:40:400
             @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
             @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+
+            s,c = sincosd(convert(T,x))
+            @test s::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test c::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
         end
         @testset "sind" begin
             @test sind(convert(T,0.0))::fT === zero(fT)
@@ -387,9 +397,22 @@ end
             @test cosd(convert(T,-90))::fT === zero(fT)
             @test cosd(convert(T,-270))::fT === zero(fT)
         end
+        @testset "sincosd" begin
+            @test sincosd(convert(T,-360))::fTsc === ( -zero(fT),  one(fT) )
+            @test sincosd(convert(T,-270))::fTsc === (   one(fT), zero(fT) )
+            @test sincosd(convert(T,-180))::fTsc === ( -zero(fT), -one(fT) )
+            @test sincosd(convert(T, -90))::fTsc === (  -one(fT), zero(fT) )
+            @test sincosd(convert(T,   0))::fTsc === (  zero(fT),  one(fT) )
+            @test sincosd(convert(T,  90))::fTsc === (   one(fT), zero(fT) )
+            @test sincosd(convert(T, 180))::fTsc === (  zero(fT), -one(fT) )
+            @test sincosd(convert(T, 270))::fTsc === (  -one(fT), zero(fT) )
+        end
 
-        @testset "sinpi and cospi" begin
-            for x = -3:0.3:3
+        @testset "$name" for (name, (sinpi, cospi)) in (
+            "sinpi and cospi" => (sinpi, cospi),
+            "sincospi" => (x->sincospi(x)[1], x->sincospi(x)[2])
+        )
+            @testset "pi * $x" for x = -3:0.3:3
                 @test sinpi(convert(T,x))::fT ≈ convert(fT,sin(pi*x)) atol=eps(pi*convert(fT,x))
                 @test cospi(convert(T,x))::fT ≈ convert(fT,cos(pi*x)) atol=eps(pi*convert(fT,x))
             end
@@ -413,19 +436,27 @@ end
             @test cosd(convert(T,60)) == 0.5
             @test sind(convert(T,150)) == 0.5
             @test sinpi(one(T)/convert(T,6)) == 0.5
+            @test sincospi(one(T)/convert(T,6))[1] == 0.5
             @test_throws DomainError sind(convert(T,Inf))
             @test_throws DomainError cosd(convert(T,Inf))
             T != Float32 && @test cospi(one(T)/convert(T,3)) == 0.5
+            T != Float32 && @test sincospi(one(T)/convert(T,3))[2] == 0.5
             T == Rational{Int} && @test sinpi(5//6) == 0.5
+            T == Rational{Int} && @test sincospi(5//6)[1] == 0.5
         end
     end
+    scdm = sincosd(missing)
+    @test ismissing(scdm[1])
+    @test ismissing(scdm[2])
 end
 
-@testset "Integer args to sinpi/cospi/sinc/cosc" begin
-    @test sinpi(1) == 0
-    @test sinpi(-1) == -0
-    @test cospi(1) == -1
-    @test cospi(2) == 1
+@testset "Integer and Inf args for sinpi/cospi/sinc/cosc" begin
+    for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
+        @test sinpi(1) == 0
+        @test sinpi(-1) == -0
+        @test cospi(1) == -1
+        @test cospi(2) == 1
+    end
 
     @test sinc(1) == 0
     @test sinc(complex(1,0)) == 0
@@ -435,24 +466,67 @@ end
     @test cosc(0) == 0
     @test cosc(complex(1,0)) == -1
     @test cosc(Inf) == 0
+
+    @test sinc(Inf + 3im) == 0
+    @test cosc(Inf + 3im) == 0
+
+    @test isequal(sinc(Inf + Inf*im), NaN + NaN*im)
+    @test isequal(cosc(Inf + Inf*im), NaN + NaN*im)
+end
+
+# issue #37227
+@testset "sinc/cosc accuracy" begin
+    setprecision(256) do
+        for R in (BigFloat, Float16, Float32, Float64)
+            for T in (R, Complex{R})
+                for x in (0, 1e-5, 1e-20, 1e-30, 1e-40, 1e-50, 1e-60, 1e-70, 5.07138898934e-313)
+                    if x < eps(R)
+                        @test sinc(T(x)) == 1
+                    end
+                    @test cosc(T(x)) ≈ pi*(-R(x)*pi)/3 rtol=max(eps(R)*100, (pi*R(x))^2)
+                end
+            end
+        end
+    end
+    @test @inferred(sinc(0//1)) === 1.0
+    @test @inferred(cosc(0//1)) === -0.0
+
+    # test right before/after thresholds of Taylor series
+    @test sinc(0.001) ≈ 0.999998355066745 rtol=1e-15
+    @test sinc(0.00099) ≈ 0.9999983878009009 rtol=1e-15
+    @test sinc(0.05f0) ≈ 0.9958927352435614 rtol=1e-7
+    @test sinc(0.0499f0) ≈ 0.9959091277049384 rtol=1e-7
+    @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
+    @test cosc(0.1399) ≈ -0.45142306168781854 rtol=1e-14
+    @test cosc(0.26f0) ≈ -0.7996401373462212 rtol=5e-7
+    @test cosc(0.2599f0) ≈ -0.7993744054401625 rtol=5e-7
+    setprecision(256) do
+        @test cosc(big"0.5") ≈ big"-1.273239544735162686151070106980114896275677165923651589981338752471174381073817" rtol=1e-76
+        @test cosc(big"0.499") ≈ big"-1.272045747741181369948389133250213864178198918667041860771078493955590574971317" rtol=1e-76
+    end
 end
 
 @testset "Irrational args to sinpi/cospi/sinc/cosc" begin
     for x in (pi, ℯ, Base.MathConstants.golden)
-        @test sinpi(x) ≈ Float64(sinpi(big(x)))
-        @test cospi(x) ≈ Float64(cospi(big(x)))
+        for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
+            @test sinpi(x) ≈ Float64(sinpi(big(x)))
+            @test cospi(x) ≈ Float64(cospi(big(x)))
+            @test sinpi(complex(x, x)) ≈ ComplexF64(sinpi(complex(big(x), big(x))))
+            @test cospi(complex(x, x)) ≈ ComplexF64(cospi(complex(big(x), big(x))))
+        end
         @test sinc(x)  ≈ Float64(sinc(big(x)))
         @test cosc(x)  ≈ Float64(cosc(big(x)))
-        @test sinpi(complex(x, x)) ≈ Complex{Float64}(sinpi(complex(big(x), big(x))))
-        @test cospi(complex(x, x)) ≈ Complex{Float64}(cospi(complex(big(x), big(x))))
-        @test sinc(complex(x, x))  ≈ Complex{Float64}(sinc(complex(big(x),  big(x))))
-        @test cosc(complex(x, x))  ≈ Complex{Float64}(cosc(complex(big(x),  big(x))))
+        @test sinc(complex(x, x))  ≈ ComplexF64(sinc(complex(big(x),  big(x))))
+        @test cosc(complex(x, x))  ≈ ComplexF64(cosc(complex(big(x),  big(x))))
     end
 end
 
 @testset "trig function type stability" begin
-    @testset "$T $f" for T = (Float32,Float64,BigFloat), f = (sind,cosd,sinpi,cospi)
-        @test Base.return_types(f,Tuple{T}) == [T]
+    @testset "$T $f" for T = (Float32,Float64,BigFloat,Rational{Int16},Complex{Int32},ComplexF16), f = (sind,cosd,sinpi,cospi)
+        @test Base.return_types(f,Tuple{T}) == [float(T)]
+    end
+    @testset "$T sincospi" for T = (Float32,Float64,BigFloat,Rational{Int16},Complex{Int32},ComplexF16)
+        @test Base.return_types(sincospi,Tuple{T}) == [Tuple{float(T),float(T)}]
     end
 end
 
@@ -472,17 +546,30 @@ end
 
 @testset "evalpoly" begin
     @test @evalpoly(2,3,4,5,6) == 3+2*(4+2*(5+2*6)) == @evalpoly(2+0im,3,4,5,6)
-    @test let evalcounts=0
-              @evalpoly(begin
-                            evalcounts += 1
-                            4
-                        end, 1,2,3,4,5)
-              evalcounts
-          end == 1
     a0 = 1
     a1 = 2
     c = 3
     @test @evalpoly(c, a0, a1) == 7
+    @test @evalpoly(1, 2) == 2
+end
+
+@testset "evalpoly real" begin
+    for x in -1.0:2.0, p1 in -3.0:3.0, p2 in -3.0:3.0, p3 in -3.0:3.0
+        evpm = @evalpoly(x, p1, p2, p3)
+        @test evalpoly(x, (p1, p2, p3)) == evpm
+        @test evalpoly(x, [p1, p2, p3]) == evpm
+    end
+end
+
+@testset "evalpoly complex" begin
+    for x in -1.0:2.0, y in -1.0:2.0, p1 in -3.0:3.0, p2 in -3.0:3.0, p3 in -3.0:3.0
+        z = x + im * y
+        evpm = @evalpoly(z, p1, p2, p3)
+        @test evalpoly(z, (p1, p2, p3)) == evpm
+        @test evalpoly(z, [p1, p2, p3]) == evpm
+    end
+    @test evalpoly(1+im, (2,)) == 2
+    @test evalpoly(1+im, [2,]) == 2
 end
 
 @testset "cis" begin
@@ -500,6 +587,9 @@ end
         @test modf( convert(elty,1.2) )[2] ≈ convert(elty,1.0)
         @test modf( convert(elty,1.0) )[1] ≈ convert(elty,0.0)
         @test modf( convert(elty,1.0) )[2] ≈ convert(elty,1.0)
+        @test isequal(modf( convert(elty,-Inf) ), (-0.0, -Inf))
+        @test isequal(modf( convert(elty,Inf) ), (0.0, Inf))
+        @test isequal(modf( convert(elty,NaN) ), (NaN, NaN))
     end
 end
 
@@ -631,10 +721,16 @@ end
     @test exp10(Float16(1.0)) === Float16(exp10(1.0))
 end
 
-# #22742: updated isapprox semantics
-@test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
-@test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
-@test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
+@testset "isapprox" begin
+  # #22742: updated isapprox semantics
+  @test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
+  @test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
+  @test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
+
+  # #13132: Use of `norm` kwarg for scalar arguments
+  @test isapprox(1, 1+1.0e-12, norm=abs)
+  @test !isapprox(1, 1+1.0e-12, norm=x->1)
+end
 
 # test AbstractFloat fallback pr22716
 struct Float22716{T<:AbstractFloat} <: AbstractFloat
@@ -1002,10 +1098,17 @@ end
     end
 end
 
-isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
-using .Main.Furlongs
-@test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
-@test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
-@test hypot(Furlong(NaN), Furlong(Inf)) == Furlong(Inf)
-@test hypot(Furlong(Inf), Furlong(NaN)) == Furlong(Inf)
-@test hypot(Furlong(Inf), Furlong(Inf)) == Furlong(Inf)
+@testset "hypot" begin
+    @test hypot(0, 0) == 0.0
+    @test hypot(3, 4) == 5.0
+    @test hypot(NaN, Inf) == Inf
+    @test hypot(Inf, NaN) == Inf
+    @test hypot(Inf, Inf) == Inf
+
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
+    @test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
+    @test hypot(Complex(3), Complex(4)) === 5.0
+    @test hypot(Complex(6, 8), Complex(8, 6)) === 10.0*sqrt(2)
+end

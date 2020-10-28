@@ -24,11 +24,12 @@ help:
 DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call cygpath_w,$(BUILDROOT)) \
     texplatform=$(texplatform)
 
-$(SRCCACHE)/UnicodeData.txt:
+UNICODE_DATA_VERSION=13.0.0
+$(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt:
 	@mkdir -p "$(SRCCACHE)"
-	$(JLDOWNLOAD) "$@" http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
+	$(JLDOWNLOAD) "$@" http://www.unicode.org/Public/$(UNICODE_DATA_VERSION)/ucd/UnicodeData.txt
 
-deps: $(SRCCACHE)/UnicodeData.txt
+deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
 	cp "$<" UnicodeData.txt
 

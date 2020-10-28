@@ -5,6 +5,7 @@
 ###################################
 
 using Random, Sockets
+using Downloads: download
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
@@ -20,7 +21,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 if Sys.iswindows()
-    busybox = download("https://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
+    busybox = download("https://cache.julialang.org/https://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -252,7 +253,25 @@ end
         @test "Hello World\n" == read(fname, String)
         @test OLD_STDOUT === stdout
         rm(fname)
+
+        col = get(stdout, :color, false)
+        redirect_stdout(IOContext(stdout, :color=>!col))
+        @test get(stdout, :color, col) == !col
+        redirect_stdout(OLD_STDOUT)
     end
+end
+
+# issue #36136
+@testset "redirect to devnull" begin
+    @test redirect_stdout(devnull) do; println("Hello") end === nothing
+    @test redirect_stderr(devnull) do; println(stderr, "Hello") end === nothing
+    # stdin is unavailable on the workers. Run test on master.
+    ret = Core.eval(Main, quote
+                remotecall_fetch(1) do
+                    redirect_stdin(devnull) do; read(stdin, String) end
+                end
+            end)
+    @test ret == ""
 end
 
 # Test that redirecting an IOStream does not crash the process
@@ -301,6 +320,7 @@ end
 # issue #12829
 let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", read(stdin, String))'`, ready = Condition(), t, infd, outfd
     @test_throws ArgumentError write(out, "not open error")
+    inread = false
     t = @async begin # spawn writer task
         open(echo, "w", out) do in1
             open(echo, "w", out) do in2
@@ -313,6 +333,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
         end
         infd = Base._fd(out.in)
         outfd = Base._fd(out.out)
+        inread || wait(ready)
         show(out, out)
         @test isreadable(out)
         @test iswritable(out)
@@ -347,6 +368,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", r
     @test bytesavailable(out) > 0
     ln1 = readline(out)
     ln2 = readline(out)
+    inread = true
+    notify(ready)
     desc = read(out, String)
     @test !isreadable(out)
     @test !iswritable(out)
@@ -452,6 +475,13 @@ end
 @test Set([``, echocmd]) != Set([``, ``])
 @test Set([echocmd, ``, ``, echocmd]) == Set([echocmd, ``])
 
+# env handling (#32454)
+@test Cmd(`foo`, env=Dict("A"=>true)).env == ["A=true"]
+@test Cmd(`foo`, env=["A=true"]).env      == ["A=true"]
+@test Cmd(`foo`, env=("A"=>true,)).env    == ["A=true"]
+@test Cmd(`foo`, env=["A"=>true]).env     == ["A=true"]
+@test Cmd(`foo`, env=nothing).env         == nothing
+
 # test for interpolation of Cmd
 let c = setenv(`x`, "A"=>true)
     @test (`$c a`).env == String["A=true"]
@@ -459,6 +489,15 @@ let c = setenv(`x`, "A"=>true)
     @test_throws ArgumentError `a $c`
     @test (`$(c.exec) a`).env === nothing
     @test_throws ArgumentError `"$c "`
+end
+
+# Interaction of cmd parsing with var syntax (#32408)
+let var = "x", vars="z"
+    @test `ls $var` == Cmd(["ls", "x"])
+    @test `ls $vars` == Cmd(["ls", "z"])
+    @test `ls $var"y"` == Cmd(["ls", "xy"])
+    @test `ls "'$var'"` == Cmd(["ls", "'x'"])
+    @test `ls $var "y"` == Cmd(["ls", "x", "y"])
 end
 
 # equality tests for AndCmds
@@ -547,6 +586,10 @@ withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
     @test Sys.which(julia_exe) == realpath(julia_exe)
 end
 
+# Check that which behaves correctly when passed an empty string
+@test isnothing(Base.Sys.which(""))
+
+
 mktempdir() do dir
     withenv("PATH" => "$(dir)$(psep)$(ENV["PATH"])") do
         # Test that files lacking executable permissions fail Sys.which
@@ -563,8 +606,15 @@ mktempdir() do dir
             @test Sys.which(foo_path) === nothing
         end
 
+    end
+
+    # Ensure these tests are done only with a PATH of known contents
+    withenv("PATH" => "$(dir)") do
         # Test that completely missing files also return nothing
         @test Sys.which("this_is_not_a_command") === nothing
+
+        # Check that which behaves correctly when passed a blank string
+        @test isnothing(Base.Sys.which(" "))
     end
 end
 
@@ -627,6 +677,13 @@ open(`$catcmd`, "r+") do f
     wait(t)
 end
 
+# issue #32193
+mktemp() do path, io
+    redirect_stderr(io) do
+        @test_throws ProcessFailedException open(identity, `$catcmd _doesnt_exist__111_`, read=true)
+    end
+end
+
 let text = "input-test-text"
     b = PipeBuffer()
     proc = open(Base.CmdRedirect(Base.CmdRedirect(```$exename --startup-file=no -E '
@@ -644,7 +701,105 @@ end
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
 
 
+# Issue #37070
+@testset "addenv()" begin
+    cmd = Cmd(`$shcmd -c "echo \$FOO \$BAR"`, env=Dict("FOO" => "foo"))
+    @test strip(String(read(cmd))) == "foo"
+    cmd = addenv(cmd, "BAR" => "bar")
+    @test strip(String(read(cmd))) == "foo bar"
+    cmd = addenv(cmd, Dict("FOO" => "bar"))
+    @test strip(String(read(cmd))) == "bar bar"
+    cmd = addenv(cmd, ["FOO=baz"])
+    @test strip(String(read(cmd))) == "baz bar"
+end
+
+
 # clean up busybox download
 if Sys.iswindows()
     rm(busybox, force=true)
+end
+
+
+# shell escaping on Windows
+@testset "shell_escape_winsomely" begin
+    # Note  argument A can be parsed both as A or "A".
+    # We do not test that the parsing satisfies either of these conditions.
+    # In other words, tests may fail even for valid parsing.
+    # This is done to avoid overly verbose tests.
+
+    # input :
+    # output: ""
+    @test Base.shell_escape_winsomely("") == "\"\""
+
+    @test Base.shell_escape_winsomely("A") == "A"
+
+    @test Base.shell_escape_winsomely(`A`) == "A"
+
+    # input : hello world
+    # output: "hello world"
+    @test Base.shell_escape_winsomely("hello world") == "\"hello world\""
+
+    # input : hello  world
+    # output: "hello  world"
+    @test Base.shell_escape_winsomely("hello\tworld") == "\"hello\tworld\""
+
+    # input : hello"world
+    # output: "hello\"world" (also valid) hello\"world
+    @test Base.shell_escape_winsomely("hello\"world") == "\"hello\\\"world\""
+
+    # input : hello""world
+    # output: "hello\"\"world" (also valid) hello\"\"world
+    @test Base.shell_escape_winsomely("hello\"\"world") == "\"hello\\\"\\\"world\""
+
+    # input : hello\world
+    # output: hello\world
+    @test Base.shell_escape_winsomely("hello\\world") == "hello\\world"
+
+    # input : hello\\world
+    # output: hello\\world
+    @test Base.shell_escape_winsomely("hello\\\\world") == "hello\\\\world"
+
+    # input : hello\"world
+    # output: "hello\"world" (also valid) hello\"world
+    @test Base.shell_escape_winsomely("hello\\\"world") == "\"hello\\\\\\\"world\""
+
+    # input : hello\\"world
+    # output: "hello\\\\\"world" (also valid) hello\\\\\"world
+    @test Base.shell_escape_winsomely("hello\\\\\"world")  == "\"hello\\\\\\\\\\\"world\""
+
+    # input : hello world\
+    # output: "hello world\\"
+    @test Base.shell_escape_winsomely("hello world\\") == "\"hello world\\\\\""
+
+    # input : A\B
+    # output: A\B"
+    @test Base.shell_escape_winsomely("A\\B") == "A\\B"
+
+    # input : [A\, B]
+    # output: "A\ B"
+    @test Base.shell_escape_winsomely("A\\", "B") == "A\\ B"
+
+    # input : A"B
+    # output: "A\"B"
+    @test Base.shell_escape_winsomely("A\"B") ==  "\"A\\\"B\""
+
+    # input : [A B\, C]
+    # output: "A B\\" C
+    @test Base.shell_escape_winsomely("A B\\", "C") == "\"A B\\\\\" C"
+
+    # input : [A "B, C]
+    # output: "A \"B" C
+    @test Base.shell_escape_winsomely("A \"B", "C") == "\"A \\\"B\" C"
+
+    # input : [A B\, C]
+    # output: "A B\\" C
+    @test Base.shell_escape_winsomely("A B\\", "C") == "\"A B\\\\\" C"
+
+    # input :[A\ B\, C]
+    # output: "A\ B\\" C
+    @test Base.shell_escape_winsomely("A\\ B\\", "C") == "\"A\\ B\\\\\" C"
+
+    # input : [A\ B\, C, D K]
+    # output: "A\ B\\" C "D K"
+    @test Base.shell_escape_winsomely("A\\ B\\", "C", "D K") == "\"A\\ B\\\\\" C \"D K\""
 end

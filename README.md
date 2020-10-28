@@ -1,22 +1,22 @@
 <a name="logo"/>
 <div align="center">
 <a href="https://julialang.org/" target="_blank">
-<img src="https://julialang.org/images/logo_hires.png" alt="Julia Logo" width="210" height="142"></img>
+<img src="doc/src/assets/logo.svg" alt="Julia Logo" width="210" height="142"></img>
 </a>
 </div>
-
-Build status:
-[![travis][travis-img]](https://travis-ci.org/JuliaLang/julia)
-[![appveyor][appveyor-img]](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
 
 Code coverage:
 [![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
 [![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
 
+Documentation:
+[![version 1][docs-img]](https://docs.julialang.org)
+
 [travis-img]: https://img.shields.io/travis/JuliaLang/julia/master.svg?label=Linux+/+macOS
 [appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
 [coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
 [codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
+[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
 
 ## The Julia Language
 
@@ -31,10 +31,10 @@ and installing Julia, below.
 - **Homepage:** <https://julialang.org>
 - **Binaries:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
-- **Documentation:** <https://docs.julialang.org/>
-- **Packages:** <https://pkg.julialang.org/>
+- **Documentation:** <https://docs.julialang.org>
+- **Packages:** <https://julialang.org/packages/>
 - **Discussion forum:** <https://discourse.julialang.org>
-- **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
+- **Slack:** <https://julialang.slack.com> (get an invite from <https://julialang.org/slack/>)
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
@@ -47,6 +47,7 @@ helpful to start contributing to the Julia codebase.
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](https://julia.meetup.com/)
+- [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
 
@@ -60,7 +61,7 @@ for OS and platform combinations.
 If everything works correctly, you will see a Julia banner and an
 interactive prompt into which you can enter expressions for
 evaluation.  You can read about [getting
-started](https://julialang.org/manual/getting-started) in the manual.
+started](https://docs.julialang.org/en/v1/manual/getting-started/) in the manual.
 
 **Note**: Although some system package managers provide Julia, such
 installations are neither maintained nor endorsed by the Julia
@@ -80,7 +81,7 @@ Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.1.1
+    git checkout v1.5.0
 
 Now run `make` to build the `julia` executable.
 
@@ -116,22 +117,27 @@ can be uninstalled by deleting `~/.julia`.
 
 The Julia source code is organized as follows:
 
-    base/          source code for the Base module (part of Julia's standard library)
-    stdlib/        source code for other standard library packages
-    contrib/       editor support for Julia source, miscellaneous scripts
-    deps/          external dependencies
-    doc/src/manual source for the user manual
-    doc/build      detailed notes for building Julia
-    src/           source for Julia language core
-    test/          test suites
-    ui/            source for various front ends
-    usr/           binaries and shared libraries loaded by Julia's standard libraries
+| Directory         | Contents                                                           |
+| -                 | -                                                                  |
+| `base/`           | source code for the Base module (part of Julia's standard library) |
+| `stdlib/`         | source code for other standard library packages                    |
+| `cli/`            | source for the command line interface/REPL                         |
+| `contrib/`        | editor support for Julia source, miscellaneous scripts             |
+| `deps/`           | external dependencies                                              |
+| `doc/src/manual/` | source for the user manual                                         |
+| `doc/build/`      | detailed notes for building Julia                                  |
+| `src/`            | source for Julia language core                                     |
+| `test/`           | test suites                                                        |
+| `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |
 
 ## Terminal, Editors and IDEs
 
-The Julia REPL is quite powerful.  See the section in the manual on
-[the Julia REPL](https://docs.julialang.org/en/latest/stdlib/REPL/)
+The Julia REPL is quite powerful. See the section in the manual on
+[the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
+
+On Windows we highly recommend running Julia in a modern terminal,
+such as [Windows Terminal from the Microsoft Store](https://aka.ms/terminal).
 
 Support for editing Julia is available for many
 [widely used editors](https://github.com/JuliaEditorSupport):

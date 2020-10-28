@@ -620,7 +620,7 @@ function wait(m::FolderMonitor)
                 take!(m.notify)
             catch ex
                 unpreserve_handle(m)
-                if ex isa InvalidStateException && ex.state == :closed
+                if ex isa InvalidStateException && ex.state === :closed
                     rethrow(EOFError()) # `wait(::Channel)` throws the wrong exception
                 end
                 rethrow()
@@ -649,10 +649,13 @@ giving the result of the polling.
 function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
     wt = Condition()
     fdw = _FDWatcher(s, readable, writable)
+    local timer
     try
         if timeout_s >= 0
             result::FDEvent = FDEvent()
-            @async (sleep(timeout_s); notify(wt))
+            timer = Timer(timeout_s) do t
+                notify(wt)
+            end
             @async begin
                 try
                     result = wait(fdw, readable=readable, writable=writable)
@@ -669,6 +672,7 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
         end
     finally
         close(fdw, readable, writable)
+        @isdefined(timer) && close(timer)
     end
 end
 
@@ -684,17 +688,22 @@ giving the result of watching the file.
 This behavior of this function varies slightly across platforms. See
 <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
 """
-function watch_file(s::AbstractString, timeout_s::Real=-1)
+function watch_file(s::String, timeout_s::Float64=-1.0)
     fm = FileMonitor(s)
+    local timer
     try
         if timeout_s >= 0
-            @async (sleep(timeout_s); close(fm))
+            timer = Timer(timeout_s) do t
+                close(fm)
+            end
         end
         return wait(fm)
     finally
         close(fm)
+        @isdefined(timer) && close(timer)
     end
 end
+watch_file(s::AbstractString, timeout_s::Real=-1) = watch_file(String(s), Float64(timeout_s))
 
 """
     watch_folder(path::AbstractString, timeout_s::Real=-1)
@@ -719,7 +728,7 @@ function watch_folder(s::String, timeout_s::Real=-1)
     end
     if timeout_s >= 0 && !isready(fm.notify)
         if timeout_s <= 0.010
-            # for very small timeouts, we can just sleep for the timeout-interval
+            # for very small timeouts, we can just sleep for the whole timeout-interval
             (timeout_s == 0) ? yield() : sleep(timeout_s)
             if !isready(fm.notify)
                 return "" => FileEvent() # timeout
@@ -730,14 +739,17 @@ function watch_folder(s::String, timeout_s::Real=-1)
             # create a second monitor object just for that purpose.
             # We still take the events from the primary stream.
             fm2 = FileMonitor(s)
+            timer = Timer(timeout_s) do t
+                close(fm2)
+            end
             try
-                @async (sleep(timeout_s); close(fm2))
                 while isopen(fm.notify) && !isready(fm.notify)
                     fm2.handle == C_NULL && return "" => FileEvent() # timeout
                     wait(fm2)
                 end
             finally
                 close(fm2)
+                close(timer)
             end
             # guaranteed that next call to `wait(fm)` is non-blocking
             # since we haven't entered the libuv event loop yet
@@ -783,9 +795,12 @@ it is more reliable and efficient, although in some situations it may not be ava
 """
 function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::Real=-1)
     pfw = PollingFileWatcher(s, Float64(interval_seconds))
+    local timer
     try
         if timeout_s >= 0
-            @async (sleep(timeout_s); close(pfw))
+            timer = Timer(timeout_s) do t
+                close(pfw)
+            end
         end
         statdiff = wait(pfw)
         if isa(statdiff[2], IOError)
@@ -795,6 +810,7 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
         return statdiff
     finally
         close(pfw)
+        @isdefined(timer) && close(timer)
     end
 end
 

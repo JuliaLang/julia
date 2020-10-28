@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+include("testhelpers/withlocales.jl")
+
 # Tests that do not really go anywhere else
 
 # test @assert macro
@@ -76,13 +79,25 @@ end
 @test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting stderr.
 let
     redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
-    script = "$redir_err; module A; f() = 1; end; A.f() = 1"
+    script = """
+        $redir_err
+        module A; f() = 1; end; A.f() = 1
+        A.f() = 1
+        outer() = (g() = 1; g() = 2; g)
+        """
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
-    @test occursin("f()", warning_str)
+    @test warning_str == """
+        WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
+        WARNING: Method definition f() in module Main at none:2 overwritten at none:3.
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
+    warning_str = read(`$exename --startup-file=no -e $script`, String)
+    @test warning_str == """
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
 end
 
 # lock / unlock
@@ -158,9 +173,18 @@ let t = @elapsed 1+1
 end
 
 let
-    val, t = @timed sin(1)
-    @test val == sin(1)
-    @test isa(t, Real) && t >= 0
+    stats = @timed sin(1)
+    @test stats.value == sin(1)
+    @test isa(stats.time, Real) && stats.time >= 0
+
+    # The return type of gcstats was changed in Julia 1.4 (# 34147)
+    # Test that the 1.0 API still works
+    val, t, bytes, gctime, gcstats = stats
+    @test val === stats.value
+    @test t === stats.time
+    @test bytes === stats.bytes
+    @test gctime === stats.gctime
+    @test gcstats === stats.gcstats
 end
 
 # problem after #11801 - at global scope
@@ -173,6 +197,9 @@ v11801, t11801 = @timed sin(1)
 @test names(@__MODULE__, all = true) == names_before_timing
 
 # interactive utilities
+
+struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
+Base.convert(::Any, v::ambigconvert) = v
 
 import Base.summarysize
 @test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
@@ -192,6 +219,20 @@ let A = zeros(1000), B = reshape(A, (1,1000))
 
     # check that object header is accounted for
     @test summarysize(A) > sizeof(A)
+end
+
+# issue #32881
+mutable struct S32881; end
+let s = "abc"
+    @test summarysize([s,s]) < summarysize(["abc","xyz"])
+end
+@test summarysize(Vector{Union{Nothing,Missing}}(undef, 16)) < summarysize(Vector{Union{Nothing,Missing}}(undef, 32))
+@test summarysize(Vector{Nothing}(undef, 16)) == summarysize(Vector{Nothing}(undef, 32))
+@test summarysize(S32881()) == sizeof(Int)
+
+# issue #33675
+let vec = vcat(missing, ones(100000))
+    @test length(unique(summarysize(vec) for i = 1:20)) == 1
 end
 
 # issue #13021
@@ -421,6 +462,30 @@ let buf = IOBuffer()
     @test Base.prompt(IOBuffer("blah\n"), buf, "baz", default="foobar") == "blah"
 end
 
+# these tests are not in a test block so that they will compile separately
+@static if Sys.iswindows()
+    SetLastError(code) = ccall(:SetLastError, stdcall, Cvoid, (UInt32,), code)
+else
+    SetLastError(_) = nothing
+end
+@test Libc.errno(0xc0ffee) === nothing
+@test SetLastError(0xc0def00d) === nothing
+let finalized = false
+    function closefunc(_)
+        Libc.errno(0)
+        SetLastError(0)
+        finalized = true
+    end
+    @eval (finalizer($closefunc, zeros()); nothing)
+    GC.gc(); GC.gc(); GC.gc(); GC.gc()
+    @test finalized
+end
+@static if Sys.iswindows()
+    @test ccall(:GetLastError, stdcall, UInt32, ()) == 0xc0def00d
+    @test Libc.GetLastError() == 0xc0def00d
+end
+@test Libc.errno() == 0xc0ffee
+
 # Test that we can VirtualProtect jitted code to writable
 @noinline function WeVirtualProtectThisToRWX(x, y)
     return x + y
@@ -433,7 +498,7 @@ end
         err18083 = ccall(:VirtualProtect, stdcall, Cint,
             (Ptr{Cvoid}, Csize_t, UInt32, Ptr{UInt32}),
             addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
-        err18083 == 0 && error(Libc.GetLastError())
+        err18083 == 0 && Base.windowserror(:VirtualProtect)
     end
 end
 
@@ -470,6 +535,15 @@ if stdout isa Base.TTY
     @test stdout[:color] == get(stdout, :color, nothing) == Base.have_color
     @test get(stdout, :bar, nothing) === nothing
     @test_throws KeyError stdout[:bar]
+end
+
+@testset "`displaysize` on closed TTY #34620" begin
+    Main.FakePTYs.with_fake_pty() do rawfd, _
+        tty = open(rawfd)::Base.TTY
+        @test displaysize(tty) isa Tuple{Integer,Integer}
+        close(tty)
+        @test_throws Base.IOError displaysize(tty)
+    end
 end
 
 let
@@ -604,8 +678,9 @@ end
 
 include("testenv.jl")
 
+
 let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
-    local cmd = `$test_exename $flags deprecation_exec.jl`
+    local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
 
     if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
         error("Deprecation test failed, cmd : $cmd")
@@ -623,36 +698,19 @@ end
 
 # issue #27239
 @testset "strftime tests issue #27239" begin
-
-    # save current locales
-    locales = Dict()
-    for cat in 0:9999
-        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, C_NULL)
-        if cstr != C_NULL
-            locales[cat] = unsafe_string(cstr)
-        end
-    end
-
     # change to non-Unicode Korean
-    for (cat, _) in locales
-        korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
-        for lc in korloc
-            cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
-        end
+    korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
+    timestrs = String[]
+    withlocales(korloc) do
+        # system dependent formats
+        push!(timestrs, Libc.strftime(0.0))
+        push!(timestrs, Libc.strftime("%a %A %b %B %p %Z", 0))
     end
-
-    # system dependent formats
-    timestr_c = Libc.strftime(0.0)
-    timestr_aAbBpZ = Libc.strftime("%a %A %b %B %p %Z", 0)
-
-    # recover locales
-    for (cat, lc) in locales
-        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
-    end
-
     # tests
-    @test isvalid(timestr_c)
-    @test isvalid(timestr_aAbBpZ)
+    isempty(timestrs) && @warn "skipping stftime tests: no locale found for testing"
+    for s in timestrs
+        @test isvalid(s)
+    end
 end
 
 
@@ -733,5 +791,43 @@ end
     @test sort([a, b]) == [b, a]
 end
 
+@testset "Libc.rand" begin
+    low, high = extrema(Libc.rand(Float64) for i=1:10^4)
+    # these fail with probability 2^(-10^4) ≈ 5e-3011
+    @test 0 ≤ low < 0.5
+    @test 0.5 < high < 1
+end
+
 # Pointer 0-arg constructor
 @test Ptr{Cvoid}() == C_NULL
+
+@testset "Pointer to unsigned/signed integer" begin
+    # assuming UInt and Ptr have the same size
+    @assert sizeof(UInt) == sizeof(Ptr{Nothing})
+    uint = UInt(0x12345678)
+    sint = signed(uint)
+    ptr = reinterpret(Ptr{Nothing}, uint)
+    @test unsigned(ptr) === uint
+    @test signed(ptr) === sint
+end
+
+# Finalizer with immutable should throw
+@test_throws ErrorException finalizer(x->nothing, 1)
+@test_throws ErrorException finalizer(C_NULL, 1)
+
+
+@testset "GC utilities" begin
+    GC.gc()
+    GC.gc(true); GC.gc(false)
+
+    GC.safepoint()
+end
+
+@testset "fieldtypes Module" begin
+    @test fieldtypes(Module) === ()
+end
+
+
+@testset "issue #28188" begin
+    @test `$(@__FILE__)` == let file = @__FILE__; `$file` end
+end

@@ -12,12 +12,6 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
-ifneq ($(OS),WINNT)
-ifeq ($(USE_SYSTEM_CURL), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
-endif
-endif
-
 ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
 LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
@@ -34,8 +28,6 @@ else
 LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
-else
-LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="curl"
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
@@ -44,25 +36,20 @@ endif
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls2.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls2.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
+# This can be removed once a release with https://github.com/libgit2/libgit2/pull/5685 lands
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-incdir.patch
+	echo 1 > $@
+
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls2.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
@@ -109,7 +96,7 @@ $(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libg
 
 else # USE_BINARYBUILDER_LIBGIT2
 
-LIBGIT2_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibGit2-v$(LIBGIT2_VER)-$(LIBGIT2_BB_REL)
+LIBGIT2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
 LIBGIT2_BB_NAME := LibGit2.v$(LIBGIT2_VER)
 $(eval $(call bb-install,libgit2,LIBGIT2,false))
 
@@ -129,4 +116,3 @@ $(build_datarootdir)/julia/cert.pem: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION
 
 # When "get"'ing libgit2, download the .pem
 get-libgit2: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem
-

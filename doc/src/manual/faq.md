@@ -67,7 +67,7 @@ When a file is run as the main script using `julia file.jl` one might want to ac
 functionality like command line argument handling. A way to determine that a file is run in
 this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
-### How do I catch CTRL-C in a script?
+### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
 Running a Julia script using `julia file.jl` does not throw
 [`InterruptException`](@ref) when you try to terminate it with CTRL-C
@@ -90,8 +90,7 @@ use `exec` to replace the process to `julia`:
 ```julia
 #!/bin/bash
 #=
-exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
-    "${BASH_SOURCE[0]}" "$@"
+exec julia --color=yes --startup-file=no "${BASH_SOURCE[0]}" "$@"
 =#
 
 @show ARGS  # put any Julia code here
@@ -101,6 +100,19 @@ In the example above, the code between `#=` and `=#` is run as a `bash`
 script.  Julia ignores this part since it is a multi-line comment for
 Julia.  The Julia code after `=#` is ignored by `bash` since it stops
 parsing the file once it reaches to the `exec` statement.
+
+!!! note
+    In order to [catch CTRL-C](@ref catch-ctrl-c) in the script you can use
+    ```julia
+    #!/bin/bash
+    #=
+    exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
+        "${BASH_SOURCE[0]}" "$@"
+    =#
+
+    @show ARGS  # put any Julia code here
+    ```
+    instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ## Functions
 
@@ -129,13 +141,13 @@ When calling `change_value!(x)` in the above example, `y` is a newly created var
 to the value of `x`, i.e. `10`; then `y` is rebound to the constant `17`, while the variable
 `x` of the outer scope is left untouched.
 
-But here is a thing you should pay attention to: suppose `x` is bound to an object of type `Array`
+However, if `x` is bound to an object of type `Array`
 (or any other *mutable* type). From within the function, you cannot "unbind" `x` from this Array,
-but you can change its content. For example:
+but you *can* change its content. For example:
 
 ```jldoctest
 julia> x = [1,2,3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -149,7 +161,7 @@ julia> change_array!(x)
 5
 
 julia> x
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  5
  2
  3
@@ -216,7 +228,7 @@ julia> function printargs(args...)
 printargs (generic function with 1 method)
 
 julia> printargs(1, 2, 3)
-Tuple{Int64,Int64,Int64}
+Tuple{Int64, Int64, Int64}
 Arg #1 = 1
 Arg #2 = 2
 Arg #3 = 3
@@ -241,7 +253,7 @@ julia> function threeargs(a, b, c)
 threeargs (generic function with 1 method)
 
 julia> x = [1, 2, 3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -296,7 +308,7 @@ julia> threetup()
 (3, 3)
 
 julia> threearr()
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  3
  3
 ```
@@ -322,8 +334,8 @@ unstable (generic function with 1 method)
 
 It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
 Since Julia can't predict the return type of this function at compile-time, any computation
-that uses it will have to guard against both types possibly occurring, making generation of
-fast machine code difficult.
+that uses it must be able to cope with values of both types, which makes it hard to produce
+fast machine code.
 
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 
@@ -352,6 +364,45 @@ julia> sqrt(-2.0+0im)
 0.0 + 1.4142135623730951im
 ```
 
+### How can I constrain or compute type parameters?
+
+The parameters of a [parametric type](@ref Parametric-Types) can hold either
+types or bits values, and the type itself chooses how it makes use of these parameters.
+For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
+element type and the integer value `2` to express its number of dimensions.  When
+defining your own parametric type, you can use subtype constraints to declare that a
+certain parameter must be a subtype ([`<:`](@ref)) of some abstract type or a previous
+type parameter.  There is not, however, a dedicated syntax to declare that a parameter
+must be a _value_ of a given type — that is, you cannot directly declare that a
+dimensionality-like parameter [`isa`](@ref) `Int` within the `struct` definition, for
+example.  Similarly, you cannot do computations (including simple things like addition
+or subtraction) on type parameters.  Instead, these sorts of constraints and
+relationships may be expressed through additional type parameters that are computed
+and enforced within the type's [constructors](@ref man-constructors).
+
+As an example, consider
+```julia
+struct ConstrainedType{T,N,N+1} # NOTE: INVALID SYNTAX
+    A::Array{T,N}
+    B::Array{T,N+1}
+end
+```
+where the user would like to enforce that the third type parameter is always the second plus one. This can be implemented with an explicit type parameter that is checked by an [inner constructor method](@ref man-inner-constructor-methods) (where it can be combined with other checks):
+```julia
+struct ConstrainedType{T,N,M}
+    A::Array{T,N}
+    B::Array{T,M}
+    function ConstrainedType(A::Array{T,N}, B::Array{T,M}) where {T,N,M}
+        N + 1 == M || throw(ArgumentError("second argument should have one more axis" ))
+        new{T,N,M}(A, B)
+    end
+end
+```
+This check is usually *costless*, as the compiler can elide the check for valid concrete types. If the second argument is also computed, it may be advantageous to provide an [outer constructor method](@ref man-outer-constructor-methods) that performs this calculation:
+```julia
+ConstrainedType(A) = ConstrainedType(A, compute_B(A))
+```
+
 ### [Why does Julia use native machine integer arithmetic?](@id faq-integer-arithmetic)
 
 Julia uses machine arithmetic for integer computations. This means that the range of `Int` values
@@ -359,16 +410,16 @@ is bounded and wraps around at either end so that adding, subtracting and multip
 can overflow or underflow, leading to some results that can be unsettling at first:
 
 ```jldoctest
-julia> typemax(Int)
+julia> x = typemax(Int)
 9223372036854775807
 
-julia> ans+1
+julia> y = x+1
 -9223372036854775808
 
-julia> -ans
+julia> z = -y
 -9223372036854775808
 
-julia> 2*ans
+julia> 2*z
 0
 ```
 
@@ -576,6 +627,14 @@ have, it ends up having a substantial cost due to compilers (LLVM and GCC) not g
 around the added overflow checks. If this improves in the future, we could consider defaulting
 to checked integer arithmetic in Julia, but for now, we have to live with the possibility of overflow.
 
+In the meantime, overflow-safe integer operations can be achieved through the use of external libraries
+such as [SaferIntegers.jl](https://github.com/JeffreySarnoff/SaferIntegers.jl). Note that, as stated
+previously, the use of these libraries significantly increases the execution time of code using the
+checked integer types. However, for limited usage, this is far less of an issue than if it were used
+for all integer operations. You can follow the status of the discussion
+[here](https://github.com/JuliaLang/julia/issues/855).
+
+
 ### What are the possible causes of an `UndefVarError` during remote execution?
 
 As the error states, an immediate cause of an `UndefVarError` on a remote node is that a binding
@@ -711,8 +770,9 @@ generate efficient code when working with `Union{T, Nothing}` arguments or field
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
 [`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
-The empty tuple (`()`) is another form of nothingness. But, it should not really be thought of
-as nothing but rather a tuple of zero values.
+In some languages, the empty tuple (`()`) is considered the canonical
+form of nothingness. However, in julia it is best thought of as just
+a regular tuple that happens to contain zero values.
 
 The empty (or "bottom") type, written as `Union{}` (an empty union type), is a type with
 no values and no subtypes (except itself). You will generally not need to use this type.
@@ -875,6 +935,22 @@ Julia compiles and uses its own copy of OpenBLAS, with threads currently capped 
 
 Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg [Intel MKL](https://software.intel.com/en-us/mkl), may provide performance improvements. You can use [MKL.jl](https://github.com/JuliaComputing/MKL.jl), a package that makes Julia's linear algebra use Intel MKL BLAS and LAPACK instead of OpenBLAS, or search the discussion forum for suggestions on how to set this up manually. Note that Intel MKL cannot be bundled with Julia, as it is not open source.
 
+## Computing cluster
+
+### How do I manage precompilation caches in distributed file systems?
+
+When using `julia` in high-performance computing (HPC) facilities, invoking
+_n_ `julia` processes simultaneously creates at most _n_ temporary copies of
+precompilation cache files. If this is an issue (slow and/or small distributed
+file system), you may:
+
+1. Use `julia` with `--compiled-modules=no` flag to turn off precompilation.
+2. Configure a private writable depot using `pushfirst!(DEPOT_PATH, private_path)`
+   where `private_path` is a path unique to this `julia` process.  This
+   can also be done by setting environment variable `JULIA_DEPOT_PATH` to
+   `$private_path:$HOME/.julia`.
+3. Create a symlink from `~/.julia/compiled` to a directory in a scratch space.
+
 ## Julia Releases
 
 ### Do I want to use the Stable, LTS, or nightly version of Julia?
@@ -904,3 +980,11 @@ If this describes you, you may also be interested in reading our [guidelines for
 
 Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 Note that not all versions of Julia are available for all platforms.
+
+### How can I transfer the list of installed packages after updating my version of Julia?
+
+Each minor version of julia has its own default [environment](https://docs.julialang.org/en/v1/manual/code-loading/#Environments-1). As a result, upon installing a new minor version of Julia, the packages you added using the previous minor version will not be available by default. The environment for a given julia version is defined by the files `Project.toml` and `Manifest.toml` in a folder matching the version number in `.julia/environments/`, for instance, ` .julia/environments/v1.3`.
+
+If you install a new minor version of Julia, say `1.4`, and want to use in its default environment the same packages as in a previous version (e.g. `1.3`), you can copy the contents of the file `Project.toml` from the `1.3` folder to `1.4`. Then, in a session of the new Julia version, enter the "package management mode" by typing the key `]`, and run the command [`instantiate`](https://julialang.github.io/Pkg.jl/v1/api/#Pkg.instantiate).
+
+This operation will resolve a set of feasible packages from the copied file that are compatible with the target Julia version, and will install or update them if suitable. If you want to reproduce not only the set of packages, but also the versions you were using in the previous Julia version, you should also copy the `Manifest.toml` file before running the Pkg command `instantiate`. However, note that packages may define compatibility constraints that may be affected by changing the version of Julia, so the exact set of versions you had in `1.3` may not work for `1.4`.

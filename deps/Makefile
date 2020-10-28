@@ -23,19 +23,14 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: llvm pcre unwind gmp mpfr patchelf libuv curl
+# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind libwhich
-# CMake libs: libgit2 libssh2 mbedtls
+# CMake libs: llvm libgit2 libssh2 mbedtls
 #
-# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
-#
-# there are rules in this file with the . replaced by a %
-# this is some magic Makefile trick that tells make
-# that all targets with a % in them on that line will
-# be rebuilt in a single invocation
+# downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
 #
 # to debug 'define' rules, replace eval at the usage site with info or error
-#
+
 
 ## Overall configuration of which rules exist and should be run by default ##
 
@@ -116,10 +111,12 @@ ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 DEP_LIBS += libssh2
 endif
 
-ifneq ($(OS), WINNT)
+ifeq ($(USE_SYSTEM_NGHTTP2), 0)
+DEP_LIBS += nghttp2
+endif
+
 ifeq ($(USE_SYSTEM_CURL), 0)
 DEP_LIBS += curl
-endif
 endif
 
 DEP_LIBS += libgit2
@@ -139,6 +136,15 @@ ifeq ($(USE_SYSTEM_UTF8PROC), 0)
 DEP_LIBS += utf8proc
 endif
 
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+DEP_LIBS += zlib
+endif
+
+ifeq ($(USE_SYSTEM_P7ZIP), 0)
+DEP_LIBS += p7zip
+endif
+
+
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
 # This is useful where one wants to use the vendor BLAS, but
@@ -153,7 +159,11 @@ ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
 endif
 
-DEP_LIBS_STAGED := $(filter-out suitesparse suitesparse-wrapper osxunwind,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
+# unlist targets that have not been converted to use the staged-install
+DEP_LIBS_STAGED := $(filter-out suitesparse-wrapper,$(DEP_LIBS))
+ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
+DEP_LIBS_STAGED := $(filter-out osxunwind,$(DEP_LIBS_STAGED))
+endif
 
 
 ## Common build target prefixes
@@ -167,11 +177,20 @@ check: $(addprefix check-, $(DEP_LIBS))
 fastcheck: $(addprefix fastcheck-, $(DEP_LIBS))
 stage: $(addprefix stage-, $(DEP_LIBS_STAGED))
 install: $(addprefix install-, $(DEP_LIBS))
-uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2 get-libwhich
+getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-nghttp2 get-curl get-libgit2 get-libwhich
+
+# If we're building for MacOS, no matter what, `getall` should include `osxunwind`
+ifeq ($(OS),Darwin)
+getall: get-osxunwind
+endif
+
+# Same if we're building a purely-source archive, always include `osxunwind`
+ifeq ($(USE_BINARYBUILDER_OSXUNWIND),0)
+getall: get-osxunwind
+endif
 
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
@@ -188,6 +207,11 @@ include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
 include $(SRCDIR)/mbedtls.mk
 include $(SRCDIR)/libssh2.mk
+include $(SRCDIR)/nghttp2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
+include $(SRCDIR)/zlib.mk
+include $(SRCDIR)/p7zip.mk
+
+include $(SRCDIR)/tools/uninstallers.mk
