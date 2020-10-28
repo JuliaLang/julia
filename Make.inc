@@ -210,7 +210,7 @@ endif
 USE_GPL_LIBS ?= 1
 
 # Whether to install Julia as a framework on Darwin (Apple) platforms.
-DARWIN_FRAMEWORK ?= 1
+DARWIN_FRAMEWORK ?= 0
 
 # Override in Make.user to customize the framework:
 FRAMEWORK_NAME ?= Julia
