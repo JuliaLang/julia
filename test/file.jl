@@ -268,6 +268,20 @@ no_error_logging(f::Function) =
     end
 end
 
+@testset "mktempdir() permissions correction" begin
+    # Test that `mktempdir()` with children with weird permissions get cleared
+    # before we would delete the directory
+    local temp_dir_path
+    mktempdir() do dir
+        temp_dir_path = dir
+        mkdir(joinpath(dir, "foo"))
+        touch(joinpath(dir, "foo", "bar"))
+        chmod(joinpath(dir, "foo"), 0o444)
+        @test isdir(temp_dir_path)
+    end
+    @test !isdir(temp_dir_path)
+end
+
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
