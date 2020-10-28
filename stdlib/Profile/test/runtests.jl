@@ -84,14 +84,15 @@ end
 
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
-    @test n_ == 1_000_000
-    def_delay = Sys.iswindows() ? 0.01 : 0.001
+    def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
+    @test n_ == def_n
+    def_delay = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 0.01 : 0.001
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
     @test n_ == 1_000_001
     @test delay_ == 0.0005
-    Profile.init(n=1_000_000, delay=def_delay)
+    Profile.init()
 end
 
 @testset "Line number correction" begin
@@ -131,5 +132,5 @@ let cmd = Base.julia_cmd()
     s = read(p, String)
     close(t)
     @test success(p)
-    @test parse(Int, s) > 1000
+    @test parse(Int, s) > 100
 end

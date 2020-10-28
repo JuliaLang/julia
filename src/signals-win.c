@@ -337,9 +337,8 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     }
     timeBeginPeriod(tc.wPeriodMin);
     while (1) {
-        DWORD timeout = nsecprof / GIGA;
-        timeout += tc.wPeriodMin;
-        Sleep(timeout);
+        DWORD timeout_ms = nsecprof / (GIGA / 1000);
+        Sleep(timeout_ms > 0 ? timeout_ms : 1);
         if (bt_size_cur < bt_size_max && running) {
             JL_LOCK_NOGC(&jl_in_stackwalk);
             jl_lock_profile();
