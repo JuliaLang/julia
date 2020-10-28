@@ -121,6 +121,10 @@ New library features
 Standard library changes
 ------------------------
 
+* `pkg> precompile` is now parallelized, and will run automatically after any `Pkg` action that changes the
+  active manifest. Errors will only throw for direct dependencies listed in the `Project.toml`, and auto-precompillation
+  will remember if a package has errored within the given environment and not retry until it changes. Disable
+  auto-precompillation with `ENV["JULIA_PKG_PRECOMPILE_AUTO"]=0`.
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
 * The `reverse(A; dims)` function for multidimensional `A` can now reverse multiple dimensions at once
   by passing a tuple for `dims`, and defaults to reversing all dimensions; there is also a multidimensional
