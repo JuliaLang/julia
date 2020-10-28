@@ -23,7 +23,7 @@ function, and primitive function, before turning into the desired result (hopefu
 The 10,000 foot view of the whole process is as follows:
 
 1. The user starts `julia`.
-2. The C function `main()` from `ui/repl.c` gets called. This function processes the command line
+2. The C function `main()` from `cli/loader_exe.c` gets called. This function processes the command line
    arguments, filling in the `jl_options` struct and setting the variable `ARGS`. It then initializes
    Julia (by calling [`julia_init` in `task.c`](https://github.com/JuliaLang/julia/blob/master/src/task.c),
    which may load a previously compiled [sysimg](@ref dev-sysimg)). Finally, it passes off control to Julia

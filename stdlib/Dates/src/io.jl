@@ -129,7 +129,7 @@ function tryparsenext(d::DatePart{'p'}, str, i, len)
     return ap == 'a' ? AM : PM, ii
 end
 
-for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
+for (tok, fn) in zip("uUeE", Any[monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         next = tryparsenext_word(str, i, len, locale, max_width(d))
         next === nothing && return nothing
@@ -161,13 +161,13 @@ end
 
 hour12(dt) = let h = hour(dt); h > 12 ? h - 12 : h == 0 ? 12 : h; end
 
-for (c, fn) in zip("YmdHIMS", [year, month, day, hour, hour12, minute, second])
+for (c, fn) in zip("YmdHIMS", Any[year, month, day, hour, hour12, minute, second])
     @eval function format(io, d::DatePart{$c}, dt)
         print(io, string($fn(dt), base = 10, pad = d.width))
     end
 end
 
-for (tok, fn) in zip("uU", [monthabbr, monthname])
+for (tok, fn) in zip("uU", Any[monthabbr, monthname])
     @eval function format(io, d::DatePart{$tok}, dt, locale)
         print(io, $fn(month(dt), locale))
     end
@@ -178,7 +178,7 @@ function format(io, d::DatePart{'p'}, dt, locale)
     print(io, ampm)
 end
 
-for (tok, fn) in zip("eE", [dayabbr, dayname])
+for (tok, fn) in zip("eE", Any[dayabbr, dayname])
     @eval function format(io, ::DatePart{$tok}, dt, locale)
         print(io, $fn(dayofweek(dt), locale))
     end
@@ -578,75 +578,30 @@ function format(dt::TimeType, f::AbstractString; locale::Locale=ENGLISH)
 end
 
 # show
-
-function Base.show(io::IO, p::P) where P <: Period
-    if get(io, :compact, false)
-        print(io, p)
-    else
-        print(io, P, '(', p.value, ')')
-    end
-end
-
-function Base.show(io::IO, dt::DateTime)
-    if get(io, :compact, false)
-        print(io, dt)
-    else
-        y,m,d = yearmonthday(dt)
-        h = hour(dt)
-        mi = minute(dt)
-        s = second(dt)
-        ms = millisecond(dt)
-        if ms == 0
-            print(io, DateTime, "($y, $m, $d, $h, $mi, $s)")
-        else
-            print(io, DateTime, "($y, $m, $d, $h, $mi, $s, $ms)")
-        end
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", dt::DateTime)
-    print(io, dt)
-end
-
-function Base.show(io::IO, ::MIME"text/plain", dt::Date)
-    print(io, dt)
-end
-
-function Base.show(io::IO, dt::Date)
-    if get(io, :compact, false)
-        print(io, dt)
-    else
-        y,m,d = yearmonthday(dt)
-        print(io, Date, "($y, $m, $d)")
-    end
-end
-
 function Base.print(io::IO, dt::DateTime)
-    if millisecond(dt) == 0
-        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS")
+    str = if millisecond(dt) == 0
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 19)
     else
-        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS.s")
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.sss", 23)
     end
+    print(io, str)
 end
 
 function Base.print(io::IO, dt::Date)
-    format(io, dt, dateformat"YYYY-mm-dd")
-end
-
-function Base.string(dt::DateTime)
-    if millisecond(dt) == 0
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 24)
-    else
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.s", 26)
-    end
-end
-
-function Base.string(dt::Date)
     # don't use format - bypassing IOBuffer creation
     # saves a bit of time here.
     y,m,d = yearmonthday(value(dt))
     yy = y < 0 ? @sprintf("%05i", y) : lpad(y, 4, "0")
     mm = lpad(m, 2, "0")
     dd = lpad(d, 2, "0")
-    return "$yy-$mm-$dd"
+    print(io, "$yy-$mm-$dd")
+end
+
+for date_type in (:Date, :DateTime)
+    # Human readable output (i.e. "2012-01-01")
+    @eval Base.show(io::IO, ::MIME"text/plain", dt::$date_type) = print(io, dt)
+    # Parsable output (i.e. Date("2012-01-01"))
+    @eval Base.show(io::IO, dt::$date_type) = print(io, typeof(dt), "(\"", dt, "\")")
+    # Parsable output will have type info displayed, thus it is implied
+    @eval Base.typeinfo_implicit(::Type{$date_type}) = true
 end

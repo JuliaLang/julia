@@ -21,7 +21,7 @@ extern "C" {
 static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
 {
     unsigned long self = jl_thread_self();
-    unsigned long owner = jl_atomic_load_acquire(&lock->owner);
+    unsigned long owner = jl_atomic_load_relaxed(&lock->owner);
     if (owner == self) {
         lock->count++;
         return;
@@ -37,7 +37,7 @@ static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
             jl_gc_safepoint_(ptls);
         }
         jl_cpu_pause();
-        owner = lock->owner;
+        owner = jl_atomic_load_relaxed(&lock->owner);
     }
 }
 
@@ -54,13 +54,10 @@ static inline void jl_mutex_lock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 static inline void jl_lock_frame_push(jl_mutex_t *lock)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    // For early bootstrap
-    if (__unlikely(!ptls->current_task))
-        return;
-    arraylist_t *locks = &ptls->current_task->locks;
-    size_t len = locks->len;
+    small_arraylist_t *locks = &ptls->locks;
+    uint32_t len = locks->len;
     if (__unlikely(len >= locks->max)) {
-        arraylist_grow(locks, 1);
+        small_arraylist_grow(locks, 1);
     }
     else {
         locks->len = len + 1;
@@ -70,9 +67,8 @@ static inline void jl_lock_frame_push(jl_mutex_t *lock)
 static inline void jl_lock_frame_pop(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (__likely(ptls->current_task)) {
-        ptls->current_task->locks.len--;
-    }
+    assert(ptls->locks.len > 0);
+    ptls->locks.len--;
 }
 
 #define JL_SIGATOMIC_BEGIN() do {               \
@@ -122,19 +118,6 @@ static inline int jl_mutex_trylock(jl_mutex_t *lock)
     }
     return got;
 }
-
-/* Call this function for code that could be called from either a managed
-   or an unmanaged thread */
-static inline void jl_mutex_lock_maybe_nogc(jl_mutex_t *lock)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->safepoint) {
-        jl_mutex_lock(lock);
-    } else {
-        jl_mutex_lock_nogc(lock);
-    }
-}
-
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
 #ifndef __clang_analyzer__
@@ -154,15 +137,6 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
     jl_gc_enable_finalizers(ptls, 1);
     jl_lock_frame_pop();
     JL_SIGATOMIC_END();
-}
-
-static inline void jl_mutex_unlock_maybe_nogc(jl_mutex_t *lock) {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->safepoint) {
-        jl_mutex_unlock(lock);
-    } else {
-        jl_mutex_unlock_nogc(lock);
-    }
 }
 
 static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT

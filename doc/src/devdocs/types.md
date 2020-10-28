@@ -42,14 +42,14 @@ Union{UInt8, Signed}
 julia> typejoin(Signed, Union{UInt8, Int8})
 Integer
 
-julia> typeintersect(Tuple{Integer,Float64}, Tuple{Int,Real})
-Tuple{Int64,Float64}
+julia> typeintersect(Tuple{Integer, Float64}, Tuple{Int, Real})
+Tuple{Int64, Float64}
 
-julia> Union{Tuple{Integer,Float64}, Tuple{Int,Real}}
-Union{Tuple{Int64,Real}, Tuple{Integer,Float64}}
+julia> Union{Tuple{Integer, Float64}, Tuple{Int, Real}}
+Union{Tuple{Int64, Real}, Tuple{Integer, Float64}}
 
-julia> typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})
-Tuple{Integer,Real}
+julia> typejoin(Tuple{Integer, Float64}, Tuple{Int, Real})
+Tuple{Integer, Real}
 ```
 
 While these operations may seem abstract, they lie at the heart of Julia.  For example, method
@@ -82,7 +82,7 @@ f3(A::Array{T}) where {T<:Any} = 3
 f4(A::Array{Any}) = 4
 ```
 
-The signature - as decribed in [Function calls](@ref) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
+The signature - as described in [Function calls](@ref) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
 All but `f4` can be called with `a = [1,2]`; all but `f2` can be called with `b = Any[1,2]`.
 
 Let's look at these types a little more closely:
@@ -99,7 +99,7 @@ UnionAll
       name: Symbol N
       lb: Union{}
       ub: Any
-    body: Array{T,N} <: DenseArray{T,N}
+    body: Array{T, N} <: DenseArray{T, N}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
@@ -162,8 +162,8 @@ julia> TV, NV = TypeVar(:T), TypeVar(:N)
 julia> Array
 Array
 
-julia> Array{TV,NV}
-Array{T,N}
+julia> Array{TV, NV}
+Array{T, N}
 ```
 
 These can be distinguished by examining the `name` field of the type, which is an object of type
@@ -185,7 +185,7 @@ TypeName
         name: Symbol N
         lb: Union{}
         ub: Any
-      body: Array{T,N} <: DenseArray{T,N}
+      body: Array{T, N} <: DenseArray{T, N}
   cache: SimpleVector
     ...
 
@@ -232,18 +232,15 @@ own type:
 julia> struct MyType{T,N} end
 
 julia> MyType{Int,2}
-MyType{Int64,2}
+MyType{Int64, 2}
 
 julia> MyType{Float32, 5}
-MyType{Float32,5}
-
-julia> MyType.body.body.name.cache
-svec(MyType{Int64,2}, MyType{Float32,5}, #undef, #undef, #undef, #undef, #undef, #undef)
+MyType{Float32, 5}
 ```
 
-(The cache is pre-allocated to have length 8, but only the first two entries are populated.) Consequently,
-when you instantiate a parametric type, each concrete type gets saved in a type cache.  However,
-instances containing free type variables are not cached.
+When you instantiate a parametric type, each concrete type gets saved in a type
+cache (`MyType.body.body.name.cache`). However, instances containing free type
+variables are not cached.
 
 ## Tuple types
 
@@ -255,7 +252,7 @@ julia> Tuple
 Tuple
 
 julia> Tuple.parameters
-svec(Vararg{Any,N} where N)
+svec(Vararg{Any, N} where N)
 ```
 
 Unlike other types, tuple types are covariant in their parameters, so this definition permits
@@ -263,10 +260,10 @@ Unlike other types, tuple types are covariant in their parameters, so this defin
 
 ```jldoctest
 julia> typeintersect(Tuple, Tuple{Int,Float64})
-Tuple{Int64,Float64}
+Tuple{Int64, Float64}
 
 julia> typeintersect(Tuple{Vararg{Any}}, Tuple{Int,Float64})
-Tuple{Int64,Float64}
+Tuple{Int64, Float64}
 ```
 
 However, if a variadic (`Vararg`) tuple type has free variables it can describe different kinds
@@ -274,7 +271,7 @@ of tuples:
 
 ```jldoctest
 julia> typeintersect(Tuple{Vararg{T} where T}, Tuple{Int,Float64})
-Tuple{Int64,Float64}
+Tuple{Int64, Float64}
 
 julia> typeintersect(Tuple{Vararg{T}} where T, Tuple{Int,Float64})
 Union{}
@@ -370,7 +367,7 @@ Therefore in this case the diagonal rule is not really necessary, since
 the array determines `T` and we can then allow `x` and `y` to be of
 any subtypes of `T`.
 So variables that occur in invariant position are never considered diagonal.
-This choice of behavior is slightly controversial --- some feel this definition
+This choice of behavior is slightly controversial -- some feel this definition
 should be written as
 
 ```julia
@@ -403,16 +400,41 @@ f(nothing, 2.0)
 These examples are telling us something: when `x` is `nothing::Nothing`, there are no
 extra constraints on `y`.
 It is as if the method signature had `y::Any`.
-This means that whether a variable is diagonal is not a static property based on
-where it appears in a type.
-Rather, it depends on where a variable appears when the subtyping algorithm *uses* it.
-When `x` has type `Nothing`, we don't need to use the `T` in `Union{Nothing,T}`, so `T`
-does not "occur".
 Indeed, we have the following type equivalence:
 
 ```julia
 (Tuple{Union{Nothing,T},T} where T) == Union{Tuple{Nothing,Any}, Tuple{T,T} where T}
 ```
+
+The general rule is: a concrete variable in covariant position acts like it's
+not concrete if the subtyping algorithm only *uses* it once.
+When `x` has type `Nothing`, we don't need to use the `T` in `Union{Nothing,T}`;
+we only use it in the second slot.
+This arises naturally from the observation that in `Tuple{T} where T` restricting
+`T` to concrete types makes no difference; the type is equal to `Tuple{Any}` either way.
+
+However, appearing in *invariant* position disqualifies a variable from being concrete
+whether that appearance of the variable is used or not.
+Otherwise types can behave differently depending on which other types
+they are compared to, making subtyping not transitive. For example, consider
+
+```julia
+Tuple{Int,Int8,Vector{Integer}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+```
+
+If the `T` inside the `Union` is ignored, then `T` is concrete and the answer is "false"
+since the first two types aren't the same.
+But consider instead
+
+```julia
+Tuple{Int,Int8,Vector{Any}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+```
+
+Now we cannot ignore the `T` in the `Union` (we must have `T == Any`), so `T` is not
+concrete and the answer is "true".
+That would make the concreteness of `T` depend on the other type, which is not
+acceptable since a type must have a clear meaning on its own.
+Therefore the appearance of `T` inside `Vector` is considered in both cases.
 
 ## Subtyping diagonal variables
 
@@ -458,8 +480,8 @@ A good way to start is to watch subtyping in action.
 Build Julia with `make debug` and fire up Julia within a debugger.
 [gdb debugging tips](@ref) has some tips which may be useful.
 
-Because the subtyping code is used heavily in the REPL itself--and hence breakpoints in this
-code get triggered often--it will be easiest if you make the following definition:
+Because the subtyping code is used heavily in the REPL itself -- and hence breakpoints in this
+code get triggered often -- it will be easiest if you make the following definition:
 
 ```julia-repl
 julia> function mysubtype(a,b)
@@ -474,7 +496,7 @@ breakpoints in other functions.
 As a warm-up, try the following:
 
 ```julia
-mysubtype(Tuple{Int,Float64}, Tuple{Integer,Real})
+mysubtype(Tuple{Int, Float64}, Tuple{Integer, Real})
 ```
 
 We can make it more interesting by trying a more complex case:

@@ -165,10 +165,17 @@ See also: [`basename`](@ref)
 
 Get the file name part of a path.
 
+!!! note
+    This function differs slightly from the Unix `basename` program, where trailing slashes are ignored,
+    i.e. `\$ basename /foo/bar/` returns `bar`, whereas `basename` in Julia returns an empty string `""`.
+
 # Examples
 ```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
+
+julia> basename("/home/myuser/")
+""
 ```
 
 See also: [`dirname`](@ref)
@@ -180,7 +187,7 @@ basename(path::AbstractString) = splitdir(path)[2]
 
 If the last component of a path contains a dot, split the path into everything before the
 dot and everything including and after the dot. Otherwise, return a tuple of the argument
-unmodified and the empty string.
+unmodified and the empty string. "splitext" is short for "split extension".
 
 # Examples
 ```jldoctest
@@ -198,6 +205,9 @@ function splitext(path::String)
     a*m.captures[1], String(m.captures[2])
 end
 
+# NOTE: deprecated in 1.4
+pathsep() = path_separator
+
 """
     splitpath(path::AbstractString) -> Vector{String}
 
@@ -211,7 +221,7 @@ the path, including the root directory if present.
 # Examples
 ```jldoctest
 julia> splitpath("/home/myuser/example.jl")
-4-element Array{String,1}:
+4-element Vector{String}:
  "/"
  "home"
  "myuser"
@@ -441,11 +451,11 @@ else
 function expanduser(path::AbstractString)
     y = iterate(path)
     y === nothing && return path
-    c, i = y
+    c, i = y::Tuple{eltype(path),Int}
     c != '~' && return path
     y = iterate(path, i)
     y === nothing && return homedir()
-    y[1] == '/' && return homedir() * path[i:end]
+    y[1]::eltype(path) == '/' && return homedir() * path[i:end]
     throw(ArgumentError("~user tilde expansion not yet implemented"))
 end
 function contractuser(path::AbstractString)

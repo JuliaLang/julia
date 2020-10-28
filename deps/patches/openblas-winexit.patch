@@ -1,0 +1,178 @@
+From f919c3301fabbaa5d965dcc7b1c3d6892a8c730a Mon Sep 17 00:00:00 2001
+From: Keno Fischer <keno@juliacomputing.com>
+Date: Sat, 14 Mar 2020 12:05:19 +0100
+
+---
+ driver/others/memory.c | 131 +----------------------------------------
+ 1 file changed, 2 insertions(+), 129 deletions(-)
+
+diff --git a/driver/others/memory.c b/driver/others/memory.c
+index 62a5a021..23f8fe65 100644
+--- a/driver/others/memory.c
++++ b/driver/others/memory.c
+@@ -1510,7 +1510,7 @@ void CONSTRUCTOR gotoblas_init(void) {
+ 
+ }
+ 
+-void DESTRUCTOR gotoblas_quit(void) {
++void gotoblas_quit(void) {
+ 
+   if (gotoblas_initialized == 0) return;
+ 
+@@ -1547,74 +1547,12 @@ void DESTRUCTOR gotoblas_quit(void) {
+ #endif
+ }
+ 
+-#if defined(_MSC_VER) && !defined(__clang__)
+-BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
+-{
+-  switch (ul_reason_for_call)
+-  {
+-    case DLL_PROCESS_ATTACH:
+-      gotoblas_init();
+-      break;
+-    case DLL_THREAD_ATTACH:
+-      break;
+-    case DLL_THREAD_DETACH:
+-#if defined(SMP)
+-      blas_thread_memory_cleanup();
+-#endif
+-      break;
+-    case DLL_PROCESS_DETACH:
+-      gotoblas_quit();
+-      break;
+-    default:
+-      break;
+-  }
+-  return TRUE;
+-}
+-
+-/*
+-  This is to allow static linking.
+-  Code adapted from Google performance tools:
+-  https://gperftools.googlecode.com/git-history/perftools-1.0/src/windows/port.cc
+-  Reference:
+-  https://sourceware.org/ml/pthreads-win32/2008/msg00028.html
+-  http://ci.boost.org/svn-trac/browser/trunk/libs/thread/src/win32/tss_pe.cpp
+-*/
+-static int on_process_term(void)
+-{
+-	gotoblas_quit();
+-	return 0;
+-}
+ #ifdef _WIN64
+ #pragma comment(linker, "/INCLUDE:_tls_used")
+ #else
+ #pragma comment(linker, "/INCLUDE:__tls_used")
+ #endif
+ 
+-#ifdef _WIN64
+-#pragma const_seg(".CRT$XLB")
+-#else
+-#pragma data_seg(".CRT$XLB")
+-#endif
+-static void (APIENTRY *dll_callback)(HINSTANCE h, DWORD ul_reason_for_call, PVOID pv) = DllMain;
+-#ifdef _WIN64
+-#pragma const_seg()
+-#else
+-#pragma data_seg()
+-#endif
+-
+-#ifdef _WIN64
+-#pragma const_seg(".CRT$XTU")
+-#else
+-#pragma data_seg(".CRT$XTU")
+-#endif
+-static int(*p_process_term)(void) = on_process_term;
+-#ifdef _WIN64
+-#pragma const_seg()
+-#else
+-#pragma data_seg()
+-#endif
+-#endif
+-
+ #if (defined(C_PGI) || (!defined(C_SUN) && defined(F_INTERFACE_SUN))) && (defined(ARCH_X86) || defined(ARCH_X86_64))
+ /* Don't call me; this is just work around for PGI / Sun bug */
+ void gotoblas_dummy_for_PGI(void) {
+@@ -3104,7 +3042,7 @@ void CONSTRUCTOR gotoblas_init(void) {
+ 
+ }
+ 
+-void DESTRUCTOR gotoblas_quit(void) {
++void gotoblas_quit(void) {
+ 
+   if (gotoblas_initialized == 0) return;
+ 
+@@ -3133,71 +3071,6 @@ void DESTRUCTOR gotoblas_quit(void) {
+ #endif
+ }
+ 
+-#if defined(_MSC_VER) && !defined(__clang__)
+-BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
+-{
+-  switch (ul_reason_for_call)
+-  {
+-    case DLL_PROCESS_ATTACH:
+-      gotoblas_init();
+-      break;
+-    case DLL_THREAD_ATTACH:
+-      break;
+-    case DLL_THREAD_DETACH:
+-      break;
+-    case DLL_PROCESS_DETACH:
+-      gotoblas_quit();
+-      break;
+-    default:
+-      break;
+-  }
+-  return TRUE;
+-}
+-
+-/*
+-  This is to allow static linking.
+-  Code adapted from Google performance tools:
+-  https://gperftools.googlecode.com/git-history/perftools-1.0/src/windows/port.cc
+-  Reference:
+-  https://sourceware.org/ml/pthreads-win32/2008/msg00028.html
+-  http://ci.boost.org/svn-trac/browser/trunk/libs/thread/src/win32/tss_pe.cpp
+-*/
+-static int on_process_term(void)
+-{
+-	gotoblas_quit();
+-	return 0;
+-}
+-#ifdef _WIN64
+-#pragma comment(linker, "/INCLUDE:_tls_used")
+-#else
+-#pragma comment(linker, "/INCLUDE:__tls_used")
+-#endif
+-
+-#ifdef _WIN64
+-#pragma const_seg(".CRT$XLB")
+-#else
+-#pragma data_seg(".CRT$XLB")
+-#endif
+-static void (APIENTRY *dll_callback)(HINSTANCE h, DWORD ul_reason_for_call, PVOID pv) = DllMain;
+-#ifdef _WIN64
+-#pragma const_seg()
+-#else
+-#pragma data_seg()
+-#endif
+-
+-#ifdef _WIN64
+-#pragma const_seg(".CRT$XTU")
+-#else
+-#pragma data_seg(".CRT$XTU")
+-#endif
+-static int(*p_process_term)(void) = on_process_term;
+-#ifdef _WIN64
+-#pragma const_seg()
+-#else
+-#pragma data_seg()
+-#endif
+-#endif
+-
+ #if (defined(C_PGI) || (!defined(C_SUN) && defined(F_INTERFACE_SUN))) && (defined(ARCH_X86) || defined(ARCH_X86_64))
+ /* Don't call me; this is just work around for PGI / Sun bug */
+ void gotoblas_dummy_for_PGI(void) {
+

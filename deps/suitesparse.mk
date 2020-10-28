@@ -16,8 +16,8 @@ CHOLMOD_CONFIG += -DNPARTITION
 
 ifneq ($(USE_BINARYBUILDER_SUITESPARSE), 1)
 
-SUITESPARSE_PROJECTS := AMD CAMD CCOLAMD COLAMD CHOLMOD UMFPACK SPQR
-SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd camd ccolamd colamd cholmod umfpack spqr)
+SUITESPARSE_PROJECTS := AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR
+SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf camd ccolamd colamd cholmod klu umfpack rbio spqr)
 
 SUITE_SPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(SUITESPARSE_VER)/lib"
 ifeq ($(OS), Darwin)
@@ -33,7 +33,7 @@ SUITESPARSE_MFLAGS += UNAME=$(OS)
 endif
 
 $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$(notdir $@)
+	$(JLDOWNLOAD) $@ https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/v$(SUITESPARSE_VER).tar.gz
 
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted: $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
@@ -138,10 +138,10 @@ install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EX
 
 else # USE_BINARYBUILDER_SUITESPARSE
 
-SUITESPARSE_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/SuiteSparse-v$(SUITESPARSE_VER)-$(SUITESPARSE_BB_REL)
+SUITESPARSE_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl/releases/download/SuiteSparse-v$(SUITESPARSE_VER)+$(SUITESPARSE_BB_REL)
 SUITESPARSE_BB_NAME := SuiteSparse.v$(SUITESPARSE_VER)
 
-$(eval $(call bb-install,suitesparse,SUITESPARSE,true))
+$(eval $(call bb-install,suitesparse,SUITESPARSE,false))
 get-suitesparse-wrapper: get-suitesparse
 extract-suitesparse-wrapper: extract-suitesparse
 configure-suitesparse-wrapper: configure-suitesparse
@@ -155,4 +155,3 @@ install-suitesparse-wrapper: install-suitesparse
 # suitesparse depends on OpenBLAS
 compile-suitesparse: | $(build_prefix)/manifest/openblas
 endif
-

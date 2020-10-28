@@ -5,14 +5,19 @@ module TestGeneric
 using Test, LinearAlgebra, Random
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
+
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
 
 Random.seed!(123)
 
 n = 5 # should be odd
 
-@testset for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat})
+@testset for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
     # In the long run, these tests should step through Strang's
     #  axiomatic definition of determinants.
     # If all axioms are satisfied and all the composition rules work,
@@ -119,6 +124,7 @@ end
         @testset "Scaling with rdiv! and ldiv!" begin
             @test rdiv!(copy(a), 5.) == a/5
             @test ldiv!(5., copy(a)) == a/5
+            @test ldiv!(zero(a), 5., copy(a)) == a/5
         end
 
         @testset "Scaling with 3-argument mul!" begin
@@ -146,11 +152,11 @@ end
 
 @testset "scale real matrix by complex type" begin
     @test_throws InexactError rmul!([1.0], 2.0im)
-    @test isequal([1.0] * 2.0im,             Complex{Float64}[2.0im])
-    @test isequal(2.0im * [1.0],             Complex{Float64}[2.0im])
-    @test isequal(Float32[1.0] * 2.0f0im,    Complex{Float32}[2.0im])
-    @test isequal(Float32[1.0] * 2.0im,      Complex{Float64}[2.0im])
-    @test isequal(Float64[1.0] * 2.0f0im,    Complex{Float64}[2.0im])
+    @test isequal([1.0] * 2.0im,             ComplexF64[2.0im])
+    @test isequal(2.0im * [1.0],             ComplexF64[2.0im])
+    @test isequal(Float32[1.0] * 2.0f0im,    ComplexF32[2.0im])
+    @test isequal(Float32[1.0] * 2.0im,      ComplexF64[2.0im])
+    @test isequal(Float64[1.0] * 2.0f0im,    ComplexF64[2.0im])
     @test isequal(Float32[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
     @test isequal(Float64[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
     @test isequal(BigFloat[1.0] * 2.0im,     Complex{BigFloat}[2.0im])
@@ -211,6 +217,25 @@ end
     @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
+@testset "rotate! and reflect!" begin
+    x = rand(ComplexF64, 10)
+    y = rand(ComplexF64, 10)
+    c = rand(Float64)
+    s = rand(ComplexF64)
+
+    x2 = copy(x)
+    y2 = copy(y)
+    rotate!(x, y, c, s)
+    @test x ≈ c*x2 + s*y2
+    @test y ≈ -conj(s)*x2 + c*y2
+
+    x3 = copy(x)
+    y3 = copy(y)
+    reflect!(x, y, c, s)
+    @test x ≈ c*x3 + s*y3
+    @test y ≈ conj(s)*x3 - c*y3
+end
+
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
     α = [1 2; 3 4]
     β = [5 6; 7 8]
@@ -245,6 +270,25 @@ end
             @test isempty(normalize!(T[]))
         end
     end
+end
+
+@testset "normalize for multidimensional arrays" begin
+
+    for arr in (
+        fill(10.0, ()),  # 0 dim
+        [1.0],           # 1 dim
+        [1.0 2.0 3.0; 4.0 5.0 6.0], # 2-dim
+        rand(1,2,3),                # higher dims
+        rand(1,2,3,4),
+        OffsetArray([-1,0], (-2,))  # no index 1
+    )
+        @test normalize(arr) == normalize!(copy(arr))
+        @test size(normalize(arr)) == size(arr)
+        @test axes(normalize(arr)) == axes(arr)
+        @test vec(normalize(arr)) == normalize(vec(arr))
+    end
+
+    @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
 end
 
 @testset "Issue #30466" begin
@@ -410,7 +454,7 @@ end
 end
 
 @testset "generalized dot #32739" begin
-    for elty in (Int, Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat})
+    for elty in (Int, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
         n = 10
         if elty <: Int
             A = rand(-n:n, n, n)
@@ -435,6 +479,11 @@ end
         @test dot(x, B', y) ≈ dot(B*x, y)
         elty <: Real && @test dot(x, transpose(B), y) ≈ dot(x, transpose(B)*y)
     end
+end
+
+@testset "condskeel #34512" begin
+    A = rand(3, 3)
+    @test condskeel(A) ≈ condskeel(A, [8,8,8])
 end
 
 end # module TestGeneric

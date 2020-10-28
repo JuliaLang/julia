@@ -48,8 +48,8 @@ macro spawn(expr)
     var = esc(Base.sync_varname)
     quote
         local ref = spawn_somewhere($thunk)
-        if $(Expr(:isdefined, var))
-            push!($var, ref)
+        if $(Expr(:islocal, var))
+            put!($var, ref)
         end
         ref
     end
@@ -93,8 +93,8 @@ macro spawnat(p, expr)
     end
     quote
         local ref = $spawncall
-        if $(Expr(:isdefined, var))
-            push!($var, ref)
+        if $(Expr(:islocal, var))
+            put!($var, ref)
         end
         ref
     end
@@ -175,7 +175,8 @@ Errors on any of the processes are collected into a
 
     @everywhere bar = 1
 
-will define `Main.bar` on all processes.
+will define `Main.bar` on all current processes. Any processes added later
+(say with [`addprocs()`](@ref)) will not have the expression defined.
 
 Unlike [`@spawnat`](@ref), `@everywhere` does not capture any local variables.
 Instead, local variables can be broadcast using interpolation:
@@ -186,7 +187,11 @@ Instead, local variables can be broadcast using interpolation:
 The optional argument `procs` allows specifying a subset of all
 processes to have execute the expression.
 
-Equivalent to calling `remotecall_eval(Main, procs, expr)`.
+Similar to calling `remotecall_eval(Main, procs, expr)`, but with two extra features:
+
+    - `using` and `import` statements run on the calling process first, to ensure
+      packages are precompiled.
+    - The current source file path used by `include` is propagated to other processes.
 """
 macro everywhere(ex)
     procs = GlobalRef(@__MODULE__, :procs)
@@ -197,7 +202,8 @@ macro everywhere(procs, ex)
     imps = extract_imports(ex)
     return quote
         $(isempty(imps) ? nothing : Expr(:toplevel, imps...)) # run imports locally first
-        let ex = $(Expr(:quote, ex)), procs = $(esc(procs))
+        let ex = Expr(:toplevel, :(task_local_storage()[:SOURCE_PATH] = $(get(task_local_storage(), :SOURCE_PATH, nothing))), $(esc(Expr(:quote, ex)))),
+            procs = $(esc(procs))
             remotecall_eval(Main, procs, ex)
         end
     end
@@ -241,13 +247,12 @@ function remotecall_eval(m::Module, pid::Int, ex)
 end
 
 
-# Statically split range [1,N] into equal sized chunks for np processors
-function splitrange(N::Int, np::Int)
-    each = div(N,np)
-    extras = rem(N,np)
+# Statically split range [firstIndex,lastIndex] into equal sized chunks for np processors
+function splitrange(firstIndex::Int, lastIndex::Int, np::Int)
+    each, extras = divrem(lastIndex-firstIndex+1, np)
     nchunks = each > 0 ? np : extras
     chunks = Vector{UnitRange{Int}}(undef, nchunks)
-    lo = 1
+    lo = firstIndex
     for i in 1:nchunks
         hi = lo + each - 1
         if extras > 0
@@ -261,8 +266,7 @@ function splitrange(N::Int, np::Int)
 end
 
 function preduce(reducer, f, R)
-    N = length(R)
-    chunks = splitrange(Int(N), nworkers())
+    chunks = splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
     all_w = workers()[1:length(chunks)]
 
     w_exec = Task[]
@@ -271,11 +275,11 @@ function preduce(reducer, f, R)
         schedule(t)
         push!(w_exec, t)
     end
-    reduce(reducer, [fetch(t) for t in w_exec])
+    reduce(reducer, Any[fetch(t) for t in w_exec])
 end
 
 function pfor(f, R)
-    @async @sync for c in splitrange(length(R), nworkers())
+    @async @sync for c in splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
         @spawnat :any f(R, first(c), last(c))
     end
 end
@@ -346,8 +350,8 @@ macro distributed(args...)
         syncvar = esc(Base.sync_varname)
         return quote
             local ref = pfor($(make_pfor_body(var, body)), $(esc(r)))
-            if $(Expr(:isdefined, syncvar))
-                push!($syncvar, ref)
+            if $(Expr(:islocal, syncvar))
+                put!($syncvar, ref)
             end
             ref
         end

@@ -71,11 +71,11 @@ julia> t = ccall(:clock, Int32, ())
 julia> t
 2292761
 
-julia> typeof(ans)
+julia> typeof(t)
 Int32
 ```
 
-`clock` takes no arguments and returns an [`Int32`](@ref). One common gotcha is that a 1-tuple of
+`clock` takes no arguments and returns an [`Int32`](@ref). One common mistake is forgetting that a 1-tuple of
 argument types must be written with a trailing comma. For example, to call the `getenv` function
 to get a pointer to the value of an environment variable, one makes a call like this:
 
@@ -87,7 +87,7 @@ julia> unsafe_string(path)
 "/bin/bash"
 ```
 
-Note that the argument type tuple must be written as `(Cstring,)`, rather than `(Cstring)`. This
+Note that the argument type tuple must be written as `(Cstring,)`, not `(Cstring)`. This
 is because `(Cstring)` is just the expression `Cstring` surrounded by parentheses, rather than
 a 1-tuple containing `Cstring`:
 
@@ -101,7 +101,7 @@ julia> (Cstring,)
 
 In practice, especially when providing reusable functionality, one generally wraps [`ccall`](@ref)
 uses in Julia functions that set up arguments and then check for errors in whatever manner the
-C or Fortran function indicates them, propagating to the Julia caller as exceptions. This is especially
+C or Fortran function specifies. And if an error occurs it is thrown as a normal Julia exception. This is especially
 important since C and Fortran APIs are notoriously inconsistent about how they indicate error
 conditions. For example, the `getenv` C library function is wrapped in the following Julia function,
 which is a simplified version of the actual definition from [`env.jl`](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
@@ -142,19 +142,24 @@ function gethostname()
                 hostname, sizeof(hostname))
     Base.systemerror("gethostname", err != 0)
     hostname[end] = 0 # ensure null-termination
-    return unsafe_string(pointer(hostname))
+    return GC.@preserve hostname unsafe_string(pointer(hostname))
 end
 ```
 
-This example first allocates an array of bytes, then calls the C library function `gethostname`
-to fill the array in with the hostname, takes a pointer to the hostname buffer, and converts the
-pointer to a Julia string, assuming that it is a NUL-terminated C string. It is common for C libraries
-to use this pattern of requiring the caller to allocate memory to be passed to the callee and
-filled in. Allocation of memory from Julia like this is generally accomplished by creating an
-uninitialized array and passing a pointer to its data to the C function. This is why we don't
-use the `Cstring` type here: as the array is uninitialized, it could contain NUL bytes. Converting
-to a `Cstring` as part of the [`ccall`](@ref) checks for contained NUL bytes and could therefore
-throw a conversion error.
+This example first allocates an array of bytes. It then calls the C library function `gethostname`
+to populate the array with the hostname. Finally, it takes a pointer to the hostname buffer, and
+converts the pointer to a Julia string, assuming that it is a NUL-terminated C string.
+
+It is common for C libraries to use this pattern of requiring the caller to allocate memory to be
+passed to the callee and populated. Allocation of memory from Julia like this is generally
+accomplished by creating an uninitialized array and passing a pointer to its data to the C function.
+This is why we don't use the `Cstring` type here: as the array is uninitialized, it could contain
+NUL bytes. Converting to a `Cstring` as part of the [`ccall`](@ref) checks for contained NUL bytes
+and could therefore throw a conversion error.
+
+Deferencing `pointer(hostname)` with `unsafe_string` is an unsafe operation as it requires access to
+the memory allocated for `hostname` that may have been in the meanwhile garbage collected. The macro
+[`GC.@preserve`](@ref) prevents this from happening and therefore accessing an invalid memory location.
 
 ## Creating C-Compatible Julia Function Pointers
 
@@ -177,7 +182,7 @@ Julia function. The arguments to [`@cfunction`](@ref) are:
 
 !!! note
     Currently, only the platform-default C calling convention is supported. This means that
-    `@cfunction`-generated pointers cannot be used in calls where WINAPI expects `stdcall`
+    `@cfunction`-generated pointers cannot be used in calls where WINAPI expects a `stdcall`
     function on 32-bit Windows, but can be used on WIN64 (where `stdcall` is unified with the
     C calling convention).
 
@@ -193,8 +198,8 @@ each. `compare` is a callback function which takes pointers to two elements `a` 
 an integer less/greater than zero if `a` should appear before/after `b` (or zero if any order
 is permitted).
 
-Now, suppose that we have a 1d array `A` of values in Julia that we want to sort
-using the `qsort` function (rather than Julia's built-in `sort` function). Before we worry about
+Now, suppose that we have a 1-d array `A` of values in Julia that we want to sort
+using the `qsort` function (rather than Julia's built-in `sort` function). Before we consider
 calling `qsort` and passing arguments, we need to write a comparison function:
 
 ```jldoctest mycompare
@@ -204,8 +209,8 @@ julia> function mycompare(a, b)::Cint
 mycompare (generic function with 1 method)
 ```
 
-``qsort`` expects a comparison function that return a C ``int``, so we annotate the return type
-to be ``Cint``.
+`qsort` expects a comparison function that return a C `int`, so we annotate the return type
+to be `Cint`.
 
 In order to pass this function to C, we obtain its address using the macro `@cfunction`:
 
@@ -221,7 +226,7 @@ The final call to `qsort` looks like this:
 
 ```jldoctest mycompare
 julia> A = [1.3, -2.7, 4.4, 3.1]
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
   1.3
  -2.7
   4.4
@@ -231,14 +236,14 @@ julia> ccall(:qsort, Cvoid, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Cvoid}),
              A, length(A), sizeof(eltype(A)), mycompare_c)
 
 julia> A
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
  -2.7
   1.3
   3.1
   4.4
 ```
 
-As can be seen, `A` is changed to the sorted array `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
+As the example shows, the original Julia array `A` has now been sorted: `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
 [takes care of converting the array to a `Ptr{Cdouble}`](@ref automatic-type-conversion)), computing
 the size of the element type in bytes, and so on.
 
@@ -265,7 +270,7 @@ to the specified type. For example, the following call:
 ccall((:foo, "libfoo"), Cvoid, (Int32, Float64), x, y)
 ```
 
-will behave as if the following were written:
+will behave as if it were written like this:
 
 ```julia
 ccall((:foo, "libfoo"), Cvoid, (Int32, Float64),
@@ -349,7 +354,7 @@ same:
 
 On all systems we currently support, basic C/C++ value types may be translated to Julia types
 as follows. Every C type also has a corresponding Julia type with the same name, prefixed by C.
-This can help for writing portable code (and remembering that an `int` in C is not the same as
+This can help when writing portable code (and remembering that an `int` in C is not the same as
 an `Int` in Julia).
 
 
@@ -360,30 +365,31 @@ an `Int` in Julia).
 | `unsigned char`                                         | `CHARACTER`              | `Cuchar`             | `UInt8`                                                                                                        |
 | `bool` (_Bool in C99+)                                  |                          | `Cuchar`             | `UInt8`                                                                                                        |
 | `short`                                                 | `INTEGER*2`, `LOGICAL*2` | `Cshort`             | `Int16`                                                                                                        |
-| `unsigned short`                                        |                          | `Cushort`            | `UInt16`                                                                                                       |
+| `unsigned short`                                        |                          | `Cushort`            | `UInt16`                                                                                                       |
 | `int`, `BOOL` (C, typical)                              | `INTEGER*4`, `LOGICAL*4` | `Cint`               | `Int32`                                                                                                        |
-| `unsigned int`                                          |                          | `Cuint`              | `UInt32`                                                                                                       |
+| `unsigned int`                                          |                          | `Cuint`              | `UInt32`                                                                                                       |
 | `long long`                                             | `INTEGER*8`, `LOGICAL*8` | `Clonglong`          | `Int64`                                                                                                        |
-| `unsigned long long`                                    |                          | `Culonglong`         | `UInt64`                                                                                                       |
-| `intmax_t`                                              |                          | `Cintmax_t`          | `Int64`                                                                                                        |
-| `uintmax_t`                                             |                          | `Cuintmax_t`         | `UInt64`                                                                                                       |
+| `unsigned long long`                                    |                          | `Culonglong`         | `UInt64`                                                                                                       |
+| `intmax_t`                                              |                          | `Cintmax_t`          | `Int64`                                                                                                        |
+| `uintmax_t`                                             |                          | `Cuintmax_t`         | `UInt64`                                                                                                       |
 | `float`                                                 | `REAL*4i`                | `Cfloat`             | `Float32`                                                                                                      |
 | `double`                                                | `REAL*8`                 | `Cdouble`            | `Float64`                                                                                                      |
-| `complex float`                                         | `COMPLEX*8`              | `ComplexF32`          | `Complex{Float32}`                                                                                             |
+| `complex float`                                         | `COMPLEX*8`              | `ComplexF32`         | `Complex{Float32}`                                                                                             |
 | `complex double`                                        | `COMPLEX*16`             | `ComplexF64`         | `Complex{Float64}`                                                                                             |
-| `ptrdiff_t`                                             |                          | `Cptrdiff_t`         | `Int`                                                                                                          |
-| `ssize_t`                                               |                          | `Cssize_t`           | `Int`                                                                                                          |
-| `size_t`                                                |                          | `Csize_t`            | `UInt`                                                                                                         |
-| `void`                                                  |                          |                      | `Cvoid`                                                                                                         |
-| `void` and `[[noreturn]]` or `_Noreturn`                |                          |                      | `Union{}`                                                                                                      |
-| `void*`                                                 |                          |                      | `Ptr{Cvoid}`                                                                                                    |
-| `T*` (where T represents an appropriately defined type) |                          |                      | `Ref{T}`                                                                                                       |
-| `char*` (or `char[]`, e.g. a string)                    | `CHARACTER*N`            |                      | `Cstring` if NUL-terminated, or `Ptr{UInt8}` if not                                                            |
-| `char**` (or `*char[]`)                                 |                          |                      | `Ptr{Ptr{UInt8}}`                                                                                              |
-| `jl_value_t*` (any Julia Type)                          |                          |                      | `Any`                                                                                                          |
-| `jl_value_t**` (a reference to a Julia Type)            |                          |                      | `Ref{Any}`                                                                                                     |
-| `va_arg`                                                |                          |                      | Not supported                                                                                                  |
-| `...` (variadic function specification)                 |                          |                      | `T...` (where `T` is one of the above types, variadic functions of different argument types are not supported) |
+| `ptrdiff_t`                                             |                          | `Cptrdiff_t`         | `Int`                                                                                                          |
+| `ssize_t`                                               |                          | `Cssize_t`           | `Int`                                                                                                          |
+| `size_t`                                                |                          | `Csize_t`            | `UInt`                                                                                                         |
+| `void`                                                  |                          |                      | `Cvoid`                                                                                                        |
+| `void` and `[[noreturn]]` or `_Noreturn`                |                          |                      | `Union{}`                                                                                                      |
+| `void*`                                                 |                          |                      | `Ptr{Cvoid}` (or similarly `Ref{Cvoid}`)                                                                       |
+| `T*` (where T represents an appropriately defined type) |                          |                      | `Ref{T}` (T may be safely mutated only if T is an isbits type)                                                 |
+| `char*` (or `char[]`, e.g. a string)                    | `CHARACTER*N`            |                      | `Cstring` if NUL-terminated, or `Ptr{UInt8}` if not                                                            |
+| `char**` (or `*char[]`)                                 |                          |                      | `Ptr{Ptr{UInt8}}`                                                                                              |
+| `jl_value_t*` (any Julia Type)                          |                          |                      | `Any`                                                                                                          |
+| `jl_value_t* const*` (a reference to a Julia value)     |                          |                      | `Ref{Any}` (const, since mutation would require a write barrier, which is not possible to insert correctly)    |
+| `va_arg`                                                |                          |                      | Not supported                                                                                                  |
+| `...` (variadic function specification)                 |                          |                      | `T...` (where `T` is one of the above types, when using the `ccall` function)                                  |
+| `...` (variadic function specification)                 |                          |                      | `; va_arg1::T, va_arg2::S, etc.` (only supported with `@ccall` macro)                                          |
 
 The [`Cstring`](@ref) type is essentially a synonym for `Ptr{UInt8}`, except the conversion to `Cstring`
 throws an error if the Julia string contains any embedded NUL characters (which would cause the
@@ -410,7 +416,7 @@ checks and is only meant to improve readability of the call.
 
 !!! warning
     For string arguments (`char*`) the Julia type should be `Cstring` (if NUL- terminated data is
-    expected) or either `Ptr{Cchar}` or `Ptr{UInt8}` otherwise (these two pointer types have the same
+    expected), or either `Ptr{Cchar}` or `Ptr{UInt8}` otherwise (these two pointer types have the same
     effect), as described above, not `String`. Similarly, for array arguments (`T[]` or `T*`), the
     Julia type should again be `Ptr{T}`, not `Vector{T}`.
 
@@ -419,19 +425,19 @@ checks and is only meant to improve readability of the call.
     `wint_t`) on all platforms.
 
 !!! warning
-    A return type of `Union{}` means the function will not return i.e. C++11 `[[noreturn]]` or C11
+    A return type of `Union{}` means the function will not return, i.e., C++11 `[[noreturn]]` or C11
     `_Noreturn` (e.g. `jl_throw` or `longjmp`). Do not use this for functions that return no value
     (`void`) but do return, use `Cvoid` instead.
 
 !!! note
     For `wchar_t*` arguments, the Julia type should be [`Cwstring`](@ref) (if the C routine expects a
-    NUL-terminated string) or `Ptr{Cwchar_t}` otherwise. Note also that UTF-8 string data in Julia is
+    NUL-terminated string), or `Ptr{Cwchar_t}` otherwise. Note also that UTF-8 string data in Julia is
     internally NUL-terminated, so it can be passed to C functions expecting NUL-terminated data without
     making a copy (but using the `Cwstring` type will cause an error to be thrown if the string itself
     contains NUL characters).
 
 !!! note
-    C functions that take an argument of the type `char**` can be called by using a `Ptr{Ptr{UInt8}}`
+    C functions that take an argument of type `char**` can be called by using a `Ptr{Ptr{UInt8}}`
     type within Julia. For example, C functions of the form:
 
     ```c
@@ -450,7 +456,7 @@ checks and is only meant to improve readability of the call.
     are provided as *hidden arguments*. Type and position of these arguments in the list are compiler
     specific, where compiler vendors usually default to using `Csize_t` as type and append the hidden
     arguments at the end of the argument list. While this behaviour is fixed for some compilers (GNU),
-    others *optionally* permit placing hidden arguments directly after the character argument (Intel,PGI).
+    others *optionally* permit placing hidden arguments directly after the character argument (Intel, PGI).
     For example, Fortran subroutines of the form
 
     ```fortran
@@ -479,7 +485,7 @@ checks and is only meant to improve readability of the call.
 
 ### Struct Type Correspondences
 
-Composite types, aka `struct` in C or `TYPE` in Fortran90 (or `STRUCTURE` / `RECORD` in some variants
+Composite types such as `struct` in C or `TYPE` in Fortran90 (or `STRUCTURE` / `RECORD` in some variants
 of F77), can be mirrored in Julia by creating a `struct` definition with the same
 field layout.
 
@@ -646,21 +652,28 @@ For translating a C argument list to Julia:
 
       * `Any`
       * argument value must be a valid Julia object
-  * `jl_value_t**`
+  * `jl_value_t* const*`
 
       * `Ref{Any}`
-      * argument value must be a valid Julia object (or `C_NULL`)
+      * argument list must be a valid Julia object (or `C_NULL`)
+      * cannot be used for an output parameter, unless the user is able to
+        manage to separate arrange for the object to be GC-preserved
   * `T*`
 
       * `Ref{T}`, where `T` is the Julia type corresponding to `T`
-      * argument value will be copied if it is an `isbits` type otherwise, the value must be a valid Julia
-        object
+      * argument value will be copied if it is an `inlinealloc` type (which
+        includes `isbits` otherwise, the value must be a valid Julia object
   * `T (*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Cvoid}` (you may need to use [`@cfunction`](@ref) explicitly to create this pointer)
+      * `Ptr{Cvoid}` (you may need to use [`@cfunction`](@ref) explicitly to
+        create this pointer)
   * `...` (e.g. a vararg)
 
-      * `T...`, where `T` is the Julia type
+      * [for `ccall`]: `T...`, where `T` is the single Julia type of all
+        remaining arguments
+      * [for `@ccall`]: `; va_arg1::T, va_arg2::S, etc`, where `T` and `S` are
+        the Julia type (i.e. separate the regular arguments from varargs with
+        a `;`)
       * currently unsupported by `@cfunction`
   * `va_arg`
 
@@ -695,7 +708,6 @@ For translating a C return type to Julia:
   * `jl_value_t**`
 
       * `Ptr{Any}` (`Ref{Any}` is invalid as a return type)
-      * argument value must be a valid Julia object (or `C_NULL`)
   * `T*`
 
       * If the memory is already owned by Julia, or is an `isbits` type, and is known to be non-null:
@@ -855,12 +867,12 @@ When passing data to a [`ccall`](@ref), it is best to avoid using the [`pointer`
 Instead define a convert method and pass the variables directly to the [`ccall`](@ref). [`ccall`](@ref)
 automatically arranges that all of its arguments will be preserved from garbage collection until
 the call returns. If a C API will store a reference to memory allocated by Julia, after the [`ccall`](@ref)
-returns, you must arrange that the object remains visible to the garbage collector. The suggested
-way to handle this is to make a global variable of type `Array{Ref,1}` to hold these values, until
+returns, you must ensure that the object remains visible to the garbage collector. The suggested
+way to do this is to make a global variable of type `Array{Ref,1}` to hold these values, until
 the C library notifies you that it is finished with them.
 
 Whenever you have created a pointer to Julia data, you must ensure the original data exists until
-you are done with using the pointer. Many methods in Julia such as [`unsafe_load`](@ref) and
+you have finished using the pointer. Many methods in Julia such as [`unsafe_load`](@ref) and
 [`String`](@ref) make copies of data instead of taking ownership of the buffer, so that it is
 safe to free (or alter) the original data without affecting Julia. A notable exception is
 [`unsafe_wrap`](@ref) which, for performance reasons, shares (or can be told to take ownership of) the
@@ -873,7 +885,15 @@ it must be handled in other ways.
 
 ## Non-constant Function Specifications
 
-A `(name, library)` function specification must be a constant expression. However, it is possible
+In some cases, the exact name or path of the needed library is not known in advance and must
+be computed at run time. To handle such cases, the library component of a `(name, library)`
+specification can be a function call, e.g. `(:dgemm_, find_blas())`. The call expression will
+be executed when the `ccall` itself is executed. However, it is assumed that the library
+location does not change once it is determined, so the result of the call can be cached and
+reused. Therefore, the number of times the expression executes is unspecified, and returning
+different values for multiple calls results in unspecified behavior.
+
+If even more flexibility is needed, it is possible
 to use computed values as function names by staging through [`eval`](@ref) as follows:
 
 ```
@@ -888,7 +908,8 @@ when wrapping libraries that contain many similar functions.
 A similar example can be constructed for [`@cfunction`](@ref).
 
 However, doing this will also be very slow and leak memory, so you should usually avoid this and instead keep
-reading.  The next section discusses how to use indirect calls to efficiently accomplish a similar effect.
+reading.
+The next section discusses how to use indirect calls to efficiently achieve a similar effect.
 
 ## Indirect Calls
 
@@ -945,6 +966,10 @@ function qsort(a::Vector{T}, cmp) where T
 end
 ```
 
+!!! note
+    Closure [`@cfunction`](@ref) rely on LLVM trampolines, which are not available on all
+    platforms (for example ARM and PowerPC).
+
 
 ## Closing a Library
 
@@ -957,8 +982,8 @@ and load in the new changes. One can either restart Julia or use the
 ```julia
 lib = Libdl.dlopen("./my_lib.so") # Open the library explicitly.
 sym = Libdl.dlsym(lib, :my_fcn)   # Get a symbol for the function to call.
-ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the
-same).  Libdl.dlclose(lib) # Close the library explicitly.
+ccall(sym, ...) # Use the pointer `sym` instead of the (symbol, library) tuple (remaining arguments are the same).
+Libdl.dlclose(lib) # Close the library explicitly.
 ```
 
 Note that when using `ccall` with the tuple input

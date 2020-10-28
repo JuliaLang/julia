@@ -94,7 +94,7 @@ julia> sprint(show, 66.66666; context=:compact => true)
 "66.6667"
 
 julia> sprint(showerror, BoundsError([1], 100))
-"BoundsError: attempt to access 1-element Array{Int64,1} at index [100]"
+"BoundsError: attempt to access 1-element Vector{Int64} at index [100]"
 ```
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
@@ -157,7 +157,7 @@ end
 """
     string(xs...)
 
-Create a string from any values, except `nothing`, using the [`print`](@ref) function.
+Create a string from any values using the [`print`](@ref) function.
 
 `string` should usually not be defined directly. Instead, define a method
 `print(io::IO, x::MyType)`. If `string(x)` for a certain type needs to be
@@ -173,15 +173,17 @@ julia> string("a", 1, true)
 """
 string(xs...) = print_to_string(xs...)
 
+string(a::Symbol) = String(a)
+
 # note: print uses an encoding determined by `io` (defaults to UTF-8), whereas
 #       write uses an encoding determined by `s` (UTF-8 for `String`)
 print(io::IO, s::AbstractString) = for c in s; print(io, c); end
-write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
+write(io::IO, s::AbstractString) = (len = 0; for c in s; len += Int(write(io, c))::Int; end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 # optimized methods to avoid iterating over chars
 write(io::IO, s::Union{String,SubString{String}}) =
-    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+    GC.@preserve s Int(unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))))::Int
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 ## printing literal quoted string data ##
@@ -256,7 +258,7 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 
 Join an array of `strings` into a single string, inserting the given delimiter (if any) between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
-two strings. If `io` is given, the result is written to `io` rather than returned as
+two strings. If `io` is given, the result is written to `io` rather than returned
 as a `String`.
 
 `strings` can be any iterable over elements `x` which are convertible to strings
@@ -341,11 +343,11 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 """
 function escape_string(io::IO, s::AbstractString, esc="")
     a = Iterators.Stateful(s)
-    for c in a
+    for c::AbstractChar in a
         if c in esc
             print(io, '\\', c)
         elseif isascii(c)
-            c == '\0'          ? print(io, escape_nul(peek(a))) :
+            c == '\0'          ? print(io, escape_nul(peek(a)::Union{AbstractChar,Nothing})) :
             c == '\e'          ? print(io, "\\e") :
             c == '\\'          ? print(io, "\\\\") :
             '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
@@ -354,10 +356,10 @@ function escape_string(io::IO, s::AbstractString, esc="")
         elseif !isoverlong(c) && !ismalformed(c)
             isprint(c)         ? print(io, c) :
             c <= '\x7f'        ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
-            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 4 : 2)) :
-                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 8 : 4))
+            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
+                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
         else # malformed or overlong
-            u = bswap(reinterpret(UInt32, c))
+            u = bswap(reinterpret(UInt32, c)::UInt32)
             while true
                 print(io, "\\x", string(u % UInt8, base = 16, pad = 2))
                 (u >>= 8) == 0 && break
@@ -481,7 +483,7 @@ Create an immutable byte (`UInt8`) vector using string syntax.
 # Examples
 ```jldoctest
 julia> v = b"12\\x01\\x02"
-4-element Base.CodeUnits{UInt8,String}:
+4-element Base.CodeUnits{UInt8, String}:
  0x31
  0x32
  0x01
@@ -522,6 +524,55 @@ julia> println(raw"\\\\x \\\\\\"")
 ```
 """
 macro raw_str(s); s; end
+
+"""
+    escape_raw_string(s::AbstractString)
+    escape_raw_string(io, s::AbstractString)
+
+Escape a string in the manner used for parsing raw string literals.
+For each double-quote (`"`) character in input string `s`, this
+function counts the number _n_ of preceeding backslash (`\\`) characters,
+and then increases there the number of backslashes from _n_ to 2_n_+1
+(even for _n_ = 0). It also doubles a sequence of backslashes at the end
+of the string.
+
+This escaping convention is used in raw strings and other non-standard
+string literals. (It also happens to be the escaping convention
+expected by the Microsoft C/C++ compiler runtime when it parses a
+command-line string into the argv[] array.)
+
+See also: [`escape_string`](@ref)
+"""
+function escape_raw_string(io, str::AbstractString)
+    escapes = 0
+    for c in str
+        if c == '\\'
+            escapes += 1
+        else
+            if c == '"'
+                # if one or more backslashes are followed by
+                # a double quote then escape all backslashes
+                # and the double quote
+                escapes = escapes * 2 + 1
+            end
+            while escapes > 0
+                write(io, '\\')
+                escapes -= 1
+            end
+            escapes = 0
+            write(io, c)
+        end
+    end
+    # also escape any trailing backslashes,
+    # so they do not affect the closing quote
+    while escapes > 0
+        write(io, '\\')
+        write(io, '\\')
+        escapes -= 1
+    end
+end
+escape_raw_string(str::AbstractString) = sprint(escape_raw_string, str;
+                                                sizehint = lastindex(str) + 2)
 
 ## multiline strings ##
 
