@@ -204,40 +204,32 @@ end
 end
 
 @testset "invmod" begin
-    @test invmod(6, 31) == 26
-    @test invmod(-1, 3) == 2
-    @test invmod(1, -3) == -2
-    @test invmod(-1, -3) == -1
-    @test invmod(0x2, 0x3) == 2
-    @test invmod(2, 0x3) == 2
-    @test invmod(0x8, -3) == -1
+    @test invmod(6, 31) === 26
+    @test invmod(-1, 3) === 2
+    @test invmod(1, -3) === -2
+    @test invmod(-1, -3) === -1
+    @test invmod(0x2, 0x3) === 0x2
+    @test invmod(2, 0x3) === UInt(2)
+    @test invmod(0x8, -3) === -1
     @test_throws DomainError invmod(0, 3)
 
     # For issue 29971
-    @test invmod(UInt8(1), typemax(UInt8)) == invmod(UInt16(1), UInt16(typemax(UInt8)))
-    @test invmod(UInt16(1), typemax(UInt16)) == invmod(UInt32(1), UInt32(typemax(UInt16)))
-    @test invmod(UInt32(1), typemax(UInt32)) == invmod(UInt64(1), UInt64(typemax(UInt32)))
-    @test invmod(UInt64(1), typemax(UInt64)) == invmod(UInt128(1), UInt128(typemax(UInt64)))
+    @test invmod(UInt8(1), typemax(UInt8))  === 0x01
+    @test invmod(UInt16(1), typemax(UInt16)) === 0x0001
+    @test invmod(UInt32(1), typemax(UInt32)) === 0x0000_0001
+    @test invmod(UInt64(1), typemax(UInt64)) === 0x0000_0000_0000_0001
 
-    @test invmod(UInt8(3), UInt8(124)) == invmod(3, 124)
-    @test invmod(UInt16(3), UInt16(124)) == invmod(3, 124)
-    @test invmod(UInt32(3), UInt32(124)) == invmod(3, 124)
-    @test invmod(UInt64(3), UInt64(124)) == invmod(3, 124)
-    @test invmod(UInt128(3), UInt128(124)) == invmod(3, 124)
-
-    @test invmod(Int8(3), Int8(124)) == invmod(3, 124)
-    @test invmod(Int16(3), Int16(124)) == invmod(3, 124)
-    @test invmod(Int32(3), Int32(124)) == invmod(3, 124)
-    @test invmod(Int64(3), Int64(124)) == invmod(3, 124)
-    @test invmod(Int128(3), Int128(124)) == invmod(3, 124)
+    for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128, BigInt)
+        @test invmod(T(3), T(124))::T == 83
+    end
 
     for T in (Int8, UInt8)
-        for x in typemin(T) : typemax(T)
-            for m in typemin(T) : typemax(T)
+        for x in typemin(T):typemax(T)
+            for m in typemin(T):typemax(T)
                 if m != 0 && try gcdx(x, m)[1] == 1 catch _ true end
                     y = invmod(x, m)
-                    @test mod(widemul(y, x), m) == mod(1,m)
-                    @test div(y,m) == 0
+                    @test mod(widemul(y, x), m) == mod(1, m)
+                    @test div(y, m) == 0
                 else
                     @test_throws DomainError invmod(x, m)
                 end

@@ -217,7 +217,7 @@ julia> invmod(5,6)
 """
 function invmod(n::Integer, m::Integer)
     iszero(m) && throw(DomainError(m, "`m` must not be 0."))
-    if n isa Signed
+    if n isa Signed && hastypemax(typeof(n))
         # work around inconsistencies in gcdx
         # https://github.com/JuliaLang/julia/issues/33781
         T = promote_type(typeof(n), typeof(m))
@@ -841,10 +841,10 @@ end
 """
     hastypemax(T::Type) -> Bool
 
-Return `true` if and only if `typemax(T)` is defined.
+Return true if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
 hastypemax(::Base.BitIntegerType) = true
-hastypemax(::Type{T}) where {T} = applicable(typemax, T)
+hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
 
 """
     digits!(array, n::Integer; base::Integer = 10)
