@@ -871,6 +871,13 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
     return getMangledName(GV->getName());
 }
 
+size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm);
+
+size_t JuliaOJIT::getTotalBytes() const
+{
+    return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
+}
+
 JuliaOJIT *jl_ExecutionEngine;
 
 // destructively move the contents of src into dest
@@ -1106,4 +1113,10 @@ static uint64_t getAddressForFunction(StringRef fname)
 void add_named_global(StringRef name, void *addr)
 {
     jl_ExecutionEngine->addGlobalMapping(name, (uint64_t)(uintptr_t)addr);
+}
+
+extern "C" JL_DLLEXPORT
+size_t jl_jit_total_bytes(void)
+{
+    return jl_ExecutionEngine->getTotalBytes();
 }
