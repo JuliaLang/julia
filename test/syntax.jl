@@ -2582,4 +2582,22 @@ end
     cdr((a, d...)) = d
     @test car(1:3) == 1
     @test cdr(1:3) == [2, 3]
+
+    @test begin a, b = (;c = 3, d = 4) end === (c = 3, d = 4)
+    @test begin a, b, c = (x = "", y = 2.0, z = 1) end === (x = "", y = 2.0, z = 1)
+    a, b, c = (x = "", y = 2.0, z = 1)
+    @test a === ""
+    @test b === 2.0
+    @test c === 1
+    @test begin a, b... = (x = "", y = 2.0, z = 1) end === (x = "", y = 2.0, z = 1)
+    a, b... = (x = "", y = 2.0, z = 1)
+    @test b === (y = 2.0, z = 1)
+    let t = (x = "", y = 1, z = 3.0)
+        _, a, b = t
+        @test a === 1
+        @test b === 3.0
+        a, b... = t
+        @test a === ""
+        @test b === (y = 1, z = 3.0)
+    end
 end
