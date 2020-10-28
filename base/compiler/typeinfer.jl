@@ -34,7 +34,7 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
         frame.linfo,
         frame.world,
         copy(frame.sptypes),
-        frame.slottypes,
+        copy(frame.slottypes),
     )
     return mi_info
 end
