@@ -418,6 +418,9 @@ end
     # Check that does not attempt to output incredibly large amounts of digits
     @test_throws ErrorException Printf.@sprintf("%f", parse(BigFloat, "1e99999"))
 
+    # Check bug with precision > length of string
+    @test Printf.@sprintf("%4.2s", "a") == "   a"
+
     # issue #29662
     @test (Printf.@sprintf "%12.3e" pi*1e100) == "  3.142e+100"
 
