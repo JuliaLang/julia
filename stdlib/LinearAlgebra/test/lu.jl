@@ -211,13 +211,13 @@ dimg  = randn(n)/2
         end
     end
 
-    @testset "Attempt and failure of LDLt factorization (#38026)" begin
+    @testset "Factorization of symtridiagonal dense matrix with zero ldlt-pivot (#38026)" begin
         A = [0.0 -1.0 0.0 0.0
             -1.0 0.0 0.0 0.0
             0.0 0.0 0.0 -1.0
             0.0 0.0 -1.0 0.0]
         F = factorize(A)
-        @test F isa LU{Float64,<:Tridiagonal}
+        @test all((!isnan).(Matrix(F)))
     end
 end
 
