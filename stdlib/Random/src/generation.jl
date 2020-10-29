@@ -57,6 +57,7 @@ Sampler(::Type{<:AbstractRNG}, I::FloatInterval{BigFloat}, ::Repetition) =
     SamplerBigFloat{typeof(I)}(precision(BigFloat))
 
 function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat)
+    precision(z) == sp.prec || throw(ArgumentError("incompatible BigFloat precision"))
     limbs = sp.limbs
     rand!(rng, limbs)
     @inbounds begin
@@ -100,7 +101,7 @@ rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat{T}
           _rand!(rng, z, sp, T())
 
 rand(rng::AbstractRNG, sp::SamplerBigFloat{T}) where {T<:FloatInterval{BigFloat}} =
-    rand!(rng, BigFloat(), sp)
+    rand!(rng, BigFloat(; precision=sp.prec), sp)
 
 
 ### random integers
