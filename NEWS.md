@@ -117,6 +117,7 @@ New library features
 * The postfix operator `'ᵀ` can now be used as an alias for `transpose` ([#38043]).
 * `keys(io::IO)` has been added, which returns all keys of `io` if `io` is an `IOContext` and an empty
   `Base.KeySet` otherwise ([#37753]).
+* `count` now accepts an optional `init` argument to control the accumulation type ([#37461]).
 
 Standard library changes
 ------------------------
