@@ -428,10 +428,10 @@ substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
 ```jldoctest
 julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
-s"Hello \\\\g<name>, it's \\\\1"
+s"Hello \\g<name>, it's \\1"
 
 julia> subst = s"Hello \\g<name>, it's \\1"
-s"Hello \\\\g<name>, it's \\\\1"
+s"Hello \\g<name>, it's \\1"
 
 julia> typeof(subst)
 SubstitutionString{String}
@@ -451,7 +451,7 @@ iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)::Union{N
 
 function show(io::IO, s::SubstitutionString)
     print(io, "s")
-    show(io, s.string)
+    print_quoted_literal(io, s.string)
 end
 
 """
