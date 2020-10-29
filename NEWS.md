@@ -157,6 +157,8 @@ Standard library changes
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside. ([#37320])
 * `@time` now reports if the time presented included any compilation time, as a percentage ([#37678])
+* `@varinfo` can now report non-exported objects within modules, look recursively into submodules, and return a sorted
+  results table ([#38042])
 
 #### LinearAlgebra
 
@@ -297,3 +299,4 @@ Tooling Improvements
 [#37678]: https://github.com/JuliaLang/julia/pull/37678
 [#37684]: https://github.com/JuliaLang/julia/issues/37684
 [#37829]: https://github.com/JuliaLang/julia/issues/37829
+[#38042]: https://github.com/JuliaLang/julia/issues/38042
