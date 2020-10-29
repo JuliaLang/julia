@@ -43,7 +43,7 @@ function print(io::IO, xs...)
     lock(io)
     try
         for x in xs
-            print(io, x)
+            show(io, x)
         end
     finally
         unlock(io)
@@ -70,7 +70,7 @@ julia> String(take!(io))
 "Hello, world\\n"
 ```
 """
-println(io::IO, xs...) = print(io, xs..., '\n')
+println(io::IO, xs...) = print(io, xs..., "\n")
 
 ## conversion of general objects to strings ##
 
