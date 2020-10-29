@@ -2583,3 +2583,5 @@ end
     @test car(1:3) == 1
     @test cdr(1:3) == [2, 3]
 end
+
+@test eval(Expr(:if, Expr(:block, Expr(:&&, true, Expr(:call, :(===), 1, 1))), 1, 2)) == 1
