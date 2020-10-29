@@ -321,11 +321,11 @@ function make_seed()
         println(stderr,
                 "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(UInt64, time())
-        seed = hash(seed, UInt64(getpid()))
+        seed = hash(seed, getpid() % UInt)
         try
             seed = hash(seed, parse(UInt64,
                                     read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
-                                    base = 16))
+                                    base = 16) % UInt)
         catch
         end
         return make_seed(seed)
