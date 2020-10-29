@@ -300,3 +300,4 @@ Tooling Improvements
 [#37684]: https://github.com/JuliaLang/julia/issues/37684
 [#37829]: https://github.com/JuliaLang/julia/issues/37829
 [#38042]: https://github.com/JuliaLang/julia/issues/38042
+[#38043]: https://github.com/JuliaLang/julia/issues/38043
