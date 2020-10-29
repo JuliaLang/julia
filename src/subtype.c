@@ -1518,7 +1518,8 @@ static int concrete_min(jl_value_t *t)
             return count;
         return count + concrete_min(((jl_uniontype_t*)t)->b);
     }
-    return 2; // up to infinite
+    assert(!jl_is_kind(t));
+    return 1; // a non-Type is also considered concrete
 }
 
 static jl_value_t *find_var_body(jl_value_t *t, jl_tvar_t *v)
