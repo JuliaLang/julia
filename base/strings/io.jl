@@ -43,7 +43,7 @@ function print(io::IO, xs...)
     lock(io)
     try
         for x in xs
-            show(io, x)
+            print(io, x)
         end
     finally
         unlock(io)
