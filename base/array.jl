@@ -2182,8 +2182,8 @@ findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 """
     findmax(itr) -> (x, index)
 
-Return the maximum element of the collection `itr` and its index. If there are multiple
-maximal elements, then the first one will be returned.
+Return the maximum element of the collection `itr` and its index or key.
+If there are multiple maximal elements, then the first one will be returned.
 If any data element is `NaN`, this element is returned.
 The result is in line with `max`.
 
@@ -2227,8 +2227,8 @@ end
 """
     findmin(itr) -> (x, index)
 
-Return the minimum element of the collection `itr` and its index. If there are multiple
-minimal elements, then the first one will be returned.
+Return the minimum element of the collection `itr` and its index or key.
+If there are multiple minimal elements, then the first one will be returned.
 If any data element is `NaN`, this element is returned.
 The result is in line with `min`.
 
@@ -2270,10 +2270,10 @@ function _findmin(a, ::Colon)
 end
 
 """
-    argmax(itr) -> Integer
+    argmax(itr)
 
-Return the index of the maximum element in a collection. If there are multiple maximal
-elements, then the first one will be returned.
+Return the index or key of the maximum element in a collection.
+If there are multiple maximal elements, then the first one will be returned.
 
 The collection must not be empty.
 
@@ -2292,10 +2292,10 @@ julia> argmax([1,7,7,NaN])
 argmax(a) = findmax(a)[2]
 
 """
-    argmin(itr) -> Integer
+    argmin(itr)
 
-Return the index of the minimum element in a collection. If there are multiple minimal
-elements, then the first one will be returned.
+Return the index or key of the minimum element in a collection.
+If there are multiple minimal elements, then the first one will be returned.
 
 The collection must not be empty.
 
