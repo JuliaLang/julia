@@ -447,7 +447,7 @@ Test whether a number value is a NaN, an indeterminate value which is neither an
 nor a finite number ("not a number").
 """
 isnan(x::AbstractFloat) = (x != x)::Bool
-isnan(x::Real) = false
+isnan(x::Number) = false
 
 isfinite(x::AbstractFloat) = x - x == 0
 isfinite(x::Real) = decompose(x)[3] != 0
