@@ -75,7 +75,7 @@ Dict{String, Int64} with 2 entries:
   "A" => 1
 ```
 """
-mutable struct Dict{K,V} <: AbstractDict{K,V}
+mutable struct HashDict{K,V,H} <: AbstractDict{K,V}
     slots::Array{UInt8,1}
     keys::Array{K,1}
     vals::Array{V,1}
@@ -85,35 +85,41 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     idxfloor::Int  # an index <= the indices of all used slots
     maxprobe::Int
 
-    function Dict{K,V}() where V where K
+    function HashDict{K,V,H}() where H where V where K
         n = 16
-        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
+        new{K,V,H}(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
     end
-    function Dict{K,V}(d::Dict{K,V}) where V where K
-        new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
+    function HashDict{K,V,H}(d::HashDict{K,V,H}) where H where V where K
+        new{K,V,H}(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
             d.idxfloor, d.maxprobe)
     end
-    function Dict{K, V}(slots, keys, vals, ndel, count, age, idxfloor, maxprobe) where {K, V}
-        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
+    function HashDict{K, V, H}(slots, keys, vals, ndel, count, age, idxfloor, maxprobe) where {K, V, H}
+        new{K,V,H}(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
     end
 end
-function Dict{K,V}(kv) where V where K
-    h = Dict{K,V}()
+
+Dict{K,V} = HashDict{K,V,UInt}
+
+function HashDict{K,V,H}(kv) where H where V where K
+    h = HashDict{K,V,H}()
     haslength(kv) && sizehint!(h, Int(length(kv))::Int)
     for (k,v) in kv
         h[k] = v
     end
     return h
 end
-Dict{K,V}(p::Pair) where {K,V} = setindex!(Dict{K,V}(), p.second, p.first)
-function Dict{K,V}(ps::Pair...) where V where K
-    h = Dict{K,V}()
+HashDict{K,V,H}(p::Pair) where {K,V,H} = setindex!(HashDict{K,V,H}(), p.second, p.first)
+function HashDict{K,V,H}(ps::Pair...) where H where V where K
+    h = HashDict{K,V,H}()
     sizehint!(h, length(ps))
     for p in ps
         h[p.first] = p.second
     end
     return h
 end
+
+# TODO: make HashDict constructors like below
+
 # Note the constructors of WeakKeyDict mirror these here, keep in sync.
 Dict() = Dict{Any,Any}()
 Dict(kv::Tuple{}) = Dict()
@@ -121,7 +127,7 @@ copy(d::Dict) = Dict(d)
 
 const AnyDict = Dict{Any,Any}
 
-Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)
+Dict(ps::Pair{K,V}...) where {K,V} = HashDict{K,V,UInt}(ps)
 Dict(ps::Pair...)                  = Dict(ps)
 
 function Dict(kv)
@@ -166,13 +172,20 @@ end
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
-hashindex(key, sz) = (((hash(key)::UInt % Int) & (sz-1)) + 1)::Int
+hashinit(::Type{UInt}) = UInt(0)
+hashinit(::Type{T}) where T = T()
+isequal(::Type{H}, a, b) where {H} = isequal(a, b)
 
-@propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
-@propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
-@propagate_inbounds isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
+hashindex(::Type{UInt}, key, sz) = (((hash(key)::UInt % Int) & (sz-1)) + 1)::Int
 
-function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
+hashindex(::Type{H}, key, sz) where {H} =
+    (((hashdigest(hash(key, hashinit(H))::H) % Int) & (sz-1)) + 1)::Int
+
+@propagate_inbounds isslotempty(h::HashDict, i::Int) = h.slots[i] == 0x0
+@propagate_inbounds isslotfilled(h::HashDict, i::Int) = h.slots[i] == 0x1
+@propagate_inbounds isslotmissing(h::HashDict, i::Int) = h.slots[i] == 0x2
+
+function rehash!(h::HashDict{K,V,H}, newsz = length(h.keys)) where H where V where K
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
@@ -200,7 +213,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
         @inbounds if olds[i] == 0x1
             k = oldk[i]
             v = oldv[i]
-            index0 = index = hashindex(k, newsz)
+            index0 = index = hashindex(H, k, newsz)
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
@@ -229,7 +242,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     return h
 end
 
-function sizehint!(d::Dict{T}, newsz) where T
+function sizehint!(d::HashDict{T}, newsz) where T
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
     newsz = min(newsz, max_values(T)::Int)
@@ -262,7 +275,7 @@ julia> A
 Dict{String, Int64}()
 ```
 """
-function empty!(h::Dict{K,V}) where V where K
+function empty!(h::HashDict{K,V,H}) where H where V where K
     fill!(h.slots, 0x0)
     sz = length(h.slots)
     empty!(h.keys)
@@ -277,18 +290,18 @@ function empty!(h::Dict{K,V}) where V where K
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex(h::Dict{K,V}, key) where V where K
+function ht_keyindex(h::HashDict{K,V,H}, key) where H where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    index = hashindex(key, sz)
+    index = hashindex(H, key, sz)
     keys = h.keys
 
     @inbounds while true
         if isslotempty(h,index)
             break
         end
-        if !isslotmissing(h,index) && (key === keys[index] || isequal(key,keys[index]))
+        if !isslotmissing(h,index) && (key === keys[index] || isequal(H,key,keys[index]))
             return index
         end
 
@@ -302,12 +315,12 @@ end
 # get the index where a key is stored, or -pos if not present
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
-function ht_keyindex2!(h::Dict{K,V}, key) where V where K
+function ht_keyindex2!(h::HashDict{K,V,H}, key) where H where V where K
     age0 = h.age
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    index = hashindex(key, sz)
+    index = hashindex(H, key, sz)
     avail = 0
     keys = h.keys
 
@@ -325,7 +338,7 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
                 # in case "key" already exists in a later collided slot.
                 avail = -index
             end
-        elseif key === keys[index] || isequal(key, keys[index])
+        elseif key === keys[index] || isequal(H, key, keys[index])
             return index
         end
 
@@ -352,7 +365,7 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
     return ht_keyindex2!(h, key)
 end
 
-@propagate_inbounds function _setindex!(h::Dict, v, key, index)
+@propagate_inbounds function _setindex!(h::HashDict, v, key, index)
     h.slots[index] = 0x1
     h.keys[index] = key
     h.vals[index] = v
@@ -370,15 +383,15 @@ end
     end
 end
 
-function setindex!(h::Dict{K,V}, v0, key0) where V where K
+function setindex!(h::HashDict{K,V,H}, v0, key0) where H where V where K
     key = convert(K, key0)
-    if !isequal(key, key0)
+    if !isequal(H, key, key0)
         throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     setindex!(h, v0, key)
 end
 
-function setindex!(h::Dict{K,V}, v0, key::K) where V where K
+function setindex!(h::HashDict{K,V,H}, v0, key::K) where H where V where K
     v = convert(V, v0)
     index = ht_keyindex2!(h, key)
 
@@ -448,15 +461,15 @@ Dict{Int64, Int64} with 1 entry:
 """
 get!(f::Function, collection, key)
 
-function get!(default::Callable, h::Dict{K,V}, key0) where V where K
+function get!(default::Callable, h::HashDict{K,V,H}, key0) where H where V where K
     key = convert(K, key0)
-    if !isequal(key, key0)
+    if !isequal(H, key , key0)
         throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     return get!(default, h, key)
 end
 
-function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
+function get!(default::Callable, h::HashDict{K,V,H}, key::K) where H where V where K
     index = ht_keyindex2!(h, key)
 
     index > 0 && return h.vals[index]
@@ -477,7 +490,7 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
 end
 
 
-function getindex(h::Dict{K,V}, key) where V where K
+function getindex(h::HashDict{K,V,H}, key) where H where V where K
     index = ht_keyindex(h, key)
     @inbounds return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
 end
@@ -501,7 +514,7 @@ julia> get(d, "c", 3)
 """
 get(collection, key, default)
 
-function get(h::Dict{K,V}, key, default) where V where K
+function get(h::HashDict{K,V,H}, key, default) where H where V where K
     index = ht_keyindex(h, key)
     @inbounds return (index < 0) ? default : h.vals[index]::V
 end
@@ -523,7 +536,7 @@ end
 """
 get(::Function, collection, key)
 
-function get(default::Callable, h::Dict{K,V}, key) where V where K
+function get(default::Callable, h::HashDict{K,V,H}, key) where H where V where K
     index = ht_keyindex(h, key)
     @inbounds return (index < 0) ? default() : h.vals[index]::V
 end
@@ -547,8 +560,8 @@ julia> haskey(D, 'c')
 false
 ```
 """
-haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
+haskey(h::HashDict, key) = (ht_keyindex(h, key) >= 0)
+in(key, v::KeySet{<:Any, <:HashDict}) = (ht_keyindex(v.dict, key) >= 0)
 
 """
     getkey(collection, key, default)
@@ -569,18 +582,18 @@ julia> getkey(D, 'd', 'a')
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 ```
 """
-function getkey(h::Dict{K,V}, key, default) where V where K
+function getkey(h::HashDict{K,V,H}, key, default) where H where V where K
     index = ht_keyindex(h, key)
     @inbounds return (index<0) ? default : h.keys[index]::K
 end
 
-function _pop!(h::Dict, index)
+function _pop!(h::HashDict, index)
     @inbounds val = h.vals[index]
     _delete!(h, index)
     return val
 end
 
-function pop!(h::Dict, key)
+function pop!(h::HashDict, key)
     index = ht_keyindex(h, key)
     return index > 0 ? _pop!(h, index) : throw(KeyError(key))
 end
@@ -609,12 +622,12 @@ julia> pop!(d, "e", 4)
 """
 pop!(collection, key, default)
 
-function pop!(h::Dict, key, default)
+function pop!(h::HashDict, key, default)
     index = ht_keyindex(h, key)
     return index > 0 ? _pop!(h, index) : default
 end
 
-function pop!(h::Dict)
+function pop!(h::HashDict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
     idx = skip_deleted_floor!(h)
     @inbounds key = h.keys[idx]
@@ -623,7 +636,7 @@ function pop!(h::Dict)
     key => val
 end
 
-function _delete!(h::Dict{K,V}, index) where {K,V}
+function _delete!(h::HashDict{K,V,H}, index) where {K,V,H}
     @inbounds h.slots[index] = 0x2
     @inbounds _unsetindex!(h.keys, index)
     @inbounds _unsetindex!(h.vals, index)
@@ -656,7 +669,7 @@ Dict{String, Int64} with 1 entry:
 """
 delete!(collection, key)
 
-function delete!(h::Dict, key)
+function delete!(h::HashDict, key)
     index = ht_keyindex(h, key)
     if index > 0
         _delete!(h, index)
@@ -664,7 +677,7 @@ function delete!(h::Dict, key)
     return h
 end
 
-function skip_deleted(h::Dict, i)
+function skip_deleted(h::HashDict, i)
     L = length(h.slots)
     for i = i:L
         @inbounds if isslotfilled(h,i)
@@ -673,7 +686,7 @@ function skip_deleted(h::Dict, i)
     end
     return 0
 end
-function skip_deleted_floor!(h::Dict)
+function skip_deleted_floor!(h::HashDict)
     idx = skip_deleted(h, h.idxfloor)
     if idx != 0
         h.idxfloor = idx
@@ -681,16 +694,16 @@ function skip_deleted_floor!(h::Dict)
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
-@propagate_inbounds function iterate(t::Dict)
+@propagate_inbounds _iterate(t::HashDict{K,V,H}, i) where {K,V,H} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
+@propagate_inbounds function iterate(t::HashDict)
     _iterate(t, skip_deleted_floor!(t))
 end
-@propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
+@propagate_inbounds iterate(t::HashDict, i) = _iterate(t, skip_deleted(t, i))
 
-isempty(t::Dict) = (t.count == 0)
-length(t::Dict) = t.count
+isempty(t::HashDict) = (t.count == 0)
+length(t::HashDict) = t.count
 
-@propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+@propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:HashDict}, ValueIterator{<:HashDict}}
     i == 0 && return nothing
     i = skip_deleted(v.dict, i)
     i == 0 && return nothing
@@ -698,7 +711,7 @@ length(t::Dict) = t.count
     (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
 end
 
-function filter!(pred, h::Dict{K,V}) where {K,V}
+function filter!(pred, h::HashDict{K,V,H}) where {K,V,H}
     h.count == 0 && return h
     @inbounds for i=1:length(h.slots)
         if h.slots[i] == 0x01 && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
@@ -708,13 +721,13 @@ function filter!(pred, h::Dict{K,V}) where {K,V}
     return h
 end
 
-function reduce(::typeof(merge), items::Vector{<:Dict})
+function reduce(::typeof(merge), items::Vector{<:HashDict{<:Any,<:Any,H}}) where H
     K = mapreduce(keytype, promote_type, items)
     V = mapreduce(valtype, promote_type, items)
-    return reduce(merge!, items; init=Dict{K,V}())
+    return reduce(merge!, items; init=HashDict{K,V,H}())
 end
 
-function map!(f, iter::ValueIterator{<:Dict})
+function map!(f, iter::ValueIterator{<:HashDict})
     dict = iter.dict
     vals = dict.vals
     # @inbounds is here so the it gets propagated to isslotfiled

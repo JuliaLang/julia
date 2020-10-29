@@ -462,15 +462,20 @@ isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 ## hashing small, built-in numeric types ##
 
-hx(a::UInt64, b::Float64, h::UInt) = hash_uint64((3a + reinterpret(UInt64,b)) - h)
+hx(a::UInt64, b::Float64, h::UInt) = hash_uint64(3a + reinterpret(UInt64, b) - h)
+hx(a::UInt64, b::Float64, h) = hash_uint(a, hash_uint(reinterpret(UInt64, b), h))
+
 const hx_NaN = hx(UInt64(0), NaN, UInt(0  ))
 
-hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
-hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64, abs(x)), Float64(x), h)
-hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN ⊻ h) : hx(fptoui(UInt64, abs(x)), x, h)
+hash_NaN(h) = hash(hx_NaN, h)
+hash_NaN(h::UInt) = hx_NaN ⊻ h
 
-hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
-hash(x::Float32, h::UInt) = hash(Float64(x), h)
+hash(x::UInt64,  h) = hx(x, Float64(x), h)
+hash(x::Int64,   h) = hx(reinterpret(UInt64, abs(x)), Float64(x), h)
+hash(x::Float64, h) = isnan(x) ? hash_NaN(h) : hx(fptoui(UInt64, abs(x)), x, h)
+
+hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h) = hash(Int64(x), h)
+hash(x::Float32, h) = hash(Float64(x), h)
 
 """
     precision(num::AbstractFloat)

@@ -16,11 +16,17 @@ Typically, any type that implements `hash` should also implement its own `==` (h
 values inside heterogeneous arrays.
 """
 hash(x::Any) = hash(x, zero(UInt))
-hash(w::WeakRef, h::UInt) = hash(w.value, h)
+hash(w::WeakRef, h) = hash(w.value, h)
+
+hashdigest(h::UInt) = h
 
 ## hashing general objects ##
 
-hash(@nospecialize(x), h::UInt) = hash_uint(3h - objectid(x))
+#hash(@nospecialize(x), h::UInt) = hash_uint(3h - objectid(x))
+
+# indirection to avoid ambiguities
+hash_uint(x::UInt, h::UInt) = hash_uint(3h - x)
+hash(@nospecialize(x), h) = hash_uint(objectid(x), h)
 
 ## core data hashing functions ##
 
@@ -71,9 +77,15 @@ end
 if UInt === UInt64
     hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
     hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x2c97bf8b3de87020)
+
+    hash(x::Expr, h) = hash(x.args, hash(x.head, hash(0x83c7900696d26dc6, h)))
+    hash(x::QuoteNode, h) = hash(x.value, hash(0x2c97bf8b3de87020, h))
 else
     hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x96d26dc6))
     hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x469d72af)
+
+    hash(x::Expr, h) = hash(x.args, hash(x.head, hash(0x96d26dc6, h)))
+    hash(x::QuoteNode, h) = hash(x.value, hash(0x469d72af, h))
 end
 
 ## hashing strings ##
