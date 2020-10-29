@@ -42,6 +42,7 @@ mutable struct InferenceState
     limited::Bool
     inferred::Bool
     dont_work_on_me::Bool
+    saw_noinline::Bool
 
     # The place to look up methods while working on this function.
     # In particular, we cache method lookup results for the same function to
@@ -113,7 +114,7 @@ mutable struct InferenceState
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
-            cached, false, false, false,
+            cached, false, false, false, false,
             CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame

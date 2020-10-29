@@ -134,6 +134,11 @@ struct InferenceParams
     end
 end
 
+struct InferenceCaches{T, S}
+    inf_cache::T
+    mi_cache::S
+end
+
 """
     NativeInterpreter
 
@@ -186,6 +191,11 @@ get_world_counter(ni::NativeInterpreter) = ni.world
 get_inference_cache(ni::NativeInterpreter) = ni.cache
 
 code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, ni.world)
+
+InferenceCaches(ni::NativeInterpreter) =
+    InferenceCaches(
+        get_inference_cache(ni),
+        WorldView(code_cache(ni), ni.world))
 
 """
     lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance)

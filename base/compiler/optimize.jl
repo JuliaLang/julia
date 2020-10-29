@@ -21,9 +21,23 @@ function push!(et::EdgeTracker, ci::CodeInstance)
     push!(et, ci.def)
 end
 
-struct InferenceCaches{T, S}
-    inf_cache::T
+# An mi_cache that overlays some base cache, but also caches
+# temporary results while we're working on a cycle
+struct CycleInferenceCache{S}
+    cycle_mis::IdDict{MethodInstance, InferenceResult}
     mi_cache::S
+end
+CycleInferenceCache(mi_cache) = CycleInferenceCache(IdDict{MethodInstance, InferenceResult}(), mi_cache)
+
+function setindex!(cic::CycleInferenceCache, v::InferenceResult, mi::MethodInstance)
+    cic.cycle_mis[mi] = v
+    return cic
+end
+
+function get(cic::CycleInferenceCache, mi::MethodInstance, @nospecialize(default))
+    result = get(cic.cycle_mis, mi, nothing)
+    result !== nothing && return result
+    return get(cic.mi_cache, mi, default)
 end
 
 struct InliningState{S <: Union{EdgeTracker, Nothing}, T <: Union{InferenceCaches, Nothing}, V <: Union{Nothing, MethodTableView}}
@@ -42,7 +56,9 @@ mutable struct OptimizationState
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
-    inlining::InliningState
+    params::OptimizationParams
+    et::Union{Nothing, EdgeTracker}
+    mt::Union{Nothing, MethodTableView}
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
         s_edges = frame.stmt_edges[1]
         if s_edges === nothing
@@ -50,16 +66,12 @@ mutable struct OptimizationState
             frame.stmt_edges[1] = s_edges
         end
         src = frame.src
-        inlining = InliningState(params,
-            EdgeTracker(s_edges::Vector{Any}, frame.valid_worlds),
-            InferenceCaches(
-                get_inference_cache(interp),
-                WorldView(code_cache(interp), frame.world)),
-            method_table(interp))
         return new(frame.linfo,
                    src, frame.stmt_info, frame.mod, frame.nargs,
                    frame.sptypes, frame.slottypes, false,
-                   inlining)
+                   params,
+                   EdgeTracker(s_edges::Vector{Any}, frame.valid_worlds),
+                   method_table(interp))
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
         # prepare src for running optimization passes
@@ -86,16 +98,13 @@ mutable struct OptimizationState
         end
         # Allow using the global MI cache, but don't track edges.
         # This method is mostly used for unit testing the optimizer
-        inlining = InliningState(params,
-            nothing,
-            InferenceCaches(
-                get_inference_cache(interp),
-                WorldView(code_cache(interp), get_world_counter())),
-            method_table(interp))
+
         return new(linfo,
                    src, stmt_info, inmodule, nargs,
                    sptypes_from_meth_instance(linfo), slottypes, false,
-                   inlining)
+                   params,
+                   nothing,
+                   method_table(interp))
         end
 end
 
@@ -180,10 +189,10 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
 end
 
 # run the optimization work
-function optimize(opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
+function optimize(opt::OptimizationState, params::OptimizationParams, caches::InferenceCaches, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
-    @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
+    @timeit "optimizer" ir = run_passes(opt.src, nargs, caches, opt)
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations

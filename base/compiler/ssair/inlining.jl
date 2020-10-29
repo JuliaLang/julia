@@ -1419,8 +1419,18 @@ function find_inferred(mi::MethodInstance, atypes::Vector{Any}, caches::Inferenc
             return svec(true, quoted(linfo.rettype_const))
         end
         return svec(false, linfo.inferred)
-    else
-        # `linfo` may be `nothing` or an IRCode here
-        return svec(false, linfo)
+    elseif isa(linfo, InferenceResult)
+        let inferred_src = linfo.src
+            if isa(inferred_src, CodeInfo)
+                return svec(false, inferred_src)
+            end
+            if isa(inferred_src, Const) && is_inlineable_constant(inferred_src.val)
+                return svec(true, quoted(inferred_src.val),)
+            end
+        end
+        linfo = nothing
     end
+
+    # `linfo` may be `nothing` or an IRCode here
+    return svec(false, linfo)
 end
