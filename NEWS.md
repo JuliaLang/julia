@@ -156,6 +156,7 @@ Standard library changes
 * The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside. ([#37320])
+* `@time` now reports if the time presented included any compilation time, as a percentage ([#37678])
 
 #### LinearAlgebra
 
@@ -293,5 +294,6 @@ Tooling Improvements
 [#37542]: https://github.com/JuliaLang/julia/issues/37542
 [#37583]: https://github.com/JuliaLang/julia/issues/37583
 [#37635]: https://github.com/JuliaLang/julia/issues/37635
+[#37678]: https://github.com/JuliaLang/julia/pull/37678
 [#37684]: https://github.com/JuliaLang/julia/issues/37684
 [#37829]: https://github.com/JuliaLang/julia/issues/37829
