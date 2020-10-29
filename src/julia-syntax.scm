@@ -2081,7 +2081,8 @@
                     ((null? r)          #f)
                     ((vararg? (car r))  (null? (cdr r)))
                     (else               (sides-match? (cdr l) (cdr r)))))
-            (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
+            (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple) (not (any assignment? (cdr x)))
+                     (not (has-parameters? (cdr x)))
                      (sides-match? lhss (cdr x)))
                 ;; (a, b, ...) = (x, y, ...)
                 (expand-forms
