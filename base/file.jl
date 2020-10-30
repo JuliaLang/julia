@@ -81,8 +81,8 @@ julia> pwd()
 ```
 """
 function cd(dir::AbstractString)
-    ret = ccall(:uv_chdir, Cint, (Cstring,), dir)
-   ret < 0 && uv_error("cd($(repr(dir)))", ret)
+    err = ccall(:uv_chdir, Cint, (Cstring,), dir)
+    err < 0 && uv_error("cd($(repr(dir)))", err)
     return nothing
 end
 cd() = cd(homedir())
