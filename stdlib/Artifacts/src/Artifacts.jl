@@ -6,7 +6,7 @@ import Base: get, SHA1
 using Base.BinaryPlatforms, Base.TOML
 
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
-       find_artifacts_toml, @artifact_str
+       select_downloadable_artifacts, find_artifacts_toml, @artifact_str
 
 """
     parse_toml(path::String)
@@ -428,6 +428,50 @@ function artifact_hash(name::String, artifacts_toml::String;
     return SHA1(meta["git-tree-sha1"])
 end
 
+function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::String;
+                                       platform::AbstractPlatform = HostPlatform(),
+                                       pkg_uuid::Union{Nothing,Base.UUID} = nothing,
+                                       include_lazy::Bool = false)
+    artifacts = Dict{String,Any}()
+    for name in keys(artifact_dict)
+        # Get the metadata about this name for the requested platform
+        meta = artifact_meta(name, artifact_dict, artifacts_toml; platform=platform)
+
+        # If there are no instances of this name for the desired platform, skip it
+        # Also skip if there's no `download` stanza (e.g. it's only a local artifact)
+        # or if it's lazy and we're not explicitly looking for lazy artifacts.
+        if meta === nothing || !haskey(meta, "download") || (get(meta, "lazy", false) && !include_lazy)
+            continue
+        end
+
+        # Else, welcome it into the meta-fold
+        artifacts[name] = meta
+    end
+    return artifacts
+end
+
+"""
+    select_downloadable_artifacts(artifacts_toml::String;
+                                  platform = HostPlatform,
+                                  include_lazy = false,
+                                  pkg_uuid = nothing)
+
+Returns a dictionary where every entry is an artifact from the given `Artifacts.toml`
+that should be downloaded for the requested platform.  Lazy artifacts are included if
+`include_lazy` is set.
+"""
+function select_downloadable_artifacts(artifacts_toml::String;
+                                       platform::AbstractPlatform = HostPlatform(),
+                                       include_lazy::Bool = false,
+                                       pkg_uuid::Union{Nothing,Base.UUID} = nothing)
+    if !isfile(artifacts_toml)
+        return Dict{String,Any}()
+    end
+    artifact_dict = load_artifacts_toml(artifacts_toml; pkg_uuid=pkg_uuid)
+    return select_downloadable_artifacts(artifact_dict, artifacts_toml; platform, pkg_uuid, include_lazy)
+end
+
+
 """
     find_artifacts_toml(path::String)
 
@@ -642,6 +686,10 @@ artifact_meta(name::AbstractString, artifact_dict::Dict, artifacts_toml::Abstrac
     artifact_meta(String(name)::String, artifact_dict, String(artifacts_toml)::String; kwargs...)
 artifact_hash(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
     artifact_hash(String(name)::String, String(artifacts_toml)::String; kwargs...)
+select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::AbstractString; kwargs...) =
+    select_downloadable_artifacts(artifact_dict, String(artifacts_toml)::String, kwargs...)
+select_downloadable_artifacts(artifacts_toml::AbstractString; kwargs...) =
+    select_downloadable_artifacts(String(artifacts_toml)::String, kwargs...)
 find_artifacts_toml(path::AbstractString) =
     find_artifacts_toml(String(path)::String)
 split_artifact_slash(name::AbstractString) =
