@@ -121,10 +121,11 @@ New library features
 Standard library changes
 ------------------------
 
-* `pkg> precompile` is now parallelized, and will run automatically after any `Pkg` action that changes the
-  active manifest. Errors will only throw for direct dependencies listed in the `Project.toml`, and auto-precompillation
-  will remember if a package has errored within the given environment and not retry until it changes. Disable
-  auto-precompillation with `ENV["JULIA_PKG_PRECOMPILE_AUTO"]=0`.
+* `pkg> precompile` is now parallelized through depth-first precompillation of dependencies. Errors will only throw for
+  direct dependencies listed in the `Project.toml`.
+* `pkg> precompile` is now automatically triggered whenever Pkg changes the active manifest. Auto-precompillation will
+  remember if a package has errored within the given environment and will not retry until it changes.
+  Auto-precompillation can be disabled by setting the environment variable `JULIA_PKG_PRECOMPILE_AUTO=0`.
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
 * The `reverse(A; dims)` function for multidimensional `A` can now reverse multiple dimensions at once
   by passing a tuple for `dims`, and defaults to reversing all dimensions; there is also a multidimensional
@@ -156,7 +157,7 @@ Standard library changes
 * The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside. ([#37320])
-* `@time` now reports if the time presented included any compilation time, as a percentage ([#37678])
+* `@time` now reports if the time presented included any compilation time, which is shown as a percentage ([#37678])
 * `@varinfo` can now report non-exported objects within modules, look recursively into submodules, and return a sorted
   results table ([#38042])
 
