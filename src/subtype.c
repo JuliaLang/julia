@@ -2865,6 +2865,25 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     */
 }
 
+// cmp <= 0: is x already <= y in this environment
+// cmp >= 0: is x already >= y in this environment
+static int compareto_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, int cmp)
+{
+    if (x == (jl_value_t*)y)
+        return 1;
+    if (!jl_is_typevar(x))
+        return 0;
+    jl_varbinding_t *xv = lookup(e, (jl_tvar_t*)x);
+    if (xv == NULL)
+        return 0;
+    int ans = 1;
+    if (cmp <= 0)
+        ans &= compareto_var(xv->ub, y, e, cmp);
+    if (cmp >= 0)
+        ans &= compareto_var(xv->lb, y, e, cmp);
+    return ans;
+}
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -2936,9 +2955,9 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 else
                     lb = simple_join(xlb, ylb);
                 if (yy) {
-                    if (lb != y)
+                    if (!compareto_var(lb, (jl_tvar_t*)y, e, -1))
                         yy->lb = lb;
-                    if (ub != y)
+                    if (!compareto_var(ub, (jl_tvar_t*)y, e,  1))
                         yy->ub = ub;
                     assert(yy->ub != y);
                     assert(yy->lb != y);
