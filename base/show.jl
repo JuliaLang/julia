@@ -1119,7 +1119,7 @@ const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
     :(.=), :(.+=), :(.-=), :(.*=), :(./=), :(.\=), :(.^=), :(.&=), :(.|=), :(.÷=), :(.%=), :(.>>>=), :(.>>=), :(.<<=),
     :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->)])
-const expr_infix = Set{Symbol}([:(:), :(->), Symbol("::")])
+const expr_infix = Set{Symbol}([:(:), :(->), :(::)])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
                          :ref => ('[',']'), :curly => ('{','}'), :(.) => ('(',')'))
@@ -1170,6 +1170,7 @@ julia> Base.isunaryoperator(:-), Base.isunaryoperator(:√), Base.isunaryoperato
 """
 isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
 is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
+is_syntactic_operator(s::Symbol) = ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0
 
 """
     isbinaryoperator(s::Symbol)
@@ -1324,7 +1325,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
             (first && prec >= prec_power &&
              ((item isa Expr && item.head === :call && (callee = item.args[1]; isa(callee, Symbol) && callee in uni_ops)) ||
               (item isa Real && item < 0))) ||
-              (enclose_operators && item isa Symbol && isoperator(item))
+            (enclose_operators && item isa Symbol && isoperator(item) && is_valid_identifier(item))
         parens && print(io, '(')
         if kw && is_expr(item, :kw, 2)
             item = item::Expr
@@ -1346,11 +1347,20 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
     print(io, cl)
 end
 
+function is_valid_identifier(sym)
+    return isidentifier(sym) || (
+        _isoperator(sym) &&
+        !(sym in (Symbol("'"), :(::), :?)) &&
+        !is_syntactic_operator(sym)
+    )
+end
+
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 # kw: `=` expressions are parsed with head `kw` in this context
 function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
+            (isa(func, Symbol) && !is_valid_identifier(func)) ||
             (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
             isa(func, GlobalRef)
         show_unquoted(io, func, indent, 0, quote_level)
@@ -1377,7 +1387,7 @@ end
 # * Print valid identifiers & operators literally; also macros names if allow_macroname=true
 # * Escape invalid identifiers with var"" syntax
 function show_sym(io::IO, sym; allow_macroname=false)
-    if isidentifier(sym) || (isoperator(sym) && sym !== Symbol("'"))
+    if is_valid_identifier(sym)
         print(io, sym)
     elseif allow_macroname && (sym_str = string(sym); startswith(sym_str, '@'))
         print(io, '@')
@@ -1436,14 +1446,16 @@ function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
 end
 
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int, quote_level::Int)
-    if isa(value, Symbol) && !(value in quoted_syms)
-        value = value::Symbol
-        s = string(value)
-        if isidentifier(s) || (isoperator(value) && value !== Symbol("'"))
-            print(io, ":")
-            print(io, value)
+    if isa(value, Symbol)
+        sym = value::Symbol
+        if value in quoted_syms
+            print(io, ":(", sym, ")")
         else
-            print(io, "Symbol(", repr(s), ")")
+            if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
+                print(io, ":", sym)
+            else
+                print(io, "Symbol(", repr(String(sym)), ")")
+            end
         end
     else
         if isa(value,Expr) && value.head === :block
@@ -1500,10 +1512,12 @@ function show_import_path(io::IO, ex, quote_level)
         end
     elseif ex.head === :(.)
         for i = 1:length(ex.args)
-            if i > 1 && ex.args[i-1] !== :(.)
+            if ex.args[i] === :(.)
                 print(io, '.')
+            else
+                show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
+                i < length(ex.args) && print(io, '.')
             end
-            show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
         end
     else
         show_unquoted(io, ex, 0, 0, quote_level)
@@ -1671,7 +1685,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         elseif isa(func,Symbol) && length(func_args) == 1 && func in uni_ops
             show_unquoted(io, func, indent, 0, quote_level)
             arg1 = func_args[1]
-            if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
+            if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1) && is_valid_identifier(arg1))
                 show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
                 show_unquoted(io, arg1, indent, func_prec, quote_level)

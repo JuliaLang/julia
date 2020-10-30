@@ -2098,3 +2098,12 @@ end
     @eval f4(; var"...") = 9
     @test_broken occursin("f4(; $(italic("var\"...\"")))", sprint(_show, methods(f4)))
 end
+
+@testset "printing of syntactic operators" begin
+    @test sprint(show, :(var"::" + var"$")) == ":(var\"::\" + (\$))"
+    @test sprint(show, :(!var"...")) == ":(!var\"...\")"
+    @test sprint(show, :(var"'ᵀ" - 1)) == ":(var\"'ᵀ\" - 1)"
+    @test sprint(show, :(::)) == ":(::)"
+    @test sprint(show, :?) == ":?"
+    @test sprint(show, :(var"?" + var"::" + var"'")) == ":(var\"?\" + var\"::\" + var\"'\")"
+end
