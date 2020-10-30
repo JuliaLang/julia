@@ -92,7 +92,7 @@ end
     n_, delay_ = Profile.init()
     @test n_ == 1_000_001
     @test delay_ == 0.0005
-    Profile.init()
+    Profile.init(n=def_n, delay=def_delay)
 end
 
 @testset "Line number correction" begin
