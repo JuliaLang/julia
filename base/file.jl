@@ -979,13 +979,16 @@ function symlink(p::AbstractString, np::AbstractString)
         end
     end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
-    sym = "symlink($(repr(p)), $(repr(np)))"
-    @static if Sys.iswindows()
-        if err < 0 && !isdir(p)
-            sym = "On Windows, creating symlinks requires Administrator privileges.\nsymlink"
+    if err < 0
+        msg = "symlink($(repr(p)), $(repr(np)))"
+        @static if Sys.iswindows()
+            if !isdir(p)
+                msg = "On Windows, creating symlinks requires Administrator privileges.\n$msg"
+            end
         end
+        uv_error(msg, err)
     end
-    uv_error(sym, err)
+    return nothing
 end
 
 """
