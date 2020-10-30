@@ -165,6 +165,10 @@ function test_diagonal()
                        Tuple{Ref{Tuple{N1,N1}}, Ref{N2}} where {N1, N2})
     @test !issub(Tuple{Type{Tuple{Vararg{T}} where T <: Integer}, Tuple{Float64, Int}},
                  Tuple{Type{Tuple{Vararg{T}}}, Tuple{Vararg{T}}} where T)
+
+    # non-types
+    @test issub_strict(Tuple{3,3}, NTuple)
+    @test !issub(Tuple{3,4}, NTuple)
 end
 
 # level 3: UnionAll
