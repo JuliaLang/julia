@@ -622,6 +622,8 @@ end
         @test mul!(similar(A), A, A)::typeof(A) == A*A
         @test mul!(similar(A, T), A, A2) ≈ A*A2
         @test mul!(similar(A, T), A2, A) ≈ A2*A
+        @test mul!(typeof(similar(A, T))(A), A, A2, 2.0, 3.0) ≈ 2.0*A*A2 + 3.0*A
+        @test mul!(typeof(similar(A2, T))(A2), A2, A, 2.0, 3.0) ≈ 2.0*A2*A + 3.0*A2
 
         @test mul!(similar(A), A, Au)::typeof(A) == A*Au
         @test mul!(similar(A), Au, A)::typeof(A) == Au*A
@@ -633,6 +635,8 @@ end
         @test mul!(similar(B), B, B)::typeof(B) == B*B
         @test mul!(similar(B, T), B, B2) ≈ B*B2
         @test mul!(similar(B, T), B2, B) ≈ B2*B
+        @test mul!(typeof(similar(B, T))(B), B, B2, 2.0, 3.0) ≈ 2.0*B*B2 + 3.0*B
+        @test mul!(typeof(similar(B2, T))(B2), B2, B, 2.0, 3.0) ≈ 2.0*B2*B + 3.0*B2
 
         @test mul!(similar(B), B, Bu)::typeof(B) == B*Bu
         @test mul!(similar(B), Bu, B)::typeof(B) == Bu*B
