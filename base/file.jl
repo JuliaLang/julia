@@ -56,7 +56,7 @@ function pwd()
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
         else
-            uv_error(:cwd, rc)
+            uv_error("pwd()", rc)
         end
     end
 end
@@ -81,7 +81,11 @@ julia> pwd()
 ```
 """
 function cd(dir::AbstractString)
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
+    ret = ccall(:uv_chdir, Cint, (Cstring,), dir)
+    if ret < 0
+        uv_error("cd($(repr(dir)))", ret)
+    end
+    return nothing
 end
 cd() = cd(homedir())
 
@@ -174,7 +178,7 @@ function mkdir(path::AbstractString; mode::Integer = 0o777)
                     C_NULL, req, path, checkmode(mode), C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("mkdir", ret)
+            uv_error("mkdir($(repr(path)); mode=0o$(string(mode,base=8)))", ret)
         end
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         return path
@@ -455,7 +459,7 @@ function tempdir()
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1)  # space for null-terminator implied by StringVector
         else
-            uv_error(:tmpdir, rc)
+            uv_error("tempdir()", rc)
         end
     end
 end
@@ -664,7 +668,7 @@ function mktempdir(parent::AbstractString=tempdir();
                     C_NULL, req, tpath, C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("mktempdir", ret)
+            uv_error("mktempdir($(repr(parent)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
@@ -913,7 +917,7 @@ end
 
 function unlink(p::AbstractString)
     err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
-    uv_error("unlink", err)
+    uv_error("unlink($(repr(p)))", err)
     nothing
 end
 
@@ -977,7 +981,7 @@ function symlink(p::AbstractString, np::AbstractString)
         end
     end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
-    sym = "symlink"
+    sym = "symlink($(repr(p)), $(repr(np)))"
     @static if Sys.iswindows()
         if err < 0 && !isdir(p)
             sym = "On Windows, creating symlinks requires Administrator privileges.\nsymlink"
@@ -999,7 +1003,7 @@ function readlink(path::AbstractString)
             C_NULL, req, path, C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("readlink", ret)
+            uv_error("readlink($(repr(path)))", ret)
             @assert false
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
@@ -1025,7 +1029,7 @@ Return `path`.
 """
 function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
-    uv_error("chmod", err)
+    uv_error("chmod($(repr(path)), 0o$(string(mode, base=8)))", err)
     if recursive && isdir(path)
         for p in readdir(path)
             if !islink(joinpath(path, p))
@@ -1045,6 +1049,6 @@ Return `path`.
 """
 function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
-    uv_error("chown",err)
+    uv_error("chown($(repr(path)), $owner, $group)",err)
     path
 end
