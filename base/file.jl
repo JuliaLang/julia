@@ -82,9 +82,7 @@ julia> pwd()
 """
 function cd(dir::AbstractString)
     ret = ccall(:uv_chdir, Cint, (Cstring,), dir)
-    if ret < 0
-        uv_error("cd($(repr(dir)))", ret)
-    end
+   ret < 0 && uv_error("cd($(repr(dir)))", ret)
     return nothing
 end
 cd() = cd(homedir())
@@ -917,7 +915,7 @@ end
 
 function unlink(p::AbstractString)
     err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
-    uv_error("unlink($(repr(p)))", err)
+    err < 0 && uv_error("unlink($(repr(p)))", err)
     nothing
 end
 
@@ -1029,7 +1027,7 @@ Return `path`.
 """
 function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
-    uv_error("chmod($(repr(path)), 0o$(string(mode, base=8)))", err)
+    err < 0 && uv_error("chmod($(repr(path)), 0o$(string(mode, base=8)))", err)
     if recursive && isdir(path)
         for p in readdir(path)
             if !islink(joinpath(path, p))
@@ -1049,6 +1047,6 @@ Return `path`.
 """
 function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
-    uv_error("chown($(repr(path)), $owner, $group)",err)
+    err < 0 && uv_error("chown($(repr(path)), $owner, $group)", err)
     path
 end
