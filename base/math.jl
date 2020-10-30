@@ -606,6 +606,10 @@ by Carlos F. Borges
 The article is available online at ArXiv at the link
   https://arxiv.org/abs/1904.09481
 
+    hypot(x...)
+
+Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = Int64(10)^10;
@@ -621,77 +625,7 @@ Stacktrace:
 
 julia> hypot(3, 4im)
 5.0
-```
-"""
-hypot(x::Number, y::Number) = hypot(promote(x, y)...)
-hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
-hypot(x::T, y::T) where {T<:Real} = hypot(float(x), float(y))
-function hypot(x::T, y::T) where {T<:Number}
-    if !iszero(x)
-        z = y/x
-        z2 = z*z
 
-        abs(x) * sqrt(oneunit(z2) + z2)
-    else
-        abs(y)
-    end
-end
-
-function hypot(x::T, y::T) where T<:AbstractFloat
-    # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
-    if isinf(x) || isinf(y)
-        return T(Inf)
-    end
-
-    # Order the operands
-    ax,ay = abs(x), abs(y)
-    if ay > ax
-        ax,ay = ay,ax
-    end
-
-    # Widely varying operands
-    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
-        return ax
-    end
-
-    # Operands do not vary widely
-    scale = eps(T)*sqrt(floatmin(T))  #Rescaling constant
-    if ax > sqrt(floatmax(T)/2)
-        ax = ax*scale
-        ay = ay*scale
-        scale = inv(scale)
-    elseif ay < sqrt(floatmin(T))
-        ax = ax/scale
-        ay = ay/scale
-    else
-        scale = one(scale)
-    end
-    h = sqrt(muladd(ax,ax,ay*ay))
-    # This branch is correctly rounded but requires a native hardware fma.
-    if Base.Math.FMA_NATIVE
-        hsquared = h*h
-        axsquared = ax*ax
-        h -= (fma(-ay,ay,hsquared-axsquared) + fma(h,h,-hsquared) - fma(ax,ax,-axsquared))/(2*h)
-    # This branch is within one ulp of correctly rounded.
-    else
-        if h <= 2*ay
-            delta = h-ay
-            h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
-        else
-            delta = h-ax
-            h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
-        end
-    end
-    return h*scale
-end
-
-"""
-    hypot(x...)
-
-Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
-
-# Examples
-```jldoctest
 julia> hypot(-5.7)
 5.7
 
@@ -699,7 +633,73 @@ julia> hypot(3, 4im, 12.0)
 13.0
 ```
 """
-hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
+hypot(x::Number) = abs(float(x))
+hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...))...)
+function _hypot(x, y)
+    # preserves unit
+    axu = abs(x)
+    ayu = abs(y)
+
+    # unitless
+    ax = axu / oneunit(axu)
+    ay = ayu / oneunit(ayu)
+
+    # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
+    if isinf(ax) || isinf(ay)
+        return oftype(axu, Inf)
+    end
+
+    # Order the operands
+    if ay > ax
+        axu, ayu = ayu, axu
+        ax, ay = ay, ax
+    end
+
+    # Widely varying operands
+    if ay <= ax*sqrt(eps(typeof(ax))/2)  #Note: This also gets ay == 0
+        return axu
+    end
+
+    # Operands do not vary widely
+    scale = eps(typeof(ax))*sqrt(floatmin(ax))  #Rescaling constant
+    if ax > sqrt(floatmax(ax)/2)
+        ax = ax*scale
+        ay = ay*scale
+        scale = inv(scale)
+    elseif ay < sqrt(floatmin(ax))
+        ax = ax/scale
+        ay = ay/scale
+    else
+        scale = oneunit(scale)
+    end
+    h = sqrt(muladd(ax, ax, ay*ay))
+    # This branch is correctly rounded but requires a native hardware fma.
+    if Base.Math.FMA_NATIVE
+        hsquared = h*h
+        axsquared = ax*ax
+        h -= (fma(-ay, ay, hsquared-axsquared) + fma(h, h,-hsquared) - fma(ax, ax, -axsquared))/(2*h)
+    # This branch is within one ulp of correctly rounded.
+    else
+        if h <= 2*ay
+            delta = h-ay
+            h -= muladd(delta, delta-2*(ax-ay), ax*(2*delta - ax))/(2*h)
+        else
+            delta = h-ax
+            h -= muladd(delta, delta, muladd(ay, (4*delta - ay), 2*delta*(ax - 2*ay)))/(2*h)
+        end
+    end
+    return h*scale*oneunit(axu)
+end
+function _hypot(x...)
+    maxabs = maximum(abs, x)
+    if isnan(maxabs) && any(isinf, x)
+        return oftype(maxabs, Inf)
+    elseif (iszero(maxabs) || isinf(maxabs))
+        return maxabs
+    else
+        return maxabs * sqrt(sum(y -> abs2(y / maxabs), x))
+    end
+end
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
 atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
@@ -1146,12 +1146,7 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
     end
 end
 
-for func in (:atan,:hypot)
-    @eval begin
-        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(b)))
-    end
-end
-
+atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
