@@ -182,7 +182,7 @@ On exotic variants of `BLAS` this function can fail, which is indicated by retur
 !!! compat "Julia 1.6"
     `get_num_threads` requires at least Julia 1.6.
 """
-get_num_threads(;_blas=guess_vendor())::Union{Int, Nothing} = _get_num_threads()
+get_num_threads()::Union{Int, Nothing} = _get_num_threads()
 
 function _get_num_threads(; _blas = guess_vendor())::Union{Int, Nothing}
     if _blas === :openblas || _blas === :openblas64
