@@ -2601,3 +2601,5 @@ end
         @test b === (y = 1, z = 3.0)
     end
 end
+
+@test eval(Expr(:if, Expr(:block, Expr(:&&, true, Expr(:call, :(===), 1, 1))), 1, 2)) == 1
