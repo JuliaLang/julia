@@ -278,6 +278,11 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
 end
 load_path_expand(::Nothing) = nothing
 
+"""
+    active_project()
+
+Return the path of the active `Project.toml` file.
+"""
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[],)
         project == "@" && continue
