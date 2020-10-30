@@ -119,3 +119,15 @@ end
         end
     end
 end
+
+@testset "select_downloadable_artifacts()" begin
+    arm_linux = Platform("armv7l", "linux")
+    artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=arm_linux)
+    @test length(keys(artifacts)) == 1
+    @test artifacts["c_simple"]["git-tree-sha1"] == "0c509b3302db90a9393d6036c3ffcd14d190523d"
+
+    artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=arm_linux, include_lazy=true)
+    @test length(keys(artifacts)) == 2
+    @test artifacts["c_simple"]["git-tree-sha1"] == "0c509b3302db90a9393d6036c3ffcd14d190523d"
+    @test artifacts["socrates"]["git-tree-sha1"] == "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
+end
