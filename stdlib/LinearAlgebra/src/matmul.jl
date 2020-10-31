@@ -186,7 +186,6 @@ end
     muladd(A, y, z)
 
 Combined multiply-add, `A*y .+ z`, for matrix-matrix or matrix-vector multiplication.
-The result is always the same size as `A*y`, but `z` may be smaller, or a scalar.
 
 !!! compat "Julia 1.6"
      These methods require Julia 1.6 or later.
@@ -201,37 +200,32 @@ julia> muladd(A, B, z)
  107.0  107.0
 ```
 """
-Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, AbstractVecOrMat}) = (A * y) .+ z
+Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, AbstractArray}) =
+    (A * y) .+ z
+
+Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, AbstractArray}) =
+    (u .* v) .+ z
+
+Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+    muladd(A', x', z')'
+Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+    transpose(muladd(transpose(A), transpose(x), transpose(z)))
 
 StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
 
-function Base.muladd(A::StridedMaybeAdjOrTransMat, y::AbstractVector, z::Union{Number, AbstractVector})
+function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, y::AbstractVector{<:Number}, z::Union{Number, AbstractVector})
     T = promote_type(eltype(A), eltype(y), eltype(z))
     C = similar(y, T, axes(A,1))
     C .= z
     mul!(C, A, y, true, true)
 end
 
-function Base.muladd(A::StridedMaybeAdjOrTransMat, B::StridedMaybeAdjOrTransMat, z::Union{Number, AbstractVecOrMat})
+function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, B::StridedMaybeAdjOrTransMat{<:Number}, z::Union{Number, AbstractVecOrMat})
     T = promote_type(eltype(A), eltype(B), eltype(z))
     C = similar(parent(B), T, axes(A,1), axes(B,2))
     C .= z
     mul!(C, A, B, true, true)
 end
-
-Base.muladd(x::AdjointAbsVec, A::StridedMaybeAdjOrTransMat, z::Union{Number, AbstractVector}) =
-    muladd(A', x', z')'
-Base.muladd(x::TransposeAbsVec, A::StridedMaybeAdjOrTransMat, z::Union{Number, AbstractVector}) =
-    transpose(muladd(transpose(A), transpose(x), transpose(z)))
-
-Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, AbstractVecOrMat}) =
-    (u .* v) .+ z
-
-# function Base.muladd(u::AdjOrTransAbsVec, v::AbstractVector, z::Number)
-#     uv = _dot_nonrecursive(u, v)
-#     ndims(z) > ndims(uv) && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
-#     uv .+ z
-# end
 
 """
     mul!(Y, A, B) -> Y

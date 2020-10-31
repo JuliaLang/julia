@@ -492,10 +492,3 @@ Base.muladd(A::Union{Diagonal, UniformScaling}, B::Union{Diagonal, UniformScalin
 
 _diag_or_value(A::Diagonal) = A.diag
 _diag_or_value(A::UniformScaling) = A.λ
-
-function Base.muladd(A::StridedMaybeAdjOrTransMat, B::StridedMaybeAdjOrTransMat, z::UniformScaling)
-    T = promote_type(eltype(A), eltype(B), eltype(z))
-    C = similar(parent(B), T, axes(A,1), axes(B,2))
-    copyto!(C, z)
-    mul!(C, A, B, true, true)
-end
