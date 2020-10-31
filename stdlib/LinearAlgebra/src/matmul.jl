@@ -215,14 +215,14 @@ StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatri
 
 function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, y::AbstractVector{<:Number}, z::Union{Number, AbstractVector})
     T = promote_type(eltype(A), eltype(y), eltype(z))
-    C = similar(y, T, axes(A,1))
+    C = similar(A, T, axes(A,1))
     C .= z
     mul!(C, A, y, true, true)
 end
 
 function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, B::StridedMaybeAdjOrTransMat{<:Number}, z::Union{Number, AbstractVecOrMat})
     T = promote_type(eltype(A), eltype(B), eltype(z))
-    C = similar(parent(B), T, axes(A,1), axes(B,2))
+    C = similar(A, T, axes(A,1), axes(B,2))
     C .= z
     mul!(C, A, B, true, true)
 end
