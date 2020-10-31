@@ -123,7 +123,7 @@ Standard library changes
 
 * `pkg> precompile` is now parallelized through depth-first precompilation of dependencies. Errors will only throw for
   direct dependencies listed in the `Project.toml`.
-* `pkg> precompile` is now automatically triggered whenever Pkg changes the active manifest. Auto-precompillation will
+* `pkg> precompile` is now automatically triggered whenever Pkg changes the active manifest. Auto-precompilation will
   remember if a package has errored within the given environment and will not retry until it changes.
   Auto-precompilation can be disabled by setting the environment variable `JULIA_PKG_PRECOMPILE_AUTO=0`.
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
