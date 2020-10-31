@@ -201,23 +201,27 @@ julia> muladd(A, B, z)
  107.0  107.0
 ```
 """
-function Base.muladd(A::AbstractMatrix, y::AbstractVector, z::Union{Number, AbstractVector})
+Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, AbstractVecOrMat}) = (A * y) .+ z
+
+StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+
+function Base.muladd(A::StridedMaybeAdjOrTransMat, y::AbstractVector, z::Union{Number, AbstractVector})
     T = promote_type(eltype(A), eltype(y), eltype(z))
     C = similar(y, T, axes(A,1))
     C .= z
     mul!(C, A, y, true, true)
 end
 
-function Base.muladd(A::AbstractMatrix, B::AbstractMatrix, z::Union{Number, AbstractVecOrMat})
+function Base.muladd(A::StridedMaybeAdjOrTransMat, B::StridedMaybeAdjOrTransMat, z::Union{Number, AbstractVecOrMat})
     T = promote_type(eltype(A), eltype(B), eltype(z))
     C = similar(parent(B), T, axes(A,1), axes(B,2))
     C .= z
     mul!(C, A, B, true, true)
 end
 
-Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+Base.muladd(x::AdjointAbsVec, A::StridedMaybeAdjOrTransMat, z::Union{Number, AbstractVector}) =
     muladd(A', x', z')'
-Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+Base.muladd(x::TransposeAbsVec, A::StridedMaybeAdjOrTransMat, z::Union{Number, AbstractVector}) =
     transpose(muladd(transpose(A), transpose(x), transpose(z)))
 
 Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, AbstractVecOrMat}) =

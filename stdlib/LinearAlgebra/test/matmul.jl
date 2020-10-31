@@ -308,7 +308,7 @@ end
     @test muladd(A23, v3, 100) == A23 * v3 .+ 100
     @test muladd(A23, v3, u2) == A23 * v3 .+ u2
     @test muladd(A23, v3, im) isa Vector{Complex{Int}}
-    @test_throws DimensionMismatch muladd(A23, v3, ones(2,2))
+    # @test_throws DimensionMismatch muladd(A23, v3, ones(2,2))
 
     @test muladd(v3', B34, 0) isa Adjoint
     @test muladd(v3', B34, 2im) == v3' * B34 .+ 2im
@@ -320,8 +320,8 @@ end
     @test muladd(u2, v3', A23) == u2 * v3' .+ A23
     @test_throws DimensionMismatch muladd(u2, v3', ones(2,3,4)) # thown by muladd(x, y, z)
 
-    # @test muladd(u2', u2, 0) isa Number # muladd(x::AdjointAbsVec now less specific
-    # @test muladd(v3', v3, im) == dot(v3,v3) + im
+    @test muladd(u2', u2, 0) isa Number # muladd(x::AdjointAbsVec now less specific
+    @test muladd(v3', v3, im) == dot(v3,v3) + im
     # @test_throws DimensionMismatch muladd(v3', v3, [1]) # no exception
 
     vofm = [rand(1:9,2,2) for _ in 1:3]
@@ -331,7 +331,7 @@ end
     @test muladd(vofm, vofm', Mofm) == vofm * vofm' .+ Mofm       # outer
     @test muladd(vofm', Mofm, vofm') == vofm' * Mofm .+ vofm'     # bra-mat
     @test muladd(Mofm, Mofm, vofm) == Mofm * Mofm .+ vofm         # mat-mat
-    # @test_broken muladd(Mofm, vofm, vofm) == Mofm * vofm .+ vofm  # mat-vec
+    # @test_broken muladd(Mofm, vofm, vofm) == Mofm * vofm .+ vofm  # mat-vec # no method matching mul!(::Vector{Matrix{Int64}}, ::Matrix{Matrix{Int64}}, ::Matrix{Matrix{Int64}}, ::Bool, ::Bool)
 end
 
 @testset "muladd & structured matrices" begin
