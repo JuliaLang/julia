@@ -254,7 +254,7 @@ julia> rm("my", recursive=true)
 julia> rm("this_file_does_not_exist", force=true)
 
 julia> rm("this_file_does_not_exist")
-ERROR: IOError: unlink: no such file or directory (ENOENT)
+ERROR: IOError: unlink("this_file_does_not_exist"): no such file or directory (ENOENT)
 Stacktrace:
 [...]
 ```
@@ -811,7 +811,7 @@ function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
     err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
                 C_NULL, uv_readdir_req, dir, 0, C_NULL)
-    err < 0 && throw(_UVError("readdir", err, "with ", repr(dir)))
+    err < 0 && uv_error("readdir($(repr(dir)))", err)
 
     # iterate the listing into entries
     entries = String[]
