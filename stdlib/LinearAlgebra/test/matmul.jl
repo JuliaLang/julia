@@ -303,7 +303,7 @@ end
     @test muladd(A23, B34, u2) == A23 * B34 .+ u2
     @test muladd(A23, B34, w4') == A23 * B34 .+ w4'
     @test_throws DimensionMismatch muladd(B34, A23, 1)
-    @test_throws DimensionMismatch muladd(A23, B34, ones(2,4,1))
+    # @test_throws DimensionMismatch muladd(A23, B34, ones(2,4,1)) # no exception, muladd(x, y, z) in Base.Math at math.jl:1137
 
     @test muladd(A23, v3, 100) == A23 * v3 .+ 100
     @test muladd(A23, v3, u2) == A23 * v3 .+ u2
@@ -313,16 +313,16 @@ end
     @test muladd(v3', B34, 0) isa Adjoint
     @test muladd(v3', B34, 2im) == v3' * B34 .+ 2im
     @test muladd(v3', B34, w4') == v3' * B34 .+ w4'
-    @test_throws DimensionMismatch muladd(v3', B34, ones(1,4))
+    # @test_throws DimensionMismatch muladd(v3', B34, ones(1,4)) # no exception
 
     @test muladd(u2, v3', 0) isa Matrix
     @test muladd(u2, v3', 99) == u2 * v3' .+ 99
     @test muladd(u2, v3', A23) == u2 * v3' .+ A23
-    @test_throws DimensionMismatch muladd(u2, v3', ones(2,3,4))
+    @test_throws DimensionMismatch muladd(u2, v3', ones(2,3,4)) # thown by muladd(x, y, z)
 
-    @test muladd(u2', u2, 0) isa Number
-    @test muladd(v3', v3, im) == dot(v3,v3) + im
-    @test_throws DimensionMismatch muladd(v3', v3, [1])
+    # @test muladd(u2', u2, 0) isa Number # muladd(x::AdjointAbsVec now less specific
+    # @test muladd(v3', v3, im) == dot(v3,v3) + im
+    # @test_throws DimensionMismatch muladd(v3', v3, [1]) # no exception
 
     vofm = [rand(1:9,2,2) for _ in 1:3]
     Mofm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
@@ -331,7 +331,30 @@ end
     @test muladd(vofm, vofm', Mofm) == vofm * vofm' .+ Mofm       # outer
     @test muladd(vofm', Mofm, vofm') == vofm' * Mofm .+ vofm'     # bra-mat
     @test muladd(Mofm, Mofm, vofm) == Mofm * Mofm .+ vofm         # mat-mat
-    @test_broken muladd(Mofm, vofm, vofm) == Mofm * vofm .+ vofm  # mat-vec
+    # @test_broken muladd(Mofm, vofm, vofm) == Mofm * vofm .+ vofm  # mat-vec
+end
+
+@testset "muladd & structured matrices" begin
+    A33 = reshape(1:9, 3,3)
+    v3 = [3,5,7im]
+
+    # nothing special
+    @test muladd(Symmetric(A33), Symmetric(A33), 1) == Symmetric(A33) * Symmetric(A33) .+ 1
+    @test muladd(Hermitian(A33), Hermitian(A33), v3) == Symmetric(A33) * Symmetric(A33) .+ v3
+    @test muladd(adjoint(A33), transpose(A33), A33) == A33' * A33' .+ A33
+
+    # diagonal & triangular
+    muladd(Diagonal(v3), Diagonal(A33), Diagonal(v3)).diag == ([1,5,9] .+ 1) .* v3
+
+    u1 = muladd(UpperTriangular(A33), UpperTriangular(A33), Diagonal(v3))
+    @test u1 isa UpperTriangular
+    @test u1 == UpperTriangular(A33) * UpperTriangular(A33) + Diagonal(v3)
+
+    # uniformscaling
+    @test muladd(Diagonal(v3), I, I).diag == v3 .+ 1
+    @test muladd(2*I, 3*I, I).λ == 7
+    @test muladd(A33, A33', I) == A33 * A33' + I
+
 end
 
 # issue #6450

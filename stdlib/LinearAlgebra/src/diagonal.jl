@@ -752,3 +752,26 @@ function logabsdet(A::Diagonal)
      mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),
                A.diag)
 end
+
+# muladd, including methods for triangular matrices
+Base.muladd(A::Diagonal, B::Diagonal, z::Diagonal) =
+    Diagonal(A.diag .* B.diag .+ z.diag)
+
+const _UpperUnion = Union{UpperTriangular, UnitUpperTriangular, Diagonal}
+const _LowerUnion = Union{LowerTriangular, UnitLowerTriangular, Diagonal}
+
+function Base.muladd(A::_UpperUnion, B::_UpperUnion, z::_UpperUnion)
+    T = promote_type(eltype(A), eltype(B), eltype(z))
+    C = similar(parent(B), T, axes(A,1), axes(B,2))
+    C .= z
+    mul!(C, A, B, true, true)
+    UpperTriangular(C)
+end
+
+function Base.muladd(A::_LowerUnion, B::_LowerUnion, z::_LowerUnion)
+    T = promote_type(eltype(A), eltype(B), eltype(z))
+    C = similar(parent(B), T, axes(A,1), axes(B,2))
+    C .= z
+    mul!(C, A, B, true, true)
+    LowerTriangular(C)
+end

@@ -201,33 +201,33 @@ julia> muladd(A, B, z)
  107.0  107.0
 ```
 """
-function Base.muladd(A::AbstractMatrix{TA}, y::AbstractVector{Ty}, z) where {TA, Ty}
-    T = promote_type(TA, Ty, eltype(z))
-    C = similar(A, T, axes(A,1))
+function Base.muladd(A::AbstractMatrix, y::AbstractVector, z::Union{Number, AbstractVector})
+    T = promote_type(eltype(A), eltype(y), eltype(z))
+    C = similar(y, T, axes(A,1))
     C .= z
     mul!(C, A, y, true, true)
 end
 
-function Base.muladd(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}, z) where {TA, TB}
-    T = promote_type(TA, TB, eltype(z))
-    C = similar(A, T, axes(A,1), axes(B,2))
+function Base.muladd(A::AbstractMatrix, B::AbstractMatrix, z::Union{Number, AbstractVecOrMat})
+    T = promote_type(eltype(A), eltype(B), eltype(z))
+    C = similar(parent(B), T, axes(A,1), axes(B,2))
     C .= z
     mul!(C, A, B, true, true)
 end
 
-Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z) = muladd(A', x', z')'
-Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z) = transpose(muladd(transpose(A), transpose(x), transpose(z)))
+Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+    muladd(A', x', z')'
+Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+    transpose(muladd(transpose(A), transpose(x), transpose(z)))
 
-function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z)
-    ndims(z) > 2 && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
+Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, AbstractVecOrMat}) =
     (u .* v) .+ z
-end
 
-function Base.muladd(u::AdjOrTransAbsVec, v::AbstractVector, z)
-    uv = _dot_nonrecursive(u, v)
-    ndims(z) > ndims(uv) && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
-    uv .+ z
-end
+# function Base.muladd(u::AdjOrTransAbsVec, v::AbstractVector, z::Number)
+#     uv = _dot_nonrecursive(u, v)
+#     ndims(z) > ndims(uv) && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
+#     uv .+ z
+# end
 
 """
     mul!(Y, A, B) -> Y
