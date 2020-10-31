@@ -362,9 +362,8 @@ function test_stat_error(stat::Function, pth)
     end
     ex = try; stat(pth); false; catch ex; ex; end::Base.IOError
     @test ex.code == (pth isa AbstractString ? Base.UV_EACCES : Base.UV_EBADF)
-    @test startswith(ex.msg, "stat: ")
     pth isa AbstractString || (pth = Base.INVALID_OS_HANDLE)
-    @test endswith(ex.msg, repr(pth))
+    @test startswith(ex.msg, "stat($(repr(pth)))")
     nothing
 end
 @testset "stat errors" begin # PR 32031
@@ -476,8 +475,8 @@ if !Sys.iswindows()
         @test stat(file).gid == 0
         @test stat(file).uid == 0
     else
-        @test_throws Base._UVError("chown($(repr(path)), -2, -1)", Base.UV_EPERM) chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base._UVError("chown($(repr(path)), -1, -2)", Base.UV_EPERM) chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test_throws Base._UVError("chown($(repr(file)), -2, -1)", Base.UV_EPERM) chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        @test_throws Base._UVError("chown($(repr(file)), -1, -2)", Base.UV_EPERM) chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
     end
 else
     # test that chown doesn't cause any errors for Windows
