@@ -114,7 +114,7 @@ New library features
   inserting or consuming the first dimension depending on the ratio of `sizeof(T)` and `sizeof(S)`.
 * New `append!(vector, collections...)` and `prepend!(vector, collections...)` methods accept multiple
   collections to be appended or prepended ([#36227]).
-* The postfix operator `'ᵀ` can now be used as an alias for `transpose` ([#38043]).
+* The postfix operator `'ᵀ` can now be used as an alias for `transpose` ([#38062]).
 * `keys(io::IO)` has been added, which returns all keys of `io` if `io` is an `IOContext` and an empty
   `Base.KeySet` otherwise ([#37753]).
 * `count` now accepts an optional `init` argument to control the accumulation type ([#37461]).
@@ -165,10 +165,10 @@ Standard library changes
 
 #### Printf
 
-* Complete overhaul of internal code to use the ryu float printing algorithms (from Julia 1.4); leads to consistent 2-5x performance improvements
-* New `Printf.tofloat` function allowing custom float types to more easily integrate with Printf formatting by converting their type to `Float16`, `Float32`, `Float64`, or `BigFloat`
-* New `Printf.format"..."` and `Printf.Format(...)` functions that allow creating `Printf.Format` objects that can be passed to `Printf.format` for easier dynamic printf formatting
-* `Printf.format(f::Printf.Format, args...)` as a non-macro function that applies a printf format `f` to provided `args`
+* Complete overhaul of internal code to use the ryu float printing algorithms (from Julia 1.4); leads to consistent 2-5x performance improvements.
+* New `Printf.tofloat` function allowing custom float types to more easily integrate with Printf formatting by converting their type to `Float16`, `Float32`, `Float64`, or `BigFloat`.
+* New `Printf.format"..."` and `Printf.Format(...)` functions that allow creating `Printf.Format` objects that can be passed to `Printf.format` for easier dynamic printf formatting.
+* `Printf.format(f::Printf.Format, args...)` as a non-macro function that applies a printf format `f` to provided `args`.
 
 
 #### Random
@@ -184,8 +184,8 @@ Standard library changes
 
   The new API offers several enhancements:
 
-  + Menus are configured in their constructors via keyword arguments
-  + For custom menu types, the new `Config` and `MultiSelectConfig` replace the global `CONFIG` Dict
+  + Menus are configured in their constructors via keyword arguments.
+  + For custom menu types, the new `Config` and `MultiSelectConfig` replace the global `CONFIG` `Dict`
   + `request(menu; cursor=1)` allows you to control the initial cursor position in the menu (defaults to first item)
   + `MultiSelectMenu` allows you to pass a list of initially-selected items with the `selected` keyword argument
   + `writeLine` was deprecated to `writeline`, and `writeline` methods are not expected to print the cursor indicator.
@@ -195,7 +195,7 @@ Standard library changes
     makes `printmenu` work properly when the number of menu items might change depending on user choices.
   + `numoptions`, returning the number of items in the menu, has been added as an alternative to implementing `options`
   + `suppress_output` (primarily a testing option) has been added as a keyword argument to `request`,
-    rather than a configuration option
+    rather than a configuration option.
 
 * Windows REPL now supports 24-bit colors, by correctly interpreting virtual terminal escapes.
 
@@ -226,7 +226,7 @@ Standard library changes
 #### UUIDs
 
 * Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
-* Added `parse(::Type{UUID}, ::AbstractString)` method
+* Added `parse(::Type{UUID}, ::AbstractString)` method.
 
 #### Mmap
 * On Unix systems, the `Mmap.madvise!` function (along with OS-specific `Mmap.MADV_*`
