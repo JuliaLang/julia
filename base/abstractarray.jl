@@ -1567,15 +1567,15 @@ reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}) =
 reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
     _typed_hcat(mapreduce(eltype, promote_type, A), A)
 
-function _typed_cat(::Type{T}, A::AbstractArray{<:AbstractArray{<:Any,N},M}) where {T,N,M}
+function _typed_cat(::Type{T}, A::AbstractArray{<:AbstractArray}) where {T}
     ax1 = axes(first(A))
-    dense = true
+    dense = isa(first(A), Array)
     for j in Iterators.drop(eachindex(A), 1)
         Aj = A[j]
         if axes(Aj) != ax1
             throw(ArgumentError("expected arrays of consistent size, got $(axes(Aj)) for argument $j, compared to $ax1 for the first"))
         end
-        dense &= isa(Aj,Array)
+        dense &= isa(Aj, Array)
     end
     B = similar(first(A), T, ax1..., axes(A)...)
     if dense
