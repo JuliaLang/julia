@@ -38,6 +38,12 @@ show(io::IO, ::MIME"text/html", h::HTML{<:Function}) = h.content(io)
     @html_str -> Docs.HTML
 
 Create an `HTML` object from a literal string.
+
+# Examples
+```jldoctest
+julia> @html_str "Julia"
+HTML{String}("Julia")
+```
 """
 macro html_str(s)
     :(HTML($s))
@@ -79,6 +85,12 @@ hash(t::T, h::UInt) where {T<:Union{HTML,Text}} = hash(T, hash(t.content, h))
     @text_str -> Docs.Text
 
 Create a `Text` object from a literal string.
+
+# Examples
+```jldoctest
+julia> @text_str "Julia"
+Julia
+```
 """
 macro text_str(s)
     :(Text($s))
