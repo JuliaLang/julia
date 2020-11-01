@@ -1220,6 +1220,7 @@ redirect_stdin
     redirect(;stdin=stdin, stderr=stderr, stdout=stdout)
 
 Redirect a subset of the streams `stdin`, `stderr`, `stdout`.
+Each argument must be an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
 """
 function redirect(;stdin=nothing, stderr=nothing, stdout=nothing)
     stdin  === nothing || redirect_stdin(stdin)
@@ -1229,7 +1230,6 @@ end
 
 """
     redirect(f; stdin=nothing, stderr=nothing, stdout=nothing)
-
 
 Redirect a subset of the streams `stdin`, `stderr`, `stdout`,
 call `f()` and restore each stream.
@@ -1255,7 +1255,7 @@ julia> read("stderr.txt", String)
 
 # Edge cases
 
-It is possible to pass the same exactly same argument to `stdout` and `stderr`:
+It is possible to pass the same argument to `stdout` and `stderr`:
 ```julia
 julia> redirect(stdout="log.txt", stderr="log.txt", stdin=devnull) do
     ...
