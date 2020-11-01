@@ -72,8 +72,14 @@ Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref).
 
 # Examples
 ```jldoctest
-julia> VecOrMat{Float64}
-Union{Array{Float64,1}, Array{Float64,2}}
+julia> Vector{Float64} <: VecOrMat{Float64}
+true
+
+julia> Matrix{Float64} <: VecOrMat{Float64}
+true
+
+julia> Array{Float64, 3} <: VecOrMat{Float64}
+false
 ```
 """
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
