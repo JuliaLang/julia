@@ -109,6 +109,17 @@ used to implement specialized methods.
 !!! compat "Julia 1.5"
     The single argument `endswith(suffix)` requires at least Julia 1.5.
 
+# Examples
+```jldoctest
+julia> endswith_julia = endswith("Julia")
+(::Base.Fix2{typeof(endswith),String}) (generic function with 1 method)
+
+julia> endswith_julia("Julia")
+true
+
+julia> endswith_julia("JuliaLang")
+false
+```
 """
 endswith(s) = Base.Fix2(endswith, s)
 
@@ -124,6 +135,17 @@ used to implement specialized methods.
 !!! compat "Julia 1.5"
     The single argument `startswith(prefix)` requires at least Julia 1.5.
 
+# Examples
+```jldoctest
+julia> startswith_julia = startswith("Julia")
+(::Base.Fix2{typeof(startswith),String}) (generic function with 1 method)
+
+julia> startswith_julia("Julia")
+true
+
+julia> startswith_julia("NotJulia")
+false
+```
 """
 startswith(s) = Base.Fix2(startswith, s)
 
