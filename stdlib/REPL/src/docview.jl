@@ -69,10 +69,11 @@ end
 _helpmode(line::AbstractString) = _helpmode(stdout, line)
 
 # Print vertical lines along each docstring if there are multiple docs
-function insert_hlines(io::IO, docs::Markdown.MD)
+function insert_hlines(io::IO, docs)
     if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
         return docs
     end
+    docs = docs::Markdown.MD
     v = Any[]
     for (n, doc) in enumerate(docs.content)
         push!(v, doc)

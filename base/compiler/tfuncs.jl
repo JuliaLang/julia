@@ -295,12 +295,15 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
                 end
             elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
-            elseif !isvatuple(a1) && isbitstype(fieldtype(a1, idx))
-                return Const(true)
             elseif isa(arg1, Const)
                 arg1v = (arg1::Const).val
                 if !ismutable(arg1v) || isdefined(arg1v, idx) || (isa(arg1v, DataType) && is_dt_const_field(idx))
                     return Const(isdefined(arg1v, idx))
+                end
+            elseif !isvatuple(a1)
+                fieldT = fieldtype(a1, idx)
+                if isa(fieldT, DataType) && isbitstype(fieldT)
+                    return Const(true)
                 end
             end
         end
@@ -380,7 +383,7 @@ function sizeof_tfunc(@nospecialize(x),)
         x = unwrap_unionall(t)
         if exact && isa(x, Union)
             isinline, sz, _ = uniontype_layout(x)
-            return isinline ? Const(Int(sz)) : Bottom
+            return isinline ? Const(Int(Core.sizeof(x))) : Bottom
         end
         isa(x, DataType) || return Int
         (isconcretetype(x) || isprimitivetype(x)) && return _const_sizeof(x)
@@ -822,6 +825,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     if isType(s) || !isa(s, DataType) || s.abstract
         return Any
     end
+    s = s::DataType
     if s <: Tuple && name ⊑ Symbol
         return Bottom
     end
@@ -831,6 +835,9 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         return Any
     end
+    # If no value has this type, then this statement should be unreachable.
+    # Bail quickly now.
+    s.has_concrete_subtype || return Union{}
     if s.name === _NAMEDTUPLE_NAME && !isconcretetype(s)
         if isa(name, Const) && isa(name.val, Symbol)
             if isa(s.parameters[1], Tuple)
@@ -971,7 +978,9 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
         return Bottom
     end
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
-        return Type
+        # For a generic DataType, one of the fields could still be a TypeVar
+        # which is not a Type
+        return Union{Type, TypeVar}
     end
     # fieldtype only accepts Types
     if isa(s0, Const) && !(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union))
@@ -999,11 +1008,18 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
         return tmerge(_fieldtype_tfunc(rewrap(u.a, s), exact, name),
                       _fieldtype_tfunc(rewrap(u.b, s), exact, name))
     end
-    u isa DataType || return Type
-    u.abstract && return Type
+    u isa DataType || return Union{Type, TypeVar}
+    if u.abstract
+        # Abstract types have no fields
+        exact && return Bottom
+        # Type{...} without free typevars has no subtypes, so it is actually
+        # exact, even if `exact` is false.
+        isType(u) && !has_free_typevars(u.parameters[1]) && return Bottom
+        return Union{Type, TypeVar}
+    end
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
         # TODO: better approximate inference
-        return Type
+        return Union{Type, TypeVar}
     end
     ftypes = datatype_fieldtypes(u)
     if isempty(ftypes)

@@ -492,6 +492,9 @@ static int exec_program(char *program)
         jl_load(jl_main_module, program);
     }
     JL_CATCH {
+        // TODO: It is possible for this output
+        //       to be mangled due to `jlbacktrace`
+        //       printing directly to STDERR_FILENO.
         jl_value_t *errs = jl_stderr_obj();
         JL_GC_PUSH1(&errs);
         volatile int shown_err = 0;
@@ -510,11 +513,11 @@ static int exec_program(char *program)
         }
         JL_GC_POP();
         if (!shown_err) {
-            jl_static_show(JL_STDERR, jl_current_exception());
-            jl_printf(JL_STDERR, "\n");
+            jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+            jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         }
-        jlbacktrace();
-        jl_printf(JL_STDERR, "\n");
+        jlbacktrace(); // written to STDERR_FILENO
+        jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         return 1;
     }
     return 0;
@@ -597,10 +600,10 @@ static NOINLINE int true_main(int argc, char *argv[])
                 free(line);
                 line = NULL;
             }
-            jl_printf(JL_STDERR, "\nparser error:\n");
-            jl_static_show(JL_STDERR, jl_current_exception());
-            jl_printf(JL_STDERR, "\n");
-            jlbacktrace();
+            jl_printf((JL_STREAM*)STDERR_FILENO, "\nparser error:\n");
+            jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+            jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+            jlbacktrace(); // written to STDERR_FILENO
         }
     }
     return 0;

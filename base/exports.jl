@@ -22,6 +22,8 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
+    AbstractMatch,
+    AbstractPattern,
     AbstractDict,
     BigFloat,
     BigInt,
@@ -464,6 +466,7 @@ export
 # linear algebra
     var"'", # to enable syntax a' for adjoint
     adjoint,
+    var"'ᵀ",
     transpose,
     kron,
     kron!,

@@ -110,6 +110,8 @@ let
     empty!(DEPOT_PATH)
 end
 
+empty!(Base.TOML_CACHE.d)
+Base.TOML.reinit!(Base.TOML_CACHE.p, "")
 @eval Sys begin
     BINDIR = ""
     STDLIB = ""

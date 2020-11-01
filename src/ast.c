@@ -34,7 +34,7 @@ jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *toplevel_sym; jl_sym_t *quote_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
-jl_sym_t *return_sym;
+jl_sym_t *return_sym;  jl_sym_t *lineinfo_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *globalref_sym; jl_sym_t *do_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
@@ -340,6 +340,7 @@ void jl_init_common_symbols(void)
     core_sym = jl_symbol("core");
     globalref_sym = jl_symbol("globalref");
     line_sym = jl_symbol("line");
+    lineinfo_sym = jl_symbol("lineinfo");
     jl_incomplete_sym = jl_symbol("incomplete");
     error_sym = jl_symbol("error");
     goto_sym = jl_symbol("goto");
@@ -558,6 +559,23 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             JL_GC_POP();
             return temp;
         }
+        else if (sym == lineinfo_sym && n == 5) {
+            jl_value_t *modu=NULL, *name=NULL, *file=NULL, *linenum=NULL, *inlinedat=NULL;
+            JL_GC_PUSH5(&modu, &name, &file, &linenum, &inlinedat);
+            value_t lst = e;
+            modu = scm_to_julia_(fl_ctx, car_(lst), mod);
+            lst = cdr_(lst);
+            name = scm_to_julia_(fl_ctx, car_(lst), mod);
+            lst = cdr_(lst);
+            file = scm_to_julia_(fl_ctx, car_(lst), mod);
+            lst = cdr_(lst);
+            linenum = scm_to_julia_(fl_ctx, car_(lst), mod);
+            lst = cdr_(lst);
+            inlinedat = scm_to_julia_(fl_ctx, car_(lst), mod);
+            temp = jl_new_struct(jl_lineinfonode_type, modu, name, file, linenum, inlinedat);
+            JL_GC_POP();
+            return temp;
+        }
         JL_GC_PUSH2(&ex, &temp);
         if (sym == goto_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
@@ -596,13 +614,6 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (iscons(e) && (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e)))))) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct(jl_quotenode_type, ex);
-        }
-        else if (sym == thunk_sym) {
-            ex = scm_to_julia_(fl_ctx, car_(e), mod);
-            assert(jl_is_code_info(ex));
-            jl_linenumber_to_lineinfo((jl_code_info_t*)ex, mod, (jl_value_t*)jl_symbol("top-level scope"));
-            temp = (jl_value_t*)jl_exprn(sym, 1);
-            jl_exprargset(temp, 0, ex);
         }
         if (temp) {
             JL_GC_POP();
@@ -1017,12 +1028,6 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     if (e->head == quote_sym && jl_expr_nargs(e) == 1) {
         expr = jl_call_scm_on_ast("julia-bq-macro", jl_exprarg(e, 0), inmodule);
         JL_GC_PUSH1(&expr);
-        if (macroctx) {
-            // in a macro, `quote` also implies `escape`
-            jl_expr_t *e2 = jl_exprn(escape_sym, 1);
-            jl_array_ptr_set(e2->args, 0, expr);
-            expr = (jl_value_t*)e2;
-        }
         expr = jl_expand_macros(expr, inmodule, macroctx, onelevel, world);
         JL_GC_POP();
         return expr;

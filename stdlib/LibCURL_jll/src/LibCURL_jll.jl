@@ -6,6 +6,9 @@ module LibCURL_jll
 
 using Libdl
 
+const PATH_list = String[]
+const LIBPATH_list = String[]
+
 export libcurl
 
 # These get calculated in __init__()

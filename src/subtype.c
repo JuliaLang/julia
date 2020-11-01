@@ -1518,7 +1518,8 @@ static int concrete_min(jl_value_t *t)
             return count;
         return count + concrete_min(((jl_uniontype_t*)t)->b);
     }
-    return 2; // up to infinite
+    assert(!jl_is_kind(t));
+    return 1; // a non-Type is also considered concrete
 }
 
 static jl_value_t *find_var_body(jl_value_t *t, jl_tvar_t *v)
@@ -2931,7 +2932,10 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 jl_value_t *ub=NULL, *lb=NULL;
                 JL_GC_PUSH2(&lb, &ub);
                 ub = intersect_aside(xub, yub, e, 0, xx ? xx->depth0 : 0);
-                lb = simple_join(xlb, ylb);
+                if (xlb == y)
+                    lb = ylb;
+                else
+                    lb = simple_join(xlb, ylb);
                 if (yy) {
                     if (lb != y)
                         yy->lb = lb;

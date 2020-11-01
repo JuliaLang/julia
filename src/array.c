@@ -998,6 +998,23 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
     char *originalptr = ((char*) a->data) - a->offset * a->elsize;
     if (a->flags.how == 1) {
         //this is a julia-allocated buffer that needs to be marked
+        char *typetagdata;
+        char *newtypetagdata;
+        if (isbitsunion) {
+            typetagdata = (char*)malloc_s(a->nrows);
+            memcpy(typetagdata, jl_array_typetagdata(a), a->nrows);
+        }
+        char *originaldata = (char*) a->data - a->offset * a->elsize;
+        char *newdata = (char*)jl_gc_alloc_buf(jl_get_ptls_states(), newbytes);
+        jl_gc_wb_buf(a, newdata, newbytes);
+        a->maxsize -= dec;
+        if (isbitsunion) {
+            newtypetagdata = jl_array_typetagdata(a);
+            memcpy(newtypetagdata, typetagdata, a->nrows);
+            free(typetagdata);
+        }
+        memcpy(newdata, originaldata, newbytes);
+        a->data = newdata + a->offset * elsz;
     }
     else if (a->flags.how == 2) {
         //malloc-allocated pointer this array object manages

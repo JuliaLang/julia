@@ -74,6 +74,16 @@ function gc_live_bytes()
     Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
 end
 
+"""
+    Base.jit_total_bytes()
+
+Return the total amount (in bytes) allocated by the just-in-time compiler
+for e.g. native code and data.
+"""
+function jit_total_bytes()
+    return Int(ccall(:jl_jit_total_bytes, Csize_t, ()))
+end
+
 # print elapsed time, return expression value
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]

@@ -37,8 +37,7 @@ function runtests(name, path, isolate=true; seed=nothing)
         return res_and_time_data
     catch ex
         Test.TESTSET_PRINT_ENABLE[] = old_print_setting
-        ex isa TestSetException || (ex = CapturedException(ex, catch_backtrace()))
-        # return this as a value to avoid remotecall from mangling it and discarding half of it
+        ex isa TestSetException || rethrow()
         return Any[ex]
     end
 end

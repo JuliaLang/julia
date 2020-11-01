@@ -341,6 +341,8 @@ getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
 get(io::IOContext, key, default) = get(io.dict, key, default)
 get(io::IO, key, default) = default
+keys(io::IOContext) = keys(io.dict)
+keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
 
@@ -648,8 +650,10 @@ function make_typealiases(@nospecialize(x::Type))
     aliases = SimpleVector[]
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
+    each = Any[]
     for p in uniontypes(unwrap_unionall(x))
         p isa UnionAll && push!(xenv, p)
+        push!(each, rewrap_unionall(p, x))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
@@ -682,7 +686,12 @@ function make_typealiases(@nospecialize(x::Type))
                     has_free_typevars(applied) && continue
                     applied <: x || continue # parameter matching didn't make a subtype
                     print_without_params(x) && (env = Core.svec())
-                    push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                    for typ in each # check that the alias also fully subsumes at least component of the input
+                        if typ <: applied
+                            push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                            break
+                        end
+                    end
                 end
             end
         end
@@ -1131,6 +1140,10 @@ function isidentifier(s::AbstractString)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
+is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
+
+_isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
 """
     isoperator(s::Symbol)
 
@@ -1142,7 +1155,7 @@ julia> Base.isoperator(:+), Base.isoperator(:f)
 (true, false)
 ```
 """
-isoperator(s::Union{Symbol,AbstractString}) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+isoperator(s::Union{Symbol,AbstractString}) = _isoperator(s) || ispostfixoperator(s)
 
 """
     isunaryoperator(s::Symbol)
@@ -1169,7 +1182,26 @@ julia> Base.isbinaryoperator(:-), Base.isbinaryoperator(:√), Base.isbinaryoper
 (true, false, false)
 ```
 """
-isbinaryoperator(s::Symbol) = isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s))
+function isbinaryoperator(s::Symbol)
+    return _isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s)) &&
+        s !== Symbol("'")
+end
+
+"""
+    ispostfixoperator(s::Union{Symbol,AbstractString})
+
+Return `true` if the symbol can be used as a postfix operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.ispostfixoperator(Symbol("'")), Base.ispostfixoperator(Symbol("'ᵀ")), Base.ispostfixoperator(:-)
+(true, true, false)
+```
+"""
+function ispostfixoperator(s::Union{Symbol,AbstractString})
+    s = String(s)
+    return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
+end
 
 """
     operator_precedence(s::Symbol)
@@ -1594,6 +1626,20 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         end
         head !== :row && print(io, cl)
 
+    # transpose
+    elseif (head === Symbol("'") && nargs == 1) || (
+        # ' with unicode suffix is a call expression
+        head === :call && nargs == 2 && args[1] isa Symbol &&
+        ispostfixoperator(args[1]) && args[1] !== Symbol("'")
+    )
+        op, arg1 = head === Symbol("'") ? (head, args[1]) : (args[1], args[2])
+        if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
+            show_enclosed_list(io, '(', [arg1], ", ", ')', indent, 0)
+        else
+            show_unquoted(io, arg1, indent, 0, quote_level)
+        end
+        print(io, op)
+
     # function call
     elseif head === :call && nargs >= 1
         func = args[1]
@@ -1622,7 +1668,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             end
 
         # unary operator (i.e. "!z")
-        elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
+        elseif isa(func,Symbol) && length(func_args) == 1 && func in uni_ops
             show_unquoted(io, func, indent, 0, quote_level)
             arg1 = func_args[1]
             if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
@@ -1959,17 +2005,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             parens && print(io, ")")
         end
 
-    # transpose
-    elseif head === Symbol('\'') && nargs == 1
-        if isa(args[1], Symbol)
-            show_unquoted(io, args[1], 0, 0, quote_level)
-        else
-            print(io, "(")
-            show_unquoted(io, args[1], 0, 0, quote_level)
-            print(io, ")")
-        end
-        print(io, head)
-
     # `where` syntax
     elseif head === :where && nargs > 1
         parens = 1 <= prec
@@ -2038,7 +2073,8 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
         isdefined(uw.name.module, uw.name.mt.name) &&
         ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
+        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
+        print_within_stacktrace(io, s, bold=true)
     elseif isa(ft, DataType) && ft.name === Type.body.name &&
         (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
@@ -2050,19 +2086,20 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         if html
             print(io, "($fargname::<b>", ft, "</b>)")
         else
-            print(io, "($fargname::", ft, ")")
+            print_within_stacktrace(io, "($fargname::", ft, ")", bold=true)
         end
     end
     nothing
 end
 
-function print_within_stacktrace(io, s...; color, bold=false)
+function print_within_stacktrace(io, s...; color=:normal, bold=false)
     if get(io, :backtrace, false)::Bool
         printstyled(io, s...; color, bold)
     else
         print(io, s...)
     end
 end
+
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing, argnames=nothing)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
@@ -2079,16 +2116,16 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     sig = (sig::DataType).parameters
     show_signature_function(env_io, sig[1], demangle)
     first = true
-    print_within_stacktrace(io, "(", color=:light_black)
+    print_within_stacktrace(io, "(", bold=true)
     show_argnames = argnames !== nothing && length(argnames) == length(sig)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         if show_argnames
-            print_within_stacktrace(io, argnames[i]; bold=true, color=:light_black)
+            print_within_stacktrace(io, argnames[i]; color=:light_black)
         end
         print(io, "::")
-        print_within_stacktrace(env_io, sig[i]; color=:light_black)
+        print_type_stacktrace(env_io, sig[i])
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -2096,14 +2133,25 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         for (k, t) in kwargs
             first || print(io, ", ")
             first = false
-            print_within_stacktrace(io, k; bold=true, color=:light_black)
+            print_within_stacktrace(io, k; color=:light_black)
             print(io, "::")
-            print_within_stacktrace(io, t; color=:light_black)
+            print_type_stacktrace(io, t)
         end
     end
-    print_within_stacktrace(io, ")", color=:light_black)
+    print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     nothing
+end
+
+function print_type_stacktrace(io, type; color=:normal)
+    str = sprint(show, type, context=io)
+    i = findfirst('{', str)
+    if isnothing(i) || !get(io, :backtrace, false)::Bool
+        printstyled(io, str; color=color)
+    else
+        printstyled(io, str[1:i-1]; color=color)
+        printstyled(io, str[i:end]; color=:light_black)
+    end
 end
 
 resolvebinding(@nospecialize(ex)) = ex

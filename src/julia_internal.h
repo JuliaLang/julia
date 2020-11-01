@@ -492,7 +492,6 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_value_t *name);
 
 jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world);
 jl_value_t *jl_gf_invoke(jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs);
@@ -1311,6 +1310,9 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #else
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
 #endif
+
+float __gnu_h2f_ieee(uint16_t param) JL_NOTSAFEPOINT;
+uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

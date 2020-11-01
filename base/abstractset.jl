@@ -64,10 +64,10 @@ julia> union!(a, 1:2:8);
 
 julia> a
 Set{Int64} with 5 elements:
-  7
-  4
-  3
   5
+  4
+  7
+  3
   1
 ```
 """

@@ -72,7 +72,9 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
             cat == UTF8PROC_CATEGORY_SC ||  // allow currency symbols
             // other symbols, but not arrows or replacement characters
             (cat == UTF8PROC_CATEGORY_SO && !(wc >= 0x2190 && wc <= 0x21FF) &&
-             wc != 0xfffc && wc != 0xfffd) ||
+             wc != 0xfffc && wc != 0xfffd &&
+             wc != 0x233f &&  // notslash
+             wc != 0x00a6) || // broken bar
 
             // math symbol (category Sm) whitelist
             (wc >= 0x2140 && wc <= 0x2a1c &&
@@ -152,7 +154,7 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
 #include "julia_opsuffs.h"
 
 // chars that can follow an operator (e.g. +) and be parsed as part of the operator
-int jl_op_suffix_char(uint32_t wc)
+JL_DLLEXPORT int jl_op_suffix_char(uint32_t wc)
 {
     static htable_t jl_opsuffs; // XXX: requires uv_once
     if (!jl_opsuffs.size) { // initialize hash table of suffixes

@@ -926,7 +926,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if la == 2
             ft = widenconst(argtypes[2])
             if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
-                return CallMeta(Const(ft.name.mt.kwsorter), false)
+                return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
             end
         end
         return CallMeta(Any, false)
@@ -982,17 +982,17 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(abstract_call_known(interp, <:, fargs, argtypes, sv).rt, false)
     elseif la == 2 && isa(argtypes[2], Const) && isa(argtypes[2].val, SimpleVector) && istopfunction(f, :length)
         # mark length(::SimpleVector) as @pure
-        return CallMeta(Const(length(argtypes[2].val)), false)
+        return CallMeta(Const(length(argtypes[2].val)), MethodResultPure())
     elseif la == 3 && isa(argtypes[2], Const) && isa(argtypes[3], Const) &&
             isa(argtypes[2].val, SimpleVector) && isa(argtypes[3].val, Int) && istopfunction(f, :getindex)
         # mark getindex(::SimpleVector, i::Int) as @pure
         svecval = argtypes[2].val::SimpleVector
         idx = argtypes[3].val::Int
         if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
-            return CallMeta(Const(getindex(svecval, idx)), false)
+            return CallMeta(Const(getindex(svecval, idx)), MethodResultPure())
         end
     elseif la == 2 && istopfunction(f, :typename)
-        return CallMeta(typename_static(argtypes[2]), false)
+        return CallMeta(typename_static(argtypes[2]), MethodResultPure())
     elseif max_methods > 1 && istopfunction(f, :copyto!)
         max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)

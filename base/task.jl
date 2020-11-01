@@ -49,7 +49,7 @@ function showerror(io::IO, ex::CompositeException)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
-            print(io, string("\n\n...and ", remaining, " more exception(s).\n"))
+            print(io, "\n\n...and ", remaining, " more exception", remaining > 1 ? "s" : "", ".\n")
         end
     else
         print(io, "CompositeException()\n")

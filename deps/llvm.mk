@@ -59,7 +59,12 @@ endif
 include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
+ifeq (,$(findstring rc,$(LLVM_VER)))
 LLVM_TAR_EXT:=$(LLVM_VER).src.tar.xz
+else
+LLVM_VER_SPLIT := $(subst -rc, ,$(LLVM_VER))
+LLVM_TAR_EXT:=$(word 1,$(LLVM_VER_SPLIT))rc$(word 2,$(LLVM_VER_SPLIT)).src.tar.xz
+endif
 
 ifneq ($(LLVM_VER),svn)
 LLVM_TAR:=$(SRCCACHE)/llvm-$(LLVM_TAR_EXT)
@@ -229,12 +234,7 @@ LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
 ifneq ($(LLVM_VER),svn)
-ifeq (,$(findstring rc,$(LLVM_VER)))
 LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
-else
-LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
-LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
-endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCCACHE)
@@ -489,8 +489,8 @@ $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 $(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-10-r_aarch64_prel32)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-10-r_ppc_rel)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-10-r_aarch64_prel32)) # remove for LLVM 11
+$(eval $(call LLVM_PATCH,llvm-10-r_ppc_rel)) # remove for LLVM 11
 $(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa))
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
@@ -504,7 +504,7 @@ $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
 $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485))
-#$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-11-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 $(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
@@ -513,6 +513,8 @@ $(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa))
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
 endif
+$(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-rtdyld-empty-symbol)) # FIXME(vchuravy): This should not be necessary
 endif # LLVM_VER 11.0
 
 

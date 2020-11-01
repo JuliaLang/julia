@@ -123,6 +123,16 @@ using Base.Meta
 @test isexpr(:(1+1),(:call,))
 @test isexpr(1,:call)==false
 @test isexpr(:(1+1),:call,3)
+
+let
+    fakeline = LineNumberNode(100000,"A")
+    # Interop with __LINE__
+    @test macroexpand(@__MODULE__, replace_sourceloc!(fakeline, :(@__LINE__))) == fakeline.line
+    # replace_sourceloc! should recurse:
+    @test replace_sourceloc!(fakeline, :((@a) + 1)).args[2].args[2] == fakeline
+    @test replace_sourceloc!(fakeline, :(@a @b)).args[3].args[2] == fakeline
+end
+
 ioB = IOBuffer()
 show_sexpr(ioB,:(1+1))
 

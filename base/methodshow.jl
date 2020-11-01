@@ -2,6 +2,14 @@
 
 # Method and method table pretty-printing
 
+const empty_sym = Symbol("")
+function strip_gensym(sym)
+    if sym === Symbol("#self#") || sym === Symbol("#unused#")
+        return empty_sym
+    end
+    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
+end
+
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
     t = sig.parameters[i]
     if i == nargs && isva && !isvarargtype(t)
@@ -10,13 +18,13 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
-    s = string(n)::String
-    i = findfirst(isequal('#'), s)
-    if i !== nothing
-        s = s[1:prevind(s, i)::Int]
-    end
-    if t === Any && !isempty(s)
-        return s, ""
+    n = strip_gensym(n)
+    local s
+    if n === empty_sym
+        s = ""
+    else
+        s = sprint(show_sym, n)
+        t === Any && return s, ""
     end
     if isvarargtype(t)
         v1, v2 = nothing, nothing
@@ -72,8 +80,6 @@ function arg_decl_parts(m::Method, html=false)
     end
     return tv, decls, file, line
 end
-
-const empty_sym = Symbol("")
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
@@ -186,6 +192,15 @@ function functionloc(@nospecialize(f))
     return functionloc(first(mt))
 end
 
+function sym_to_string(sym)
+    s = String(sym)
+    if endswith(s, "...")
+        return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
+    else
+        return sprint(show_sym, sym)
+    end
+end
+
 function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
@@ -195,12 +210,16 @@ function show(io::IO, m::Method)
         return
     end
     print(io, decls[1][2], "(")
-    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
-                 ", ", ", ")
+    join(
+        io,
+        String[isempty(d[2]) ? d[1] : string(d[1], "::", d[2]) for d in decls[2:end]],
+        ", ",
+        ", ",
+    )
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
         print(io, "; ")
-        join(io, kwargs, ", ", ", ")
+        join(io, map(sym_to_string, kwargs), ", ", ", ")
     end
     print(io, ")")
     show_method_params(io, tv)
@@ -341,12 +360,18 @@ function show(io::IO, ::MIME"text/html", m::Method)
         return
     end
     print(io, decls[1][2], "(")
-    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
-                      for d in decls[2:end]], ", ", ", ")
+    join(
+        io,
+        String[
+            isempty(d[2]) ? d[1] : string(d[1], "::<b>", d[2], "</b>") for d in decls[2:end]
+        ],
+        ", ",
+        ", ",
+    )
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
         print(io, "; <i>")
-        join(io, kwargs, ", ", ", ")
+        join(io, map(sym_to_string, kwargs), ", ", ", ")
         print(io, "</i>")
     end
     print(io, ")")
