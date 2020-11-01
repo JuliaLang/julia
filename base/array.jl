@@ -68,6 +68,13 @@ const Matrix{T} = Array{T,2}
     VecOrMat{T}
 
 Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref).
+
+# Examples
+```jldoctest
+julia> VecOrMat{Float64}
+Union{Array{Float64,1}, Array{Float64,2}}
+```
+
 """
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
