@@ -1452,16 +1452,49 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     end
 end
 
+# helper to be able to print non-standard expressions as `Expr(:foo)` instead of
+# `:($(Expr(:foo)))`
+mutable struct _PaddedIO <: IO
+    io::IO
+    front::String
+    tail::String
+end
+
+function write(io::_PaddedIO, x::UInt8)::Int
+    nb = write(io.io, io.front)
+    io.front = ""
+    return nb + write(io.io, x)
+end
+function unsafe_write(io::_PaddedIO, p::Ptr{UInt8}, n::UInt)::Int
+    nb = write(io.io, io.front)
+    io.front = ""
+    return nb + unsafe_write(io.io, p, n)
+end
+
+function maybe_interpolate(f, io::IO)
+    interp = !(io isa _PaddedIO && io.front == ":(")
+    if interp
+        print(io, "\$(")
+    else
+        io.front = io.tail = ""
+    end
+    f(io)
+    interp && print(io, ")")
+    nothing
+end
+
 function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
     if isa(ex.value, Symbol)
         show_unquoted_quote_expr(io, ex.value, indent, prec, 0)
     else
-        print(io, "\$(QuoteNode(")
-        # QuoteNode does not allows for interpolation, so if ex.value is an
-        # Expr it should be shown with quote_level equal to zero.
-        # Calling show(io, ex.value) like this implicitly enforce that.
-        show(io, ex.value)
-        print(io, "))")
+        maybe_interpolate(io) do io
+            print(io, "QuoteNode(")
+            # QuoteNode does not allows for interpolation, so if ex.value is an
+            # Expr it should be shown with quote_level equal to zero.
+            # Calling show(io, ex.value) like this implicitly enforce that.
+            show(io, ex.value)
+            print(io, ")")
+        end
     end
 end
 
@@ -1483,9 +1516,9 @@ function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, pre
             show_block(IOContext(io, beginsym=>false), "quote", value, indent, quote_level)
             print(io, "end")
         else
-            print(io, ":(")
-            show_unquoted(io, value, indent+2, -1, quote_level)  # +2 for `:(`
-            print(io, ")")
+            _io = _PaddedIO(io, ":(", ")")
+            show_unquoted(_io, value, indent+2, -1, quote_level)  # +2 for `:(`
+            print(_io, _io.tail)
         end
     end
 end
@@ -1565,13 +1598,15 @@ end
 const beginsym = gensym(:beginsym)
 
 function show_unquoted_expr_fallback(io::IO, ex::Expr, indent::Int, quote_level::Int)
-    print(io, "\$(Expr(")
-    show(io, ex.head)
-    for arg in ex.args
-        print(io, ", ")
-        show(io, arg)
+    maybe_interpolate(io) do io
+        print(io, "Expr(")
+        show(io, ex.head)
+        for arg in ex.args
+            print(io, ", ")
+            show(io, arg)
+        end
+        print(io, ")")
     end
-    print(io, "))")
 end
 
 # TODO: implement interpolated strings

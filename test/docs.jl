@@ -1222,7 +1222,7 @@ for fn in (:isdone,)
     global xs = @foo $fn
 end
 end
-@test M27832.xs == ":(\$(Expr(:\$, :fn)))"
+@test M27832.xs == "Expr(:\$, :fn)"
 Core.atdoc!(_last_atdoc)
 
 # issue #29432

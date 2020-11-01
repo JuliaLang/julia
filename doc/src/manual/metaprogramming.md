@@ -337,7 +337,7 @@ julia> eval(Meta.quot(Expr(:$, :(1+2))))
 3
 
 julia> eval(QuoteNode(Expr(:$, :(1+2))))
-:($(Expr(:$, :(1 + 2))))
+Expr(:$, :(1 + 2))
 ```
 The parser yields `QuoteNode`s for simple quoted items like symbols:
 ```jldoctest interp1
