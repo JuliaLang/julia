@@ -262,6 +262,12 @@
                     res = relpath(filep, startp)
                     idx += 1
                     @test res == relpath_expected_results[idx]
+                    if Sys.iswindows()
+                        @test relpath("e:$filep", "e:$startp") == relpath_expected_results[idx]
+                        @test relpath("e:$filep", "E:$startp") == relpath_expected_results[idx]
+                        @test relpath("E:$filep", "e:$startp") == relpath_expected_results[idx]
+                        @test relpath("E:$filep", "E:$startp") == relpath_expected_results[idx]
+                    end
                 end
             end
             # Additional cases
@@ -269,6 +275,20 @@
             @test_throws ArgumentError relpath(S(""), S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"))
         end
         test_relpath()
+    end
+
+    if Sys.iswindows()
+        @testset "issue #23646" begin
+            @test lowercase(relpath("E:\\a\\b", "C:\\c")) == "e:\\a\\b"
+            @test lowercase(relpath("E:\\a\\b", "c:\\c")) == "e:\\a\\b"
+            @test lowercase(relpath("e:\\a\\b", "C:\\c")) == "e:\\a\\b"
+            @test lowercase(relpath("e:\\a\\b", "c:\\c")) == "e:\\a\\b"
+
+            @test relpath("C:\\a\\b", "c:\\a\\b") == "."
+            @test relpath("c:\\a\\b", "C:\\a\\b") == "."
+            @test lowercase(relpath("C:\\a\\b", "c:\\c\\d")) == "..\\..\\a\\b"
+            @test lowercase(relpath("c:\\a\\b", "C:\\c\\d")) == "..\\..\\a\\b"
+        end
     end
 
     @testset "type stability" begin
