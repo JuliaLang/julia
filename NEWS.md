@@ -28,7 +28,7 @@ New language features
   are now interpreted as `BigInt` ([#23546]).
 * The postfix conjugate transpose operator `'` now accepts Unicode modifiers as
   suffixes, so e.g. `a'ᵀ` is parsed as `var"'ᵀ"(a)`, which can be defined by the
-  user. `a'ᵀ` parsed as `a' * ᵀ` before, so this is a minor change ([#37247]).
+  user. `a'ᵀ` parsed as `a' * ᵀ` before, so this is a minor change ([#38062]).
 * It is now possible to use varargs on the left-hand side of assignments for taking any
   number of items from the front of an iterable collection, while also collecting the rest,
   like `a, b... = [1, 2, 3]`, for example. This syntax is implemented using `Base.rest`,
