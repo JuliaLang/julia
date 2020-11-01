@@ -122,6 +122,12 @@ New library features
 Standard library changes
 ------------------------
 
+* `pkg> precompile` is now parallelized through depth-first precompilation of dependencies. Errors will only throw for
+  direct dependencies listed in the `Project.toml`.
+* `pkg> precompile` is now automatically triggered whenever Pkg changes the active manifest. Auto-precompilation will
+  remember if a package has errored within the given environment and will not retry until it changes.
+  Auto-precompilation can be gracefully interrupted with a `ctrl-c` and disabled by setting the environment variable
+  `JULIA_PKG_PRECOMPILE_AUTO=0`.
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
 * The `reverse(A; dims)` function for multidimensional `A` can now reverse multiple dimensions at once
   by passing a tuple for `dims`, and defaults to reversing all dimensions; there is also a multidimensional
@@ -153,6 +159,9 @@ Standard library changes
 * The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside. ([#37320])
+* `@time` now reports if the time presented included any compilation time, which is shown as a percentage ([#37678])
+* `@varinfo` can now report non-exported objects within modules, look recursively into submodules, and return a sorted
+  results table ([#38042])
 
 #### LinearAlgebra
 
@@ -290,5 +299,8 @@ Tooling Improvements
 [#37542]: https://github.com/JuliaLang/julia/issues/37542
 [#37583]: https://github.com/JuliaLang/julia/issues/37583
 [#37635]: https://github.com/JuliaLang/julia/issues/37635
+[#37678]: https://github.com/JuliaLang/julia/pull/37678
 [#37684]: https://github.com/JuliaLang/julia/issues/37684
 [#37829]: https://github.com/JuliaLang/julia/issues/37829
+[#38042]: https://github.com/JuliaLang/julia/issues/38042
+[#38043]: https://github.com/JuliaLang/julia/issues/38043
