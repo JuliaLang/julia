@@ -64,6 +64,7 @@ Two-dimensional dense array with elements of type `T`, often used to represent
 a mathematical matrix. Alias for [`Array{T,2}`](@ref).
 """
 const Matrix{T} = Array{T,2}
+
 """
     VecOrMat{T}
 
@@ -74,7 +75,6 @@ Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref).
 julia> VecOrMat{Float64}
 Union{Array{Float64,1}, Array{Float64,2}}
 ```
-
 """
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
