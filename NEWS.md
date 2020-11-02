@@ -83,6 +83,7 @@ Build system changes
   `./julia-installer.exe /TASKS="desktopicon,startmenu,addtopath"`, adds a desktop
   icon, a startmenu group icon, and adds Julia to system PATH.
 
+
 Library functions
 -----------------
 
@@ -159,8 +160,6 @@ Standard library changes
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside. ([#37320])
 * `@time` now reports if the time presented included any compilation time, which is shown as a percentage ([#37678])
-* `String(array)` now accepts an arbitrary `AbstractVector{UInt8}`, and takes
-   "ownership" of the array only in a few documented circumstances ([#25846]).
 * `@varinfo` can now report non-exported objects within modules, look recursively into submodules, and return a sorted
   results table ([#38042])
 
