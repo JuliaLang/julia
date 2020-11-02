@@ -98,3 +98,6 @@ using Base: notnothing
 # isnothing()
 @test !isnothing(1)
 @test isnothing(nothing)
+
+# type stability
+@test fieldtype(typeof(Some(Int)), 1) === Type{Int}

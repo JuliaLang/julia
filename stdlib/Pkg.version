@@ -1,2 +1,2 @@
-PKG_BRANCH = master
-PKG_SHA1 = eb3726d8f9c68bb91707a5c0e9809c95f1c1eee7
+PKG_BRANCH = release-1.6
+PKG_SHA1 = 9b045d5e8fdaecadac4aaaedf0ac4af13d75e162

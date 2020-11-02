@@ -43,6 +43,7 @@ Random.seed!(1)
             @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
         end
         @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
+        @test eltype(Bidiagonal([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == Float32 # promotion test
         @test isa(Bidiagonal{elty,Vector{elty}}(GenericArray(dv), ev, :U), Bidiagonal{elty,Vector{elty}})
         @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
         @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
@@ -232,6 +233,10 @@ Random.seed!(1)
             @test_throws DimensionMismatch transpose(T) \ offsizemat
             @test_throws DimensionMismatch T' \ offsizemat
 
+            if elty <: BlasReal
+                @test_throws SingularException LinearAlgebra.naivesub!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :U), rand(elty, n))
+                @test_throws SingularException LinearAlgebra.naivesub!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :L), rand(elty, n))
+            end
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
                     if atype == "Array"
@@ -375,7 +380,7 @@ Random.seed!(1)
         @test factorize(T) === T
     end
     BD = Bidiagonal(dv, ev, :U)
-    @test Matrix{Complex{Float64}}(BD) == BD
+    @test Matrix{ComplexF64}(BD) == BD
 end
 
 # Issue 10742 and similar

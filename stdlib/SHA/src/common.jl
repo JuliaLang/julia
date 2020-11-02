@@ -4,6 +4,20 @@
 
 # update! takes in variable-length data, buffering it into blocklen()-sized pieces,
 # calling transform!() when necessary to update the internal hash state.
+"""
+    update!(context, data[, datalen])
+
+Update the SHA context with the bytes in data. See also [`digest!`](@ref) for
+finalizing the hash.
+
+# Examples
+```julia-repl
+julia> ctx = SHA1_CTX()
+SHA1 hash state
+
+julia> update!(ctx, b"data to to be hashed")
+```
+"""
 function update!(context::T, data::U, datalen=length(data)) where {T<:SHA_CTX, U<:AbstractBytes}
     # We need to do all our arithmetic in the proper bitwidth
     UIntXXX = typeof(context.bytecount)
@@ -66,6 +80,27 @@ end
 
 # Clear out any saved data in the buffer, append total bitlength, and return our precious hash!
 # Note: SHA3_CTX has a more specialised method
+"""
+    digest!(context)
+
+Finalize the SHA context and return the hash as array of bytes (Array{Uint8, 1}).
+
+# Examples
+```julia-repl
+julia> ctx = SHA1_CTX()
+SHA1 hash state
+
+julia> update!(ctx, b"data to to be hashed")
+
+julia> digest!(ctx)
+20-element Array{UInt8,1}:
+ 0x83
+ 0xe4
+ ⋮
+ 0x89
+ 0xf5
+```
+"""
 function digest!(context::T) where T<:SHA_CTX
     pad_remainder!(context)
     # Store the length of the input data (in bits) at the end of the padding

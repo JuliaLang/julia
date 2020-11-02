@@ -42,8 +42,8 @@ promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float
 promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Real} = promote_type(Float64, T)
 promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number} = promote_type(promote_type(S, real(T)), T)
 
-AbstractFloat(x::AbstractIrrational) = Float64(x)
-Float16(x::AbstractIrrational) = Float16(Float32(x))
+AbstractFloat(x::AbstractIrrational) = Float64(x)::Float64
+Float16(x::AbstractIrrational) = Float16(Float32(x)::Float32)
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
 @pure function Rational{T}(x::AbstractIrrational) where T<:Integer
@@ -60,11 +60,11 @@ Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
         p += 32
     end
 end
-(::Type{Rational{BigInt}})(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))
+Rational{BigInt}(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))
 
 @pure function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
     setprecision(BigFloat, 256) do
-        T(BigFloat(x), r)
+        T(BigFloat(x)::BigFloat, r)
     end
 end
 
@@ -164,7 +164,7 @@ round(x::Irrational, r::RoundingMode) = round(float(x), r)
 	@irrational(sym, val, def)
 
 Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
-and arbitrary-precision definition in terms of `BigFloat`s given be the expression `def`.
+and arbitrary-precision definition in terms of `BigFloat`s given by the expression `def`.
 """
 macro irrational(sym, val, def)
     esym = esc(sym)

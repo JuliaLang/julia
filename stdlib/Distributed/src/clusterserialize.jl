@@ -2,7 +2,7 @@
 
 using Serialization: serialize_cycle, deserialize_cycle, writetag,
                      serialize_typename, deserialize_typename,
-                     TYPENAME_TAG, reset_state, serialize_type
+                     TYPENAME_TAG, TASK_TAG, reset_state, serialize_type
 using Serialization.__deserialized_types__
 
 import Serialization: object_number, lookup_object_number, remember_object
@@ -102,6 +102,19 @@ function serialize(s::ClusterSerializer, t::Core.TypeName)
     nothing
 end
 
+function serialize(s::ClusterSerializer, t::Task)
+    serialize_cycle(s, t) && return
+    if istaskstarted(t) && !istaskdone(t)
+        error("cannot serialize a running Task")
+    end
+    writetag(s.io, TASK_TAG)
+    serialize(s, t.code)
+    serialize(s, t.storage)
+    serialize(s, t._state)
+    serialize(s, t.result)
+    serialize(s, t._isexception)
+end
+
 function serialize(s::ClusterSerializer, g::GlobalRef)
     # Record if required and then invoke the default GlobalRef serializer.
     sym = g.name
@@ -123,7 +136,7 @@ end
 # d) is a bits type
 function syms_2b_sent(s::ClusterSerializer, identifier)
     lst = Symbol[]
-    check_syms = get(s.glbs_in_tnobj, identifier, [])
+    check_syms = get(s.glbs_in_tnobj, identifier, Symbol[])
     for sym in check_syms
         v = getfield(Main, sym)
 
@@ -229,6 +242,17 @@ function deserialize(s::ClusterSerializer, t::Type{<:CapturedException})
     end
 
     return CapturedException(capex, bt)
+end
+
+function deserialize(s::ClusterSerializer, ::Type{Task})
+    t = Task(nothing)
+    deserialize_cycle(s, t)
+    t.code = deserialize(s)
+    t.storage = deserialize(s)
+    t._state = deserialize(s)::UInt8
+    t.result = deserialize(s)
+    t._isexception = deserialize(s)
+    t
 end
 
 """

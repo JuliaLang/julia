@@ -96,10 +96,13 @@ function map_completion_text(completions)
     return map(completion_text, c), r, res
 end
 
-test_complete(s) = map_completion_text(completions(s,lastindex(s)))
-test_scomplete(s) =  map_completion_text(shell_completions(s,lastindex(s)))
-test_bslashcomplete(s) =  map_completion_text(bslash_completions(s,lastindex(s))[2])
-test_complete_context(s) =  map_completion_text(completions(s,lastindex(s),Main.CompletionFoo))
+test_complete(s) = map_completion_text(@inferred(completions(s,lastindex(s))))
+test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s,lastindex(s))))
+test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s,lastindex(s)))[2])
+test_complete_context(s) =  map_completion_text(@inferred(completions(s,lastindex(s),Main.CompletionFoo)))
+
+module M32377 end
+test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
 
 let s = ""
     c, r = test_complete(s)
@@ -109,10 +112,10 @@ let s = ""
 end
 
 let s = "using REP"
-    c, r = test_complete(s)
+    c, r = test_complete_32377(s)
     @test count(isequal("REPL"), c) == 1
     # issue #30234
-    @test !Base.isbindingresolved(Main, :tanh)
+    @test !Base.isbindingresolved(M32377, :tanh)
 end
 
 let s = "Comp"
@@ -132,7 +135,7 @@ end
 let s = "Main.CompletionFoo."
     c, r = test_complete(s)
     @test "bar" in c
-    @test r === UnitRange{Int64}(20:19)
+    @test r === 20:19
     @test s[r] == ""
 end
 
@@ -405,15 +408,14 @@ end
 
 let s = "(1, CompletionFoo.test2(`')'`,"
     c, r, res = test_complete(s)
-    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
     @test length(c) == 1
+    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
 end
 
 let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
-    @test_broken length(c) == 1
+    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
 end
 
 let s = "CompletionFoo.test3([1.,2.], 1.,"
@@ -439,8 +441,7 @@ end
 let s = "CompletionFoo.test5(broadcast((x,y)->x==y, push!(Base.split(\"\",' '),\"\",\"\"), \"\"),"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken length(c) == 1
-    @test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
 end
 
 # test partial expression expansion
@@ -595,7 +596,7 @@ end
 let c, r, res
     c, r, res = test_scomplete("\$a")
     @test c == String[]
-    @test r === UnitRange{Int64}(0:-1)
+    @test r === 0:-1
     @test res === false
 end
 
@@ -645,7 +646,7 @@ let s, c, r
         s = "/tmp/"
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r === UnitRange{Int64}(6:5)
+        @test r === 6:5
         @test s[r] == ""
     end
 
@@ -662,7 +663,7 @@ let s, c, r
         file = joinpath(path, "repl completions")
         s = "/tmp "
         c,r = test_scomplete(s)
-        @test r === UnitRange{Int64}(6:5)
+        @test r === 6:5
     end
 
     # Test completing paths with an escaped trailing space
@@ -976,7 +977,7 @@ end
 let s = ""
     c, r = test_complete_context(s)
     @test "bar" in c
-    @test r === UnitRange{Int64}(1:0)
+    @test r === 1:0
     @test s[r] == ""
 end
 

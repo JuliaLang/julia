@@ -166,7 +166,7 @@ julia> perm = [2, 4, 3, 1];
 julia> permute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  4
  3
@@ -213,7 +213,7 @@ julia> perm = [2, 4, 3, 1];
 julia> invpermute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
@@ -233,7 +233,7 @@ If `B = A[v]`, then `A == B[invperm(v)]`.
 julia> v = [2; 4; 3; 1];
 
 julia> invperm(v)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
@@ -242,14 +242,14 @@ julia> invperm(v)
 julia> A = ['a','b','c','d'];
 
 julia> B = A[v]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> B[invperm(v)]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
@@ -290,27 +290,30 @@ invperm(P::Any16) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
-    nextprod([k_1, k_2,...], n)
+    nextprod(factors::Union{Tuple,AbstractVector}, n)
 
 Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
-``p_1``, ``p_2``, etc.
+``p_1``, ``p_2``, etcetera, for factors ``k_i`` in `factors`.
 
 # Examples
 ```jldoctest
-julia> nextprod([2, 3], 105)
+julia> nextprod((2, 3), 105)
 108
 
 julia> 2^2 * 3^3
 108
 ```
+
+!!! compat "Julia 1.6"
+    The method that accepts a tuple requires Julia 1.6 or later.
 """
-function nextprod(a::Vector{Int}, x)
+function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = fill(1, k)                    # current value of each counter
-    mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
+    mx = map(a -> nextpow(a,x), a)   # maximum value of each counter
     v[1] = mx[1]                      # start at first case that is >= x
     p::widen(Int) = mx[1]             # initial value of product in this case
     best = p

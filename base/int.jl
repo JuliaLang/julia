@@ -70,6 +70,7 @@ julia> signed(UInt64)
 Int64
 ```
 """
+signed(::Type{Bool}) = Int
 signed(::Type{UInt8}) = Int8
 signed(::Type{UInt16}) = Int16
 signed(::Type{UInt32}) = Int32
@@ -368,7 +369,7 @@ julia> count_ones(7)
 3
 ```
 """
-count_ones(x::BitInteger) = ctpop_int(x) % Int
+count_ones(x::BitInteger) = (ctpop_int(x) % Int)::Int
 
 """
     leading_zeros(x::Integer) -> Integer
@@ -381,7 +382,7 @@ julia> leading_zeros(Int32(1))
 31
 ```
 """
-leading_zeros(x::BitInteger) = ctlz_int(x) % Int
+leading_zeros(x::BitInteger) = (ctlz_int(x) % Int)::Int
 
 """
     trailing_zeros(x::Integer) -> Integer
@@ -394,7 +395,7 @@ julia> trailing_zeros(2)
 1
 ```
 """
-trailing_zeros(x::BitInteger) = cttz_int(x) % Int
+trailing_zeros(x::BitInteger) = (cttz_int(x) % Int)::Int
 
 """
     count_zeros(x::Integer) -> Integer

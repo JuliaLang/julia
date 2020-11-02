@@ -111,3 +111,25 @@ end
     end
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
 end
+
+# Profile deadlocking in compilation (debuginfo registration)
+let cmd = Base.julia_cmd()
+    script = """
+        using Profile
+        f(::Val) = GC.safepoint()
+        @profile for i = 1:10^3; f(Val(i)); end
+        print(Profile.len_data())
+        """
+    p = open(`$cmd -e $script`)
+    t = Timer(120) do t
+        # should be under 10 seconds, so give it 2 minutes then report failure
+        println("KILLING BY PROFILE TEST WATCHDOG\n")
+        kill(p, Base.SIGTERM)
+        sleep(10)
+        kill(p, Base.SIGKILL)
+    end
+    s = read(p, String)
+    close(t)
+    @test success(p)
+    @test parse(Int, s) > 1000
+end

@@ -186,9 +186,9 @@ a master process to establish a connection before dying.
 
 An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
 available to Julia. If `$JULIA_NUM_THREADS` exceeds the number of available
-physical CPU cores, then the number of threads is set to the number of cores. If
+CPU threads (logical cores), then the number of threads is set to the number of CPU threads. If
 `$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
-cores cannot be determined through system calls, then the number of threads is
+threads cannot be determined through system calls, then the number of threads is
 set to `1`.
 
 !!! note
@@ -244,16 +244,6 @@ should have at the terminal.
 
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
-
-### `JULIA_STACKFRAME_LINEINFO_COLOR`
-
-The formatting `Base.stackframe_lineinfo_color()` (default: bold, `"\033[1m"`)
-that line info should have during a stack trace at the terminal.
-
-### `JULIA_STACKFRAME_FUNCTION_COLOR`
-
-The formatting `Base.stackframe_function_color()` (default: bold, `"\033[1m"`)
-that function calls should have during a stack trace at the terminal.
 
 ## Debugging and profiling
 
@@ -323,6 +313,14 @@ event listener for just-in-time (JIT) profiling.
       (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
     * [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
       in the build configuration).
+    * [Perf](https://perf.wiki.kernel.org) (`USE_PERF_JITEVENTS` set to `1`
+      in the build configuration). This integration is enabled by default.
+
+### `ENABLE_GDBLISTENER`
+
+If set to anything besides `0` enables GDB registration of Julia code on release builds.
+On debug builds of Julia this is always enabled. Recommended to use with `-g 2`.
+
 
 ### `JULIA_LLVM_ARGS`
 

@@ -7,6 +7,9 @@ Representation of a channel passing objects of type `T`.
 """
 abstract type AbstractChannel{T} end
 
+push!(c::AbstractChannel, v) = (put!(c, v); c)
+popfirst!(c::AbstractChannel) = take!(c)
+
 """
     Channel{T=Any}(size::Int=0)
 
@@ -118,7 +121,7 @@ julia> chnl = Channel{Char}(1, spawn=true) do ch
                put!(ch, c)
            end
        end
-Channel{Char}(sz_max:1,sz_curr:1)
+Channel{Char}(1) (1 item available)
 
 julia> String(collect(chnl))
 "hello world"
@@ -236,9 +239,10 @@ julia> take!(c)
 1
 
 julia> put!(c, 1);
-ERROR: TaskFailedException:
-foo
+ERROR: TaskFailedException
 Stacktrace:
+[...]
+    nested task error: foo
 [...]
 ```
 """
@@ -279,7 +283,7 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
     lock(c)
     try
         isopen(c) || return
-        if istaskfailed(t) && task_result(t) isa Exception
+        if istaskfailed(t)
             close(c, TaskFailedException(t))
             return
         end
@@ -346,8 +350,6 @@ function put_unbuffered(c::Channel, v)
     return v
 end
 
-push!(c::Channel, v) = put!(c, v)
-
 """
     fetch(c::Channel)
 
@@ -394,8 +396,6 @@ function take_buffered(c::Channel)
     end
 end
 
-popfirst!(c::Channel) = take!(c)
-
 # 0-size channel
 function take_unbuffered(c::Channel{T}) where T
     lock(c)
@@ -419,6 +419,7 @@ on a [`put!`](@ref).
 """
 isready(c::Channel) = n_avail(c) > 0
 n_avail(c::Channel) = isbuffered(c) ? length(c.data) : length(c.cond_put.waitq)
+isempty(c::Channel) = isbuffered(c) ? isempty(c.data) : isempty(c.cond_put.waitq)
 
 lock(c::Channel) = lock(c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
@@ -440,7 +441,24 @@ end
 
 eltype(::Type{Channel{T}}) where {T} = T
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
+show(io::IO, c::Channel) = print(io, typeof(c), "(", c.sz_max, ")")
+
+function show(io::IO, ::MIME"text/plain", c::Channel)
+    show(io, c)
+    if !(get(io, :compact, false)::Bool)
+        if !isopen(c)
+            print(io, " (closed)")
+        else
+            n = n_avail(c)
+            if n == 0
+                print(io, " (empty)")
+            else
+                s = n == 1 ? "" : "s"
+                print(io, " (", n_avail(c), " item$s available)")
+            end
+        end
+    end
+end
 
 function iterate(c::Channel, state=nothing)
     try

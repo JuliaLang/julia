@@ -292,6 +292,48 @@ end
     end
 end
 
+@testset "muladd" begin
+    A23 = reshape(1:6, 2,3)
+    B34 = reshape(1:12, 3,4) .+ im
+    u2 = [10,20]
+    v3 = [3,5,7] .+ im
+    w4 = [11,13,17,19im]
+
+    @test muladd(A23, B34, 100) == A23 * B34 .+ 100
+    @test muladd(A23, B34, u2) == A23 * B34 .+ u2
+    @test muladd(A23, B34, w4') == A23 * B34 .+ w4'
+    @test_throws DimensionMismatch muladd(B34, A23, 1)
+    @test_throws DimensionMismatch muladd(A23, B34, ones(2,4,1))
+
+    @test muladd(A23, v3, 100) == A23 * v3 .+ 100
+    @test muladd(A23, v3, u2) == A23 * v3 .+ u2
+    @test muladd(A23, v3, im) isa Vector{Complex{Int}}
+    @test_throws DimensionMismatch muladd(A23, v3, ones(2,2))
+
+    @test muladd(v3', B34, 0) isa Adjoint
+    @test muladd(v3', B34, 2im) == v3' * B34 .+ 2im
+    @test muladd(v3', B34, w4') == v3' * B34 .+ w4'
+    @test_throws DimensionMismatch muladd(v3', B34, ones(1,4))
+
+    @test muladd(u2, v3', 0) isa Matrix
+    @test muladd(u2, v3', 99) == u2 * v3' .+ 99
+    @test muladd(u2, v3', A23) == u2 * v3' .+ A23
+    @test_throws DimensionMismatch muladd(u2, v3', ones(2,3,4))
+
+    @test muladd(u2', u2, 0) isa Number
+    @test muladd(v3', v3, im) == dot(v3,v3) + im
+    @test_throws DimensionMismatch muladd(v3', v3, [1])
+
+    vofm = [rand(1:9,2,2) for _ in 1:3]
+    Mofm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
+
+    @test muladd(vofm', vofm, vofm[1]) == vofm' * vofm .+ vofm[1] # inner
+    @test muladd(vofm, vofm', Mofm) == vofm * vofm' .+ Mofm       # outer
+    @test muladd(vofm', Mofm, vofm') == vofm' * Mofm .+ vofm'     # bra-mat
+    @test muladd(Mofm, Mofm, vofm) == Mofm * Mofm .+ vofm         # mat-mat
+    @test_broken muladd(Mofm, vofm, vofm) == Mofm * vofm .+ vofm  # mat-vec
+end
+
 # issue #6450
 @test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
 

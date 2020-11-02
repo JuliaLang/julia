@@ -193,6 +193,7 @@ end
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
     @test x.hi/2 === PhysQuantity{1}(2.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
+    @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -819,7 +820,9 @@ end
                        0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),map(Float32,LinRange(0.0, 1.0, 11)),
                        1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
                        range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20)),
-                       3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0)]
+                       3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0),
+                       Base.OneTo(1), 1:1, 1:-3:1, 1//1:1//3:1//1, range(1.0, step=2.5, length=1),
+                       LinRange(1,1,1), LinRange(1,1,2)]
     for r in Rs
         local r
         ar = Vector(r)
@@ -1005,8 +1008,10 @@ end
     @test LinRange(0,3,4)/3 == LinRange(0,1,4)
     @test broadcast(-, 2, LinRange(0,3,4)) == LinRange(2,-1,4)
     @test broadcast(+, 2, LinRange(0,3,4)) == LinRange(2,5,4)
-    @test -LinRange(0,3,4) == LinRange(0,-3,4)
-    @test reverse(LinRange(0,3,4)) == LinRange(3,0,4)
+    @test -LinRange{Int}(0,3,4) === LinRange{Int}(0,-3,4)
+    @test -LinRange{Float64}(0.,3.,4) === LinRange{Float64}(-0.,-3.,4)
+    @test reverse(LinRange{Int}(0,3,4)) === LinRange{Int}(3,0,4)
+    @test reverse(LinRange{Float64}(0.,3.,4)) === LinRange{Float64}(3.,0.,4)
 end
 @testset "Issue #11245" begin
     io = IOBuffer()
@@ -1207,6 +1212,31 @@ end
     @test convert(Array{Float64,1}, r) == a
 end
 
+@testset "extrema" begin
+    @test_throws ArgumentError minimum(1:2:-1)
+    @test_throws ArgumentError argmin(Base.OneTo(-1))
+    @test_throws ArgumentError maximum(Base.OneTo(-1))
+    @test_throws ArgumentError argmax(1:-1)
+
+    for (r, imin, imax) in [
+            (Base.OneTo(5), 1, 5),
+            (1:10, 1, 10),
+            (10:-1:0, 11, 1),
+            (range(10, stop=20, length=5), 1, 5),
+            (range(10.3, step=-2, length=7), 7, 1),
+           ]
+        @test minimum(r) === r[imin]
+        @test maximum(r) === r[imax]
+        @test imin === argmin(r)
+        @test imax === argmax(r)
+        @test extrema(r) === (r[imin], r[imax])
+    end
+
+    r = 1f8-10:1f8
+    @test_broken argmin(f) == argmin(collect(r))
+    @test_broken argmax(f) == argmax(collect(r))
+end
+
 @testset "OneTo" begin
     let r = Base.OneTo(-5)
         @test isempty(r)
@@ -1222,6 +1252,8 @@ end
         @test last(r) == 3
         @test minimum(r) == 1
         @test maximum(r) == 3
+        @test argmin(r) == 1
+        @test argmax(r) == 3
         @test r[2] == 2
         @test r[2:3] === 2:3
         @test_throws BoundsError r[4]
@@ -1607,8 +1639,33 @@ end
     @test collect(r) == ['a','c','e','g']
 end
 
+@testset "diff of ranges, #36116" begin
+    for r in (0:2, 0:1:2, 0.0:1.0:2.0, LinRange(0,2,3))
+        @test diff(r) == diff(collect(r)) == fill(1, 2)
+        @test_throws ArgumentError diff(r, dims=2)
+    end
+    for r in (0:2:5, 0.1:0.1:2.0, LinRange(0,2,33))
+        @test diff(r) == diff(collect(r)) == [r[i+1] - r[i] for i in 1:length(r)-1]
+    end
+end
+
 @testset "Return type of indexing with ranges" begin
     for T = (Base.OneTo{Int}, UnitRange{Int}, StepRange{Int,Int}, StepRangeLen{Int}, LinRange{Int})
         @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
     end
+end
+
+@testset "Type-stable intersect (#32410)" begin
+    for T = (StepRange{Int,Int}, StepRange{BigInt,Int}, StepRange{BigInt,BigInt})
+        @test @inferred(intersect(T(1:2:5), 1:5)) == 1:2:5
+        @test @inferred(intersect(1:5, T(1:2:5))) == 1:2:5
+        @test @inferred(intersect(T(5:-2:1), 1:5)) == 5:-2:1
+        @test @inferred(intersect(1:5, T(5:-2:1))) == 1:2:5
+        @test isempty(@inferred(intersect(T(5:2:3), 1:5)))
+        @test isempty(@inferred(intersect(1:5, T(5:2:3))))
+    end
+    @test @inferred(intersect(1:2:5, 1//1:1:5//1)) == 1:2:5
+    @test @inferred(intersect(1//1:1:5//1, 1:2:5)) == 1:2:5
+    @test @inferred(intersect(big(1):big(5), 3)) == 3:3
+    @test @inferred(intersect(3, big(1):big(5))) == 3:3
 end

@@ -353,14 +353,12 @@ end
     @test istaskdone(t)
     @test fetch(t)
     @test run[] == 3
-    @test fetch(errstream) == """
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        """
+    output = fetch(errstream)
+    @test 3 == length(findall(
+        """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
-    t.state = :invalid
+    t._state = 66
     newstderr = redirect_stderr()
     try
         errstream = @async read(newstderr[1], String)
@@ -390,6 +388,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
         @test !isopen(t)
@@ -402,6 +401,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
         @test !isopen(t)
@@ -468,6 +468,45 @@ end
     @test_throws InvalidStateException Base.check_channel_state(c)
 end
 
+# PR #36641
+# Ensure that `isempty()` does not mutate a Channel's state:
+@testset "isempty(::Channel) mutation" begin
+    function isempty_timeout(c::Channel)
+        inner_c = Channel{Union{Bool,Nothing}}()
+        @async put!(inner_c, isempty(c))
+        @async begin
+            sleep(0.01)
+            if isopen(inner_c)
+                put!(inner_c, nothing)
+            end
+        end
+        result = take!(inner_c)
+        if result === nothing
+            error("isempty() timed out!")
+        end
+        return result
+    end
+    # First, with a non-buffered channel
+    c = Channel()
+    @test isempty_timeout(c)
+    t_put = @async put!(c, 1)
+    @test !isempty_timeout(c)
+    # check a second time to ensure `isempty(c)` didn't just consume the element.
+    @test !isempty_timeout(c)
+    @test take!(c) == 1
+    @test isempty_timeout(c)
+    wait(t_put)
+
+    # Next, with a buffered channel:
+    c = Channel(2)
+    @test isempty_timeout(c)
+    t_put = put!(c, 1)
+    @test !isempty_timeout(c)
+    @test !isempty_timeout(c)
+    @test take!(c) == 1
+    @test isempty_timeout(c)
+end
+
 # issue #12473
 # make sure 1-shot timers work
 let a = []
@@ -498,4 +537,21 @@ end
 let t = @async nothing
     wait(t)
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
+end
+
+@testset "push!(c, v) -> c" begin
+    c = Channel(Inf)
+    @test push!(c, nothing) === c
+end
+
+# Channel `show`
+let c = Channel(3)
+    @test repr(c) == "Channel{Any}(3)"
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (empty)"
+    put!(c, 0)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (1 item available)"
+    put!(c, 1)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (2 items available)"
+    close(c)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (closed)"
 end

@@ -67,9 +67,10 @@ try
               include_dependency("foo.jl")
               include_dependency("foo.jl")
               module Bar
-                  @doc "bar function" bar(x) = x + 2
                   include_dependency("bar.jl")
               end
+              @doc "Bar module" Bar # this needs to define the META dictionary via eval
+              @eval Bar @doc "bar function" bar(x) = x + 2
 
               # test for creation of some reasonably complicated type
               struct MyType{T} end
@@ -171,6 +172,10 @@ try
               const layout2 = Any[Ptr{Int8}(0), Ptr{Int16}(1), Ptr{Int32}(-1)]
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
 
+              # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
+              call_bottom() = show(stdout::IO, Union{})
+              Core.Compiler.return_type(call_bottom, ())
+
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
           end
@@ -223,11 +228,13 @@ try
 
     @eval begin function ccallable_test()
         Base.llvmcall(
-        (""" declare i32 @f35014(i32)""",
-         """
-         %1 = call i32 @f35014(i32 3)
-         ret i32 %1
-         """), Cint, Tuple{})
+        ("""declare i32 @f35014(i32)
+            define i32 @entry() {
+            0:
+                %1 = call i32 @f35014(i32 3)
+                ret i32 %1
+            }""", "entry"
+        ), Cint, Tuple{})
     end
     @test ccallable_test() == 4
     end
@@ -256,11 +263,12 @@ try
         # issue #12284:
         @test string(Base.Docs.doc(Foo.foo)) == "foo function\n"
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
+        @test string(Base.Docs.doc(Foo.Bar)) == "Bar module\n"
 
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
-        discard_module = mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3])
+        discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) ]
-        @test map(x -> x[2], deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
+        @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
                             Base.PkgId(Foo) => Base.PkgId(Test),
@@ -282,17 +290,16 @@ try
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
+                [:Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
                  :Future, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, ]),
-                # Plus precompilation module generated at build time
-                let id = Base.PkgId("__PackagePrecompilationStatementModule")
-                    Dict(id => Base.module_build_id(Base.root_module(id)))
-                end
+                 :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,
+                 :ArgTools, :Tar,]),
            )
         @test discard_module.(deps) == deps1
+        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
+        @test map(x -> x.filename, deps) == [Foo_file]
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
         @test sin(0x01, 0x4000, 0x30031234) == 52
@@ -333,6 +340,55 @@ try
         @test pointer_from_objref(PV) === pointer_from_objref(ft(ft(PV)[1].parameters[1])[1])
     end
 
+    Nest_module = :Nest4b3a94a1a081a8cb
+    Nest_file = joinpath(dir, "$Nest_module.jl")
+    NestInner_file = joinpath(dir, "$(Nest_module)Inner.jl")
+    NestInner2_file = joinpath(dir, "$(Nest_module)Inner2.jl")
+    write(Nest_file,
+        """
+        module $Nest_module
+        include("$(escape_string(NestInner_file))")
+        end
+        """)
+    write(NestInner_file,
+        """
+        module NestInner
+        include("$(escape_string(NestInner2_file))")
+        end
+        """)
+    write(NestInner2_file,
+        """
+        f() = 22
+        """)
+    Nest = Base.require(Main, Nest_module)
+    cachefile = joinpath(cachedir, "$Nest_module.ji")
+    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    @test last(deps).modpath == ["NestInner"]
+
+    UsesB_module = :UsesB4b3a94a1a081a8cb
+    B_module     = :UsesB4b3a94a1a081a8cb_B
+    UsesB_file = joinpath(dir, "$UsesB_module.jl")
+    B_file = joinpath(dir, "$(B_module).jl")
+    write(UsesB_file,
+        """
+        module $UsesB_module
+        using $B_module
+        end
+        """)
+    write(B_file,
+        """
+        module $B_module
+        export bfunc
+        bfunc() = 33
+        end
+        """)
+    UsesB = Base.require(Main, UsesB_module)
+    cachefile = joinpath(cachedir, "$UsesB_module.ji")
+    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    id1, id2 = only(requires)
+    @test Base.pkgorigins[id1].cachepath == cachefile
+    @test Base.pkgorigins[id2].cachepath == joinpath(cachedir, "$B_module.ji")
+
     Baz_file = joinpath(dir, "Baz.jl")
     write(Baz_file,
           """
@@ -363,7 +419,8 @@ try
           """)
 
     cachefile = Base.compilecache(Base.PkgId("FooBar"))
-    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"))
+    empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
+    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)
@@ -403,7 +460,7 @@ try
           error("break me")
           end
           """)
-    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn "LoadError: break me\nStacktrace:\n [1] error" try
             Base.require(Main, :FooBar2)
             error("the \"break me\" test failed")
         catch exc

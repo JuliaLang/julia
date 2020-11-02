@@ -65,7 +65,7 @@ function alignment(io::IO, X::AbstractVecOrMat,
         l = r = 0
         for i in rows # plumb down and see what largest element sizes are
             if isassigned(X,i,j)
-                aij = alignment(io, X[i,j])
+                aij = alignment(io, X[i,j])::Tuple{Int,Int}
             else
                 aij = undef_ref_alignment
             end
@@ -100,7 +100,7 @@ function print_matrix_row(io::IO,
         k > length(A) && break
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
-            a = alignment(io, x)
+            a = alignment(io, x)::Tuple{Int,Int}
 
             # First try 3-arg show
             sx = sprint(show, "text/plain", x, context=io, sizehint=0)
@@ -158,7 +158,7 @@ string post (printed at the end of the last row of the matrix).
 Also options to use different ellipsis characters hdots, vdots, ddots.
 These are repeated every hmod or vmod elements.
 """
-function print_matrix(io::IO, X::AbstractVecOrMat,
+function print_matrix(io::IO, @nospecialize(X::AbstractVecOrMat),
                       pre::AbstractString = " ",  # pre-matrix string
                       sep::AbstractString = "  ", # separator between elements
                       post::AbstractString = "",  # post-matrix string
@@ -166,18 +166,19 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    if !get(io, :limit, false)
+    hmod, vmod = Int(hmod)::Int, Int(vmod)::Int
+    if !(get(io, :limit, false)::Bool)
         screenheight = screenwidth = typemax(Int)
     else
-        sz = displaysize(io)
+        sz = displaysize(io)::Tuple{Int,Int}
         screenheight, screenwidth = sz[1] - 4, sz[2]
     end
-    screenwidth -= length(pre) + length(post)
-    presp = repeat(" ", length(pre))  # indent each row to match pre string
+    screenwidth -= length(pre)::Int + length(post)::Int
+    presp = repeat(" ", length(pre)::Int)  # indent each row to match pre string
     postsp = ""
     @assert textwidth(hdots) == textwidth(ddots)
-    sepsize = length(sep)
-    rowsA, colsA = UnitRange(axes(X,1)), UnitRange(axes(X,2))
+    sepsize = length(sep)::Int
+    rowsA, colsA = UnitRange{Int}(axes(X,1)), UnitRange{Int}(axes(X,2))
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
@@ -204,14 +205,14 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 if i != last(rowsA); println(io); end
             end
         else # rows fit down screen but cols don't, so need horizontal ellipsis
-            c = div(screenwidth-length(hdots)+1,2)+1  # what goes to right of ellipsis
+            c = div(screenwidth-length(hdots)::Int+1,2)+1  # what goes to right of ellipsis
             Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize)) # alignments for right
-            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
+            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)::Int
             Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize) # alignments for left of ellipsis
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
-                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
+                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)::Int))
                 print_matrix_row(io, X, Ralign, i, (n - length(Ralign)) .+ colsA, sep)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != last(rowsA); println(io); end
@@ -231,15 +232,15 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 end
             end
         else # neither rows nor cols fit, so use all 3 kinds of dots
-            c = div(screenwidth-length(hdots)+1,2)+1
+            c = div(screenwidth-length(hdots)::Int+1,2)+1
             Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize))
-            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
+            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)::Int
             Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize)
             r = mod((length(Ralign)-n+1),vmod) # where to put dots on right half
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
-                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
+                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)::Int))
                 print_matrix_row(io, X,Ralign,i,(n-length(Ralign)).+colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
@@ -423,7 +424,10 @@ _show_nonempty(::IO, ::AbstractVector, ::String) =
 _show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String) = print_array(io, X)
 
 # NOTE: it's not clear how this method could use the :typeinfo attribute
-_show_empty(io::IO, X::Array{T}) where {T} = print(io, "Array{", T, "}(undef,", join(size(X),','), ')')
+function _show_empty(io::IO, X::Array)
+    show(io, typeof(X))
+    print(io, "(undef, ", join(size(X),", "), ')')
+end
 _show_empty(io, X::AbstractArray) = summary(io, X)
 
 # typeinfo aware (necessarily)
@@ -446,7 +450,7 @@ function show_zero_dim(io::IO, X::AbstractArray{T, 0}) where T
         print(io, "fill(")
         show(io, X[])
     else
-        print(io, "Array{", T, ",0}(")
+        print(io, "Array{", T, ", 0}(")
         show(io, undef)
     end
     print(io, ")")
@@ -516,9 +520,9 @@ function typeinfo_prefix(io::IO, X)
 
     if X isa AbstractDict
         if eltype_X == eltype_ctx
-            string(typeof(X).name), false
+            sprint(show_type_name, typeof(X).name), false
         elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
-            string(typeof(X).name), true
+            sprint(show_type_name, typeof(X).name), true
         else
             string(typeof(X)), false
         end
@@ -529,7 +533,7 @@ function typeinfo_prefix(io::IO, X)
         elseif !isempty(X) && typeinfo_implicit(eltype_X)
             "", true
         elseif print_without_params(eltype_X)
-            string(unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
+            sprint(show_type_name, unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
         else
             string(eltype_X), false
         end

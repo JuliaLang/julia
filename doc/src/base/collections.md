@@ -138,6 +138,7 @@ Base.filter!
 Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
+Base.rest
 ```
 
 ## Indexable Collections
@@ -269,6 +270,7 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
+Base.popat!
 Base.pushfirst!
 Base.popfirst!
 Base.insert!

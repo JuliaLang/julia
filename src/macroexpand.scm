@@ -210,7 +210,7 @@
         ((atom? v) '())
         (else
          (case (car v)
-           ((... kw |::|) (try-arg-name (cadr v)))
+           ((... kw |::| =) (try-arg-name (cadr v)))
            ((escape) (list v))
            ((hygienic-scope) (try-arg-name (cadr v)))
            ((meta)  ;; allow certain per-argument annotations
@@ -275,7 +275,18 @@
                     ,@(map (lambda (x)
                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
                            (cddr e))))
+    ((tuple) `(tuple ,@(map (lambda (x)
+                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
+                            (cdr e))))
     (else (other e))))
+
+;; given the LHS of e.g. `x::Int -> y`, wrap the signature in `tuple` to normalize
+(define (tuple-wrap-arrow-sig e)
+  (cond ((atom? e)             `(tuple ,e))
+        ((eq? (car e) 'where)  `(where ,(tuple-wrap-arrow-arglist (cadr e)) ,@(cddr e)))
+        ((eq? (car e) 'tuple)  e)
+        ((eq? (car e) 'escape) `(escape ,(tuple-wrap-arrow-sig (cadr e))))
+        (else                  `(tuple ,e))))
 
 (define (new-expansion-env-for x env (outermost #f))
   (let ((introduced (pattern-expand1 vars-introduced-by-patterns x)))
@@ -366,6 +377,10 @@
                                       x)))
                            (resolve-expansion-vars- x env m parent-scope #f)))
                        (cdr e))))
+
+           ((->)
+            `(-> ,(resolve-in-function-lhs (tuple-wrap-arrow-sig (cadr e)) env m parent-scope inarg)
+                 ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
 
            ((= function)
             (if (and (pair? (cadr e)) (function-def? e))

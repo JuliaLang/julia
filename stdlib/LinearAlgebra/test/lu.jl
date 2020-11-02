@@ -210,6 +210,15 @@ dimg  = randn(n)/2
             @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
+
+    @testset "Factorization of symtridiagonal dense matrix with zero ldlt-pivot (#38026)" begin
+        A = [0.0 -1.0 0.0 0.0
+            -1.0 0.0 0.0 0.0
+            0.0 0.0 0.0 -1.0
+            0.0 0.0 -1.0 0.0]
+        F = factorize(A)
+        @test all((!isnan).(Matrix(F)))
+    end
 end
 
 @testset "Singular matrices" for T in (Float64, ComplexF64)
@@ -284,15 +293,15 @@ end
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64,Array{Float64,2}}
+LinearAlgebra.LU{Float64, Matrix{Float64}}
 L factor:
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0
 U factor:
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
@@ -360,4 +369,17 @@ end
     end
 end
 
+@testset "transpose(A) / lu(B)' should not overwrite A (#36657)" begin
+    for elty in (Float16, Float64, ComplexF64)
+        A = randn(elty, 5, 5)
+        B = randn(elty, 5, 5)
+        C = copy(A)
+        a = randn(elty, 5)
+        c = copy(a)
+        @test transpose(A) / lu(B)' ≈ transpose(A) / B'
+        @test transpose(a) / lu(B)' ≈ transpose(a) / B'
+        @test A == C
+        @test a == c
+    end
+end
 end # module TestLU
