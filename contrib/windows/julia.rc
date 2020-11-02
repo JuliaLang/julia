@@ -18,7 +18,7 @@ BEGIN
       VALUE "FileDescription", "Julia Programming Language"
       VALUE "FileVersion", JLVER_STR
       VALUE "InternalName", "julia"
-      VALUE "LegalCopyright", "MIT Licensed"
+      VALUE "LegalCopyright", "(c) 2009-2019 Julia Language"
       VALUE "OriginalFilename", "julia.exe"
       VALUE "ProductName", "Julia"
       VALUE "ProductVersion", JLVER_STR

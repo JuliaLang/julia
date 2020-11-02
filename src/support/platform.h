@@ -16,17 +16,19 @@
  *          _COMPILER_GCC_
  *          _COMPILER_INTEL_
  *          _COMPILER_MICROSOFT_
- *          _COMPILER_MINGW_
  *      OS:
  *          _OS_FREEBSD_
  *          _OS_LINUX_
  *          _OS_WINDOWS_
  *          _OS_DARWIN_
+ *          _OS_EMSCRIPTEN_
  *
  *      CPU/Architecture:
  *          _CPU_X86_
  *          _CPU_X86_64_
+ *          _CPU_AARCH64_
  *          _CPU_ARM_
+ *          _CPU_WASM_
  */
 
 /*******************************************************************************
@@ -34,25 +36,14 @@
 *******************************************************************************/
 
 /*
- * Notes:
- *
- *  1. Checking for Intel's compiler should be done before checking for
+ * Note: Checking for Intel's compiler should be done before checking for
  * Microsoft's. On Windows Intel's compiler also defines _MSC_VER as the
- * acknoledgement of the fact that it is integrated with Visual Studio.
- *
- *  2. Checking for MinGW should be done before checking for GCC as MinGW
- * pretends to be GCC.
+ * acknowledgement of the fact that it is integrated with Visual Studio.
  */
 #if defined(__clang__)
 #define _COMPILER_CLANG_
-// Clang can also be used as a MinGW compiler
-#if defined(__MINGW32__)
-#define _COMPILER_MINGW_
-#endif
 #elif defined(__INTEL_COMPILER) || defined(__ICC)
 #define _COMPILER_INTEL_
-#elif defined(__MINGW32__)
-#define _COMPILER_MINGW_
 #elif defined(_MSC_VER)
 #define _COMPILER_MICROSOFT_
 #elif defined(__GNUC__)
@@ -71,6 +62,8 @@
 #define _OS_WINDOWS_
 #elif defined(__APPLE__) && defined(__MACH__)
 #define _OS_DARWIN_
+#elif defined(__EMSCRIPTEN__)
+#define _OS_EMSCRIPTEN_
 #endif
 
 /*******************************************************************************
@@ -89,6 +82,8 @@
 #define _CPU_PPC64_
 #elif defined(_ARCH_PPC)
 #define _CPU_PPC_
+#elif defined(__wasm__)
+#define _CPU_WASM_
 #endif
 
 #if defined(_CPU_X86_64_)

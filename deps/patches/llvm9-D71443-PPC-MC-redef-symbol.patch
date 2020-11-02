@@ -1,0 +1,47 @@
+From 5cd52dbfa9c60cfd12676924bed97701ee9bc4ef Mon Sep 17 00:00:00 2001
+From: Fangrui Song <maskray@google.com>
+Date: Thu, 12 Dec 2019 16:18:57 -0800
+Subject: [PATCH] [MC][PowerPC] Fix a crash when redefining a symbol after .set
+
+Fix PR44284. This is probably not valid assembly but we should not crash.
+
+Reviewed By: luporl, #powerpc, steven.zhang
+
+Differential Revision: https://reviews.llvm.org/D71443
+
+(cherry picked from commit f99eedeb72644671cd584f48e4c136d47f6b0020)
+---
+ llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp | 3 ++-
+ llvm/test/MC/PowerPC/ppc64-localentry-symbols.s          | 5 +++++
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
+index 90c3c8d20ed..71f926c265e 100644
+--- llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
++++ llvm/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
+@@ -196,7 +196,8 @@ public:
+ 
+   void finish() override {
+     for (auto *Sym : UpdateOther)
+-      copyLocalEntry(Sym, Sym->getVariableValue());
++      if (Sym->isVariable())
++        copyLocalEntry(Sym, Sym->getVariableValue());
+   }
+ 
+ private:
+diff --git llvm/test/MC/PowerPC/ppc64-localentry-symbols.s llvm/test/MC/PowerPC/ppc64-localentry-symbols.s
+index f1d5c5d0ab1..a663af57ad4 100644
+--- llvm/test/MC/PowerPC/ppc64-localentry-symbols.s
++++ llvm/test/MC/PowerPC/ppc64-localentry-symbols.s
+@@ -32,3 +32,8 @@ func:
+   nop
+   nop
+   .localentry func, 8
++
++## PR44284 Don't crash if err is redefined after .set
++.set err, _err
++.globl err
++err:
+-- 
+2.26.0
+

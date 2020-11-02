@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Markdown
+using Test, Markdown
 import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: show
 
@@ -85,6 +85,8 @@ let text =
 
         And *another* paragraph.
 
+    \tAnd a third paragraph indented with a *tab*.
+
     This isn't part of the footnote.
     """,
     md = Markdown.parse(text)
@@ -97,7 +99,7 @@ let text =
     @test md.content[2].id == "1"
     @test md.content[3].id == "note"
 
-    @test length(md.content[3].text) == 4
+    @test length(md.content[3].text) == 5
 
     let expected =
             """
@@ -115,6 +117,8 @@ let text =
                 ```
 
                 And *another* paragraph.
+
+                And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -138,22 +142,24 @@ let text =
 
                And *another* paragraph.
 
+               And a third paragraph indented with a *tab*.
+
 
             This isn't part of the footnote.
             """
         @test Markdown.rst(md) == expected
     end
     let html = Markdown.html(md)
-        @test contains(html, ",<a href=\"#footnote-1\" class=\"footnote\">[1]</a>")
-        @test contains(html, ".<a href=\"#footnote-note\" class=\"footnote\">[note]</a>")
-        @test contains(html, "<div class=\"footnote\" id=\"footnote-1\"><p class=\"footnote-title\">1</p>")
-        @test contains(html, "<div class=\"footnote\" id=\"footnote-note\"><p class=\"footnote-title\">note</p>")
+        @test occursin(",<a href=\"#footnote-1\" class=\"footnote\">[1]</a>", html)
+        @test occursin(".<a href=\"#footnote-note\" class=\"footnote\">[note]</a>", html)
+        @test occursin("<div class=\"footnote\" id=\"footnote-1\"><p class=\"footnote-title\">1</p>", html)
+        @test occursin("<div class=\"footnote\" id=\"footnote-note\"><p class=\"footnote-title\">note</p>", html)
     end
     let latex = Markdown.latex(md)
-        @test contains(latex, ",\\footnotemark[1]")
-        @test contains(latex, ".\\footnotemark[note]")
-        @test contains(latex, "\n\\footnotetext[1]{Footnote text for")
-        @test contains(latex, "\n\\footnotetext[note]{A longer footnote:\n")
+        @test occursin(",\\footnotemark[1]", latex)
+        @test occursin(".\\footnotemark[note]", latex)
+        @test occursin("\n\\footnotetext[1]{Footnote text for", latex)
+        @test occursin("\n\\footnotetext[note]{A longer footnote:\n", latex)
     end
 end
 
@@ -226,11 +232,18 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 # Terminal (markdown) output
 
 # multiple whitespace is ignored
-@test sprint(term, md"a  b") == "  a b\n"
-@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)\n"
-@test sprint(term, md"[x](@ref)") == "  x\n"
-@test sprint(term, md"[x](@ref something)") == "  x\n"
-@test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)\n"
+@test sprint(term, md"a  b") == "  a b"
+@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)"
+@test sprint(term, md"[x](@ref)") == "  x"
+@test sprint(term, md"[x](@ref something)") == "  x"
+@test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
+
+# math (LaTeX)
+@test sprint(term, md"""
+```math
+A = Q R
+```
+""") == "  A = Q R"
 
 # enumeration is normalized
 let doc = Markdown.parse(
@@ -239,10 +252,25 @@ let doc = Markdown.parse(
         3. b
         """
     )
-    @test contains(sprint(term, doc), "1. ")
-    @test contains(sprint(term, doc), "2. ")
-    @test !contains(sprint(term, doc), "3. ")
+    @test occursin("1. ", sprint(term, doc))
+    @test occursin("2. ", sprint(term, doc))
+    @test !occursin("3. ", sprint(term, doc))
 end
+
+# Testing margin when printing Tables to the terminal.
+@test sprint(term, md"""
+| R |
+|---|
+| L |
+""") == "  R\n  –\n  L"
+
+@test sprint(term, md"""
+!!! note "Tables in admonitions"
+
+    | R |
+    |---|
+    | L |
+""") == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
 
 # HTML output
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
@@ -312,7 +340,7 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n      \n    •    list2\n      \n"
+        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n\n    •    list2"
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -427,20 +455,20 @@ end
 
 ref(x) = Reference(x)
 
-ref(mean)
+ref(sum)
 
 show(io::IO, m::MIME"text/plain", r::Reference) =
     print(io, "$(r.ref) (see Julia docs)")
 
-mean_ref = md"Behaves like $(ref(mean))"
-@test plain(mean_ref) == "Behaves like mean (see Julia docs)\n"
-@test html(mean_ref) == "<p>Behaves like mean &#40;see Julia docs&#41;</p>\n"
+sum_ref = md"Behaves like $(ref(sum))"
+@test plain(sum_ref) == "Behaves like sum (see Julia docs)\n"
+@test html(sum_ref) == "<p>Behaves like sum &#40;see Julia docs&#41;</p>\n"
 
 show(io::IO, m::MIME"text/html", r::Reference) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
     end
-@test html(mean_ref) == "<p>Behaves like <a href=\"test\">mean &#40;see Julia docs&#41;</a></p>\n"
+@test html(sum_ref) == "<p>Behaves like <a href=\"test\">sum &#40;see Julia docs&#41;</a></p>\n"
 
 @test md"""
 ````julia
@@ -495,6 +523,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">Markdown</th><th align="center">Table</th><th align="right">Test</th></tr><tr><td align="left">foo</td><td align="center"><code>bar</code></td><td align="right"><em>baz</em></td></tr><tr><td align="left"><code>bar</code></td><td align="center">baz</td><td align="right"><em>foo</em></td></tr></table>\n"""
 end
 let text =
     """
@@ -504,6 +533,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">a</th><th align="right">b</th></tr><tr><td align="left"><code>x | y</code></td><td align="right">2</td></tr></table>\n"""
 end
 
 # LaTeX extension
@@ -647,6 +677,8 @@ let t_1 =
         !!! note
             foo bar baz
 
+        \tsecond tab-indented paragraph
+
         !!! warning "custom title"
             - foo
             - bar
@@ -690,6 +722,7 @@ let t_1 =
     @test m_2.content[1].category == "note"
     @test m_2.content[1].title == "Note"
     @test isa(m_2.content[1].content[1], Markdown.Paragraph)
+    @test isa(m_2.content[1].content[2], Markdown.Paragraph)
 
     @test isa(m_2.content[2], Markdown.Admonition)
     @test m_2.content[2].category == "warning"
@@ -786,6 +819,8 @@ let t_1 =
             !!! note
                 foo bar baz
 
+                second tab-indented paragraph
+
 
             !!! warning "custom title"
                   * foo
@@ -814,6 +849,8 @@ let t_1 =
             """
             .. note::
                foo bar baz
+
+               second tab-indented paragraph
 
 
             .. warning:: custom title
@@ -1066,14 +1103,18 @@ let text =
     end
 end
 
-# different output depending on whether color is requested:
+# issue 20225, check this can print
+@test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
+
+# different output depending on whether color is requested:	+# issue 20225, check this can print
 let buf = IOBuffer()
+    @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
     show(buf, "text/plain", md"*emph*")
-    @test String(take!(buf)) == "  emph\n"
+    @test String(take!(buf)) == "  emph"
     show(buf, "text/markdown", md"*emph*")
     @test String(take!(buf)) == "*emph*\n"
     show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
-    @test String(take!(buf)) == "  \e[4memph\e[24m\n"
+    @test String(take!(buf)) == "  \e[4memph\e[24m"
 end
 
 # table rendering with term #25213
@@ -1081,7 +1122,7 @@ t = """
     a   |   b
     :-- | --:
     1   |   2"""
-@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2\n"
+@test sprint(Markdown.term, Markdown.parse(t), 0) == "  a b\n  – –\n  1 2"
 
 # test Base.copy
 let
@@ -1095,4 +1136,46 @@ let
     @test !haskey(md.meta, :foo)
     md.meta[:foo] = 42
     @test !haskey(md′.meta, :foo)
+end
+
+let
+    v = Markdown.parse("foo\n\n- 1\n- 2\n\n- 3\n\n\n- 1\n- 2\n\nbar\n\n- 1\n\n  2\n- 4\n\nbuz\n\n- 1\n- 2\n  3\n- 4\n")
+    @test v.content[2].loose
+    @test !v.content[3].loose
+    @test v.content[5].loose
+    @test !v.content[7].loose
+end
+
+# issue #29995
+let m = Markdown.parse("---"), io = IOBuffer()
+    show(io, "text/latex", m)
+    @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
+end
+
+# issue #16194: interpolation in md"..." strings
+@testset "issue #16194: interpolation in md\"...\" strings" begin
+    x = "X"
+    contains_X(md) = occursin(x, sprint(show, MIME("text/plain"), md))
+    @test contains_X(md"# $x") # H1
+    @test contains_X(md"## $x") # H2
+    @test contains_X(md"### $x") # H3
+    @test contains_X(md"x = $x") # Paragraph
+    @test contains_X(md"- $x") # List
+    @test contains_X(md"[$x](..)") # Link
+    @test contains_X(md"**$x**") # Bold
+    @test contains_X(md"*$x*") # Italic
+    @test contains_X( # Table
+        md"""
+        | name |
+        |------|
+        |  $x  |
+        """)
+end
+
+@testset "issue #37232: linebreaks" begin
+    s = @md_str """
+       Misc:\\
+       - line\\
+       """
+    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n  "
 end

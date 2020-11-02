@@ -1,21 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Tests that do not really go anywhere else
+isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+include("testhelpers/withlocales.jl")
 
-# test assert() method
-@test_throws AssertionError assert(false)
-let res = assert(true)
-    @test res === nothing
-end
-let
-    try
-        assert(false)
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test isempty(ex.msg)
-    end
-end
+# Tests that do not really go anywhere else
 
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
@@ -29,7 +17,7 @@ let
         error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
-        @test contains(ex.msg, "1 == 2")
+        @test occursin("1 == 2", ex.msg)
     end
 end
 # test @assert message
@@ -59,8 +47,8 @@ let
         error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
-        @test !contains(ex.msg,  "1 == 2")
-        @test contains(ex.msg, "random_object")
+        @test !occursin("1 == 2", ex.msg)
+        @test occursin("random_object", ex.msg)
     end
 end
 # if the second argument is an expression, c
@@ -91,18 +79,31 @@ end
 @test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting STDERR.
 let
-    redir_err = "redirect_stderr(STDOUT)"
+    redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
-    script = "$redir_err; module A; f() = 1; end; A.f() = 1"
+    script = """
+        $redir_err
+        module A; f() = 1; end; A.f() = 1
+        A.f() = 1
+        outer() = (g() = 1; g() = 2; g)
+        """
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
-    @test contains(warning_str, "f()")
+    @test warning_str == """
+        WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
+        WARNING: Method definition f() in module Main at none:2 overwritten at none:3.
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
+    warning_str = read(`$exename --startup-file=no -e $script`, String)
+    @test warning_str == """
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
 end
 
 # lock / unlock
 let l = ReentrantLock()
     lock(l)
+    @test islocked(l)
     success = Ref(false)
     @test trylock(l) do
         @test lock(l) do
@@ -117,7 +118,7 @@ let l = ReentrantLock()
             @test false
         end === false
     end
-    Base._wait(t)
+    Base.wait(t)
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
@@ -125,15 +126,15 @@ end
 # task switching
 
 @noinline function f6597(c)
-    t = @schedule nothing
+    t = @async nothing
     finalizer(t -> c[] += 1, t)
-    Base._wait(t)
+    Base.wait(t)
     @test c[] == 0
-    Base._wait(t)
+    Base.wait(t)
     nothing
 end
 let c = Ref(0),
-    t2 = @schedule (wait(); c[] += 99)
+    t2 = @async (wait(); c[] += 99)
     @test c[] == 0
     f6597(c)
     GC.gc() # this should run the finalizer for t
@@ -144,6 +145,22 @@ let c = Ref(0),
     @test c[] == 100
 end
 
+@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+
+# test that @sync is lexical (PR #27164)
+
+const x27164 = Ref(0)
+do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
+
+let t = nothing
+    @sync begin
+        t = do_something_async_27164()
+        @async (sleep(0.05); x27164[] = 1)
+    end
+    @test x27164[] == 1
+    fetch(t)
+    @test x27164[] == 2
+end
 
 # timing macros
 
@@ -156,9 +173,18 @@ let t = @elapsed 1+1
 end
 
 let
-    val, t = @timed sin(1)
-    @test val == sin(1)
-    @test isa(t, Real) && t >= 0
+    stats = @timed sin(1)
+    @test stats.value == sin(1)
+    @test isa(stats.time, Real) && stats.time >= 0
+
+    # The return type of gcstats was changed in Julia 1.4 (# 34147)
+    # Test that the 1.0 API still works
+    val, t, bytes, gctime, gcstats = stats
+    @test val === stats.value
+    @test t === stats.time
+    @test bytes === stats.bytes
+    @test gctime === stats.gctime
+    @test gcstats === stats.gcstats
 end
 
 # problem after #11801 - at global scope
@@ -171,6 +197,9 @@ v11801, t11801 = @timed sin(1)
 @test names(@__MODULE__, all = true) == names_before_timing
 
 # interactive utilities
+
+struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
+Base.convert(::Any, v::ambigconvert) = v
 
 import Base.summarysize
 @test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
@@ -190,6 +219,20 @@ let A = zeros(1000), B = reshape(A, (1,1000))
 
     # check that object header is accounted for
     @test summarysize(A) > sizeof(A)
+end
+
+# issue #32881
+mutable struct S32881; end
+let s = "abc"
+    @test summarysize([s,s]) < summarysize(["abc","xyz"])
+end
+@test summarysize(Vector{Union{Nothing,Missing}}(undef, 16)) < summarysize(Vector{Union{Nothing,Missing}}(undef, 32))
+@test summarysize(Vector{Nothing}(undef, 16)) == summarysize(Vector{Nothing}(undef, 32))
+@test summarysize(S32881()) == sizeof(Int)
+
+# issue #33675
+let vec = vcat(missing, ones(100000))
+    @test length(unique(summarysize(vec) for i = 1:20)) == 1
 end
 
 # issue #13021
@@ -376,26 +419,25 @@ let s = "abcα🐨\0x\0"
     end
 end
 
-# clipboard functionality
-if Sys.iswindows()
-    for str in ("Hello, world.", "∀ x ∃ y", "")
-        clipboard(str)
-        @test clipboard() == str
+let X = UInt8[0x30,0x31,0x32]
+    for T in (UInt8, UInt16, UInt32, Int32)
+        @test transcode(UInt8,transcode(T, X)) == X
+        @test transcode(UInt8,transcode(T, 0x30:0x32)) == X
     end
 end
 
-let optstring = stringmime(MIME("text/plain"), Base.JLOptions())
+let optstring = repr("text/plain", Base.JLOptions())
     @test startswith(optstring, "JLOptions(\n")
-    @test !contains(optstring, "Ptr")
+    @test !occursin("Ptr", optstring)
     @test endswith(optstring, "\n)")
-    @test contains(optstring, " = \"")
+    @test occursin(" = \"", optstring)
 end
 let optstring = repr(Base.JLOptions())
     @test startswith(optstring, "JLOptions(")
     @test endswith(optstring, ")")
-    @test !contains(optstring, "\n")
-    @test !contains(optstring, "Ptr")
-    @test contains(optstring, " = \"")
+    @test !occursin("\n", optstring)
+    @test !occursin("Ptr", optstring)
+    @test occursin(" = \"", optstring)
 end
 
 # Base.securezero! functions (#17579)
@@ -410,20 +452,53 @@ let a = [1,2,3]
     @test a == [0,0,0]
 end
 
-# Test that we can VirtualProtect jitted code to writable
-if Sys.iswindows()
-    @noinline function WeVirtualProtectThisToRWX(x, y)
-        x+y
-    end
+# PR #28038 (prompt/getpass stream args)
+@test_throws MethodError Base.getpass(IOBuffer(), stdout, "pass")
+let buf = IOBuffer()
+    @test Base.prompt(IOBuffer("foo\nbar\n"), buf, "baz") == "foo"
+    @test String(take!(buf)) == "baz: "
+    @test Base.prompt(IOBuffer("\n"), buf, "baz", default="foobar") == "foobar"
+    @test String(take!(buf)) == "baz [foobar]: "
+    @test Base.prompt(IOBuffer("blah\n"), buf, "baz", default="foobar") == "blah"
+end
 
-    let addr = cfunction(WeVirtualProtectThisToRWX, UInt64, Tuple{UInt64, UInt64})
-        addr = addr-(UInt64(addr)%4096)
+# these tests are not in a test block so that they will compile separately
+@static if Sys.iswindows()
+    SetLastError(code) = ccall(:SetLastError, stdcall, Cvoid, (UInt32,), code)
+else
+    SetLastError(_) = nothing
+end
+@test Libc.errno(0xc0ffee) === nothing
+@test SetLastError(0xc0def00d) === nothing
+let finalized = false
+    function closefunc(_)
+        Libc.errno(0)
+        SetLastError(0)
+        finalized = true
+    end
+    @eval (finalizer($closefunc, zeros()); nothing)
+    GC.gc(); GC.gc(); GC.gc(); GC.gc()
+    @test finalized
+end
+@static if Sys.iswindows()
+    @test ccall(:GetLastError, stdcall, UInt32, ()) == 0xc0def00d
+    @test Libc.GetLastError() == 0xc0def00d
+end
+@test Libc.errno() == 0xc0ffee
+
+# Test that we can VirtualProtect jitted code to writable
+@noinline function WeVirtualProtectThisToRWX(x, y)
+    return x + y
+end
+@static if Sys.iswindows()
+    let addr = @cfunction(WeVirtualProtectThisToRWX, UInt64, (UInt64, UInt64))
+        addr = addr - (UInt64(addr) % 4096)
         PAGE_EXECUTE_READWRITE = 0x40
         oldPerm = Ref{UInt32}()
-        err18083 = ccall(:VirtualProtect,stdcall,Cint,
+        err18083 = ccall(:VirtualProtect, stdcall, Cint,
             (Ptr{Cvoid}, Csize_t, UInt32, Ptr{UInt32}),
             addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
-        err18083 == 0 && error(Libc.GetLastError())
+        err18083 == 0 && Base.windowserror(:VirtualProtect)
     end
 end
 
@@ -452,14 +527,23 @@ let buf_color = IOBuffer()
     @test String(take!(buf_color)) == "\e[31m\e[1mTwo\e[22m\e[39m\n\e[31m\e[1mlines\e[22m\e[39m"
 end
 
-if STDOUT isa Base.TTY
-    @test haskey(STDOUT, :color) == true
-    @test haskey(STDOUT, :bar) == false
-    @test (:color=>Base.have_color) in STDOUT
-    @test (:color=>!Base.have_color) ∉ STDOUT
-    @test STDOUT[:color] == get(STDOUT, :color, nothing) == Base.have_color
-    @test get(STDOUT, :bar, nothing) === nothing
-    @test_throws KeyError STDOUT[:bar]
+if stdout isa Base.TTY
+    @test haskey(stdout, :color) == true
+    @test haskey(stdout, :bar) == false
+    @test (:color=>Base.have_color) in stdout
+    @test (:color=>!Base.have_color) ∉ stdout
+    @test stdout[:color] == get(stdout, :color, nothing) == Base.have_color
+    @test get(stdout, :bar, nothing) === nothing
+    @test_throws KeyError stdout[:bar]
+end
+
+@testset "`displaysize` on closed TTY #34620" begin
+    Main.FakePTYs.with_fake_pty() do rawfd, _
+        tty = open(rawfd)::Base.TTY
+        @test displaysize(tty) isa Tuple{Integer,Integer}
+        close(tty)
+        @test_throws Base.IOError displaysize(tty)
+    end
 end
 
 let
@@ -514,8 +598,8 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
         Demo_20254(string.(arr))
     end
 
-    _get(x::NTuple{1}) = (get(x[1]),)
-    _get_19433(xs::Vararg) = (get(xs[1]), _get_19433(xs[2:end])...)
+    _get_19433(x::NTuple{1}) = (something(x[1]),)
+    _get_19433(xs::Vararg) = (something(xs[1]), _get_19433(xs[2:end])...)
 
     f_19433(f_19433, xs...) = f_19433(_get_19433(xs)...)
 
@@ -566,7 +650,7 @@ end
 # Endian tests
 # For now, we only support little endian.
 # Add an `Sys.ARCH` test for big endian when/if we add support for that.
-# Do **NOT** use `ENDIAN_BOM` to figure out the endianess
+# Do **NOT** use `ENDIAN_BOM` to figure out the endianness
 # since that's exactly what we want to test.
 @test ENDIAN_BOM == 0x04030201
 @test ntoh(0x1) == 0x1
@@ -594,13 +678,156 @@ end
 
 include("testenv.jl")
 
-let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
-    local cmd = `$test_exename $flags deprecation_exec.jl`
 
-    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR))
+let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
+    local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
+
+    if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
         error("Deprecation test failed, cmd : $cmd")
     end
 end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
+
+# issue #26310
+@test_warn "could not import" Core.eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "could not import" Core.eval(Main,        :(import ........notdefined_26310__))
+@test_nowarn Core.eval(Main, :(import .Main))
+@test_nowarn Core.eval(Main, :(import ....Main))
+
+# issue #27239
+@testset "strftime tests issue #27239" begin
+    # change to non-Unicode Korean
+    korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
+    timestrs = String[]
+    withlocales(korloc) do
+        # system dependent formats
+        push!(timestrs, Libc.strftime(0.0))
+        push!(timestrs, Libc.strftime("%a %A %b %B %p %Z", 0))
+    end
+    # tests
+    isempty(timestrs) && @warn "skipping stftime tests: no locale found for testing"
+    for s in timestrs
+        @test isvalid(s)
+    end
+end
+
+
+using Base: @kwdef
+
+@kwdef struct Test27970Typed
+    a::Int
+    b::String = "hi"
+end
+
+@kwdef struct Test27970Untyped
+    a
+end
+
+@kwdef struct Test27970Empty end
+
+@testset "No default values in @kwdef" begin
+    @test Test27970Typed(a=1) == Test27970Typed(1, "hi")
+    # Implicit type conversion (no assertion on kwarg)
+    @test Test27970Typed(a=0x03) == Test27970Typed(3, "hi")
+    @test_throws UndefKeywordError Test27970Typed()
+
+    @test Test27970Untyped(a=1) == Test27970Untyped(1)
+    @test_throws UndefKeywordError Test27970Untyped()
+
+    # Just checking that this doesn't stack overflow on construction
+    @test Test27970Empty() == Test27970Empty()
+end
+
+abstract type AbstractTest29307 end
+@kwdef struct Test29307{T<:Integer} <: AbstractTest29307
+    a::T=2
+end
+
+@testset "subtyped @kwdef" begin
+    @test Test29307() == Test29307{Int}(2)
+    @test Test29307(a=0x03) == Test29307{UInt8}(0x03)
+    @test Test29307{UInt32}() == Test29307{UInt32}(2)
+    @test Test29307{UInt32}(a=0x03) == Test29307{UInt32}(0x03)
+end
+
+@kwdef struct TestInnerConstructor
+    a = 1
+    TestInnerConstructor(a::Int) = (@assert a>0; new(a))
+    function TestInnerConstructor(a::String)
+        @assert length(a) > 0
+        new(a)
+    end
+end
+
+@testset "@kwdef inner constructor" begin
+    @test TestInnerConstructor() == TestInnerConstructor(1)
+    @test TestInnerConstructor(a=2) == TestInnerConstructor(2)
+    @test_throws AssertionError TestInnerConstructor(a=0)
+    @test TestInnerConstructor(a="2") == TestInnerConstructor("2")
+    @test_throws AssertionError TestInnerConstructor(a="")
+end
+
+const outsidevar = 7
+@kwdef struct TestOutsideVar
+    a::Int=outsidevar
+end
+@test TestOutsideVar() == TestOutsideVar(7)
+
+
+@testset "exports of modules" begin
+    for (_, mod) in Base.loaded_modules
+       for v in names(mod)
+           @test isdefined(mod, v)
+       end
+   end
+end
+
+@testset "ordering UUIDs" begin
+    a = Base.UUID("dbd321ed-e87e-4f33-9511-65b7d01cdd55")
+    b = Base.UUID("2832b20a-2ad5-46e9-abb1-2d20c8c31dd3")
+    @test isless(b, a)
+    @test sort([a, b]) == [b, a]
+end
+
+@testset "Libc.rand" begin
+    low, high = extrema(Libc.rand(Float64) for i=1:10^4)
+    # these fail with probability 2^(-10^4) ≈ 5e-3011
+    @test 0 ≤ low < 0.5
+    @test 0.5 < high < 1
+end
+
+# Pointer 0-arg constructor
+@test Ptr{Cvoid}() == C_NULL
+
+@testset "Pointer to unsigned/signed integer" begin
+    # assuming UInt and Ptr have the same size
+    @assert sizeof(UInt) == sizeof(Ptr{Nothing})
+    uint = UInt(0x12345678)
+    sint = signed(uint)
+    ptr = reinterpret(Ptr{Nothing}, uint)
+    @test unsigned(ptr) === uint
+    @test signed(ptr) === sint
+end
+
+# Finalizer with immutable should throw
+@test_throws ErrorException finalizer(x->nothing, 1)
+@test_throws ErrorException finalizer(C_NULL, 1)
+
+
+@testset "GC utilities" begin
+    GC.gc()
+    GC.gc(true); GC.gc(false)
+
+    GC.safepoint()
+end
+
+@testset "fieldtypes Module" begin
+    @test fieldtypes(Module) === ()
+end
+
+
+@testset "issue #28188" begin
+    @test `$(@__FILE__)` == let file = @__FILE__; `$file` end
+end

@@ -58,6 +58,11 @@ function Base.floor(dt::Date, p::Month)
     return Date(target_year, target_month)
 end
 
+function Base.floor(dt::Date, p::Quarter)
+    return floor(dt, Month(p))
+end
+
+
 function Base.floor(dt::Date, p::Week)
     value(p) < 1 && throw(DomainError(p))
     days = value(dt) - WEEKEPOCH
@@ -170,7 +175,7 @@ julia> ceil(Dates.Minute(44), Dates.Minute(15))
 45 minutes
 
 julia> ceil(Dates.Hour(36), Dates.Day)
-3 days
+2 days
 ```
 
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
@@ -250,7 +255,7 @@ julia> round(Dates.Minute(44), Dates.Minute(15))
 45 minutes
 
 julia> round(Dates.Hour(36), Dates.Day)
-3 days
+2 days
 ```
 
 Valid rounding modes for `round(::Period, ::T, ::RoundingMode)` are `RoundNearestTiesUp`
@@ -279,7 +284,13 @@ Base.round(x::TimeTypeOrPeriod, p::Period) = Base.round(x, p, RoundNearestTiesUp
 # Make rounding functions callable using Period types in addition to values.
 Base.floor(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.floor(x, oneunit(P))
 Base.ceil(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.ceil(x, oneunit(P))
+Base.floor(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.floor(Date(x), oneunit(P))
+Base.ceil(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.ceil(Date(x), oneunit(P))
 
 function Base.round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period
     return Base.round(x, oneunit(P), r)
+end
+
+function Base.round(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period
+    return Base.round(Date(x), oneunit(P), r)
 end

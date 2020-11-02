@@ -120,12 +120,18 @@ isequaldlm(m1, m2, t) = isequal(m1, m2) && (eltype(m1) == eltype(m2) == t)
 end
 
 @testset "comments" begin
-    @test isequaldlm(readdlm(IOBuffer("#this is comment\n1,2,3\n#one more comment\n4,5,6"), ','), [1. 2. 3.;4. 5. 6.], Float64)
-    @test isequaldlm(readdlm(IOBuffer("#this is \n#comment\n1,2,3\n#one more \n#comment\n4,5,6"), ','), [1. 2. 3.;4. 5. 6.], Float64)
-    @test isequaldlm(readdlm(IOBuffer("1,2,#3\n4,5,6"), ','), [1. 2. "";4. 5. 6.], Any)
-    @test isequaldlm(readdlm(IOBuffer("1#,2,3\n4,5,6"), ','), [1. "" "";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("#this is comment\n1,2,3\n#one more comment\n4,5,6"), ',', comments=true), [1. 2. 3.;4. 5. 6.], Float64)
+    @test isequaldlm(readdlm(IOBuffer("#this is \n#comment\n1,2,3\n#one more \n#comment\n4,5,6"), ',', comments=true), [1. 2. 3.;4. 5. 6.], Float64)
+    @test isequaldlm(readdlm(IOBuffer("1,2,#3\n4,5,6"), ',', comments=true), [1. 2. "";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("1#,2,3\n4,5,6"), ',', comments=true), [1. "" "";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("1,2,\"#3\"\n4,5,6"), ',', comments=true), [1. 2. "#3";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6"), ',', comments=true), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
+end
+
+@testset "without comments" begin
+    @test isequaldlm(readdlm(IOBuffer("1,2,#3\n4,5,6"), ','), [1. 2. "#3";4. 5. 6.], Any)
+    @test isequaldlm(readdlm(IOBuffer("1#,2,3\n4,5,6"), ','), ["1#" 2. 3.;4. 5. 6.], Any)
     @test isequaldlm(readdlm(IOBuffer("1,2,\"#3\"\n4,5,6"), ','), [1. 2. "#3";4. 5. 6.], Any)
-    @test isequaldlm(readdlm(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6"), ','), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
 end
 
 @testset "skipstart" begin
@@ -200,8 +206,8 @@ end
             "Puerto Rico", "Olga Tanon", "Puerto Rico", "Olga Tañón",
             "Rep. of China", "Hsu Chi", "臺灣", "舒淇",
             "Rep. of China", "Ang Lee", "臺灣", "李安",
-            "Rep. of Korea", "AHN Sung-Gi", "한민국", "안성기",
-            "Rep. of Korea", "SHIM Eun-Ha", "한민국", "심은하",
+            "Rep. of Korea", "AHN Sung-Gi", "대한민국", "안성기",
+            "Rep. of Korea", "SHIM Eun-Ha", "대한민국", "심은하",
             "Russia", "Mikhail Gorbachev", "Россия", "Михаил Горбачёв",
             "Russia", "Boris Grebenshchikov", "Россия", "Борис Гребенщиков",
             "Slovenia", "\"Frane \"\"Jezek\"\" Milcinski", "Slovenija", "Frane Milčinski - Ježek",
@@ -230,12 +236,12 @@ end
     for data in ["A B C", "A B C\n"]
         data,hdr = readdlm(IOBuffer(data), header=true)
         @test hdr == AbstractString["A" "B" "C"]
-        @test data == Matrix{Float64}(uninitialized, 0, 3)
+        @test data == Matrix{Float64}(undef, 0, 3)
     end
 end
 
 # fix #13179 parsing unicode lines with default delmiters
-@test isequaldlm(readdlm(IOBuffer("# Should ignore this π\n1\tα\n2\tβ\n")), Any[1 "α"; 2 "β"], Any)
+@test isequaldlm(readdlm(IOBuffer("# Should ignore this π\n1\tα\n2\tβ\n"), comments=true), Any[1 "α"; 2 "β"], Any)
 
 # BigInt parser
 let data = "1 2 3"
@@ -244,6 +250,7 @@ end
 
 @testset "show with MIME types" begin
     @test sprint(show, "text/csv", [1 2; 3 4]) == "1,2\n3,4\n"
+    @test sprint(show, "text/tab-separated-values", [1 2; 3 4]) == "1\t2\n3\t4\n"
 
     for writefunc in ((io,x) -> show(io, "text/csv", x),
                       (io,x) -> invoke(writedlm, Tuple{IO,Any,Any}, io, x, ","))
@@ -260,6 +267,22 @@ end
             @test vec(readdlm(io, ',')) == x
         end
     end
+
+    for writefunc in ((io,x) -> show(io, "text/tab-separated-values", x),
+                      (io,x) -> invoke(writedlm, Tuple{IO,Any,Any}, io, x, "\t"))
+        # iterable collections of iterable rows:
+        let x = [(1,2), (3,4)], io = IOBuffer()
+            writefunc(io, x)
+            seek(io, 0)
+            @test readdlm(io, '\t') == [1 2; 3 4]
+        end
+        # vectors of strings:
+        let x = ["foo", "bar"], io = IOBuffer()
+            writefunc(io, x)
+            seek(io, 0)
+            @test vec(readdlm(io, '\t')) == x
+        end
+    end
 end
 
 # Test that we can read a write protected file
@@ -272,6 +295,13 @@ let fn = tempname()
     rm(fn)
 end
 
+# test writedlm with a filename instead of io input
+let fn = tempname(), x = ["a" "b"; "d" ""]
+    writedlm(fn, x, ',')
+    @test readdlm(fn, ',') == x
+    rm(fn)
+end
+
 # issue #21180
 let data = "\"721\",\"1438\",\"1439\",\"…\",\"1\""
     @test readdlm(IOBuffer(data), ',') == Any[721  1438  1439  "…"  1]
@@ -280,6 +310,12 @@ end
 # issue #21207
 let data = "\"1\",\"灣\"\"灣灣灣灣\",\"3\""
     @test readdlm(IOBuffer(data), ',') == Any[1 "灣\"灣灣灣灣" 3]
+end
+
+# reading from a byte array (#16731)
+let data = Vector{UInt8}("1,2,3\n4,5,6"), origdata = copy(data)
+    @test readdlm(data, ',') == [1 2 3; 4 5 6]
+    @test data == origdata
 end
 
 # issue #11484: useful error message for invalid readdlm filepath arguments

@@ -257,7 +257,10 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
-zero(::Type{TwicePrecision{T}}) where {T} = TwicePrecision{T}(0, 0)
+function zero(::Type{TwicePrecision{T}}) where {T}
+    z = zero(T)
+    TwicePrecision{T}(z, z)
+end
 
 # Arithmetic
 
@@ -280,7 +283,7 @@ end
 
 function *(x::TwicePrecision, v::Number)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    x * TwicePrecision{typeof(x.hi*v)}(v)
+    x * TwicePrecision(oftype(x.hi*v, v))
 end
 function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
@@ -298,7 +301,7 @@ end
 *(x::TwicePrecision, y::TwicePrecision) = *(promote(x, y)...)
 
 function /(x::TwicePrecision, v::Number)
-    x / TwicePrecision{typeof(x.hi/v)}(v)
+    x / TwicePrecision(oftype(x.hi/v, v))
 end
 
 function /(x::TwicePrecision, y::TwicePrecision)
@@ -354,7 +357,7 @@ StepRangeLen(ref::TwicePrecision{T}, step::TwicePrecision{T},
 
 # Construct range for rational start=start_n/den, step=step_n/den
 function floatrange(::Type{T}, start_n::Integer, step_n::Integer, len::Integer, den::Integer) where T
-    if len < 2
+    if len < 2 || step_n == 0
         return steprangelen_hp(T, (start_n, den), (step_n, den), 0, Int(len), 1)
     end
     # index of smallest-magnitude value
@@ -380,7 +383,7 @@ function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::Abs
     steprangelen_hp(T, (a,divisor), (st,divisor), nbitslen(T, len, 1), Int(len), 1)
 end
 
-function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
+function (:)(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
     step == 0 && throw(ArgumentError("range step cannot be zero"))
     # see if the inputs have exact rational approximations (and if so,
     # perform all computations in terms of the rationals)
@@ -390,7 +393,7 @@ function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float6
         stop_n, stop_d = rat(stop)
         if start_d != 0 && stop_d != 0 &&
                 T(start_n/start_d) == start && T(stop_n/stop_d) == stop
-            den = lcm(start_d, step_d) # use same denominator for start and step
+            den = lcm_unchecked(start_d, step_d) # use same denominator for start and step
             m = maxintfloat(T, Int)
             if den != 0 && abs(start*den) <= m && abs(step*den) <= m &&  # will round succeed?
                     rem(den, start_d) == 0 && rem(den, step_d) == 0      # check lcm overflow
@@ -421,12 +424,15 @@ function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float6
     steprangelen_hp(T, start, step, 0, len, 1)
 end
 
-function range(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractFloat} = T(r.step)
+step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T} = T(r.step)
+
+function _range(a::T, st::T, ::Nothing, len::Integer) where T<:Union{Float16,Float32,Float64}
     start_n, start_d = rat(a)
     step_n, step_d = rat(st)
     if start_d != 0 && step_d != 0 &&
             T(start_n/start_d) == a && T(step_n/step_d) == st
-        den = lcm(start_d, step_d)
+        den = lcm_unchecked(start_d, step_d)
         m = maxintfloat(T, Int)
         if abs(den*a) <= m && abs(den*st) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
@@ -484,12 +490,12 @@ StepRangeLen{T,R,S}(r::StepRangeLen{T,R,S}) where {T<:AbstractFloat,R<:TwicePrec
 StepRangeLen{T,R,S}(r::StepRangeLen) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} =
     _convertSRL(StepRangeLen{T,R,S}, r)
 
-(::Type{StepRangeLen{Float64}})(r::StepRangeLen) =
+StepRangeLen{Float64}(r::StepRangeLen) =
     _convertSRL(StepRangeLen{Float64,TwicePrecision{Float64},TwicePrecision{Float64}}, r)
 StepRangeLen{T}(r::StepRangeLen) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
 
-(::Type{StepRangeLen{Float64}})(r::AbstractRange) =
+StepRangeLen{Float64}(r::AbstractRange) =
     _convertSRL(StepRangeLen{Float64,TwicePrecision{Float64},TwicePrecision{Float64}}, r)
 StepRangeLen{T}(r::AbstractRange) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
@@ -510,7 +516,7 @@ function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T,
     step_n, step_d = rat(s)
     if start_d != 0 && step_d != 0 &&
             U(start_n/start_d) == f && U(step_n/step_d) == s
-        den = lcm(start_d, step_d)
+        den = lcm_unchecked(start_d, step_d)
         m = maxintfloat(T, Int)
         if den != 0 && abs(f*den) <= m && abs(s*den) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
@@ -537,8 +543,23 @@ function sum(r::StepRangeLen)
     np, nn = l - r.offset, r.offset - 1  # positive, negative
     # To prevent overflow in sum(1:n), multiply its factors by the step
     sp, sn = sumpair(np), sumpair(nn)
-    tp = _prod(r.step, sp[1], sp[2])
-    tn = _prod(r.step, sn[1], sn[2])
+    W = widen(Int)
+    Δn = W(sp[1]) * W(sp[2]) - W(sn[1]) * W(sn[2])
+    s = r.step * Δn
+    # Add in contributions of ref
+    ref = r.ref * l
+    convert(eltype(r), s + ref)
+end
+function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision})
+    l = length(r)
+    # Compute the contribution of step over all indices.
+    # Indexes on opposite side of r.offset contribute with opposite sign,
+    #    r.step * (sum(1:np) - sum(1:nn))
+    np, nn = l - r.offset, r.offset - 1  # positive, negative
+    # To prevent overflow in sum(1:n), multiply its factors by the step
+    sp, sn = sumpair(np), sumpair(nn)
+    tp = _tp_prod(r.step, sp[1], sp[2])
+    tn = _tp_prod(r.step, sn[1], sn[2])
     s_hi, s_lo = add12(tp.hi, -tn.hi)
     s_lo += tp.lo - tn.lo
     # Add in contributions of ref
@@ -567,10 +588,10 @@ function +(r1::StepRangeLen{T,R}, r2::StepRangeLen{T,R}) where T where R<:TwiceP
     StepRangeLen{T,typeof(ref),typeof(step)}(ref, step, len, imid)
 end
 
-## LinSpace
+## LinRange
 
-# For Float16, Float32, and Float64, linspace returns a StepRangeLen
-function linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
+# For Float16, Float32, and Float64, this returns a StepRangeLen
+function _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:IEEEFloat}
     len < 2 && return _linspace1(T, start, stop, len)
     if start == stop
         return steprangelen_hp(T, start, zero(T), 0, len, 1)
@@ -579,13 +600,13 @@ function linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
     start_n, start_d = rat(start)
     stop_n, stop_d = rat(stop)
     if start_d != 0 && stop_d != 0
-        den = lcm(start_d, stop_d)
+        den = lcm_unchecked(start_d, stop_d)
         m = maxintfloat(T, Int)
         if den != 0 && abs(den*start) <= m && abs(den*stop) <= m
             start_n = round(Int, den*start)
             stop_n = round(Int, den*stop)
             if T(start_n/den) == start && T(stop_n/den) == stop
-                return linspace(T, start_n, stop_n, len, den)
+                return _linspace(T, start_n, stop_n, len, den)
             end
         end
     end
@@ -622,7 +643,7 @@ function _linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
     end
     # 2x calculations to get high precision endpoint matching while also
     # preventing overflow in ref_hi+(i-offset)*step_hi
-    m, k = prevfloat(realmax(T)), max(imin-1, len-imin)
+    m, k = prevfloat(floatmax(T)), max(imin-1, len-imin)
     step_hi_pre = clamp(step, max(-(m+ref)/k, (-m+ref)/k), min((m-ref)/k, (m+ref)/k))
     nb = nbitslen(T, len, imin)
     step_hi = truncbits(step_hi_pre, nb)
@@ -634,11 +655,12 @@ function _linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
     steprangelen_hp(T, (ref, ref_lo), (step_hi, step_lo), 0, Int(len), imin)
 end
 
-# linspace for rational numbers, start = start_n/den, stop = stop_n/den
+# range for rational numbers, start = start_n/den, stop = stop_n/den
 # Note this returns a StepRangeLen
-function linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T
+_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEEFloat} = _linspace(T, start, stop, len, 1)
+function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T<:IEEEFloat
     len < 2 && return _linspace1(T, start_n/den, stop_n/den, len)
-    start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len)
+    start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len, 1)
     tmin = -start_n/(Float64(stop_n) - Float64(start_n))
     imin = round(Int, tmin*(len-1)+1)
     imin = clamp(imin, 1, Int(len))
@@ -650,10 +672,10 @@ function linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, de
 end
 
 # For len < 2
-function _linspace1(::Type{T}, start, stop, len::Integer) where T
-    len >= 0 || throw(ArgumentError("linspace($start, $stop, $len): negative length"))
+function _linspace1(::Type{T}, start, stop, len::Integer) where T<:IEEEFloat
+    len >= 0 || throw(ArgumentError("range($start, stop=$stop, length=$len): negative length"))
     if len <= 1
-        len == 1 && (start == stop || throw(ArgumentError("linspace($start, $stop, $len): endpoints differ")))
+        len == 1 && (start == stop || throw(ArgumentError("range($start, stop=$stop, length=$len): endpoints differ")))
         # Ensure that first(r)==start and last(r)==stop even for len==0
         # The output type must be consistent with steprangelen_hp
         if T<:Union{Float32,Float16}
@@ -687,16 +709,19 @@ function rat(x)
     return a, b
 end
 
+# This version of lcm does not check for overflows
+lcm_unchecked(a::T, b::T) where T<:Integer = a * div(b, gcd(a, b))
+
 narrow(::Type{T}) where {T<:AbstractFloat} = Float64
 narrow(::Type{Float64}) = Float32
 narrow(::Type{Float32}) = Float16
 narrow(::Type{Float16}) = Float16
 
-function _prod(t::TwicePrecision, x, y...)
+function _tp_prod(t::TwicePrecision, x, y...)
     @_inline_meta
-    _prod(t * x, y...)
+    _tp_prod(t * x, y...)
 end
-_prod(t::TwicePrecision) = t
+_tp_prod(t::TwicePrecision) = t
 <(x::TwicePrecision{T}, y::TwicePrecision{T}) where {T} =
     x.hi < y.hi || ((x.hi == y.hi) & (x.lo < y.lo))
 

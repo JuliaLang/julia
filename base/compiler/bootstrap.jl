@@ -5,8 +5,10 @@
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call],
-    world = ccall(:jl_get_world_counter, UInt, ())
+let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call, run_passes],
+    world = get_world_counter(),
+    interp = NativeInterpreter(world)
+
     for x in T_FFUNC_VAL
         push!(fs, x[3])
     end
@@ -15,21 +17,19 @@ let fs = Any[typeinf_ext, typeinf, typeinf_edge, pure_eval_call],
             x = T_IFUNC[i]
             push!(fs, x[3])
         else
-            println(STDERR, "WARNING: tfunc missing for ", reinterpret(IntrinsicFunction, Int32(i)))
+            println(stderr, "WARNING: tfunc missing for ", reinterpret(IntrinsicFunction, Int32(i)))
         end
     end
     for f in fs
         for m in _methods_by_ftype(Tuple{typeof(f), Vararg{Any}}, 10, typemax(UInt))
             # remove any TypeVars from the intersection
-            typ = Any[m[1].parameters...]
+            typ = Any[m.spec_types.parameters...]
             for i = 1:length(typ)
                 if isa(typ[i], TypeVar)
                     typ[i] = typ[i].ub
                 end
             end
-            typeinf_type(m[3], Tuple{typ...}, m[2], true, Params(world))
+            typeinf_type(interp, m.method, Tuple{typ...}, m.sparams)
         end
     end
 end
-
-ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext)

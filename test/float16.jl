@@ -108,7 +108,7 @@ end
     @test NaN16 != NaN16
     @test isequal(NaN16, NaN16)
     @test repr(NaN16) == "NaN16"
-    @test sprint(showcompact, NaN16) == "NaN"
+    @test sprint(show, NaN16, context=:compact => true) == "NaN"
 
     @test isinf(Inf16)
     @test isinf(-Inf16)
@@ -120,7 +120,7 @@ end
     @test -Inf16 < Inf16
     @test isequal(Inf16, Inf16)
     @test repr(Inf16) == "Inf16"
-    @test sprint(showcompact, Inf16) == "Inf"
+    @test sprint(show, Inf16, context=:compact => true) == "Inf"
 
     @test isnan(reinterpret(Float16,0x7c01))
     @test !isinf(reinterpret(Float16,0x7c01))
@@ -166,3 +166,17 @@ end
 
 # issue #17148
 @test rem(Float16(1.2), Float16(one(1.2))) == 0.20019531f0
+
+# issue #32441
+const f16eps2 = Float32(eps(Float16(0.0)))/2
+const minsubf16 = nextfloat(Float16(0.0))
+const minsubf16_32 = Float32(minsubf16)
+@test Float16(f16eps2) == Float16(0.0)
+@test Float16(nextfloat(f16eps2)) == minsubf16
+@test Float16(prevfloat(minsubf16_32)) == minsubf16
+# Ties to even, in this case up
+@test Float16(minsubf16_32 + f16eps2) == nextfloat(minsubf16)
+@test Float16(prevfloat(minsubf16_32 + f16eps2)) == minsubf16
+
+# issues #33076
+@test Float16(1f5) == Inf16

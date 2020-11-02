@@ -2,7 +2,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include "options.h"
 
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include "julia.h"
@@ -96,9 +95,11 @@ static bool check_fd_or_close(int fd)
 {
     if (fd == -1)
         return false;
-    fcntl(fd, F_SETFD, FD_CLOEXEC);
-    fchmod(fd, S_IRWXU);
-    if (ftruncate(fd, jl_page_size) != 0) {
+    int err = fcntl(fd, F_SETFD, FD_CLOEXEC);
+    assert(err == 0);
+    (void)err; // prevent compiler warning
+    if (fchmod(fd, S_IRWXU) != 0 ||
+        ftruncate(fd, jl_page_size) != 0) {
         close(fd);
         return false;
     }
@@ -737,6 +738,7 @@ class RTDyldMemoryManagerJL : public SectionMemoryManager {
     std::unique_ptr<ROAllocator<false>> ro_alloc;
     std::unique_ptr<ROAllocator<true>> exe_alloc;
     bool code_allocated;
+    size_t total_allocated;
 
 public:
     RTDyldMemoryManagerJL()
@@ -745,7 +747,8 @@ public:
           rw_alloc(),
           ro_alloc(),
           exe_alloc(),
-          code_allocated(false)
+          code_allocated(false),
+          total_allocated(0)
     {
 #ifdef _OS_LINUX_
         if (!ro_alloc && get_self_mem_fd() != -1) {
@@ -761,6 +764,7 @@ public:
     ~RTDyldMemoryManagerJL() override
     {
     }
+    size_t getTotalBytes() { return total_allocated; }
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                           size_t Size) override;
 #if 0
@@ -828,6 +832,7 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
     // allocating more than one code section can confuse libunwind.
     assert(!code_allocated);
     code_allocated = true;
+    total_allocated += Size;
     if (exe_alloc)
         return (uint8_t*)exe_alloc->alloc(Size, Alignment);
     return SectionMemoryManager::allocateCodeSection(Size, Alignment, SectionID,
@@ -840,6 +845,7 @@ uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
                                                     StringRef SectionName,
                                                     bool isReadOnly)
 {
+    total_allocated += Size;
     if (!isReadOnly)
         return (uint8_t*)rw_alloc.alloc(Size, Alignment);
     if (ro_alloc)
@@ -911,4 +917,9 @@ void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr)
 RTDyldMemoryManager* createRTDyldMemoryManager()
 {
     return new RTDyldMemoryManagerJL();
+}
+
+size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm)
+{
+    return ((RTDyldMemoryManagerJL*)mm)->getTotalBytes();
 }

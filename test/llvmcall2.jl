@@ -7,7 +7,7 @@ function declared_floor(x::Float64)
 end
 @test declared_floor(4.2) == 4.0
 ir = sprint(code_llvm, declared_floor, Tuple{Float64})
-@test contains(ir, "call double @llvm.floor.f64") # should be inlined
+@test occursin("call double @llvm.floor.f64", ir) # should be inlined
 
 function doubly_declared_floor(x::Float64)
     a = ccall("llvm.floor.f64", llvmcall, Float64, (Float64,), x)
@@ -36,3 +36,11 @@ function ceilfloor(x::Float64)
     return b
 end
 @test ceilfloor(7.4) == 8.0
+
+# support for calling external functions
+begin
+    f() = ccall("time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    @test_throws ErrorException f()
+    g() = ccall("extern time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    g()
+end

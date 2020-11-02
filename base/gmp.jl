@@ -4,13 +4,13 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
-             binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
+import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
+             binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
-             sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
+             sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
+             bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             hastypemax
+             sign, hastypemax, isodd, digits!
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -52,9 +52,8 @@ mutable struct BigInt <: Signed
     size::Cint
     d::Ptr{Limb}
 
-    function BigInt()
-        b = new(zero(Cint), zero(Cint), C_NULL)
-        MPZ.init!(b)
+    function BigInt(; nbits::Integer=0)
+        b = MPZ.init2!(new(), nbits)
         finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
         return b
     end
@@ -70,15 +69,27 @@ results are promoted to a [`BigInt`](@ref).
 Instances can be constructed from strings via [`parse`](@ref), or using the `big`
 string literal.
 
+# Examples
 ```jldoctest
 julia> parse(BigInt, "42")
 42
 
 julia> big"313"
 313
+
+julia> BigInt(10)^19
+10000000000000000000
 ```
 """
 BigInt(x)
+
+"""
+    ALLOC_OVERFLOW_FUNCTION
+
+A reference that holds a boolean, if true, indicating julia is linked with a patched GMP that
+does not abort on huge allocation and throws OutOfMemoryError instead.
+"""
+const ALLOC_OVERFLOW_FUNCTION = Ref(false)
 
 function __init__()
     try
@@ -94,11 +105,22 @@ function __init__()
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
               cglobal(:jl_gc_counted_free_with_size))
-
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module GMP")
+    end
+    # This only works with a patched version of GMP, ignore otherwise
+    try
+        ccall((:__gmp_set_alloc_overflow_function, :libgmp), Cvoid,
+              (Ptr{Cvoid},),
+              cglobal(:jl_throw_out_of_memory_error))
+        ALLOC_OVERFLOW_FUNCTION[] = true
+    catch ex
+        # ErrorException("ccall: could not find function...")
+        if typeof(ex) != ErrorException
+            rethrow()
+        end
     end
 end
 
@@ -110,7 +132,7 @@ module MPZ
 # - a method modifying its input has a "!" appendend to its name, according to Julia's conventions
 # - some convenient methods are added (in addition to the pure MPZ ones), e.g. `add(a, b) = add!(BigInt(), a, b)`
 #   and `add!(x, a) = add!(x, x, a)`.
-using Base.GMP: BigInt, Limb
+using ..GMP: BigInt, Limb, BITS_PER_LIMB
 
 const mpz_t = Ref{BigInt}
 const bitcnt_t = Culong
@@ -125,11 +147,15 @@ realloc2(a) = realloc2!(BigInt(), a)
 
 sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (mpz_t, Cint), a, b))
 
-for op in (:add, :sub, :mul, :fdiv_q, :tdiv_q, :fdiv_r, :tdiv_r, :gcd, :lcm, :and, :ior, :xor)
+for (op, nbits) in (:add => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
+                    :sub => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
+                    :mul => 0, :fdiv_q => 0, :tdiv_q => 0, :cdiv_q => 0,
+                    :fdiv_r => 0, :tdiv_r => 0, :cdiv_r => 0,
+                    :gcd => 0, :lcm => 0, :and => 0, :ior => 0, :xor => 0)
     op! = Symbol(op, :!)
     @eval begin
         $op!(x::BigInt, a::BigInt, b::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t, mpz_t), x, a, b); x)
-        $op(a::BigInt, b::BigInt) = $op!(BigInt(), a, b)
+        $op(a::BigInt, b::BigInt) = $op!(BigInt(nbits=$nbits), a, b)
         $op!(x::BigInt, b::BigInt) = $op!(x, x, b)
     end
 end
@@ -165,7 +191,7 @@ for op in (:neg, :com, :sqrt, :set)
         $op!(x::BigInt, a::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t), x, a); x)
         $op(a::BigInt) = $op!(BigInt(), a)
     end
-    op == :set && continue # MPZ.set!(x) would make no sense
+    op === :set && continue # MPZ.set!(x) would make no sense
     @eval $op!(x::BigInt) = $op!(x, x)
 end
 
@@ -282,31 +308,22 @@ BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
-    if x < 0
-        if typemin(Clong) <= x
-            return BigInt(convert(Clong,x))
-        end
-        b = BigInt(0)
-        shift = 0
-        while x < -1
-            b += BigInt(~UInt32(x&0xffffffff))<<shift
-            x >>= 32
-            shift += 32
-        end
-        return -b-1
-    else
-        if x <= typemax(Culong)
-            return BigInt(convert(Culong,x))
-        end
-        b = BigInt(0)
-        shift = 0
-        while x > 0
-            b += BigInt(UInt32(x&0xffffffff))<<shift
-            x >>>= 32
-            shift += 32
-        end
-        return b
+    x == 0 && return BigInt(Culong(0))
+    nd = ndigits(x, base=2)
+    z = MPZ.realloc2(nd)
+    s = sign(x)
+    s == -1 && (x = -x)
+    x = unsigned(x)
+    size = 0
+    limbnbits = sizeof(Limb) << 3
+    while nd > 0
+        size += 1
+        unsafe_store!(z.d, x % Limb, size)
+        x >>>= limbnbits
+        nd -= limbnbits
     end
+    z.size = s*size
+    z
 end
 
 
@@ -325,11 +342,13 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
+isodd(x::BigInt) = MPZ.tstbit(x, 0)
+
 function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
-        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(nameof(T), T, x))
         x % T
     end
 end
@@ -340,9 +359,9 @@ function (::Type{T})(x::BigInt) where T<:Base.BitSigned
         SLimb = typeof(Signed(one(Limb)))
         convert(T, convert(SLimb, x))
     else
-        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(Symbol(string(T)), T, x))
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(nameof(T), T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError(Symbol(string(T)), T, x)) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError(nameof(T), T, x)) # catch overflow
         y
     end
 end
@@ -363,26 +382,72 @@ function (::Type{T})(n::BigInt, ::RoundingMode{:Up}) where T<:CdoubleMax
     x < n ? nextfloat(x) : x
 end
 
-function (::Type{T})(n::BigInt, ::RoundingMode{:Nearest}) where T<:CdoubleMax
-    x = T(n,RoundToZero)
-    if maxintfloat(T) <= abs(x) < T(Inf)
-        r = n-BigInt(x)
-        h = eps(x)/2
-        if iseven(reinterpret(Unsigned,x)) # check if last bit is odd/even
-            if r < -h
-                return prevfloat(x)
-            elseif r > h
-                return nextfloat(x)
-            end
+function Float64(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return 0.0
+    xsize = abs(x.size)
+    if xsize*BITS_PER_LIMB > 1024
+        z = Inf64
+    elseif xsize == 1
+        z = Float64(unsafe_load(x.d))
+    elseif Limb == UInt32 && xsize == 2
+        z = Float64((unsafe_load(x.d, 2) % UInt64) << BITS_PER_LIMB + unsafe_load(x.d))
+    else
+        y1 = unsafe_load(x.d, xsize) % UInt64
+        n = 64 - leading_zeros(y1)
+        # load first 54(1 + 52 bits of fraction + 1 for rounding)
+        y = y1 >> (n - (precision(Float64)+1))
+        if Limb == UInt64
+            y += n > precision(Float64) ? 0 : (unsafe_load(x.d, xsize-1) >> (10+n))
         else
-            if r <= -h
-                return prevfloat(x)
-            elseif r >= h
-                return nextfloat(x)
-            end
+            y += (unsafe_load(x.d, xsize-1) % UInt64) >> (n-22)
+            y += n > (precision(Float64) - 32) ? 0 : (unsafe_load(x.d, xsize-2) >> (10+n))
         end
+        y = (y + 1) >> 1 # round, ties up
+        y &= ~UInt64(trailing_zeros(x) == (n-54 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
+        d = ((n+1021) % UInt64) << 52
+        z = reinterpret(Float64, d+y)
+        z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
     end
-    x
+    return flipsign(z, x.size)
+end
+
+function Float32(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return 0f0
+    xsize = abs(x.size)
+    if xsize*BITS_PER_LIMB > 128
+        z = Inf32
+    elseif xsize == 1
+        z = Float32(unsafe_load(x.d))
+    else
+        y1 = unsafe_load(x.d, xsize)
+        n = BITS_PER_LIMB - leading_zeros(y1)
+        # load first 25(1 + 23 bits of fraction + 1 for rounding)
+        y = (y1 >> (n - (precision(Float32)+1))) % UInt32
+        y += (n > precision(Float32) ? 0 : unsafe_load(x.d, xsize-1) >> (BITS_PER_LIMB - (25-n))) % UInt32
+        y = (y + one(UInt32)) >> 1 # round, ties up
+        y &= ~UInt32(trailing_zeros(x) == (n-25 + (xsize-1)*BITS_PER_LIMB)) # fix last bit to round to even
+        d = ((n+125) % UInt32) << 23
+        z = reinterpret(Float32, d+y)
+        z = ldexp(z, (xsize-1)*BITS_PER_LIMB)
+    end
+    return flipsign(z, x.size)
+end
+
+function Float16(x::BigInt, ::RoundingMode{:Nearest})
+    x == 0 && return Float16(0.0)
+    y1 = unsafe_load(x.d)
+    n = BITS_PER_LIMB - leading_zeros(y1)
+    if n > 16 || abs(x.size) > 1
+        z = Inf16
+    else
+        # load first 12(1 + 10 bits for fraction + 1 for rounding)
+        y = (y1 >> (n - (precision(Float16)+1))) % UInt16
+        y = (y + one(UInt16)) >> 1 # round, ties up
+        y &= ~UInt16(trailing_zeros(x) == (n-12)) # fix last bit to round to even
+        d = ((n+13) % UInt16) << 10
+        z = reinterpret(Float16, d+y)
+    end
+    return flipsign(z, x.size)
 end
 
 Float64(n::BigInt) = Float64(n, RoundNearest)
@@ -395,22 +460,36 @@ promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
     big(x)
 
 Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
-`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+`BigFloat`). See [`BigFloat`](@ref BigFloat(::Any, rounding::RoundingMode)) for
+information about some pitfalls with floating-point numbers.
 """
 function big end
 
 big(::Type{<:Integer})  = BigInt
 big(::Type{<:Rational}) = Rational{BigInt}
 
+big(n::Integer) = convert(BigInt, n)
+
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
-                 (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
+                 (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
                  (:&, :and), (:|, :ior), (:xor, :xor))
     @eval begin
         ($fJ)(x::BigInt, y::BigInt) = MPZ.$fC(x, y)
     end
 end
+
+for (r, f) in ((RoundToZero, :tdiv_q),
+               (RoundDown, :fdiv_q),
+               (RoundUp, :cdiv_q))
+    @eval div(x::BigInt, y::BigInt, ::typeof($r)) = MPZ.$f(x, y)
+end
+
+# For compat only. Remove in 2.0.
+div(x::BigInt, y::BigInt) = div(x, y, RoundToZero)
+fld(x::BigInt, y::BigInt) = div(x, y, RoundDown)
+cld(x::BigInt, y::BigInt) = div(x, y, RoundUp)
 
 /(x::BigInt, y::BigInt) = float(x)/float(y)
 
@@ -486,13 +565,13 @@ count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
 
-cmp(x::BigInt, y::BigInt) = MPZ.cmp(x, y)
-cmp(x::BigInt, y::ClongMax) = MPZ.cmp_si(x, y)
-cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
+cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
+cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))
+cmp(x::BigInt, y::CulongMax) = sign(MPZ.cmp_ui(x, y))
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? -1 : sign(MPZ.cmp_d(x, y))
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)
@@ -552,13 +631,13 @@ function gcdx(a::BigInt, b::BigInt)
     g, s, t
 end
 
-sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, BigInt(0), arr)
-# note: a similar implementation for `prod` won't be efficient:
+sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, arr; init=BigInt(0))
+# Note: a similar implementation for `prod` won't be efficient:
 # 1) the time complexity of the allocations is negligible compared to the multiplications
 # 2) assuming arr contains similarly sized BigInts, the multiplications are much more
-# performant when doing e.g. ((a1*a2)*(a2*a3))*(...) rather than a1*(a2*(a3*(...))),
-# which is exactly what the default implementation of `prod` does, via mapreduce
-# (which maybe could be slightly optimized for BigInt)
+# performant when doing e.g. ((a1*a2)*(a3*a4))*(...) rather than a1*(a2*(a3*(...))),
+# which is exactly what the default implementation of `prod` does, via `mapreduce`
+# (which maybe could be slightly optimized for BigInt).
 
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 
@@ -592,33 +671,45 @@ flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
 flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 # above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
+function sign(x::BigInt)
+    isneg(x) && return -one(x)
+    ispos(x) && return one(x)
+    return x
+end
 
-string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
 
-bin(n::BigInt) = base( 2, n)
-oct(n::BigInt) = base( 8, n)
-dec(n::BigInt) = base(10, n)
-hex(n::BigInt) = base(16, n)
-
-bin(n::BigInt, pad::Int) = base( 2, n, pad)
-oct(n::BigInt, pad::Int) = base( 8, n, pad)
-dec(n::BigInt, pad::Int) = base(10, n, pad)
-hex(n::BigInt, pad::Int) = base(16, n, pad)
-
-function base(b::Integer, n::BigInt, pad::Integer=1)
-    b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
-    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
+function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
+    base < 0 && return Base._base(Int(base), n, pad, (base>0) & (n.size<0))
+    2 <= base <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $base"))
     iszero(n) && pad < 1 && return ""
-    nd1 = ndigits(n, b)
+    nd1 = ndigits(n, base=base)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
-    GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
     @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end
     isneg(n) && (sv[1] = '-' % UInt8)
     String(sv)
+end
+
+function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
+    if 2 ≤ base ≤ 62
+        s = codeunits(string(n; base))
+        i, j = firstindex(a)-1, length(s)+1
+        lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
+        while i < lasti
+            # base ≤ 36: 0-9, plus a-z for 10-35
+            # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
+            x = s[j -= 1]
+            a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
+        end
+        lasti = lastindex(a)
+        while i < lasti; a[i+=1] = zero(T); end
+        return isneg(n) ? map!(-,a,a) : a
+    end
+    return invoke(digits!, Tuple{typeof(a), Integer}, a, n; base) # slow generic fallback
 end
 
 function ndigits0zpb(x::BigInt, b::Integer)
@@ -628,7 +719,7 @@ function ndigits0zpb(x::BigInt, b::Integer)
         MPZ.sizeinbase(x, b)
     else
         # non-base 2 mpz_sizeinbase might return an answer 1 too big
-        # use property that log(b, x) < ndigits(x, b) <= log(b, x) + 1
+        # use property that log(b, x) < ndigits(x, base=b) <= log(b, x) + 1
         n = MPZ.sizeinbase(x, 2)
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
         q,r = divrem(n,lb)
@@ -644,10 +735,11 @@ function ndigits0zpb(x::BigInt, b::Integer)
     end
 end
 
+# Fast paths for nextpow(2, x::BigInt)
 # below, ONE is always left-shifted by at least one digit, so a new BigInt is
 # allocated, which can be safely mutated
-prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, 2) - 1), x)
-nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, 2), x)
+_prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, base=2) - 1), x)
+_nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, base=2), x)
 
 Base.checked_abs(x::BigInt) = abs(x)
 Base.checked_neg(x::BigInt) = -x
@@ -670,6 +762,79 @@ function Base.deepcopy_internal(x::BigInt, stackdict::IdDict)
     y = MPZ.set(x)
     stackdict[x] = y
     return y
+end
+
+## streamlined hashing for BigInt, by avoiding allocation from shifts ##
+
+if Limb === UInt
+    # this condition is true most (all?) of the time, and in this case we can define
+    # an optimized version of the above hash_integer(::Integer, ::UInt) method for BigInt
+    # used e.g. for Rational{BigInt}
+    function hash_integer(n::BigInt, h::UInt)
+        GC.@preserve n begin
+            s = n.size
+            s == 0 && return hash_integer(0, h)
+            p = convert(Ptr{UInt}, n.d)
+            b = unsafe_load(p)
+            h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
+            for k = 2:abs(s)
+                h ⊻= hash_uint(unsafe_load(p, k) ⊻ h)
+            end
+            return h
+        end
+    end
+
+    _divLimb(n) = UInt === UInt64 ? n >>> 6 : n >>> 5
+    _modLimb(n) = UInt === UInt64 ? n & 63 : n & 31
+
+    function hash(x::BigInt, h::UInt)
+        GC.@preserve x begin
+            sz = x.size
+            sz == 0 && return hash(0, h)
+            ptr = Ptr{UInt}(x.d)
+            if sz == 1
+                return hash(unsafe_load(ptr), h)
+            elseif sz == -1
+                limb = unsafe_load(ptr)
+                limb <= typemin(Int) % UInt && return hash(-(limb % Int), h)
+            end
+            pow = trailing_zeros(x)
+            nd = ndigits0z(x, 2)
+            idx = _divLimb(pow) + 1
+            shift = _modLimb(pow) % UInt
+            upshift = BITS_PER_LIMB - shift
+            asz = abs(sz)
+            if shift == 0
+                limb = unsafe_load(ptr, idx)
+            else
+                limb1 = unsafe_load(ptr, idx)
+                limb2 = idx < asz ? unsafe_load(ptr, idx+1) : UInt(0)
+                limb = limb2 << upshift | limb1 >> shift
+            end
+            if nd <= 1024 && nd - pow <= 53
+                return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
+            end
+            h = hash_integer(1, h)
+            h = hash_integer(pow, h)
+            h ⊻= hash_uint(flipsign(limb, sz) ⊻ h)
+            for idx = idx+1:asz
+                if shift == 0
+                    limb = unsafe_load(ptr, idx)
+                else
+                    limb1 = limb2
+                    if idx == asz
+                        limb = limb1 >> shift
+                        limb == 0 && break # don't hash leading zeros
+                    else
+                        limb2 = unsafe_load(ptr, idx+1)
+                        limb = limb2 << upshift | limb1 >> shift
+                    end
+                end
+                h ⊻= hash_uint(limb ⊻ h)
+            end
+            return h
+        end
+    end
 end
 
 end # module

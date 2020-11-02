@@ -32,7 +32,7 @@ docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test stringmime("text/plain", Docs.doc(C74685))=="  Doc abstract type\n"
+@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type"
 @test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
@@ -40,6 +40,12 @@ macro macro_doctest() end
 :@macro_doctest
 
 @test (@doc @macro_doctest) !== nothing
+
+@test (@eval @doc $(Meta.parse("{a"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) == (@doc @cmd)
+@test (@eval @doc $(Meta.parse("123456789012345678901234567890"))) == (@doc @int128_str)
+@test (@eval @doc $(Meta.parse("1234567890123456789012345678901234567890"))) == (@doc @big_str)
 
 # test that random stuff interpolated into docstrings doesn't break search or other methods here
 @doc doc"""
@@ -153,6 +159,18 @@ t(::Int, ::Any)
 "t-3"
 t{S <: Integer}(::S)
 
+# Docstrings to parametric methods after definition using where syntax (#32960):
+tw(x::T) where T = nothing
+tw(x::T, y::U) where {T, U <: Integer} = nothing
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat = nothing
+
+"tw-1"
+tw(x::T) where T
+"tw-2"
+tw(x::T, y::U) where {T, U <: Integer}
+"tw-3"
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat
+
 "FieldDocs"
 mutable struct FieldDocs
     "one"
@@ -192,6 +210,13 @@ returntype(x::Float64)::Float64 = x
 function returntype(x::Int)::Int
     x
 end
+
+# @nospecialize (issue #34122)
+"`fnospecialize` for Numbers"
+fnospecialize(@nospecialize(x::Number)) = 1
+
+"`fnospecialize` for arrays"
+fnospecialize(@nospecialize(x::AbstractArray)) = 2
 
 end
 
@@ -264,6 +289,14 @@ end
 let rt = @var(DocsTest.returntype)
     md = meta(DocsTest)[rt]
     @test md.order == [Tuple{Float64}, Tuple{Int}]
+end
+
+let fns = @var(DocsTest.fnospecialize)
+    md = meta(DocsTest)[fns]
+    d = md.docs[Tuple{Number}]
+    @test docstrings_equal(d, doc"`fnospecialize` for Numbers")
+    d = md.docs[Tuple{AbstractArray}]
+    @test docstrings_equal(d, doc"`fnospecialize` for arrays")
 end
 
 @test docstrings_equal(@doc(DocsTest.TA), doc"TA")
@@ -400,6 +433,7 @@ macro example_1(f)
     end |> esc
 end
 
+const LINE_NUMBER_F = @__LINE__() + 1
 "f"
 @example_1 f
 
@@ -413,16 +447,23 @@ macro example_2(f)
     end |> esc
 end
 
+const LINE_NUMBER_G = @__LINE__() + 1
 "g"
 @example_2 g
 
 @example_2 _g
+
+const LINE_NUMBER_T = @__LINE__() + 1
+"T"
+Base.@kwdef struct T end
 
 end
 
 let md = meta(MacroGenerated)[@var(MacroGenerated.f)]
     @test md.order == [Tuple{Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"f")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_F
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_f)
@@ -431,9 +472,18 @@ let md = meta(MacroGenerated)[@var(MacroGenerated.g)]
     @test md.order == [Tuple{Any}, Tuple{Any, Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"g")
     @test docstrings_equal(md.docs[Tuple{Any, Any}], doc"g")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_G
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_g)
+
+let md = meta(MacroGenerated)[@var(MacroGenerated.T)]
+    @test md.order == Type[Union{}]
+    @test docstrings_equal(md.docs[Union{}], doc"T")
+    @test md.docs[Union{}].data[:linenumber] == MacroGenerated.LINE_NUMBER_T
+    @test md.docs[Union{}].data[:path] == @__FILE__()
+end
 
 module DocVars
 
@@ -559,7 +609,7 @@ REPL.docsearch(haystack::LazyHelp, needle) = REPL.docsearch(haystack.text, needl
 end
 
 let d = @doc(I15424.LazyHelp)
-    @test stringmime("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+    @test repr("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
 end
 
 # Issue #13385.
@@ -669,10 +719,9 @@ end
 @test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test contains(sprint(apropos, "pearson"), "cor")
-@test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
+@test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
 using Profile
-@test contains(sprint(apropos, "print"), "Profile.print")
+@test occursin("Profile.print", sprint(apropos, "print"))
 
 # Issue #13068.
 
@@ -950,10 +999,11 @@ let x = Binding(Main, :⊕)
     @test Meta.parse(string(x)) == :(⊕)
 end
 
-doc_util_path = Symbol(joinpath("docs", "utils.jl"))
-
 @test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
 @test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
+
+# issue #36378 (\u1e8b and x\u307 are the fully composed and decomposed forms of ẋ, respectively)
+@test sprint(repl_latex, "\u1e8b") == "\"x\u307\" can be typed by x\\dot<tab>\n\n"
 
 # issue #15684
 begin
@@ -979,19 +1029,47 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-let dt1 = _repl(:(dynamic_test(1.0)))
+# For testing purposes, strip off the `trimdocs(expr)` wrapper
+function striptrimdocs(expr)
+    if Meta.isexpr(expr, :call)
+        fex = expr.args[1]
+        if Meta.isexpr(fex, :.) && fex.args[1] == :REPL
+            fmex = fex.args[2]
+            if isa(fmex, QuoteNode) && fmex.value == :trimdocs
+                expr = expr.args[2]
+            end
+        end
+    end
+    return expr
+end
+
+let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
     @test dt1 isa Expr
     @test dt1.args[1] isa Expr
     @test dt1.args[1].head === :macrocall
     @test dt1.args[1].args[1] == Symbol("@doc")
     @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
 end
-let dt2 = _repl(:(dynamic_test(::String)))
+let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
     @test dt2 isa Expr
     @test dt2.args[1] isa Expr
     @test dt2.args[1].head === :macrocall
     @test dt2.args[1].args[1] == Symbol("@doc")
     @test dt2.args[1].args[3] == :(dynamic_test(::String))
+end
+let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
+    @test dt3 isa Expr
+    @test dt3.args[1] isa Expr
+    @test dt3.args[1].head === :macrocall
+    @test dt3.args[1].args[1] == Symbol("@doc")
+    @test dt3.args[1].args[3].args[2].head == :(::) # can't test equality due to line numbers
+end
+let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
+    @test dt4 isa Expr
+    @test dt4.args[1] isa Expr
+    @test dt4.args[1].head === :macrocall
+    @test dt4.args[1].args[1] == Symbol("@doc")
+    @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
 end
 
 # Equality testing
@@ -1002,6 +1080,9 @@ end
 @test Text("docstring1") ≠ Text("docstring2")
 @test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
 @test hash(Text("docstring")) ≠ hash(HTML("docstring"))
+
+# issue #25172
+@test repr(MIME"text/html"(), HTML("a","b")) == "ab"
 
 # issue 21016
 module I21016
@@ -1118,3 +1199,35 @@ struct A_20087 end
 (a::A_20087)() = a
 
 @test docstrings_equal(@doc(A_20087()), doc"a")
+
+struct B_20087 end
+
+"""b"""
+(::B_20087)() = a
+
+@test docstrings_equal(@doc(B_20087()), doc"b")
+
+# issue #27832
+
+_last_atdoc = Core.atdoc
+Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+
+"""
+"""
+module M27832
+macro foo(x)
+    repr(x)
+end
+for fn in (:isdone,)
+    global xs = @foo $fn
+end
+end
+@test M27832.xs == ":(\$(Expr(:\$, :fn)))"
+Core.atdoc!(_last_atdoc)
+
+# issue #29432
+"First docstring" module Module29432 end
+Test.collect_test_logs() do                          # suppress printing of any warning
+    eval(quote "Second docstring" Module29432 end)   # requires toplevel
+end
+@test docstrings_equal(@doc(Module29432), doc"Second docstring")

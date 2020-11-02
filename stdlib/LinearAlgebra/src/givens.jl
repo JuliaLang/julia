@@ -6,17 +6,22 @@ abstract type AbstractRotation{T} end
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using adjoint instead of transpose.")
 
-function *(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
+function (*)(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     lmul!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-*(A::AbstractVector, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
-*(A::AbstractMatrix, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
+(*)(A::AbstractVector, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
+(*)(A::AbstractMatrix, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
 function _absvecormat_mul_adjrot(A::AbstractVecOrMat{T}, adjR::Adjoint{<:Any,<:AbstractRotation{S}}) where {T,S}
     R = adjR.parent
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    rmul!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), adjoint(convert(AbstractRotation{TS}, R)))
+    rmul!(TS.(A), convert(AbstractRotation{TS}, R)')
 end
+function(*)(A::AbstractMatrix{T}, R::AbstractRotation{S}) where {T,S}
+    TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
+    rmul!(TS.(A), convert(AbstractRotation{TS}, R))
+end
+
 """
     LinearAlgebra.Givens(i1,i2,c,s) -> G
 
@@ -34,13 +39,14 @@ struct Givens{T} <: AbstractRotation{T}
     c::T
     s::T
 end
-mutable struct Rotation{T} <: AbstractRotation{T}
+struct Rotation{T} <: AbstractRotation{T}
     rotations::Vector{Givens{T}}
 end
 
 convert(::Type{T}, r::T) where {T<:AbstractRotation} = r
 convert(::Type{T}, r::AbstractRotation) where {T<:AbstractRotation} = T(r)
 
+Givens(i1, i2, c, s) = Givens(i1, i2, promote(c, s)...)
 Givens{T}(G::Givens{T}) where {T} = G
 Givens{T}(G::Givens) where {T} = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
 Rotation{T}(R::Rotation{T}) where {T} = R
@@ -48,14 +54,17 @@ Rotation{T}(R::Rotation) where {T} = Rotation{T}([Givens{T}(g) for g in R.rotati
 AbstractRotation{T}(G::Givens) where {T} = Givens{T}(G)
 AbstractRotation{T}(R::Rotation) where {T} = Rotation{T}(R)
 
-adjoint(G::Givens) = Adjoint(G)
+adjoint(G::Givens) = Givens(G.i1, G.i2, G.c', -G.s)
 adjoint(R::Rotation) = Adjoint(R)
-Base.copy(aG::Adjoint{<:Any,<:Givens}) = (G = aG.parent; Givens(G.i1, G.i2, conj(G.c), -G.s))
-Base.copy(aR::Adjoint{<:Any,Rotation{T}}) where {T} = Rotation{T}(reverse!([copy(r') for r in aR.parent.rotations]))
+function Base.copy(aG::Adjoint{<:Any,<:Givens})
+    G = aG.parent
+    return Givens(G.i1, G.i2, conj(G.c), -G.s)
+end
+Base.copy(aR::Adjoint{<:Any,Rotation{T}}) where {T} = Rotation{T}(reverse!([r' for r in aR.parent.rotations]))
 
-realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
-realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
-realmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
+floatmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
+floatmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
+floatmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(floatmin(T)/eps(T))/log(twopar)/twopar))
 
 # derived from LAPACK's dlartg
 # Copyright:
@@ -70,8 +79,8 @@ function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
     zeropar = T0(zero(T)) # must be dimensionless
 
     # need both dimensionful and dimensionless versions of these:
-    safmn2 = realmin2(T0)
-    safmn2u = realmin2(T)
+    safmn2 = floatmin2(T0)
+    safmn2u = floatmin2(T)
     safmx2 = one(T)/safmn2
     safmx2u = oneunit(T)/safmn2
 
@@ -144,9 +153,9 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     czero = complex(zeropar)
 
     abs1(ff) = max(abs(real(ff)), abs(imag(ff)))
-    safmin = realmin(T0)
-    safmn2 = realmin2(T0)
-    safmn2u = realmin2(T)
+    safmin = floatmin(T0)
+    safmn2 = floatmin2(T0)
+    safmn2u = floatmin2(T)
     safmx2 = one(T)/safmn2
     safmx2u = oneunit(T)/safmn2
     scalepar = max(abs1(f), abs1(g))
@@ -240,6 +249,20 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     return cs, sn, r
 end
 
+# enable for unitful quantities
+function givensAlgorithm(f::T, g::T) where T
+    fs = f / oneunit(T)
+    gs = g / oneunit(T)
+    typeof(fs) === T && typeof(gs) === T &&
+    !isa(fs, Union{AbstractFloat,Complex{<:AbstractFloat}}) &&
+    throw(MethodError(givensAlgorithm, (fs, gs)))
+
+    c, s, r = givensAlgorithm(fs, gs)
+    return c, s, r * oneunit(T)
+end
+
+givensAlgorithm(f, g) = givensAlgorithm(promote(float(f), float(g))...)
+
 """
 
     givens(f::T, g::T, i1::Integer, i2::Integer) where {T} -> (G::Givens, r::T)
@@ -270,7 +293,7 @@ function givens(f::T, g::T, i1::Integer, i2::Integer) where T
         s = -conj(s)
         i1,i2 = i2,i1
     end
-    Givens(i1, i2, convert(T, c), convert(T, s)), r
+    Givens(i1, i2, c, s), r
 end
 """
     givens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)
@@ -326,28 +349,29 @@ function getindex(G::Givens, i::Integer, j::Integer)
     end
 end
 
-function lmul!(G::Givens, A::AbstractVecOrMat)
+@inline function lmul!(G::Givens, A::AbstractVecOrMat)
+    require_one_based_indexing(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
     end
-    @inbounds @simd for i = 1:n
+    @inbounds for i = 1:n
         a1, a2 = A[G.i1,i], A[G.i2,i]
         A[G.i1,i] =       G.c *a1 + G.s*a2
         A[G.i2,i] = -conj(G.s)*a1 + G.c*a2
     end
     return A
 end
-function rmul!(A::AbstractMatrix, adjG::Adjoint{<:Any,<:Givens})
-    G = adjG.parent
+@inline function rmul!(A::AbstractMatrix, G::Givens)
+    require_one_based_indexing(A)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
     end
-    @inbounds @simd for i = 1:m
+    @inbounds for i = 1:m
         a1, a2 = A[i,G.i1], A[i,G.i2]
-        A[i,G.i1] =  a1*G.c + a2*conj(G.s)
-        A[i,G.i2] = -a1*G.s + a2*G.c
+        A[i,G.i1] = a1*G.c - a2*G.s'
+        A[i,G.i2] = a1*G.s + a2*G.c
     end
     return A
 end
@@ -374,16 +398,16 @@ end
 # TODO: None of the following disambiguation methods are great. They should perhaps
 # instead be MethodErrors, or revised.
 #
-# dismabiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj of AbstractRotation)
+# disambiguation methods: *(Adj/Trans of AbsVec or AbsMat, Adj of AbstractRotation)
 *(A::Adjoint{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-# dismabiguation methods: *(Adj/Trans of AbsTri or RealHermSymComplex{Herm|Sym}, Adj of AbstractRotation)
+# disambiguation methods: *(Adj/Trans of AbsTri or RealHermSymComplex{Herm|Sym}, Adj of AbstractRotation)
 *(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-# dismabiguation methods: *(Diag/AbsTri, Adj of AbstractRotation)
+# disambiguation methods: *(Diag/AbsTri, Adj of AbstractRotation)
 *(A::Diagonal, B::Adjoint{<:Any,<:AbstractRotation}) = A * copy(B)
 *(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractRotation}) = A * copy(B)

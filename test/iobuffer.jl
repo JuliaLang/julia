@@ -19,7 +19,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     @test eof(io)
     seek(io, 0)
     @test read(io,UInt8) == convert(UInt8, 'a')
-    a = Vector{UInt8}(uninitialized, 2)
+    a = Vector{UInt8}(undef, 2)
     @test read!(io, a) == a
     @test a == UInt8['b','c']
     @test bufcontents(io) == "abc"
@@ -44,7 +44,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     @test write(io,"boston\ncambridge\n") > 0
     @test String(take!(io)) == "boston\ncambridge\n"
     @test String(take!(io)) == ""
-    @test write(io, Complex{Float64}(0)) === 16
+    @test write(io, ComplexF64(0)) === 16
     @test write(io, Rational{Int64}(1//2)) === 16
     close(io)
     @test_throws ArgumentError write(io,UInt8[0])
@@ -169,7 +169,7 @@ end
 
 @testset "issue 5453" begin
     io = IOBuffer("abcdef")
-    a = Vector{UInt8}(uninitialized, 1024)
+    a = Vector{UInt8}(undef, 1024)
     @test_throws EOFError read!(io,a)
     @test eof(io)
 end
@@ -200,7 +200,7 @@ end
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
     @test_throws ArgumentError write(io,'β')
-    a = Vector{UInt8}(uninitialized, 10)
+    a = Vector{UInt8}(undef, 10)
     @test read!(io, a) === a
     @test String(a) == "helloworld"
     @test read(io, Char) == 'ω'
@@ -254,6 +254,18 @@ end
     @test close(bstream) === nothing
     @test eof(bstream)
     @test bytesavailable(bstream) == 0
+    flag = Ref{Bool}(false)
+    event = Base.Event()
+    bstream = Base.BufferStream()
+    task = @async begin
+        notify(event)
+        read(bstream, 16)
+        flag[] = true
+    end
+    wait(event)
+    write(bstream, rand(UInt8, 16))
+    wait(task)
+    @test flag[] == true
 end
 
 @test flush(IOBuffer()) === nothing # should be a no-op
@@ -283,7 +295,7 @@ end
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(isalpha, io))
+        @test !eof(skipchars(isletter, io))
         @test read(io, Char) == char
     end
 end
@@ -319,4 +331,13 @@ end
     Base.compact(b)
     @test readline(b) == "Goodbye!"
     close(b)
+end
+
+@testset "peek(::GenericIOBuffer)" begin
+    io = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
+    write(io, "こんにちは")
+    @test peek(io) == 0xe3
+    @test peek(io, Char) == 'こ'
+    @test peek(io, Int32) == -476872221
+    close(io)
 end

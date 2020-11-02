@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Tools for distributed parallel processing.
 """
@@ -9,17 +7,19 @@ module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, connect, kill, close, showerror
+             hash, ==, kill, close, isopen, showerror
 
 # imports for use
-using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
-            VERSION_STRING, sync_begin, sync_add, sync_end, async_run_thunk,
-            binding_module, notify_error, atexit, julia_exename, julia_cmd,
-            AsyncGenerator, acquire, release, invokelatest,
-            shell_escape_posixly, uv_error, coalesce, notnothing
+using Base: Process, Semaphore, JLOptions, buffer_writes, @sync_add,
+            VERSION_STRING, binding_module, atexit, julia_exename,
+            julia_cmd, AsyncGenerator, acquire, release, invokelatest,
+            shell_escape_posixly, uv_error, something, notnothing, isbuffered,
+            mapany
+using Base.Threads: Event
 
-using Serialization
+using Serialization, Sockets
 import Serialization: serialize, deserialize
+import Sockets: connect, wait_connected
 
 # NOTE: clusterserialize.jl imports additional symbols from Serialization for use
 
@@ -75,13 +75,27 @@ function _require_callback(mod::Base.PkgId)
         # broadcast top-level (e.g. from Main) import/using from node 1 (only)
         @sync for p in procs()
             p == 1 && continue
-            @async remotecall_wait(p) do
-                Base._require(mod)
+            @sync_add remotecall(p) do
+                Base.require(mod)
                 nothing
             end
         end
     end
 end
+
+const REF_ID = Ref(1)
+next_ref_id() = (id = REF_ID[]; REF_ID[] = id+1; id)
+
+struct RRID
+    whence::Int
+    id::Int
+
+    RRID() = RRID(myid(),next_ref_id())
+    RRID(whence, id) = new(whence,id)
+end
+
+hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
+==(r::RRID, s::RRID) = (r.whence==s.whence && r.id==s.id)
 
 include("clusterserialize.jl")
 include("cluster.jl")   # cluster setup and management, addprocs
@@ -92,12 +106,8 @@ include("macros.jl")      # @spawn and friends
 include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
-include("precompile.jl")
-
-@eval @deprecate $(Symbol("@parallel")) $(Symbol("@distributed"))
 
 function __init__()
-    push!(Base.package_callbacks, _require_callback)
     init_parallel()
 end
 

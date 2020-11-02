@@ -19,11 +19,13 @@ signbit(x::Float16) = signbit(bitcast(Int16, x))
 """
     maxintfloat(T=Float64)
 
-The largest consecutive integer that is exactly represented in the given floating-point type `T`
-(which defaults to `Float64`).
+The largest consecutive integer-valued floating-point number that is exactly represented in
+the given floating-point type `T` (which defaults to `Float64`).
 
-That is, `maxintfloat` returns the smallest positive integer `n` such that `n+1`
-is *not* exactly representable in the type `T`.
+That is, `maxintfloat` returns the smallest positive integer-valued floating-point number
+`n` such that `n+1` is *not* exactly representable in the type `T`.
+
+When an `Integer`-type value is needed, use `Integer(maxintfloat(T))`.
 """
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
@@ -43,43 +45,52 @@ maxintfloat() = maxintfloat(Float64)
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
 """
-    round([T,] x, [digits, [base]], [r::RoundingMode])
+    round([T,] x, [r::RoundingMode])
+    round(x, [r::RoundingMode]; digits::Integer=0, base = 10)
+    round(x, [r::RoundingMode]; sigdigits::Integer, base = 10)
 
-Rounds `x` to an integer value according to the provided
-[`RoundingMode`](@ref), returning a value of the same type as `x`. When not
-specifying a rounding mode the global mode will be used
-(see [`rounding`](@ref)), which by default is round to the nearest integer
-([`RoundNearest`](@ref) mode), with ties (fractional values of 0.5) being
-rounded to the nearest even integer.
+Rounds the number `x`.
+
+Without keyword arguments, `x` is rounded to an integer value, returning a value of type
+`T`, or of the same type of `x` if no `T` is provided. An [`InexactError`](@ref) will be
+thrown if the value is not representable by `T`, similar to [`convert`](@ref).
+
+If the `digits` keyword argument is provided, it rounds to the specified number of digits
+after the decimal place (or before if negative), in base `base`.
+
+If the `sigdigits` keyword argument is provided, it rounds to the specified number of
+significant digits, in base `base`.
+
+The [`RoundingMode`](@ref) `r` controls the direction of the rounding; the default is
+[`RoundNearest`](@ref), which rounds to the nearest integer, with ties (fractional values
+of 0.5) being rounded to the nearest even integer. Note that `round` may give incorrect
+results if the global rounding mode is changed (see [`rounding`](@ref)).
 
 # Examples
 ```jldoctest
 julia> round(1.7)
 2.0
 
+julia> round(Int, 1.7)
+2
+
 julia> round(1.5)
 2.0
 
 julia> round(2.5)
 2.0
-```
 
-The optional [`RoundingMode`](@ref) argument will change how the number gets
-rounded.
-
-`round(T, x, [r::RoundingMode])` converts the result to type `T`, throwing an
-[`InexactError`](@ref) if the value is not representable.
-
-`round(x, digits)` rounds to the specified number of digits after the decimal place (or
-before if negative). `round(x, digits, base)` rounds using a base other than 10.
-
-# Examples
-```jldoctest
-julia> round(pi, 2)
+julia> round(pi; digits=2)
 3.14
 
-julia> round(pi, 3, 2)
+julia> round(pi; digits=3, base=2)
 3.125
+
+julia> round(123.456; sigdigits=2)
+120.0
+
+julia> round(357.913; sigdigits=4, base=2)
+352.0
 ```
 
 !!! note
@@ -89,7 +100,7 @@ julia> round(pi, 3, 2)
     rounded to 1.2.
 
     # Examples
-    ```jldoctest
+    ```jldoctest; setup = :(using Printf)
     julia> x = 1.15
     1.15
 
@@ -99,102 +110,120 @@ julia> round(pi, 3, 2)
     julia> x < 115//100
     true
 
-    julia> round(x, 1)
+    julia> round(x, digits=1)
     1.2
     ```
 
-See also [`signif`](@ref) for rounding to significant digits.
+# Extensions
+
+To extend `round` to new numeric types, it is typically sufficient to define `Base.round(x::NewType, r::RoundingMode)`.
 """
 round(T::Type, x)
-round(x::Real, ::RoundingMode{:ToZero}) = trunc(x)
-round(x::Real, ::RoundingMode{:Up}) = ceil(x)
-round(x::Real, ::RoundingMode{:Down}) = floor(x)
+
+function round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer}
+    r != RoundToZero && (x = round(x,r))
+    trunc(T, x)
+end
+
+# NOTE: this relies on the current keyword dispatch behaviour (#9498).
+function round(x::Real, r::RoundingMode=RoundNearest;
+               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
+    if digits === nothing
+        if sigdigits === nothing
+            if base === nothing
+                # avoid recursive calls
+                throw(MethodError(round, (x,r)))
+            else
+                round(x,r)
+                # or throw(ArgumentError("`round` cannot use `base` argument without `digits` or `sigdigits` arguments."))
+            end
+        else
+            isfinite(x) || return float(x)
+            _round_sigdigits(x, r, sigdigits, base === nothing ? 10 : base)
+        end
+    else
+        if sigdigits === nothing
+            isfinite(x) || return float(x)
+            _round_digits(x, r, digits, base === nothing ? 10 : base)
+        else
+            throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
+        end
+    end
+end
+
+trunc(x::Real; kwargs...) = round(x, RoundToZero; kwargs...)
+floor(x::Real; kwargs...) = round(x, RoundDown; kwargs...)
+ceil(x::Real; kwargs...)  = round(x, RoundUp; kwargs...)
+
+round(x::Integer, r::RoundingMode) = x
+
+# round x to multiples of 1/invstep
+function _round_invstep(x, invstep, r::RoundingMode)
+    y = round(x * invstep, r) / invstep
+    if !isfinite(y)
+        return x
+    end
+    return y
+end
+
+# round x to multiples of step
+function _round_step(x, step, r::RoundingMode)
+    # TODO: use div with rounding mode
+    y = round(x / step, r) * step
+    if !isfinite(y)
+        if x > 0
+            return (r == RoundUp ? oftype(x, Inf) : zero(x))
+        elseif x < 0
+            return (r == RoundDown ? -oftype(x, Inf) : -zero(x))
+        else
+            return x
+        end
+    end
+    return y
+end
+
+function _round_digits(x, r::RoundingMode, digits::Integer, base)
+    fx = float(x)
+    if digits >= 0
+        invstep = oftype(fx, base)^digits
+        _round_invstep(fx, invstep, r)
+    else
+        step = oftype(fx, base)^-digits
+        _round_step(fx, step, r)
+    end
+end
+
+hidigit(x::Integer, base) = ndigits0z(x, base)
+function hidigit(x::AbstractFloat, base)
+    iszero(x) && return 0
+    if base == 10
+        return 1 + floor(Int, log10(abs(x)))
+    elseif base == 2
+        return 1 + exponent(x)
+    else
+        return 1 + floor(Int, log(base, abs(x)))
+    end
+end
+hidigit(x::Real, base) = hidigit(float(x), base)
+
+function _round_sigdigits(x, r::RoundingMode, sigdigits::Integer, base)
+    h = hidigit(x, base)
+    _round_digits(x, r, sigdigits-h, base)
+end
+
 # C-style round
 function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     y = trunc(x)
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
-    y = floor(x)
-    ifelse(x==y,y,copysign(floor(2*x-y),x))
-end
-round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T,round(x,r))
-
-# adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
-# for round, og is the power of 10 relative to the decimal point
-# for signif, og is the absolute power of 10
-# digits and base must be integers, x must be convertable to float
-
-function _signif_og(x, digits, base)
-    if base == 10
-        e = floor(log10(abs(x)) - digits + 1.)
-        og = oftype(x, exp10(abs(e)))
-    elseif base == 2
-        e = exponent(abs(x)) - digits + 1.
-        og = oftype(x, exp2(abs(e)))
-    else
-        e = floor(log(base, abs(x)) - digits + 1.)
-        og = oftype(x, float(base) ^ abs(e))
-    end
-    return og, e
-end
-
-"""
-    signif(x, digits, [base])
-
-Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
-base `base` representation, default 10.
-
-# Examples
-```jldoctest
-julia> signif(123.456, 2)
-120.0
-
-julia> signif(357.913, 4, 2)
-352.0
-```
-"""
-function signif(x::Real, digits::Integer, base::Integer=10)
-    digits < 1 && throw(DomainError(digits, "`digits` cannot be less than 1."))
-
-    x = float(x)
-    (x == 0 || !isfinite(x)) && return x
-    og, e = _signif_og(x, digits, base)
-    if e >= 0 # for numeric stability
-        r = round(x/og)*og
-    else
-        r = round(x*og)/og
-    end
-    !isfinite(r) ? x : r
-end
-
-for f in (:round, :ceil, :floor, :trunc)
-    @eval begin
-        function ($f)(x::Real, digits::Integer, base::Integer=10)
-            x = float(x)
-            og = convert(eltype(x),base)^digits
-            r = ($f)(x * og) / og
-
-            if !isfinite(r)
-                if digits > 0
-                    return x
-                elseif x > 0
-                    return $(:ceil == f ? :(convert(eltype(x), Inf)) : :(zero(x)))
-                elseif x < 0
-                    return $(:floor == f ? :(-convert(eltype(x), Inf)) : :(-zero(x)))
-                else
-                    return x
-                end
-            end
-            return r
-        end
-    end
+function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
+    copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
 end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=atol>0 ? √eps : 0, atol::Real=0, nans::Bool=false, norm::Function)
+    isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
 
 Inexact equality comparison: `true` if `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The
 default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
@@ -205,9 +234,9 @@ the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger 
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
-`x` and `y` may also be arrays of numbers, in which case `norm` defaults to `vecnorm` but
-may be changed by passing a `norm::Function` keyword argument. (For numbers, `norm` is the
-same thing as `abs`.) When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
+The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for
+arrays (where an alternative `norm` choice is sometimes useful).
+When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
 or `NaN`), the comparison falls back to checking whether all elements of `x` and `y` are
 approximately equal component-wise.
 
@@ -243,9 +272,20 @@ julia> isapprox(1e-10, 0, atol=1e-8)
 true
 ```
 """
-function isapprox(x::Number, y::Number; atol::Real=0, rtol::Real=rtoldefault(x,y,atol), nans::Bool=false)
-    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= max(atol, rtol*max(abs(x), abs(y)))) || (nans && isnan(x) && isnan(y))
+function isapprox(x::Number, y::Number;
+                  atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
+                  nans::Bool=false, norm::Function=abs)
+    x == y || (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
 end
+
+"""
+    isapprox(x; kwargs...) / ≈(x; kwargs...)
+
+Create a function that compares its argument to `x` using `≈`, i.e. a function equivalent to `y -> y ≈ x`.
+
+The keyword arguments supported here are the same as those in the 2-argument `isapprox`.
+"""
+isapprox(y; kwargs...) = x -> isapprox(x, y; kwargs...)
 
 const ≈ = isapprox
 """
@@ -286,7 +326,7 @@ fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 # 1.0000000009313226 = 1 + 1/2^30
 # If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
 # instead of the properly-rounded 0.30000000000000004; check after calling fma
-if (Sys.ARCH != :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
+if (Sys.ARCH !== :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
     (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) ==
      1.8626451500983188e-9) && 0.1 + 0.2 == 0.30000000000000004)
     fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)

@@ -2,18 +2,6 @@
 
 abstract type AbstractMsg end
 
-const REF_ID = Ref(1)
-next_ref_id() = (id = REF_ID[]; REF_ID[] = id+1; id)
-
-struct RRID
-    whence::Int
-    id::Int
-
-    RRID() = RRID(myid(),next_ref_id())
-    RRID(whence, id) = new(whence,id)
-end
-hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
-==(r::RRID, s::RRID) = (r.whence==s.whence && r.id==s.id)
 
 ## Wire format description
 #
@@ -36,17 +24,17 @@ end
 null_id(id) =  id == RRID(0, 0)
 
 struct CallMsg{Mode} <: AbstractMsg
-    f::Function
+    f::Any
     args::Tuple
     kwargs
 end
 struct CallWaitMsg <: AbstractMsg
-    f::Function
+    f::Any
     args::Tuple
     kwargs
 end
 struct RemoteDoMsg <: AbstractMsg
-    f::Function
+    f::Any
     args::Tuple
     kwargs
 end
@@ -71,7 +59,7 @@ struct JoinPGRPMsg <: AbstractMsg
     lazy::Bool
 end
 struct JoinCompleteMsg <: AbstractMsg
-    cpu_cores::Int
+    cpu_threads::Int
     ospid::Int
 end
 
@@ -92,7 +80,7 @@ for (idx, tname) in enumerate(msgtypes)
     end
 end
 
-let msg_cases = :(assert(false))
+let msg_cases = :(@assert false)
     for i = length(msgtypes):-1:1
         mti = msgtypes[i]
         msg_cases = :(if idx == $i
@@ -174,6 +162,9 @@ end
 
 function send_msg_(w::Worker, header, msg, now::Bool)
     check_worker_state(w)
+    if myid() != 1 && !isa(msg, IdentifySocketMsg) && !isa(msg, IdentifySocketAckMsg)
+        wait(w.initialized)
+    end
     io = w.w_stream
     lock(io.lock)
     try
@@ -201,7 +192,7 @@ function flush_gc_msgs()
         end
     catch e
         bt = catch_backtrace()
-        @schedule showerror(STDERR, e, bt)
+        @async showerror(stderr, e, bt)
     end
 end
 
