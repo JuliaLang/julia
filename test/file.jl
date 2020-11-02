@@ -1194,7 +1194,7 @@ else
 end
 using Downloads: download
 @test_throws ArgumentError download("good", "ba\0d")
-@test_throws ArgumentError download("ba\0d", "good")
+@test_throws ArgumentError download("ba\0d", tempname())
 
 ###################
 #     walkdir     #
