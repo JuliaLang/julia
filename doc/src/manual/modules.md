@@ -1,7 +1,7 @@
 # [Modules](@id modules)
 
 Modules in Julia help organizing code into coherent units. They are delimited syntactically inside
-`module Name ... end`, and have the following features:
+`module NameOfModule ... end`, and have the following features:
 
 1. Modules are separate namespaces, each introducing a new global scope. This is useful, because it
    allows functions and global variables to have the same name in different modules without being in
