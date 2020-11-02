@@ -11,12 +11,12 @@ GC.gc(); GC.gc()
 GC.gc(); GC.gc()
 @test Mmap.mmap(file, Array{UInt8,3}, (1,1,11)) == reshape(t,(1,1,11))
 GC.gc(); GC.gc()
-@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(uninitialized, (0,0,0))
+@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(undef, (0,0,0))
 @test Mmap.mmap(file, Vector{UInt8}, (11,)) == t
 GC.gc(); GC.gc()
 @test Mmap.mmap(file, Array{UInt8,2}, (1,11)) == t'
 GC.gc(); GC.gc()
-@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(uninitialized, (0,0))
+@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(undef, (0,0))
 m = Mmap.mmap(file, Array{UInt8,3}, (1,2,1))
 @test m == reshape(b"He",(1,2,1))
 finalize(m); m=nothing; GC.gc()
@@ -59,7 +59,7 @@ close(s); finalize(m); m=nothing; GC.gc()
 
 s = open(file, "r")
 close(s)
-@test_throws Base.UVError Mmap.mmap(s) # closed IOStream
+@test_throws Base.IOError Mmap.mmap(s) # closed IOStream
 @test_throws ArgumentError Mmap.mmap(s,Vector{UInt8},12,0) # closed IOStream
 @test_throws SystemError Mmap.mmap("")
 
@@ -226,6 +226,22 @@ m = Mmap.mmap(s, BitArray, (72,))
 @test Test._check_bitarray_consistency(m)
 @test length(m) == 72
 close(s); finalize(m); m = nothing; GC.gc()
+
+m = Mmap.mmap(file, BitArray, (72,))
+@test Test._check_bitarray_consistency(m)
+@test length(m) == 72
+finalize(m); m = nothing; GC.gc()
+
+s = open(file, "r+")
+m = Mmap.mmap(s, BitArray, 72) # len integer instead of dims
+@test Test._check_bitarray_consistency(m)
+@test length(m) == 72
+close(s); finalize(m); m = nothing; GC.gc()
+
+m = Mmap.mmap(file, BitArray, 72) # len integer instead of dims
+@test Test._check_bitarray_consistency(m)
+@test length(m) == 72
+finalize(m); m = nothing; GC.gc()
 rm(file)
 
 # Mmap.mmap with an offset
@@ -290,6 +306,20 @@ n = similar(m, 12)
 @test length(n) == 12
 @test size(n) == (12,)
 finalize(m); m = nothing; GC.gc()
+
+if Sys.isunix()
+    file = tempname()
+    write(file, rand(Float64, 20))
+    A = Mmap.mmap(file, Vector{Float64}, 20)
+    @test Mmap.madvise!(A, Mmap.MADV_WILLNEED) === nothing # checking for no error
+    finalize(A); A = nothing; GC.gc()
+
+    write(file, BitArray(rand(Bool, 20)))
+    b = Mmap.mmap(file, BitArray, 20)
+    @test Mmap.madvise!(b, Mmap.MADV_WILLNEED) === nothing
+    finalize(b); b = nothing; GC.gc()
+    rm(file)
+end
 
 # test #14885
 file = tempname()

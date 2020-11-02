@@ -1,0 +1,33 @@
+ Makefile.power | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile.power b/Makefile.power
+index 24d8aa8a..e53a243a 100644
+--- a/Makefile.power
++++ b/Makefile.power
+@@ -11,20 +11,20 @@ endif
+ 
+ ifeq ($(CORE), POWER9)
+ ifeq ($(USE_OPENMP), 1)
+-COMMON_OPT += -Ofast -mcpu=power9 -mtune=power9 -mvsx -malign-power -DUSE_OPENMP -fno-fast-math -fopenmp
++COMMON_OPT += -mcpu=power9 -mtune=power9 -mvsx -malign-power -DUSE_OPENMP -fno-fast-math -fopenmp
+ FCOMMON_OPT += -O2 -frecursive -mcpu=power9 -mtune=power9 -malign-power -DUSE_OPENMP -fno-fast-math -fopenmp
+ else
+-COMMON_OPT += -Ofast -mcpu=power9 -mtune=power9 -mvsx -malign-power -fno-fast-math
++COMMON_OPT += -mcpu=power9 -mtune=power9 -mvsx -malign-power -fno-fast-math
+ FCOMMON_OPT += -O2 -frecursive -mcpu=power9 -mtune=power9 -malign-power -fno-fast-math
+ endif
+ endif
+ 
+ ifeq ($(CORE), POWER8)
+ ifeq ($(USE_OPENMP), 1)
+-COMMON_OPT += -Ofast -mcpu=power8 -mtune=power8 -mvsx -malign-power -DUSE_OPENMP -fno-fast-math -fopenmp
++COMMON_OPT += -mcpu=power8 -mtune=power8 -mvsx -malign-power -DUSE_OPENMP -fno-fast-math -fopenmp
+ FCOMMON_OPT += -O2 -frecursive -mcpu=power8 -mtune=power8 -malign-power -DUSE_OPENMP -fno-fast-math -fopenmp
+ else
+-COMMON_OPT += -Ofast -mcpu=power8 -mtune=power8 -mvsx -malign-power -fno-fast-math
++COMMON_OPT += -mcpu=power8 -mtune=power8 -mvsx -malign-power -fno-fast-math
+ FCOMMON_OPT += -O2 -frecursive -mcpu=power8 -mtune=power8 -malign-power -fno-fast-math
+ endif
+ endif
+

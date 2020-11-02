@@ -1,17 +1,24 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/ADT/DepthFirstIterator.h>
 #include <llvm/Analysis/CFG.h>
-#include <llvm/IR/Value.h>
+#include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
-#include "llvm-version.h"
 #include "julia.h"
 #include "julia_assert.h"
 
@@ -115,14 +122,9 @@ bool LowerExcHandlers::doInitialization(Module &M) {
     jlenter_func = M.getFunction("jl_enter_handler");
     setjmp_func = M.getFunction(jl_setjmp_name);
 
-#if JL_LLVM_VERSION >= 50000
     auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0);
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
-#else
-    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start);
-    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end);
-#endif
     return true;
 }
 
@@ -183,12 +185,8 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
     Instruction *firstInst = &F.getEntryBlock().front();
     std::vector<AllocaInst *> buffs;
     for (int i = 0; i < MaxDepth; ++i) {
-        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()),
-#if JL_LLVM_VERSION >= 50000
-                                       0,
-#endif
-                                       handler_sz, "", firstInst);
-        buff->setAlignment(16);
+        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), 0,
+                handler_sz, Align(16), "", firstInst);
         buffs.push_back(buff);
     }
 
@@ -245,4 +243,9 @@ static RegisterPass<LowerExcHandlers> X("LowerExcHandlers", "Lower Julia Excepti
 Pass *createLowerExcHandlersPass()
 {
     return new LowerExcHandlers();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLowerExcHandlersPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createLowerExcHandlersPass());
 }

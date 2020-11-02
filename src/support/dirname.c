@@ -42,11 +42,7 @@ extern "C" {
 JL_DLLEXPORT char *dirname( char *path )
 {
     size_t len;
-#  if !defined(_COMPILER_MICROSOFT_)
-    static __thread char *retfail = NULL;
-#  else
-    static __declspec(thread) char *retfail = NULL;
-#  endif
+    static JL_THREAD_LOCAL char *retfail = NULL;
 
     /* to handle path names for files in multibyte character locales,
      * we need to set up LC_CTYPE to match the host file system locale.

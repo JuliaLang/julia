@@ -25,12 +25,16 @@ for c in child_nodes(root(xdoc))
             id = attribute(ce, "id")
             U = string(map(s -> Char(parse(Int, s, base = 16)),
                            split(id[2:end], "-"))...)
-            if contains(L, r"^\\[A-Za-z]+$") && !isa(U,String)
+            if occursin(r"^\\[A-Za-z]+$", L) && !isa(U,String)
                 if L in Ls
                     println("# duplicated symbol $L ($id)")
                 else
                     if U[1] == '\u22a5' # unicode.xml incorrectly uses \perp for \bot
                         L = "\\bot"
+                    elseif U[1] == '\u21be'
+                        L = "\\upharpoonright"
+                    elseif U[1] == '\u21bf'
+                        L = "\\upharpoonleft"
                     end
                     push!(latexsym, (L, U))
                     push!(Ls, L)
@@ -107,6 +111,7 @@ const latex_symbols = Dict(
     "\\impliedby" => "⟸",
     "\\to" => "→",
     "\\euler" => "ℯ",
+    "\\ohm" => "Ω",
 
     # Superscripts
     "\\^0" => "⁰",
@@ -178,6 +183,9 @@ const latex_symbols = Dict(
     "\\^phi" => "ᵠ",
     "\\^chi" => "ᵡ",
     "\\^Phi" => "ᶲ",
+    "\\^uparrow" => "ꜛ",
+    "\\^downarrow" => "ꜜ",
+    "\\^!" => "ꜝ",
 
     # Subscripts
     "\\_0" => "₀",
@@ -471,8 +479,8 @@ const latex_symbols = Dict(
     "\\circlearrowright" => "↻",
     "\\leftharpoonup" => "↼",
     "\\leftharpoondown" => "↽",
-    "\\upharpoonleft" => "↾",
-    "\\upharpoonright" => "↿",
+    "\\upharpoonright" => "↾",
+    "\\upharpoonleft" => "↿",
     "\\rightharpoonup" => "⇀",
     "\\rightharpoondown" => "⇁",
     "\\downharpoonright" => "⇂",
@@ -519,6 +527,7 @@ const latex_symbols = Dict(
     "\\setminus" => "∖",
     "\\ast" => "∗",
     "\\circ" => "∘",
+    blackboard*"semi" => "⨟",
     "\\surd" => "√",
     "\\propto" => "∝",
     "\\infty" => "∞",
@@ -584,7 +593,9 @@ const latex_symbols = Dict(
     "\\equiv" => "≡",
     "\\nequiv" => "≢",
     "\\le" => "≤",
+    "\\leq" => "≤",
     "\\ge" => "≥",
+    "\\geq" => "≥",
     "\\leqq" => "≦",
     "\\geqq" => "≧",
     "\\lneqq" => "≨",
@@ -1646,6 +1657,7 @@ const latex_symbols = Dict(
     italic*"e" => "𝑒",  # mathematical italic small e
     italic*"f" => "𝑓",  # mathematical italic small f
     italic*"g" => "𝑔",  # mathematical italic small g
+    italic*"h" => "ℎ",  # mathematical italic small h (planck constant)
     italic*"i" => "𝑖",  # mathematical italic small i
     italic*"j" => "𝑗",  # mathematical italic small j
     italic*"k" => "𝑘",  # mathematical italic small k
@@ -2575,6 +2587,8 @@ const latex_symbols = Dict(
     "\\leftmoon" => "☾",  # last quarter moon
     "\\smalltriangleright" => "▹",  # right triangle, open
     "\\smalltriangleleft" => "◃",  # left triangle, open
+
+    "\\tricolon" => "⁝",  # tricolon
 
     # fractions
     "\\1/4" => "¼", # vulgar fraction one quarter

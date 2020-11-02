@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using SHA
 using Test
 
@@ -7,7 +9,8 @@ const VERBOSE = false
 lorem = "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
 so_many_as_array = repeat([0x61], 1000000)
 so_many_as_tuple = ntuple((i) -> 0x61, 1000000)
-file = ".sha"  # Subject to change
+tempdir = mktempdir()
+file = joinpath(tempdir, ".sha")
 fIO = open(file, "w")
 write(fIO, '\0')
 close(fIO)
@@ -133,7 +136,7 @@ for idx in 1:length(data)
 
         if hash != answers[sha_func][idx]
             print("\n")
-            warn(
+            @warn(
             """
             For $(describe_hash(sha_types[sha_func])) expected:
                 $(answers[sha_func][idx])
@@ -162,7 +165,7 @@ for sha_idx in 1:length(sha_funcs)
     hash = bytes2hex(SHA.digest!(ctx))
     if hash != answers[sha_funcs[sha_idx]][end]
         print("\n")
-        warn(
+        @warn(
         """
         For $(describe_hash(sha_types[sha_funcs[sha_idx]])) expected:
             $(answers[sha_funcs[sha_idx]][end-1])
@@ -203,7 +206,7 @@ for sha_idx in 1:length(sha_funcs)
     hash = bytes2hex(SHA.digest!(ctx))
     if hash != answers[sha_funcs[sha_idx]][end]
         print("\n")
-        warn(
+        @warn(
         """
         For $(describe_hash(sha_types[sha_funcs[sha_idx]])) expected:
             $(answers[sha_funcs[sha_idx]][end-1])
@@ -230,7 +233,7 @@ for (key, msg, fun, hash) in (
     digest = bytes2hex(fun(Vector(key), Vector(msg)))
     if digest != hash
         print("\n")
-        warn(
+        @warn(
         """
         For $fun($(String(key)), $(String(msg))) expected:
             $hash
@@ -254,7 +257,7 @@ for idx in 1:length(ctxs)
         copy(ctxs[idx]())
     catch
         print("\n")
-        warn("Some weird copy error happened with $(ctxs[idx])")
+        @warn("Some weird copy error happened with $(ctxs[idx])")
         nerrors += 1
     end
     VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
@@ -263,7 +266,7 @@ for idx in 1:length(ctxs)
     VERBOSE && print("Testing show function @ $(ctxs[idx]) ...")
     if replstr(ctxs[idx]()) != shws[idx]
         print("\n")
-        warn("Some weird show error happened with $(ctxs[idx])")
+        @warn("Some weird show error happened with $(ctxs[idx])")
         nerrors += 1
     end
     VERBOSE && println("Done! [$(nerrors - nerrors_old) errors]")
@@ -272,15 +275,24 @@ end
 # test error if eltype of input is not UInt8
 for f in sha_funcs
     global nerrors
+    local data = UInt32[0x23467, 0x324775]
     try
-        f(UInt32[0x23467, 0x324775])
-        warn("Non-UInt8 Arrays should fail")
-        nerrors += 1
+        f(data)
+    catch ex
+        if ex isa MethodError &&
+            ex.f === f &&
+            ex.args === (data,)
+            continue
+        end
+        rethrow()
     end
+    @warn("Non-UInt8 Arrays should fail")
+    nerrors += 1
 end
 
 # Clean up the I/O mess
 rm(file)
+rm(tempdir)
 
 if nerrors == 0
     VERBOSE && println("ALL OK")

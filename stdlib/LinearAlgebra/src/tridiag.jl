@@ -3,14 +3,15 @@
 #### Specialized matrix types ####
 
 ## (complex) symmetric tridiagonal matrices
-struct SymTridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V                        # diagonal
-    ev::V                        # subdiagonal
-    function SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}}
+    ev::V                        # superdiagonal
+    function SymTridiagonal{T, V}(dv, ev) where {T, V<:AbstractVector{T}}
+        require_one_based_indexing(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
-        new{T,V}(dv,ev)
+        new{T, V}(dv, ev)
     end
 end
 
@@ -22,67 +23,111 @@ sub/super-diagonal (`ev`), respectively. The result is of type `SymTridiagonal`
 and provides efficient specialized eigensolvers, but may be converted into a
 regular matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 
+For `SymTridiagonal` block matrices, the elements of `dv` are symmetrized.
+The argument `ev` is interpreted as the superdiagonal. Blocks from the
+subdiagonal are (materialized) transpose of the corresponding superdiagonal blocks.
+
 # Examples
 ```jldoctest
 julia> dv = [1, 2, 3, 4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
  4
 
 julia> ev = [7, 8, 9]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  7
  8
  9
 
 julia> SymTridiagonal(dv, ev)
-4×4 SymTridiagonal{Int64,Array{Int64,1}}:
+4×4 SymTridiagonal{Int64, Vector{Int64}}:
  1  7  ⋅  ⋅
  7  2  8  ⋅
  ⋅  8  3  9
  ⋅  ⋅  9  4
+
+julia> A = SymTridiagonal(fill([1 2; 3 4], 3), fill([1 2; 3 4], 2));
+
+julia> A[1,1]
+2×2 Symmetric{Int64, Matrix{Int64}}:
+ 1  2
+ 2  4
+
+julia> A[1,2]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> A[2,1]
+2×2 Matrix{Int64}:
+ 1  3
+ 2  4
 ```
 """
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
+SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T,V}(dv, ev)
+function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
+    SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
+                   convert(AbstractVector{T}, ev)::AbstractVector{T})
+end
 
 """
     SymTridiagonal(A::AbstractMatrix)
 
-Construct a symmetric tridiagonal matrix from the diagonal and
-first sub/super-diagonal, of the symmetric matrix `A`.
+Construct a symmetric tridiagonal matrix from the diagonal and first superdiagonal
+of the symmetric matrix `A`.
 
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 2 4 5; 3 5 6]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  2  4  5
  3  5  6
 
 julia> SymTridiagonal(A)
-3×3 SymTridiagonal{Int64,Array{Int64,1}}:
+3×3 SymTridiagonal{Int64, Vector{Int64}}:
  1  2  ⋅
  2  4  5
  ⋅  5  6
+
+julia> B = reshape([[1 2; 2 3], [1 2; 3 4], [1 3; 2 4], [1 2; 2 3]], 2, 2);
+
+julia> SymTridiagonal(B)
+2×2 SymTridiagonal{Matrix{Int64}, Vector{Matrix{Int64}}}:
+ [1 2; 2 3]  [1 3; 2 4]
+ [1 2; 3 4]  [1 2; 2 3]
 ```
 """
 function SymTridiagonal(A::AbstractMatrix)
-    if diag(A,1) == diag(A,-1)
-        SymTridiagonal(diag(A,0), diag(A,1))
+    if (diag(A, 1) == transpose.(diag(A, -1))) && all(issymmetric.(diag(A, 0)))
+        SymTridiagonal(diag(A, 0), diag(A, 1))
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
     end
 end
 
+SymTridiagonal{T,V}(S::SymTridiagonal{T,V}) where {T,V<:AbstractVector{T}} = S
+SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
+    SymTridiagonal(convert(V, S.dv)::V, convert(V, S.ev)::V)
+SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
+    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
+                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+SymTridiagonal(S::SymTridiagonal) = S
+
 AbstractMatrix{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
+    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
+                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
+    if n == 0
+        return Mf
+    end
     @inbounds begin
         @simd for i = 1:n-1
             Mf[i,i] = M.dv[i]
@@ -115,18 +160,9 @@ similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T
 # similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 #Elementary operations
-broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
-broadcast(::typeof(round), M::SymTridiagonal) = SymTridiagonal(round.(M.dv), round.(M.ev))
-broadcast(::typeof(trunc), M::SymTridiagonal) = SymTridiagonal(trunc.(M.dv), trunc.(M.ev))
-broadcast(::typeof(floor), M::SymTridiagonal) = SymTridiagonal(floor.(M.dv), floor.(M.ev))
-broadcast(::typeof(ceil), M::SymTridiagonal) = SymTridiagonal(ceil.(M.dv), ceil.(M.ev))
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
-broadcast(::typeof(round), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(round.(T, M.dv), round.(T, M.ev))
-broadcast(::typeof(trunc), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(trunc.(T, M.dv), trunc.(T, M.ev))
-broadcast(::typeof(floor), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(floor.(T, M.dv), floor.(T, M.ev))
-broadcast(::typeof(ceil), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(ceil.(T, M.dv), ceil.(T, M.ev))
 
 transpose(S::SymTridiagonal) = S
 adjoint(S::SymTridiagonal{<:Real}) = S
@@ -134,13 +170,13 @@ adjoint(S::SymTridiagonal) = Adjoint(S)
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
 Base.copy(S::Transpose{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(transpose.(x)), (S.parent.dv, S.parent.ev))...)
 
-function diag(M::SymTridiagonal, n::Integer=0)
+function diag(M::SymTridiagonal{<:Number}, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     absn = abs(n)
     if absn == 0
         return copyto!(similar(M.dv, length(M.dv)), M.dv)
-    elseif absn==1
+    elseif absn == 1
         return copyto!(similar(M.ev, length(M.ev)), M.ev)
     elseif absn <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-absn), 0)
@@ -149,15 +185,37 @@ function diag(M::SymTridiagonal, n::Integer=0)
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
+function diag(M::SymTridiagonal, n::Integer=0)
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of n
+    if n == 0
+        return copyto!(similar(M.dv, length(M.dv)), symmetric.(M.dv, :U))
+    elseif n == 1
+        return copyto!(similar(M.ev, length(M.ev)), M.ev)
+    elseif n == -1
+        return copyto!(similar(M.ev, length(M.ev)), transpose.(M.ev))
+    elseif n <= size(M,1)
+        throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
+    else
+        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+    end
+end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, A.ev+B.ev)
 -(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv-B.dv, A.ev-B.ev)
+-(A::SymTridiagonal) = SymTridiagonal(-A.dv, -A.ev)
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
 *(B::Number, A::SymTridiagonal) = A*B
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
+@inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
+             alpha::Number, beta::Number) =
+    _mul!(A, B, C, MulAddMul(alpha, beta))
+
+@inline function _mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
+                          _add::MulAddMul)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))
         throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
@@ -166,39 +224,71 @@ function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
         throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
     end
 
+    if m == 0
+        return C
+    elseif iszero(_add.alpha)
+        return _rmul_or_fill!(C, _add.beta)
+    end
+
     α = S.dv
     β = S.ev
     @inbounds begin
         for j = 1:n
-            x₀, x₊ = B[1, j], B[2, j]
-            β₀ = β[1]
-            C[1, j] = α[1]*x₀ + x₊*β₀
-            for i = 2:m - 1
+            x₊ = B[1, j]
+            x₀ = zero(x₊)
+            # If m == 1 then β[1] is out of bounds
+            β₀ = m > 1 ? zero(β[1]) : zero(eltype(β))
+            for i = 1:m - 1
                 x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
                 β₋, β₀ = β₀, β[i]
-                C[i, j] = β₋*x₋ + α[i]*x₀ + β₀*x₊
+                _modify!(_add, β₋*x₋ + α[i]*x₀ + β₀*x₊, C, (i, j))
             end
-            C[m, j] = β₀*x₀ + α[m]*x₊
+            _modify!(_add, β₀*x₀ + α[m]*x₊, C, (m, j))
         end
     end
 
     return C
 end
 
-(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
+function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    nx, ny = length(x), length(y)
+    (nx == size(S, 1) == ny) || throw(DimensionMismatch())
+    if iszero(nx)
+        return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
+    end
+    dv, ev = S.dv, S.ev
+    x₀ = x[1]
+    x₊ = x[2]
+    sub = transpose(ev[1])
+    r = dot(adjoint(dv[1])*x₀ + adjoint(sub)*x₊, y[1])
+    @inbounds for j in 2:nx-1
+        x₋, x₀, x₊ = x₀, x₊, x[j+1]
+        sup, sub = transpose(sub), transpose(ev[j])
+        r += dot(adjoint(sup)*x₋ + adjoint(dv[j])*x₀ + adjoint(sub)*x₊, y[j])
+    end
+    r += dot(adjoint(transpose(sub))*x₀ + adjoint(dv[nx])*x₊, y[nx])
+    return r
+end
 
-eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigfact(A::SymTridiagonal{T}) where T = eigfact!(copy_oftype(A, eigtype(T)))
+(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
+# division with optional shift for use in shifted-Hessenberg solvers (hessenberg.jl):
+ldiv!(A::SymTridiagonal, B::AbstractVecOrMat; shift::Number=false) = ldiv!(ldlt(A, shift=shift), B)
+rdiv!(B::AbstractVecOrMat, A::SymTridiagonal; shift::Number=false) = rdiv!(B, ldlt(A, shift=shift))
+
+eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
+eigen(A::SymTridiagonal{T}) where T = eigen!(copy_oftype(A, eigtype(T)))
+
+eigen!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
-eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), irange)
+eigen(A::SymTridiagonal{T}, irange::UnitRange) where T =
+    eigen!(copy_oftype(A, eigtype(T)), irange)
 
-eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
+eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
-eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
-    eigfact!(copy_oftype(A, eigtype(T)), vl, vu)
+eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
+    eigen!(copy_oftype(A, eigtype(T)), vl, vu)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
 eigvals(A::SymTridiagonal{T}) where T = eigvals!(copy_oftype(A, eigtype(T)))
@@ -218,7 +308,7 @@ eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigfact(A).vectors
+eigvecs(A::SymTridiagonal) = eigen(A).vectors
 
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
@@ -232,25 +322,25 @@ returns the specific corresponding eigenvectors.
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+3×3 SymTridiagonal{Float64, Vector{Float64}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
 
 julia> eigvals(A)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  -2.1400549446402604
   1.0000000000000002
   5.140054944640259
 
 julia> eigvecs(A)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   0.418304  -0.83205      0.364299
  -0.656749  -7.39009e-16  0.754109
   0.627457   0.5547       0.546448
 
 julia> eigvecs(A, [1.])
-3×1 Array{Float64,2}:
+3×1 Matrix{Float64}:
   0.8320502943378438
   4.263514128092366e-17
  -0.5547001962252291
@@ -258,10 +348,26 @@ julia> eigvecs(A, [1.])
 """
 eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
+function svdvals!(A::SymTridiagonal)
+    vals = eigvals!(A)
+    return sort!(map!(abs, vals, vals); rev=true)
+end
+
 #tril and triu
 
-istriu(M::SymTridiagonal) = iszero(M.ev)
-istril(M::SymTridiagonal) = iszero(M.ev)
+function istriu(M::SymTridiagonal, k::Integer=0)
+    if k <= -1
+        return true
+    elseif k == 0
+        return iszero(M.ev)
+    else # k >= 1
+        return iszero(M.ev) && iszero(M.dv)
+    end
+end
+istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
+iszero(M::SymTridiagonal) = iszero(M.ev) && iszero(M.dv)
+isone(M::SymTridiagonal) = iszero(M.ev) && all(isone, M.dv)
+isdiag(M::SymTridiagonal) = iszero(M.ev)
 
 function tril!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)
@@ -305,80 +411,44 @@ end
 # Generic methods #
 ###################
 
-#Needed for inv_usmani()
-mutable struct ZeroOffsetVector
-    data::Vector
-end
-getindex(a::ZeroOffsetVector, i) = a.data[i+1]
-setindex!(a::ZeroOffsetVector, x, i) = a.data[i+1]=x
-
-
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::SymTridiagonal, i::Integer, j::Integer, s::AbstractString)
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
 
-#Implements the inverse using the recurrence relation between principal minors
+# Implements the determinant using principal minors
 # a, b, c are assumed to be the subdiagonal, diagonal, and superdiagonal of
 # a tridiagonal matrix.
 #Reference:
 #    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6
-function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
+function det_usmani(a::V, b::V, c::V, shift::Number=0) where {T,V<:AbstractVector{T}}
+    require_one_based_indexing(a, b, c)
     n = length(b)
-    θ = ZeroOffsetVector(zeros(T, n+1)) #principal minors of A
-    θ[0] = 1
-    n>=1 && (θ[1] = b[1])
-    for i=2:n
-        θ[i] = b[i]*θ[i-1]-a[i-1]*c[i-1]*θ[i-2]
-    end
-    φ = zeros(T, n+1)
-    φ[n+1] = 1
-    n>=1 && (φ[n] = b[n])
-    for i=n-1:-1:1
-        φ[i] = b[i]*φ[i+1]-a[i]*c[i]*φ[i+2]
-    end
-    α = Matrix{T}(uninitialized, n, n)
-    for i=1:n, j=1:n
-        sign = (i+j)%2==0 ? (+) : (-)
-        if i<j
-            α[i,j]=(sign)(prod(c[i:j-1]))*θ[i-1]*φ[j+1]/θ[n]
-        elseif i==j
-            α[i,i]=                       θ[i-1]*φ[i+1]/θ[n]
-        else #i>j
-            α[i,j]=(sign)(prod(a[j:i-1]))*θ[j-1]*φ[i+1]/θ[n]
-        end
-    end
-    α
-end
-
-#Implements the determinant using principal minors
-#Inputs and reference are as above for inv_usmani()
-function det_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
-    n = length(b)
-    θa = one(T)
+    θa = oneunit(T)+zero(shift)
     if n == 0
         return θa
     end
-    θb = b[1]
-    for i=2:n
-        θb, θa = b[i]*θb-a[i-1]*c[i-1]*θa, θb
+    θb = b[1]+shift
+    for i in 2:n
+        θb, θa = (b[i]+shift)*θb - a[i-1]*c[i-1]*θa, θb
     end
     return θb
 end
 
-inv(A::SymTridiagonal) = inv_usmani(A.ev, A.dv, A.ev)
-det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
+# det with optional diagonal shift for use with shifted Hessenberg factorizations
+det(A::SymTridiagonal; shift::Number=false) = det_usmani(A.ev, A.dv, A.ev, shift)
+logabsdet(A::SymTridiagonal; shift::Number=false) = logabsdet(ldlt(A; shift=shift))
 
 function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
     if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
         throw(BoundsError(A, (i,j)))
     end
     if i == j
-        return A.dv[i]
+        return symmetric(A.dv[i], :U)::symmetric_type(eltype(A.dv))
     elseif i == j + 1
-        return A.ev[j]
+        return copy(transpose(A.ev[j])) # materialized for type stability
     elseif i + 1 == j
         return A.ev[i]
     else
@@ -402,17 +472,20 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     d::V     # diagonal
     du::V    # sup-diagonal
     du2::V   # supsup-diagonal for pivoting in LU
-    function Tridiagonal{T}(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}}
+    function Tridiagonal{T,V}(dl, d, du) where {T,V<:AbstractVector{T}}
+        require_one_based_indexing(dl, d, du)
         n = length(d)
-        if (length(dl) != n-1 || length(du) != n-1)
+        if (length(dl) != n-1 || length(du) != n-1) && !(length(d) == 0 && length(dl) == 0 && length(du) == 0)
             throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
                 "lengths of subdiagonal, diagonal and superdiagonal: ",
                 "($(length(dl)), $(length(d)), $(length(du)))")))
         end
         new{T,V}(dl, d, du)
     end
-    # constructor used in lufact!
-    function Tridiagonal{T,V}(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}}
+    # constructor used in lu!
+    function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
+        require_one_based_indexing(dl, d, du, du2)
+        # length checks?
         new{T,V}(dl, d, du, du2)
     end
 end
@@ -435,14 +508,18 @@ julia> du = [4, 5, 6];
 julia> d = [7, 8, 9, 0];
 
 julia> Tridiagonal(dl, d, du)
-4×4 Tridiagonal{Int64,Array{Int64,1}}:
+4×4 Tridiagonal{Int64, Vector{Int64}}:
  7  4  ⋅  ⋅
  1  8  5  ⋅
  ⋅  2  9  6
  ⋅  ⋅  3  0
 ```
 """
-Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T}(dl, d, du)
+Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du)
+Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du, du2)
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
+    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
+end
 
 """
     Tridiagonal(A)
@@ -453,14 +530,14 @@ diagonal and first super-diagonal of the matrix `A`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  2  3  4
  1  2  3  4
  1  2  3  4
  1  2  3  4
 
 julia> Tridiagonal(A)
-4×4 Tridiagonal{Int64,Array{Int64,1}}:
+4×4 Tridiagonal{Int64, Vector{Int64}}:
  1  2  ⋅  ⋅
  1  2  3  ⋅
  ⋅  2  3  4
@@ -468,6 +545,18 @@ julia> Tridiagonal(A)
 ```
 """
 Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
+
+Tridiagonal(A::Tridiagonal) = A
+Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
+function Tridiagonal{T}(A::Tridiagonal) where {T}
+    dl, d, du = map(x->convert(AbstractVector{T}, x)::AbstractVector{T},
+                    (A.dl, A.d, A.du))
+    if isdefined(A, :du2)
+        Tridiagonal(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
+    else
+        Tridiagonal(dl, d, du)
+    end
+end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
 function size(M::Tridiagonal, d::Integer)
@@ -505,24 +594,11 @@ similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), sim
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
 
 #Elementary operations
-broadcast(::typeof(abs), M::Tridiagonal) = Tridiagonal(abs.(M.dl), abs.(M.d), abs.(M.du))
-broadcast(::typeof(round), M::Tridiagonal) = Tridiagonal(round.(M.dl), round.(M.d), round.(M.du))
-broadcast(::typeof(trunc), M::Tridiagonal) = Tridiagonal(trunc.(M.dl), trunc.(M.d), trunc.(M.du))
-broadcast(::typeof(floor), M::Tridiagonal) = Tridiagonal(floor.(M.dl), floor.(M.d), floor.(M.du))
-broadcast(::typeof(ceil), M::Tridiagonal) = Tridiagonal(ceil.(M.dl), ceil.(M.d), ceil.(M.du))
 for func in (:conj, :copy, :real, :imag)
     @eval function ($func)(M::Tridiagonal)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du))
     end
 end
-broadcast(::typeof(round), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(round.(T, M.dl), round.(T, M.d), round.(T, M.du))
-broadcast(::typeof(trunc), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(trunc.(T, M.dl), trunc.(T, M.d), trunc.(T, M.du))
-broadcast(::typeof(floor), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(floor.(T, M.dl), floor.(T, M.d), floor.(T, M.du))
-broadcast(::typeof(ceil), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
-    Tridiagonal(ceil.(T, M.dl), ceil.(T, M.d), ceil.(T, M.du))
 
 adjoint(S::Tridiagonal) = Adjoint(S)
 transpose(S::Tridiagonal) = Transpose(S)
@@ -585,10 +661,34 @@ function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::Ab
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
 
+
 #tril and triu
 
-istriu(M::Tridiagonal) = iszero(M.dl)
-istril(M::Tridiagonal) = iszero(M.du)
+iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
+isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
+function istriu(M::Tridiagonal, k::Integer=0)
+    if k <= -1
+        return true
+    elseif k == 0
+        return iszero(M.dl)
+    elseif k == 1
+        return iszero(M.dl) && iszero(M.d)
+    else # k >= 2
+        return iszero(M.dl) && iszero(M.d) && iszero(M.du)
+    end
+end
+function istril(M::Tridiagonal, k::Integer=0)
+    if k >= 1
+        return true
+    elseif k == 0
+        return iszero(M.du)
+    elseif k == -1
+        return iszero(M.du) && iszero(M.d)
+    else # k <= -2
+        return iszero(M.du) && iszero(M.d) && iszero(M.dl)
+    end
+end
+isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)
     n = length(M.d)
@@ -640,11 +740,8 @@ end
 ==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)
 ==(A::SymTridiagonal, B::Tridiagonal) = (B.dl==B.du==A.ev) && (B.d==A.dv)
 
-inv(A::Tridiagonal) = inv_usmani(A.dl, A.d, A.du)
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
-Tridiagonal{T}(M::Tridiagonal) where {T} =
-    Tridiagonal(convert(AbstractVector{T}, M.dl), convert(AbstractVector{T}, M.d), convert(AbstractVector{T}, M.du))
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
 Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function SymTridiagonal{T}(M::Tridiagonal) where T
@@ -653,4 +750,94 @@ function SymTridiagonal{T}(M::Tridiagonal) where T
     else
         throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))
     end
+end
+
+Base._sum(A::Tridiagonal, ::Colon) = sum(A.d) + sum(A.dl) + sum(A.du)
+Base._sum(A::SymTridiagonal, ::Colon) = sum(A.dv) + 2sum(A.ev)
+
+function Base._sum(A::Tridiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.d)
+    if n == 0
+        return res
+    elseif n == 1
+        res[1] = A.d[1]
+        return res
+    end
+    @inbounds begin
+        if dims == 1
+            res[1] = A.dl[1] + A.d[1]
+            for i = 2:n-1
+                res[i] = A.dl[i] + A.d[i] + A.du[i-1]
+            end
+            res[n] = A.d[n] + A.du[n-1]
+        elseif dims == 2
+            res[1] = A.d[1] + A.du[1]
+            for i = 2:n-1
+                res[i] = A.dl[i-1] + A.d[i] + A.du[i]
+            end
+            res[n] = A.dl[n-1] + A.d[n]
+        elseif dims >= 3
+            for i = 1:n-1
+                res[i,i+1] = A.du[i]
+                res[i,i]   = A.d[i]
+                res[i+1,i] = A.dl[i]
+            end
+            res[n,n] = A.d[n]
+        end
+    end
+    res
+end
+
+function Base._sum(A::SymTridiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.dv)
+    if n == 0
+        return res
+    elseif n == 1
+        res[1] = A.dv[1]
+        return res
+    end
+    @inbounds begin
+        if dims == 1
+            res[1] = A.ev[1] + A.dv[1]
+            for i = 2:n-1
+                res[i] = A.ev[i] + A.dv[i] + A.ev[i-1]
+            end
+            res[n] = A.dv[n] + A.ev[n-1]
+        elseif dims == 2
+            res[1] = A.dv[1] + A.ev[1]
+            for i = 2:n-1
+                res[i] = A.ev[i-1] + A.dv[i] + A.ev[i]
+            end
+            res[n] = A.ev[n-1] + A.dv[n]
+        elseif dims >= 3
+            for i = 1:n-1
+                res[i,i+1] = A.ev[i]
+                res[i,i]   = A.dv[i]
+                res[i+1,i] = A.ev[i]
+            end
+            res[n,n] = A.dv[n]
+        end
+    end
+    res
+end
+
+function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    nx, ny = length(x), length(y)
+    (nx == size(A, 1) == ny) || throw(DimensionMismatch())
+    if iszero(nx)
+        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    end
+    x₀ = x[1]
+    x₊ = x[2]
+    dl, d, du = A.dl, A.d, A.du
+    r = dot(adjoint(d[1])*x₀ + adjoint(dl[1])*x₊, y[1])
+    @inbounds for j in 2:nx-1
+        x₋, x₀, x₊ = x₀, x₊, x[j+1]
+        r += dot(adjoint(du[j-1])*x₋ + adjoint(d[j])*x₀ + adjoint(dl[j])*x₊, y[j])
+    end
+    r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
+    return r
 end

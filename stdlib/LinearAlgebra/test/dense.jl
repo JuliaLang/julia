@@ -15,7 +15,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234321)
 
 @testset "Matrix condition number" begin
     ainit = rand(n,n)
@@ -28,6 +28,16 @@ srand(1234321)
             @test cond(a[:,1:5]) ≈ 10.233059337453463 atol=0.01
             @test_throws ArgumentError cond(a,3)
         end
+    end
+    @testset "Singular matrices" for p in (1, 2, Inf)
+        @test cond(zeros(Int, 2, 2), p) == Inf
+        @test cond(zeros(2, 2), p) == Inf
+        @test cond([0 0; 1 1], p) == Inf
+        @test cond([0. 0.; 1. 1.], p) == Inf
+    end
+    @testset "Issue #33547, condition number of 2x2 matrix" begin
+        M = [1.0 -2.0; -2.0 -1.5]
+        @test cond(M, 1) ≈ 2.227272727272727
     end
 end
 
@@ -47,7 +57,7 @@ bimg  = randn(n,2)/2
     @testset "Positive definiteness" begin
         @test !isposdef(ainit)
         @test isposdef(apd)
-        if eltya != Int # cannot perform cholfact! for Matrix{Int}
+        if eltya != Int # cannot perform cholesky! for Matrix{Int}
             @test !isposdef!(copy(ainit))
             @test isposdef!(copy(apd))
         end
@@ -67,25 +77,62 @@ bimg  = randn(n,2)/2
             end
 
             @testset "Test nullspace" begin
-                a15null = nullspace(copy(a[:,1:n1]'))
+                a15null = nullspace(a[:,1:n1]')
                 @test rank([a[:,1:n1] a15null]) == 10
                 @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
                 @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
                 @test size(nullspace(b), 2) == 0
+                @test size(nullspace(b, rtol=0.001), 2) == 0
+                @test size(nullspace(b, atol=100*εb), 2) == 0
                 @test size(nullspace(b, 100*εb), 2) == 0
                 @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
                 @test nullspace(zeros(eltya,n), 0.1) == Matrix(I, 1, 1)
+                # test empty cases
+                @test nullspace(zeros(n, 0)) == Matrix(I, 0, 0)
+                @test nullspace(zeros(0, n)) == Matrix(I, n, n)
             end
         end
     end # for eltyb
+
+@testset "Test diagm for vectors" begin
+    @test diagm(zeros(50)) == diagm(0 => zeros(50))
+    @test diagm(ones(50)) == diagm(0 => ones(50))
+    v = randn(500)
+    @test diagm(v) == diagm(0 => v)
+    @test diagm(500, 501, v) == diagm(500, 501, 0 => v)
+end
+
+@testset "Non-square diagm" begin
+    x = [7, 8]
+    for m=1:4, n=2:4
+        if m < 2 || n < 3
+            @test_throws DimensionMismatch diagm(m,n, 0 => x,  1 => x)
+            @test_throws DimensionMismatch diagm(n,m, 0 => x,  -1 => x)
+        else
+            M = zeros(m,n)
+            M[1:2,1:3] = [7 7 0; 0 8 8]
+            @test diagm(m,n, 0 => x,  1 => x) == M
+            @test diagm(n,m, 0 => x,  -1 => x) == M'
+        end
+    end
+end
+
+@testset "Test pinv (rtol, atol)" begin
+    M = [1 0 0; 0 1 0; 0 0 0]
+    @test pinv(M,atol=1)== zeros(3,3)
+    @test pinv(M,rtol=0.5)== M
+end
 
     for (a, a2) in ((copy(ainit), copy(ainit2)), (view(ainit, 1:n, 1:n), view(ainit2, 1:n, 1:n)))
         @testset "Test pinv" begin
             pinva15 = pinv(a[:,1:n1])
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
             @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
+            pinva15 = pinv(a[:,1:n1]') # the Adjoint case
+            @test a[:,1:n1]'*pinva15*a[:,1:n1]' ≈ a[:,1:n1]'
+            @test pinva15*a[:,1:n1]'*pinva15 ≈ pinva15
 
-            @test size(pinv(Matrix{eltya}(uninitialized,0,0))) == (0,0)
+            @test size(pinv(Matrix{eltya}(undef,0,0))) == (0,0)
         end
 
         @testset "Lyapunov/Sylvester" begin
@@ -141,22 +188,34 @@ bimg  = randn(n,2)/2
     end
 end # for eltya
 
-@testset "test triu/tril bounds checking" begin
+@testset "test out of bounds triu/tril" begin
     local m, n = 5, 7
     ainit = rand(m, n)
     for a in (copy(ainit), view(ainit, 1:m, 1:n))
-        @test_throws ArgumentError triu(a, -m)
-        @test_throws ArgumentError triu(a, n + 2)
-        @test_throws ArgumentError tril(a, -m - 2)
-        @test_throws ArgumentError tril(a, n)
+        @test triu(a, -m) == a
+        @test triu(a, n + 2) == zero(a)
+        @test tril(a, -m - 2) == zero(a)
+        @test tril(a, n) == a
     end
+end
+
+@testset "triu M > N case bug fix" begin
+    mat=[1 2;
+         3 4;
+         5 6;
+         7 8]
+    res=[1 2;
+         3 4;
+         0 6;
+         0 0]
+    @test triu(mat, -1) == res
 end
 
 @testset "Tests norms" begin
     nnorm = 10
     mmat = 10
     nmat = 8
-    @testset "For $elty" for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
+    @testset "For $elty" for elty in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int32, Int64, BigInt)
         x = fill(elty(1),10)
         @testset "Vector" begin
             xs = view(x,1:2:10)
@@ -236,18 +295,18 @@ end
             end
         end
 
-        @testset "Matrix (Operator)" begin
+        @testset "Matrix (Operator) opnorm" begin
             A = fill(elty(1),10,10)
             As = view(A,1:5,1:5)
-            @test norm(A, 1) ≈ 10
-            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A, 2) ≈ 10
-            @test norm(A, Inf) ≈ 10
-            @test norm(As, 1) ≈ 5
-            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(As, 2) ≈ 5
-            @test norm(As, Inf) ≈ 5
+            @test opnorm(A, 1) ≈ 10
+            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test opnorm(A, 2) ≈ 10
+            @test opnorm(A, Inf) ≈ 10
+            @test opnorm(As, 1) ≈ 5
+            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test opnorm(As, 2) ≈ 5
+            @test opnorm(As, Inf) ≈ 5
         end
 
-        @testset "Absolute homogeneity, triangle inequality, & vecnorm" begin
+        @testset "Absolute homogeneity, triangle inequality, & norm" begin
             for i = 1:10
                 Ainit = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
                         elty <: Complex ? convert(Matrix{elty}, complex.(randn(mmat, nmat), randn(mmat, nmat))) :
@@ -269,9 +328,9 @@ end
                     elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A + B) <= norm(A) + norm(B) # two is default
                     @test norm(A + B,Inf) <= norm(A,Inf) + norm(B,Inf)
 
-                    # vecnorm:
-                    for p = -2:3
-                        @test norm(reshape(A, length(A)), p) == vecnorm(A, p)
+                    # norm
+                    for p in (-Inf, Inf, (-2:3)...)
+                        @test norm(A, p) == norm(vec(A), p)
                     end
                 end
             end
@@ -336,11 +395,35 @@ end
     @test kron(b',2) == [8 10 12]
 end
 
+@testset "kron!" begin
+    a = [1.0, 0.0]
+    b = [0.0, 1.0]
+    @test kron!([1.0, 0.0], b, 0.5) == [0.0; 0.5]
+    @test kron!([1.0, 0.0], 0.5, b) == [0.0; 0.5]
+    c = Vector{Float64}(undef, 4)
+    kron!(c, a, b)
+    @test c == [0.0; 1.0; 0.0; 0.0]
+    c = Matrix{Float64}(undef, 2, 2)
+    kron!(c, a, b')
+    @test c == [0.0 1.0; 0.0 0.0]
+end
+
+@testset "kron adjoint" begin
+    a = [1+im, 2, 3]
+    b = [4, 5, 6+7im]
+    @test kron(a', b') isa Adjoint
+    @test kron(a', b') == kron(a, b)'
+    @test kron(transpose(a), b') isa Transpose
+    @test kron(transpose(a), b') == kron(permutedims(a), collect(b'))
+    @test kron(transpose(a), transpose(b)) isa Transpose
+    @test kron(transpose(a), transpose(b)) == transpose(kron(a, b))
+end
+
 @testset "issue #4796" begin
     dim=2
     S=zeros(Complex,dim,dim)
     T=zeros(Complex,dim,dim)
-    T[:] = 1
+    fill!(T, 1)
     z = 2.5 + 1.5im
     S[1] = z
     @test S*T == [z z; 0 0]
@@ -382,13 +465,13 @@ end
         @test exp(A5) ≈ eA5
 
         # Hessenberg
-        @test hessfact(A1).H ≈ convert(Matrix{elty},
+        @test hessenberg(A1).H ≈ convert(Matrix{elty},
                                                  [4.000000000000000  -1.414213562373094  -1.414213562373095
                                                   -1.414213562373095   4.999999999999996  -0.000000000000000
                                                   0  -0.000000000000002   3.000000000000000])
     end
 
-    @testset "Additional tests for $elty" for elty in (Float64, Complex{Float64})
+    @testset "Additional tests for $elty" for elty in (Float64, ComplexF64)
         A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
                                      1/3 1/4 1/5 1/6;
                                      1/4 1/5 1/6 1/7;
@@ -406,11 +489,18 @@ end
     end
 
     @testset "Integer promotion tests" begin
-        for (elty1, elty2) in ((Int64, Float64), (Complex{Int64}, Complex{Float64}))
+        for (elty1, elty2) in ((Int64, Float64), (Complex{Int64}, ComplexF64))
             A4int  = convert(Matrix{elty1}, [1 2; 3 4])
             A4float  = convert(Matrix{elty2}, A4int)
             @test exp(A4int) == exp(A4float)
         end
+    end
+
+    @testset "^ tests" for elty in (Float32, Float64, ComplexF32, ComplexF64, Int32, Int64)
+        # should all be exact as the lhs functions are simple aliases
+        @test ℯ^(fill(elty(2), (4,4))) == exp(fill(elty(2), (4,4)))
+        @test 2^(fill(elty(2), (4,4))) == exp(log(2)*fill(elty(2), (4,4)))
+        @test 2.0^(fill(elty(2), (4,4))) == exp(log(2.0)*fill(elty(2), (4,4)))
     end
 
     A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
@@ -555,7 +645,7 @@ end
         end
     end
 
-    @testset "Inverse functions for $elty" for elty in (Complex{Float32}, Complex{Float64})
+    @testset "Inverse functions for $elty" for elty in (ComplexF32, ComplexF64)
         A1 = convert(Matrix{elty}, [ 0.143721-0.0im       -0.138386-0.106905im;
                                      -0.138386+0.106905im   0.306224-0.0im])
         A2 = convert(Matrix{elty}, [1im 2; 0.02+0.5im 3])
@@ -577,23 +667,23 @@ end
             @test coth(acoth(coth(A))) ≈ coth(A)
 
             # Definition of principal values (Aprahamian & Higham, 2016, pp. 4-5)
-            abstol = sqrt(eps(real(elty))) * vecnorm(acosh(A))
+            abstol = sqrt(eps(real(elty))) * norm(acosh(A))
             @test all(z -> (0 < real(z) < π ||
                             abs(real(z)) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π) < abstol && imag(z) <= 0),
-                      eigfact(acos(A)).values)
+                      eigen(acos(A)).values)
             @test all(z -> (-π/2 < real(z) < π/2 ||
                             abs(real(z) + π/2) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π/2) < abstol && imag(z) <= 0),
-                      eigfact(asin(A)).values)
+                      eigen(asin(A)).values)
             @test all(z -> (-π < imag(z) < π && real(z) > 0 ||
                             0 <= imag(z) < π && abs(real(z)) < abstol ||
                             abs(imag(z) - π) < abstol && real(z) >= 0),
-                      eigfact(acosh(A)).values)
+                      eigen(acosh(A)).values)
             @test all(z -> (-π/2 < imag(z) < π/2 ||
                             abs(imag(z) + π/2) < abstol && real(z) <= 0 ||
                             abs(imag(z) - π/2) < abstol && real(z) <= 0),
-                      eigfact(asinh(A)).values)
+                      eigen(asinh(A)).values)
         end
     end
 end
@@ -614,12 +704,12 @@ end
     @test exp(A10) ≈ eA10
 end
 
-@testset "Additional matrix logarithm tests" for elty in (Float64, Complex{Float64})
+@testset "Additional matrix logarithm tests" for elty in (Float64, ComplexF64)
     A11 = convert(Matrix{elty}, [3 2; -5 -3])
     @test exp(log(A11)) ≈ A11
 
     A12 = convert(Matrix{elty}, [1 -1; 1 -1])
-    @test typeof(log(A12)) == Array{Complex{Float64}, 2}
+    @test typeof(log(A12)) == Array{ComplexF64, 2}
 
     A13 = convert(Matrix{elty}, [2 0; 0 2])
     @test typeof(log(A13)) == Array{elty, 2}
@@ -651,7 +741,7 @@ end
           2  6 10
           3  7 11
           4  8 12 ]
-    @test_throws ArgumentError diag(A, -5)
+    @test diag(A,-5) == []
     @test diag(A,-4) == []
     @test diag(A,-3) == [4]
     @test diag(A,-2) == [3,8]
@@ -660,24 +750,24 @@ end
     @test diag(A, 1) == [5,10]
     @test diag(A, 2) == [9]
     @test diag(A, 3) == []
-    @test_throws ArgumentError diag(A, 4)
+    @test diag(A, 4) == []
 
     @test diag(zeros(0,0)) == []
-    @test_throws ArgumentError diag(zeros(0,0),1)
-    @test_throws ArgumentError diag(zeros(0,0),-1)
+    @test diag(zeros(0,0),1) == []
+    @test diag(zeros(0,0),-1) == []
 
     @test diag(zeros(1,0)) == []
     @test diag(zeros(1,0),-1) == []
-    @test_throws ArgumentError diag(zeros(1,0),1)
-    @test_throws ArgumentError diag(zeros(1,0),-2)
+    @test diag(zeros(1,0),1) == []
+    @test diag(zeros(1,0),-2) == []
 
     @test diag(zeros(0,1)) == []
     @test diag(zeros(0,1),1) == []
-    @test_throws ArgumentError diag(zeros(0,1),-1)
-    @test_throws ArgumentError diag(zeros(0,1),2)
+    @test diag(zeros(0,1),-1) == []
+    @test diag(zeros(0,1),2) == []
 end
 
-@testset "Matrix to real power" for elty in (Float64, Complex{Float64})
+@testset "Matrix to real power" for elty in (Float64, ComplexF64)
 # Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
     #Aa : only positive real eigenvalues
     Aa = convert(Matrix{elty}, [5 4 2 1; 0 1 -1 -1; -1 -1 3 0; 1 1 -1 2])
@@ -796,13 +886,13 @@ end
         r = (elty <: Complex ? adjoint : transpose)(rand(elty, 5))
         cm = rand(elty, 5, 1)
         rm = rand(elty, 1, 5)
-        @testset "inner prodcuts" begin
+        @testset "dot products" begin
             test_div_pinv_consistency(r, c)
             test_div_pinv_consistency(rm, c)
             test_div_pinv_consistency(r, cm)
             test_div_pinv_consistency(rm, cm)
         end
-        @testset "outer prodcuts" begin
+        @testset "outer products" begin
             test_div_pinv_consistency(c, r)
             test_div_pinv_consistency(cm, rm)
         end
@@ -823,28 +913,54 @@ end
 @testset "strides" begin
     a = rand(10)
     b = view(a,2:2:10)
-    A = rand(10,10)
-    B = view(A, 2:2:10, 2:2:10)
-
     @test LinearAlgebra.stride1(a) == 1
     @test LinearAlgebra.stride1(b) == 2
+end
 
-    @test strides(a) == (1,)
-    @test strides(b) == (2,)
-    @test strides(A) == (1,10)
-    @test strides(B) == (2,20)
+@testset "inverse of Adjoint" begin
+    A = randn(n, n)
 
-    @test_deprecated strides(1:5)
-    @test_deprecated stride(1:5,1)
+    @test @inferred(inv(A'))*A'                     ≈ I
+    @test @inferred(inv(transpose(A)))*transpose(A) ≈ I
 
-    for M in (a, b, A, B)
-        @inferred strides(M)
-        strides_M = strides(M)
+    B = complex.(A, randn(n, n))
 
-        for (i, _stride) in enumerate(collect(strides_M))
-            @test _stride == stride(M, i)
-        end
+    @test @inferred(inv(B'))*B'                     ≈ I
+    @test @inferred(inv(transpose(B)))*transpose(B) ≈ I
+end
+
+@testset "Factorize fallback for Adjoint/Transpose" begin
+    a = rand(Complex{Int8}, n, n)
+    @test Array(transpose(factorize(Transpose(a)))) ≈ Array(factorize(a))
+    @test transpose(factorize(transpose(a))) == factorize(a)
+    @test Array(adjoint(factorize(Adjoint(a)))) ≈ Array(factorize(a))
+    @test adjoint(factorize(adjoint(a))) == factorize(a)
+end
+
+@testset "Matrix log issue #32313" begin
+    for A in ([30 20; -50 -30], [10.0im 0; 0 -10.0im], randn(6,6))
+        @test exp(log(A)) ≈ A
     end
+end
+
+@testset "Matrix log PR #33245" begin
+    # edge case for divided difference
+    A1 = triu(ones(3,3),1) + diagm([1.0, -2eps()-1im, -eps()+0.75im])
+    @test exp(log(A1)) ≈ A1
+    # case where no sqrt is needed (s=0)
+    A2 = [1.01 0.01 0.01; 0 1.01 0.01; 0 0 1.01]
+    @test exp(log(A2)) ≈ A2
+end
+
+struct TypeWithoutZero end
+Base.zero(::Type{TypeWithoutZero}) = TypeWithZero()
+struct TypeWithZero end
+Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
+Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
+Base.:+(x::TypeWithZero, ::TypeWithoutZero) = x
+
+@testset "diagm for type with no zero" begin
+    @test diagm(0 => [TypeWithoutZero()]) isa Matrix{TypeWithZero}
 end
 
 end # module TestDense

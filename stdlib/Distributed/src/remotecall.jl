@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base: eltype
+
+abstract type AbstractRemoteRef end
+
 """
     client_refs
 
@@ -8,15 +12,15 @@ Tracks whether a particular `AbstractRemoteRef`
 
 The `client_refs` lock is also used to synchronize access to `.refs` and associated `clientset` state.
 """
-const client_refs = WeakKeyDict{Any, Nothing}() # used as a WeakKeySet
-
-abstract type AbstractRemoteRef end
+const client_refs = WeakKeyDict{AbstractRemoteRef, Nothing}() # used as a WeakKeySet
 
 """
-    Future(pid::Integer=myid())
+    Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing)
 
-Create a `Future` on process `pid`.
-The default `pid` is the current process.
+A `Future` is a placeholder for a single computation
+of unknown termination status and time.
+For multiple potential computations, see `RemoteChannel`.
+See `remoteref_id` for identifying an `AbstractRemoteRef`.
 """
 mutable struct Future <: AbstractRemoteRef
     where::Int
@@ -98,9 +102,15 @@ function finalize_ref(r::AbstractRemoteRef)
     nothing
 end
 
+"""
+    Future(pid::Integer=myid())
+
+Create a `Future` on process `pid`.
+The default `pid` is the current process.
+"""
+Future(pid::Integer=myid()) = Future(pid, RRID())
 Future(w::LocalProcess) = Future(w.id)
 Future(w::Worker) = Future(w.id)
-Future(pid::Integer=myid()) = Future(pid, RRID())
 
 RemoteChannel(pid::Integer=myid()) = RemoteChannel{Channel{Any}}(pid, RRID())
 
@@ -110,6 +120,8 @@ function RemoteChannel(f::Function, pid::Integer=myid())
         RemoteChannel{typeof(rv.c)}(myid(), rrid)
     end
 end
+
+Base.eltype(::Type{RemoteChannel{T}}) where {T} = eltype(T)
 
 hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
@@ -177,9 +189,12 @@ If the argument `Future` is owned by a different node, this call will block to w
 It is recommended to wait for `rr` in a separate task instead
 or to use a local [`Channel`](@ref) as a proxy:
 
-    c = Channel(1)
-    @async put!(c, remotecall_fetch(long_computation, p))
-    isready(c)  # will not block
+```julia
+p = 1
+f = Future(p)
+@async put!(f, remotecall_fetch(long_computation, p))
+isready(f)  # will not block
+```
 """
 function isready(rr::Future)
     rr.v === nothing || return true
@@ -232,9 +247,9 @@ function del_clients(pairs::Vector)
     end
 end
 
-any_gc_flag = Condition()
+const any_gc_flag = Condition()
 function start_gc_msgs_task()
-    @schedule while true
+    @async while true
         wait(any_gc_flag)
         flush_gc_msgs()
     end
@@ -292,24 +307,29 @@ function serialize(s::ClusterSerializer, rr::AbstractRemoteRef, addclient)
 end
 
 function deserialize(s::ClusterSerializer, t::Type{<:Future})
-    f = deserialize_rr(s,t)
-    Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
+    f = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, t)
+    f2 = Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
+
+    # 1) send_add_client() is not executed when the ref is being serialized
+    #    to where it exists, hence do it here.
+    # 2) If we have received a 'fetch'ed Future or if the Future ctor found an
+    #    already 'fetch'ed instance in client_refs (Issue #25847), we should not
+    #    track it in the backing RemoteValue store.
+    if f2.where == myid() && f2.v === nothing
+        add_client(remoteref_id(f2), myid())
+    end
+    f2
 end
 
 function deserialize(s::ClusterSerializer, t::Type{<:RemoteChannel})
-    rr = deserialize_rr(s,t)
-    # call ctor to make sure this rr gets added to the client_refs table
-    RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))
-end
-
-function deserialize_rr(s, t)
     rr = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, t)
     if rr.where == myid()
         # send_add_client() is not executed when the ref is being
         # serialized to where it exists
         add_client(remoteref_id(rr), myid())
     end
-    rr
+    # call ctor to make sure this rr gets added to the client_refs table
+    RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))
 end
 
 # Future and RemoteChannel are serializable only in a running cluster.
@@ -383,6 +403,20 @@ Any remote exceptions are captured in a
 [`RemoteException`](@ref) and thrown.
 
 See also [`fetch`](@ref) and [`remotecall`](@ref).
+
+# Examples
+```julia-repl
+\$ julia -p 2
+
+julia> remotecall_fetch(sqrt, 2, 4)
+2.0
+
+julia> remotecall_fetch(sqrt, 2, -4)
+ERROR: On worker 2:
+DomainError with -4.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+...
+```
 """
 remotecall_fetch(f, id::Integer, args...; kwargs...) =
     remotecall_fetch(f, worker_from_id(id), args...; kwargs...)
@@ -445,7 +479,7 @@ invoked, the order of executions on the remote worker is undetermined. For examp
 to `f1`, followed by `f2` and `f3` in that order. However, it is not guaranteed that `f1`
 is executed before `f3` on worker 2.
 
-Any exceptions thrown by `f` are printed to [`STDERR`](@ref) on the remote worker.
+Any exceptions thrown by `f` are printed to [`stderr`](@ref) on the remote worker.
 
 Keyword arguments, if any, are passed through to `f`.
 """
@@ -461,10 +495,10 @@ function call_on_owner(f, rr::AbstractRemoteRef, args...)
     end
 end
 
-function wait_ref(rid, callee, args...)
+function wait_ref(rid, caller, args...)
     v = fetch_ref(rid, args...)
     if isa(v, RemoteException)
-        if myid() == callee
+        if myid() == caller
             throw(v)
         else
             return v
@@ -476,19 +510,26 @@ end
 """
     wait(r::Future)
 
-Wait for a value to become available for the specified future.
+Wait for a value to become available for the specified [`Future`](@ref).
 """
 wait(r::Future) = (r.v !== nothing && return r; call_on_owner(wait_ref, r, myid()); r)
 
 """
     wait(r::RemoteChannel, args...)
 
-Wait for a value to become available on the specified remote channel.
+Wait for a value to become available on the specified [`RemoteChannel`](@ref).
 """
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
+"""
+    fetch(x::Future)
+
+Wait for and get the value of a [`Future`](@ref). The fetched value is cached locally.
+Further calls to `fetch` on the same reference return the cached value. If the remote value
+is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
+"""
 function fetch(r::Future)
-    r.v !== nothing && return coalesce(r.v)
+    r.v !== nothing && return something(r.v)
     v = call_on_owner(fetch_ref, r)
     r.v = Some(v)
     send_del_client(r)
@@ -496,22 +537,14 @@ function fetch(r::Future)
 end
 
 fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
+
+"""
+    fetch(c::RemoteChannel)
+
+Wait for and get a value from a [`RemoteChannel`](@ref). Exceptions raised are the
+same as for a [`Future`](@ref). Does not remove the item fetched.
+"""
 fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
-
-"""
-    fetch(x)
-
-Waits and fetches a value from `x` depending on the type of `x`:
-
-* [`Future`](@ref): Wait for and get the value of a `Future`. The fetched value is cached locally.
-  Further calls to `fetch` on the same reference return the cached value. If the remote value
-  is an exception, throws a [`RemoteException`](@ref) which captures the remote exception and backtrace.
-* [`RemoteChannel`](@ref): Wait for and get the value of a remote reference. Exceptions raised are
-  same as for a `Future` .
-
-Does not remove the item fetched.
-"""
-fetch(@nospecialize x) = x
 
 isready(rv::RemoteValue, args...) = isready(rv.c, args...)
 
@@ -530,18 +563,27 @@ function put!(rr::Future, v)
     rr.v = Some(v)
     rr
 end
-function put_future(rid, v, callee)
+function put_future(rid, v, caller)
     rv = lookup_ref(rid)
     isready(rv) && error("Future can be set only once")
     put!(rv, v)
-    # The callee has the value and hence can be removed from the remote store.
-    del_client(rid, callee)
+    # The caller has the value and hence can be removed from the remote store.
+    del_client(rid, caller)
     nothing
 end
 
 
 put!(rv::RemoteValue, args...) = put!(rv.c, args...)
-put_ref(rid, args...) = (put!(lookup_ref(rid), args...); nothing)
+function put_ref(rid, caller, args...)
+    rv = lookup_ref(rid)
+    put!(rv, args...)
+    if myid() == caller && rv.synctake !== nothing
+        # Wait till a "taken" value is serialized out - github issue #29932
+        lock(rv.synctake)
+        unlock(rv.synctake)
+    end
+    nothing
+end
 
 """
     put!(rr::RemoteChannel, args...)
@@ -550,15 +592,29 @@ Store a set of values to the [`RemoteChannel`](@ref).
 If the channel is full, blocks until space is available.
 Return the first argument.
 """
-put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, args...); rr)
+put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, myid(), args...); rr)
 
 # take! is not supported on Future
 
 take!(rv::RemoteValue, args...) = take!(rv.c, args...)
-function take_ref(rid, callee, args...)
-    v=take!(lookup_ref(rid), args...)
-    isa(v, RemoteException) && (myid() == callee) && throw(v)
-    v
+function take_ref(rid, caller, args...)
+    rv = lookup_ref(rid)
+    synctake = false
+    if myid() != caller && rv.synctake !== nothing
+        # special handling for local put! / remote take! on unbuffered channel
+        # github issue #29932
+        synctake = true
+        lock(rv.synctake)
+    end
+
+    v=take!(rv, args...)
+    isa(v, RemoteException) && (myid() == caller) && throw(v)
+
+    if synctake
+        return SyncTake(v, rv)
+    else
+        return v
+    end
 end
 
 """
@@ -569,10 +625,13 @@ removing the value(s) in the process.
 """
 take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)
 
-# close is not supported on Future
+# close and isopen are not supported on Future
 
 close_ref(rid) = (close(lookup_ref(rid).c); nothing)
 close(rr::RemoteChannel) = call_on_owner(close_ref, rr)
+
+isopen_ref(rid) = isopen(lookup_ref(rid).c)
+isopen(rr::RemoteChannel) = call_on_owner(isopen_ref, rr)
 
 getindex(r::RemoteChannel) = fetch(r)
 getindex(r::Future) = fetch(r)

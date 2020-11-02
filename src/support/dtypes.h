@@ -6,6 +6,10 @@
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
+#include <string.h> // memcpy
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
 #if defined(_COMPILER_INTEL_)
 #include <mathimf.h>
 #else
@@ -13,6 +17,7 @@
 #endif
 
 #include "platform.h"
+#include "analyzer_annotations.h"
 
 #if !defined(_OS_WINDOWS_)
 #include <inttypes.h>
@@ -24,7 +29,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-#if !defined(_COMPILER_MINGW_)
+#if !defined(_COMPILER_GCC_)
 
 #define strtoull                                            _strtoui64
 #define strtoll                                             _strtoi64
@@ -37,7 +42,7 @@
 #define STDOUT_FILENO                                       1
 #define STDERR_FILENO                                       2
 
-#endif /* !_COMPILER_MINGW_ */
+#endif /* !_COMPILER_GCC_ */
 
 #endif /* _OS_WINDOWS_ */
 
@@ -109,7 +114,7 @@
 #  define STATIC_INLINE static inline
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)
 #  define NOINLINE_DECL(f) __declspec(noinline) f
 #else
@@ -129,6 +134,74 @@
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
 #endif
 
+#ifdef __has_builtin
+#  define jl_has_builtin(x) __has_builtin(x)
+#else
+#  define jl_has_builtin(x) 0
+#endif
+
+#if jl_has_builtin(__builtin_assume)
+#define jl_assume(cond) (__extension__ ({               \
+                __typeof__(cond) cond_ = (cond);        \
+                __builtin_assume(!!(cond_));            \
+                cond_;                                  \
+            }))
+#elif defined(_COMPILER_MICROSOFT_) && defined(__cplusplus)
+template<typename T>
+static inline T
+jl_assume(T v)
+{
+    __assume(!!v);
+    return v;
+}
+#elif defined(_COMPILER_INTEL_)
+#define jl_assume(cond) (__extension__ ({               \
+                __typeof__(cond) cond_ = (cond);        \
+                __assume(!!(cond_));                    \
+                cond_;                                  \
+            }))
+#elif defined(__GNUC__)
+static inline void jl_assume_(int cond)
+{
+    if (!cond) {
+        __builtin_unreachable();
+    }
+}
+#define jl_assume(cond) (__extension__ ({               \
+                __typeof__(cond) cond_ = (cond);        \
+                jl_assume_(!!(cond_));                  \
+                cond_;                                  \
+            }))
+#else
+#define jl_assume(cond) (cond)
+#endif
+
+#if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
+#define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
+#elif defined(_COMPILER_INTEL_)
+#define jl_assume_aligned(ptr, align) (__extension__ ({         \
+                __typeof__(ptr) ptr_ = (ptr);                   \
+                __assume_aligned(ptr_, align);                  \
+                ptr_;                                           \
+            }))
+#elif defined(__GNUC__)
+#define jl_assume_aligned(ptr, align) (__extension__ ({         \
+                __typeof__(ptr) ptr_ = (ptr);                   \
+                jl_assume(((uintptr_t)ptr) % (align) == 0);     \
+                ptr_;                                           \
+            }))
+#elif defined(__cplusplus)
+template<typename T>
+static inline T
+jl_assume_aligned(T ptr, unsigned align)
+{
+    (void)jl_assume(((uintptr_t)ptr) % align == 0);
+    return ptr;
+}
+#else
+#define jl_assume_aligned(ptr, align) (ptr)
+#endif
+
 typedef int bool_t;
 typedef unsigned char  byte_t;   /* 1 byte */
 
@@ -144,7 +217,7 @@ typedef uint32_t uint_t;
 typedef int32_t int_t;
 #endif
 
-STATIC_INLINE unsigned int next_power_of_two(unsigned int val)
+STATIC_INLINE unsigned int next_power_of_two(unsigned int val) JL_NOTSAFEPOINT
 {
     /* this function taken from libuv src/unix/core.c */
     val -= 1;
@@ -157,7 +230,7 @@ STATIC_INLINE unsigned int next_power_of_two(unsigned int val)
     return val;
 }
 
-#define LLT_ALIGN(x, sz) (((x) + (sz)-1) & -(sz))
+#define LLT_ALIGN(x, sz) (((x) + (sz)-1) & ~((sz)-1))
 
 // branch prediction annotations
 #ifdef __GNUC__
@@ -218,5 +291,98 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 #else
 #define JL_UNUSED
 #endif
+
+STATIC_INLINE double jl_load_unaligned_f64(const void *ptr) JL_NOTSAFEPOINT
+{
+    double val;
+    memcpy(&val, ptr, sizeof(double));
+    return val;
+}
+
+STATIC_INLINE uint64_t jl_load_unaligned_i64(const void *ptr) JL_NOTSAFEPOINT
+{
+    uint64_t val;
+    memcpy(&val, ptr, sizeof(uint64_t));
+    return val;
+}
+
+STATIC_INLINE double jl_load_ptraligned_f64(const void *ptr) JL_NOTSAFEPOINT
+{
+    double val;
+    memcpy(&val, jl_assume_aligned(ptr, sizeof(void*)), sizeof(double));
+    return val;
+}
+
+STATIC_INLINE uint64_t jl_load_ptraligned_i64(const void *ptr) JL_NOTSAFEPOINT
+{
+    uint64_t val;
+    memcpy(&val, jl_assume_aligned(ptr, sizeof(void*)), sizeof(uint64_t));
+    return val;
+}
+
+
+STATIC_INLINE uint32_t jl_load_unaligned_i32(const void *ptr) JL_NOTSAFEPOINT
+{
+    uint32_t val;
+    memcpy(&val, ptr, 4);
+    return val;
+}
+STATIC_INLINE uint16_t jl_load_unaligned_i16(const void *ptr) JL_NOTSAFEPOINT
+{
+    uint16_t val;
+    memcpy(&val, ptr, 2);
+    return val;
+}
+
+STATIC_INLINE void jl_store_unaligned_i64(void *ptr, uint64_t val) JL_NOTSAFEPOINT
+{
+    memcpy(ptr, &val, 8);
+}
+STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val) JL_NOTSAFEPOINT
+{
+    memcpy(ptr, &val, 4);
+}
+STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOINT
+{
+    memcpy(ptr, &val, 2);
+}
+
+#ifdef _OS_WINDOWS_
+#include <errhandlingapi.h>
+#endif
+
+STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    void *p = malloc(sz);
+    if (p == NULL) {
+        perror("(julia) malloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
+}
+
+STATIC_INLINE void *realloc_s(void *p, size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    p = realloc(p, sz);
+    if (p == NULL) {
+        perror("(julia) realloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
+}
 
 #endif /* DTYPES_H */

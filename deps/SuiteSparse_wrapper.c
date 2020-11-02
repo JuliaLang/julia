@@ -1,3 +1,9 @@
+/*
+  SuiteSparse_wrapper.c: Changes made to this file in the Julia repo
+  in deps/SuiteSparse_wrapper.c should be also made in
+  Yggdrasil/S/SuiteSparse and vice versa.
+*/
+
 #include <string.h>
 #include <cholmod.h>
 

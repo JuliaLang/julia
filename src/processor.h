@@ -123,7 +123,7 @@ typedef enum {
 } jl_cpu_feature_t;
 #undef JL_FEATURE_DEF_NAME
 
-int jl_test_cpu_feature(jl_cpu_feature_t feature);
+JL_DLLEXPORT int jl_test_cpu_feature(jl_cpu_feature_t feature);
 
 static const uint32_t jl_sysimg_tag_mask = 0x80000000u;
 static const uint32_t jl_sysimg_val_mask = ~((uint32_t)0x80000000u);
@@ -208,4 +208,5 @@ struct jl_target_spec_t {
 std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
 std::string jl_get_cpu_name_llvm(void);
 std::string jl_get_cpu_features_llvm(void);
+std::string jl_format_filename(llvm::StringRef output_pattern);
 #endif

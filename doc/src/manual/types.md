@@ -16,10 +16,11 @@ of function arguments to be deeply integrated with the language. Method dispatch
 detail in [Methods](@ref), but is rooted in the type system presented here.
 
 The default behavior in Julia when types are omitted is to allow values to be of any type. Thus,
-one can write many useful Julia programs without ever explicitly using types. When additional
+one can write many useful Julia functions without ever explicitly using types. When additional
 expressiveness is needed, however, it is easy to gradually introduce explicit type annotations
-into previously "untyped" code. Doing so will typically increase both the performance and robustness
-of these systems, and perhaps somewhat counterintuitively, often significantly simplify them.
+into previously "untyped" code. Adding annotations serves three primary purposes: to take advantage
+of Julia's powerful multiple-dispatch mechanism,  to improve human readability, and to catch
+programmer errors.
 
 Describing Julia in the lingo of [type systems](https://en.wikipedia.org/wiki/Type_system), it
 is: dynamic, nominative and parametric. Generic types can be parameterized, and the hierarchical
@@ -39,10 +40,11 @@ up front are:
   * There is no meaningful concept of a "compile-time type": the only type a value has is its actual
     type when the program is running. This is called a "run-time type" in object-oriented languages
     where the combination of static compilation with polymorphism makes this distinction significant.
-  * Only values, not variables, have types -- variables are simply names bound to values.
+  * Only values, not variables, have types -- variables are simply names bound to values, although for
+    simplicity we may say "type of a variable" as shorthand for "type of the value to which a variable refers".
   * Both abstract and concrete types can be parameterized by other types. They can also be parameterized
     by symbols, by values of any type for which [`isbits`](@ref) returns true (essentially, things
-    like numbers and bools that are stored like C types or structs with no pointers to other objects),
+    like numbers and bools that are stored like C types or `struct`s with no pointers to other objects),
     and also by tuples thereof. Type parameters may be omitted when they do not need to be referenced
     or restricted.
 
@@ -69,7 +71,7 @@ an exception is thrown, otherwise, the left-hand value is returned:
 
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: in typeassert, expected AbstractFloat, got Int64
+ERROR: TypeError: in typeassert, expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
@@ -89,10 +91,10 @@ julia> function foo()
        end
 foo (generic function with 1 method)
 
-julia> foo()
+julia> x = foo()
 100
 
-julia> typeof(ans)
+julia> typeof(x)
 Int8
 ```
 
@@ -124,7 +126,7 @@ end
 Returning from this function behaves just like an assignment to a variable with a declared type:
 the value is always converted to `Float64`.
 
-## Abstract Types
+## [Abstract Types](@id man-abstract-types)
 
 Abstract types cannot be instantiated, and serve only as nodes in the type graph, thereby describing
 sets of related concrete types: those concrete types which are their descendants. We begin with
@@ -147,7 +149,7 @@ numbers. Abstract types allow the construction of a hierarchy of types, providin
 into which concrete types can fit. This allows you, for example, to easily program to any type
 that is an integer, without restricting an algorithm to a specific type of integer.
 
-Abstract types are declared using the `abstract type` keyword. The general syntaxes for declaring an
+Abstract types are declared using the [`abstract type`](@ref) keyword. The general syntaxes for declaring an
 abstract type are:
 
 ```
@@ -156,7 +158,7 @@ abstract type «name» <: «supertype» end
 ```
 
 The `abstract type` keyword introduces a new abstract type, whose name is given by `«name»`. This
-name can be optionally followed by `<:` and an already-existing type, indicating that the newly
+name can be optionally followed by [`<:`](@ref) and an already-existing type, indicating that the newly
 declared abstract type is a subtype of this "parent" type.
 
 When no supertype is given, the default supertype is `Any` -- a predefined abstract type that
@@ -231,9 +233,17 @@ has full control over whether the default or more specific method is used.
 An important point to note is that there is no loss in performance if the programmer relies on
 a function whose arguments are abstract types, because it is recompiled for each tuple of argument
 concrete types with which it is invoked. (There may be a performance issue, however, in the case
-of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-tips).)
+of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-abstract-container).)
 
 ## Primitive Types
+
+!!! warning
+    It is almost always preferable to wrap an existing primitive type in a new
+    composite type than to define your own primitive type.
+
+    This functionality exists to allow Julia to bootstrap the standard primitive
+    types that LLVM supports. Once they are defined, there is very little reason
+    to define more.
 
 A primitive type is a concrete type whose data consists of plain old bits. Classic examples of primitive
 types are integers and floating-point values. Unlike most languages, Julia lets you declare your
@@ -246,7 +256,7 @@ primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
 primitive type Bool <: Integer 8 end
-primitive type Char 32 end
+primitive type Char <: AbstractChar 32 end
 
 primitive type Int8    <: Signed   8 end
 primitive type UInt8   <: Unsigned 8 end
@@ -272,8 +282,9 @@ a name. A primitive type can optionally be declared to be a subtype of some supe
 is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
 of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
 [`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
-8 bits are supported. Therefore, boolean values, although they really need just a single bit,
-cannot be declared to be any smaller than eight bits.
+8 bits are supported and you are likely to experience LLVM bugs with sizes other than those used above.
+Therefore, boolean values, although they really need just a single bit, cannot be declared to be any
+smaller than eight bits.
 
 The types [`Bool`](@ref), [`Int8`](@ref) and [`UInt8`](@ref) all have identical representations:
 they are eight-bit chunks of memory. Since Julia's type system is nominative, however, they
@@ -308,7 +319,7 @@ for more information on methods and dispatch). Thus, it would be inappropriate f
 named bags of methods "inside" each object ends up being a highly beneficial aspect of the language
 design.
 
-Composite types are introduced with the `struct` keyword followed by a block of field names, optionally
+Composite types are introduced with the [`struct`](@ref) keyword followed by a block of field names, optionally
 annotated with types using the `::` operator:
 
 ```jldoctest footype
@@ -343,20 +354,16 @@ must be convertible to `Int`:
 
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
-ERROR: InexactError: convert(Int64, 23.5)
+ERROR: InexactError: Int64(23.5)
 Stacktrace:
- [1] convert at ./float.jl:703 [inlined]
- [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
+[...]
 ```
 
-You may find a list of field names using the `fieldnames` function.
+You may find a list of field names using the [`fieldnames`](@ref) function.
 
 ```jldoctest footype
 julia> fieldnames(Foo)
-3-element Array{Symbol,1}:
- :bar
- :baz
- :qux
+(:bar, :baz, :qux)
 ```
 
 You can access the field values of a composite object using the traditional `foo.bar` notation:
@@ -375,8 +382,8 @@ julia> foo.qux
 Composite objects declared with `struct` are *immutable*; they cannot be modified
 after construction. This may seem odd at first, but it has several advantages:
 
-  * It can be more efficient. Some structs can be packed efficiently into arrays, and in some cases the
-    compiler is able to avoid allocating immutable objects entirely.
+  * It can be more efficient. Some structs can be packed efficiently into arrays, and
+    in some cases the compiler is able to avoid allocating immutable objects entirely.
   * It is not possible to violate the invariants provided by the type's constructors.
   * Code using immutable objects can be easier to reason about.
 
@@ -384,21 +391,20 @@ An immutable object might contain mutable objects, such as arrays, as fields. Th
 objects will remain mutable; only the fields of the immutable object itself cannot be changed
 to point to different objects.
 
-Where required, mutable composite objects can be declared with the keyword `mutable struct`, to be
+Where required, mutable composite objects can be declared with the keyword [`mutable struct`](@ref), to be
 discussed in the next section.
 
-Immutable composite types with no fields are singletons; there can be only one instance of such types:
+If all the fields of an immutable structure are indistinguishable (`===`) then two immutable values containing those fields are also indistinguishable:
 
 ```jldoctest
-julia> struct NoFields
+julia> struct X
+           a::Int
+           b::Float64
        end
 
-julia> NoFields() === NoFields()
+julia> X(1, 2) === X(1, 2)
 true
 ```
-
-The `===` function confirms that the "two" constructed instances of `NoFields` are actually one
-and the same. Singleton types are described in further detail [below](@ref man-singleton-types).
 
 There is much more to say about how instances of composite types are created, but that discussion
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
@@ -436,23 +442,27 @@ over time. If they would be considered identical, the type should probably be im
 
 To recap, two essential properties define immutability in Julia:
 
-  * An object with an immutable type is passed around (both in assignment statements and in function
-    calls) by copying, whereas a mutable type is passed around by reference.
-  * It is not permitted to modify the fields of a composite immutable type.
+  * It is not permitted to modify the value of an immutable type.
+    * For bits types this means that the bit pattern of a value once set will never change
+      and that value is the identity of a bits type.
+    * For composite  types, this means that the identity of the values of its fields will
+      never change. When the fields are bits types, that means their bits will never change,
+      for fields whose values are mutable types like arrays, that means the fields will
+      always refer to the same mutable value even though that mutable value's content may
+      itself be modified.
+  * An object with an immutable type may be copied freely by the compiler since its
+    immutability makes it impossible to programmatically distinguish between the original
+    object and a copy.
+    * In particular, this means that small enough immutable values like integers and floats
+      are typically passed to functions in registers (or stack allocated).
+    * Mutable values, on the other hand are heap-allocated and passed to
+      functions as pointers to heap-allocated values except in cases where the compiler
+      is sure that there's no way to tell that this is not what is happening.
 
-It is instructive, particularly for readers whose background is C/C++, to consider why these two
-properties go hand in hand.  If they were separated, i.e., if the fields of objects passed around
-by copying could be modified, then it would become more difficult to reason about certain instances
-of generic code.  For example, suppose `x` is a function argument of an abstract type, and suppose
-that the function changes a field: `x.isprocessed = true`.  Depending on whether `x` is passed
-by copying or by reference, this statement may or may not alter the actual argument in the calling
-routine.  Julia sidesteps the possibility of creating functions with unknown effects in this scenario
-by forbidding modification of fields of objects passed around by copying.
+## [Declared Types](@id man-declared-types)
 
-## Declared Types
-
-The three kinds of types discussed in the previous three sections are actually all closely related.
-They share the same key properties:
+The three kinds of types (abstract, primitive, composite) discussed in the previous
+sections are actually all closely related. They share the same key properties:
 
   * They are explicitly declared.
   * They have names.
@@ -479,7 +489,7 @@ Every concrete value in the system is an instance of some `DataType`.
 ## Type Unions
 
 A type union is a special abstract type which includes as objects all instances of any of its
-argument types, constructed using the special `Union` function:
+argument types, constructed using the special [`Union`](@ref) keyword:
 
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
@@ -492,11 +502,20 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
-simply exposes it to the programmer.
+simply exposes it to the programmer. The Julia compiler is able to generate efficient code in the
+presence of `Union` types with a small number of types [^1], by generating specialized code
+in separate branches for each possible type.
+
+A particularly useful case of a `Union` type is `Union{T, Nothing}`, where `T` can be any type and
+[`Nothing`](@ref) is the singleton type whose only instance is the object [`nothing`](@ref). This pattern
+is the Julia equivalent of [`Nullable`, `Option` or `Maybe`](https://en.wikipedia.org/wiki/Nullable_type)
+types in other languages. Declaring a function argument or a field as `Union{T, Nothing}` allows
+setting it either to a value of type `T`, or to `nothing` to indicate that there is no value.
+See [this FAQ entry](@ref faq-nothing) for more information.
 
 ## Parametric Types
 
@@ -519,7 +538,7 @@ All declared types (the `DataType` variety) can be parameterized, with the same 
 case. We will discuss them in the following order: first, parametric composite types, then parametric
 abstract types, and finally parametric primitive types.
 
-### Parametric Composite Types
+### [Parametric Composite Types](@id man-parametric-composite-types)
 
 Type parameters are introduced immediately after the type name, surrounded by curly braces:
 
@@ -621,8 +640,8 @@ function norm(p::Point{<:Real})
 end
 ```
 
-(Equivalently, one could define `function norm{T<:Real}(p::Point{T})` or
-`function norm(p::Point{T} where T<:Real)`; see [UnionAll Types](@ref).)
+(Equivalently, one could define `function norm(p::Point{T} where T<:Real)` or
+`function norm(p::Point{T}) where T<:Real`; see [UnionAll Types](@ref).)
 
 More examples will be discussed later in [Methods](@ref).
 
@@ -636,10 +655,10 @@ Since the type `Point{Float64}` is a concrete type equivalent to `Point` declare
 in place of `T`, it can be applied as a constructor accordingly:
 
 ```jldoctest pointtype
-julia> Point{Float64}(1.0, 2.0)
+julia> p = Point{Float64}(1.0, 2.0)
 Point{Float64}(1.0, 2.0)
 
-julia> typeof(ans)
+julia> typeof(p)
 Point{Float64}
 ```
 
@@ -647,14 +666,12 @@ For the default constructor, exactly one argument must be supplied for each fiel
 
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
-ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
-This may have arisen from a call to the constructor Point{Float64}(...),
-since type constructors fall back to convert methods.
-Stacktrace:
- [1] Point{Float64}(::Float64) at ./sysimg.jl:114
+ERROR: MethodError: no method matching Point{Float64}(::Float64)
+[...]
 
 julia> Point{Float64}(1.0,2.0,3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+[...]
 ```
 
 Only one default constructor is generated for parametric types, since overriding it is not possible.
@@ -666,16 +683,16 @@ that reason, you can also apply `Point` itself as a constructor, provided that t
 of the parameter type `T` is unambiguous:
 
 ```jldoctest pointtype
-julia> Point(1.0,2.0)
+julia> p1 = Point(1.0,2.0)
 Point{Float64}(1.0, 2.0)
 
-julia> typeof(ans)
+julia> typeof(p1)
 Point{Float64}
 
-julia> Point(1,2)
+julia> p2 = Point(1,2)
 Point{Int64}(1, 2)
 
-julia> typeof(ans)
+julia> typeof(p2)
 Point{Int64}
 ```
 
@@ -804,7 +821,7 @@ julia> Pointy{AbstractString}
 ERROR: TypeError: in Pointy, in T, expected T<:Real, got Type{AbstractString}
 
 julia> Pointy{1}
-ERROR: TypeError: in Pointy, in T, expected T<:Real, got Int64
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got a value of type Int64
 ```
 
 Type parameters for parametric composite types can be restricted in the same manner:
@@ -858,7 +875,7 @@ tuple type is generated on demand:
 
 ```jldoctest
 julia> typeof((1,"foo",2.5))
-Tuple{Int64,String,Float64}
+Tuple{Int64, String, Float64}
 ```
 
 Note the implications of covariance:
@@ -879,12 +896,12 @@ signature (when the signature matches).
 
 ### Vararg Tuple Types
 
-The last parameter of a tuple type can be the special type `Vararg`, which denotes any number
+The last parameter of a tuple type can be the special type [`Vararg`](@ref), which denotes any number
 of trailing elements:
 
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
-Tuple{AbstractString,Vararg{Int64,N} where N}
+Tuple{AbstractString, Vararg{Int64, N} where N}
 
 julia> isa(("1",), mytupletype)
 true
@@ -912,7 +929,21 @@ symbols giving the field names, and a tuple type giving the field types.
 
 ```jldoctest
 julia> typeof((a=1,b="hello"))
-NamedTuple{(:a, :b),Tuple{Int64,String}}
+NamedTuple{(:a, :b), Tuple{Int64, String}}
+```
+
+The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax for declaring
+`NamedTuple` types via `key::Type` declarations, where an omitted `::Type` corresponds to `::Any`.
+
+```jldoctest
+julia> @NamedTuple{a::Int, b::String}
+NamedTuple{(:a, :b), Tuple{Int64, String}}
+
+julia> @NamedTuple begin
+           a::Int
+           b::String
+       end
+NamedTuple{(:a, :b), Tuple{Int64, String}}
 ```
 
 A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
@@ -920,7 +951,7 @@ The constructed `NamedTuple` type can be either a concrete type, with both param
 or a type that specifies only field names:
 
 ```jldoctest
-julia> NamedTuple{(:a, :b),Tuple{Float32, String}}((1,""))
+julia> @NamedTuple{a::Float32,b::String}((1,""))
 (a = 1.0f0, b = "")
 
 julia> NamedTuple{(:a, :b)}((1,""))
@@ -929,62 +960,6 @@ julia> NamedTuple{(:a, :b)}((1,""))
 
 If field types are specified, the arguments are converted. Otherwise the types of the arguments
 are used directly.
-
-#### [Singleton Types](@id man-singleton-types)
-
-There is a special kind of abstract parametric type that must be mentioned here: singleton types.
-For each type, `T`, the "singleton type" `Type{T}` is an abstract type whose only instance is
-the object `T`. Since the definition is a little difficult to parse, let's look at some examples:
-
-```jldoctest
-julia> isa(Float64, Type{Float64})
-true
-
-julia> isa(Real, Type{Float64})
-false
-
-julia> isa(Real, Type{Real})
-true
-
-julia> isa(Float64, Type{Real})
-false
-```
-
-In other words, [`isa(A,Type{B})`](@ref) is true if and only if `A` and `B` are the same object
-and that object is a type. Without the parameter, `Type` is simply an abstract type which has
-all type objects as its instances, including, of course, singleton types:
-
-```jldoctest
-julia> isa(Type{Float64}, Type)
-true
-
-julia> isa(Float64, Type)
-true
-
-julia> isa(Real, Type)
-true
-```
-
-Any object that is not a type is not an instance of `Type`:
-
-```jldoctest
-julia> isa(1, Type)
-false
-
-julia> isa("foo", Type)
-false
-```
-
-Until we discuss [Parametric Methods](@ref) and [conversions](@ref conversion-and-promotion), it is difficult to explain
-the utility of the singleton type construct, but in short, it allows one to specialize function
-behavior on specific type *values*. This is useful for writing methods (especially parametric
-ones) whose behavior depends on a type that is given as an explicit argument rather than implied
-by the type of one of its arguments.
-
-A few popular languages have singleton types, including Haskell, Scala and Ruby. In general usage,
-the term "singleton type" refers to a type whose only instance is a single value. This meaning
-applies to Julia's singleton types, but with that caveat that only type objects have singleton
-types.
 
 ### Parametric Primitive Types
 
@@ -1004,7 +979,7 @@ is that the type parameter `T` is not used in the definition of the type itself 
 an abstract tag, essentially defining an entire family of types with identical structure, differentiated
 only by their type parameter. Thus, `Ptr{Float64}` and `Ptr{Int64}` are distinct types, even though
 they have identical representations. And of course, all specific pointer types are subtypes of
-the umbrella `Ptr` type:
+the umbrella [`Ptr`](@ref) type:
 
 ```jldoctest
 julia> Ptr{Float64} <: Ptr
@@ -1020,7 +995,7 @@ We have said that a parametric type like `Ptr` acts as a supertype of all its in
 (`Ptr{Int64}` etc.). How does this work? `Ptr` itself cannot be a normal data type, since without
 knowing the type of the referenced data the type clearly cannot be used for memory operations.
 The answer is that `Ptr` (or other parametric types like `Array`) is a different kind of type called a
-`UnionAll` type. Such a type expresses the *iterated union* of types for all values of some parameter.
+[`UnionAll`](@ref) type. Such a type expresses the *iterated union* of types for all values of some parameter.
 
 `UnionAll` types are usually written using the keyword `where`. For example `Ptr` could be more
 accurately written as `Ptr{T} where T`, meaning all values whose type is `Ptr{T}` for some value
@@ -1058,10 +1033,10 @@ consider the two types created by the following declarations:
 
 ```jldoctest
 julia> const T1 = Array{Array{T,1} where T, 1}
-Array{Array{T,1} where T,1}
+Vector{Vector{T} where T} (alias for Array{Array{T, 1} where T, 1})
 
-julia> const T2 = Array{Array{T,1}, 1} where T
-Array{Array{T,1},1} where T
+julia> const T2 = Array{Array{T, 1}, 1} where T
+Array{Vector{T}, 1} where T
 ```
 
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each
@@ -1073,7 +1048,7 @@ There is a convenient syntax for naming such types, similar to the short form of
 definition syntax:
 
 ```julia
-Vector{T} = Array{T,1}
+Vector{T} = Array{T, 1}
 ```
 
 This is equivalent to `const Vector = Array{T,1} where T`.
@@ -1083,6 +1058,146 @@ dimensions -- is 1, regardless of what the element type is. In languages where p
 must always be specified in full, this is not especially helpful, but in Julia, this allows one
 to write just `Vector` for the abstract type including all one-dimensional dense arrays of any
 element type.
+
+## [Singleton types](@id man-singleton-types)
+
+Immutable composite types with no fields are called *singletons*. Formally, if
+
+1. `T` is an immutable composite type (i.e. defined with `struct`),
+1. `a isa T && b isa T` implies `a === b`,
+
+then `T` is a singleton type.[^2] [`Base.issingletontype`](@ref) can be used to check if a
+type is a singleton type. [Abstract types](@ref man-abstract-types) cannot be singleton
+types by construction.
+
+From the definition, it follows that there can be only one instance of such types:
+
+```jldoctest
+julia> struct NoFields
+       end
+
+julia> NoFields() === NoFields()
+true
+
+julia> Base.issingletontype(NoFields)
+true
+```
+
+The [`===`](@ref) function confirms that the constructed instances of `NoFields` are actually one
+and the same.
+
+Parametric types can be singleton types when the above condition holds. For example,
+```jldoctest
+julia> struct NoFieldsParam{T}
+       end
+
+julia> Base.issingletontype(NoFieldsParam) # can't be a singleton type ...
+false
+
+julia> NoFieldsParam{Int}() isa NoFieldsParam # ... because it has ...
+true
+
+julia> NoFieldsParam{Bool}() isa NoFieldsParam # ... multiple instances
+true
+
+julia> Base.issingletontype(NoFieldsParam{Int}) # parametrized, it is a singleton
+true
+
+julia> NoFieldsParam{Int}() === NoFieldsParam{Int}()
+true
+```
+
+## [`Type{T}` type selectors](@id man-typet-type)
+
+For each type `T`, `Type{T}` is an abstract parametric type whose only instance is the
+object `T`. Until we discuss [Parametric Methods](@ref) and [conversions](@ref
+conversion-and-promotion), it is difficult to explain the utility of this construct, but in
+short, it allows one to specialize function behavior on specific types as *values*. This is
+useful for writing methods (especially parametric ones) whose behavior depends on a type
+that is given as an explicit argument rather than implied by the type of one of its
+arguments.
+
+Since the definition is a little difficult to parse, let's look at some examples:
+
+```jldoctest
+julia> isa(Float64, Type{Float64})
+true
+
+julia> isa(Real, Type{Float64})
+false
+
+julia> isa(Real, Type{Real})
+true
+
+julia> isa(Float64, Type{Real})
+false
+```
+
+In other words, [`isa(A, Type{B})`](@ref) is true if and only if `A` and `B` are the same object
+and that object is a type.
+
+In particular, since parametric types are [invariant](@ref man-parametric-composite-types), we have
+
+```jldoctest
+julia> struct TypeParamExample{T}
+           x::T
+       end
+
+julia> TypeParamExample isa Type{TypeParamExample}
+true
+
+julia> TypeParamExample{Int} isa Type{TypeParamExample}
+false
+
+julia> TypeParamExample{Int} isa Type{TypeParamExample{Int}}
+true
+```
+
+Without the parameter, `Type` is simply an abstract type which has
+all type objects as its instances:
+
+```jldoctest
+julia> isa(Type{Float64}, Type)
+true
+
+julia> isa(Float64, Type)
+true
+
+julia> isa(Real, Type)
+true
+```
+
+Any object that is not a type is not an instance of `Type`:
+
+```jldoctest
+julia> isa(1, Type)
+false
+
+julia> isa("foo", Type)
+false
+```
+
+While `Type` is part of Julia's type hierarchy like any other abstract parametric type, it
+is not commonly used outside method signatures except in some special cases. Another
+important use case for `Type` is sharpening field types which would otherwise be captured
+less precisely, e.g. as [`DataType`](@ref man-declared-types) in the example below where the
+default constuctor could lead to performance problems in code relying on the precise wrapped
+type (similarly to [abstract type parameters](@ref man-performance-abstract-container)).
+
+```jldoctest
+julia> struct WrapType{T}
+       value::T
+       end
+
+julia> WrapType(Float64) # default constructor, note DataType
+WrapType{DataType}(Float64)
+
+julia> WrapType(::Type{T}) where T = WrapType{Type{T}}(T)
+WrapType
+
+julia> WrapType(Float64) # sharpened constructor, note more precise Type{Float64}
+WrapType{Type{Float64}}(Float64)
+```
 
 ## Type Aliases
 
@@ -1115,9 +1230,9 @@ Of course, this depends on what `Int` is aliased to -- but that is predefined to
 type -- either [`Int32`](@ref) or [`Int64`](@ref).
 
 (Note that unlike `Int`, `Float` does not exist as a type alias for a specific sized
-[`AbstractFloat`](@ref). Unlike with integer registers, the floating point register sizes
-are specified by the IEEE-754 standard. Whereas the size of `Int` reflects the size of a
-native pointer on that machine.)
+[`AbstractFloat`](@ref). Unlike with integer registers, where the size of `Int`
+reflects the size of a native pointer on that machine, the floating point register sizes
+are specified by the IEEE-754 standard.)
 
 ## Operations on Types
 
@@ -1142,9 +1257,6 @@ what their types are:
 
 ```jldoctest
 julia> typeof(Rational{Int})
-DataType
-
-julia> typeof(Union{Real,Float64,Rational})
 DataType
 
 julia> typeof(Union{Real,String})
@@ -1184,15 +1296,14 @@ Any
 If you apply [`supertype`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
 is raised:
 
-```jldoctest
+```jldoctest; filter = r"Closest candidates.*"s
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:42
-  supertype(!Matched::UnionAll) at operators.jl:47
+[...]
 ```
 
-## Custom pretty-printing
+## [Custom pretty-printing](@id man-custom-pretty-printing)
 
 Often, one wants to customize how instances of a type are displayed.  This is accomplished by
 overloading the [`show`](@ref) function.  For example, suppose we define a type to represent
@@ -1245,14 +1356,14 @@ Polar{Float64} complex number:
    3.0 * exp(4.0im)
 
 julia> [Polar(3, 4.0), Polar(4.0,5.3)]
-2-element Array{Polar{Float64},1}:
+2-element Vector{Polar{Float64}}:
  3.0 * exp(4.0im)
  4.0 * exp(5.3im)
 ```
 
 where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
-the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(STDOUT, MIME("text/plain"), z)`,
-which in turn defaults to `show(STDOUT, z)`, but you should *not* define new [`display`](@ref)
+the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(stdout, MIME("text/plain"), z)`,
+which in turn defaults to `show(stdout, z)`, but you should *not* define new [`display`](@ref)
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
@@ -1269,7 +1380,7 @@ A `Polar` object will then display automatically using HTML in an environment th
 display, but you can call `show` manually to get HTML output if you want:
 
 ```jldoctest polartype
-julia> show(STDOUT, "text/html", Polar(3.0,4.0))
+julia> show(stdout, "text/html", Polar(3.0,4.0))
 <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup>
 ```
 
@@ -1326,6 +1437,37 @@ julia> :($a == 2)
 :(3.0 * exp(4.0im) == 2)
 ```
 
+In some cases, it is useful to adjust the behavior of `show` methods depending
+on the context. This can be achieved via the [`IOContext`](@ref) type, which allows
+passing contextual properties together with a wrapped IO stream.
+For example, we can build a shorter representation in our `show` method
+when the `:compact` property is set to `true`, falling back to the long
+representation if the property is `false` or absent:
+```jldoctest polartype
+julia> function Base.show(io::IO, z::Polar)
+           if get(io, :compact, false)
+               print(io, z.r, "ℯ", z.Θ, "im")
+           else
+               print(io, z.r, " * exp(", z.Θ, "im)")
+           end
+       end
+```
+
+This new compact representation will be used when the passed IO stream is an `IOContext`
+object with the `:compact` property set. In particular, this is the case when printing
+arrays with multiple columns (where horizontal space is limited):
+```jldoctest polartype
+julia> show(IOContext(stdout, :compact=>true), Polar(3, 4.0))
+3.0ℯ4.0im
+
+julia> [Polar(3, 4.0) Polar(4.0,5.3)]
+1×2 Matrix{Polar{Float64}}:
+ 3.0ℯ4.0im  4.0ℯ5.3im
+```
+
+See the [`IOContext`](@ref) documentation for a list of common properties which can be used
+to adjust printing.
+
 ## "Value types"
 
 In Julia, you can't dispatch on a *value* such as `true` or `false`. However, you can dispatch
@@ -1338,13 +1480,13 @@ of custom types. By way of illustration of this idea, let's introduce a parametr
 and a constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
 for cases where you don't need a more elaborate hierarchy.
 
-`Val` is defined as:
+[`Val`](@ref) is defined as:
 
 ```jldoctest valtype
 julia> struct Val{x}
        end
 
-julia> Base.@pure Val(x) = Val{x}()
+julia> Val(x) = Val{x}()
 Val
 ```
 
@@ -1366,10 +1508,13 @@ julia> firstlast(Val(false))
 "Last"
 ```
 
-For consistency across Julia, the call site should always pass a `Val`*instance* rather than using
+For consistency across Julia, the call site should always pass a `Val` *instance* rather than using
 a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
  In particular, you would never want to write actual code as illustrated above.  For more information
-about the proper (and improper) uses of `Val`, please read the more extensive discussion in [the performance tips](@ref man-performance-tips).
+about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
+
+[^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.
+[^2]: A few popular languages have singleton types, including Haskell, Scala and Ruby.

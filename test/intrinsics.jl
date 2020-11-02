@@ -10,9 +10,18 @@ include("testenv.jl")
 @test isa(convert(Char, 65), Char)
 
 # runtime intrinsics
-let f = Any[Core.Intrinsics.add_int, Core.Intrinsics.sub_int]
-    @test f[1](1, 1) == 2
-    @test f[2](1, 1) == 0
+@testset "runtime intrinsics" begin
+    @test Core.Intrinsics.add_int(1, 1) == 2
+    @test Core.Intrinsics.sub_int(1, 1) == 0
+    @test_throws ErrorException("fpext: output bitsize must be >= input bitsize")    Core.Intrinsics.fpext(Int32, 0x0000_0000_0000_0000)
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int32, 0x0000_0000)
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int64, 0x0000_0000)
+    @test_throws ErrorException("ZExt: output bitsize must be > input bitsize")     Core.Intrinsics.zext_int(Int8, 0x00)
+    @test_throws ErrorException("SExt: output bitsize must be > input bitsize")     Core.Intrinsics.sext_int(Int8, 0x00)
+    @test_throws ErrorException("ZExt: output bitsize must be > input bitsize")     Core.Intrinsics.zext_int(Int8, 0x0000)
+    @test_throws ErrorException("SExt: output bitsize must be > input bitsize")     Core.Intrinsics.sext_int(Int8, 0x0000)
+    @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int8, 0x00)
+    @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int16, 0x00)
 end
 
 # issue #4581
@@ -89,4 +98,57 @@ let f = Core.Intrinsics.ashr_int
     @test f(Int32(-1), -1) == -1
     @test f(Int32(-1), -10) == -1
     @test f(Int32(2), -1) == 0
+end
+
+# issue #29929
+@test unsafe_store!(Ptr{Nothing}(C_NULL), nothing) === Ptr{Nothing}(0)
+@test unsafe_load(Ptr{Nothing}(0)) === nothing
+struct GhostStruct end
+@test unsafe_load(Ptr{GhostStruct}(rand(Int))) === GhostStruct()
+
+# macro to verify and compare the compiled output of an intrinsic with its runtime version
+macro test_intrinsic(intr, args...)
+    output = args[end]
+    inputs = args[1:end-1]
+    quote
+        function f()
+            $intr($(inputs...))
+        end
+        @test f() === Base.invokelatest($intr, $(inputs...))
+        @test f() == $output
+    end
+end
+
+@testset "Float16 intrinsics" begin
+    # unary
+    @test_intrinsic Core.Intrinsics.neg_float Float16(3.3) Float16(-3.3)
+    @test_intrinsic Core.Intrinsics.fpext Float32 Float16(3.3) 3.3007812f0
+    @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 Float32(3.3) Float16(3.3)
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 Float64(3.3) Float16(3.3)
+
+    # binary
+    @test_intrinsic Core.Intrinsics.add_float Float16(3.3) Float16(2) Float16(5.3)
+    @test_intrinsic Core.Intrinsics.sub_float Float16(3.3) Float16(2) Float16(1.301)
+    @test_intrinsic Core.Intrinsics.mul_float Float16(3.3) Float16(2) Float16(6.6)
+    @test_intrinsic Core.Intrinsics.div_float Float16(3.3) Float16(2) Float16(1.65)
+    @test_intrinsic Core.Intrinsics.rem_float Float16(3.3) Float16(2) Float16(1.301)
+
+    # ternary
+    @test_intrinsic Core.Intrinsics.fma_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
+    @test_intrinsic Core.Intrinsics.muladd_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
+
+    # boolean
+    @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(3.3) true
+    @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(2) false
+    @test_intrinsic Core.Intrinsics.ne_float Float16(3.3) Float16(3.3) false
+    @test_intrinsic Core.Intrinsics.ne_float Float16(3.3) Float16(2) true
+    @test_intrinsic Core.Intrinsics.le_float Float16(3.3) Float16(3.3) true
+    @test_intrinsic Core.Intrinsics.le_float Float16(3.3) Float16(2) false
+
+    # conversions
+    @test_intrinsic Core.Intrinsics.sitofp Float16 3 Float16(3f0)
+    @test_intrinsic Core.Intrinsics.uitofp Float16 UInt(3) Float16(3f0)
+    @test_intrinsic Core.Intrinsics.fptosi Int Float16(3.3) 3
+    @test_intrinsic Core.Intrinsics.fptoui UInt Float16(3.3) UInt(3)
 end

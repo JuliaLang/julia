@@ -22,7 +22,7 @@ end
 function plain(io::IO, code::Code)
     # If the code includes a fenced block this will break parsing,
     # so it must be enclosed by a longer ````-sequence.
-    n = mapreduce(length, max, 2, matchall(r"^`+"m, code.code)) + 1
+    n = mapreduce(m -> length(m.match), max, eachmatch(r"^`+"m, code.code); init=2) + 1
     println(io, "`" ^ n, code.language)
     println(io, code.code)
     println(io, "`" ^ n)
@@ -72,7 +72,7 @@ end
 
 function plain(io::IO, md::Admonition)
     s = sprint(plain, md.content)
-    title = md.title == ucfirst(md.category) ? "" : " \"$(md.title)\""
+    title = md.title == uppercasefirst(md.category) ? "" : " \"$(md.title)\""
     println(io, "!!! ", md.category, title)
     for line in split(rstrip(s), "\n")
         println(io, isempty(line) ? "" : "    ", line)
@@ -120,8 +120,8 @@ plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
 plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
 
 function plaininline(io::IO, md::Code)
-    if contains(md.code, "`")
-        n = maximum(length(m) for m in matchall(r"(`+)", md.code))
+    if occursin("`", md.code)
+        n = maximum(length(m.match) for m in eachmatch(r"(`+)", md.code))
         s = "`"^((iseven(n) ? 1 : 2) + n)
         print(io, s, Base.startswith(md.code, "`") ? " " : "")
         print(io, md.code, endswith(md.code, "`") ? " " : "", s)

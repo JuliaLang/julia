@@ -1,5 +1,9 @@
-ifeq ($(LLVM_DEBUG),1)
+ifneq ($(LLVM_DEBUG),0)
+ifeq  ($(LLVM_DEBUG),1)
 LLVM_BUILDTYPE := Debug
+else
+LLVM_BUILDTYPE := RelWithDebInfo
+endif
 else
 LLVM_BUILDTYPE := Release
 endif
@@ -16,6 +20,16 @@ LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+ASAN
 endif
 endif
 
+
+ifeq ($(LLVM_VER),svn)
+LLVM_BARESRC_DIR:=$(SRCCACHE)/llvm-project-bare
+LLVM_MONOSRC_DIR:=$(SRCCACHE)/llvm-project-$(LLVM_VER)-${LLVM_GIT_VER}
+LLVM_SRC_DIR:=$(LLVM_MONOSRC_DIR)/llvm
+LIBCXX_ROOT_DIR:=$(LLVM_MONOSRC_DIR)
+else
+LLVM_MONOSRC_DIR:=
 LLVM_SRC_DIR:=$(SRCCACHE)/llvm-$(LLVM_VER)
+LIBCXX_ROOT_DIR:=$(LLVM_SRC_DIR)/projects
+endif
 LLVM_BUILD_DIR:=$(BUILDDIR)/llvm-$(LLVM_VER)
 LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)

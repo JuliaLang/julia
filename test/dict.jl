@@ -6,15 +6,13 @@ using Random
     p = Pair(10,20)
     @test p == (10=>20)
     @test isequal(p,10=>20)
-    @test start(p) == 1
-    @test next(p, 1) == (10,2)
-    @test !done(p, 1)
-    @test !done(p,2)
-    @test done(p,3)
-    @test !done(p,0)
+    @test iterate(p)[1] == 10
+    @test iterate(p, iterate(p)[2])[1] == 20
+    @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
+    @test firstindex(p) == 1
     @test lastindex(p) == length(p) == 2
-    @test Base.indexed_next(p, 1, (1,2)) == (10,2)
-    @test Base.indexed_next(p, 2, (1,2)) == (20,3)
+    @test Base.indexed_iterate(p, 1, nothing) == (10,2)
+    @test Base.indexed_iterate(p, 2, nothing) == (20,3)
     @test (1=>2) < (2=>3)
     @test (2=>2) < (2=>3)
     @test !((2=>3) < (2=>3))
@@ -32,6 +30,7 @@ using Random
     @test last(p) == 20
     @test eltype(p) == Int
     @test eltype(4 => 5.6) == Union{Int,Float64}
+    @test vcat(1 => 2.0, 1.0 => 2) == [1.0 => 2.0, 1.0 => 2.0]
 end
 
 @testset "Dict" begin
@@ -278,6 +277,13 @@ end
 
     @test ismissing(Dict(1=>missing) == Dict(1=>missing))
     @test isequal(Dict(1=>missing), Dict(1=>missing))
+    d = Dict(1=>missing)
+    @test ismissing(d == d)
+    d = Dict(1=>[missing])
+    @test ismissing(d == d)
+    d = Dict(1=>NaN)
+    @test d != d
+    @test isequal(d, d)
 
     @test Dict(missing=>1) == Dict(missing=>1)
     @test isequal(Dict(missing=>1), Dict(missing=>1))
@@ -302,6 +308,13 @@ end
     end == 16
 
     @test d == Dict(8=>19, 19=>2, 42=>4)
+end
+
+@testset "getkey" begin
+   h = Dict(1=>2, 3 => 6, 5=>10)
+   @test getkey(h, 1, 7) == 1
+   @test getkey(h, 4, 6) == 6
+   @test getkey(h, "1", 8) == 8
 end
 
 @testset "show" begin
@@ -343,21 +356,21 @@ end
     d = Dict{Int, String}()
     show(io, d)
     str = String(take!(io))
-    @test str == "Dict{$(Int),String}()"
+    @test str == "Dict{$(Int), String}()"
     close(io)
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
     d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
     buf = IOBuffer()
-    showcompact(buf, d)
+    show(IOContext(buf, :compact => true), d)
 
     # Check explicitly for the expected strings, since the CPU bitness effects
     # dictionary ordering.
     result = String(take!(buf))
-    @test contains(result, "Dict")
-    @test contains(result, "(1=>2)=>(3=>45)")
-    @test contains(result, "(3=>10)=>(10=>11)")
+    @test occursin("Dict", result)
+    @test occursin("(1=>2)=>(3=>45)", result)
+    @test occursin("(3=>10)=>(10=>11)", result)
 end
 
 mutable struct Alpha end
@@ -368,7 +381,7 @@ Base.show(io::IO, ::Alpha) = print(io,"α")
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
     local str = String(take!(sbuff))
-    @test !contains(str, "…")
+    @test !occursin("…", str)
     @test endswith(str, "α => 1")
 end
 
@@ -419,14 +432,14 @@ mutable struct T10647{T}; x::T; end
     a[1] = a
     a[a] = 2
     a[3] = T10647(a)
-    @test a == a
+    @test isequal(a, a)
     show(IOBuffer(), a)
     Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
     Base.show(IOBuffer(), a)
     Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
-@testset "IdDict{Any,Any}" begin
+@testset "IdDict{Any,Any} and partial inference" begin
     a = IdDict{Any,Any}()
     a[1] = a
     a[a] = 2
@@ -443,7 +456,7 @@ end
 
     ca = copy(a)
     @test length(ca) == length(a)
-    @test ca == a
+    @test isequal(ca, a)
     @test ca !== a # make sure they are different objects
 
     ca = empty!(ca)
@@ -465,6 +478,13 @@ end
     @test isa(d, IdDict{Any,Any})
     @test d == IdDict{Any,Any}(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Any,Any}
+
+    d = IdDict{Any,Int32}(:hi => 7)
+    let c = Ref{Any}(1.5)
+        f() = c[]
+        @test @inferred(get!(f, d, :hi)) === Int32(7)
+        @test_throws InexactError(:Int32, Int32, 1.5) get!(f, d, :hello)
+    end
 end
 
 @testset "IdDict" begin
@@ -484,7 +504,7 @@ end
 
     ca = copy(a)
     @test length(ca) == length(a)
-    @test ca == a
+    @test isequal(ca, a)
     @test ca !== a # make sure they are different objects
 
     ca = empty!(ca)
@@ -531,9 +551,6 @@ end
     @test 1 == @inferred get(d, 1, 1)
     @test pop!(d, -111, nothing) == nothing
     @test 1 == @inferred pop!(d, 1)
-    i = @inferred start(d)
-    @inferred next(d, i)
-    @inferred done(d, i)
 
     # get! and delete!
     d = @inferred IdDict(Pair(:a,1), Pair(:b,2), Pair(3,3))
@@ -544,7 +561,8 @@ end
     @test delete!(d, "a") === d
     @test !haskey(d, "a")
     @test_throws ArgumentError get!(IdDict{Symbol,Any}(), 2, "b")
-
+    @test get!(IdDict{Int,Int}(), 1, 2.0) === 2
+    @test get!(()->2.0, IdDict{Int,Int}(), 1) === 2
 
     # sizehint! & rehash!
     d = IdDict()
@@ -564,6 +582,51 @@ end
     @test_throws ArgumentError IdDict([1, 2, 3, 4])
     # test rethrow of error in ctor
     @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
+end
+
+@testset "issue 30165, get! for IdDict" begin
+    f(x) = x^2
+    d = IdDict(8=>19)
+    @test get!(d, 8, 5) == 19
+    @test get!(d, 19, 2) == 2
+
+    @test get!(d, 42) do  # d is updated with f(2)
+        f(2)
+    end == 4
+
+    @test get!(d, 42) do  # d is not updated
+        f(200)
+    end == 4
+
+    @test get(d, 13) do   # d is not updated
+        f(4)
+    end == 16
+
+    @test d == IdDict(8=>19, 19=>2, 42=>4)
+end
+
+@testset "issue #26833, deletion from IdDict" begin
+    d = IdDict()
+    i = 1
+    # generate many hash collisions
+    while length(d) < 32 # expected to occur at i <≈ 2^16 * 2^5
+        if objectid(i) % UInt16 == 0x1111
+            push!(d, i => true)
+        end
+        i += 1
+    end
+    k = collect(keys(d))
+    @test haskey(d, k[1])
+    delete!(d, k[1])
+    @test length(d) == 31
+    @test !haskey(d, k[1])
+    @test haskey(d, k[end])
+    push!(d, k[end] => false)
+    @test length(d) == 31
+    @test haskey(d, k[end])
+    @test !pop!(d, k[end])
+    @test !haskey(d, k[end])
+    @test length(d) == 30
 end
 
 
@@ -663,6 +726,16 @@ import Base.ImmutableDict
 
     @test_throws KeyError d[k1]
     @test_throws KeyError d1["key2"]
+
+    v = [k1 => v1, k2 => v2]
+    d5 = ImmutableDict(v...)
+    @test d5 == d2
+    @test reverse(collect(d5)) == v
+    d6 = ImmutableDict(:a => 1, :b => 3, :a => 2)
+    @test d6[:a] == 2
+    @test d6[:b] == 3
+
+    @test !haskey(ImmutableDict(-0.0=>1), 0.0)
 end
 
 @testset "filtering" begin
@@ -689,13 +762,13 @@ const global hashoffset = [UInt(190)]
 
 Base.hash(s::MyString) = hash(s.str) + hashoffset[]
 Base.lastindex(s::MyString) = lastindex(s.str)
-Base.next(s::MyString, v::Int) = next(s.str, v)
+Base.iterate(s::MyString, v::Int=1) = iterate(s.str, v)
 Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
 ==(a::MyString, b::MyString) = (a.str == b.str)
 
 Base.hash(v::MyInt) = v.val + hashoffset[]
 Base.lastindex(v::MyInt) = lastindex(v.val)
-Base.next(v::MyInt, i::Int) = next(v.val, i)
+Base.iterate(v::MyInt, i...) = iterate(v.val, i...)
 Base.isequal(a::MyInt, b::MyInt) = isequal(a.val, b.val)
 ==(a::MyInt, b::MyInt) = (a.val == b.val)
 @testset "issue #15077" begin
@@ -765,12 +838,6 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     A = [1]
     B = [2]
     C = [3]
-    local x = 0
-    local y = 0
-    local z = 0
-    finalizer(a->(x+=1), A)
-    finalizer(b->(y+=1), B)
-    finalizer(c->(z+=1), C)
 
     # construction
     wkd = WeakKeyDict()
@@ -785,13 +852,21 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
+    @test WeakKeyDict{typeof(A), Int64}(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
     @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
+    D = [[4.0]]
+    @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(D,4.0)) isa WeakKeyDict{Any, Any}
+    @test isa(WeakKeyDict(Pair(A,2), Pair(B,3.0), Pair(C,4)), WeakKeyDict{Array{Int,1},Any})
+    @test isa(WeakKeyDict(Pair(convert(Vector{Number}, A),2), Pair(B,3), Pair(C,4)), WeakKeyDict{Any,Int})
     @test copy(wkd) == wkd
 
     @test length(wkd) == 3
     @test !isempty(wkd)
     res = pop!(wkd, C)
     @test res == 4
+    @test length(wkd) == 2
+    res = pop!(wkd, C, 3)
+    @test res == 3
     @test C ∉ keys(wkd)
     @test 4 ∉ values(wkd)
     @test length(wkd) == 2
@@ -811,6 +886,43 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(wkd, WeakKeyDict)
 
     @test_throws ArgumentError WeakKeyDict([1, 2, 3])
+
+    wkd = WeakKeyDict(A=>1)
+    @test delete!(wkd, A) == empty(wkd)
+    @test delete!(wkd, A) === wkd
+
+    # issue #26939
+    d26939 = WeakKeyDict()
+    d26939[big"1.0" + 1.1] = 1
+    GC.gc() # make sure this doesn't segfault
+
+    # WeakKeyDict does not convert keys on setting
+    @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
+    wkd = WeakKeyDict(A=>2)
+    @test_throws ArgumentError get!(wkd, [2.0], 2)
+    @test_throws ArgumentError get!(wkd, [1.0], 2) # get! fails even if the key is only
+                                                   # used for getting and not setting
+
+    # WeakKeyDict does convert on getting
+    wkd = WeakKeyDict(A=>2)
+    @test keytype(wkd)==Vector{Int}
+    @test wkd[[1.0]] == 2
+    @test haskey(wkd, [1.0])
+    @test pop!(wkd, [1.0]) == 2
+    @test get(()->3, wkd, [2.0]) == 3
+
+    # map! on values of WKD
+    wkd = WeakKeyDict(A=>2, B=>3)
+    map!(v->v-1, values(wkd))
+    @test wkd == WeakKeyDict(A=>1, B=>2)
+
+    # get!
+    wkd = WeakKeyDict(A=>2)
+    get!(wkd, B, 3)
+    @test wkd == WeakKeyDict(A=>2, B=>3)
+    get!(()->4, wkd, C)
+    @test wkd == WeakKeyDict(A=>2, B=>3, C=>4)
+    @test_throws ArgumentError get!(()->5, wkd, [1.0])
 end
 
 @testset "issue #19995, hash of dicts" begin
@@ -852,14 +964,22 @@ let
     end
 end
 
+struct NonFunctionCallable end
+(::NonFunctionCallable)(args...) = +(args...)
+
 @testset "Dict merge" begin
     d1 = Dict("A" => 1, "B" => 2)
     d2 = Dict("B" => 3.0, "C" => 4.0)
     @test @inferred merge(d1, d2) == Dict("A" => 1, "B" => 3, "C" => 4)
     # merge with combiner function
+    @test @inferred mergewith(+, d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
+    @test @inferred mergewith(*, d1, d2) == Dict("A" => 1, "B" => 6, "C" => 4)
+    @test @inferred mergewith(-, d1, d2) == Dict("A" => 1, "B" => -1, "C" => 4)
+    @test @inferred mergewith(NonFunctionCallable(), d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
+    @test foldl(mergewith(+), [d1, d2]; init=Dict{Union{},Union{}}()) ==
+        Dict("A" => 1, "B" => 5, "C" => 4)
+    # backward compatibility
     @test @inferred merge(+, d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
-    @test @inferred merge(*, d1, d2) == Dict("A" => 1, "B" => 6, "C" => 4)
-    @test @inferred merge(-, d1, d2) == Dict("A" => 1, "B" => -1, "C" => 4)
 end
 
 @testset "Dict merge!" begin
@@ -868,12 +988,36 @@ end
     @inferred merge!(d1, d2)
     @test d1 == Dict("A" => 1, "B" => 3, "C" => 4)
     # merge! with combiner function
-    @inferred merge!(+, d1, d2)
+    @inferred mergewith!(+, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 6, "C" => 8)
-    @inferred merge!(*, d1, d2)
+    @inferred mergewith!(*, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
-    @inferred merge!(-, d1, d2)
+    @inferred mergewith!(-, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
+    @inferred mergewith!(NonFunctionCallable(), d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
+    @test foldl(mergewith!(+), [d1, d2]; init=empty(d1)) ==
+        Dict("A" => 1, "B" => 21, "C" => 36)
+    # backward compatibility
+    merge!(+, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 21, "C" => 36)
+end
+
+@testset "Dict reduce merge" begin
+    function check_merge(i::Vector{<:Dict}, o)
+        r1 = reduce(merge, i)
+        r2 = merge(i...)
+        t = typeof(o)
+        @test r1 == o
+        @test r2 == o
+        @test typeof(r1) == t
+        @test typeof(r2) == t
+    end
+    check_merge([Dict(1=>2), Dict(1.0=>2.0)], Dict(1.0=>2.0))
+    check_merge([Dict(1=>2), Dict(2=>Complex(1.0, 1.0))],
+      Dict(2=>Complex(1.0, 1.0), 1=>Complex(2.0, 0.0)))
+    check_merge([Dict(1=>2), Dict(3=>4)], Dict(3=>4, 1=>2))
+    check_merge([Dict(3=>4), Dict(:a=>5)], Dict(:a => 5, 3 => 4))
 end
 
 @testset "misc error/io" begin
@@ -902,19 +1046,19 @@ end
         @test i isa AbstractSet
         @test i == Set([1])
     end
-    @test map(string, keys(d)) == Set(["1","3"])
+    @test Set(string(k) for k in keys(d)) == Set(["1","3"])
 end
 
 @testset "find" begin
-    @test findall(equalto(1), Dict(:a=>1, :b=>2)) == [:a]
-    @test sort(findall(equalto(1), Dict(:a=>1, :b=>1))) == [:a, :b]
-    @test isempty(findall(equalto(1), Dict()))
-    @test isempty(findall(equalto(1), Dict(:a=>2, :b=>3)))
+    @test findall(isequal(1), Dict(:a=>1, :b=>2)) == [:a]
+    @test sort(findall(isequal(1), Dict(:a=>1, :b=>1))) == [:a, :b]
+    @test isempty(findall(isequal(1), Dict()))
+    @test isempty(findall(isequal(1), Dict(:a=>2, :b=>3)))
 
-    @test findfirst(equalto(1), Dict(:a=>1, :b=>2)) == :a
-    @test findfirst(equalto(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
-    @test findfirst(equalto(1), Dict()) === nothing
-    @test findfirst(equalto(1), Dict(:a=>2, :b=>3)) === nothing
+    @test findfirst(isequal(1), Dict(:a=>1, :b=>2)) == :a
+    @test findfirst(isequal(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
+    @test findfirst(isequal(1), Dict()) === nothing
+    @test findfirst(isequal(1), Dict(:a=>2, :b=>3)) === nothing
 end
 
 @testset "Dict printing with limited rows" begin
@@ -923,36 +1067,71 @@ end
     io = IOContext(buf, :displaysize => (4, 80), :limit => true)
     d = Base.ImmutableDict(1=>2)
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int, $Int} with 1 entry: …"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 1 entry. Keys: …"
 
     io = IOContext(io, :displaysize => (5, 80))
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int, $Int} with 1 entry:\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 1 entry. Keys:\n  1"
     d = Base.ImmutableDict(d, 3=>4)
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int, $Int} with 2 entries:\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 2 entries. Keys:\n  ⋮"
 
     io = IOContext(io, :displaysize => (6, 80))
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
-        "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
+        "Base.ImmutableDict{$Int, $Int} with 2 entries:\n  3 => 4\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 2 entries. Keys:\n  3\n  1"
     d = Base.ImmutableDict(d, 5=>6)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
-        "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
+        "Base.ImmutableDict{$Int, $Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 3 entries. Keys:\n  5\n  ⋮"
+end
+
+@testset "copy!" begin
+    s = Dict(1=>2, 2=>3)
+    for a = ([3=>4], [0x3=>0x4], [3=>4, 5=>6, 7=>8], Pair{UInt,UInt}[3=>4, 5=>6, 7=>8])
+        @test s === copy!(s, Dict(a)) == Dict(a)
+        if length(a) == 1 # current limitation of Base.ImmutableDict
+            @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
+        end
+    end
+end
+
+@testset "map!(f, values(dict))" begin
+    @testset "AbstractDict & Fallback" begin
+        mutable struct TestDict{K, V}  <: AbstractDict{K, V}
+            dict::Dict{K, V}
+            function TestDict(args...)
+                d = Dict(args...)
+                new{keytype(d), valtype(d)}(d)
+            end
+        end
+        Base.setindex!(td::TestDict, args...) = setindex!(td.dict, args...)
+        Base.getindex(td::TestDict, args...) = getindex(td.dict, args...)
+        Base.pairs(D::TestDict) = pairs(D.dict)
+        testdict = TestDict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
+    end
+    @testset "Dict" begin
+        testdict = Dict(:a=>1, :b=>2)
+        map!(v->v-1, values(testdict))
+        @test testdict[:a] == 0
+        @test testdict[:b] == 1
+    end
 end

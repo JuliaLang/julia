@@ -18,7 +18,7 @@ extern "C" {
 #include <threading.h>
 
 // Profiler control variables //
-static volatile intptr_t *bt_data_prof = NULL;
+static volatile jl_bt_element_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
 static volatile uint64_t nsecprof = 0;
@@ -27,6 +27,8 @@ static const    uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
+void jl_lock_profile(void);
+void jl_unlock_profile(void);
 
 static uint64_t jl_last_sigint_trigger = 0;
 static uint64_t jl_disable_sigint_time = 0;
@@ -127,8 +129,10 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
     return ((ucontext_t*)_ctx)->uc_mcontext.gregs[REG_EIP];
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
     return ((ucontext_t*)_ctx)->uc_mcontext.mc_eip;
-#elif defined(_OS_DARWIN_)
+#elif defined(_OS_DARWIN_) && defined(_CPU_x86_64_)
     return ((ucontext64_t*)_ctx)->uc_mcontext64->__ss.__rip;
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    return ((ucontext64_t*)_ctx)->uc_mcontext64->__ss.__pc;
 #elif defined(_OS_WINDOWS_) && defined(_CPU_X86_)
     return ((CONTEXT*)_ctx)->Eip;
 #elif defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -221,7 +225,7 @@ void jl_show_sigill(void *_ctx)
 }
 
 // what to do on a critical error
-void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size)
+void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data, size_t *bt_size)
 {
     // This function is not allowed to reference any TLS variables.
     // We need to explicitly pass in the TLS buffer pointer when
@@ -230,10 +234,14 @@ void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_
     if (sig)
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
-    if (context)
-        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context);
-    for (i = 0; i < n; i++)
-        jl_gdblookup(bt_data[i] - 1);
+    if (context) {
+        // Must avoid extended backtrace frames here unless we're sure bt_data
+        // is properly rooted.
+        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
+    }
+    for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
+        jl_print_bt_entry_codeloc(bt_data + i);
+    }
     gc_debug_print_status();
     gc_debug_critical_error();
 }
@@ -247,7 +255,7 @@ JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
     nsecprof = delay_nsec;
     if (bt_data_prof != NULL)
         free((void*)bt_data_prof);
-    bt_data_prof = (intptr_t*) calloc(maxsize, sizeof(intptr_t));
+    bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
     bt_size_cur = 0;

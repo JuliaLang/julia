@@ -16,7 +16,7 @@ macro static(ex)
         @label loop
         hd = ex.head
         if hd ∈ (:if, :elseif, :&&, :||)
-            cond = eval(__module__, ex.args[1])
+            cond = Core.eval(__module__, ex.args[1])
             if xor(cond, hd === :||)
                 return esc(ex.args[2])
             elseif length(ex.args) == 3

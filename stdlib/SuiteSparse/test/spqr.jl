@@ -8,16 +8,16 @@ using LinearAlgebra: rmul!, lmul!, Adjoint, Transpose
 m, n = 100, 10
 nn = 100
 
-@test size(qrfact(sprandn(m, n, 0.1)).Q) == (m, m)
+@test size(qr(sprandn(m, n, 0.1)).Q) == (m, m)
 
-@testset "element type of A: $eltyA" for eltyA in (Float64, Complex{Float64})
+@testset "element type of A: $eltyA" for eltyA in (Float64, ComplexF64)
     if eltyA <: Real
         A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], randn(nn), m, n)
     else
         A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], complex.(randn(nn), randn(nn)), m, n)
     end
 
-    F = qrfact(A)
+    F = qr(A)
     @test size(F) == (m,n)
     @test size(F, 1) == m
     @test size(F, 2) == n
@@ -49,7 +49,7 @@ nn = 100
         @test_throws DimensionMismatch rmul!(offsizeA, adjoint(Q))
     end
 
-    @testset "element type of B: $eltyB" for eltyB in (Int, Float64, Complex{Float64})
+    @testset "element type of B: $eltyB" for eltyB in (Int, Float64, ComplexF64)
         if eltyB == Int
             B = rand(1:10, m, 2)
         elseif eltyB <: Real
@@ -67,7 +67,7 @@ nn = 100
     end
 
     # Make sure that conversion to Sparse doesn't use SuiteSparse's symmetric flag
-    @test qrfact(SparseMatrixCSC{eltyA}(I, 5, 5)) \ fill(eltyA(1), 5) == fill(1, 5)
+    @test qr(SparseMatrixCSC{eltyA}(I, 5, 5)) \ fill(eltyA(1), 5) == fill(1, 5)
 end
 
 @testset "basic solution of rank deficient ls" begin
@@ -79,6 +79,56 @@ end
     # check that basic solution has more zeros
     @test count(!iszero, xs) < count(!iszero, xd)
     @test A*xs ≈ A*xd
+end
+
+@testset "Issue 26367" begin
+    A = sparse([0.0 1 0 0; 0 0 0 0])
+    @test Matrix(qr(A).Q) == Matrix(qr(Matrix(A)).Q) == Matrix(I, 2, 2)
+end
+
+@testset "Issue 26368" begin
+    A = sparse([0.0 1 0 0; 0 0 0 0])
+    F = qr(A)
+    @test F.Q*F.R == A[F.prow,F.pcol]
+end
+
+@testset "select ordering overdetermined" begin
+     A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], randn(nn), m, n)
+     b = randn(m)
+     xref = Array(A) \ b
+     for ordering ∈ SuiteSparse.SPQR.ORDERINGS
+         QR = qr(A, ordering=ordering)
+         x = QR \ b
+         @test x ≈ xref
+     end
+     @test_throws ErrorException qr(A, ordering=Int32(10))
+end
+
+@testset "select ordering underdetermined" begin
+     A = sparse([1:n; rand(1:n, nn - n)], [1:n; rand(1:m, nn - n)], randn(nn), n, m)
+     b = A * ones(m)
+     for ordering ∈ SuiteSparse.SPQR.ORDERINGS
+         QR = qr(A, ordering=ordering)
+         x = QR \ b
+         # x ≂̸ Array(A) \ b; LAPACK returns a min-norm x while SPQR returns a basic x
+         @test A * x ≈ b
+     end
+     @test_throws ErrorException qr(A, ordering=Int32(10))
+end
+
+@testset "propertynames of QRSparse" begin
+    A = sparse([0.0 1 0 0; 0 0 0 0])
+    F = qr(A)
+    @test propertynames(F) == (:R, :Q, :prow, :pcol)
+    @test propertynames(F, true) == (:R, :Q, :prow, :pcol, :factors, :τ, :cpiv, :rpivinv)
+end
+
+@testset "rank" begin
+    S = sprandn(10, 5, 1.0)*sprandn(5, 10, 1.0)
+    @test rank(qr(S)) == 5
+    @test rank(S) == 5
+    @test all(iszero, (rank(qr(spzeros(10, i))) for i in 1:10))
+    @test all(iszero, (rank(spzeros(10, i)) for i in 1:10))
 end
 
 end

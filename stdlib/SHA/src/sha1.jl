@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Nonlinear functions, in order to encourage inlining, these sadly are not an array of lambdas
 function Round0(b,c,d)
     return UInt32((b & c) | (~b & d))

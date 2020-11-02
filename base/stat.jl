@@ -57,7 +57,7 @@ StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
     ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
 )
 
-show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(oct(filemode(st),6)), size=$(filesize(st)))")
+show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(string(filemode(st), base = 8, pad = 6)), size=$(filesize(st)))")
 
 # stat & lstat functions
 
@@ -65,7 +65,9 @@ macro stat_call(sym, arg1type, arg)
     return quote
         stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
-        r == 0 || r == Base.UV_ENOENT || r == Base.UV_ENOTDIR || throw(UVError("stat", r))
+        if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
+            throw(_UVError("stat", r, "for file ", repr($(esc(arg)))))
+        end
         st = StatStruct(stat_buf)
         if ispath(st) != (r == 0)
             error("stat returned zero type for a valid path")
@@ -121,7 +123,7 @@ lstat(path...) = lstat(joinpath(path...))
 """
     filemode(file)
 
-Equivalent to `stat(file).mode`
+Equivalent to `stat(file).mode`.
 """
 filemode(st::StatStruct) = st.mode
 
@@ -137,70 +139,69 @@ filesize(st::StatStruct) = st.size
 
 Equivalent to `stat(file).mtime`.
 """
-   mtime(st::StatStruct) = st.mtime
+mtime(st::StatStruct) = st.mtime
 
 """
     ctime(file)
 
-Equivalent to `stat(file).ctime`
+Equivalent to `stat(file).ctime`.
 """
-   ctime(st::StatStruct) = st.ctime
+ctime(st::StatStruct) = st.ctime
 
 # mode type predicates
 
 """
     ispath(path) -> Bool
 
-Returns `true` if `path` is a valid filesystem path, `false` otherwise.
+Return `true` if a valid filesystem entity exists at `path`,
+otherwise returns `false`.
+This is the generalization of [`isfile`](@ref), [`isdir`](@ref) etc.
 """
-    ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
+ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
 
 """
     isfifo(path) -> Bool
 
-Returns `true` if `path` is a FIFO, `false` otherwise.
+Return `true` if `path` is a FIFO, `false` otherwise.
 """
-    isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
+isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
 
 """
     ischardev(path) -> Bool
 
-Returns `true` if `path` is a character device, `false` otherwise.
+Return `true` if `path` is a character device, `false` otherwise.
 """
 ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
 
 """
     isdir(path) -> Bool
 
-Returns `true` if `path` is a directory, `false` otherwise.
+Return `true` if `path` is a directory, `false` otherwise.
 
 # Examples
 ```jldoctest
 julia> isdir(homedir())
 true
 
-julia> f = open("test_file.txt", "w")
-IOStream(<file test_file.txt>)
-
-julia> isdir(f)
+julia> isdir("not/a/directory")
 false
-
-julia> close(f)
 ```
+
+See also: [`isfile`](@ref) and [`ispath`](@ref).
 """
-    isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
+isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
 """
     isblockdev(path) -> Bool
 
-Returns `true` if `path` is a block device, `false` otherwise.
+Return `true` if `path` is a block device, `false` otherwise.
 """
 isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
 
 """
     isfile(path) -> Bool
 
-Returns `true` if `path` is a regular file, `false` otherwise.
+Return `true` if `path` is a regular file, `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -212,52 +213,54 @@ julia> f = open("test_file.txt", "w");
 julia> isfile(f)
 true
 
-julia> close(f)
+julia> close(f); rm("test_file.txt")
 ```
+
+See also: [`isdir`](@ref) and [`ispath`](@ref).
 """
-    isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
+isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 
 """
     islink(path) -> Bool
 
-Returns `true` if `path` is a symbolic link, `false` otherwise.
+Return `true` if `path` is a symbolic link, `false` otherwise.
 """
-    islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
+islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
 
 """
     issocket(path) -> Bool
 
-Returns `true` if `path` is a socket, `false` otherwise.
+Return `true` if `path` is a socket, `false` otherwise.
 """
-  issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
+issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
 
 # mode permission predicates
 
 """
     issetuid(path) -> Bool
 
-Returns `true` if `path` has the setuid flag set, `false` otherwise.
+Return `true` if `path` has the setuid flag set, `false` otherwise.
 """
 issetuid(st::StatStruct) = (filemode(st) & 0o4000) > 0
 
 """
     issetgid(path) -> Bool
 
-Returns `true` if `path` has the setgid flag set, `false` otherwise.
+Return `true` if `path` has the setgid flag set, `false` otherwise.
 """
 issetgid(st::StatStruct) = (filemode(st) & 0o2000) > 0
 
 """
     issticky(path) -> Bool
 
-Returns `true` if `path` has the sticky bit set, `false` otherwise.
+Return `true` if `path` has the sticky bit set, `false` otherwise.
 """
 issticky(st::StatStruct) = (filemode(st) & 0o1000) > 0
 
 """
     uperm(file)
 
-Gets the permissions of the owner of the file as a bitfield of
+Get the permissions of the owner of the file as a bitfield of
 
 | Value | Description        |
 |:------|:-------------------|
@@ -287,23 +290,23 @@ operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
 # mode predicate methods for file names
 
 for f in Symbol[
-    :ispath
-    :isfifo
-    :ischardev
-    :isdir
-    :isblockdev
-    :isfile
-    :issocket
-    :issetuid
-    :issetgid
-    :issticky
-    :uperm
-    :gperm
-    :operm
-    :filemode
-    :filesize
-    :mtime
-    :ctime
+    :ispath,
+    :isfifo,
+    :ischardev,
+    :isdir,
+    :isblockdev,
+    :isfile,
+    :issocket,
+    :issetuid,
+    :issetgid,
+    :issticky,
+    :uperm,
+    :gperm,
+    :operm,
+    :filemode,
+    :filesize,
+    :mtime,
+    :ctime,
 ]
     @eval ($f)(path...)  = ($f)(stat(path...))
 end
@@ -325,7 +328,7 @@ end
 """
     ismount(path) -> Bool
 
-Returns `true` if `path` is a mount point, `false` otherwise.
+Return `true` if `path` is a mount point, `false` otherwise.
 """
 function ismount(path...)
     path = joinpath(path...)

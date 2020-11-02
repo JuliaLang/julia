@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Low level module for mmap (memory mapping of files).
 """
@@ -111,7 +109,7 @@ const FILE_MAP_EXECUTE       = DWORD(0x20)
 
 function gethandle(io::IO)
     handle = Libc._get_osfhandle(RawFD(fd(io)))
-    systemerror("could not get handle for file to map: $(Libc.FormatMessage())", handle == INVALID_OS_HANDLE)
+    Base.windowserror(:mmap, handle == INVALID_OS_HANDLE)
     return handle
 end
 
@@ -126,7 +124,7 @@ end # os-test
 
 """
     Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-           Mmap.mmap(type::Type{Array{T,N}}, dims)
+    Mmap.mmap(type::Type{Array{T,N}}, dims)
 
 Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
 convenient way of working with data too large to fit in the computer's memory.
@@ -138,7 +136,7 @@ systems, not Julia).
 
 `dims` is a tuple or single [`Integer`](@ref) specifying the size or length of the array.
 
-The file is passed via the stream argument, either as an open `IOStream` or filename string.
+The file is passed via the stream argument, either as an open [`IOStream`](@ref) or filename string.
 When you initialize the stream, use `"r"` for a "read-only" array, and `"w+"` to create a
 new array used to write values to disk.
 
@@ -160,6 +158,7 @@ For example, the following code
 ```julia
 # Create a file for mmapping
 # (you could alternatively use mmap to do this step, too)
+using Mmap
 A = rand(1:20, 5, 30)
 s = open("/tmp/mmap.bin", "w+")
 # We'll write the dimensions of the array as the first two Ints in the file
@@ -188,11 +187,11 @@ function mmap(io::IO,
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
-    isbits(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbits(T) == true"))
+    isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
     len = prod(dims) * sizeof(T)
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array{T}(uninitialized, ntuple(x->0,Val(N)))
+    len == 0 && return Array{T}(undef, ntuple(x->0,Val(N)))
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
@@ -219,10 +218,10 @@ function mmap(io::IO,
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
                                 readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
-        handle == C_NULL && error("could not create file mapping: $(Libc.FormatMessage())")
+        Base.windowserror(:mmap, handle == C_NULL)
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
-                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
-        ptr == C_NULL && error("could not create mapping view: $(Libc.FormatMessage())")
+                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
+        Base.windowserror(:mmap, ptr == C_NULL)
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
@@ -232,7 +231,7 @@ function mmap(io::IO,
         else
             status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)!=0
             status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), handle)!=0
-            status || error("could not unmap view: $(Libc.FormatMessage())")
+            Base.windowserror(:UnmapViewOfFile, status == 0)
         end
     end
     return A
@@ -303,7 +302,7 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(uninitialized, ntuple(i->0,Val(N))...)
+    B = BitArray{N}(undef, ntuple(i->0,Val(N))...)
     B.chunks = chunks
     B.len = n
     if N != 1
@@ -336,17 +335,78 @@ const MS_SYNC = 4
 Forces synchronization between the in-memory version of a memory-mapped `Array` or
 [`BitArray`](@ref) and the on-disk version.
 """
-function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
+function sync!(m::Array, flags::Integer=MS_SYNC)
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset
+    mmaplen = sizeof(m) + offset
     GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
-                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
+                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flags) != 0)
     else
-        systemerror("could not FlushViewOfFile: $(Libc.FormatMessage())",
-                    ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, length(m)) == 0)
+        Base.windowserror(:FlushViewOfFile,
+            ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, mmaplen) == 0)
     end
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)
+
+@static if Sys.isunix()
+const MADV_NORMAL = 0
+const MADV_RANDOM = 1
+const MADV_SEQUENTIAL = 2
+const MADV_WILLNEED = 3
+const MADV_DONTNEED = 4
+if Sys.islinux()
+    const MADV_FREE = 8
+    const MADV_REMOVE = 9
+    const MADV_DONTFORK = 10
+    const MADV_DOFORK = 11
+    const MADV_MERGEABLE = 12
+    const MADV_UNMERGEABLE = 13
+    const MADV_HUGEPAGE = 14
+    const MADV_NOHUGEPAGE = 15
+    const MADV_DONTDUMP = 16
+    const MADV_DODUMP = 17
+    const MADV_WIPEONFORK = 18
+    const MADV_KEEPONFORK = 19
+    const MADV_COLD = 20
+    const MADV_PAGEOUT = 21
+    const MADV_HWPOISON = 100
+    const MADV_SOFT_OFFLINE = 101
+elseif Sys.isapple()
+    const MADV_FREE = 5
+elseif Sys.isfreebsd() || Sys.isdragonfly()
+    const MADV_FREE = 5
+    const MADV_NOSYNC = 6
+    const MADV_AUTOSYNC = 7
+    const MADV_NOCORE = 8
+    const MADV_CORE = 9
+    if Sys.isfreebsd()
+        const MADV_PROTECT = 10
+    else
+        const MADV_INVAL = 10
+        const MADV_SETMAP = 11
+    end
+elseif Sys.isopenbsd() || Sys.isnetbsd()
+    const MADV_SPACEAVAIL = 5
+    const MADV_FREE = 6
+end
+
+"""
+    Mmap.madvise!(array, flag::Integer = Mmap.MADV_NORMAL)
+
+Advises the kernel on the intended usage of the memory-mapped `array`, with the intent
+`flag` being one of the available `MADV_*` constants.
+"""
+function madvise!(m::Array, flag::Integer=MADV_NORMAL)
+    offset = rem(UInt(pointer(m)), PAGESIZE)
+    ptr = pointer(m) - offset
+    mmaplen = sizeof(m) + offset
+    GC.@preserve m begin
+        systemerror("madvise",
+                    ccall(:madvise, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flag) != 0)
+    end
+end
+madvise!(B::BitArray, flag::Integer=MADV_NORMAL) = madvise!(B.chunks, flag)
+end # Sys.isunix()
 
 end # module

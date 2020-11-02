@@ -100,7 +100,7 @@ function latex(io::IO, md::List)
     end
 end
 
-function show(io::IO, ::MIME"text/latex", md::HorizontalRule)
+function latex(io::IO, md::HorizontalRule)
     println(io, "\\rule{\\textwidth}{1pt}")
 end
 
@@ -154,7 +154,9 @@ function latexinline(io::IO, md::Link)
 end
 
 const _latexescape_chars = Dict{Char, AbstractString}(
-   '~'=>"{\\sim}", '^'=>"\\^{}", '\\'=>"{\\textbackslash}")
+    '~'=>"{\\textasciitilde}",
+    '^'=>"\\^{}",
+    '\\'=>"{\\textbackslash}")
 for ch in "&%\$#_{}"
     _latexescape_chars[ch] = "\\$ch"
 end

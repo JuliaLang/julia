@@ -17,25 +17,28 @@ extern "C" {
 
 static jl_sym_t *symtab = NULL;
 
-static uintptr_t hash_symbol(const char *str, size_t len)
+#define MAX_SYM_LEN ((size_t)INTPTR_MAX - sizeof(jl_taggedvalue_t) - sizeof(jl_sym_t) - 1)
+
+static uintptr_t hash_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     return memhash(str, len) ^ ~(uintptr_t)0/3*2;
 }
 
-static size_t symbol_nbytes(size_t len)
+static size_t symbol_nbytes(size_t len) JL_NOTSAFEPOINT
 {
     return (sizeof(jl_taggedvalue_t) + sizeof(jl_sym_t) + len + 1 + 7) & -8;
 }
 
-static jl_sym_t *mk_symbol(const char *str, size_t len)
+static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
+    assert(jl_symbol_type && "not initialized");
 
     jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb, 0, sizeof(void*), 0);
     sym = (jl_sym_t*)jl_valueof(tag);
     // set to old marked so that we won't look at it in the GC or write barrier.
-    tag->header = ((uintptr_t)jl_sym_type) | GC_OLD_MARKED;
+    tag->header = ((uintptr_t)jl_symbol_type) | GC_OLD_MARKED;
     sym->left = sym->right = NULL;
     sym->hash = hash_symbol(str, len);
     memcpy(jl_symbol_name(sym), str, len);
@@ -43,7 +46,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     return sym;
 }
 
-static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl_sym_t ***slot)
+static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl_sym_t ***slot) JL_NOTSAFEPOINT
 {
     jl_sym_t *node = jl_atomic_load_acquire(ptree); // consume
     uintptr_t h = hash_symbol(str, len);
@@ -70,8 +73,15 @@ static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl
     return node;
 }
 
-static jl_sym_t *_jl_symbol(const char *str, size_t len)
+jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT // (or throw)
 {
+#ifndef __clang_analyzer__
+    // Hide the error throwing from the analyser since there isn't a way to express
+    // "safepoint only when throwing error" currently.
+    if (len > MAX_SYM_LEN)
+        jl_exceptionf(jl_argumenterror_type, "Symbol name too long");
+#endif
+    assert(!memchr(str, 0, len));
     jl_sym_t **slot;
     jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);
     if (node == NULL) {
@@ -88,12 +98,12 @@ static jl_sym_t *_jl_symbol(const char *str, size_t len)
     return node;
 }
 
-JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str)
+JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str) JL_NOTSAFEPOINT // (or throw)
 {
     return _jl_symbol(str, strlen(str));
 }
 
-JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str)
+JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str) JL_NOTSAFEPOINT
 {
     return symtab_lookup(&symtab, str, strlen(str), NULL);
 }
@@ -118,27 +128,36 @@ JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 {
     char name[16];
     char *n;
-    n = uint2str(&name[2], sizeof(name)-2, gs_ctr, 10);
+    uint32_t ctr = jl_atomic_fetch_add(&gs_ctr, 1);
+    n = uint2str(&name[2], sizeof(name)-2, ctr, 10);
     *(--n) = '#'; *(--n) = '#';
-    gs_ctr++;
     return jl_symbol(n);
 }
 
-JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
+JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len)
 {
-    char gs_name[14];
-    if (memchr(str, 0, len))
+    if (len == (size_t)-1) {
+        len = strlen(str);
+    }
+    else if (memchr(str, 0, len)) {
         jl_exceptionf(jl_argumenterror_type, "Symbol name may not contain \\0");
-    char *name = (char*) (len >= 256 ? malloc(sizeof(gs_name)+len+3) :
-                          alloca(sizeof(gs_name)+len+3));
+    }
+    char gs_name[14];
+    size_t alloc_len = sizeof(gs_name) + len + 3;
+    if (len > MAX_SYM_LEN || alloc_len > MAX_SYM_LEN)
+        jl_exceptionf(jl_argumenterror_type, "Symbol name too long");
+    char *name = (char*)(len >= 256 ? malloc_s(alloc_len) : alloca(alloc_len));
     char *n;
-    name[0] = '#'; name[1] = '#'; name[2+len] = '#';
-    memcpy(name+2, str, len);
-    n = uint2str(gs_name, sizeof(gs_name), gs_ctr, 10);
-    memcpy(name+3+len, n, sizeof(gs_name)-(n-gs_name));
-    gs_ctr++;
-    jl_sym_t *sym = _jl_symbol(name, len+3+sizeof(gs_name)-(n-gs_name)-1);
-    if (len >= 256) free(name);
+    name[0] = '#';
+    name[1] = '#';
+    name[2 + len] = '#';
+    memcpy(name + 2, str, len);
+    uint32_t ctr = jl_atomic_fetch_add(&gs_ctr, 1);
+    n = uint2str(gs_name, sizeof(gs_name), ctr, 10);
+    memcpy(name + 3 + len, n, sizeof(gs_name) - (n - gs_name));
+    jl_sym_t *sym = _jl_symbol(name, alloc_len - (n - gs_name)- 1);
+    if (len >= 256)
+        free(name);
     return sym;
 }
 

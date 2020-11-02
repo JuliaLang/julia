@@ -66,6 +66,23 @@ else
     hash_uint(x::UInt)     = hash_32_32(x)
 end
 
+## efficient value-based hashing of integers ##
+
+hash(x::Int64,  h::UInt) = hash_uint64(bitcast(UInt64, x)) - 3h
+hash(x::UInt64, h::UInt) = hash_uint64(x) - 3h
+hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
+
+function hash_integer(n::Integer, h::UInt)
+    h ⊻= hash_uint((n % UInt) ⊻ h)
+    n = abs(n)
+    n >>>= sizeof(UInt) << 3
+    while n != 0
+        h ⊻= hash_uint((n % UInt) ⊻ h)
+        n >>>= sizeof(UInt) << 3
+    end
+    return h
+end
+
 ## symbol & expression hashing ##
 
 if UInt === UInt64
@@ -74,4 +91,14 @@ if UInt === UInt64
 else
     hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x96d26dc6))
     hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x469d72af)
+end
+
+## hashing strings ##
+
+const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
+const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
+
+function hash(s::String, h::UInt)
+    h += memhash_seed
+    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
 end

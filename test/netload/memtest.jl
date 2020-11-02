@@ -22,7 +22,7 @@ struct RUsage
 end
 
 function get_vmsize()
-    ru = Vector{RUsage}(uninitialized, 1)
+    ru = Vector{RUsage}(undef, 1)
     ccall(:getrusage, Cint, (Cint, Ptr{Cvoid}), 0, ru)
     return ru[1].ru_maxrss
 end

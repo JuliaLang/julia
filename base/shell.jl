@@ -4,115 +4,113 @@
 
 const shell_special = "#{}()[]<>|&*?~;"
 
-# needs to be factored out so depwarn only warns once
-# when removed, also need to update shell_escape for a Cmd to pass shell_special
-# and may want to use it in the test for #10120 (currently the implementation is essentially copied there)
-@noinline warn_shell_special(special) =
-    depwarn("special characters \"$special\" should now be quoted in commands", :warn_shell_special)
-
-function shell_parse(str::AbstractString, interpolate::Bool=true;
-                     special::AbstractString="")
-    s = lstrip(str)
-    # strips the end but respects the space when the string ends with "\\ "
-    r = reverse(s)
-    i = start(r)
+# strips the end but respects the space when the string ends with "\\ "
+function rstrip_shell(s::AbstractString)
     c_old = nothing
-    while !done(r,i)
-        c, j = next(r,i)
-        if c == '\\' && c_old == ' '
-            i -= 1
-            break
-        elseif !(c in _default_delims)
-            break
-        end
-        i = j
+    for (i, c) in Iterators.reverse(pairs(s))
+        i::Int; c::AbstractChar
+        ((c == '\\') && c_old == ' ') && return SubString(s, 1, i+1)
+        isspace(c) || return SubString(s, 1, i)
         c_old = c
     end
-    s = s[1:end-i+1]
+    SubString(s, 1, 0)
+end
 
+function shell_parse(str::AbstractString, interpolate::Bool=true;
+                     special::AbstractString="", filename="none")
+    s = SubString(str, firstindex(str))
+    s = rstrip_shell(lstrip(s))
+
+    # N.B.: This is used by REPLCompletions
     last_parse = 0:-1
     isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
 
     in_single_quotes = false
     in_double_quotes = false
 
-    args::Vector{Any} = []
-    arg::Vector{Any} = []
-    i = start(s)
-    j = i
+    args = []
+    arg = []
+    i = firstindex(s)
+    st = Iterators.Stateful(pairs(s))
 
-    function update_arg(x)
+    function push_nonempty!(list, x)
         if !isa(x,AbstractString) || !isempty(x)
-            push!(arg, x)
+            push!(list, x)
         end
+        return nothing
     end
-    function append_arg()
-        if isempty(arg); arg = Any["",]; end
-        push!(args, arg)
-        arg = []
+    function consume_upto!(list, s, i, j)
+        push_nonempty!(list, s[i:prevind(s, j)::Int])
+        something(peek(st), lastindex(s)::Int+1 => '\0').first::Int
+    end
+    function append_2to1!(list, innerlist)
+        if isempty(innerlist); push!(innerlist, ""); end
+        push!(list, copy(innerlist))
+        empty!(innerlist)
     end
 
-    while !done(s,j)
-        c, k = next(s,j)
+    for (j, c) in st
+        j, c = j::Int, c::eltype(str)
         if !in_single_quotes && !in_double_quotes && isspace(c)
-            update_arg(s[i:prevind(s, j)])
-            append_arg()
-            j = k
-            while !done(s,j)
-                c, k = next(s,j)
-                if !isspace(c)
-                    i = j
-                    break
-                end
-                j = k
+            i = consume_upto!(arg, s, i, j)
+            append_2to1!(args, arg)
+            while !isempty(st)
+                # We've made sure above that we don't end in whitespace,
+                # so updating `i` here is ok
+                (i, c) = peek(st)::Pair{Int,eltype(str)}
+                isspace(c) || break
+                popfirst!(st)
             end
         elseif interpolate && !in_single_quotes && c == '$'
-            update_arg(s[i:prevind(s, j)]); i = k; j = k
-            if done(s,k)
-                error("\$ right before end of command")
+            i = consume_upto!(arg, s, i, j)
+            isempty(st) && error("\$ right before end of command")
+            stpos, c = popfirst!(st)::Pair{Int,eltype(str)}
+            isspace(c) && error("space not allowed right after \$")
+            if startswith(SubString(s, stpos), "var\"")
+                # Disallow var"#" syntax in cmd interpolations.
+                # TODO: Allow only identifiers after the $ for consistency with
+                # string interpolation syntax (see #3150)
+                ex, j = :var, stpos+3
+            else
+                # use parseatom instead of parse to respect filename (#28188)
+                ex, j = Meta.parseatom(s, stpos, filename=filename)
             end
-            if isspace(s[k])
-                error("space not allowed right after \$")
-            end
-            stpos = j
-            ex, j = Meta.parse(s,j,greedy=false)
-            last_parse = stpos:j
-            update_arg(ex); i = j
+            last_parse = (stpos:prevind(s, j)) .+ s.offset
+            push_nonempty!(arg, ex)
+            s = SubString(s, j)
+            Iterators.reset!(st, pairs(s))
+            i = firstindex(s)
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
-                update_arg(s[i:prevind(s, j)]); i = k
+                i = consume_upto!(arg, s, i, j)
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
-                update_arg(s[i:prevind(s, j)]); i = k
+                i = consume_upto!(arg, s, i, j)
             elseif c == '\\'
                 if in_double_quotes
-                    if done(s,k)
-                        error("unterminated double quote")
-                    end
-                    if s[k] == '"' || s[k] == '$' || s[k] == '\\'
-                        update_arg(s[i:prevind(s, j)]); i = k
-                        c, k = next(s,k)
+                    isempty(st) && error("unterminated double quote")
+                    k, c′ = peek(st)
+                    if c′ == '"' || c′ == '$' || c′ == '\\'
+                        i = consume_upto!(arg, s, i, j)
+                        _ = popfirst!(st)
                     end
                 elseif !in_single_quotes
-                    if done(s,k)
-                        error("dangling backslash")
-                    end
-                    update_arg(s[i:prevind(s, j)]); i = k
-                    c, k = next(s,k)
+                    isempty(st) && error("dangling backslash")
+                    i = consume_upto!(arg, s, i, j)
+                    _ = popfirst!(st)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special
-                warn_shell_special(special) # noinline depwarn
+                error("parsing command `$str`: special characters \"$special\" must be quoted in commands")
             end
-            j = k
         end
     end
 
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
 
-    update_arg(s[i:end])
-    append_arg()
+    push_nonempty!(arg, s[i:end])
+    append_2to1!(args, arg)
 
     interpolate || return args, last_parse
 
@@ -134,9 +132,6 @@ function shell_split(s::AbstractString)
 end
 
 function print_shell_word(io::IO, word::AbstractString, special::AbstractString = "")
-    if isempty(word)
-        print(io, "''")
-    end
     has_single = false
     has_special = false
     for c in word
@@ -147,7 +142,9 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
             end
         end
     end
-    if !has_special
+    if isempty(word)
+        print(io, "''")
+    elseif !has_special
         print(io, word)
     elseif !has_single
         print(io, '\'', word, '\'')
@@ -161,6 +158,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
         end
         print(io, '"')
     end
+    nothing
 end
 
 function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...;
@@ -192,7 +190,7 @@ julia> Base.shell_escape("echo", "this", "&&", "that")
 ```
 """
 shell_escape(args::AbstractString...; special::AbstractString="") =
-    sprint(io->print_shell_escaped(io, args..., special=special))
+    sprint((io, args...) -> print_shell_escaped(io, args..., special=special), args...)
 
 
 function print_shell_escaped_posixly(io::IO, args::AbstractString...)
@@ -203,7 +201,7 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         # that any (reasonable) shell will definitely never consider them to be special
         have_single = false
         have_double = false
-        function isword(c::Char)
+        function isword(c::AbstractChar)
             if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
                 # word characters
             elseif c == '_' || c == '/' || c == '+' || c == '-'
@@ -221,7 +219,9 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
             end
             return true
         end
-        if all(isword, arg)
+        if isempty(arg)
+            print(io, "''")
+        elseif all(isword, arg)
             have_single && (arg = replace(arg, '\'' => "\\'"))
             have_double && (arg = replace(arg, '"' => "\\\""))
             print(io, arg)
@@ -249,4 +249,63 @@ julia> Base.shell_escape_posixly("echo", "this", "&&", "that")
 ```
 """
 shell_escape_posixly(args::AbstractString...) =
-    sprint(io->print_shell_escaped_posixly(io, args...))
+    sprint(print_shell_escaped_posixly, args...)
+
+
+function print_shell_escaped_winsomely(io::IO, args::AbstractString...)
+    first = true
+    for arg in args
+        first || write(io, ' ')
+        first = false
+        # Quote any arg that contains a whitespace (' ' or '\t') or a double quote mark '"'.
+        # It's also valid to quote an arg with just a whitespace,
+        # but the following may be 'safer', and both implementations are valid anyways.
+        quotes = any(c -> c in (' ', '\t', '"'), arg) || isempty(arg)
+        quotes && write(io, '"')
+        backslashes = 0
+        for c in arg
+            if c == '\\'
+                backslashes += 1
+            else
+                # escape all backslashes and the following double quote
+                c == '"' && (backslashes = backslashes * 2 + 1)
+                for j = 1:backslashes
+                    # backslashes aren't special here
+                    write(io, '\\')
+                end
+                backslashes = 0
+                write(io, c)
+            end
+        end
+        # escape all backslashes, letting the terminating double quote we add below to then be interpreted as a special char
+        quotes && (backslashes *= 2)
+        for j = 1:backslashes
+            write(io, '\\')
+        end
+        quotes && write(io, '"')
+    end
+    return nothing
+end
+
+
+"""
+     shell_escaped_winsomely(args::Union{Cmd,AbstractString...})::String
+
+Convert the collection of strings `args` into single string suitable for passing as the argument
+string for a Windows command line. Windows passes the entire command line as a single string to
+the application (unlike POSIX systems, where the list of arguments are passed separately).
+Many Windows API applications (including julia.exe), use the conventions of the [Microsoft C
+runtime](https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments) to
+split that command line into a list of strings. This function implements the inverse of such a
+C runtime command-line parser. It joins command-line arguments to be passed to a Windows console
+application into a command line, escaping or quoting meta characters such as space,
+double quotes and backslash where needed. This may be useful in concert with the `windows_verbatim`
+flag to [`Cmd`](@ref) when constructing process pipelines.
+
+# Example
+```jldoctest
+julia> println(shell_escaped_winsomely("A B\\", "C"))
+"A B\\" C
+"""
+shell_escape_winsomely(args::AbstractString...) =
+    sprint(print_shell_escaped_winsomely, args..., sizehint=(sum(length, args)) + 3*length(args))
