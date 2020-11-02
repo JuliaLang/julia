@@ -1168,6 +1168,12 @@ end
             @test hypot(x, x*f, x*f) ≈ x * hypot(one(f), f, f) rtol=eps(T)
         end
     end
+    @testset "Real and Complex $T" for T in (Float16, Float32, Float64, BigFloat)
+        let x = sqrt(floatmax(T)/2 + 1)
+            @test (@inferred hypot(x, complex(x/4))) ≈ x * sqrt(17/BigFloat(16))
+            @test (@inferred hypot(x, complex(x/4), x/4)) ≈ x * sqrt(9/BigFloat(8))
+        end
+    end
     # hypot on Complex returns Real
     @test (@inferred hypot(3, 4im)) === 5.0
     @test (@inferred hypot(3, 4im, 12)) === 13.0
