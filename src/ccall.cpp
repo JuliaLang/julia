@@ -1833,12 +1833,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = (strncmp(f_name, "extern ", 7) == 0);
             if (f_extern)
                 f_name += 7;
-            llvmf = jl_Module->getOrInsertFunction(f_name, functype)
-#if JL_LLVM_VERSION >= 90000
-                .getCallee();
-#else
-                ;
-#endif
+            llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
             if (!f_extern && (!isa<Function>(llvmf) ||
                               cast<Function>(llvmf)->getIntrinsicID() ==
                                       Intrinsic::not_intrinsic)) {

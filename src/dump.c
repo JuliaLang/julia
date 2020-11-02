@@ -78,7 +78,6 @@ static jl_value_t *jl_idtable_type = NULL;
 static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
-static arraylist_t builtin_typenames;
 
 static void write_uint64(ios_t *s, uint64_t i) JL_NOTSAFEPOINT
 {
@@ -1126,27 +1125,54 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *
 
         // Calculate Preferences hash for current package.
         jl_value_t *prefs_hash = NULL;
+        jl_value_t *prefs_list = NULL;
+        JL_GC_PUSH1(&prefs_list);
         if (jl_base_module) {
             // Toplevel module is the module we're currently compiling, use it to get our preferences hash
             jl_value_t * toplevel = (jl_value_t*)jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
             jl_value_t * prefs_hash_func = jl_get_global(jl_base_module, jl_symbol("get_preferences_hash"));
+            jl_value_t * get_compiletime_prefs_func = jl_get_global(jl_base_module, jl_symbol("get_compiletime_preferences"));
 
-            if (toplevel && prefs_hash_func) {
-                // call get_preferences_hash(__toplevel__)
-                jl_value_t *prefs_hash_args[2] = {prefs_hash_func, (jl_value_t*)toplevel};
+            if (toplevel && prefs_hash_func && get_compiletime_prefs_func) {
+                // Temporary invoke in newest world age
                 size_t last_age = jl_get_ptls_states()->world_age;
                 jl_get_ptls_states()->world_age = jl_world_counter;
-                prefs_hash = (jl_value_t*)jl_apply(prefs_hash_args, 2);
+
+                // call get_compiletime_prefs(__toplevel__)
+                jl_value_t *args[3] = {get_compiletime_prefs_func, (jl_value_t*)toplevel, NULL};
+                prefs_list = (jl_value_t*)jl_apply(args, 2);
+
+                // Call get_preferences_hash(__toplevel__, prefs_list)
+                args[0] = prefs_hash_func;
+                args[2] = prefs_list;
+                prefs_hash = (jl_value_t*)jl_apply(args, 3);
+
+                // Reset world age to normal
                 jl_get_ptls_states()->world_age = last_age;
             }
         }
 
         // If we successfully got the preferences, write it out, otherwise write `0` for this `.ji` file.
-        if (prefs_hash != NULL) {
+        if (prefs_hash != NULL && prefs_list != NULL) {
+            size_t i, l = jl_array_len(prefs_list);
+            for (i = 0; i < l; i++) {
+                jl_value_t *pref_name = jl_array_ptr_ref(prefs_list, i);
+                size_t slen = jl_string_len(pref_name);
+                write_int32(s, slen);
+                ios_write(s, jl_string_data(pref_name), slen);
+            }
+            write_int32(s, 0); // terminator
             write_uint64(s, jl_unbox_uint64(prefs_hash));
         } else {
+            // This is an error path, but let's at least generate a valid `.ji` file.
+            // We declare an empty list of preference names, followed by a zero-hash.
+            // The zero-hash is not what would be generated for an empty set of preferences,
+            // and so this `.ji` file will be invalidated by a future non-erroring pass
+            // through this function.
+            write_int32(s, 0);
             write_uint64(s, 0);
         }
+        JL_GC_POP(); // for prefs_list
 
         // write a dummy file position to indicate the beginning of the source-text
         pos = ios_pos(s);
@@ -2045,11 +2071,12 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
         }
     }
     JL_CATCH {
-        jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
-        jl_static_show(JL_STDERR, v);
-        jl_printf(JL_STDERR, ":\n");
-        jl_static_show(JL_STDERR, jl_current_exception());
-        jl_printf(JL_STDERR, "\n");
+        jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: error while reinitializing value ");
+        jl_static_show((JL_STREAM*)STDERR_FILENO, v);
+        jl_printf((JL_STREAM*)STDERR_FILENO, ":\n");
+        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+        jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+        jlbacktrace(); // written to STDERR_FILENO
     }
 }
 
@@ -2649,17 +2676,6 @@ void jl_init_serializer(void)
         i += 1;
     }
     assert(i <= 256);
-
-    arraylist_new(&builtin_typenames, 0);
-    arraylist_push(&builtin_typenames, jl_array_typename);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_ref_type->body)->name);
-    arraylist_push(&builtin_typenames, jl_pointer_typename);
-    arraylist_push(&builtin_typenames, jl_type_typename);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name);
-    arraylist_push(&builtin_typenames, jl_tuple_typename);
-    arraylist_push(&builtin_typenames, jl_vararg_typename);
-    arraylist_push(&builtin_typenames, jl_namedtuple_typename);
 }
 
 #ifdef __cplusplus

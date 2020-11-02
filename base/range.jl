@@ -970,6 +970,11 @@ AbstractUnitRange{T}(r::AbstractUnitRange{T}) where {T} = r
 AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
 AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
 
+OrdinalRange{T1, T2}(r::StepRange) where {T1, T2<: Integer} = StepRange{T1, T2}(r)
+OrdinalRange{T1, T2}(r::AbstractUnitRange{T1}) where {T1, T2<:Integer} = r
+OrdinalRange{T1, T2}(r::UnitRange) where {T1, T2<:Integer} = UnitRange{T1}(r)
+OrdinalRange{T1, T2}(r::OneTo) where {T1, T2<:Integer} = OneTo{T1}(r)
+
 promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
     el_same(promote_type(T1a,T2a),
             # el_same only operates on array element type, so just promote second type parameter

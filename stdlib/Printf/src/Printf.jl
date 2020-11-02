@@ -80,10 +80,19 @@ function Format(f::AbstractString)
     len = length(bytes)
     pos = 1
     b = 0x00
-    while true
+    while pos <= len
         b = bytes[pos]
         pos += 1
-        (pos > len || (b == UInt8('%') && pos <= len && bytes[pos] != UInt8('%'))) && break
+        if b == UInt8('%')
+            pos > len && throw(ArgumentError("invalid format string: '$f'"))
+            if bytes[pos] == UInt8('%')
+                # escaped '%'
+                b = bytes[pos]
+                pos += 1
+            else
+                break
+            end
+        end
     end
     strs = [1:pos - 1 - (b == UInt8('%'))]
     fmts = []
@@ -227,7 +236,8 @@ end
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
     leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
     str = string(arg)
-    op = p = prec == -1 ? (length(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)) : prec
+    slen = length(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
+    op = p = prec == -1 ? slen : min(slen, prec)
     if !leftalign && width > p
         for _ = 1:(width - p)
             buf[pos] = UInt8(' ')
@@ -370,16 +380,34 @@ tofloat(x) = Float64(x)
 tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
+_snprintf(ptr, siz, str, arg) =
+    @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+                                   arg::Ref{BigFloat})::Cint
+
+const __BIG_FLOAT_MAX__ = 8192
+
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     x = tofloat(arg)
-    if x isa BigFloat && isfinite(x)
-        ptr = pointer(buf, pos)
-        newpos = @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, (length(buf) - pos + 1)::Csize_t, string(spec; modifier="R")::Ptr{UInt8}; arg::Ref{BigFloat})::Cint
-        newpos > 0 || error("invalid printf formatting for BigFloat")
-        return pos + newpos
-    elseif x isa BigFloat
+    if x isa BigFloat
+        if isfinite(x)
+            GC.@preserve buf begin
+                siz = length(buf) - pos + 1
+                str = string(spec; modifier="R")
+                len = _snprintf(pointer(buf, pos), siz, str, x)
+                if len > siz
+                    maxout = max(__BIG_FLOAT_MAX__,
+                                 ceil(Int, precision(x) * log(2) / log(10)) + 25)
+                    len > maxout &&
+                        error("Over $maxout bytes $len needed to output BigFloat $x")
+                    resize!(buf, len + 1)
+                    len = _snprintf(pointer(buf, pos), len + 1, str, x)
+                end
+                len > 0 || throw(ArgumentError("invalid printf formatting $str for BigFloat"))
+                return pos + len
+            end
+        end
         x = Float64(x)
     end
     if T == Val{'e'} || T == Val{'E'}
@@ -645,9 +673,16 @@ const UNROLL_UPTO = 16
 # if you have your own buffer + pos, write formatted args directly to it
 @inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
     # write out first substring
+    escapechar = false
     for i in f.substringranges[1]
-        buf[pos] = f.str[i]
-        pos += 1
+        b = f.str[i]
+        if !escapechar
+            buf[pos] = b
+            pos += 1
+            escapechar = b === UInt8('%')
+        else
+            escapechar = false
+        end
     end
     # for each format, write out arg and next substring
     # unroll up to 16 formats
@@ -656,8 +691,14 @@ const UNROLL_UPTO = 16
         if N >= i
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
-                buf[pos] = f.str[j]
-                pos += 1
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
+                end
             end
         end
     end
@@ -665,8 +706,14 @@ const UNROLL_UPTO = 16
         for i = 17:length(f.formats)
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
-                buf[pos] = f.str[j]
-                pos += 1
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
+                end
             end
         end
     end
@@ -740,19 +787,48 @@ end
 """
     @printf([io::IO], "%Fmt", args...)
 
-Print `args` using C `printf` style format specification string, with some caveats:
+Print `args` using C `printf` style format specification string.
+Optionally, an `IO` may be passed as the first argument to redirect output.
+
+# Examples
+```jldoctest
+julia> @printf "Hello %s" "world"
+Hello world
+
+julia> @printf "Scientific notation %e" 1.234
+Scientific notation 1.234000e+00
+
+julia> @printf "Scientific notation three digits %.3e" 1.23456
+Scientific notation three digits 1.235e+00
+
+julia> @printf "Decimal two digits %.2f" 1.23456
+Decimal two digits 1.23
+
+julia> @printf "Padded to length 5 %5i" 123
+Padded to length 5   123
+
+julia> @printf "Padded with zeros to length 6 %06i" 123
+Padded with zeros to length 6 000123
+
+julia> @printf "Use shorter of decimal or scientific %g %g" 1.23 12300000.0
+Use shorter of decimal or scientific 1.23 1.23e+07
+```
+
+For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
+See also: [`@sprintf`](@ref).
+
+# Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
 equally close to the numeric values of two possible output strings, the output
 string further away from zero is chosen.
-Optionally, an `IO`
-may be passed as the first argument to redirect output.
-See also: [`@sprintf`](@ref)
+
 # Examples
 ```jldoctest
-julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
-Inf Inf NaN NaN\n
-julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
+julia> @printf("%f %F %f %F", Inf, Inf, NaN, NaN)
+Inf Inf NaN NaN
+
+julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
 0 0.0 -0.007812
 ```
 """
@@ -771,7 +847,8 @@ end
 """
     @sprintf("%Fmt", args...)
 
-Return `@printf` formatted output as string.
+Return [`@printf`](@ref) formatted output as string.
+
 # Examples
 ```jldoctest
 julia> @sprintf "this is a %s %15.1f" "test" 34.567

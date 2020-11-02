@@ -388,6 +388,9 @@ Base.parentmodule
 Base.pathof(::Module)
 Base.moduleroot
 Base.@__MODULE__
+Base.@__FILE__
+Base.@__DIR__
+Base.@__LINE__
 Base.fullname
 Base.names
 Core.nfields

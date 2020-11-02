@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module BinaryPlatforms
 
 export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
@@ -589,7 +591,7 @@ const arch_march_isa_mapping = let
     end
     Dict(
         "i686" => [
-            "i686" => get_set("i686", "i686"),
+            "pentium4" => get_set("i686", "pentium4"),
             "prescott" => get_set("i686", "prescott"),
         ],
         "x86_64" => [
@@ -795,7 +797,7 @@ function parse_dl_name_version(path::String, os::String)
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"
     else
         # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?).so((?:\.[\d]+)*)$"
+        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"
     end
 
     m = match(dlregex, basename(path))

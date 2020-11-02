@@ -20,6 +20,9 @@ showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :d
     @test ioc.io == io
     @test ioc.dict == Base.ImmutableDict(Base.ImmutableDict{Symbol, Any}(:x, 1),
                                          :y => 2)
+    @test Base.ImmutableDict((key => ioc[key] for key in keys(ioc))...) == ioc.dict
+    @test keys(IOBuffer()) isa Base.KeySet
+    @test length(keys(IOBuffer())) == 0
 end
 
 @test replstr(Array{Any}(undef, 2)) == "2-element Vector{Any}:\n #undef\n #undef"
@@ -205,6 +208,11 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 @test_repr "import A.B, C.D"
+@test_repr "import A as B"
+@test_repr "import A.x as y"
+@test_repr "import A: x as y"
+@test_repr "import A.B: x, y as z"
+@test_repr "import A.B: x, y as z, a.b as c, xx"
 
 # keyword args (issue #34023 and #32775)
 @test_repr "f(a, b=c)"
@@ -1331,6 +1339,39 @@ end
 
 @test static_shown(QuoteNode(:x)) == ":(:x)"
 
+# PR #38049
+@test static_shown(sum) == "Base.sum"
+@test static_shown(+) == "Base.:(+)"
+@test static_shown(typeof(+)) == "typeof(Base.:(+))"
+
+struct var"#X#" end
+var"#f#"() = 2
+struct var"%X%" end  # Invalid name without '#'
+
+# (Just to make this test more sustainable,) we don't necesssarily need to test the exact
+# output format, just ensure that it prints at least the parts we expect:
+@test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
+@test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))
+
+# Test that static_shown is returning valid, correct julia expressions
+@testset "static_show() prints valid julia" begin
+    @testset for v in (
+            var"#X#",
+            var"#X#"(),
+            var"%X%",
+            var"%X%"(),
+            Vector,
+            Vector{<:Any},
+            Vector{var"#X#"},
+            +,
+            typeof(+),
+            var"#f#",
+            typeof(var"#f#"),
+        )
+        @test v == eval(Meta.parse(static_shown(v)))
+    end
+end
+
 # Test @show
 let fname = tempname()
     try
@@ -1603,7 +1644,7 @@ end
 
     # issue #27680
     @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
-              "Set([(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
+              "Set([(1.0, 1.0), (3.0, 3.0), (2.0, 2.0)])" :
               "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
     # issue #27747
@@ -2020,3 +2061,40 @@ end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
+@test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector{T} where T}"
+@test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat{T} where T}"
+
+@test sprint(show, :(./)) == ":((./))"
+@test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
+
+@test sprint(show, :(a'ᵀ)) == ":(a'ᵀ)"
+@test sprint(show, :((+)')) == ":((+)')"
+for s in (Symbol("'"), Symbol("'⁻¹"))
+    @test Base.isoperator(s)
+    @test !Base.isunaryoperator(s)
+    @test !Base.isbinaryoperator(s)
+    @test Base.ispostfixoperator(s)
+end
+
+@testset "method printing with non-standard identifiers ($mime)" for mime in (
+    MIME("text/plain"), MIME("text/html"),
+)
+    _show(io, x) = show(io, MIME(mime), x)
+
+    @eval var","(x) = x
+    @test occursin("var\",\"(x)", sprint(_show, methods(var",")))
+
+    @eval f1(var"a.b") = 3
+    @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
+
+    italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
+
+    @eval f2(; var"123") = 5
+    @test occursin("f2(; $(italic("var\"123\"")))", sprint(_show, methods(f2)))
+
+    @eval f3(; var"%!"...) = 7
+    @test occursin("f3(; $(italic("var\"%!\"...")))", sprint(_show, methods(f3)))
+
+    @eval f4(; var"...") = 9
+    @test_broken occursin("f4(; $(italic("var\"...\"")))", sprint(_show, methods(f4)))
+end

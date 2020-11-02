@@ -83,7 +83,7 @@ function record(::FallbackTestSet, t::LogTestFailure)
 end
 
 function record(ts::DefaultTestSet, t::LogTestFailure)
-    if myid() == 1
+    if TESTSET_PRINT_ENABLE[]
         printstyled(ts.description, ": ", color=:white)
         print(t)
         Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
