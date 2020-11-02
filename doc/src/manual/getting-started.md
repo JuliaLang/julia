@@ -103,3 +103,6 @@ command-line-options).
 ## Resources
 
 A curated list of useful learning resources to help new users get started can be found on the [learning](https://julialang.org/learning/) page of the main Julia web site.
+
+For a quick start at using Julia tools see the [ModulePlay example](https://github.com/robbyriverside/ModulePlay) documented [here](https://github.com/robbyriverside/ModulePlay/blob/main/getting_started_faq.md)
+
