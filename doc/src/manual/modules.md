@@ -4,8 +4,7 @@ Modules in Julia help organize code into coherent units. They are delimited synt
 `module NameOfModule ... end`, and have the following features:
 
 1. Modules are separate namespaces, each introducing a new global scope. This is useful, because it
-   allows functions and global variables to have the same name in different modules without being in
-   conflict.
+   allows the same name to be used for different functions or global variables without conflict, as long as they are in separate modules.
 
 2. Modules have facilities for detailed namespace management: each defines a set of symbols it
    `export`s, and can import symbols from other modules with `using` and `import` (we explain these below).
