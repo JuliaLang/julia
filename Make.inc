@@ -82,7 +82,12 @@ endif
 USE_OPROFILE_JITEVENTS ?= 0
 
 # Set to 1 to enable profiling with perf
+ifeq (Linux,$(OS))
 USE_PERF_JITEVENTS ?= 1
+else
+USE_PERF_JITEVENTS ?= 0
+endif
+
 
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP := 0
