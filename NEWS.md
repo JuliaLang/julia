@@ -50,6 +50,7 @@ Language changes
 * `<:` and `>:` can now be broadcasted over arrays with `.<:` and `.>:`  ([#35085])
 * The line number of function definitions is now added by the parser as an
   additional `LineNumberNode` at the start of each function body ([#35138]).
+* The `a[begin]` syntax now calls `firstindex(a)` rather than `first(axes(a))` ([#35779]).
 * Statements of the form `a'` now get lowered to `var"'"(a)` instead of `Base.adjoint(a)`. This
   allows for shadowing this function in local scopes, although this is generally discouraged.
   By default, Base exports `var"'"` as an alias of `Base.adjoint`, so custom types should still
