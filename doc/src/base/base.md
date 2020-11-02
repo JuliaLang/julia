@@ -425,5 +425,9 @@ Base.precompile
 ```@docs
 Meta.quot
 Meta.isexpr
+Meta.isidentifier
+Meta.isoperator
+Meta.isunaryoperator
+Meta.isbinaryoperator
 Meta.show_sexpr
 ```
