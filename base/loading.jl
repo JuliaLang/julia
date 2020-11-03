@@ -1669,6 +1669,7 @@ function record_compiletime_preference(uuid::UUID, key::String)
 end
 get_compiletime_preferences(uuid::UUID) = collect(get(Vector{String}, COMPILETIME_PREFERENCES, uuid))
 get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uuid)
+get_compiletime_preferences(::Nothing) = String[]
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
