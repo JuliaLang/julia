@@ -1790,3 +1790,14 @@ let X1 = Tuple{AlmostLU, Vector{T}} where T,
     @test I >: actual
     @test_broken I == actual
 end
+
+# issue #22787
+# for now check that these don't stack overflow
+let
+    t = typeintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
+                      Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S)
+    @test_broken t != Union{}
+    t = typeintersect(Tuple{Type{T}, T, Ref{T}} where T,
+                      Tuple{Type{S}, Ref{S}, S} where S)
+    @test_broken t != Union{}
+end
