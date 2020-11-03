@@ -293,7 +293,7 @@ end
 end
 
 @testset "muladd" begin
-    A23 = reshape(1:6, 2,3)
+    A23 = reshape(1:6, 2,3) .+ 0
     B34 = reshape(1:12, 3,4) .+ im
     u2 = [10,20]
     v3 = [3,5,7] .+ im
@@ -312,6 +312,8 @@ end
         @test muladd(A23, B34, ones(2,4,1)) == A23 * B34 + ones(2,4,1)
         @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(9,4,1))
         @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(1,4,9))
+        # and catches z::Array{T,0}
+        @test muladd(A23, B34, fill(0)) == A23 * B34
     end
     @testset "matrix-vector" begin
         @test muladd(A23, v3, 0) == A23 * v3
@@ -326,6 +328,7 @@ end
         @test_throws DimensionMismatch muladd(A23, v3, ones(2,2))
         @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(7,1))
         @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(1,7))
+        @test muladd(A23, v3, fill(0)) == A23 * v3
     end
     @testset "adjoint-matrix" begin
         @test muladd(v3', B34, 0) isa Adjoint
@@ -336,6 +339,7 @@ end
         @test muladd(v3', B34, ones(1,4)) == (B34' * v3 + ones(4,1))'
         @test_throws DimensionMismatch muladd(v3', B34, ones(7,4))
         @test_throws DimensionMismatch muladd(v3', B34, ones(1,4,7))
+        @test muladd(v3', B34, fill(0)) == v3' * B34 # does not make an Adjoint
     end
     @testset "vector-adjoint" begin
         @test muladd(u2, v3', 0) isa Matrix
@@ -345,12 +349,14 @@ end
         @test muladd(u2, v3', ones(2,3,1)) == u2 * v3' + ones(2,3,1)
         @test_throws DimensionMismatch muladd(u2, v3', ones(2,3,4))
         @test_throws DimensionMismatch muladd([1], v3', ones(7,3))
+        @test muladd(u2, v3', fill(0)) == u2 * v3'
     end
     @testset "dot" begin # all use muladd(::Any, ::Any, ::Any)
         @test muladd(u2', u2, 0) isa Number
         @test muladd(v3', v3, im) == dot(v3,v3) + im
         @test muladd(u2', u2, [1]) == [dot(u2,u2) + 1]
         @test_throws DimensionMismatch muladd(u2', u2, [1,1]) == [dot(u2,u2) + 1]
+        @test muladd(u2', u2, fill(0)) == dot(u2,u2)
     end
     @testset "arrays of arrays" begin
         vofm = [rand(1:9,2,2) for _ in 1:3]
