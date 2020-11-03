@@ -186,6 +186,7 @@ end
     muladd(A, y, z)
 
 Combined multiply-add, `A*y .+ z`, for matrix-matrix or matrix-vector multiplication.
+The result is always the same size as `A*y`, but `z` may be smaller, or a scalar.
 
 !!! compat "Julia 1.6"
      These methods require Julia 1.6 or later.
@@ -200,11 +201,32 @@ julia> muladd(A, B, z)
  107.0  107.0
 ```
 """
-Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, AbstractArray}) =
-    (A * y) .+ z
+function Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, AbstractArray})
+    Ay = A * y
+    for d in 1:ndims(Ay)
+        # Same error as Ay .+= z would give, to match StridedMatrix method:
+        size(z,d) > size(Ay,d) && throw(DimensionMismatch("array could not be broadcast to match destination"))
+    end
+    for d in ndims(Ay)+1:ndims(z)
+        # Similar error to what Ay + z would give, to match (Any,Any,Any) method:
+        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+            axes(z), ", must have singleton at dim ", d)))
+    end
+    Ay .+ z
+end
 
-Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, AbstractArray}) =
+function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, AbstractArray})
+    if size(z,1) > length(u) || size(z,2) > length(v)
+        # Same error as (u*v) .+= z:
+        throw(DimensionMismatch("array could not be broadcast to match destination"))
+    end
+    for d in 3:ndims(z)
+        # Similar error to (u*v) + z:
+        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+            axes(z), ", must have singleton at dim ", d)))
+    end
     (u .* v) .+ z
+end
 
 Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
     muladd(A', x', z')'
