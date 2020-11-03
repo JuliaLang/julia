@@ -1600,7 +1600,6 @@ function recursive_prefs_merge(base::Dict{String, Any}, overrides::Dict{String, 
     new_base = Base._typeddict(base, overrides...)
 
     for override in overrides
-        override isa Dict{String, Any} || continue # error here?
         # Clear entries are keys that should be deleted from any previous setting.
         override_clear = get(override, "__clear__", nothing)
         if override_clear isa Vector{String}
@@ -1670,7 +1669,6 @@ function record_compiletime_preference(uuid::UUID, key::String)
 end
 get_compiletime_preferences(uuid::UUID) = collect(get(Vector{String}, COMPILETIME_PREFERENCES, uuid))
 get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uuid)
-get_compiletime_preferences(::Nothing) = String[]
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
