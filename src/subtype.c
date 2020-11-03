@@ -2964,8 +2964,10 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     assert(yy->lb != y);
                 }
                 if (xx) {
-                    xx->lb = y;
-                    xx->ub = y;
+                    if (!compareto_var(y, (jl_tvar_t*)x, e, -1))
+                        xx->lb = y;
+                    if (!compareto_var(y, (jl_tvar_t*)x, e,  1))
+                        xx->ub = y;
                     assert(xx->ub != x);
                 }
                 JL_GC_POP();
