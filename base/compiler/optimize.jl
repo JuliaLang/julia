@@ -272,7 +272,7 @@ function finish(opt::OptimizationState, params::OptimizationParams, ir, @nospeci
 end
 
 # run the optimization work
-function optimize(opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
+function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
     nargs = Int(opt.nargs) - 1
     @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
     finish(opt, params, ir, result)
