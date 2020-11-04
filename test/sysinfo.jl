@@ -7,5 +7,5 @@ sprint(Base.Sys.cpu_summary)
 @test Base.Sys.uptime() > 0
 Base.Sys.loadavg()
 
-@test Base.libllvm() isa Symbol
-@test contains(String(Base.libllvm()), "LLVM")
+@test Base.libllvm_path() isa Symbol
+@test contains(String(Base.libllv_pathm()), "LLVM")
