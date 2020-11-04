@@ -120,7 +120,7 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 adjoint(::Array{Complex{Int64},2}):
+2×2 adjoint(::Matrix{Complex{Int64}}):
  3-2im  8-7im
  9-2im  4-6im
 
@@ -157,7 +157,7 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 transpose(::Array{Complex{Int64},2}):
+2×2 transpose(::Matrix{Complex{Int64}}):
  3+2im  8+7im
  9+2im  4+6im
 
@@ -178,6 +178,7 @@ transpose(A::Transpose) = A.parent
 adjoint(A::Transpose{<:Real}) = A.parent
 transpose(A::Adjoint{<:Real}) = A.parent
 
+# printing
 function Base.showarg(io::IO, v::Adjoint, toplevel)
     print(io, "adjoint(")
     Base.showarg(io, parent(v), false)
