@@ -162,6 +162,8 @@ Standard library changes
 * `@time` now reports if the time presented included any compilation time, which is shown as a percentage ([#37678])
 * `@varinfo` can now report non-exported objects within modules, look recursively into submodules, and return a sorted
   results table ([#38042])
+* `@testset` now supports the option `verbose` to show the test result summary
+  of the children even if they all pass ([#33755])
 
 #### LinearAlgebra
 
