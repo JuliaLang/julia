@@ -636,8 +636,8 @@ function find_all_in_cache_path(pkg::PkgId)
             isfile_casesensitive(filepath) && push!(paths, filepath)
         end
     end
-    sort!(paths, by=p->stat(p).mtime, rev=true)
-    return paths
+    p = sortperm(mtime.(paths), rev = true)
+    return paths[p]
 end
 
 # these return either the array of modules loaded from the path / content given
