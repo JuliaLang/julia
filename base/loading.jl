@@ -636,6 +636,8 @@ function find_all_in_cache_path(pkg::PkgId)
             isfile_casesensitive(filepath) && push!(paths, filepath)
         end
     end
+    # allocating the sort vector is less expensive than using sort!(.. by=mtime), which would
+    # call the relatively slow mtime multiple times per path
     p = sortperm(mtime.(paths), rev = true)
     return paths[p]
 end
