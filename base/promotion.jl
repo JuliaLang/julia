@@ -334,7 +334,7 @@ enable compile-time specialization on the value of the exponent.
 (As a default fallback we have `Base.literal_pow(^, x, Val(y)) = ^(x,y)`,
 where usually `^ == Base.^` unless `^` has been defined in the calling
 namespace.) If `y` is a negative integer literal, then `Base.literal_pow`
-transforms the operation to `inv(x)^-y` by default, where -y is a positive value.
+transforms the operation to `inv(x)^-y` by default, where `-y` is positive.
 
 
 ```jldoctest
