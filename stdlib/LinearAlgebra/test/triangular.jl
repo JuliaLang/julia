@@ -307,7 +307,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test A1*A1 isa t1
         @test A1/A1 isa t1
         @test A1\A1 isa t1
-        
+
         # Begin loop for second Triangular matrix
         for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
             for (t2, uplo2) in ((UpperTriangular, :U),
