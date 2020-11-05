@@ -1,4 +1,4 @@
-# Code Loading
+# [Code Loading](@id code-loading)
 
 !!! note
     This chapter covers the technical details of package loading. To install packages, use [`Pkg`](@ref Pkg), Julia's built-in package manager, to add packages to your active environment. To use packages already in your active environment, write `import X` or `using X`, as described in the [Modules documentation](@ref modules).
