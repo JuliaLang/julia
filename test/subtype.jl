@@ -1806,3 +1806,8 @@ let
                       Tuple{<:Array{T, N}, Val{<:AbstractString}}  where {T<:Real, N})
     @test t == Tuple{<:Array{Union{}, N}, Val{Union{}}} where N
 end
+
+# issue #36951
+@testintersect(Type{T} where T>:Missing,
+               Type{Some{T}} where T,
+               Union{})
