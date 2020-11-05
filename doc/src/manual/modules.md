@@ -30,7 +30,7 @@ behaves as if the contents of the source file were evaluated in its place. In th
 short and simplified examples, so we won't use `include`.
 
 The recommended style is not to indent the body of the module, since that would typically lead to
-whole files being indented. Also, it is common to use `MixedCase` for module names (just like
+whole files being indented. Also, it is common to use `UpperCamelCase` for module names (just like
 types), and use the plural form if applicable, especially if the module contains a similarly named
 identifier, to avoid name clashes. For example,
 
