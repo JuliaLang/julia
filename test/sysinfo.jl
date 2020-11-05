@@ -8,4 +8,4 @@ sprint(Base.Sys.cpu_summary)
 Base.Sys.loadavg()
 
 @test Base.libllvm_path() isa Symbol
-@test contains(String(Base.libllv_pathm()), "LLVM")
+@test contains(String(Base.libllvm_path()), "LLVM")
