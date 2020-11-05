@@ -218,6 +218,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
         show(io, mime, x[])
+        if x[] === exit
+            print(io, ". To exit Julia, type exit() and press enter")
+        end
         println(io)
     end
     return nothing
