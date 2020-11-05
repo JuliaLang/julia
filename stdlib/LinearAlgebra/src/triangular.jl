@@ -1854,6 +1854,22 @@ for (f, f2!) in ((:*, :lmul!), (:\, :ldiv!))
     end
 end
 
+function (*)(A::LowerTriangular, B::UnitLowerTriangular)
+    TAB = typeof((*)(zero(eltype(A)), one(eltype(B))) +
+                    (*)(zero(eltype(A)), one(eltype(B))))
+    AA = similar(A, TAB, size(A))
+    copyto!(AA, A)
+    return LowerTriangular(rmul!(AA, convert(AbstractMatrix{TAB}, B)))
+end
+
+function (*)(A::UpperTriangular, B::UnitUpperTriangular)
+    TAB = typeof((*)(zero(eltype(A)), one(eltype(B))) +
+                    (*)(zero(eltype(A)), one(eltype(B))))
+    AA = similar(A, TAB, size(A))
+    copyto!(AA, A)
+    return UpperTriangular(rmul!(AA, convert(AbstractMatrix{TAB}, B)))
+end
+
 for (ipop, op, xformtype, xformop) in (
         (:lmul!, :*, :Adjoint, :adjoint),
         (:lmul!, :*, :Transpose, :transpose),
@@ -1912,6 +1928,13 @@ function (/)(A::LowerTriangular, B::UnitLowerTriangular)
     copyto!(AA, A)
     return LowerTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
+function (/)(A::UnitLowerTriangular, B::UnitLowerTriangular)
+    TAB = typeof((/)(zero(eltype(A)), one(eltype(B))) +
+                 (/)(zero(eltype(A)), one(eltype(B))))
+    AA = similar(A, TAB, size(A))
+    copyto!(AA, A)
+    return UnitLowerTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
+end
 function (/)(A::UpperTriangular, B::UpperTriangular)
     TAB = typeof((/)(zero(eltype(A)), zero(eltype(B))) +
                  (/)(zero(eltype(A)), zero(eltype(B))))
@@ -1925,6 +1948,13 @@ function (/)(A::UpperTriangular, B::UnitUpperTriangular)
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     return UpperTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
+end
+function (/)(A::UnitUpperTriangular, B::UnitUpperTriangular)
+    TAB = typeof((/)(zero(eltype(A)), one(eltype(B))) +
+                 (/)(zero(eltype(A)), one(eltype(B))))
+    AA = similar(A, TAB, size(A))
+    copyto!(AA, A)
+    return UnitUpperTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 
 for (ipop, op, xformtype, xformop) in (
