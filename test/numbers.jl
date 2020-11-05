@@ -2716,3 +2716,13 @@ end
     @test invoke(isfinite, Tuple{Number}, NaN) == false
     @test invoke(isfinite, Tuple{Number}, Inf) == false
 end
+
+struct MyRealFld <: Real
+    x::Real
+end
+@testset "fallback error throwing for fld/cld" begin
+    a = MyRealFld(2.0)
+    b = MyRealFld(3.0)
+    @test_throws MethodError fld(a, b)
+    @test_throws MethodError cld(a, b)
+end
