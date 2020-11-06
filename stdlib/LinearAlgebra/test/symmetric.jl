@@ -678,4 +678,18 @@ end
     end
 end
 
+@testset "Multiplications symmetric/hermitian for $T and $S" for T in
+        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
+    let A = Transpose(Symmetric(rand(S, 3, 3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ parent(A) * Bv
+        @test A * Bm ≈ parent(A) * Bm
+        @test Bm * A ≈ Bm * parent(A)
+    end
+    let A = Adjoint(Hermitian(rand(S, 3,3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ parent(A) * Bv
+        @test A * Bm ≈ parent(A) * Bm
+        @test Bm * A ≈ Bm * parent(A)
+    end
+end
+
 end # module TestSymmetric
