@@ -30,7 +30,7 @@ JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
 void jl_lock_profile(void);
 void jl_unlock_profile(void);
-    
+
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)
 {
     // the latter `+ 1` is for the block terminator `0`.
