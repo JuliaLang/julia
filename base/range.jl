@@ -47,7 +47,8 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start[, stop]; length, stop, step)
+    range(start, stop; length, step)
+    range(start; length, stop, step)
     range(;start, length, stop, step)
 
 Construct a `range` from the arguments.
