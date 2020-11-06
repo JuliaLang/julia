@@ -1276,7 +1276,9 @@
                             (not (ts:space? s)))
                        ;; string literal suffix, "s"x
                        (loop `(macrocall ,macname ,startloc ,macstr
-                                         ,(string (take-token s))))
+                                         ,(if (symbol? nxt)
+                                              (string (take-token s))
+                              					      (take-token s))))
                        (loop `(macrocall ,macname ,startloc ,macstr))))
                  ex))
             (else ex))))))
