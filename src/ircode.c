@@ -276,14 +276,17 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         jl_array_t *ar = (jl_array_t*)v;
         jl_value_t *et = jl_tparam0(jl_typeof(ar));
         int isunion = jl_is_uniontype(et);
-        if (ar->flags.ndims == 1 && ar->elsize <= 0x1f) {
+        size_t elalign = ar->flags.ptrarray ? sizeof(void*) : jl_datatype_align(jl_tparam0(jl_typeof(ar)));
+        if (ar->flags.ndims == 1 && ar->elsize <= 0x1f && elalign <= 0xff) {
             write_uint8(s->s, TAG_ARRAY1D);
             write_uint8(s->s, (ar->flags.ptrarray << 7) | (ar->flags.hasptr << 6) | (isunion << 5) | (ar->elsize & 0x1f));
+            write_uint8(s->s, elalign);
         }
         else {
             write_uint8(s->s, TAG_ARRAY);
             write_uint16(s->s, ar->flags.ndims);
             write_uint16(s->s, (ar->flags.ptrarray << 15) | (ar->flags.hasptr << 14) | (isunion << 13) | (ar->elsize & 0x1fff));
+            write_uint16(s->s, elalign);
         }
         for (i = 0; i < ar->flags.ndims; i++)
             jl_encode_value(s, jl_box_long(jl_array_dim(ar,i)));
@@ -403,7 +406,7 @@ static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag) JL_GC_D
 static jl_value_t *jl_decode_value_array(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
 {
     int16_t i, ndims;
-    int isptr, isunion, hasptr, elsize;
+    int isptr, isunion, hasptr, elsize, elalign;
     if (tag == TAG_ARRAY1D) {
         ndims = 1;
         elsize = read_uint8(s->s);
@@ -411,6 +414,7 @@ static jl_value_t *jl_decode_value_array(jl_ircode_state *s, uint8_t tag) JL_GC_
         hasptr = (elsize >> 6) & 1;
         isunion = (elsize >> 5) & 1;
         elsize = elsize & 0x1f;
+        elalign = read_uint8(s->s);
     }
     else {
         ndims = read_uint16(s->s);
@@ -419,13 +423,14 @@ static jl_value_t *jl_decode_value_array(jl_ircode_state *s, uint8_t tag) JL_GC_
         hasptr = (elsize >> 14) & 1;
         isunion = (elsize >> 13) & 1;
         elsize = elsize & 0x3fff;
+        elalign = read_uint16(s->s);
     }
     size_t *dims = (size_t*)alloca(ndims * sizeof(size_t));
     for (i = 0; i < ndims; i++) {
         dims[i] = jl_unbox_long(jl_decode_value(s));
     }
     jl_array_t *a = jl_new_array_for_deserialization(
-            (jl_value_t*)NULL, ndims, dims, !isptr, hasptr, isunion, elsize);
+            (jl_value_t*)NULL, ndims, dims, !isptr, hasptr, isunion, elsize, elalign);
     jl_value_t *aty = jl_decode_value(s);
     jl_set_typeof(a, aty);
     if (a->flags.ptrarray) {
@@ -544,7 +549,7 @@ static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s) JL_GC_DISABLED
 static jl_value_t *jl_decode_value_any(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
 {
     int32_t sz = (tag == TAG_SHORT_GENERAL ? read_uint8(s->s) : read_int32(s->s));
-    jl_value_t *v = jl_gc_alloc(s->ptls, sz, NULL);
+    jl_value_t *v = jl_gc_alloc(s->ptls, sz, /*align*/0, NULL); // TODO: this alignment seems wrong
     jl_set_typeof(v, (void*)(intptr_t)0x50);
     jl_datatype_t *dt = (jl_datatype_t*)jl_decode_value(s);
     jl_set_typeof(v, dt);

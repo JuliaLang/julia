@@ -651,7 +651,7 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_task_t *t = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
+    jl_task_t *t = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), 0, jl_task_type);
     t->copy_stack = 0;
     if (ssize == 0) {
         // stack size unspecified; use default
@@ -1220,7 +1220,7 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ptls->root_task == NULL) {
-        ptls->root_task = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
+        ptls->root_task = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), 0, jl_task_type);
         memset(ptls->root_task, 0, sizeof(jl_task_t));
         ptls->root_task->tls = jl_nothing;
     }

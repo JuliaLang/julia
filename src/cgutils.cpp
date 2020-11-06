@@ -2271,7 +2271,7 @@ static Value *emit_array_nd_index(
 
 // --- boxing ---
 
-static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt);
+static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, size_t alignment, Value *jt);
 
 static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, MDNode *tbaa,
                             unsigned alignment = sizeof(void*)) // min alignment in julia's gc is pointer-aligned
@@ -2573,7 +2573,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
                     jl_cgval_t vinfo_r = jl_cgval_t(vinfo, (jl_value_t*)jt, NULL);
                     box = _boxed_special(ctx, vinfo_r, t);
                     if (!box) {
-                        box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
+                        box = emit_allocobj(ctx, jl_datatype_size(jt), jl_datatype_align(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
                         init_bits_cgval(ctx, box, vinfo_r, jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut);
                     }
                 }
@@ -2637,7 +2637,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
         assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
         box = _boxed_special(ctx, vinfo, t);
         if (!box) {
-            box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
+            box = emit_allocobj(ctx, jl_datatype_size(jt), jl_datatype_align(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
             init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut);
         }
     }
@@ -2759,11 +2759,16 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std
 }
 
 // allocation for known size object
-static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
+static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, size_t alignment, Value *jt)
 {
     Value *ptls_ptr = emit_bitcast(ctx, ctx.ptlsStates, T_pint8);
     Function *F = prepare_call(jl_alloc_obj_func);
-    auto call = ctx.builder.CreateCall(F, {ptls_ptr, ConstantInt::get(T_size, static_size), maybe_decay_untracked(ctx, jt)});
+    auto call = ctx.builder.CreateCall(F, {
+            ptls_ptr,
+            ConstantInt::get(T_size, static_size),
+            ConstantInt::get(T_size, alignment),
+            maybe_decay_untracked(ctx, jt)
+        });
     call->setAttributes(F->getAttributes());
     return call;
 }
@@ -3033,7 +3038,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             else
                 return mark_julia_slot(strct, ty, NULL, tbaa_stack);
         }
-        Value *strct = emit_allocobj(ctx, jl_datatype_size(sty),
+        Value *strct = emit_allocobj(ctx, jl_datatype_size(sty), jl_datatype_align(sty),
                                      literal_pointer_val(ctx, (jl_value_t*)ty));
         jl_cgval_t strctinfo = mark_julia_type(ctx, strct, true, ty);
         strct = decay_derived(ctx, strct);
