@@ -27,7 +27,7 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 Adjoint{Complex{Int64}, Matrix{Complex{Int64}}} with eltype Int64:
+2×2 adjoint(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3-2im  8-7im
  9-2im  4-6im
 ```
@@ -58,7 +58,7 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 transpose(::Matrix{Complex{Int64}}) with eltype Int64:
+2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3+2im  8+7im
  9+2im  4+6im
 ```
@@ -157,7 +157,7 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 transpose(::Matrix{Complex{Int64}}) with eltype Int64:
+2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3+2im  8+7im
  9+2im  4+6im
 
