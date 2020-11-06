@@ -505,17 +505,18 @@ end
 
 # converting from other matrix types to SparseMatrixCSC (also see sparse())
 SparseMatrixCSC(M::Matrix) = sparse(M)
-function SparseMatrixCSC(T::Tridiagonal{Tv}) where Tv
+SparseMatrixCSC(T::Tridiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(T)
+function SparseMatrixCSC{Tv,Ti}(T::Tridiagonal) where {Tv,Ti}
     m = length(T.d)
 
-    colptr = Vector{Int}(undef, m+1)
+    colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
     @inbounds for i=1:m-1
         colptr[i+1] = 3i
     end
     colptr[end] = 3m-1
 
-    rowval = Vector{Int}(undef, 3m-2)
+    rowval = Vector{Ti}(undef, 3m-2)
     rowval[1] = 1
     rowval[2] = 2
     @inbounds for i=2:m-1, j=-1:1
@@ -534,17 +535,18 @@ function SparseMatrixCSC(T::Tridiagonal{Tv}) where Tv
 
     return SparseMatrixCSC(m, m, colptr, rowval, nzval)
 end
-function SparseMatrixCSC(T::SymTridiagonal{Tv}) where Tv
+SparseMatrixCSC(T::SymTridiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(T)
+function SparseMatrixCSC{Tv,Ti}(T::SymTridiagonal) where {Tv,Ti}
     m = length(T.dv)
 
-    colptr = Vector{Int}(undef, m+1)
+    colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
     @inbounds for i=1:m-1
         colptr[i+1] = 3i
     end
     colptr[end] = 3m-1
 
-    rowval = Vector{Int}(undef, 3m-2)
+    rowval = Vector{Ti}(undef, 3m-2)
     rowval[1] = 1
     rowval[2] = 2
     @inbounds for i=2:m-1, j=-1:1
@@ -563,17 +565,18 @@ function SparseMatrixCSC(T::SymTridiagonal{Tv}) where Tv
 
     return SparseMatrixCSC(m, m, colptr, rowval, nzval)
 end
-function SparseMatrixCSC(B::Bidiagonal{Tv}) where Tv
+SparseMatrixCSC(B::Bidiagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(B)
+function SparseMatrixCSC{Tv,Ti}(B::Bidiagonal) where {Tv,Ti}
     m = length(B.dv)
 
-    colptr = Vector{Int}(undef, m+1)
+    colptr = Vector{Ti}(undef, m+1)
     colptr[1] = 1
     @inbounds for i=1:m-1
         colptr[i+1] = B.uplo == 'U' ? 2i : 2i+1
     end
     colptr[end] = 2m
 
-    rowval = Vector{Int}(undef, 2m-1)
+    rowval = Vector{Ti}(undef, 2m-1)
     @inbounds for i=1:m-1
         rowval[2i-1] = i
         rowval[2i]   = B.uplo == 'U' ? i : i+1
@@ -590,9 +593,10 @@ function SparseMatrixCSC(B::Bidiagonal{Tv}) where Tv
 
     return SparseMatrixCSC(m, m, colptr, rowval, nzval)
 end
-function SparseMatrixCSC(D::Diagonal{T}) where T
+SparseMatrixCSC(D::Diagonal{Tv}) where Tv = SparseMatrixCSC{Tv,Int}(D)
+function SparseMatrixCSC{Tv,Ti}(D::Diagonal) where {Tv,Ti}
     m = length(D.diag)
-    return SparseMatrixCSC(m, m, Vector(1:(m+1)), Vector(1:m), Vector{T}(D.diag))
+    return SparseMatrixCSC(m, m, Vector(1:(m+1)), Vector(1:m), Vector{Tv}(D.diag))
 end
 SparseMatrixCSC(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
 SparseMatrixCSC{Tv}(M::AbstractMatrix{Tv}) where {Tv} = SparseMatrixCSC{Tv,Int}(M)
