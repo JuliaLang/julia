@@ -46,7 +46,7 @@ end
 
 ## [Namespace management](@id namespace-management)
 
-Namespace management refers to the facilities the language offers for making variable names in a module
+Namespace management refers to the facilities the language offers for making names in a module
 available in other modules. We discuss the related concepts and functionality below in detail.
 
 ### Qualified names
