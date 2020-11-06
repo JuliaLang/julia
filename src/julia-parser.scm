@@ -1278,7 +1278,7 @@
                        (loop `(macrocall ,macname ,startloc ,macstr
                                          ,(if (symbol? nxt)
                                               (string (take-token s))
-                              					      (take-token s))))
+                                              (take-token s))))
                        (loop `(macrocall ,macname ,startloc ,macstr))))
                  ex))
             (else ex))))))
