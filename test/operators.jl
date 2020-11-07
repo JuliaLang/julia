@@ -226,6 +226,10 @@ end
     fy = Base.Fix2(/, y)
     @test fx(y) == x / y
     @test fy(x) == x / y
+
+    gx = Base.Fix1(*, x) # Vararg
+    @test gx() == x
+    @test gx(y, y) == x * y^2
 end
 
 @testset "curried comparisons" begin

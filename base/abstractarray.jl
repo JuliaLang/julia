@@ -1800,7 +1800,7 @@ julia> cat(ones(2,2), fill(pi,2), zeros(2,3,1); dims=2)
  1.0  1.0  3.14159  0.0  0.0  0.0
 
 julia> cat([true], trues(2,2), trues(2,4); dims=(1,2))
-5×7 Array{Bool,2}:
+5×7 Matrix{Bool}:
  1  0  0  0  0  0  0
  0  1  1  0  0  0  0
  0  1  1  0  0  0  0
@@ -1865,7 +1865,7 @@ julia> reduce(cat, [rand(3,5) for μ in 1:7, ν in 0:10]) |> size
 (3, 5, 7, 11)
 
 julia> mapreduce(float, cat(dims=[1,2]), [1, fill(2,2,2), [3 4 5]])
-4×6 Array{Float64,2}:
+4×6 Matrix{Float64}:
  1.0  0.0  0.0  0.0  0.0  0.0
  0.0  2.0  2.0  0.0  0.0  0.0
  0.0  2.0  2.0  0.0  0.0  0.0
