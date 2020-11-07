@@ -61,7 +61,7 @@ macro test999_str(args...); args; end
     b""" == ("a\nb",)
 
 # make sure a trailing integer, not just a symbol, is allowed also
-@test test999"foo"123 == ("foo", "123")
+@test test999"foo"123 == ("foo", 123)
 
 # issue #5997
 @test_throws ParseError Meta.parse(": x")
