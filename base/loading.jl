@@ -492,7 +492,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
     for (dep_name, entries) in d
         entries::Vector{Any}
         for entry in entries
-            entry::Dict{String, Any}
+            entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && continue
             if UUID(uuid) === where
@@ -505,7 +505,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                     found_name = name in deps
                     break
                 else
-                    deps::Dict{String, Any}
+                    deps = deps::Dict{String, Any}
                     for (dep, uuid) in deps
                         uuid::String
                         if dep === name
@@ -538,7 +538,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
     entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
     entries === nothing && return nothing # TODO: allow name to mismatch?
     for entry in entries
-        entry::Dict{String, Any}
+        entry = entry::Dict{String, Any}
         uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
         uuid === nothing && continue
         if UUID(uuid) === pkg.uuid
