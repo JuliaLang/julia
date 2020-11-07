@@ -1567,17 +1567,18 @@ reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}) =
 reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
     _typed_hcat(mapreduce(eltype, promote_type, A), A)
 
-function _typed_cat(::Type{T}, A::AbstractArray{<:AbstractArray}) where {T}
+function _typed_cat(::Type{T}, A::AbstractArray{<:AbstractArray}, valg::Val=Val(0)) where {T}
     ax1 = axes(first(A))
-    dense = isa(first(A), Array)
-    for j in Iterators.drop(eachindex(A), 1)
+    gap = ntuple(_->1, valg) # trivial dimensions
+    dense = true
+    for j in eachindex(A)
         Aj = A[j]
         if axes(Aj) != ax1
             throw(ArgumentError("expected arrays of consistent size, got $(axes(Aj)) for argument $j, compared to $ax1 for the first"))
         end
         dense &= isa(Aj, Array)
     end
-    B = similar(first(A), T, ax1..., axes(A)...)
+    B = similar(first(A), T, ax1..., gap..., axes(A)...)
     if dense
         off = 1
         for a in A
@@ -1588,7 +1589,7 @@ function _typed_cat(::Type{T}, A::AbstractArray{<:AbstractArray}) where {T}
         colons = map(_->Colon(), ax1)
         for J in CartesianIndices(A)
             ints = Tuple(J)
-            @inbounds B[colons..., ints...] = A[J]
+            @inbounds B[colons..., gap..., ints...] = A[J]
         end
     end
     return B
@@ -1861,6 +1862,9 @@ julia> reduce(cat(dims=3), [ones(2,2), fill(√2,2,2), [4 8; 16 32]])
   4.0   8.0
  16.0  32.0
 
+julia> reduce(cat(dims=4), [ones(2,3) for _ in 1:5]) |> size
+(2, 3, 1, 5)
+
 julia> reduce(cat, [rand(3,5) for μ in 1:7, ν in 0:10]) |> size
 (3, 5, 7, 11)
 
@@ -1874,15 +1878,20 @@ julia> mapreduce(float, cat(dims=[1,2]), [1, fill(2,2,2), [3 4 5]])
 """
 cat(; dims) = length(dims)==1 ? Fix1(_cat, Val(dims...)) : Fix1(_cat, Tuple(dims))
 
-reduce(::Fix1{typeof(_cat), Val{1}}, A) = reduce(vcat, A)
-reduce(::Fix1{typeof(_cat), Val{2}}, A) = reduce(hcat, A)
+reduce(::Fix1{typeof(_cat), Val{1}}, A::AbstractVector{<:AbstractVecOrMat}) = reduce(vcat, A)
+reduce(::Fix1{typeof(_cat), Val{2}}, A::AbstractVector{<:AbstractVecOrMat}) = reduce(hcat, A)
 reduce(::Fix1{typeof(_cat), Val{2}}, A::AbstractVector{<:AbstractVector}) = reduce(cat, A)
-reduce(f::Fix1{typeof(_cat), Val{M}}, A::AbstractVector{<:AbstractArray{<:Any,N}}) where {M,N} =
-    M == N+1 ? reduce(cat, A) : mapreduce(identity, f, A)
+
+function reduce(f::Fix1{typeof(_cat), Val{M}}, A::AbstractVector{<:AbstractArray{<:Any,N}}) where {M,N}
+    if M > N
+        _typed_cat(mapreduce(eltype, promote_type, A), A, Val(M-N-1))
+    else
+        mapreduce(identity, f, A)
+    end
+end
 
 reduce(::typeof(cat), A::AbstractArray{<:AbstractArray}) =
     _typed_cat(mapreduce(eltype, promote_type, A), A)
-
 
 # 2d horizontal and vertical concatenation
 
