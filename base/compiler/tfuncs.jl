@@ -770,7 +770,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 nv = fieldindex(widenconst(s), nv, false)
             end
             if isa(nv, Int) && 1 <= nv <= length(s.fields)
-                return s.fields[nv]
+                return unwrapva(s.fields[nv])
             end
         end
         s = widenconst(s)

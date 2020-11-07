@@ -1329,6 +1329,39 @@ end
 
 @test static_shown(QuoteNode(:x)) == ":(:x)"
 
+# PR #38049
+@test static_shown(sum) == "Base.sum"
+@test static_shown(+) == "Base.:(+)"
+@test static_shown(typeof(+)) == "typeof(Base.:(+))"
+
+struct var"#X#" end
+var"#f#"() = 2
+struct var"%X%" end  # Invalid name without '#'
+
+# (Just to make this test more sustainable,) we don't necesssarily need to test the exact
+# output format, just ensure that it prints at least the parts we expect:
+@test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
+@test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))
+
+# Test that static_shown is returning valid, correct julia expressions
+@testset "static_show() prints valid julia" begin
+    @testset for v in (
+            var"#X#",
+            var"#X#"(),
+            var"%X%",
+            var"%X%"(),
+            Vector,
+            Vector{<:Any},
+            Vector{var"#X#"},
+            +,
+            typeof(+),
+            var"#f#",
+            typeof(var"#f#"),
+        )
+        @test v == eval(Meta.parse(static_shown(v)))
+    end
+end
+
 # Test @show
 let fname = tempname()
     try
@@ -1985,4 +2018,13 @@ end
     @test sprint(show, skipmissing(1:5)) == "skipmissing(1:5)"
     @test sprint(show, skipmissing([1,2,missing])) == "skipmissing(Union{Missing, $Int}[1, 2, missing])"
     @test sprint(show, skipmissing((missing,1.0,'a'))) == "skipmissing((missing, 1.0, 'a'))"
+end
+
+@testset "unicode in method table" begin
+    αsym = gensym(:α)
+    ℓsym = gensym(:ℓ)
+    eval(:(foo($αsym) = $αsym))
+    eval(:(bar($ℓsym) = $ℓsym))
+    @test contains(string(methods(foo)), "foo(α)")
+    @test contains(string(methods(bar)), "bar(ℓ)")
 end

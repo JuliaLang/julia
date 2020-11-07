@@ -71,6 +71,7 @@ static inline void jl_lock_frame_pop(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (__likely(ptls->current_task)) {
+        assert(ptls->current_task->locks.len > 0);
         ptls->current_task->locks.len--;
     }
 }

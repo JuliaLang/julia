@@ -176,7 +176,7 @@ static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx
 {
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx), ptls->pgcstack, 0);
+                                          jl_to_bt_context(sigctx), ptls->pgcstack);
     ptls->sig_exception = e;
     jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }
@@ -665,6 +665,8 @@ static void *signal_listener(void *arg)
         unw_context_t *signal_context;
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
+        if (critical || profile)
+            jl_lock_profile();
         for (int i = jl_n_threads; i-- > 0; ) {
             // notify thread to stop
             jl_thread_suspend_and_get_state(i, &signal_context);
@@ -674,7 +676,7 @@ static void *signal_listener(void *arg)
             if (critical) {
                 bt_size += rec_backtrace_ctx(bt_data + bt_size,
                         JL_MAX_BT_SIZE / jl_n_threads - 1,
-                        signal_context, NULL, 1);
+                        signal_context, NULL);
                 bt_data[bt_size++].uintptr = 0;
             }
 
@@ -693,7 +695,7 @@ static void *signal_listener(void *arg)
                     } else {
                         // Get backtrace data
                         bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                                bt_size_max - bt_size_cur - 1, signal_context, NULL, 1);
+                                bt_size_max - bt_size_cur - 1, signal_context, NULL);
                     }
                     ptls->safe_restore = old_buf;
 
@@ -709,6 +711,8 @@ static void *signal_listener(void *arg)
             // notify thread to resume
             jl_thread_resume(i, sig);
         }
+        if (critical || profile)
+            jl_unlock_profile();
 #endif
 
         // this part is async with the running of the rest of the program

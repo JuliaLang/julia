@@ -2562,47 +2562,6 @@ end
 
 @test map(>:, [Int], [Int]) == [true]
 
-# issue 35566
-module Issue35566
-function step(acc, x)
-    xs, = acc
-    y = x > 0.0 ? x : missing
-    if y isa eltype(xs)
-        ys = push!(xs, y)
-    else
-        ys = vcat(xs, [y])
-    end
-    return (ys,)
-end
-
-function probe(y)
-    if y isa Tuple{Vector{Missing}}
-        return Val(:missing)
-    else
-        return Val(:expected)
-    end
-end
-
-function _foldl_iter(rf, val::T, iter, state) where {T}
-    while true
-        ret = iterate(iter, state)
-        ret === nothing && break
-        x, state = ret
-        y = rf(val, x)
-        if y isa T
-            val = y
-        else
-            return probe(y)
-        end
-    end
-    return Val(:expected)
-end
-
-f() = _foldl_iter(step, (Missing[],), [0.0], 1)
-end
-@test Core.Compiler.typesubtract(Tuple{Union{Int,Char}}, Tuple{Char}) == Tuple{Int}
-@test Base.return_types(Issue35566.f) == [Val{:expected}]
-
 # constant prop through keyword arguments
 _unstable_kw(;x=1,y=2) = x == 1 ? 0 : ""
 _use_unstable_kw_1() = _unstable_kw(x = 2)
@@ -2647,3 +2606,6 @@ for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     @test code[end] == Expr(:unreachable)
     @test_throws TypeError badf()
 end
+
+# issue #37638
+@test !(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}) <: Vararg)

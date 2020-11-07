@@ -64,8 +64,8 @@ fastcheck-libuv: #none
 check-libuv: $(LIBUV_BUILDDIR)/build-checked
 
 else # USE_BINARYBUILDER_LIBUV
-LIBUV_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/LibUV-v2+$(LIBUV_VER)-julia+$(LIBUV_BB_REL)
-LIBUV_BB_NAME := LibUV.v2.0.0+$(LIBUV_VER)-julia
+LIBUV_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibUV_jll.jl/releases/download/LibUV-v2.0.0+$(LIBUV_BB_REL)
+LIBUV_BB_NAME := LibUV.v2.0.0
 
 $(eval $(call bb-install,libuv,LIBUV,false))
 endif
