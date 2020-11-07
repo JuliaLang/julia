@@ -1267,13 +1267,6 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         }
     }
 
-    if (tag == 10 || tag == 11 || tag == 12) {
-        assert(pos > 0);
-        arraylist_push(&flagref_list, loc == HT_NOTFOUND ? NULL : loc);
-        arraylist_push(&flagref_list, (void*)(uintptr_t)pos);
-        ptrhash_put(&uniquing_table, dt, NULL);
-    }
-
     if (has_instance) {
         assert(dt->isconcretetype && "there shouldn't be an instance on an abstract type");
         dt->instance = jl_deserialize_value(s, &dt->instance);
@@ -1289,6 +1282,13 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     jl_gc_wb(dt, dt->super);
     dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
     if (dt->types) jl_gc_wb(dt, dt->types);
+
+    if (tag == 10 || tag == 11 || tag == 12) {
+        assert(pos > 0);
+        arraylist_push(&flagref_list, loc == HT_NOTFOUND ? NULL : loc);
+        arraylist_push(&flagref_list, (void*)(uintptr_t)pos);
+        ptrhash_put(&uniquing_table, dt, NULL);
+    }
 
     return (jl_value_t*)dt;
 }

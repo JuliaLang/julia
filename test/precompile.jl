@@ -904,4 +904,40 @@ let
     end
 end
 
+# Issue #38312
+let
+    TheType = """Array{Ref{Val{1}}, 1}"""
+    load_path = mktempdir()
+    load_cache_path = mktempdir()
+    try
+        write(joinpath(load_path, "Foo38312.jl"),
+            """
+            module Foo38312
+
+            const TheType = $TheType
+
+            end
+            """)
+        write(joinpath(load_path, "Bar38312.jl"),
+            """
+            module Bar38312
+
+            const TheType = $TheType
+
+            end
+            """)
+
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
+
+        Base.compilecache(Base.PkgId("Foo38312"))
+        Base.compilecache(Base.PkgId("Bar38312"))
+        @test pointer_from_objref((@eval (using Foo38312; Foo38312)).TheType) ===
+        pointer_from_objref((@eval (using Bar38312; Bar38312)).TheType)
+    finally
+        rm(load_path, recursive=true)
+        rm(load_cache_path, recursive=true)
+    end
+end
+
 end # !withenv
