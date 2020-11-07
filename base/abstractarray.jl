@@ -1791,13 +1791,6 @@ an iterable containing several dimensions, this allows one to construct block di
 matrices and their higher-dimensional analogues by simultaneously increasing several
 dimensions for every new input array and putting zero blocks elsewhere.
 
-For a vector of arrays, `reduce(cat, A)` will stack them along a new dimension,
-equivalent to `cat(A...; dims = ndims(A[1])+1)`. Like `reduce(hcat, A)` this is done
-efficiently for large `A`.
-
-!!! compat "Julia 1.6"
-     `reduce(cat, A)` requires at least Julia 1.6.
-
 # Examples
 ```jldoctest
 julia> cat(ones(2,2), fill(pi,2), zeros(2,3,1); dims=2)
@@ -1813,28 +1806,11 @@ julia> cat([true], trues(2,2), trues(2,4); dims=(1,2))
  0  1  1  0  0  0  0
  0  0  0  1  1  1  1
  0  0  0  1  1  1  1
-
-julia> reduce(cat, [[1 1; 1 1], fill(√2,2,2), [4 8; 16 32]])
-2×2×3 Array{Float64,3}:
-[:, :, 1] =
- 1.0  1.0
- 1.0  1.0
-
-[:, :, 2] =
- 1.41421  1.41421
- 1.41421  1.41421
-
-[:, :, 3] =
-  4.0   8.0
- 16.0  32.0
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
 
 _cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(T, A...; dims=catdims)
-
-reduce(::typeof(cat), A::AbstractArray{<:AbstractArray}) =
-    _typed_cat(mapreduce(eltype, promote_type, A), A)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
@@ -1851,6 +1827,62 @@ typed_vcat(T::Type, A::AbstractArray...) = cat_t(T, A...; dims=Val(1))
 typed_hcat(T::Type, A::AbstractArray) = cat_t(T, A; dims=Val(2))
 typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(T, A, B; dims=Val(2))
 typed_hcat(T::Type, A::AbstractArray...) = cat_t(T, A...; dims=Val(2))
+
+"""
+    cat(; dims)
+
+Returns a `Base.Fix1` function, equivalent to `(A...,) -> cat(A...; dims)`.
+
+For some dimensions, `reduce(cat(;dims), A)` is done by an efficient method:
+* `dims=1` is `reduce(vcat, A)`.
+* `dims=2` is equivalent to `reduce(hcat, A)`.
+* `dims=N+1`, when `A` a vector of `N`-dimensional arrays, is `reduce(cat, A)`.
+
+In general `reduce(cat, A)` acts on an `M`-array containing `N`-arrays of uniform size
+to return one `N+M`-array. This has `size(out) == (size(first(A))..., size(A)...)`,
+and elements `out[J, I] == A[I][J]` where `I in CartesianIndices(A)`
+and `J in CartesianIndices(first(A))`.
+
+!!! compat "Julia 1.6"
+     These methods require at least Julia 1.6.
+
+```jldoctest
+julia> reduce(cat(dims=3), [ones(2,2), fill(√2,2,2), [4 8; 16 32]])
+2×2×3 Array{Float64,3}:
+[:, :, 1] =
+ 1.0  1.0
+ 1.0  1.0
+
+[:, :, 2] =
+ 1.41421  1.41421
+ 1.41421  1.41421
+
+[:, :, 3] =
+  4.0   8.0
+ 16.0  32.0
+
+julia> reduce(cat, [rand(3,5) for μ in 1:7, ν in 0:10]) |> size
+(3, 5, 7, 11)
+
+julia> mapreduce(float, cat(dims=[1,2]), [1, fill(2,2,2), [3 4 5]])
+4×6 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  2.0  0.0  0.0  0.0
+ 0.0  2.0  2.0  0.0  0.0  0.0
+ 0.0  0.0  0.0  3.0  4.0  5.0
+```
+"""
+cat(; dims) = length(dims)==1 ? Fix1(_cat, Val(dims...)) : Fix1(_cat, Tuple(dims))
+
+reduce(::Fix1{typeof(_cat), Val{1}}, A) = reduce(vcat, A)
+reduce(::Fix1{typeof(_cat), Val{2}}, A) = reduce(hcat, A)
+reduce(::Fix1{typeof(_cat), Val{2}}, A::AbstractVector{<:AbstractVector}) = reduce(cat, A)
+reduce(f::Fix1{typeof(_cat), Val{M}}, A::AbstractVector{<:AbstractArray{<:Any,N}}) where {M,N} =
+    M == N+1 ? reduce(cat, A) : mapreduce(identity, f, A)
+
+reduce(::typeof(cat), A::AbstractArray{<:AbstractArray}) =
+    _typed_cat(mapreduce(eltype, promote_type, A), A)
+
 
 # 2d horizontal and vertical concatenation
 

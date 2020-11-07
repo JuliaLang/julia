@@ -964,6 +964,7 @@ struct Fix1{F,T} <: Function
 end
 
 (f::Fix1)(y) = f.f(f.x, y)
+(f::Fix1)(ys...) = f.f(f.x, ys...)
 
 """
     Fix2(f, x)
