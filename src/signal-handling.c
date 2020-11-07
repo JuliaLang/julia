@@ -31,6 +31,12 @@ JL_DLLEXPORT int jl_profile_start_timer(void);
 void jl_lock_profile(void);
 void jl_unlock_profile(void);
 
+JL_DLLEXPORT int jl_profile_is_buffer_full(void)
+{
+    // the latter `+ 1` is for the block terminator `0`.
+    return bt_size_cur + (JL_BT_MAX_ENTRY_SIZE + 1) + 1 > bt_size_max;
+}
+
 static uint64_t jl_last_sigint_trigger = 0;
 static uint64_t jl_disable_sigint_time = 0;
 static void jl_clear_force_sigint(void)
@@ -291,12 +297,6 @@ JL_DLLEXPORT void jl_profile_clear_data(void)
 JL_DLLEXPORT int jl_profile_is_running(void)
 {
     return running;
-}
-
-JL_DLLEXPORT int jl_profile_is_buffer_full(void)
-{
-    // the latter `+ 1` is for the block terminator `0`.
-    return bt_size_cur + (JL_BT_MAX_ENTRY_SIZE + 1) + 1 > bt_size_max;
 }
 
 #ifdef __cplusplus
