@@ -1794,7 +1794,7 @@ dimensions for every new input array and putting zero blocks elsewhere.
 # Examples
 ```jldoctest
 julia> cat(ones(2,2), fill(pi,2), zeros(2,3,1); dims=2)
-2×6×1 Array{Float64,3}:
+2×6×1 Array{Float64, 3}:
 [:, :, 1] =
  1.0  1.0  3.14159  0.0  0.0  0.0
  1.0  1.0  3.14159  0.0  0.0  0.0
@@ -1848,7 +1848,7 @@ and `J in CartesianIndices(first(A))`.
 
 ```jldoctest
 julia> reduce(cat(dims=3), [ones(2,2), fill(√2,2,2), [4 8; 16 32]])
-2×2×3 Array{Float64,3}:
+2×2×3 Array{Float64, 3}:
 [:, :, 1] =
  1.0  1.0
  1.0  1.0
