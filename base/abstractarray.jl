@@ -1574,7 +1574,7 @@ function _typed_cat(::Type{T}, A::AbstractArray{<:AbstractArray}, valg::Val=Val(
     for j in eachindex(A)
         Aj = A[j]
         if axes(Aj) != ax1
-            throw(ArgumentError("expected arrays of consistent size, got $(axes(Aj)) for argument $j, compared to $ax1 for the first"))
+            throw(ArgumentError("expected arrays of consistent size, got $(UnitRange.(axes(Aj))) for element $j, compared to $(UnitRange.(ax1)) for the first"))
         end
         dense &= isa(Aj, Array)
     end
@@ -1847,20 +1847,21 @@ and `J in CartesianIndices(first(A))`.
 !!! compat "Julia 1.6"
      These methods require at least Julia 1.6.
 
+# Examples
 ```jldoctest
-julia> reduce(cat(dims=3), [ones(2,2), fill(√2,2,2), [4 8; 16 32]])
-2×2×3 Array{Float64, 3}:
+julia> reduce(cat(dims=3), [ones(2,4), fill(√2,2,4), [2 4 8 16; 32 64 128 256]])
+2×4×3 Array{Float64, 3}:
 [:, :, 1] =
- 1.0  1.0
- 1.0  1.0
+ 1.0  1.0  1.0  1.0
+ 1.0  1.0  1.0  1.0
 
 [:, :, 2] =
- 1.41421  1.41421
- 1.41421  1.41421
+ 1.41421  1.41421  1.41421  1.41421
+ 1.41421  1.41421  1.41421  1.41421
 
 [:, :, 3] =
-  4.0   8.0
- 16.0  32.0
+  2.0   4.0    8.0   16.0
+ 32.0  64.0  128.0  256.0
 
 julia> reduce(cat(dims=4), [ones(2,3) for _ in 1:5]) |> size
 (2, 3, 1, 5)
