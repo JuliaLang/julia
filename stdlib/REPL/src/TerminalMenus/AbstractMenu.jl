@@ -181,7 +181,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Int=
         REPL.Terminals.raw!(term, true)
         true
     catch err
-        @warn("TerminalMenus: Unable to enter raw mode: $err")
+        suppress_output || @warn("TerminalMenus: Unable to enter raw mode: $err")
         false
     end
     # hide the cursor
