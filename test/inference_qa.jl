@@ -1,12 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# The aim of these tests is to enforce a minimum quality of inferrability of Julia's
-# Base and specifically its precompiled methods. Passing these tests does not
-# indicate that Julia has no inference problems, but they are designed to catch some
-# inadvertent problems. While `@inferred` only tests the return type, the tests
-# in this file are designed to check the overall inference quality of method *internals*.
+# The aim of these tests is to enforce "quality assurance" for inferrability of Julia's
+# Base and specifically its precompiled methods. Passing these tests & warnings does not
+# indicate that Julia has no inference problems, but they are designed to reveal what
+# would otherwise be hidden problems. While `@inferred` only tests the return type, the tests
+# in this file are designed to check the overall inference quality of method internals.
 
-# If you fail tests here, you can usually fix problems using `@code_warntype` or Cthulhu.jl's `@descend`.
+# If you fail tests or get new warnings here, you can usually fix problems using
+# `@code_warntype` or Cthulhu.jl's `@descend`.
 
 using Test
 
@@ -84,9 +85,8 @@ end
         @test isempty(remove_unlikely_methodinstances(atrisk_triggers(m, first.(mivulnerabilities_exported))))
 
         # It's far less important to protect against invalidation of private functions,
-        # since generally packages should not extend these functions. Nevertheless it wouldn't
-        # be a bad thing.
-        @test_broken isempty(remove_unlikely_methodinstances(atrisk_triggers(m, first.(mivulnerabilities_private))))
+        # since generally packages should not extend these functions.
+        # @test_broken isempty(remove_unlikely_methodinstances(atrisk_triggers(m, first.(mivulnerabilities_private))))
     end
 end
 
@@ -104,13 +104,17 @@ end
     # Test overall number of atrisk MethodInstances and their average number of backedges
     badexp = Set(remove_unlikely_methodinstances(first.(mivulnerabilities_exported)))
     badcounts = filter(pr->pr.first ∈ badexp, mivulnerabilities_exported)
-    @test length(badcounts) < 1250 # 1000
-    if length(badcounts) < 800
+    threshbc = 1000
+    if length(badcounts) > threshbc
+        @warn "There are $(length(badcounts)) at-risk specializations of exported methods, which is above the previous threshold"
+    elseif length(badcounts) < 0.8*threshbc
         @info "There are now only $(length(badcounts)) at-risk specializations of exported methods, consider dropping the threshold"
     end
     meancounts = sum(last.(badcounts))/length(badcounts)
-    @test meancounts < 33 # 32
-    if meancounts < 24
+    threshmc = 19
+    if meancounts > threshmc
+        @warn "The mean number of at-risk backedges is now $meancounts, which is above the previous threshold"
+    elseif meancounts < 0.8*threshmc
         @info "The mean number of at-risk backedges is now only $meancounts, consider dropping the threshold"
     end
 end
@@ -199,17 +203,19 @@ end
     # Check that we never infer certain methodinstances,
     # It would be great to broaden this beyond Real, but this is a good start.
     # If you fail these tests, it means an internal operation forced
-    # the compiler to infer one of these methods for a problematic combination of types.
+    # the compiler to generate one of these methods for a poorly-inferred combination of types.
     function subtype_real(@nospecialize T)
         while isa(T, TypeVar)
             T = T.ub
         end
         return T<:Real
     end
-    for f in (==, isequal, <, <=)
+    for f in (==, <,) # isequal, <=)
         for mi in methodinstances(f)
             if any(subtype_real, Base.unwrap_unionall(mi.specTypes).parameters)
-                @test !is_atrisk_type(mi.specTypes)
+                if is_atrisk_type(mi.specTypes)
+                    @warn "Specialization $(mi.specTypes) was inferred, this may indicate degraded inference quality"
+                end
             end
         end
     end
