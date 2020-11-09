@@ -1820,6 +1820,14 @@ for (f, f2!) in ((:*, :lmul!), (:\, :ldiv!))
             return LowerTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
         end
 
+        function $(f)(A::LowerTriangular, B::UnitLowerTriangular)
+            TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
+                         ($f)(zero(eltype(A)), zero(eltype(B))))
+            BB = similar(B, TAB, size(B))
+            copyto!(BB, B)
+            return LowerTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
+        end
+
         function $(f)(A::UnitLowerTriangular, B::UnitLowerTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
@@ -1844,6 +1852,14 @@ for (f, f2!) in ((:*, :lmul!), (:\, :ldiv!))
             return UpperTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
         end
 
+        function ($f)(A::UpperTriangular, B::UnitUpperTriangular)
+            TAB = typeof(($f)(zero(eltype(A)), zero(eltype(B))) +
+                         ($f)(zero(eltype(A)), zero(eltype(B))))
+            BB = similar(B, TAB, size(B))
+            copyto!(BB, B)
+            return UpperTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
+        end
+
         function ($f)(A::UnitUpperTriangular, B::UnitUpperTriangular)
             TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
                          (*)(zero(eltype(A)), zero(eltype(B))))
@@ -1852,22 +1868,6 @@ for (f, f2!) in ((:*, :lmul!), (:\, :ldiv!))
             return UnitUpperTriangular($f2!(convert(AbstractMatrix{TAB}, A), BB))
         end
     end
-end
-
-function (*)(A::LowerTriangular, B::UnitLowerTriangular)
-    TAB = typeof((*)(zero(eltype(A)), one(eltype(B))) +
-                    (*)(zero(eltype(A)), one(eltype(B))))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
-    return LowerTriangular(rmul!(AA, convert(AbstractMatrix{TAB}, B)))
-end
-
-function (*)(A::UpperTriangular, B::UnitUpperTriangular)
-    TAB = typeof((*)(zero(eltype(A)), one(eltype(B))) +
-                    (*)(zero(eltype(A)), one(eltype(B))))
-    AA = similar(A, TAB, size(A))
-    copyto!(AA, A)
-    return UpperTriangular(rmul!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 
 for (ipop, op, xformtype, xformop) in (
@@ -1915,8 +1915,15 @@ for (ipop, op, xformtype, xformop) in (
 end
 
 function (/)(A::LowerTriangular, B::LowerTriangular)
-    TAB = typeof((/)(zero(eltype(A)), zero(eltype(B))) +
-                 (/)(zero(eltype(A)), zero(eltype(B))))
+    TAB = typeof((/)(zero(eltype(A)), one(eltype(B))) +
+                 (/)(zero(eltype(A)), one(eltype(B))))
+    AA = similar(A, TAB, size(A))
+    copyto!(AA, A)
+    return LowerTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
+end
+function (/)(A::UnitLowerTriangular, B::LowerTriangular)
+    TAB = typeof((/)(zero(eltype(A)), one(eltype(B))) +
+                 (/)(zero(eltype(A)), one(eltype(B))))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     return LowerTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
@@ -1929,15 +1936,22 @@ function (/)(A::LowerTriangular, B::UnitLowerTriangular)
     return LowerTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 function (/)(A::UnitLowerTriangular, B::UnitLowerTriangular)
-    TAB = typeof((/)(zero(eltype(A)), one(eltype(B))) +
-                 (/)(zero(eltype(A)), one(eltype(B))))
+    TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
+                 (*)(zero(eltype(A)), zero(eltype(B))))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     return UnitLowerTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 function (/)(A::UpperTriangular, B::UpperTriangular)
-    TAB = typeof((/)(zero(eltype(A)), zero(eltype(B))) +
-                 (/)(zero(eltype(A)), zero(eltype(B))))
+    TAB = typeof((/)(zero(eltype(A)), one(eltype(B))) +
+                 (/)(zero(eltype(A)), one(eltype(B))))
+    AA = similar(A, TAB, size(A))
+    copyto!(AA, A)
+    return UpperTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
+end
+function (/)(A::UnitUpperTriangular, B::UpperTriangular)
+    TAB = typeof((/)(zero(eltype(A)), one(eltype(B))) +
+                 (/)(zero(eltype(A)), one(eltype(B))))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     return UpperTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
@@ -1950,8 +1964,8 @@ function (/)(A::UpperTriangular, B::UnitUpperTriangular)
     return UpperTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
 end
 function (/)(A::UnitUpperTriangular, B::UnitUpperTriangular)
-    TAB = typeof((/)(zero(eltype(A)), one(eltype(B))) +
-                 (/)(zero(eltype(A)), one(eltype(B))))
+    TAB = typeof((*)(zero(eltype(A)), zero(eltype(B))) +
+                 (*)(zero(eltype(A)), zero(eltype(B))))
     AA = similar(A, TAB, size(A))
     copyto!(AA, A)
     return UnitUpperTriangular(rdiv!(AA, convert(AbstractMatrix{TAB}, B)))
