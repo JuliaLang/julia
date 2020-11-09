@@ -304,9 +304,9 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             svdvals(A1)
         end
 
-        @test A1*A1 isa t1
-        @test A1/A1 isa t1
-        @test A1\A1 isa t1
+        @test ((A1*A1)::t1) ≈ Matrix(A1) * Matrix(A1)
+        @test ((A1/A1)::t1) ≈ Matrix(A1) / Matrix(A1)
+        @test ((A1\A1)::t1) ≈ Matrix(A1) \ Matrix(A1)
 
         # Begin loop for second Triangular matrix
         for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
