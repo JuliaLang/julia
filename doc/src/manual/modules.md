@@ -6,8 +6,8 @@ Modules in Julia help organize code into coherent units. They are delimited synt
 1. Modules are separate namespaces, each introducing a new global scope. This is useful, because it
    allows the same name to be used for different functions or global variables without conflict, as long as they are in separate modules.
 
-2. Modules have facilities for detailed namespace management: each defines a set of symbols it
-   `export`s, and can import symbols from other modules with `using` and `import` (we explain these below).
+2. Modules have facilities for detailed namespace management: each defines a set of names it
+   `export`s, and can import names from other modules with `using` and `import` (we explain these below).
 
 3. Modules can be precompiled for faster loading, and contain code for runtime initialization.
 
@@ -25,7 +25,7 @@ end
 ```
 
 Files and file names are mostly unrelated to modules; modules are associated only with module
-expressions. One can have multiple files per module, and multiple modules per file, `include`
+expressions. One can have multiple files per module, and multiple modules per file. `include`
 behaves as if the contents of the source file were evaluated in its place. In this chapter, we use
 short and simplified examples, so we won't use `include`.
 
@@ -46,12 +46,12 @@ end
 
 ## [Namespace management](@id namespace-management)
 
-Namespace management refers to the facilities the language offers for making symbols in a module
+Namespace management refers to the facilities the language offers for making names in a module
 available in other modules. We discuss the related concepts and functionality below in detail.
 
-### Qualified symbol names
+### Qualified names
 
-Identifiers for functions, variables and types in the global scope like `sin`, `ARGS`, and
+Names for functions, variables and types in the global scope like `sin`, `ARGS`, and
 `UnitRange` always belong to a module, called the *parent module*, which can be found
 interactively with [`parentmodule`](@ref), for example
 
@@ -60,29 +60,26 @@ julia> parentmodule(UnitRange)
 Base
 ```
 
-One can also refer to these symbols outside their parent module by prefixing them with their module,
+One can also refer to these names outside their parent module by prefixing them with their module,
 eg `Base.UnitRange`. This is called a *qualified name*. The parent module may be accessible using a
 chain of submodules like `Base.Math.sin`, where `Base.Math` is called the *module path*.
+Due to syntactic ambiguities, qualifying a name that contains only symbols, such as an operator,
+requires inserting a colon, e.g. `Base.:+`. A small number of operators additionally require
+parentheses, e.g. `Base.:(==)`.
 
 If a name is qualified, then it is always *accessible*, and in case of a function, it can also have
-methods added to it by using the qualified name as the function name. However, due to syntactic
-ambiguities that arise, if you wish to add methods to a function in a different module whose name
-contains only symbols, such as an operator, `Base.+` for example, you must use `Base.:+` to refer to
-it. If the operator is more than one character in length you must surround it in brackets, such as:
-`Base.:(==)`. Macro names are written with `@` in `import`, `using`, and `export` statements (see
-below), e.g. `import Mod: @mac`.
+methods added to it by using the qualified name as the function name.
 
 Within a module, a variable name can be “reserved” without assigning to it by declaring it as
 `global x`. This prevents name conflicts for globals initialized after load time. The syntax
 `M.x = y` does not work to assign a global in another module; global assignment is always
 module-local.
 
-
 ### Export lists
 
-Symbols (functions, global variables, and constants) can be added to the *export list* of a module
-with `export`. Typically, they are at or near the top of the module definition so that readers of
-the source code can find them easily, as in
+Names (referring to functions, types, global variables, and constants) can be added to the
+*export list* of a module with `export`. Typically, they are at or near the top of the module definition
+so that readers of the source code can find them easily, as in
 
 ```julia
 module NiceStuff
@@ -101,14 +98,14 @@ end
 but this is just a style suggestion — a module can have multiple `export` statements in arbitrary
 locations.
 
-It is common to export symbols which form part of the API (application programming interface). In
+It is common to export names which form part of the API (application programming interface). In
 the above code, the export list suggests that users should use `nice` and `DOG`. However, since
 qualified names always make identifiers accessible, this is just an option for organizing APIs:
 unlike other languages, Julia has no facilities for truly hiding module internals.
 
-Also, some modules don't export symbols at all. This is usually done if they use very common
-symbols, such as `derivative`, in their API, which could easily clash with the export lists of other
-modules. We will see how to manage symbol clashes below.
+Also, some modules don't export names at all. This is usually done if they use common
+words, such as `derivative`, in their API, which could easily clash with the export lists of other
+modules. We will see how to manage name clashes below.
 
 ### Standalone `using` and `import`
 
@@ -131,7 +128,7 @@ To continue with our example,
 using NiceStuff
 ```
 
-would load the above code, making `NiceStuff` (the module name), `DOG` and `nice` available. `Dog` is not on the export list, but it can be accessed if the symbol is qualified with the module path (which here is just the module name) as `NiceStuff.Dog`.
+would load the above code, making `NiceStuff` (the module name), `DOG` and `nice` available. `Dog` is not on the export list, but it can be accessed if the name is qualified with the module path (which here is just the module name) as `NiceStuff.Dog`.
 
 Importantly, **`using ModuleName` is the only form for which export lists matter at all**.
 
@@ -141,30 +138,32 @@ In contrast,
 import NiceStuff
 ```
 
-would bring *only* the module name into scope. Users would need to use `NiceStuff.DOG`, `NiceStuff.Dog`, and `NiceStuff.nice` to access its symbols. Usually, `import ModuleName` is used in contexts when the user wants to keep the namespace clean.
+brings *only* the module name into scope. Users would need to use `NiceStuff.DOG`, `NiceStuff.Dog`, and `NiceStuff.nice` to access its contents. Usually, `import ModuleName` is used in contexts when the user wants to keep the namespace clean.
 
-You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, eg
+You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
 ```julia
 using LinearAlgebra, Statistics
 ```
 
-### `using` and `import` with specific symbols, and adding methods
+### `using` and `import` with specific identifiers, and adding methods
 
-When `using ModuleName:` or `import ModuleName:` is followed by a comma-separated list of symbols, the module is loaded, but *only those specific symbols are brought into the namespace* by this specific statement. For example,
+When `using ModuleName:` or `import ModuleName:` is followed by a comma-separated list of names, the module is loaded, but *only those specific names are brought into the namespace* by the statement. For example,
 
 ```julia
 using NiceStuff: nice, DOG
 ```
 
-will import those two specific symbols.
+will import the names `nice` and `DOG`.
 
 Importantly, the module name `NiceStuff` will *not* be in the namespace. If you want to make it accessible, you have to list it explicitly, as
 ```julia
 using NiceStuff: nice, DOG, NiceStuff
 ```
 
-Julia has two forms for seemingly the same thing because only `import ModuleName: f` allows adding methods to `f` *without a module path*. That is to say, the following example will not work as intended:
+Julia has two forms for seemingly the same thing because only `import ModuleName: f` allows adding methods to `f`
+*without a module path*.
+That is to say, the following example will give an error:
 
 ```julia
 using NiceStuff: nice
@@ -172,7 +171,7 @@ struct Cat end
 nice(::Cat) = "nice 😸"
 ```
 
-because `nice` will define a function in the current scope, different from `NiceStuff.nice`. The purpose of this feature is to prevent accidentally adding methods to functions in other modules.
+This error prevents accidentally adding methods to functions in other modules that you only intended to use.
 
 There are two ways to deal with this. You can always qualify function names with a module path:
 ```julia
@@ -197,7 +196,7 @@ Once a variable is made visible via `using` or `import`, a module may not create
 with the same name. Imported variables are read-only; assigning to a global variable always affects
 a variable owned by the current module, or else raises an error.
 
-### Symbol renaming with `as`
+### Renaming with `as`
 
 An identifier brought into scope by `import` or `using` can be renamed with the keyword `as`.
 This is useful for working around name conflicts as well as for shortening names.
@@ -230,19 +229,20 @@ on all of the exported names in `CSV`.
 
 ### Mixing multiple `using` and `import` statements
 
-When multiple `using` or `import` statements of any of the forms above are used, their effect is combined in the order they appear. For example,
+When multiple `using` or `import` statements of any of the forms above are used, their effect is combined in the order they appear.
+For example,
 
 ```julia
-using NiceStuff         # exported symbols and the module name
+using NiceStuff         # exported names and the module name
 import NiceStuff: nice  # allows adding methods to unqualified functions
 ```
 
-would bring all the exported symbols of `NiceStuff` and the module name itself into scope, and also
+would bring all the exported names of `NiceStuff` and the module name itself into scope, and also
 allow adding methods to `nice` without prefixing it with a module name.
 
-### Handling symbol conflicts
+### Handling name conflicts
 
-Consider the situation where two (or more) packages export the same symbol, as in
+Consider the situation where two (or more) packages export the same name, as in
 
 ```julia
 module A
@@ -267,7 +267,7 @@ Here, Julia cannot decide which `f` you are referring to, so you have to make a 
 
 1. Simply proceed with qualified names like `A.f` and `B.f`. This makes the context clear to the reader of your code, especially if `f` just happens to coincide but has different meaning in various packages. For example, `degree` has various uses in mathematics, the natural sciences, and in everyday life, and these meanings should be kept separate.
 
-2. Use the `as` keyword above to rename one or both symbols, eg
+2. Use the `as` keyword above to rename one or both identifiers, eg
 
    ```julia
    using A: f as f
@@ -277,16 +277,16 @@ Here, Julia cannot decide which `f` you are referring to, so you have to make a 
    would make `B.f` available as `g`. Here, we are assuming that you did not use `using A` before,
    which would have brought `f` into the namespace.
 
-3. When the symbols in question *do* share a meaning, it is common for one module to import it from another, or have a lightweight “base” package with the sole function of defining an interface like this, which can be used by other packages. It is conventional to have such package names end in `...Base` (which has nothing to do with Julia's `Base` module).
+3. When the names in question *do* share a meaning, it is common for one module to import it from another, or have a lightweight “base” package with the sole function of defining an interface like this, which can be used by other packages. It is conventional to have such package names end in `...Base` (which has nothing to do with Julia's `Base` module).
 
 ### Default top-level definitions and bare modules
 
-In addition to `using Base`, modules also automatically contain definitions of the [`eval`](@ref)
+Modules automatically contain `using Core`, `using Base`, and definitions of the [`eval`](@ref)
 and [`include`](@ref) functions, which evaluate expressions/files within the global scope of that
 module.
 
 If these default definitions are not wanted, modules can be defined using the keyword
-[`baremodule`](@ref) instead (note: `Core` is still imported, as per above). In terms of
+[`baremodule`](@ref) instead (note: `Core` is still imported). In terms of
 `baremodule`, a standard `module` looks like this:
 
 ```
@@ -320,9 +320,9 @@ There are three important standard modules:
 
 ## Submodules and relative paths
 
-Modules can contain *submodules*, nesting the same syntax `module ... end`. They can be used to introduce separate namespaces, which can be helpful for organizing complex codebases. Note that each `module` introduces its own [scope](@ref scope-of-variables), so submodules do not automatically “inherit” symbols from their parent.
+Modules can contain *submodules*, nesting the same syntax `module ... end`. They can be used to introduce separate namespaces, which can be helpful for organizing complex codebases. Note that each `module` introduces its own [scope](@ref scope-of-variables), so submodules do not automatically “inherit” names from their parent.
 
-It is recommended that submodules refer to other modules within the enclosing parent module (including the latter) using *relative module qualifiers* in `using` and `import` statements. A relative module qualifier starts with a period (`.`), which corresponds to the current module, and each successive `.` leads to the parent of the current module. This should be followed by modules if necessary, and a terminating symbol, separated by further `.`s.
+It is recommended that submodules refer to other modules within the enclosing parent module (including the latter) using *relative module qualifiers* in `using` and `import` statements. A relative module qualifier starts with a period (`.`), which corresponds to the current module, and each successive `.` leads to the parent of the current module. This should be followed by modules if necessary, and eventually the actual name to access, all separated by `.`s.
 
 Consider the following example, where the submodule `SubA` defines a function, which is then extended in its “sibling” module:
 
@@ -373,7 +373,7 @@ y = 1
 end
 ```
 
-where `Sub` is trying to use `TestPackage.y` before it was define, so it does not have a value.
+where `Sub` is trying to use `TestPackage.y` before it was defined, so it does not have a value.
 
 For similar reasons, you cannot use a cyclic ordering:
 
