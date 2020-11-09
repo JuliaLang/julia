@@ -398,7 +398,7 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 
 // -- high resolution timers --
 // Returns time in nanosec
-JL_DLLEXPORT uint64_t jl_hrtime(void)
+JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT
 {
     return uv_hrtime();
 }

@@ -22,7 +22,6 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     const jl_uuid_t uuid_zero = {0, 0};
     jl_module_t *m = (jl_module_t*)jl_gc_alloc(ptls, sizeof(jl_module_t),
                                                jl_module_type);
-    JL_GC_PUSH1(&m);
     assert(jl_is_symbol(name));
     m->name = name;
     m->parent = NULL;
@@ -41,6 +40,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
+    JL_GC_PUSH1(&m);
     if (jl_core_module) {
         jl_module_using(m, jl_core_module);
     }
