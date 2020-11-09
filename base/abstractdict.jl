@@ -277,6 +277,7 @@ Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
 the merged collections. If the same key is present in another collection, the
 value for that key will be the value it has in the last collection listed.
+See also [`mergewith`](@ref) for custom handling of values with the same key.
 
 # Examples
 ```jldoctest
