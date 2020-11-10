@@ -378,6 +378,9 @@ julia> findall("a", "banana")
  4:4
  6:6
 ```
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
 """
 function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     found = UnitRange{Int}[]
