@@ -577,8 +577,8 @@ end
 
     # issue #38364
     f38364(xs) = xs[1:20]
-    # verify that this does not stack overflow
-    @test code_typed(f38364, Tuple{NTuple{2000,String}})[1] isa Pair
+    xs = tuple(("x" for _ in 1:2000)...)
+    @test @inferred(f38364(xs)) == tuple(("x" for _ in 1:20)...)
 end
 
 @testset "Base.rest" begin
