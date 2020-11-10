@@ -999,7 +999,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, *(jl_value_t**)v, depth);
         n += jl_printf(out, ")");
     }
-    else if (jl_function_type && jl_isa(v, (jl_value_t*)jl_function_type)) {
+    else if (jl_function_type && jl_subtype(vt, (jl_value_t*)jl_function_type)) {
         // v is function instance (an instance of a Function type).
         jl_datatype_t *dv = (jl_datatype_t*)vt;
         jl_sym_t *sym = dv->name->mt->name;
