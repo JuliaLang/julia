@@ -487,6 +487,25 @@ end
     end
 end
 
+@testset "Conversion from other issparse types" begin
+    n = 10
+    D = Diagonal(rand(1:9, n, n))
+    Bl = Bidiagonal(rand(1:9, n, n), :L)
+    Bu = Bidiagonal(rand(1:9, n, n), :U)
+    T = Tridiagonal(rand(1:9, n, n))
+    S = SymTridiagonal(Symmetric(rand(1:9, n, n)))
+    @test SparseMatrixCSC(D) == D
+    @test SparseMatrixCSC(Bl) == Bl
+    @test SparseMatrixCSC(Bu) == Bu
+    @test SparseMatrixCSC(T) == T
+    @test SparseMatrixCSC(S) == S
+    @test SparseMatrixCSC{Float64, Int16}(D) == D
+    @test SparseMatrixCSC{Float64, Int16}(Bl) == Bl
+    @test SparseMatrixCSC{Float64, Int16}(Bu) == Bu
+    @test SparseMatrixCSC{Float64, Int16}(T) == T
+    @test SparseMatrixCSC{Float64, Int16}(S) == S
+end
+
 @testset "Concatenation" begin
     let m = 80, n = 100
         A = Vector{SparseVector{Float64,Int}}(undef, n)

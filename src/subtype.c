@@ -2276,7 +2276,14 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         }
         else {
             ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
-            // TODO: we should probably check `bb->lb <: ub` here; find a test case for that
+            save_env(e, &root, &se);
+            int issub = subtype_in_env_existential(bb->lb, ub, e, 0, d);
+            restore_env(e, root, &se);
+            free_env(&se);
+            if (!issub) {
+                JL_GC_POP();
+                return jl_bottom_type;
+            }
         }
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {

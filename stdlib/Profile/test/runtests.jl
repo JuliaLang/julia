@@ -95,6 +95,13 @@ end
     Profile.init(n=def_n, delay=def_delay)
 end
 
+@testset "warning for buffer full" begin
+    n_, delay_ = Profile.init()
+    Profile.init(n=17)
+    @test_logs (:warn, r"The profile data buffer is full") Profile.fetch()
+    Profile.init(n=n_, delay=delay_)
+end
+
 @testset "Line number correction" begin
     @profile busywait(1, 20)
     _, fdict0 = Profile.flatten(Profile.retrieve()...)

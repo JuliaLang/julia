@@ -295,8 +295,8 @@ end
 """
     printmenu(out, m::AbstractMenu, cursoridx::Int; init::Bool=false, oldstate=nothing) -> newstate
 
-Display the state of a menu. `init=true` causes `m.pageoffset` to be initialized to zero,
-and starts printing at the current cursor location; when `init` is false, the terminal will
+Display the state of a menu. `init=true` causes `m.pageoffset` to be initialized to start printing at
+or just above the current cursor location; when `init` is false, the terminal will
 preserve the current setting of `m.pageoffset` and overwrite the previous display.
 Returns `newstate`, which can be passed in as `oldstate` on the next call to allow accurate
 overwriting of the previous display.
@@ -314,7 +314,8 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
     ncleared = oldstate === nothing ? m.pagesize-1 : oldstate
 
     if init
-        m.pageoffset = 0
+        # like clamp, except this takes the min if max < min
+        m.pageoffset = max(0, min(cursoridx - m.pagesize ÷ 2, lastoption - m.pagesize))
     else
         print(buf, "\x1b[999D\x1b[$(ncleared)A")   # move left 999 spaces and up `ncleared` lines
     end

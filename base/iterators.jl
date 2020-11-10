@@ -1148,7 +1148,7 @@ end
 
 function length(itr::PartitionIterator)
     l = length(itr.c)
-    return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
+    return cld(l, itr.n)
 end
 
 function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
