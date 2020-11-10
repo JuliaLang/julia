@@ -9,9 +9,16 @@ using ..CoreLogging
 
 export quot,
        isexpr,
+       isidentifier,
+       isoperator,
+       isunaryoperator,
+       isbinaryoperator,
+       ispostfixoperator,
        replace_sourceloc!,
        show_sexpr,
        @dump
+
+using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
 
 """
     Meta.quot(ex)::Expr

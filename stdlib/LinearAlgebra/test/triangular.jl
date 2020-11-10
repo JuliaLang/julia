@@ -304,6 +304,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             svdvals(A1)
         end
 
+        @test ((A1*A1)::t1) ≈ Matrix(A1) * Matrix(A1)
+        @test ((A1/A1)::t1) ≈ Matrix(A1) / Matrix(A1)
+        @test ((A1\A1)::t1) ≈ Matrix(A1) \ Matrix(A1)
+
         # Begin loop for second Triangular matrix
         for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
             for (t2, uplo2) in ((UpperTriangular, :U),
@@ -338,6 +342,27 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1'A2' ≈ Matrix(A1)'Matrix(A2)'
                 @test A1/A2 ≈ Matrix(A1)/Matrix(A2)
                 @test A1\A2 ≈ Matrix(A1)\Matrix(A2)
+                if uplo1 === :U && uplo2 === :U
+                    if t1 === UnitUpperTriangular && t2 === UnitUpperTriangular
+                        @test A1*A2 isa UnitUpperTriangular
+                        @test A1/A2 isa UnitUpperTriangular
+                        @test A1\A2 isa UnitUpperTriangular
+                    else
+                        @test A1*A2 isa UpperTriangular
+                        @test A1/A2 isa UpperTriangular
+                        @test A1\A2 isa UpperTriangular
+                    end
+                elseif uplo1 === :L && uplo2 === :L
+                    if t1 === UnitLowerTriangular && t2 === UnitLowerTriangular
+                        @test A1*A2 isa UnitLowerTriangular
+                        @test A1/A2 isa UnitLowerTriangular
+                        @test A1\A2 isa UnitLowerTriangular
+                    else
+                        @test A1*A2 isa LowerTriangular
+                        @test A1/A2 isa LowerTriangular
+                        @test A1\A2 isa LowerTriangular
+                    end
+                end
                 offsizeA = Matrix{Float64}(I, n+1, n+1)
                 @test_throws DimensionMismatch offsizeA / A2
                 @test_throws DimensionMismatch offsizeA / transpose(A2)

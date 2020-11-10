@@ -1109,7 +1109,8 @@ end
     pop!(collection) -> item
 
 Remove an item in `collection` and return it. If `collection` is an
-ordered container, the last item is returned.
+ordered container, the last item is returned; for unordered containers,
+an arbitrary element is returned.
 
 # Examples
 ```jldoctest

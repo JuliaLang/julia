@@ -1790,3 +1790,24 @@ let X1 = Tuple{AlmostLU, Vector{T}} where T,
     @test I >: actual
     @test_broken I == actual
 end
+
+let
+    # issue #22787
+    # for now check that these don't stack overflow
+    t = typeintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
+                      Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S)
+    @test_broken t != Union{}
+    t = typeintersect(Tuple{Type{T}, T, Ref{T}} where T,
+                      Tuple{Type{S}, Ref{S}, S} where S)
+    @test_broken t != Union{}
+
+    # issue #38279
+    t = typeintersect(Tuple{<:Array{T, N}, Val{T}} where {T<:Real, N},
+                      Tuple{<:Array{T, N}, Val{<:AbstractString}}  where {T<:Real, N})
+    @test t == Tuple{<:Array{Union{}, N}, Val{Union{}}} where N
+end
+
+# issue #36951
+@testintersect(Type{T} where T>:Missing,
+               Type{Some{T}} where T,
+               Union{})

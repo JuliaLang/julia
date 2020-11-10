@@ -484,7 +484,7 @@ end
 
 function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
-        d::TOMLDict
+        d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector
