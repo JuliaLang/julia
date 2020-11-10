@@ -1818,7 +1818,6 @@ for isunittri in (true, false), islowertri in (true, false)
     # build out-of-place left-division operations
     # broad method where elements are Numbers
     @eval function \(A::$tritype{<:TA,<:AbstractMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
-        # A = $(applyxform ? :(xformA.data) : :(xformA) )
         TAb = $(isunittri ?
             :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
             :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
@@ -1826,7 +1825,6 @@ for isunittri in (true, false), islowertri in (true, false)
     end
     # fallback where elements are not Numbers
     @eval function \(A::$tritype, b::SparseVector)
-        # A = $(applyxform ? :(xformA.parent) : :(xformA) )
         LinearAlgebra.ldiv!(A, copy(b))
     end
 
@@ -1865,7 +1863,7 @@ for isunittri in (true, false), islowertri in (true, false)
 
         # the generic in-place left-division methods handle these cases, but
         # we can achieve greater efficiency where the triangular matrix provides
-        # good view support. hence the StridedMatrix restriction.
+        # good view support, hence the StridedMatrix restriction.
         @eval function ldiv!(xA::$xformtritype, b::SparseVector)
             A = $( applyxform ? :(parent(parent(xA))) : :(parent(xA)) )
             # If b has no nonzero entries, the result is necessarily zero and this call
