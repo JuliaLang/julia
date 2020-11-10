@@ -179,6 +179,11 @@ end
 safe_tail(t::Tuple) = tail(t)
 safe_tail(t::Tuple{}) = ()
 
+const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                       Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,Vararg{T,N}}
+
 # front (the converse of tail: it skips the last entry)
 
 """
@@ -199,6 +204,10 @@ function front(t::Tuple)
     @_inline_meta
     _front(t...)
 end
+function front(t::Any16)
+    @_inline_meta
+    return ntuple(i -> t[i], Val(length(t)-1))
+end
 _front() = throw(ArgumentError("Cannot call front on an empty tuple."))
 _front(v) = ()
 function _front(v, t...)
@@ -215,10 +224,6 @@ map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
 map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                       Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
-const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
-                         T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
     A = Vector{Any}(undef, n)

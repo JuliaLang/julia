@@ -574,6 +574,11 @@ end
     @test_throws BoundsError (1,2.0)[0:2]
     @test_throws BoundsError (1,2.0)[0:1]
     @test_throws BoundsError (1,2.0)[0:0]
+
+    # issue #38364
+    f38364(xs) = xs[1:20]
+    # verify that this does not stack overflow
+    @test code_typed(f38364, Tuple{NTuple{2000,String}})[1] isa Pair
 end
 
 @testset "Base.rest" begin
