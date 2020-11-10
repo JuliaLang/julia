@@ -1357,6 +1357,23 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
 // invalidate cached methods that overlap this definition
 static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
 {
+    jl_array_t *callbacks = replaced_mi->callbacks;
+    if (callbacks) {
+        // AbstractInterpreter allows for MethodInstances to be present in non-local caches
+        // inform those caches about the invalidation.
+        size_t i, l = jl_array_len(callbacks);
+        jl_value_t **args;
+        JL_GC_PUSHARGS(args, 3);
+        args[1] = (jl_value_t*)replaced_mi;
+        args[2] = jl_box_uint32(max_world);
+        jl_value_t **cbs = (jl_value_t**)jl_array_ptr_data(callbacks);
+        for (i = 0; i < l; i++) {
+            args[0] = cbs[i];
+            jl_apply(args, 3);
+        }
+        JL_GC_POP();
+    }
+
     JL_LOCK_NOGC(&replaced_mi->def.method->writelock);
     jl_array_t *backedges = replaced_mi->backedges;
     if (backedges) {
@@ -1711,7 +1728,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                 continue;
                         }
                         jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
-                        if (mi->backedges) {
+                        if (mi->backedges || mi->callbacks) {
                             invalidated = 1;
                             invalidate_backedges(mi, max_world, "jl_method_table_insert");
                         }

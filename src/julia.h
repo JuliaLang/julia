@@ -347,6 +347,7 @@ struct _jl_method_instance_t {
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sparam_syms
     jl_value_t *uninferred; // cached uncompressed code, for generated functions, top-level thunks, or the interpreter
     jl_array_t *backedges; // list of method-instances which contain a call into this method-instance
+    jl_array_t *callbacks; // list of callback functions to inform external caches about invalidations
     struct _jl_code_instance_t *cache;
     uint8_t inInference; // flags to tell if inference is running on this object
 };

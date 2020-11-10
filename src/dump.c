@@ -641,6 +641,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 backedges = NULL;
         }
         jl_serialize_value(s, (jl_value_t*)backedges);
+        jl_serialize_value(s, (jl_value_t*)NULL); //callbacks
         jl_serialize_value(s, (jl_value_t*)mi->cache);
     }
     else if (jl_is_code_instance(v)) {
@@ -1491,6 +1492,9 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     mi->backedges = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&mi->backedges);
     if (mi->backedges)
         jl_gc_wb(mi, mi->backedges);
+    mi->callbacks = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&mi->callbacks);
+    if (mi->callbacks)
+        jl_gc_wb(mi, mi->callbacks);
     mi->cache = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&mi->cache);
     if (mi->cache)
         jl_gc_wb(mi, mi->cache);
