@@ -64,6 +64,11 @@ end
                     @test_throws ArgumentError Hermitian(Symmetric(aherm, :U), :L)
                 end
             end
+            @testset "diag" begin
+                D = Diagonal(x)
+                @test diag(Symmetric(D, :U))::Vector == x
+                @test diag(Hermitian(D, :U))::Vector == real(x)
+            end
             @testset "similar" begin
                 @test isa(similar(Symmetric(asym)), Symmetric{eltya})
                 @test isa(similar(Hermitian(aherm)), Hermitian{eltya})
