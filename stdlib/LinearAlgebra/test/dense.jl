@@ -152,8 +152,6 @@ end
             @test asymsq*asymsq ≈ asym
             @test sqrt(transpose(asym))*sqrt(transpose(asym)) ≈ transpose(asym)
             @test sqrt(adjoint(asym))*sqrt(adjoint(asym)) ≈ adjoint(asym)
-
-
         end
 
         @testset "Powers" begin
