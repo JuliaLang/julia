@@ -39,6 +39,19 @@ Random.seed!(1234321)
         M = [1.0 -2.0; -2.0 -1.5]
         @test cond(M, 1) ≈ 2.227272727272727
     end
+    @testset "Empty matrices" begin
+        @test cond(zeros(Int, 0, 0), 1) === 0.0
+        @test cond(zeros(Int, 0, 0), 2) === 0.0
+        @test cond(zeros(Int, 0, 0), Inf) === 0.0
+        @test cond(zeros(0, 0), 1) === 0.0
+        @test cond(zeros(0, 0), 2) === 0.0
+        @test cond(zeros(0, 0), Inf) === 0.0
+        @test cond(zeros(ComplexF64, 0, 0), 1) === 0.0
+        @test cond(zeros(ComplexF64, 0, 0), 2) === 0.0
+        @test cond(zeros(ComplexF64, 0, 0), Inf) === 0.0
+        @test cond(zeros(10, 0)) === 0.0
+        @test cond(zeros(0, 10)) === 0.0
+    end
 end
 
 areal = randn(n,n)/2
