@@ -499,20 +499,20 @@ function complete_methods(ex_org::Expr, context_module::Module=Main)
     # Input types and number of arguments
     if isempty(kwargs_ex)
         t_in = Tuple{Core.Typeof(func), args_ex...}
-        na = length(t_in.parameters)
+        na = length(t_in.parameters)::Int
         orig_ml = fill(nothing, length(ml))
     else
         isdefined(ml.mt, :kwsorter) || return out
         kwfunc = ml.mt.kwsorter
         kwargt = NamedTuple{(first.(kwargs_ex)...,), Tuple{last.(kwargs_ex)...}}
         t_in = Tuple{Core.Typeof(kwfunc), kwargt, Core.Typeof(func), args_ex...}
-        na = length(t_in.parameters)
+        na = length(t_in.parameters)::Int
         orig_ml = ml # this method is supposed to be used for printing
         ml = methods(kwfunc)
         func = kwfunc
     end
 
-    for (method, orig_method) in zip(ml, orig_ml)
+    for (method::Method, orig_method) in zip(ml, orig_ml)
         ms = method.sig
 
         # Check if the method's type signature intersects the input types
