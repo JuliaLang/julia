@@ -700,7 +700,7 @@ end
 @testset "Dsiambituation multiplication with transposed AbstractMatrix methods in linalg/matmul.jl for $T and $S"
         for T in (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
     let Ahrs = Transpose(Hermitian(Symmetric(rand(T, 3, 3)))),
-        Acs = Transpose(Symmetric(rand(S, 3, 3)))
+        Acs = Transpose(Symmetric(rand(S, 3, 3))),
         Ahcs = Transpose(Hermitian(Symmetric(rand(S, 3, 3))))
 
         @test Ahrs * Ahrs ≈ Ahrs * parent(Ahrs)
