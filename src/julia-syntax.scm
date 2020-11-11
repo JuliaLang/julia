@@ -2112,9 +2112,17 @@
                                   x (make-ssavalue)))
                          (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                          (n   (length lhss))
+                         ;; skip last assignment if it is an all-underscore vararg
+                         (n   (if (> n 0)
+                                  (let ((l (last lhss)))
+                                    (if (and (pair? l) (eq? (car l) '|...|)
+                                             (underscore-symbol? (cadr l)))
+                                        (- n 1)
+                                        n))
+                                  n))
                          (st  (gensy)))
                     `(block
-                      (local ,st)
+                      ,.(if (> n 0) `((local ,st)) '())
                       ,@ini
                       ,.(map (lambda (i lhs)
                                (expand-forms
