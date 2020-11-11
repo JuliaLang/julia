@@ -2617,6 +2617,14 @@ end
 
 @test eval(Expr(:if, Expr(:block, Expr(:&&, true, Expr(:call, :(===), 1, 1))), 1, 2)) == 1
 
+# issue #38386
+macro m38386()
+    fname = :f38386
+    :(function $(esc(fname)) end)
+end
+@m38386
+@test isempty(methods(f38386))
+
 @testset "all-underscore varargs on the rhs" begin
     @test ncalls_in_lowered(quote _..., = a end, GlobalRef(Base, :rest)) == 0
     @test ncalls_in_lowered(quote ___..., = a end, GlobalRef(Base, :rest)) == 0
