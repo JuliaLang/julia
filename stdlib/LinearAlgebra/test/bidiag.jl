@@ -44,7 +44,7 @@ Random.seed!(1)
         end
         @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
         @test eltype(Bidiagonal([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == Float32 # promotion test
-        @test isa(Bidiagonal(Float64[], Float64[], :U), Bidiagonal)
+        @test isa(Bidiagonal(elty[], elty[], :U), Bidiagonal{elty,Vector{elty}})
         @test isa(Bidiagonal{elty,Vector{elty}}(GenericArray(dv), ev, :U), Bidiagonal{elty,Vector{elty}})
         @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
         @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
