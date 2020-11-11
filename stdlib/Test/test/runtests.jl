@@ -1039,3 +1039,18 @@ end
         @test occursin(expected, result)
     end
 end
+
+macro test_macro_throw_1()
+    throw(ErrorException("Real error"))
+end
+macro test_macro_throw_2()
+    LoadError("file", 111, throw(ErrorException("Real error")))
+end
+
+@testset "Soft deprecation of @test_throws LoadError @macroexpand" begin
+    # Undecorated LoadError can stand in for the wrapped error (ie, any Exception)
+    @test_throws LoadError @macroexpand @test_macro_throw_1
+    # Expected LoadError instances are unwrapped as necessary
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_1
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
+end

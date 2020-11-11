@@ -615,15 +615,12 @@ end
 @test A15838.@f() === nothing
 @test A15838.@f(1) === :b
 let ex = :(A15838.@f(1, 2)), __source__ = LineNumberNode(@__LINE__, Symbol(@__FILE__))
-    nometh = try
+    e = try
         macroexpand(@__MODULE__, ex)
         false
     catch ex
         ex
-    end::LoadError
-    @test nometh.file === string(__source__.file)
-    @test nometh.line === __source__.line
-    e = nometh.error::MethodError
+    end::MethodError
     @test e.f === getfield(A15838, Symbol("@f"))
     @test e.args === (__source__, @__MODULE__, 1, 2)
 end
