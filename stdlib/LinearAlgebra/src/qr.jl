@@ -863,7 +863,7 @@ function _wide_qr_ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     end
     return B
 end
-<<<<<<< HEAD
+
 
 function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
@@ -876,12 +876,11 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     return B
 end
 ldiv!(A::QR, B::StridedVector) = ldiv!(A, reshape(B, length(B), 1))[:]
-=======
+
 function ldiv!(A::QR, B::StridedVector)
     ldiv!(A, reshape(B, length(B), 1))
     B
 end
->>>>>>> 9c498bff432fcd142831a5dd40300982859d6174
 function ldiv!(A::QRPivoted, b::StridedVector)
     ldiv!(QR(A.factors,A.τ), b)
     b[1:size(A.factors, 2)] = view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]
