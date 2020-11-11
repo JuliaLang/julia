@@ -877,7 +877,10 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     ldiv!(UpperTriangular(view(R,1:n,:)), view(B, 1:n, :))
     return B
 end
-ldiv!(A::QR, B::StridedVector) = ldiv!(A, reshape(B, length(B), 1))[:]
+function ldiv!(A::QR, B::StridedVector)
+    ldiv!(A, reshape(B, length(B), 1))
+    return B
+end
 
 function ldiv!(A::QR, B::StridedVector)
     ldiv!(A, reshape(B, length(B), 1))
