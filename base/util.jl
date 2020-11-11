@@ -514,7 +514,7 @@ end
 
 Provides a convenient way to call [`Base.invokelatest`](@ref).
 `@invokelatest f(args...; kwargs...)` will simply be expanded into
-`Base.invokelatst(f, args...; kwargs...)`.
+`Base.invokelatest(f, args...; kwargs...)`.
 """
 macro invokelatest(ex)
     @assert is_expr(ex, :call) "call expression f(args...; kwargs...) should be given"
