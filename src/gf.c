@@ -1361,17 +1361,32 @@ static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_w
     if (callbacks) {
         // AbstractInterpreter allows for MethodInstances to be present in non-local caches
         // inform those caches about the invalidation.
-        size_t i, l = jl_array_len(callbacks);
-        jl_value_t **args;
-        JL_GC_PUSHARGS(args, 3);
-        args[1] = (jl_value_t*)replaced_mi;
-        args[2] = jl_box_uint32(max_world);
-        jl_value_t **cbs = (jl_value_t**)jl_array_ptr_data(callbacks);
-        for (i = 0; i < l; i++) {
-            args[0] = cbs[i];
-            jl_apply(args, 3);
+        JL_TRY {
+            size_t i, l = jl_array_len(callbacks);
+            jl_value_t **args;
+            JL_GC_PUSHARGS(args, 3);
+            // these arguments are constant per call
+            args[1] = (jl_value_t*)replaced_mi;
+            args[2] = jl_box_uint32(max_world);
+
+            size_t last_age = jl_get_ptls_states()->world_age;
+            jl_get_ptls_states()->world_age = jl_get_world_counter();
+
+            jl_value_t **cbs = (jl_value_t**)jl_array_ptr_data(callbacks);
+            for (i = 0; i < l; i++) {
+                args[0] = cbs[i];
+                jl_apply(args, 3);
+            }
+            jl_get_ptls_states()->world_age = last_age;
+            JL_GC_POP();
+            jl_exception_clear();
         }
-        JL_GC_POP();
+        JL_CATCH {
+            jl_printf((JL_STREAM*)STDERR_FILENO, "error in invalidation callback: ");
+            jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+            jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+            jlbacktrace(); // writen to STDERR_FILENO
+        }
     }
 
     JL_LOCK_NOGC(&replaced_mi->def.method->writelock);
