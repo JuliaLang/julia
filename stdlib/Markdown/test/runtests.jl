@@ -85,6 +85,8 @@ let text =
 
         And *another* paragraph.
 
+    \tAnd a third paragraph indented with a *tab*.
+
     This isn't part of the footnote.
     """,
     md = Markdown.parse(text)
@@ -97,7 +99,7 @@ let text =
     @test md.content[2].id == "1"
     @test md.content[3].id == "note"
 
-    @test length(md.content[3].text) == 4
+    @test length(md.content[3].text) == 5
 
     let expected =
             """
@@ -115,6 +117,8 @@ let text =
                 ```
 
                 And *another* paragraph.
+
+                And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -137,6 +141,8 @@ let text =
                    some.code
 
                And *another* paragraph.
+
+               And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -232,6 +238,13 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 @test sprint(term, md"[x](@ref something)") == "  x"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
 
+# math (LaTeX)
+@test sprint(term, md"""
+```math
+A = Q R
+```
+""") == "  A = Q R"
+
 # enumeration is normalized
 let doc = Markdown.parse(
         """
@@ -243,6 +256,21 @@ let doc = Markdown.parse(
     @test occursin("2. ", sprint(term, doc))
     @test !occursin("3. ", sprint(term, doc))
 end
+
+# Testing margin when printing Tables to the terminal.
+@test sprint(term, md"""
+| R |
+|---|
+| L |
+""") == "  R\n  –\n  L"
+
+@test sprint(term, md"""
+!!! note "Tables in admonitions"
+
+    | R |
+    |---|
+    | L |
+""") == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
 
 # HTML output
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
@@ -495,6 +523,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">Markdown</th><th align="center">Table</th><th align="right">Test</th></tr><tr><td align="left">foo</td><td align="center"><code>bar</code></td><td align="right"><em>baz</em></td></tr><tr><td align="left"><code>bar</code></td><td align="center">baz</td><td align="right"><em>foo</em></td></tr></table>\n"""
 end
 let text =
     """
@@ -504,6 +533,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">a</th><th align="right">b</th></tr><tr><td align="left"><code>x | y</code></td><td align="right">2</td></tr></table>\n"""
 end
 
 # LaTeX extension
@@ -647,6 +677,8 @@ let t_1 =
         !!! note
             foo bar baz
 
+        \tsecond tab-indented paragraph
+
         !!! warning "custom title"
             - foo
             - bar
@@ -690,6 +722,7 @@ let t_1 =
     @test m_2.content[1].category == "note"
     @test m_2.content[1].title == "Note"
     @test isa(m_2.content[1].content[1], Markdown.Paragraph)
+    @test isa(m_2.content[1].content[2], Markdown.Paragraph)
 
     @test isa(m_2.content[2], Markdown.Admonition)
     @test m_2.content[2].category == "warning"
@@ -786,6 +819,8 @@ let t_1 =
             !!! note
                 foo bar baz
 
+                second tab-indented paragraph
+
 
             !!! warning "custom title"
                   * foo
@@ -814,6 +849,8 @@ let t_1 =
             """
             .. note::
                foo bar baz
+
+               second tab-indented paragraph
 
 
             .. warning:: custom title
@@ -1085,7 +1122,7 @@ t = """
     a   |   b
     :-- | --:
     1   |   2"""
-@test sprint(Markdown.term, Markdown.parse(t), 0) == "a b\n– –\n1 2"
+@test sprint(Markdown.term, Markdown.parse(t), 0) == "  a b\n  – –\n  1 2"
 
 # test Base.copy
 let
@@ -1113,4 +1150,32 @@ end
 let m = Markdown.parse("---"), io = IOBuffer()
     show(io, "text/latex", m)
     @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
+end
+
+# issue #16194: interpolation in md"..." strings
+@testset "issue #16194: interpolation in md\"...\" strings" begin
+    x = "X"
+    contains_X(md) = occursin(x, sprint(show, MIME("text/plain"), md))
+    @test contains_X(md"# $x") # H1
+    @test contains_X(md"## $x") # H2
+    @test contains_X(md"### $x") # H3
+    @test contains_X(md"x = $x") # Paragraph
+    @test contains_X(md"- $x") # List
+    @test contains_X(md"[$x](..)") # Link
+    @test contains_X(md"**$x**") # Bold
+    @test contains_X(md"*$x*") # Italic
+    @test contains_X( # Table
+        md"""
+        | name |
+        |------|
+        |  $x  |
+        """)
+end
+
+@testset "issue #37232: linebreaks" begin
+    s = @md_str """
+       Misc:\\
+       - line\\
+       """
+    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n  "
 end

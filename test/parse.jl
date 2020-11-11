@@ -244,42 +244,14 @@ end
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
 
-# issue #16594
-@test Meta.parse("@x a + \nb") == Meta.parse("@x a +\nb")
-@test [1 +
-       1] == [2]
-@test [1 +1] == [1 1]
-
-@testset "issue #16594" begin
-    # note for the macro tests, order is important
-    # because the line number is included as part of the expression
-    # (i.e. both macros must start on the same line)
-    @test :(@test((1+1) == 2)) == :(@test 1 +
-                                          1 == 2)
-    @test :(@x 1 +1 -1) == :(@x(1, +1, -1))
-    @test :(@x 1 + 1 -1) == :(@x(1+1, -1))
-    @test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
-    @test :(@x(1 + 1 - 1)) == :(@x 1 +
-                                   1 -
-                                   1)
-    @test :(@x(1 + 1 + 1)) == :(@x 1 +
-                                   1 +
-                                   1)
-    @test :([x .+
-              y]) == :([x .+ y])
-end
-
-# line break in : expression disallowed
-@test_throws Meta.ParseError Meta.parse("[1 :\n2] == [1:2]")
-
 @test tryparse(Float64, "1.23") === 1.23
 @test tryparse(Float32, "1.23") === 1.23f0
 @test tryparse(Float16, "1.23") === Float16(1.23)
 
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
-    for r in (1,0,-1), i in (1,0,-1), sign in ('-','+'), Im in ("i","j","im")
-        for s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
+    for sign in ('-','+'), Im in ("i","j","im"), s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
+        for r in (1,0,-1), i in (1,0,-1),
             n = Complex(r, sign == '+' ? i : -i)
             s = string(s1, r, s2, sign, s3, i, Im, s4)
             @test n === parse(Complex{Int}, s)
@@ -293,6 +265,13 @@ end
                 @test n*parse(T,"1e-3") == parse(Complex{T}, string(s1, r, "e-3", s2, sign, s3, i, "e-3", Im, s4))
             end
         end
+        for r in (-1.0,-1e-9,Inf,-Inf,NaN), i in (-1.0,-1e-9,Inf,NaN)
+            n = Complex(r, sign == '+' ? i : -i)
+            s = lowercase(string(s1, r, s2, sign, s3, i, Im, s4))
+            @test n === parse(ComplexF64, s)
+            @test Complex(r) === parse(ComplexF64, string(s1, r, s2))
+            @test Complex(0,i) === parse(ComplexF64, string(s3, i, Im, s4))
+        end
     end
     @test parse(Complex{Float16}, "3.3+4i") === Complex{Float16}(3.3+4im)
     @test parse(Complex{Int}, SubString("xxxxxx1+2imxxxx", 7, 10)) === 1+2im
@@ -301,14 +280,6 @@ end
     end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
 end
-
-# added ⟂ to operator precedence (#24404)
-@test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
-@test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)
-
-# only allow certain characters after interpolated vars (#25231)
-@test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
-@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
 
 @testset "parse and tryparse type inference" begin
     @inferred parse(Int, "12")
@@ -333,8 +304,9 @@ end
     @test_throws ArgumentError parse(Bool, "02")
 end
 
-@testset "issue #30341" begin
-    @test Meta.parse("x .~ y") == Expr(:call, :.~, :x, :y)
-    # Ensure dotting binary doesn't break dotting unary
-    @test Meta.parse(".~[1,2]") == Expr(:call, :.~, Expr(:vect, 1, 2))
+@testset "inf and nan parsing" begin
+    for (v,vs) in ((NaN,"nan"), (Inf,"inf"), (Inf,"infinity")), sbefore in ("", "  "), safter in ("", "  "), sign in (+, -), case in (lowercase, uppercase)
+        s = case(string(sbefore, sign, vs, safter))
+        @test isequal(parse(Float64, s), sign(v))
+    end
 end

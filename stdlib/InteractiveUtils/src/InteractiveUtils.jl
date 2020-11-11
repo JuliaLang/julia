@@ -2,8 +2,10 @@
 
 module InteractiveUtils
 
+Base.Experimental.@optlevel 1
+
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
-    versioninfo, subtypes, @which, @edit, @less, @functionloc, @code_warntype,
+    versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
     @code_typed, @code_lowered, @code_llvm, @code_native, clipboard
 
 import Base.Docs.apropos
@@ -19,27 +21,58 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r"")
+    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
-"""
-function varinfo(m::Module=Main, pattern::Regex=r"")
-    rows =
-        Any[ let value = getfield(m, v)
-                 Any[string(v),
-                     (value===Base || value===Main || value===Core ? "" : format_bytes(summarysize(value))),
-                     summary(value)]
-             end
-             for v in sort!(names(m)) if isdefined(m, v) && occursin(pattern, string(v)) ]
 
+- `all` : also list non-exported objects defined in the module, deprecated objects, and compiler-generated objects.
+- `imported` : also list objects explicitly imported from other modules.
+- `recursive` : recursively include objects in sub-modules, observing the same settings in each.
+- `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
+"""
+function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false)
+    @assert sortby in [:name, :size, :summary] "Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"
+    function _populate_rows(m2::Module, allrows, include_self::Bool, prep::String)
+        newrows = Any[
+            let
+                value = getfield(m2, v)
+                ssize_str, ssize = if value===Base || value===Main || value===Core
+                    ("", typemax(Int))
+                else
+                    ss = summarysize(value)
+                    (format_bytes(ss), ss)
+                end
+                Any[string(prep, v), ssize_str, summary(value), ssize]
+            end
+            for v in names(m2; all, imported)
+            if (string(v) != split(string(m2), ".")[end] || include_self) && isdefined(m2, v) && occursin(pattern, string(v)) ]
+        append!(allrows, newrows)
+        if recursive
+            for row in newrows
+                if row[3] == "Module" && !in(split(row[1], ".")[end], [split(string(m2), ".")[end], "Base", "Main", "Core"])
+                    _populate_rows(getfield(m2, Symbol(split(row[1], ".")[end])), allrows, false, prep * "$(row[1]).")
+                end
+            end
+        end
+        return allrows
+    end
+    rows = _populate_rows(m, Vector{Any}[], true, "")
+    if sortby == :name
+        col, reverse = 1, false
+    elseif sortby == :size
+        col, reverse = 4, true
+    elseif sortby == :summary
+        col, reverse = 3, false
+    end
+    rows = sort!(rows, by=r->r[col], rev=reverse)
     pushfirst!(rows, Any["name", "size", "summary"])
 
-    return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
+    return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
 end
-varinfo(pat::Regex) = varinfo(Main, pat)
+varinfo(pat::Regex; kwargs...) = varinfo(Main, pat, kwargs...)
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)
@@ -231,13 +264,33 @@ are included, including those not visible in the current module.
 # Examples
 ```jldoctest
 julia> subtypes(Integer)
-3-element Array{Any,1}:
+3-element Vector{Any}:
  Bool
  Signed
  Unsigned
 ```
 """
 subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
+
+"""
+    supertypes(T::Type)
+
+Return a tuple `(T, ..., Any)` of `T` and all its supertypes, as determined by
+successive calls to the [`supertype`](@ref) function, listed in order of `<:`
+and terminated by `Any`.
+
+# Examples
+```jldoctest
+julia> supertypes(Int)
+(Int64, Signed, Integer, Real, Number, Any)
+```
+"""
+function supertypes(T::Type)
+    S = supertype(T)
+    # note: we return a tuple here, not an Array as for subtypes, because in
+    #       the future we could evaluate this function statically if desired.
+    return S === T ? (T,) : (T, supertypes(S)...)
+end
 
 # dumptype is for displaying abstract type hierarchies,
 # based on Jameson Nash's typetree.jl in https://github.com/JuliaArchive/Examples
@@ -327,6 +380,31 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
             Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
         return LinearAlgebra.peakflops(n; parallel = parallel)
     end
+end
+
+function report_bug(kind)
+    @info "Loading BugReporting package..."
+    BugReportingId = Base.PkgId(
+        Base.UUID((0xbcf9a6e7_4020_453c,0xb88e_690564246bb8)), "BugReporting")
+    # Check if the BugReporting package exists in the current environment
+    local BugReporting
+    if Base.locate_package(BugReportingId) === nothing
+        @info "Package `BugReporting` not found - attempting temporary installation"
+        # Create a temporary environment and add BugReporting
+        let Pkg = Base.require(Base.PkgId(
+            Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))
+            mktempdir() do tmp
+                old_load_path = copy(LOAD_PATH)
+                push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
+                Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
+                BugReporting = Base.require(BugReportingId)
+                append!(empty!(LOAD_PATH), old_load_path)
+            end
+        end
+    else
+        BugReporting = Base.require(BugReportingId)
+    end
+    return Base.invokelatest(BugReporting.make_interactive_report, kind)
 end
 
 end

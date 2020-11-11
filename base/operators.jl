@@ -27,7 +27,7 @@ false
 
 Supertype operator, equivalent to `T2 <: T1`.
 """
-const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
     supertype(T::DataType)
@@ -80,7 +80,7 @@ handle comparison to other types via promotion rules where possible.
 [`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
 should therefore also implement [`hash`](@ref).
 """
-==(x, y) = x === y
+==
 
 """
     isequal(x, y)
@@ -125,23 +125,42 @@ isequal(x, y) = x == y
 signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
 signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
 
-isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
-isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
-isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)::Bool
+isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)::Bool
+isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)::Bool
 
 """
     isless(x, y)
 
-Test whether `x` is less than `y`, according to a canonical total order. Values that are
-normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion.
+Test whether `x` is less than `y`, according to a fixed total order.
+`isless` is not defined on all pairs of values `(x, y)`. However, if it
+is defined, it is expected to satisfy the following:
+- If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
+  and exactly one of those three yields `true`.
+- The relation defined by `isless` is transitive, i.e.,
+  `isless(x, y) && isless(y, z)` implies `isless(x, z)`.
+
+Values that are normally unordered, such as `NaN`,
+are ordered in an arbitrary but consistent fashion.
 [`missing`](@ref) values are ordered last.
 
 This is the default comparison used by [`sort`](@ref).
 
 # Implementation
-Non-numeric types with a canonical total order should implement this function.
+Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
-Types with a canonical partial order should implement [`<`](@ref).
+Types with a partial order should implement [`<`](@ref).
+See the documentation on [Alternate orderings](@ref) for how to define alternate
+ordering methods that can be used in sorting and related functions.
+
+# Examples
+```jldoctest
+julia> isless(1, 3)
+true
+
+julia> isless("Red", "Blue")
+false
+```
 """
 function isless end
 
@@ -152,11 +171,11 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 
 function ==(T::Type, S::Type)
     @_pure_meta
-    T<:S && S<:T
+    return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
 end
 function !=(T::Type, S::Type)
     @_pure_meta
-    !(T == S)
+    return !(T == S)
 end
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
@@ -525,6 +544,11 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     end
 end
 
+function kron! end
+
+const var"'" = adjoint
+const var"'ᵀ" = transpose
+
 """
     \\(x, y)
 
@@ -542,12 +566,12 @@ julia> inv(3) * 6
 julia> A = [4 3; 2 1]; x = [5, 6];
 
 julia> A \\ x
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   6.5
  -7.0
 
 julia> inv(A) * x
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   6.5
  -7.0
 ```
@@ -674,40 +698,6 @@ function >>>(x::Integer, c::Unsigned)
 end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
-# fallback div, fld, and cld implementations
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
-
-"""
-    fld(x, y)
-
-Largest integer less than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> fld(7.3,5.5)
-1.0
-```
-"""
-fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
-
-"""
-    cld(x, y)
-
-Smallest integer larger than or equal to `x/y`.
-
-# Examples
-```jldoctest
-julia> cld(5.5,2.2)
-3.0
-```
-"""
-cld(x::T, y::T) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
-#rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
-#mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
-modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
-
 # operator alias
 
 """
@@ -744,6 +734,9 @@ julia> 9 ÷ 4
 
 julia> -5 ÷ 3
 -1
+
+julia> 5.0 ÷ 2
+2.0
 ```
 """
 div
@@ -853,17 +846,87 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 
+Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
+The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
+and splatting `∘(fs...)` for composing an iterable collection of functions.
+
+!!! compat "Julia 1.4"
+    Multiple function composition requires at least Julia 1.4.
+
+!!! compat "Julia 1.5"
+    Composition of one function ∘(f)  requires at least Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> map(uppercase∘first, ["apple", "banana", "carrot"])
-3-element Array{Char,1}:
- 'A'
- 'B'
- 'C'
-```
-"""
-∘(f, g) = (x...)->f(g(x...))
+3-element Vector{Char}:
+ 'A': ASCII/Unicode U+0041 (category Lu: Letter, uppercase)
+ 'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
+ 'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
 
+julia> fs = [
+           x -> 2x
+           x -> x/2
+           x -> x-1
+           x -> x+1
+       ];
+
+julia> ∘(fs...)(3)
+3.0
+```
+See also [`ComposedFunction`](@ref).
+"""
+function ∘ end
+
+"""
+    ComposedFunction{Outer,Inner} <: Function
+
+Represents the composition of two callable objects `outer::Outer` and `inner::Inner`. That is
+```julia
+ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...))
+```
+The preferred way to construct instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
+```jldoctest
+julia> sin ∘ cos === ComposedFunction(sin, cos)
+true
+
+julia> typeof(sin∘cos)
+ComposedFunction{typeof(sin), typeof(cos)}
+```
+The composed pieces are stored in the fields of `ComposedFunction` and can be retrieved as follows:
+```jldoctest
+julia> composition = sin ∘ cos
+sin ∘ cos
+
+julia> composition.outer === sin
+true
+
+julia> composition.inner === cos
+true
+```
+!!! compat "Julia 1.6"
+    ComposedFunction requires at least Julia 1.6. In earlier versions `∘` returns an anonymous function instead.
+
+See also [`∘`](@ref).
+"""
+struct ComposedFunction{O,I} <: Function
+    outer::O
+    inner::I
+    ComposedFunction{O, I}(outer, inner) where {O, I} = new{O, I}(outer, inner)
+    ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
+end
+
+(c::ComposedFunction)(x...) = c.outer(c.inner(x...))
+
+∘(f) = f
+∘(f, g) = ComposedFunction(f, g)
+∘(f, g, h...) = ∘(f ∘ g, h...)
+
+function show(io::IO, c::ComposedFunction)
+    show(io, c.outer)
+    print(io, " ∘ ")
+    show(io, c.inner)
+end
 
 """
     !f::Function
@@ -1020,8 +1083,8 @@ passes a tuple as that single argument.
 
 # Example usage:
 ```jldoctest
-julia> map(splat(+), zip(1:3,4:6))
-3-element Array{Int64,1}:
+julia> map(Base.splat(+), zip(1:3,4:6))
+3-element Vector{Int64}:
  5
  7
  9
@@ -1035,7 +1098,8 @@ splat(f) = args->f(args...)
     in(x)
 
 Create a function that checks whether its argument is [`in`](@ref) `x`, i.e.
-a function equivalent to `y -> y in x`.
+a function equivalent to `y -> y in x`. See also [`insorted`](@ref) for the use
+with sorted collections.
 
 The returned function is of type `Base.Fix2{typeof(in)}`, which can be
 used to implement specialized methods.
@@ -1079,6 +1143,17 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
+To determine whether an item is not in a given collection, see [`:∉`](@ref).
+You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
+
+When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
+`item` and `collection` are broadcasted over, which is often not what is intended.
+For example, if both arguments are vectors (and the dimensions match), the result is
+a vector indicating whether each value in collection `items` is `in` the value at the
+corresponding position in `collection`. To get a vector indicating whether each value
+in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
+`in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
+
 # Examples
 ```jldoctest
 julia> a = 1:3:20
@@ -1101,6 +1176,22 @@ true
 
 julia> missing in Set([1, 2])
 false
+
+julia> !(21 in a)
+true
+
+julia> !(19 in a)
+false
+
+julia> [1, 2] .∈ [2, 3]
+2-element BitVector:
+ 0
+ 0
+
+julia> [1, 2] .∈ ([2, 3],)
+2-element BitVector:
+ 0
+ 1
 ```
 """
 in, ∋
@@ -1111,6 +1202,14 @@ in, ∋
 
 Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
 
+When broadcasting with `items .∉ collection`, both `item` and `collection` are
+broadcasted over, which is often not what is intended. For example, if both arguments
+are vectors (and the dimensions match), the result is a vector indicating whether
+each value in collection `items` is not in the value at the corresponding position
+in `collection`. To get a vector indicating whether each value in `items` is not in
+`collection`, wrap `collection` in a tuple or a `Ref` like this:
+`items .∉ Ref(collection)`.
+
 # Examples
 ```jldoctest
 julia> 1 ∉ 2:4
@@ -1118,6 +1217,16 @@ true
 
 julia> 1 ∉ 1:3
 false
+
+julia> [1, 2] .∉ [2, 3]
+2-element BitVector:
+ 1
+ 1
+
+julia> [1, 2] .∉ ([2, 3],)
+2-element BitVector:
+ 1
+ 0
 ```
 """
 ∉, ∌

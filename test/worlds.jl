@@ -2,9 +2,9 @@
 
 # tests for accurate updating of method tables
 
+using Base: get_world_counter
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
-world_counter() = ccall(:jl_get_world_counter, UInt, ())
-@test typemax(UInt) > world_counter() == tls_world_age() > 0
+@test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
 # test simple method replacement
 begin
@@ -106,17 +106,17 @@ function put_n_take!(v...)
 end
 
 g265() = [f265(x) for x in 1:3.]
-wc265 = world_counter()
+wc265 = get_world_counter()
 f265(::Any) = 1.0
-@test wc265 + 1 == world_counter()
+@test wc265 + 1 == get_world_counter()
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
-wc265 = world_counter()
-@test put_n_take!(world_counter, ()) == wc265
+wc265 = get_world_counter()
+@test put_n_take!(get_world_counter, ()) == wc265
 @test put_n_take!(tls_world_age, ()) == wc265
 f265(::Int) = 1
-@test put_n_take!(world_counter, ()) == wc265 + 1 == world_counter() == tls_world_age()
+@test put_n_take!(get_world_counter, ()) == wc265 + 1 == get_world_counter() == tls_world_age()
 @test put_n_take!(tls_world_age, ()) == wc265
 
 @test g265() == Int[1, 1, 1]
@@ -138,15 +138,16 @@ f265(::Int) = 1
 h265() = true
 loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
 @test h265()
-@test_throws MethodError put_n_take!(h265, ())
-@test_throws MethodError fetch(t265)
+@test_throws TaskFailedException(t265) put_n_take!(h265, ())
+@test_throws TaskFailedException(t265) fetch(t265)
 @test istaskdone(t265)
 let ex = t265.exception
+    @test ex isa MethodError
     @test ex.f == h265
     @test ex.args == ()
     @test ex.world == wc265
     str = sprint(showerror, ex)
-    wc = world_counter()
+    wc = get_world_counter()
     cmps = """
         MethodError: no method matching h265()
         The applicable method may be too new: running in world age $wc265, while current world is $wc."""
@@ -177,9 +178,10 @@ z = Any["ABC"]
 f26506(x::Int) = 2
 g26506(z) # Places an entry for f26506(::String) in mt.name.cache
 f26506(x::String) = 3
-cache = typeof(f26506).name.mt.cache
-# The entry we created above should have been truncated
-@test cache.min_world == cache.max_world
+let cache = typeof(f26506).name.mt.cache
+    # The entry we created above should have been truncated
+    @test cache.min_world == cache.max_world
+end
 c26506_1, c26506_2 = Condition(), Condition()
 # Captures the world age
 result26506 = Any[]
@@ -190,7 +192,157 @@ t = Task(()->begin
 end)
 yield(t)
 f26506(x::Float64) = 4
-cache = typeof(f26506).name.mt.cache
-@test cache.min_world == cache.max_world
-notify(c26506_1); wait(c26506_2);
+let cache = typeof(f26506).name.mt.cache
+    # The entry we created above should have been truncated
+    @test cache.min_world == cache.max_world
+end
+notify(c26506_1)
+wait(c26506_2)
 @test result26506[1] == 3
+
+
+## Invalidation tests
+
+function instance(f, types)
+    m = which(f, types)
+    inst = nothing
+    tt = Tuple{typeof(f), types...}
+    specs = m.specializations
+    if isa(specs, Nothing)
+    elseif isa(specs, Core.SimpleVector)
+        for i = 1:length(specs)
+            if isassigned(specs, i)
+                mi = specs[i]::Core.MethodInstance
+                if mi.specTypes <: tt && tt <: mi.specTypes
+                    inst = mi
+                    break
+                end
+            end
+        end
+    else
+        Base.visit(specs) do mi
+            if mi.specTypes === tt
+                inst = mi
+            end
+        end
+    end
+    return inst
+end
+
+function worlds(mi::Core.MethodInstance)
+    w = Tuple{UInt,UInt}[]
+    if isdefined(mi, :cache)
+        ci = mi.cache
+        push!(w, (ci.min_world, ci.max_world))
+        while isdefined(ci, :next)
+            ci = ci.next
+            push!(w, (ci.min_world, ci.max_world))
+        end
+    end
+    return w
+end
+
+# avoid adding this to Base
+function equal(ci1::Core.CodeInfo, ci2::Core.CodeInfo)
+    return ci1.code == ci2.code &&
+           ci1.codelocs == ci2.codelocs &&
+           ci1.ssavaluetypes == ci2.ssavaluetypes &&
+           ci1.ssaflags == ci2.ssaflags &&
+           ci1.method_for_inference_limit_heuristics == ci2.method_for_inference_limit_heuristics &&
+           ci1.linetable == ci2.linetable &&
+           ci1.slotnames == ci2.slotnames &&
+           ci1.slotflags == ci2.slotflags &&
+           ci1.slottypes == ci2.slottypes &&
+           ci1.rettype == ci2.rettype
+end
+equal(p1::Pair, p2::Pair) = p1.second == p2.second && equal(p1.first, p2.first)
+
+## Union-splitting based on state-of-the-world: check that each invalidation corresponds to new code
+applyf35855(c) = f35855(c[1])
+f35855(::Int) = 1
+f35855(::Float64) = 2
+applyf35855([1])
+applyf35855([1.0])
+applyf35855(Any[1])
+wint   = worlds(instance(applyf35855, (Vector{Int},)))
+wfloat = worlds(instance(applyf35855, (Vector{Float64},)))
+wany2  = worlds(instance(applyf35855, (Vector{Any},)))
+src2 = code_typed(applyf35855, (Vector{Any},))[1]
+f35855(::String) = 3
+applyf35855(Any[1])
+@test worlds(instance(applyf35855, (Vector{Int},))) == wint
+@test worlds(instance(applyf35855, (Vector{Float64},))) == wfloat
+wany3 = worlds(instance(applyf35855, (Vector{Any},)))
+src3 = code_typed(applyf35855, (Vector{Any},))[1]
+@test !(wany3 == wany2) || equal(src3, src2) # code doesn't change unless you invalidate
+f35855(::AbstractVector) = 4
+applyf35855(Any[1])
+wany4 = worlds(instance(applyf35855, (Vector{Any},)))
+src4 = code_typed(applyf35855, (Vector{Any},))[1]
+@test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
+f35855(::Dict) = 5
+applyf35855(Any[1])
+wany5 = worlds(instance(applyf35855, (Vector{Any},)))
+src5 = code_typed(applyf35855, (Vector{Any},))[1]
+@test (wany5 == wany4) == equal(src5, src4)
+f35855(::Set) = 6    # with current settings, this shouldn't invalidate
+applyf35855(Any[1])
+wany6 = worlds(instance(applyf35855, (Vector{Any},)))
+src6 = code_typed(applyf35855, (Vector{Any},))[1]
+@test wany6 == wany5
+@test equal(src6, src5)
+
+applyf35855_2(c) = f35855_2(c[1])
+f35855_2(::Int) = 1
+f35855_2(::Float64) = 2
+applyf35855_2(Any[1])
+wany3 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src3 = code_typed(applyf35855_2, (Vector{Any},))[1]
+f35855_2(::AbstractVector) = 4
+applyf35855_2(Any[1])
+wany4 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src4 = code_typed(applyf35855_2, (Vector{Any},))[1]
+@test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
+
+## ambiguities do not trigger invalidation
+mi = instance(+, (AbstractChar, UInt8))
+w = worlds(mi)
+
+abstract type FixedPoint35855{T <: Integer} <: Real end
+struct Normed35855 <: FixedPoint35855{UInt8}
+    i::UInt8
+    Normed35855(i::Integer, _) = new(i % UInt8)
+end
+(::Type{X})(x::Real) where {T, X<:FixedPoint35855{T}} = X(round(T, typemax(T)*x), 0)
+@test worlds(mi) == w
+
+mi = instance(convert, (Type{Nothing}, String))
+w = worlds(mi)
+abstract type Colorant35855 end
+Base.convert(::Type{C}, c) where {C<:Colorant35855} = false
+@test worlds(mi) == w
+
+# NamedTuple and extensions of eltype
+outer(anyc) = inner(anyc[])
+inner(s::Union{Vector,Dict}; kw=false) = inneri(s, kwi=maximum(s), kwb=kw)
+inneri(s, args...; kwargs...) = inneri(IOBuffer(), s, args...; kwargs...)
+inneri(io::IO, s::Union{Vector,Dict}; kwi=0, kwb=false) = (print(io, first(s), " "^kwi, kwb); String(take!(io)))
+@test outer(Ref{Any}([1,2,3])) == "1   false"
+mi = instance(Core.kwfunc(inneri), (NamedTuple{(:kwi,:kwb),TT} where TT<:Tuple{Any,Bool}, typeof(inneri), Vector{T} where T))
+w = worlds(mi)
+abstract type Container{T} end
+Base.eltype(::Type{C}) where {T,C<:Container{T}} = T
+@test worlds(mi) == w
+
+# invoke_in_world
+f_inworld(x) = "world one; x=$x"
+g_inworld(x; y) = "world one; x=$x, y=$y"
+wc_aiw1 = get_world_counter()
+# redefine f_inworld, g_inworld, and check that we can invoke both versions
+f_inworld(x) = "world two; x=$x"
+g_inworld(x; y) = "world two; x=$x, y=$y"
+wc_aiw2 = get_world_counter()
+@test Base.invoke_in_world(wc_aiw1, f_inworld, 2) == "world one; x=2"
+@test Base.invoke_in_world(wc_aiw2, f_inworld, 2) == "world two; x=2"
+@test Base.invoke_in_world(wc_aiw1, g_inworld, 2, y=3) == "world one; x=2, y=3"
+@test Base.invoke_in_world(wc_aiw2, g_inworld, 2, y=3) == "world two; x=2, y=3"

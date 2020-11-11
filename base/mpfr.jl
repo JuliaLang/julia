@@ -11,19 +11,18 @@ import
         inv, exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
-        sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        log1p,
-        eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
-        cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh,
+        sum, sqrt, string, print, trunc, precision, exp10, expm1, log1p,
+        eps, signbit, sign, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
+        cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n
+        isone, big, _string_n, decompose
 
-import .Base.Rounding: rounding_raw, setrounding_raw
+import ..Rounding: rounding_raw, setrounding_raw
 
-import .Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
+import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb
 
-import .Base.FastMath.sincos_fast
+import ..FastMath.sincos_fast
 
 version() = VersionNumber(unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ())))
 patches() = split(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())),' ')
@@ -74,7 +73,7 @@ function convert(::Type{RoundingMode}, r::MPFRRoundingMode)
     elseif r == MPFRRoundFromZero
         return RoundFromZero
     else
-        throw(ArgumentError("invalid MPFR rounding mode code: $c"))
+        throw(ArgumentError("invalid MPFR rounding mode code: $r"))
     end
 end
 
@@ -109,6 +108,7 @@ mutable struct BigFloat <: AbstractFloat
     end
 
     function BigFloat(; precision::Integer=DEFAULT_PRECISION[])
+        precision < 1 && throw(DomainError(precision, "`precision` cannot be less than 1."))
         nb = ccall((:mpfr_custom_get_size,:libmpfr), Csize_t, (Clong,), precision)
         nb = (nb + Core.sizeof(Limb) - 1) ÷ Core.sizeof(Limb) # align to number of Limb allocations required for this
         #d = Vector{Limb}(undef, nb)
@@ -191,6 +191,11 @@ function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::I
     end
 end
 
+function _duplicate(x::BigFloat)
+    z = BigFloat(;precision=precision(x))
+    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), z, x, 0)
+    return z
+end
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
@@ -218,8 +223,10 @@ function BigFloat(x::BigInt, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Int
     return z
 end
 
-BigFloat(x::Integer, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(BigInt(x), r; precision=precision)
+BigFloat(x::Integer; precision::Integer=DEFAULT_PRECISION[]) =
+    BigFloat(BigInt(x)::BigInt, ROUNDING_MODE[]; precision=precision)
+BigFloat(x::Integer, r::MPFRRoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
+    BigFloat(BigInt(x)::BigInt, r; precision=precision)
 
 BigFloat(x::Union{Bool,Int8,Int16,Int32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(convert(Clong, x), r; precision=precision)
@@ -232,7 +239,7 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precisi
 function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     setprecision(BigFloat, precision) do
         setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x)) / BigFloat(denominator(x))
+            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x))::BigFloat
         end
     end
 end
@@ -253,72 +260,57 @@ AbstractFloat(x::BigInt) = BigFloat(x)
 float(::Type{BigInt}) = BigFloat
 
 BigFloat(x::Real, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
+    BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)::BigFloat
 BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
 
 ## BigFloat -> Integer
-"""
-    MPFR.unsafe_cast(T, x::BigFloat, r::RoundingMode)
+_unchecked_cast(T, x::BigFloat, r::RoundingMode) = _unchecked_cast(T, x, convert(MPFRRoundingMode, r))
 
-Convert `x` to integer type `T`, rounding the direction of `r`. If the value is not
-representable by T, an arbitrary value will be returned.
-"""
-unsafe_cast(T, x::BigFloat, r::RoundingMode) = unsafe_cast(T, x, convert(MPFRRoundingMode, r))
-
-function unsafe_cast(::Type{Int64}, x::BigFloat, r::MPFRRoundingMode)
+function _unchecked_cast(::Type{Int64}, x::BigFloat, r::MPFRRoundingMode)
     ccall((:__gmpfr_mpfr_get_sj,:libmpfr), Cintmax_t, (Ref{BigFloat}, MPFRRoundingMode), x, r)
 end
-function unsafe_cast(::Type{UInt64}, x::BigFloat, r::MPFRRoundingMode)
+
+function _unchecked_cast(::Type{UInt64}, x::BigFloat, r::MPFRRoundingMode)
     ccall((:__gmpfr_mpfr_get_uj,:libmpfr), Cuintmax_t, (Ref{BigFloat}, MPFRRoundingMode), x, r)
 end
 
-function unsafe_cast(::Type{T}, x::BigFloat, r::MPFRRoundingMode) where T<:Signed
-    unsafe_cast(Int64, x, r) % T
-end
-function unsafe_cast(::Type{T}, x::BigFloat, r::MPFRRoundingMode) where T<:Unsigned
-    unsafe_cast(UInt64, x, r) % T
-end
-
-function unsafe_cast(::Type{BigInt}, x::BigFloat, r::MPFRRoundingMode)
-    # actually safe, just keep naming consistent
+function _unchecked_cast(::Type{BigInt}, x::BigFloat, r::MPFRRoundingMode)
     z = BigInt()
     ccall((:mpfr_get_z, :libmpfr), Int32, (Ref{BigInt}, Ref{BigFloat}, MPFRRoundingMode), z, x, r)
     return z
 end
-unsafe_cast(::Type{Int128}, x::BigFloat, r::MPFRRoundingMode) = Int128(unsafe_cast(BigInt, x, r))
-unsafe_cast(::Type{UInt128}, x::BigFloat, r::MPFRRoundingMode) = UInt128(unsafe_cast(BigInt, x, r))
 
-unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_cast(T, x, RoundToZero)
-
-function trunc(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError(:trunc, T, x))
-    unsafe_cast(T, x, RoundToZero)
-end
-function floor(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError(:floor, T, x))
-    unsafe_cast(T, x, RoundDown)
-end
-function ceil(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError(:ceil, T, x))
-    unsafe_cast(T, x, RoundUp)
+function _unchecked_cast(::Type{T}, x::BigFloat, r::MPFRRoundingMode) where T<:Union{Signed, Unsigned}
+    CT = T <: Signed ? Int64 : UInt64
+    typemax(T) < typemax(CT) ? _unchecked_cast(CT, x, r) : _unchecked_cast(BigInt, x, r)
 end
 
-function round(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError(:round, T, x))
-    unsafe_cast(T, x, ROUNDING_MODE[])
+function round(::Type{T}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode}) where T<:Union{Signed, Unsigned}
+    clear_flags()
+    res = _unchecked_cast(T, x, r)
+    if had_range_exception() || !(typemin(T) <= res <= typemax(T))
+        throw(InexactError(:round, T, x))
+    end
+    return unsafe_trunc(T, res)
 end
+round(::Type{BigInt}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode}) = _unchecked_cast(BigInt, x, r)
+round(::Type{T}, x::BigFloat, r::RoundingMode) where T<:Union{Signed, Unsigned} =
+    invoke(round, Tuple{Type{<:Union{Signed, Unsigned}}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, T, x, r)
+round(::Type{BigInt}, x::BigFloat, r::RoundingMode) =
+    invoke(round, Tuple{Type{BigInt}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, BigInt, x, r)
+round(::Type{<:Integer}, x::BigFloat, r::RoundingMode) = throw(MethodError(round, (Integer, x, r)))
 
-trunc(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, RoundToZero)
-floor(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, RoundDown)
-ceil(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, RoundUp)
-round(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, ROUNDING_MODE[])
 
-# convert/round/trunc/floor/ceil(Integer, x) should return a BigInt
-trunc(::Type{Integer}, x::BigFloat) = trunc(BigInt, x)
-floor(::Type{Integer}, x::BigFloat) = floor(BigInt, x)
-ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
-round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
+unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_trunc(T, _unchecked_cast(T, x, RoundToZero))
+unsafe_trunc(::Type{BigInt}, x::BigFloat) = _unchecked_cast(BigInt, x, RoundToZero)
+
+# TODO: Ideally the base fallbacks for these would already exist
+for (f, rnd) in zip((:trunc, :floor, :ceil, :round),
+                 (RoundToZero, RoundDown, RoundUp, :(ROUNDING_MODE[])))
+    @eval $f(::Type{T}, x::BigFloat) where T<:Union{Unsigned, Signed, BigInt} = round(T, x, $rnd)
+    @eval $f(::Type{Integer}, x::BigFloat) = $f(BigInt, x)
+end
 
 function Bool(x::BigFloat)
     iszero(x) && return false
@@ -357,7 +349,7 @@ big(::Type{<:AbstractFloat}) = BigFloat
 
 big(x::AbstractFloat) = convert(BigFloat, x)
 
-function (::Type{Rational{BigInt}})(x::AbstractFloat)
+function Rational{BigInt}(x::AbstractFloat)
     isnan(x) && return zero(BigInt) // zero(BigInt)
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     iszero(x) && return zero(BigInt) // one(BigInt)
@@ -700,7 +692,6 @@ function min(x::BigFloat, y::BigFloat)
 end
 
 function modf(x::BigFloat)
-    isinf(x) && return (BigFloat(NaN), x)
     zint = BigFloat()
     zfloat = BigFloat()
     ccall((:mpfr_modf, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), zint, zfloat, x, ROUNDING_MODE[])
@@ -795,6 +786,11 @@ cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 <=(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
 signbit(x::BigFloat) = ccall((:mpfr_signbit, :libmpfr), Int32, (Ref{BigFloat},), x) != 0
+function sign(x::BigFloat)
+    c = cmp(x, 0)
+    (c == 0 || isnan(x)) && return x
+    return c < 0 ? -one(x) : one(x)
+end
 
 function precision(x::BigFloat)  # precision of an object of type BigFloat
     return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ref{BigFloat},), x)
@@ -811,6 +807,12 @@ precision(::Type{BigFloat}) = Int(DEFAULT_PRECISION[]) # precision of the type B
     setprecision([T=BigFloat,] precision::Int)
 
 Set the precision (in bits) to be used for `T` arithmetic.
+
+!!! warning
+
+    This function is not thread-safe. It will affect code running on all threads, but
+    its behavior is undefined if called concurrently with computations that use the
+    setting.
 """
 function setprecision(::Type{BigFloat}, precision::Integer)
     if precision < 2
@@ -889,21 +891,24 @@ isone(x::BigFloat) = x == Clong(1)
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
-function nextfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode),
-          z, x, ROUNDING_MODE[])
-    ccall((:mpfr_nextabove, :libmpfr), Int32, (Ref{BigFloat},), z) != 0
-    return z
+function nextfloat!(x::BigFloat, n::Integer=1)
+    signbit(n) && return prevfloat!(x, abs(n))
+    for i = 1:n
+        ccall((:mpfr_nextabove, :libmpfr), Int32, (Ref{BigFloat},), x)
+    end
+    return x
 end
 
-function prevfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode),
-          z, x, ROUNDING_MODE[])
-    ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ref{BigFloat},), z) != 0
-    return z
+function prevfloat!(x::BigFloat, n::Integer=1)
+    signbit(n) && return nextfloat!(x, abs(n))
+    for i = 1:n
+        ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ref{BigFloat},), x)
+    end
+    return x
 end
+
+nextfloat(x::BigFloat, n::Integer=1) = n == 0 ? x : nextfloat!(_duplicate(x), n)
+prevfloat(x::BigFloat, n::Integer=1) = n == 0 ? x : prevfloat!(_duplicate(x), n)
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
@@ -922,6 +927,9 @@ It is logically equivalent to:
     setprecision(BigFloat, old)
 
 Often used as `setprecision(T, precision) do ... end`
+
+Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
+`setprecision`
 """
 function setprecision(f::Function, ::Type{T}, prec::Integer) where T
     old_prec = precision(T)
@@ -936,27 +944,21 @@ end
 setprecision(f::Function, prec::Integer) = setprecision(f, BigFloat, prec)
 
 function string_mpfr(x::BigFloat, fmt::String)
-    buf = Base.StringVector(0)
-    s = _calculate_buffer_size!(buf, fmt, x)
-    resize!(buf, s)
-    _fill_buffer!(buf, fmt, x)
-    String(buf)
-end
-
-function _calculate_buffer_size!(buf, fmt, x::BigFloat)
-    ccall((:mpfr_snprintf,:libmpfr),
-        Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
-        buf, 0, fmt, x)
-end
-
-function _fill_buffer!(buf, fmt, x::BigFloat)
-    s = length(buf)
-    # we temporarily need one more item in buffer to capture null termination
-    resize!(buf, s + 1)
-    n = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ref{BigFloat}...), buf, fmt, x)
-    @assert n + 1 == length(buf)
-    @assert last(buf) == 0x00
-    resize!(buf, s)
+    pc = Ref{Ptr{UInt8}}()
+    n = ccall((:mpfr_asprintf,:libmpfr), Cint,
+              (Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ref{BigFloat}...),
+              pc, fmt, x)
+    p = pc[]
+    # convert comma decimal separator to dot
+    for i = 1:n
+        if unsafe_load(p, i) == UInt8(',')
+            unsafe_store!(p, '.', i)
+            break
+        end
+    end
+    str = unsafe_string(p)
+    ccall((:mpfr_free_str, :libmpfr), Cvoid, (Ptr{UInt8},), p)
+    return str
 end
 
 function _prettify_bigfloat(s::String)::String
@@ -1014,8 +1016,9 @@ get_emin() = ccall((:mpfr_get_emin, :libmpfr), Clong, ())
 get_emin_min() = ccall((:mpfr_get_emin_min, :libmpfr), Clong, ())
 get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 
-set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Cvoid, (Clong,), x)
-set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Cvoid, (Clong,), x)
+check_exponent_err(ret) = ret == 0 || throw(ArgumentError("Invalid MPFR exponent range"))
+set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, :libmpfr), Cint, (Clong,), x))
+set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, :libmpfr), Cint, (Clong,), x))
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
     haskey(stackdict, x) && return stackdict[x]
@@ -1028,9 +1031,29 @@ function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
     return y
 end
 
-function Base.lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
+function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
+    isnan(x) && return 0, 0, 0
+    isinf(x) && return x.sign, 0, 0
+    x == 0 && return 0, 0, x.sign
+    s = BigInt()
+    s.size = cld(x.prec, 8*sizeof(Limb)) # limbs
+    b = s.size * sizeof(Limb)            # bytes
+    ccall((:__gmpz_realloc2, :libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.d, x.d, b) # bytes
+    s, x.exp - 8b, x.sign
+end
+
+function lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
     t = BigFloat(j)/d
     fma(t, b, fma(-t, a, a))
 end
+
+# flags
+clear_flags() = ccall((:mpfr_clear_flags, :libmpfr), Cvoid, ())
+had_underflow() = ccall((:mpfr_underflow_p, :libmpfr), Cint, ()) != 0
+had_overflow() = ccall((:mpfr_underflow_p, :libmpfr), Cint, ()) != 0
+had_nan() = ccall((:mpfr_nanflag_p, :libmpfr), Cint, ()) != 0
+had_inexact_exception() = ccall((:mpfr_inexflag_p, :libmpfr), Cint, ()) != 0
+had_range_exception() = ccall((:mpfr_erangeflag_p, :libmpfr), Cint, ()) != 0
 
 end #module

@@ -89,6 +89,20 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     return sgn, base, j
 end
 
+@inline function __convert_digit(_c::UInt32, base)
+    _0 = UInt32('0')
+    _9 = UInt32('9')
+    _A = UInt32('A')
+    _a = UInt32('a')
+    _Z = UInt32('Z')
+    _z = UInt32('z')
+    a::UInt32 = base <= 36 ? 10 : 36
+    d = _0 <= _c <= _9 ? _c-_0             :
+        _A <= _c <= _Z ? _c-_A+ UInt32(10) :
+        _a <= _c <= _z ? _c-_a+a           : UInt32(base)
+end
+
+
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if sgn == 0 && base == 0 && i == 0
@@ -115,18 +129,10 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
            base == 16 ? div(typemax(T) - T(15), T(16)) :
                         div(typemax(T) - base + 1, base)
     n::T = 0
-    a::Int = base <= 36 ? 10 : 36
-    _0 = UInt32('0')
-    _9 = UInt32('9')
-    _A = UInt32('A')
-    _a = UInt32('a')
-    _Z = UInt32('Z')
-    _z = UInt32('z')
     while n <= m
-        _c = UInt32(c)
-        d::T = _0 <= _c <= _9 ? _c-_0             :
-               _A <= _c <= _Z ? _c-_A+ UInt32(10) :
-               _a <= _c <= _z ? _c-_a+a           : base
+        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
+        _c = reinterpret(UInt32, c) >> 24
+        d::T = __convert_digit(_c, base)
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return nothing
@@ -142,10 +148,9 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
     (T <: Signed) && (n *= sgn)
     while !isspace(c)
-        _c = UInt32(c)
-        d::T = _0 <= _c <= _9 ? _c-_0             :
-               _A <= _c <= _Z ? _c-_A+ UInt32(10) :
-               _a <= _c <= _z ? _c-_a+a           : base
+        # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
+        _c = reinterpret(UInt32, c) >> 24
+        d::T = __convert_digit(_c, base)
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return nothing
@@ -199,10 +204,8 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
     len = endpos - startpos + 1
     p   = pointer(sbuff) + startpos - 1
     GC.@preserve sbuff begin
-        (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                                  p, "true", 4)) && (return true)
-        (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                                  p, "false", 5)) && (return false)
+        (len == 4) && (0 == _memcmp(p, "true", 4)) && (return true)
+        (len == 5) && (0 == _memcmp(p, "false", 5)) && (return false)
     end
 
     if raise
@@ -319,7 +322,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     if i₊ == 0 # purely real or imaginary value
-        if iᵢ > 0 # purely imaginary
+        if iᵢ > i && !(iᵢ == i+1 && s[i] in ('+','-')) # purely imaginary (not "±inf")
             x = tryparse_internal(T, s, i, iᵢ-1, raise)
             x === nothing && return nothing
             return Complex{T}(zero(x),x)

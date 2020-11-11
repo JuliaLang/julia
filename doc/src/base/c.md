@@ -1,6 +1,7 @@
 # C Interface
 
 ```@docs
+@ccall
 ccall
 Core.Intrinsics.cglobal
 Base.@cfunction
@@ -18,9 +19,12 @@ Base.pointer_from_objref
 Base.unsafe_pointer_to_objref
 Base.disable_sigint
 Base.reenable_sigint
+Base.exit_on_sigint
 Base.systemerror
+Base.windowserror
 Core.Ptr
 Core.Ref
+Base.isassigned(::Base.RefValue)
 Base.Cchar
 Base.Cuchar
 Base.Cshort

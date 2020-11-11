@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-world_counter() = ccall(:jl_get_world_counter, UInt, ())
+using Base: get_world_counter
 
 # DO NOT ALTER ORDER OR SPACING OF METHODS BELOW
 const lineoffset = @__LINE__
@@ -11,34 +11,15 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
-using LinearAlgebra, SparseArrays
-
 # For curmod_*
 include("testenv.jl")
-
-ambigs = Any[[], [3], [2,5], [], [3]]
-
-mt = methods(ambig)
-
-getline(m::Method) = m.line - lineoffset
-
-for m in mt
-    ln = getline(m)
-    atarget = ambigs[ln]
-    if isempty(atarget)
-        @test m.ambig === nothing
-    else
-        aln = Int[getline(a) for a in m.ambig]
-        @test sort(aln) == atarget
-    end
-end
 
 @test length(methods(ambig)) == 5
 @test length(Base.methods_including_ambiguous(ambig, Tuple)) == 5
 
 @test length(methods(ambig, (Int, Int))) == 1
 @test length(methods(ambig, (UInt8, Int))) == 0
-@test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 2
+@test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 3
 
 @test ambig("hi", "there") == 1
 @test ambig(3.1, 3.2) == 5
@@ -60,11 +41,26 @@ let err = try
     Base.showerror(io, err)
     lines = split(String(take!(io)), '\n')
     ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at")
+                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at") ||
+                           startswith(str, "  ambig(x::Number, y) in $curmod_str at")
     @test ambig_checkline(lines[2])
     @test ambig_checkline(lines[3])
-    @test lines[4] == "Possible fix, define"
-    @test lines[5] == "  ambig(::Integer, ::Integer)"
+    @test ambig_checkline(lines[4])
+    @test lines[5] == "Possible fix, define"
+    @test lines[6] == "  ambig(::Integer, ::Integer)"
+end
+
+ambig_with_bounds(x, ::Int, ::T) where {T<:Integer,S} = 0
+ambig_with_bounds(::Int, x, ::T) where {T<:Integer,S} = 1
+let err = try
+              ambig_with_bounds(1, 2, 3)
+          catch _e_
+              _e_
+          end
+    io = IOBuffer()
+    Base.showerror(io, err)
+    lines = split(String(take!(io)), '\n')
+    @test lines[end] == "  ambig_with_bounds(::$Int, ::$Int, ::T) where T<:Integer"
 end
 
 ## Other ways of accessing functions
@@ -81,7 +77,7 @@ end
 let io = IOBuffer()
     @test precompile(ambig, (UInt8, Int)) == false
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
-    @test_throws(MethodError(ambig, (UInt8(1), Int(2)), world_counter()),
+    @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
     @test_throws(ErrorException("no unique matching method found for the specified argument types"),
                  which(ambig, (UInt8, Int)))
@@ -151,11 +147,45 @@ end
 ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
+
+using LinearAlgebra, SparseArrays, SuiteSparse
+
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
-@test detect_ambiguities(Core, Base; imported=true, recursive=true, ambiguous_bottom=false) == []
-# some ambiguities involving Union{} type parameters are expected, but not required
-@test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
+@testset "detect_ambiguities" begin
+    let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false)))
+        @test isempty(ambig)
+        expect = []
+        good = true
+        while !isempty(ambig)
+            sigs = pop!(ambig)
+            i = findfirst(==(sigs), expect)
+            if i === nothing
+                println(stderr, "push!(expect, (", sigs[1], ", ", sigs[2], "))")
+                good = false
+                continue
+            end
+            deleteat!(expect, i)
+        end
+        @test isempty(expect)
+        @test good
+    end
+
+    # some ambiguities involving Union{} type parameters are expected, but not required
+    let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
+        @test !isempty(ambig)
+    end
+
+    STDLIB_DIR = Sys.STDLIB
+    STDLIBS = filter!(x -> x != "LinearAlgebra" && x != "SparseArrays" && # Some packages run this test themselves
+                           isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")),
+                      readdir(STDLIB_DIR))
+
+    # List standard libraries. Exclude modules such as Main, Base, and Core.
+    let modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing && String(pkg.name) in STDLIBS]
+        @test isempty(detect_ambiguities(modules...; recursive=true))
+    end
+end
 
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2
@@ -228,20 +258,29 @@ end
 @test isempty(detect_ambiguities(Ambig17648))
 
 module Ambig8
-using Base: DimsInteger, Indices
-g18307(::Union{Indices,Dims}, I::AbstractVector{T}...) where {T<:Integer} = 1
-g18307(::DimsInteger) = 2
-g18307(::DimsInteger, I::Integer...) = 3
+# complex / unsorted(-able) ambiguities
+f(::Union{typeof(pi), Integer}) =  1
+f(::Union{AbstractIrrational, Int}) =  2
+f(::Irrational) = 3
+f(::Signed) = 4
+g(::Irrational) = 3
+g(::Signed) = 4
+g(::Union{typeof(pi), Integer}) =  1
+g(::Union{AbstractIrrational, Int}) =  2
+struct Irrational2 <: AbstractIrrational; end
 end
-try
-    # want this to be a test_throws MethodError, but currently it's not (see #18307)
-    Ambig8.g18307((1,))
-catch err
-    if isa(err, MethodError)
-        error("Test correctly returned a MethodError, please change to @test_throws MethodError")
-    else
-        rethrow()
-    end
+@test isempty(methods(Ambig8.f, (Int,)))
+@test isempty(methods(Ambig8.g, (Int,)))
+for f in (Ambig8.f, Ambig8.g)
+    @test length(methods(f, (Integer,))) == 2 # 1 is also acceptable
+    @test length(methods(f, (Signed,))) == 1 # 2 is also acceptable
+    @test length(Base.methods_including_ambiguous(f, (Signed,))) == 2
+    @test f(0x00) == 1
+    @test f(Ambig8.Irrational2()) == 2
+    @test f(MathConstants.γ) == 3
+    @test f(Int8(0)) == 4
+    @test_throws MethodError f(0)
+    @test_throws MethodError f(pi)
 end
 
 module Ambig9
@@ -271,8 +310,6 @@ end
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{Int8}}))
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =
@@ -282,27 +319,11 @@ end
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
         @test_broken need_to_handle_undef_sparam == Set()
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
-        pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T}, 1}, Tuple{Vararg{Pair{T}}}} where T<:AbstractString,)))
-        pop!(need_to_handle_undef_sparam, which(Base._cat, (Any, SparseArrays._TypedDenseConcatGroup{T} where T)))
+        pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing, T}} where T, Any}))
-        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Nothing, S}} where S, Type{T} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing, S}} where S, Type{T} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing, Nothing, S}} where S, Type{T} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.nonmissingtype, Tuple{Type{Union{Missing, T}} where T}))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{Some{T}, Nothing}} where T, Some)))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, (Type{Union{T, Nothing}} where T, Some)))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{}}))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Tuple{Vararg{Int}}}, Tuple{Int8}}))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Nothing,T}},Union{Nothing,T}} where T))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing,T}},Union{Missing,T}} where T))
-        pop!(need_to_handle_undef_sparam, which(Base.convert, Tuple{Type{Union{Missing,Nothing,T}},Union{Missing,Nothing,T}} where T))
-        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Nothing,T}},Type{Any}} where T))
-        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing,T}},Type{Any}} where T))
-        pop!(need_to_handle_undef_sparam, which(Base.promote_rule, Tuple{Type{Union{Missing,Nothing,T}},Type{Any}} where T))
         @test need_to_handle_undef_sparam == Set()
     end
 end
@@ -311,4 +332,31 @@ end
     @test Base.has_bottom_parameter(Ref{<:Union{}})
 end
 
-nothing # don't return a module from the remote include
+# test a case where specificity is not transitive over subtyping
+f35983(::T, ::T) where {T} = 1
+f35983(::Type, ::Type) = 2
+@test f35983(10, 12) == 1
+@test f35983(Int32, Int32) == 2
+@test f35983(Int32, Int64) == 2
+@test f35983(Int32, Complex) == 2
+@test only(Base.methods_including_ambiguous(f35983, (Type, Type))).sig == Tuple{typeof(f35983), Type, Type}
+@test only(Base.methods(f35983, (Type, Type))).sig == Tuple{typeof(f35983), Type, Type}
+@test length(Base.methods_including_ambiguous(f35983, (Any, Any))) == 2
+@test first(Base.methods_including_ambiguous(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
+@test length(Base.methods(f35983, (Any, Any))) == 2
+@test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
+let ambig = Int32[0]
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    @test length(ms) == 1
+    @test ambig[1] == 0
+end
+f35983(::Type{Int16}, ::Any) = 3
+@test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
+@test length(Base.methods(f35983, (Type, Type))) == 2
+let ambig = Int32[0]
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    @test length(ms) == 2
+    @test ambig[1] == 1
+end
+
+nothing

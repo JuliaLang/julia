@@ -45,14 +45,20 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
+@test !endswith(@__DIR__, Base.Filesystem.path_separator)
 let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
-    wd = sprint(show, abspath(pwd(), "")),
-    s_dir = sprint(show, joinpath(realpath(tempdir()), ""))
+    wd = sprint(show, pwd())
+    s_dir = sprint(show, realpath(tempdir()))
     @test wd != s_dir
     @test readchomp(`$exename -E "@__DIR__" -i`) == wd
     @test readchomp(`$exename -E "cd(()->eval(:(@__DIR__)), $s_dir)" -i`) == s_dir
     @test readchomp(`$exename -E "@__DIR__"`) == wd # non-interactive
+    @test !endswith(wd, Base.Filesystem.path_separator)
+    @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
+
+@test Base.in_sysimage(Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"))
+@test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
 
 # Issue #5789 and PR #13542:
 mktempdir() do dir
@@ -101,6 +107,11 @@ let shastr1 = "ab"^20, shastr2 = "ac"^20
     @test !isless(hash1, hash1)
 end
 
+# Test bad SHA1 values
+@test_throws ArgumentError SHA1("this is not a valid SHA1")
+@test_throws ArgumentError parse(SHA1, "either is this")
+@test tryparse(SHA1, "nor this") === nothing
+
 let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid = UUID(uuidstr)
     @test uuid == eval(Meta.parse(repr(uuid))) # check show method
@@ -109,8 +120,17 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test UUID(UInt128(uuid)) == uuid
     @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
     @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
+
+    uuidstr2 = "ba"^4 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^6
+    uuid2 = UUID(uuidstr2)
+    uuids = [uuid, uuid2]
+    @test (uuids .== uuid) == [true, false]
+
+    @test parse(UUID, uuidstr2) == uuid2
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
+@test_throws ArgumentError parse(UUID, "not a UUID")
+@test tryparse(UUID, "either is this") === nothing
 
 function subset(v::Vector{T}, m::Int) where T
     T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
@@ -160,10 +180,10 @@ end
                 this = Base.explicit_project_deps_get(project_file, "This")
                 that = Base.explicit_project_deps_get(project_file, "That")
                 # test that the correct answers are given
-                @test root == (something(n, N+1) ≥ something(d, N+1) ? false :
+                @test root == (something(n, N+1) ≥ something(d, N+1) ? nothing :
                                something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
-                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : false)
-                @test that == false
+                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : nothing)
+                @test that == nothing
             end
         end
     end
@@ -173,15 +193,30 @@ end
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
-saved_home_project = Base.HOME_PROJECT[]
 saved_active_project = Base.ACTIVE_PROJECT[]
 
 push!(empty!(LOAD_PATH), "project")
-push!(empty!(DEPOT_PATH), "depot")
-Base.HOME_PROJECT[] = nothing
+append!(empty!(DEPOT_PATH), [mktempdir(), "depot"])
 Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]
+
+
+# locate `tail(names)` package by following the search path graph through `names` starting from `where`
+function recurse_package(where::PkgId, name::String, names::String...)
+    pkg = identify_package(where, name)
+    pkg === nothing && return nothing
+    return recurse_package(pkg, names...)
+end
+
+recurse_package(pkg::String) = identify_package(pkg)
+recurse_package(where::PkgId, pkg::String) = identify_package(where, pkg)
+
+function recurse_package(name::String, names::String...)
+    pkg = identify_package(name)
+    pkg === nothing && return nothing
+    return recurse_package(pkg, names...)
+end
 
 @testset "project & manifest identify_package & locate_package" begin
     local path
@@ -193,14 +228,15 @@ Base.ACTIVE_PROJECT[] = nothing
         ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"                ),
     ]
         n = map(String, split(names, '.'))
-        pkg = identify_package(n...)
+        pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
+        @test Base.compilecache_path(pkg, UInt64(0)) == Base.compilecache_path(pkg, UInt64(0))
     end
     @test identify_package("Baz") == nothing
     @test identify_package("Qux") == nothing
     @testset "equivalent package names" begin
-        local classes = [
+         classes = [
             ["Foo"],
             ["Bar", "Foo.Bar"],
             ["Foo.Baz", "Bar.Baz", "Foo.Bar.Baz"],
@@ -213,15 +249,15 @@ Base.ACTIVE_PROJECT[] = nothing
         for i = 1:length(classes)
             A = classes[i]
             for x in A
-                X = identify_package(map(String, split(x, '.'))...)
+                X = recurse_package(map(String, split(x, '.'))...)
                 for y in A
-                    Y = identify_package(map(String, split(y, '.'))...)
+                    Y = recurse_package(map(String, split(y, '.'))...)
                     @test X == Y
                 end
                 for j = i+1:length(classes)
                     B = classes[j]
                     for z in B
-                        Z = identify_package(map(String, split(z, '.'))...)
+                        Z = recurse_package(map(String, split(z, '.'))...)
                         @test X != Z
                     end
                 end
@@ -272,6 +308,13 @@ module NotPkgModule; end
     @testset "pathof" begin
         @test pathof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
         @test pathof(NotPkgModule) === nothing
+    end
+
+    @testset "pkgdir" begin
+        @test pkgdir(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(NotPkgModule) === nothing
     end
 
 end
@@ -367,6 +410,12 @@ const depots = [mktempdir() for _ = 1:3]
 const envs = Dict{String,Any}()
 
 append!(empty!(DEPOT_PATH), depots)
+
+@testset "load code uniqueness" begin
+    @test allunique(UUIDS)
+    @test allunique(depots)
+    @test allunique(DEPOT_PATH)
+end
 
 for (flat, root, roots, graph) in graphs
     if flat
@@ -499,7 +548,7 @@ function test_find(
     for name in NAMES
         id = identify_package(name)
         @test id == get(roots, name, nothing)
-        path = locate_package(id)
+        path = id === nothing ? nothing : locate_package(id)
         @test path == get(paths, id, nothing)
     end
     # check indirect dependencies
@@ -509,7 +558,7 @@ function test_find(
         for name in NAMES
             id = identify_package(where, name)
             @test id == get(deps, name, nothing)
-            path = locate_package(id)
+            path = id === nothing ? nothing : locate_package(id)
             @test path == get(paths, id, nothing)
         end
     end
@@ -547,7 +596,11 @@ end
 end
 
 # normalization of paths by include (#26424)
-@test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
+@test begin
+    exc = try; include("./notarealfile.jl"); "unexpectedly reached!"; catch exc; exc; end
+    @test exc isa SystemError
+    exc.prefix
+end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
 
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
@@ -568,9 +621,9 @@ end
         cd("foo")
         @test Base.active_project() == old
         """
-        @test success(`$(Base.julia_cmd()) --project=foo -e $(script)`)
+        @test success(`$(Base.julia_cmd()) --startup-file=no --project=foo -e $(script)`)
         withenv("JULIA_PROJECT" => "foo") do
-            @test success(`$(Base.julia_cmd()) -e $(script)`)
+            @test success(`$(Base.julia_cmd()) --startup-file=no -e $(script)`)
         end
     end; end
 end
@@ -586,7 +639,7 @@ mktempdir() do dir
     mkpath(vpath)
     withenv("JULIA_DEPOT_PATH" => dir) do
         script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
-        @test success(`$(Base.julia_cmd()) -e $(script)`)
+        @test success(`$(Base.julia_cmd()) --startup-file=no -e $(script)`)
     end
 end
 
@@ -603,7 +656,7 @@ end
     for (env, result) in pairs(cases)
         withenv("JULIA_LOAD_PATH" => env) do
             script = "LOAD_PATH == $(repr(result)) || error()"
-            @test success(`$(Base.julia_cmd()) -e $script`)
+            @test success(`$(Base.julia_cmd()) --startup-file=no -e $script`)
         end
     end
 end
@@ -622,7 +675,7 @@ end
     for (env, result) in pairs(cases)
         withenv("JULIA_DEPOT_PATH" => env) do
             script = "DEPOT_PATH == $(repr(result)) || error()"
-            @test success(`$(Base.julia_cmd()) -e $script`)
+            @test success(`$(Base.julia_cmd()) --startup-file=no -e $script`)
         end
     end
 end
@@ -638,10 +691,31 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-Base.HOME_PROJECT[] = saved_home_project
 Base.ACTIVE_PROJECT[] = saved_active_project
 
 # issue #28190
 module Foo; import Libdl; end
 import .Foo.Libdl; import Libdl
 @test Foo.Libdl === Libdl
+
+@testset "include with mapexpr" begin
+    let exprs = Any[]
+        @test 13 === include_string(@__MODULE__, "1+1\n3*4") do ex
+            ex isa LineNumberNode || push!(exprs, ex)
+            Meta.isexpr(ex, :call) ? :(1 + $ex) : ex
+        end
+        @test exprs == [:(1 + 1), :(3 * 4)]
+    end
+    # test using test_exec.jl, just because that is the shortest handy file
+    for incl in (include, (mapexpr,path) -> Base.include(mapexpr, @__MODULE__, path))
+        let exprs = Any[]
+            incl("test_exec.jl") do ex
+                ex isa LineNumberNode || push!(exprs, ex)
+                Meta.isexpr(ex, :macrocall) ? :nothing : ex
+            end
+            @test length(exprs) == 2 && exprs[1] == :(using Test)
+            @test Meta.isexpr(exprs[2], :macrocall) &&
+                  exprs[2].args[[1,3]] == [Symbol("@test"), :(1 == 2)]
+        end
+    end
+end

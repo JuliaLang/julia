@@ -8,6 +8,13 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @testset "Logging" begin
 
+@testset "Core" begin
+    # Symbols imported from CoreLogging should appear in tab completions
+    @test :AbstractLogger in names(Logging, all=true)  # exported public type
+    @test :Info in names(Logging, all=true)            # non-exported public constant
+    @test :handle_message in names(Logging, all=true)  # non-exported public function
+end
+
 @testset "ConsoleLogger" begin
     # First pass log limiting
     @test min_enabled_level(ConsoleLogger(devnull, Logging.Debug)) == Logging.Debug
@@ -194,7 +201,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
     │   exception =
     │    DivideError: integer division error
     │    Stacktrace:
-    │     [1] func1() at""")
+    │      [1] func1()""")
 
 
     @testset "Limiting large data structures" begin
@@ -202,19 +209,19 @@ import Logging: min_enabled_level, shouldlog, handle_message
         replace("""
         ┌ PREFIX msg
         │   a =
-        │    100×100 Array{Float64,2}:
+        │    100×100 Matrix{Float64}:
         │     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-        │     ⋮                                   ⋱                           EOL
+        │     ⋮                                   ⋱                    EOL
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │   b =
-        │    10×10 Array{Float64,2}:
+        │    10×10 Matrix{Float64}:
         │     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-        │     ⋮                                   ⋱                           EOL
+        │     ⋮                                   ⋱                    EOL
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         └ SUFFIX
@@ -224,7 +231,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
         """
         ┌ PREFIX msg
         │   a =
-        │    10×10 Array{Float64,2}:
+        │    10×10 Matrix{Float64}:
         │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001

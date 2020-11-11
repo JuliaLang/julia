@@ -59,7 +59,7 @@ end
 
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -73,7 +73,9 @@ function quoted(@nospecialize(x))
 end
 
 function is_inlineable_constant(@nospecialize(x))
-    x isa Type && return true
+    if x isa Type || x isa Symbol
+        return true
+    end
     return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
 end
 
@@ -81,11 +83,12 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
-function invoke_api(li::MethodInstance)
+function invoke_api(li::CodeInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)
 end
 
 function get_staged(li::MethodInstance)
+    may_invoke_generator(li) || return nothing
     try
         # user code might throw errors – ignore them
         return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
@@ -104,7 +107,7 @@ function retrieve_code_info(linfo::MethodInstance)
     if c === nothing && isdefined(m, :source)
         src = m.source
         if isa(src, Array{UInt8,1})
-            c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, src)
+            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
         end
@@ -115,28 +118,40 @@ function retrieve_code_info(linfo::MethodInstance)
     end
 end
 
-function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, world::UInt, preexisting::Bool=false)
-    if world < min_world(method) || world > max_world(method)
-        return nothing
-    end
-    if isdefined(method, :generator) && !may_invoke_generator(method, atypes, sparams)
-        return nothing
+# Get at the nonfunction_mt, which happens to be the mt of SimpleVector
+const nonfunction_mt = typename(SimpleVector).mt
+
+function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::SimpleVector)
+    isa(atypes, DataType) || return Nothing
+    mt = ccall(:jl_method_table_for, Any, (Any,), atypes)
+    mt === nothing && return nothing
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
+        mt, atypes, sparams, method)
+end
+
+# get a handle to the unique specialization object representing a particular instantiation of a call
+function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false, compilesig::Bool=false)
+    if compilesig
+        new_atypes = get_compileable_sig(method, atypes, sparams)
+        new_atypes === nothing && return nothing
+        atypes = new_atypes
     end
     if preexisting
-        if method.specializations !== nothing
-            # check cached specializations
-            # for an existing result stored there
-            return ccall(:jl_specializations_lookup, Any, (Any, Any, UInt), method, atypes, world)
-        end
-        return nothing
+        # check cached specializations
+        # for an existing result stored there
+        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
     end
-    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt), method, atypes, sparams, world)
+    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
+end
+
+function specialize_method(match::MethodMatch, preexisting::Bool=false, compilesig::Bool=false)
+    return specialize_method(match.method, match.spec_types, match.sparams, preexisting, compilesig)
 end
 
 # This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector, world::UInt)
-    if isdefined(method, :generator) && method.generator.expand_early
-        method_instance = code_for_method(method, sig, sparams, world, false)
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
+    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
+        method_instance = specialize_method(method, sig, sparams, false)
         if isa(method_instance, MethodInstance)
             cinfo = get_staged(method_instance)
             if isa(cinfo, CodeInfo)
@@ -171,9 +186,11 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, src)
     elseif isa(x, Argument)
-        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] : src.argtypes[x.n]
+        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] :
+            isa(src, IRCode) ? src.argtypes[x.n] :
+            slottypes[x.n]
     elseif isa(x, QuoteNode)
-        return AbstractEvalConstant((x::QuoteNode).value)
+        return Const((x::QuoteNode).value)
     elseif isa(x, GlobalRef)
         return abstract_eval_global(x.mod, (x::GlobalRef).name)
     elseif isa(x, PhiNode)
@@ -181,7 +198,7 @@ function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vecto
     elseif isa(x, PiNode)
         return x.typ
     else
-        return AbstractEvalConstant(x)
+        return Const(x)
     end
 end
 
@@ -193,6 +210,11 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
     for line in 1:length(body)
         e = body[line]
+        if isa(e, ReturnNode)
+            e = e.val
+        elseif isa(e, GotoIfNot)
+            e = e.cond
+        end
         if isa(e, SSAValue)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
@@ -217,15 +239,96 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
     end
 end
 
+function is_throw_call(e::Expr)
+    if e.head === :call
+        f = e.args[1]
+        if isa(f, GlobalRef)
+            ff = abstract_eval_global(f.mod, f.name)
+            if isa(ff, Const) && ff.val === Core.throw
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
+    stmts = BitSet()
+    n = length(code)
+    try_depth = 0
+    for i in n:-1:1
+        s = code[i]
+        if isa(s, Expr)
+            if s.head === :enter
+                try_depth -= 1
+            elseif s.head === :leave
+                try_depth += (s.args[1]::Int)
+            elseif s.head === :gotoifnot
+                tgt = s.args[2]::Int
+                if i+1 in stmts && tgt in stmts
+                    push!(stmts, i)
+                end
+            elseif s.head === :return
+            elseif is_throw_call(s)
+                if try_depth == 0
+                    push!(stmts, i)
+                end
+            elseif i+1 in stmts
+                push!(stmts, i)
+            end
+        elseif isa(s, ReturnNode)
+            # NOTE: it potentially makes sense to treat unreachable nodes
+            # (where !isdefined(s, :val)) as `throw` points, but that can cause
+            # worse codegen around the call site (issue #37558)
+        elseif isa(s, GotoNode)
+            tgt = s.label
+            if isassigned(ir)
+                tgt = first(ir[].cfg.blocks[tgt].stmts)
+            end
+            if tgt in stmts
+                push!(stmts, i)
+            end
+        elseif isa(s, GotoIfNot)
+            if i+1 in stmts
+                tgt = s.dest::Int
+                if isassigned(ir)
+                    tgt = first(ir[].cfg.blocks[tgt].stmts)
+                end
+                if tgt in stmts
+                    push!(stmts, i)
+                end
+            end
+        elseif i+1 in stmts
+            push!(stmts, i)
+        end
+    end
+    return stmts
+end
+
 # using a function to ensure we can infer this
-@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id
+@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
+    isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
 
 ###########
 # options #
 ###########
 
+is_root_module(m::Module) = false
+
 inlining_enabled() = (JLOptions().can_inline == 1)
-coverage_enabled() = (JLOptions().code_coverage != 0)
+function coverage_enabled(m::Module)
+    ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
+    cov = JLOptions().code_coverage
+    if cov == 1
+        m = moduleroot(m)
+        m === Core && return false
+        isdefined(Main, :Base) && m === Main.Base && return false
+        return true
+    elseif cov == 2
+        return true
+    end
+    return false
+end
 function inbounds_option()
     opt_check_bounds = JLOptions().check_bounds
     opt_check_bounds == 0 && return :default

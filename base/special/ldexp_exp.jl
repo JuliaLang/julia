@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # This code is a Julia translation of the C code from Openlibm (http://www.openlibm.org/)
 # with the following license:
 

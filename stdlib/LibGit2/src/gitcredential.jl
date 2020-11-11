@@ -87,7 +87,7 @@ function Base.copy!(a::GitCredential, b::GitCredential)
     a.host = b.host
     a.path = b.path
     a.username = b.username
-    a.password = b.password == nothing ? nothing : copy(b.password)
+    a.password = b.password === nothing ? nothing : copy(b.password)
     return a
 end
 
@@ -102,11 +102,11 @@ end
 
 function Base.read!(io::IO, cred::GitCredential)
     # https://git-scm.com/docs/git-credential#IOFMT
-    while !eof(io)
-        key = readuntil(io, '=')
+    while !(eof(io)::Bool)
+        key::AbstractString = readuntil(io, '=')
         if key == "password"
             value = Base.SecretBuffer()
-            while !eof(io) && (c = read(io, UInt8)) != UInt8('\n')
+            while !(eof(io)::Bool) && (c = read(io, UInt8)) != UInt8('\n')
                 write(value, c)
             end
             seekstart(value)
@@ -122,7 +122,7 @@ function Base.read!(io::IO, cred::GitCredential)
             end
         elseif key in GIT_CRED_ATTRIBUTES
             field = getproperty(cred, Symbol(key))
-            field !== nothing && Symbol(key) == :password && Base.shred!(field)
+            field !== nothing && Symbol(key) === :password && Base.shred!(field)
             setproperty!(cred, Symbol(key), value)
         elseif !all(isspace, key)
             @warn "Unknown git credential attribute found: $(repr(key))"
@@ -222,21 +222,11 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
         ismatch(url, cred) || continue
 
         # An empty credential.helper resets the list to empty
-        isempty(value) && empty!(helpers)
-
-        # Due to a bug in libgit2 iteration we may read credential helpers out of order.
-        # See: https://github.com/libgit2/libgit2/issues/4361
-        #
-        # Typically the ordering doesn't matter but does in this particular case. Disabling
-        # credential helpers avoids potential issues with using the wrong credentials or
-        # writing credentials to the wrong helper.
         if isempty(value)
-            @warn """Resetting the helper list is currently unsupported:
-                     ignoring all git credential helpers""" maxlog=1
-            return GitCredentialHelper[]
+            empty!(helpers)
+        else
+            Base.push!(helpers, parse(GitCredentialHelper, value))
         end
-
-        Base.push!(helpers, parse(GitCredentialHelper, value))
     end
 
     return helpers
@@ -263,6 +253,7 @@ function default_username(cfg::GitConfig, cred::GitCredential)
 end
 
 function use_http_path(cfg::GitConfig, cred::GitCredential)
+    seen_specific = false
     use_path = false  # Default is to ignore the path
 
     # https://git-scm.com/docs/gitcredentials#gitcredentials-useHttpPath
@@ -272,8 +263,11 @@ function use_http_path(cfg::GitConfig, cred::GitCredential)
     for entry in GitConfigIter(cfg, r"credential.*\.usehttppath")
         section, url, name, value = split_cfg_entry(entry)
 
-        ismatch(url, cred) || continue
-        use_path = value == "true"
+        # Ignore global configuration if we have already encountered more specific entry
+        if ismatch(url, cred) && (!isempty(url) || !seen_specific)
+            seen_specific = !isempty(url)
+            use_path = value == "true"
+        end
     end
 
     return use_path

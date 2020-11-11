@@ -68,7 +68,8 @@ mktempdir() do dir
                 error("unexpected")
             catch ex
                 @test isa(ex, LibGit2.Error.GitError)
-                @test ex.code == LibGit2.Error.EAUTH
+                # Return code seems to vary, see #32186, #32219
+                @test ex.code ∈ (LibGit2.Error.EAUTH, LibGit2.Error.ERROR)
             end
             Base.shred!(cred)
         end

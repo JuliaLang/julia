@@ -41,6 +41,9 @@
     @test rpad("αβ", 8, "¹₂³") == "αβ¹₂³¹₂³"
     @test lpad("αβ", 9, "¹₂³") == "¹₂³¹₂³¹αβ"
     @test rpad("αβ", 9, "¹₂³") == "αβ¹₂³¹₂³¹"
+    # Issue #32160 (unsigned underflow in lpad/rpad)
+    @test lpad("xx", UInt(1), " ") == "xx"
+    @test rpad("xx", UInt(1), " ") == "xx"
 end
 
 # string manipulation
@@ -294,6 +297,9 @@ end
     @test replace("a", in("a") => typeof) == "Char"
     @test replace("a", ['a'] => typeof) == "Char"
 
+    # Issue 36953
+    @test replace("abc", "" => "_", count=1) == "_abc"
+
 end
 
 @testset "chomp/chop" begin
@@ -302,6 +308,7 @@ end
     @test chomp("foo\r\n") == "foo"
     @test chomp("fo∀\r\n") == "fo∀"
     @test chomp("fo∀") == "fo∀"
+    @test chop("") == ""
     @test chop("fooε") == "foo"
     @test chop("foεo") == "foε"
     @test chop("∃∃∃∃") == "∃∃∃"
@@ -378,4 +385,21 @@ let testb() = b"0123"
     @test b isa AbstractVector
     @test_throws ErrorException b[4] = '4'
     @test testb() == UInt8['0','1','2','3']
+end
+
+@testset "Base.rest" begin
+    s = "aβcd"
+    @test Base.rest(s) === SubString(s)
+    a, b, c... = s
+    @test c === SubString(s, 4)
+
+    s = SubString("aβcd", 2)
+    @test Base.rest(s) === SubString(s)
+    b, c... = s
+    @test c === SubString(s, 3)
+
+    s = GenericString("aβcd")
+    @test Base.rest(s) === "aβcd"
+    a, b, c... = s
+    @test c === "cd"
 end

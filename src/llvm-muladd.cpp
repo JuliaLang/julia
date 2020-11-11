@@ -4,7 +4,11 @@
 #undef DEBUG
 #include "llvm-version.h"
 
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
 #include <llvm/IR/Value.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -94,4 +98,9 @@ static RegisterPass<CombineMulAdd> X("CombineMulAdd", "Combine mul and add to mu
 Pass *createCombineMulAddPass()
 {
     return new CombineMulAdd();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddCombineMulAddPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createCombineMulAddPass());
 }

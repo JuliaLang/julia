@@ -83,6 +83,7 @@ end
         end
     end
     test_exc_stack_catch_return()
+
     for i=1:1
         try
             error("A")
@@ -91,6 +92,19 @@ end
             break
         end
     end
+    # Also test try-break-finally forms here. See #31766
+    for i=1:1
+        try
+            error("A")
+        catch
+            @test length(catch_stack()) == 1
+            break
+        finally
+            @test length(catch_stack()) == 0
+        end
+    end
+    @test length(catch_stack()) == 0
+
     for i=1:1
         try
             error("A")
@@ -99,6 +113,18 @@ end
             continue
         end
     end
+    for i=1:1
+        try
+            error("A")
+        catch
+            @test length(catch_stack()) == 1
+            continue
+        finally
+            @test length(catch_stack()) == 0
+        end
+    end
+    @test length(catch_stack()) == 0
+
     try
         error("A")
     catch
@@ -106,6 +132,15 @@ end
         @goto outofcatch
     end
     @label outofcatch
+    try
+        error("A")
+    catch
+        @test length(catch_stack()) == 1
+        @goto outofcatch2
+    finally
+        @test length(catch_stack()) == 0
+    end
+    @label outofcatch2
     @test length(catch_stack()) == 0
 
     # Exiting from a try block in various ways should not affect the exception
@@ -143,10 +178,77 @@ end
     end
 end
 
+@testset "Finally handling with exception stacks" begin
+    # The lowering of finally is quite subtle when combined with break or
+    # return because each finally block may be entered via multiple code paths
+    # (eg, different occurrences of return), and these code paths must diverge
+    # again once the finally block has completed. To complicate matters
+    # further, the return code path must thread through every nested finally
+    # block before actually returning, all the while preserving the information
+    # about which variable to return.
+
+    # Issue #34579
+    (()-> begin
+        try
+            throw("err")
+        catch
+            # Explicit return => exception should be popped before finally block
+            return
+        finally
+            @test length(Base.catch_stack()) == 0
+        end
+    end)()
+    @test length(Base.catch_stack()) == 0
+
+    while true
+        try
+            error("err1")
+        catch
+            try
+                # Break target is outside catch block, but finally is inside =>
+                # exception should not be popped inside finally block
+                break
+            finally
+                @test length(Base.catch_stack()) == 1
+            end
+        end
+    end
+    @test length(Base.catch_stack()) == 0
+
+    # Nested finally handling with `return`: each finally block should observe
+    # only the active exceptions as according to its nesting depth.
+    (() -> begin
+        try
+            try
+                error("err1")
+            catch
+                try
+                    try
+                        error("err2")
+                    catch
+                        # This return needs to thread control flow through
+                        # multiple finally blocks in the linearized IR.
+                        return
+                    end
+                finally
+                    # At this point err2 is dealt with
+                    @test length(Base.catch_stack()) == 1
+                    @test Base.catch_stack()[1][1] == ErrorException("err1")
+                end
+            end
+        finally
+            # At this point err1 is dealt with
+            @test length(Base.catch_stack()) == 0
+        end
+    end)()
+    @test length(Base.catch_stack()) == 0
+end
+
 @testset "Deep exception stacks" begin
-    # Generate deep exception stack with recursive handlers Note that if you
-    # let this overflow the program stack (not the exception stack) julia will
-    # crash. See #28577
+    # Generate deep exception stack with recursive handlers.
+    #
+    # (Note that if you let this overflow the program stack (not the exception
+    # stack) julia will crash. See #28577.)
     function test_exc_stack_deep(n)
         n != 1 || error("RootCause")
         try
@@ -239,12 +341,12 @@ end
     @test catch_stack(t, include_bt=false) == [ErrorException("A"), ErrorException("B")]
     # Exception stacks for tasks which never get the chance to start
     t = @task nothing
-    @test try
+    @test (try
         @async Base.throwto(t, ErrorException("expected"))
         wait(t)
     catch e
         e
-    end == ErrorException("expected")
+    end).task.exception == ErrorException("expected")
     @test length(catch_stack(t)) == 1
     @test length(catch_stack(t)[1][2]) > 0 # backtrace is nonempty
     # Exception stacks should not be accessed on concurrently running tasks
@@ -265,3 +367,34 @@ end
         exc
     end == ErrorException("rethrow(exc) not allowed outside a catch block")
 end
+
+# issue #36527
+function f36527()
+    caught = false
+    🏡 = Core.eval(Main, :(module asdf36527 end))
+    try
+        Core.eval(🏡, :(include_string($🏡, "@assert z36527 == 10")))
+    catch ex
+        GC.gc()
+        catch_backtrace()
+        caught = true
+    end
+    return caught
+end
+
+@test f36527()
+
+# accessing an undefined var in tail position in a catch block
+function undef_var_in_catch()
+    try
+        error("first error")
+    catch
+        __probably_n0t_defined__
+    end
+end
+@test length(try
+    undef_var_in_catch()
+    []
+catch
+    catch_stack()
+end) == 2

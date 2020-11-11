@@ -1,0 +1,277 @@
+From c8001215f1e32ae454053d9eab8cb1064c48e803 Mon Sep 17 00:00:00 2001
+From: James Henderson <james.henderson@sony.com>
+Date: Mon, 10 Aug 2020 13:36:44 +0100
+Subject: [PATCH] [DebugInfo] Don't error for zero-length arange entries
+
+Although the DWARF specification states that .debug_aranges entries
+can't have length zero, these can occur in the wild. There's no
+particular reason to enforce this part of the spec, since functionally
+they have no impact. The patch removes the error and introduces a new
+warning for premature terminator entries which does not stop parsing.
+
+This is a relanding of cb3a598c87db, adding the missing obj2yaml part
+that was needed.
+
+Fixes https://bugs.llvm.org/show_bug.cgi?id=46805. See also
+https://reviews.llvm.org/D71932 which originally introduced the error.
+
+Reviewed by: ikudrin, dblaikie, Higuoxing
+
+Differential Revision: https://reviews.llvm.org/D85313
+---
+ .../DebugInfo/DWARF/DWARFDebugArangeSet.h     |  3 +-
+ llvm/lib/DebugInfo/DWARF/DWARFContext.cpp     |  3 +-
+ .../DebugInfo/DWARF/DWARFDebugArangeSet.cpp   | 18 ++--
+ .../lib/DebugInfo/DWARF/DWARFDebugAranges.cpp |  3 +-
+ llvm/tools/obj2yaml/dwarf2yaml.cpp            |  8 +-
+ .../DWARF/DWARFDebugArangeSetTest.cpp         | 98 +++++++++++++++++--
+ 6 files changed, 113 insertions(+), 20 deletions(-)
+
+diff --git llvm/include/llvm/DebugInfo/DWARF/DWARFDebugArangeSet.h llvm/include/llvm/DebugInfo/DWARF/DWARFDebugArangeSet.h
+index 0681a2e33a5..3d5852ee151 100644
+--- llvm/include/llvm/DebugInfo/DWARF/DWARFDebugArangeSet.h
++++ llvm/include/llvm/DebugInfo/DWARF/DWARFDebugArangeSet.h
+@@ -60,7 +60,8 @@ public:
+   DWARFDebugArangeSet() { clear(); }
+ 
+   void clear();
+-  Error extract(DWARFDataExtractor data, uint64_t *offset_ptr);
++  Error extract(DWARFDataExtractor data, uint64_t *offset_ptr,
++                function_ref<void(Error)> WarningHandler);
+   void dump(raw_ostream &OS) const;
+ 
+   uint64_t getCompileUnitDIEOffset() const { return HeaderData.CuOffset; }
+diff --git llvm/lib/DebugInfo/DWARF/DWARFContext.cpp llvm/lib/DebugInfo/DWARF/DWARFContext.cpp
+index bf621949777..3bcde8fafb1 100644
+--- llvm/lib/DebugInfo/DWARF/DWARFContext.cpp
++++ llvm/lib/DebugInfo/DWARF/DWARFContext.cpp
+@@ -502,7 +502,8 @@ void DWARFContext::dump(
+                                    0);
+     DWARFDebugArangeSet set;
+     while (arangesData.isValidOffset(offset)) {
+-      if (Error E = set.extract(arangesData, &offset)) {
++      if (Error E =
++              set.extract(arangesData, &offset, DumpOpts.WarningHandler)) {
+         RecoverableErrorHandler(std::move(E));
+         break;
+       }
+diff --git llvm/lib/DebugInfo/DWARF/DWARFDebugArangeSet.cpp llvm/lib/DebugInfo/DWARF/DWARFDebugArangeSet.cpp
+index 608fc0388af..381dd476cd5 100644
+--- llvm/lib/DebugInfo/DWARF/DWARFDebugArangeSet.cpp
++++ llvm/lib/DebugInfo/DWARF/DWARFDebugArangeSet.cpp
+@@ -32,7 +32,8 @@ void DWARFDebugArangeSet::clear() {
+ }
+ 
+ Error DWARFDebugArangeSet::extract(DWARFDataExtractor data,
+-                                   uint64_t *offset_ptr) {
++                                   uint64_t *offset_ptr,
++                                   function_ref<void(Error)> WarningHandler) {
+   assert(data.isValidOffset(*offset_ptr));
+   ArangeDescriptors.clear();
+   Offset = *offset_ptr;
+@@ -132,19 +133,20 @@ Error DWARFDebugArangeSet::extract(DWARFDataExtractor data,
+ 
+   uint64_t end_offset = Offset + full_length;
+   while (*offset_ptr < end_offset) {
++    uint64_t EntryOffset = *offset_ptr;
+     arangeDescriptor.Address = data.getUnsigned(offset_ptr, HeaderData.AddrSize);
+     arangeDescriptor.Length = data.getUnsigned(offset_ptr, HeaderData.AddrSize);
+ 
+-    if (arangeDescriptor.Length == 0) {
+-      // Each set of tuples is terminated by a 0 for the address and 0
+-      // for the length.
+-      if (arangeDescriptor.Address == 0 && *offset_ptr == end_offset)
++    // Each set of tuples is terminated by a 0 for the address and 0
++    // for the length.
++    if (arangeDescriptor.Length == 0 && arangeDescriptor.Address == 0) {
++      if (*offset_ptr == end_offset)
+         return ErrorSuccess();
+-      return createStringError(
++      WarningHandler(createStringError(
+           errc::invalid_argument,
+           "address range table at offset 0x%" PRIx64
+-          " has an invalid tuple (length = 0) at offset 0x%" PRIx64,
+-          Offset, *offset_ptr - tuple_size);
++          " has a premature terminator entry at offset 0x%" PRIx64,
++          Offset, EntryOffset));
+     }
+ 
+     ArangeDescriptors.push_back(arangeDescriptor);
+diff --git llvm/lib/DebugInfo/DWARF/DWARFDebugAranges.cpp llvm/lib/DebugInfo/DWARF/DWARFDebugAranges.cpp
+index e8ed6307505..e0db469752c 100644
+--- llvm/lib/DebugInfo/DWARF/DWARFDebugAranges.cpp
++++ llvm/lib/DebugInfo/DWARF/DWARFDebugAranges.cpp
+@@ -28,7 +28,8 @@ void DWARFDebugAranges::extract(
+   DWARFDebugArangeSet Set;
+ 
+   while (DebugArangesData.isValidOffset(Offset)) {
+-    if (Error E = Set.extract(DebugArangesData, &Offset)) {
++    if (Error E =
++            Set.extract(DebugArangesData, &Offset, RecoverableErrorHandler)) {
+       RecoverableErrorHandler(std::move(E));
+       return;
+     }
+diff --git llvm/tools/obj2yaml/dwarf2yaml.cpp llvm/tools/obj2yaml/dwarf2yaml.cpp
+index a318a547e32..14e4450201c 100644
+--- llvm/tools/obj2yaml/dwarf2yaml.cpp
++++ llvm/tools/obj2yaml/dwarf2yaml.cpp
+@@ -64,9 +64,15 @@ Error dumpDebugARanges(DWARFContext &DCtx, DWARFYAML::Data &Y) {
+                                  DCtx.isLittleEndian(), 0);
+   uint64_t Offset = 0;
+   DWARFDebugArangeSet Set;
++  std::vector<DWARFYAML::ARange> DebugAranges;
++
++  // We ignore any errors that don't prevent parsing the section, since we can
++  // still represent such sections. These errors are recorded via the
++  // WarningHandler parameter of Set.extract().
++  auto DiscardError = [](Error Err) { consumeError(std::move(Err)); };
+ 
+   while (ArangesData.isValidOffset(Offset)) {
+-    if (Error E = Set.extract(ArangesData, &Offset))
++    if (Error E = Set.extract(ArangesData, &Offset, DiscardError))
+       return E;
+     DWARFYAML::ARange Range;
+     Range.Format = Set.getHeader().Format;
+diff --git llvm/unittests/DebugInfo/DWARF/DWARFDebugArangeSetTest.cpp llvm/unittests/DebugInfo/DWARF/DWARFDebugArangeSetTest.cpp
+index 4ec9c5d1c0b..face8ec024f 100644
+--- llvm/unittests/DebugInfo/DWARF/DWARFDebugArangeSetTest.cpp
++++ llvm/unittests/DebugInfo/DWARF/DWARFDebugArangeSetTest.cpp
+@@ -7,12 +7,23 @@
+ //===----------------------------------------------------------------------===//
+ 
+ #include "llvm/DebugInfo/DWARF/DWARFDebugArangeSet.h"
++#include "llvm/Testing/Support/Error.h"
+ #include "gtest/gtest.h"
+ 
+ using namespace llvm;
+ 
+ namespace {
+ 
++struct WarningHandler {
++  ~WarningHandler() { EXPECT_THAT_ERROR(std::move(Err), Succeeded()); }
++
++  void operator()(Error E) { Err = joinErrors(std::move(Err), std::move(E)); }
++
++  Error getWarning() { return std::move(Err); }
++
++  Error Err = Error::success();
++};
++
+ template <size_t SecSize>
+ void ExpectExtractError(const char (&SecDataRaw)[SecSize],
+                         const char *ErrorMessage) {
+@@ -21,7 +32,8 @@ void ExpectExtractError(const char (&SecDataRaw)[SecSize],
+                                /* AddressSize = */ 4);
+   DWARFDebugArangeSet Set;
+   uint64_t Offset = 0;
+-  Error E = Set.extract(Extractor, &Offset);
++  WarningHandler Warnings;
++  Error E = Set.extract(Extractor, &Offset, Warnings);
+   ASSERT_TRUE(E.operator bool());
+   EXPECT_STREQ(ErrorMessage, toString(std::move(E)).c_str());
+ }
+@@ -166,9 +178,9 @@ TEST(DWARFDebugArangeSet, UnevenLength) {
+       "of the tuple size");
+ }
+ 
+-TEST(DWARFDebugArangeSet, ZeroLengthEntry) {
++TEST(DWARFDebugArangeSet, ZeroAddressEntry) {
+   static const char DebugArangesSecRaw[] =
+-      "\x24\x00\x00\x00" // Length
++      "\x1c\x00\x00\x00" // Length
+       "\x02\x00"         // Version
+       "\x00\x00\x00\x00" // Debug Info Offset
+       "\x04"             // Address Size
+@@ -176,14 +188,84 @@ TEST(DWARFDebugArangeSet, ZeroLengthEntry) {
+       "\x00\x00\x00\x00" // Padding
+       "\x00\x00\x00\x00" // Entry1: Address
+       "\x01\x00\x00\x00" //         Length
++      "\x00\x00\x00\x00" // Termination tuple
++      "\x00\x00\x00\x00";
++  DWARFDataExtractor Extractor(
++      StringRef(DebugArangesSecRaw, sizeof(DebugArangesSecRaw) - 1),
++      /*IsLittleEndian=*/true,
++      /*AddressSize=*/4);
++  DWARFDebugArangeSet Set;
++  uint64_t Offset = 0;
++  ASSERT_THAT_ERROR(Set.extract(Extractor, &Offset, WarningHandler()),
++                    Succeeded());
++  auto Range = Set.descriptors();
++  auto Iter = Range.begin();
++  ASSERT_EQ(std::distance(Iter, Range.end()), 1u);
++  EXPECT_EQ(Iter->Address, 0u);
++  EXPECT_EQ(Iter->Length, 1u);
++}
++
++TEST(DWARFDebugArangeSet, ZeroLengthEntry) {
++  static const char DebugArangesSecRaw[] =
++      "\x1c\x00\x00\x00" // Length
++      "\x02\x00"         // Version
++      "\x00\x00\x00\x00" // Debug Info Offset
++      "\x04"             // Address Size
++      "\x00"             // Segment Selector Size
++      "\x00\x00\x00\x00" // Padding
++      "\x01\x00\x00\x00" // Entry1: Address
++      "\x00\x00\x00\x00" //         Length
++      "\x00\x00\x00\x00" // Termination tuple
++      "\x00\x00\x00\x00";
++  DWARFDataExtractor Extractor(
++      StringRef(DebugArangesSecRaw, sizeof(DebugArangesSecRaw) - 1),
++      /*IsLittleEndian=*/true,
++      /*AddressSize=*/4);
++  DWARFDebugArangeSet Set;
++  uint64_t Offset = 0;
++  ASSERT_THAT_ERROR(Set.extract(Extractor, &Offset, WarningHandler()),
++                    Succeeded());
++  auto Range = Set.descriptors();
++  auto Iter = Range.begin();
++  ASSERT_EQ(std::distance(Iter, Range.end()), 1u);
++  EXPECT_EQ(Iter->Address, 1u);
++  EXPECT_EQ(Iter->Length, 0u);
++}
++
++TEST(DWARFDebugArangesSet, PrematureTerminator) {
++  static const char DebugArangesSecRaw[] =
++      "\x24\x00\x00\x00" // Length
++      "\x02\x00"         // Version
++      "\x00\x00\x00\x00" // Debug Info Offset
++      "\x04"             // Address Size
++      "\x00"             // Segment Selector Size
++      "\x00\x00\x00\x00" // Padding
++      "\x00\x00\x00\x00" // Entry1: Premature
++      "\x00\x00\x00\x00" //         terminator
+       "\x01\x00\x00\x00" // Entry2: Address
+-      "\x00\x00\x00\x00" //         Length (invalid)
++      "\x01\x00\x00\x00" //         Length
+       "\x00\x00\x00\x00" // Termination tuple
+       "\x00\x00\x00\x00";
+-  ExpectExtractError(
+-      DebugArangesSecRaw,
+-      "address range table at offset 0x0 has an invalid tuple (length = 0) "
+-      "at offset 0x18");
++  DWARFDataExtractor Extractor(
++      StringRef(DebugArangesSecRaw, sizeof(DebugArangesSecRaw) - 1),
++      /*IsLittleEndian=*/true,
++      /*AddressSize=*/4);
++  DWARFDebugArangeSet Set;
++  uint64_t Offset = 0;
++  WarningHandler Warnings;
++  ASSERT_THAT_ERROR(Set.extract(Extractor, &Offset, Warnings), Succeeded());
++  auto Range = Set.descriptors();
++  auto Iter = Range.begin();
++  ASSERT_EQ(std::distance(Iter, Range.end()), 2u);
++  EXPECT_EQ(Iter->Address, 0u);
++  EXPECT_EQ(Iter->Length, 0u);
++  ++Iter;
++  EXPECT_EQ(Iter->Address, 1u);
++  EXPECT_EQ(Iter->Length, 1u);
++  EXPECT_THAT_ERROR(
++      Warnings.getWarning(),
++      FailedWithMessage("address range table at offset 0x0 has a premature "
++                        "terminator entry at offset 0x10"));
+ }
+ 
+ } // end anonymous namespace
+-- 
+2.28.0
+

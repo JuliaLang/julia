@@ -10,13 +10,17 @@ dlls = Libdl.dllist()
 @test length(dlls) > 3 # at a bare minimum, probably have some version of libstdc, libgcc, libjulia, ...
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     for dl in dlls
-        if isfile(dl) && (Libdl.dlopen(dl; throw_error=false) != C_NULL)
+        if isfile(dl) && (Libdl.dlopen(dl; throw_error=false) !== nothing)
             @test Base.samefile(Libdl.dlpath(dl), dl)
         end
     end
 end
 @test length(filter(dlls) do dl
-        return occursin(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
+      if Base.DARWIN_FRAMEWORK
+          return occursin(Regex("^$(Base.DARWIN_FRAMEWORK_NAME)(?:_debug)?\$"), basename(dl))
+      else
+          return occursin(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
+      end
     end) == 1 # look for something libjulia-like (but only one)
 
 # library handle pointer must not be NULL
@@ -28,7 +32,13 @@ cd(@__DIR__) do
 # Find the library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
 # and then adding on /julia to that directory path to get the private library directory, if we need
 # to (where "need to" is defined as private_libdir/julia/libccalltest.dlext exists
-private_libdir = if ccall(:jl_is_debugbuild, Cint, ()) != 0
+private_libdir = if Base.DARWIN_FRAMEWORK
+    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
+    else
+        joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
+    end
+elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
     dirname(abspath(Libdl.dlpath("libjulia-debug")))
 else
     dirname(abspath(Libdl.dlpath("libjulia")))
@@ -186,6 +196,18 @@ let dl = C_NULL
     end
 end
 
+# test do-block dlopen
+Libdl.dlopen(abspath(joinpath(private_libdir, "libccalltest"))) do dl
+    fptr = Libdl.dlsym(dl, :set_verbose)
+    @test fptr !== nothing
+    @test_throws ErrorException Libdl.dlsym(dl, :foo)
+
+    fptr = Libdl.dlsym_e(dl, :set_verbose)
+    @test fptr != C_NULL
+    fptr = Libdl.dlsym_e(dl, :foo)
+    @test fptr == C_NULL
+end
+
 # test dlclose
 # If dl is NULL, jl_dlclose should return -1 and dlclose should return false
 # dlclose should return true on success and false on failure
@@ -198,6 +220,56 @@ let dl = C_NULL
 
     @test Libdl.dlclose(dl)
     @test_skip !Libdl.dlclose(dl)   # Syscall doesn't fail on Win32
+end
+
+# test DL_LOAD_PATH handling and @executable_path expansion
+mktempdir() do dir
+    # Create a `libdcalltest` in a directory that is not on our load path
+    src_path = joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")
+    dst_path = joinpath(dir, "libdcalltest.$(Libdl.dlext)")
+    cp(src_path, dst_path)
+
+    # Add an absurdly long entry to the load path to verify it doesn't lead to a buffer overflow
+    push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
+
+    # Add the temporary directors to load path by absolute path
+    push!(Base.DL_LOAD_PATH, dir)
+
+    # Test that we can now open that file
+    Libdl.dlopen("libdcalltest") do dl
+        fptr = Libdl.dlsym(dl, :set_verbose)
+        @test fptr !== nothing
+        @test_throws ErrorException Libdl.dlsym(dl, :foo)
+
+        fptr = Libdl.dlsym_e(dl, :set_verbose)
+        @test fptr != C_NULL
+        fptr = Libdl.dlsym_e(dl, :foo)
+        @test fptr == C_NULL
+    end
+
+    # Skip these tests if the temporary directory is not on the same filesystem
+    # as the BINDIR, as in that case, a relative path will never work.
+    if Base.Filesystem.splitdrive(dir)[1] != Base.Filesystem.splitdrive(Sys.BINDIR)[1]
+        return
+    end
+
+    empty!(Base.DL_LOAD_PATH)
+    push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
+
+    # Add this temporary directory to our load path, now using `@executable_path` to do so.
+    push!(Base.DL_LOAD_PATH, joinpath("@executable_path", relpath(dir, Sys.BINDIR)))
+
+    # Test that we can now open that file
+    Libdl.dlopen("libdcalltest") do dl
+        fptr = Libdl.dlsym(dl, :set_verbose)
+        @test fptr !== nothing
+        @test_throws ErrorException Libdl.dlsym(dl, :foo)
+
+        fptr = Libdl.dlsym_e(dl, :set_verbose)
+        @test fptr != C_NULL
+        fptr = Libdl.dlsym_e(dl, :foo)
+        @test fptr == C_NULL
+    end
 end
 
 end

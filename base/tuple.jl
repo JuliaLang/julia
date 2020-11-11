@@ -14,6 +14,11 @@ true
 """
 NTuple
 
+# convenience function for extracting N from a Tuple (if defined)
+# else return `nothing` for anything else given (such as Vararg or other non-sized Union)
+_counttuple(::Type{<:NTuple{N,Any}}) where {N} = N
+_counttuple(::Type) = nothing
+
 ## indexing ##
 
 length(@nospecialize t::Tuple) = nfields(t)
@@ -23,12 +28,30 @@ size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(Argumen
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
 @eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
 @eval getindex(@nospecialize(t::Tuple), i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
-getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...,)
+getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
-setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
+
+"""
+    setindex(c::Tuple, v, i::Integer)
+
+Creates a new tuple similar to `x` with the value at index `i` set to `v`.
+Throws a `BoundsError` when out of bounds.
+
+# Examples
+```jldoctest
+julia> Base.setindex((1, 2, 6), 2, 3) == (1, 2, 2)
+true
+```
+"""
+function setindex(x::Tuple, v, i::Integer)
+    @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
+    @_inline_meta
+    _setindex(v, i, x...)
+end
+
 function _setindex(v, i::Integer, first, tail...)
     @_inline_meta
     return (ifelse(i == 1, v, first), _setindex(v, i - 1, tail...)...)
@@ -73,6 +96,40 @@ function indexed_iterate(I, i, state)
     x
 end
 
+"""
+    Base.rest(collection[, itr_state])
+
+Generic function for taking the tail of `collection`, starting from a specific iteration
+state `itr_state`. Return a `Tuple`, if `collection` itself is a `Tuple`, a subtype of
+`AbstractVector`, if `collection` is an `AbstractArray`, a subtype of `AbstractString`
+if `collection` is an `AbstractString`, and an arbitrary iterator, falling back to
+`Iterators.rest(collection[, itr_state])`, otherwise.
+Can be overloaded for user-defined collection types to customize the behavior of slurping
+in assignments, like `a, b... = collection`.
+
+!!! compat "Julia 1.6"
+    `Base.rest` requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> first, state = iterate(a)
+(1, 2)
+
+julia> first, Base.rest(a, state)
+(1, [3, 2, 4])
+```
+"""
+function rest end
+rest(t::Tuple) = t
+rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
+rest(a::Array, i::Int=1) = a[i:end]
+rest(itr, state...) = Iterators.rest(itr, state...)
+
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
 first(t::Tuple) = t[1]
@@ -90,15 +147,32 @@ function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
     end
 end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
-function _compute_eltype(t::Type{<:Tuple})
+function _tuple_unique_fieldtypes(@nospecialize t)
     @_pure_meta
-    t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
+    types = IdSet()
     t´ = unwrap_unionall(t)
-    r = Union{}
-    for ti in t´.parameters
-        r = promote_typejoin(r, rewrap_unionall(unwrapva(ti), t))
+    # Given t = Tuple{Vararg{S}} where S<:Real, the various
+    # unwrapping/wrapping/va-handling here will return Real
+    if t isa Union
+        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
+        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
+    else
+        r = Union{}
+        for ti in (t´::DataType).parameters
+            r = push!(types, rewrap_unionall(unwrapva(ti), t))
+        end
     end
-    return r
+    return Core.svec(types...)
+end
+function _compute_eltype(@nospecialize t)
+    @_pure_meta # TODO: the compiler shouldn't need this
+    types = _tuple_unique_fieldtypes(t)
+    return afoldl(types...) do a, b
+        # if we've already reached Any, it can't widen any more
+        a === Any && return Any
+        b === Any && return Any
+        return promote_typejoin(a, b)
+    end
 end
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
@@ -107,11 +181,25 @@ safe_tail(t::Tuple{}) = ()
 
 # front (the converse of tail: it skips the last entry)
 
+"""
+    front(x::Tuple)::Tuple
+
+Return a `Tuple` consisting of all but the last component of `x`.
+
+# Examples
+```jldoctest
+julia> Base.front((1,2,3))
+(1, 2)
+
+julia> Base.front(())
+ERROR: ArgumentError: Cannot call front on an empty tuple.
+```
+"""
 function front(t::Tuple)
     @_inline_meta
     _front(t...)
 end
-_front() = throw(ArgumentError("Cannot call front on an empty tuple"))
+_front() = throw(ArgumentError("Cannot call front on an empty tuple."))
 _front(v) = ()
 function _front(v, t...)
     @_inline_meta
@@ -172,18 +260,7 @@ function map(f, t1::Any16, t2::Any16, ts::Any16...)
     (A...,)
 end
 
-# mapafoldl, based on afold in operators.jl
-mapafoldl(F,op,a) = a
-mapafoldl(F,op,a,b) = op(a,F(b))
-mapafoldl(F,op,a,b,c...) = mapafoldl(F, op, op(a,F(b)), c...)
-function mapafoldl(F,op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
-    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,F(b)),F(c)),F(d)),F(e)),F(f)),F(g)),F(h)),F(i)),F(j)),F(k)),F(l)),F(m)),F(n)),F(o)),F(p))
-    for x in qs; y = op(y,F(x)); end
-    y
-end
-mapfoldl_impl(f, op, nt::NamedTuple{(:init,)}, t::Tuple) = mapafoldl(f, op, nt.init, t...)
-mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple) = mapafoldl(f, op, f(t[1]), tail(t)...)
-mapfoldl_impl(f, op, nt::NamedTuple{()}, t::Tuple{}) = mapreduce_empty_iter(f, op, t, IteratorEltype(t))
+_foldl_impl(op, init, itr::Tuple) = afoldl(op, init, itr...)
 
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
@@ -201,7 +278,27 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # NOTE: this means this constructor must be avoided in Core.Compiler!
 if nameof(@__MODULE__) === :Base
 
+function tuple_type_tail(T::Type)
+    @_pure_meta # TODO: this method is wrong (and not @pure)
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_tail(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+    else
+        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+        if isvatuple(T) && length(T.parameters) == 1
+            va = T.parameters[1]
+            (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
+            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
+        end
+        return Tuple{argtail(T.parameters...)...}
+    end
+end
+
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
+
+Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
+Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
 
 (::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 
@@ -216,7 +313,7 @@ function _totuple(T, itr, s...)
     @_inline_meta
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
+    return (convert(fieldtype(T, 1), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
 end
 
 # use iterative algorithm for long tuples
@@ -233,7 +330,19 @@ _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.
 
 _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 
+# for types that `apply` knows about, just splatting is faster than collecting first
+_totuple(::Type{Tuple}, itr::Array) = (itr...,)
+_totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
+_totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
+
 end
+
+## filter ##
+
+filter(f, xs::Tuple) = afoldl((ys, x) -> f(x) ? (ys..., x) : ys, (), xs...)
+
+# use Array for long tuples
+filter(f, t::Any16) = Tuple(filter(f, collect(t)))
 
 ## comparison ##
 
@@ -388,6 +497,22 @@ function _tuple_any(f::Function, tf::Bool, a, b...)
     _tuple_any(f, tf | f(a), b...)
 end
 _tuple_any(f::Function, tf::Bool) = tf
+
+
+# a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    @_pure_meta
+    for y in itr
+        y === x && return true
+    end
+    return false
+end
+function in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    return sym_in(x, itr)
+end
+
 
 """
     empty(x::Tuple)

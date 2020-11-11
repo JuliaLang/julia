@@ -54,23 +54,7 @@ remote exception and a serializable form of the call stack when the exception wa
 RemoteException(captured) = RemoteException(myid(), captured)
 function showerror(io::IO, re::RemoteException)
     (re.pid != myid()) && print(io, "On worker ", re.pid, ":\n")
-    showerror(io, get_root_exception(re.captured))
-end
-
-isa_exception_container(ex) = (isa(ex, RemoteException) ||
-                               isa(ex, CapturedException) ||
-                               isa(ex, CompositeException))
-
-function get_root_exception(ex)
-    if isa(ex, RemoteException)
-        return get_root_exception(ex.captured)
-    elseif isa(ex, CapturedException) && isa_exception_container(ex.ex)
-        return get_root_exception(ex.ex)
-    elseif isa(ex, CompositeException) && length(ex.exceptions) > 0 && isa_exception_container(ex.exceptions[1])
-        return get_root_exception(ex.exceptions[1])
-    else
-        return ex
-    end
+    showerror(io, re.captured)
 end
 
 function run_work_thunk(thunk, print_error)
@@ -131,10 +115,12 @@ function process_messages(r_stream::TCPSocket, w_stream::TCPSocket, incoming::Bo
 end
 
 function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, incoming::Bool)
-    disable_nagle(r_stream)
+    Sockets.nagle(r_stream, false)
+    Sockets.quickack(r_stream, true)
     wait_connected(r_stream)
     if r_stream != w_stream
-        disable_nagle(w_stream)
+        Sockets.nagle(w_stream, false)
+        Sockets.quickack(w_stream, true)
         wait_connected(w_stream)
     end
     message_handler_loop(r_stream, w_stream, incoming)

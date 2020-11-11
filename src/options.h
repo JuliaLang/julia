@@ -113,11 +113,14 @@
 #define JL_STACK_SIZE (2*1024*1024)
 #endif
 
+// allow a suspended Task to restart on a different thread
+//#define MIGRATE_TASKS
+
 // threading options ----------------------------------------------------------
 
 // controls for when threads sleep
 #define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
-#define DEFAULT_THREAD_SLEEP_THRESHOLD  1e9    // cycles (1e9==1sec@1GHz)
+#define DEFAULT_THREAD_SLEEP_THRESHOLD  16*1000 // nanoseconds (16us)
 
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
@@ -129,27 +132,41 @@
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
 
+// partr -- parallel tasks runtime options ------------------------------------
+
+// multiq
+    // number of heaps = MULTIQ_HEAP_C * nthreads
+#define MULTIQ_HEAP_C                   4
+    // how many in each heap
+#define MULTIQ_TASKS_PER_HEAP           129
+
+// parfor
+    // tasks = niters / (GRAIN_K * nthreads)
+#define GRAIN_K                         4
+
+// synchronization
+    // narrivers = ((GRAIN_K * nthreads) ^ ARRIVERS_P) + 1
+    // limit for number of recursive parfors
+#define ARRIVERS_P                      2
+    // nreducers = narrivers * REDUCERS_FRAC
+#define REDUCERS_FRAC                   1
+
 
 // sanitizer defaults ---------------------------------------------------------
 
-// XXX: these macros are duplicated from julia_internal.h
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define JL_ASAN_ENABLED
-#endif
-#elif defined(__SANITIZE_ADDRESS__)
-#define JL_ASAN_ENABLED
-#endif
-#if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
-#define JL_MSAN_ENABLED
-#endif
+#ifndef JULIA_H
+#error "Must be included after julia.h"
 #endif
 
 // Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
 #if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
 #define MEMDEBUG
 #define KEEP_BODIES
+#endif
+
+// TSAN doesn't like COPY_STACKS
+#if defined(JL_TSAN_ENABLED) && defined(COPY_STACKS)
+#undef COPY_STACKS
 #endif
 
 // Memory sanitizer needs TLS, which llvm only supports for the small memory model

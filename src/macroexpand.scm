@@ -15,9 +15,9 @@
               (loop (cdr lst) (cons nxt out)))))))
 
 (define (julia-bq-expand- x d)
-  (cond ((or (eq? x 'true) (eq? x 'false))  x)
-        ((or (symbol? x) (ssavalue? x))     (list 'inert x))
+  (cond ((or (symbol? x) (ssavalue? x))     (list 'inert x))
         ((atom? x)  x)
+        ((memq (car x) '(true false)) x)
         ((and (= d 0) (eq? (car x) '$))
          (if (length= x 2)
              (if (vararg? (cadr x))
@@ -115,7 +115,7 @@
                                    (cons (decl-var (cadar binds)) vars)))
                             ((eventually-call? (cadar binds))
                              ;; f()=c
-                             (let ((asgn (cadr (julia-expand0 (car binds)))))
+                             (let ((asgn (cadr (julia-expand0 (car binds) 'none 0))))
                                (loop (cdr binds)
                                      (cons (cadr asgn) vars))))
                             ((and (pair? (cadar binds))
@@ -206,12 +206,11 @@
 
 ;; get the name from a function formal argument expression, allowing `(escape x)`
 (define (try-arg-name v)
-  (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
-         (list v))
+  (cond ((symbol? v) (list v))
         ((atom? v) '())
         (else
          (case (car v)
-           ((... kw |::|) (try-arg-name (cadr v)))
+           ((... kw |::| =) (try-arg-name (cadr v)))
            ((escape) (list v))
            ((hygienic-scope) (try-arg-name (cadr v)))
            ((meta)  ;; allow certain per-argument annotations
@@ -276,7 +275,18 @@
                     ,@(map (lambda (x)
                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
                            (cddr e))))
+    ((tuple) `(tuple ,@(map (lambda (x)
+                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
+                            (cdr e))))
     (else (other e))))
+
+;; given the LHS of e.g. `x::Int -> y`, wrap the signature in `tuple` to normalize
+(define (tuple-wrap-arrow-sig e)
+  (cond ((atom? e)             `(tuple ,e))
+        ((eq? (car e) 'where)  `(where ,(tuple-wrap-arrow-arglist (cadr e)) ,@(cddr e)))
+        ((eq? (car e) 'tuple)  e)
+        ((eq? (car e) 'escape) `(escape ,(tuple-wrap-arrow-sig (cadr e))))
+        (else                  `(tuple ,e))))
 
 (define (new-expansion-env-for x env (outermost #f))
   (let ((introduced (pattern-expand1 vars-introduced-by-patterns x)))
@@ -298,10 +308,9 @@
              (append!
               pairs
               (filter (lambda (v) (not (assq (car v) env)))
-                      (append!
-                       (pair-with-gensyms v)
-                       (map (lambda (v) (cons v v))
-                            (diff (keywords-introduced-by x) globals))))
+                      (pair-with-gensyms v))
+              (map (lambda (v) (cons v v))
+                   (keywords-introduced-by x))
               env)))))))
 
 (define (resolve-expansion-vars-with-new-env x env m parent-scope inarg (outermost #f))
@@ -315,7 +324,7 @@
    m parent-scope inarg))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
+  (cond ((or (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
          e)
         ((symbol? e)
          (let ((a (assq e env)))
@@ -342,7 +351,7 @@
                                    ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))))
                              (else
                               `(global ,(resolve-expansion-vars-with-new-env arg env m parent-scope inarg))))))
-           ((using import export meta line inbounds boundscheck simdloop gc_preserve gc_preserve_end) (map unescape e))
+           ((using import export meta line inbounds boundscheck loopinfo) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
@@ -362,8 +371,16 @@
            ((parameters)
             (cons 'parameters
                   (map (lambda (x)
-                         (resolve-expansion-vars- x env m parent-scope #f))
+                         ;; `x` by itself after ; means `x=x`
+                         (let ((x (if (and (not inarg) (symbol? x))
+                                      `(kw ,x ,x)
+                                      x)))
+                           (resolve-expansion-vars- x env m parent-scope #f)))
                        (cdr e))))
+
+           ((->)
+            `(-> ,(resolve-in-function-lhs (tuple-wrap-arrow-sig (cadr e)) env m parent-scope inarg)
+                 ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
 
            ((= function)
             (if (and (pair? (cadr e)) (function-def? e))
@@ -414,6 +431,14 @@
                    (body (cadr e))
                    (m (caddr e)))
               (resolve-expansion-vars-with-new-env body env m parent-scope inarg #t)))
+           ((tuple)
+            (cons (car e)
+                  (map (lambda (x)
+                         (if (assignment? x)
+                             `(= ,(unescape (cadr x))
+                                 ,(resolve-expansion-vars-with-new-env (caddr x) env m parent-scope inarg))
+                             (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))
+                       (cdr e))))
 
            ;; todo: trycatch
            (else
@@ -488,10 +513,17 @@
         ((and (eq? (car e) '=) (not (function-def? e)))
          (append! (filter symbol? (decl-vars* (cadr e)))
                   (find-assigned-vars-in-expansion (caddr e) #f)))
+        ((eq? (car e) 'tuple)
+         (apply append! (map (lambda (x)
+                               (find-assigned-vars-in-expansion (if (assignment? x)
+                                                                    (caddr x)
+                                                                    x)
+                                                                #f))
+                             (cdr e))))
         (else
          (apply append! (map (lambda (x)
                                (find-assigned-vars-in-expansion x #f))
-                             e)))))
+                             (cdr e))))))
 
 (define (keywords-introduced-by e)
   (let ((v (pattern-expand1 keywords-introduced-by-patterns e)))

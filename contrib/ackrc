@@ -1,2 +1,0 @@
---type-set=julia=.jl
---type-add=julia:firstlinematch:/^#!.*\bjulia/
