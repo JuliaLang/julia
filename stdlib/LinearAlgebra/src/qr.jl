@@ -770,7 +770,8 @@ mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:Abstrac
 
 function ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat}
     m,n = size(A)
-    (ldiv!(UpperTriangular(view(A.factors,1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), b), 1:size(A, 2))); b)
+    ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), b), 1:size(A, 2)))
+    return b
 end
 function ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
     m,n = size(A)
