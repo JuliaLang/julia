@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# sinh, cosh, tanh, asinh, acosh, and atanh are heavily based on FDLIBM code:
+# asinh, acosh, and atanh are heavily based on FDLIBM code:
 # e_sinh.c, e_sinhf, e_cosh.c, e_coshf, s_tanh.c, s_tanhf.c, s_asinh.c,
 # s_asinhf.c, e_acosh.c, e_coshf.c, e_atanh.c, and e_atanhf.c
 # that are made available under the following licence:
@@ -50,7 +50,7 @@ function sinh_kernel(x::Float64)
     x2 = x*x
     x2lo = fma(x,x,-x2)
     hi_order = evalpoly(x2, (8.333333333336817e-3, 1.9841269840165435e-4,
-                             2.7557319381151335e-6, 2.5052096530035283e-8,
+			     2.7557319381151335e-6, 2.5052096530035283e-8,
                              1.6059550718903307e-10, 7.634842144412119e-13,
                              2.9696954760355812e-15))
     hi,lo = exthorner(x2, (1.0, 0.16666666666666635, hi_order))
@@ -135,17 +135,17 @@ TANH_LARGE_X(::Type{Float32}) = 9.0f0
 TANH_SMALL_X(::Type{Float64}) = 1.0
 TANH_SMALL_X(::Type{Float32}) = 1.3862944f0       #2*log(2)
 @inline function tanh_kernel(x::Float64)
-    return evalpoly(x, (1.0, -0.33333333333332904, 0.13333333333267555, 
-                        -0.05396825393066753, 0.02186948742242217, 
-                        -0.008863215974794633, 0.003591910693118715, 
-                        -0.0014542587440487815, 0.0005825521659411748, 
+    return evalpoly(x, (1.0, -0.33333333333332904, 0.13333333333267555,
+                        -0.05396825393066753, 0.02186948742242217,
+                        -0.008863215974794633, 0.003591910693118715,
+                        -0.0014542587440487815, 0.0005825521659411748,
                         -0.00021647574085351332, 5.5752458452673005e-5))
 end
 @inline function tanh_kernel(x::Float32)
-    return evalpoly(x, (1.0f0, -0.3333312f0, 0.13328037f0, 
+    return evalpoly(x, (1.0f0, -0.3333312f0, 0.13328037f0,
                         -0.05350336f0, 0.019975215f0, -0.0050525228f0))
 end
-function mytanh(x::T) where T<:Union{Float32, Float64}
+function tanh(x::T) where T<:Union{Float32, Float64}
     # Method
     # mathematically tanh(x) is defined to be (exp(x)-exp(-x))/(exp(x)+exp(-x))
     #    1. reduce x to non-negative by tanh(-x) = -tanh(x).
