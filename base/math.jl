@@ -401,7 +401,7 @@ julia> exp10(2)
 """
 exp10(x::AbstractFloat) = 10^x
 
-for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :expm1)
+for f in (:sin, :cos, :tan, :sinh, :cosh, :tanh, :atan, :acos, :asin, :asinh, :acosh, :atanh, :exp, :expm1, :log)
     @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
 end
 

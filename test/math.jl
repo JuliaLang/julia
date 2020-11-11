@@ -1186,3 +1186,18 @@ end
     @test (@inferred hypot(3, 4im)) === 5.0
     @test (@inferred hypot(3, 4im, 12)) === 13.0
 end
+
+struct BadFloatWrapper <: AbstractFloat
+    x::Float64
+end
+
+@testset "not impelemented errors" begin
+    x = BadFloatWrapper(1.9)
+    @test_throws ErrorException asinh(x)
+    @test_throws ErrorException sinh(x)
+    @test_throws ErrorException cosh(x)
+    @test_throws ErrorException tanh(x)
+    @test_throws ErrorException atan(x)
+    @test_throws ErrorException exp(x)
+    @test_throws ErrorException expm1(x)
+end
