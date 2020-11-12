@@ -116,7 +116,7 @@ function range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing
     # See https://github.com/JuliaLang/julia/pull/28708#issuecomment-420034562
     if step === length === nothing
         msg = """
-        Neither step nor length were provided. To fix this do one of the following:
+        Neither `step` nor `length` was provided. To fix this do one of the following:
         * Pass one of them
         * Use `$(start):$(stop)`
         * Use `range($start, stop=$stop)`
