@@ -2115,8 +2115,7 @@
                          ;; skip last assignment if it is an all-underscore vararg
                          (n   (if (> n 0)
                                   (let ((l (last lhss)))
-                                    (if (and (vararg? l)
-                                             (underscore-symbol? (cadr l)))
+                                    (if (and (vararg? l) (underscore-symbol? (cadr l)))
                                         (- n 1)
                                         n))
                                   n))
@@ -2124,16 +2123,16 @@
                     `(block
                       ,@(if (> n 0) `((local ,st)) '())
                       ,@ini
-                      ,.(map (lambda (i lhs)
+                      ,@(map (lambda (i lhs)
                                (expand-forms
-                                 (if (and (pair? lhs) (eq? (car lhs) '|...|))
-                                     `(= ,(cadr lhs) (call (top rest) ,xx ,.(if (eq? i 0) '() `(,st))))
+                                 (if (vararg? lhs)
+                                     `(= ,(cadr lhs) (call (top rest) ,xx ,@(if (eq? i 0) '() `(,st))))
                                      (lower-tuple-assignment
-                                      (if (= i (- n 1))
-                                          (list lhs)
-                                          (list lhs st))
-                                      `(call (top indexed_iterate)
-                                             ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st)))))))
+                                       (if (= i (- n 1))
+                                           (list lhs)
+                                           (list lhs st))
+                                       `(call (top indexed_iterate)
+                                              ,xx ,(+ i 1) ,@(if (eq? i 0) '() `(,st)))))))
                              (iota n)
                              lhss)
                       (unnecessary ,xx)))))))
