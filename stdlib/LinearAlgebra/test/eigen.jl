@@ -103,6 +103,9 @@ end
         test_matrix = rand(typeof(eltya),3,3)
         test_matrix[2,2] = eltya
         @test_throws(ArgumentError, eigen(test_matrix))
+        @test_throws(ArgumentError, eigen(Symmetric(test_matrix)))
+        @test_throws(ArgumentError, eigen(Hermitian(test_matrix)))
+        @test_throws(ArgumentError, eigen(Diagonal(test_matrix)))
     end
 end
 
