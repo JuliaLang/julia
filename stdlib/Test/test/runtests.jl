@@ -79,12 +79,8 @@ end
                    "Thrown: ErrorException")
 end
 # Test printing of Fail results
-mutable struct NoThrowTestSet <: Test.AbstractTestSet
-    results::Vector
-    NoThrowTestSet(desc) = new([])
-end
-Test.record(ts::NoThrowTestSet, t::Test.Result) = (push!(ts.results, t); t)
-Test.finish(ts::NoThrowTestSet) = ts.results
+include("nothrow_testset.jl")
+
 let fails = @testset NoThrowTestSet begin
         # 1 - Fail - wrong exception
         @test_throws OverflowError error()
@@ -797,29 +793,30 @@ end
     @test startswith(fails[4].value, "ErrorException")
 end
 
-function newfunc()
-    42
-end
-@deprecate oldfunc newfunc
-
-@testset "@test_deprecated" begin
-    @test_deprecated oldfunc()
-
-    # Expression passthrough
-    if Base.JLOptions().depwarn != 2
-        @test (@test_deprecated oldfunc()) == 42
-
-        fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
-            @test_deprecated newfunc()
-            @test_deprecated r"Not found in message" oldfunc()
+let code = quote
+        function newfunc()
+            42
         end
-        @test length(fails) == 2
-        @test fails[1] isa Test.LogTestFailure
-        @test fails[2] isa Test.LogTestFailure
-    else
-        @warn """Omitting `@test_deprecated` tests which can't yet
-                 be tested in --depwarn=error mode"""
+        @deprecate oldfunc newfunc
+
+        @testset "@test_deprecated" begin
+            @test_deprecated oldfunc()
+            @test Base.JLOptions().depwarn == 1
+
+            @test (@test_deprecated oldfunc()) == 42
+
+            fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
+                @test_deprecated newfunc()
+                @test_deprecated r"Not found in message" oldfunc()
+            end
+            @test length(fails) == 2
+            @test fails[1] isa Test.LogTestFailure
+            @test fails[2] isa Test.LogTestFailure
+        end
     end
+    incl = "include($(repr(joinpath(@__DIR__, "nothrow_testset.jl"))))"
+    cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=yes -e 'using Test' -e $incl -e $code`
+    @test success(pipeline(cmd))
 end
 
 @testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
