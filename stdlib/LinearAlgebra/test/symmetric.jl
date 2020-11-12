@@ -64,6 +64,11 @@ end
                     @test_throws ArgumentError Hermitian(Symmetric(aherm, :U), :L)
                 end
             end
+            @testset "diag" begin
+                D = Diagonal(x)
+                @test diag(Symmetric(D, :U))::Vector == x
+                @test diag(Hermitian(D, :U))::Vector == real(x)
+            end
             @testset "similar" begin
                 @test isa(similar(Symmetric(asym)), Symmetric{eltya})
                 @test isa(similar(Hermitian(aherm)), Hermitian{eltya})
@@ -675,6 +680,20 @@ end
         @test sqrt(D) ≈ [1 0; 0 1e-7im] rtol=1e-14
         @test sqrt(D, rtol=1e-13) ≈ [1 0; 0 0] rtol=1e-14
         @test sqrt(D, rtol=1e-13)^2 ≈ D rtol=1e-13
+    end
+end
+
+@testset "Multiplications symmetric/hermitian for $T and $S" for T in
+        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
+    let A = Transpose(Symmetric(rand(S, 3, 3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ parent(A) * Bv
+        @test A * Bm ≈ parent(A) * Bm
+        @test Bm * A ≈ Bm * parent(A)
+    end
+    let A = Adjoint(Hermitian(rand(S, 3,3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ parent(A) * Bv
+        @test A * Bm ≈ parent(A) * Bm
+        @test Bm * A ≈ Bm * parent(A)
     end
 end
 

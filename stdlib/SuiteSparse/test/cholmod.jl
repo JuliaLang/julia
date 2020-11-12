@@ -866,11 +866,16 @@ end
     end
 end
 
-@testset "Issue #27860" begin
-    for typeA in (Float64, ComplexF64), typeB in (Float64, ComplexF64), transform in (adjoint, transpose)
+@testset "Issues #27860 & #28363" begin
+    for typeA in (Float64, ComplexF64), typeB in (Float64, ComplexF64), transform in (identity, adjoint, transpose)
         A = sparse(typeA[2.0 0.1; 0.1 2.0])
         B = randn(typeB, 2, 2)
         @test A \ transform(B) ≈ cholesky(A) \ transform(B) ≈ Matrix(A) \ transform(B)
+        C = randn(typeA, 2, 2)
+        sC = sparse(C)
+        sF = typeA <: Real ? cholesky(Symmetric(A)) : cholesky(Hermitian(A))
+        @test cholesky(A) \ transform(sC) ≈ Matrix(A) \ transform(C)
+        @test sF.PtL \ transform(A) ≈ sF.PtL \ Matrix(transform(A))
     end
 end
 

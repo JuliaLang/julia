@@ -178,3 +178,8 @@ end
     @test ≈(1.0; atol=1).(1.0:3.0) == [true, true, false]
 
 end
+
+@testset "isnan for Number" begin
+    struct CustomNumber <: Number end
+    @test !isnan(CustomNumber())
+end

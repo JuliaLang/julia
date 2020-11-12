@@ -2854,72 +2854,76 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
             // now that the results are (mostly) sorted, assign group numbers to each ambiguity
             // by computing the specificity-ambiguity matrix covering this query
             uint32_t *ambig_groupid = (uint32_t*)alloca(len * sizeof(uint32_t));
+            for (i = 0; i < len; i++)
+                ambig_groupid[i] = i;
             // as we go, keep a rough count of how many methods are disjoint, which
             // gives us a lower bound on how many methods we will be returning
             // and lets us stop early if we reach our limit
             int ndisjoint = minmax ? 1 : 0;
             for (i = 0; i < len; i++) {
-                // can't use skip[i] here, since we still need to make sure the minmax dominates
                 jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
+                if (skip[i]) {
+                    // if there was a minmax method, we can just pretend the rest are all in the same group:
+                    // they're all together but unsorted in the list, since we'll drop them all later anyways
+                    assert(matc->fully_covers != NOT_FULLY_COVERS);
+                    if (ambig_groupid[len - 1] > i)
+                        ambig_groupid[len - 1] = i; // ambiguity covering range [i:len)
+                    break;
+                }
                 jl_method_t *m = matc->method;
                 int subt = matc->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m->sig)
                 int rsubt = jl_egal((jl_value_t*)matc->spec_types, m->sig);
-                ambig_groupid[i] = i;
                 int disjoint = 1;
-                for (j = i; j > 0; j--) {
+                for (j = len; j > i; j--) {
+                    if (ambig_groupid[j - 1] < i) {
+                        disjoint = 0;
+                        break;
+                    }
                     jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(env.t, j - 1);
+                    // can't use skip[j - 1] here, since we still need to make sure the minmax dominates
                     jl_method_t *m2 = matc2->method;
                     int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
-                    if (skip[j - 1]) {
-                        // if there was a minmax method, we can just pretend these are all in the same group
-                        // they're all together but unsorted in the list, since we'll drop them all later anyways
-                        assert(matc2->fully_covers != NOT_FULLY_COVERS);
-                        disjoint = 0;
-                        ambig_groupid[i] = j - 1; // ambiguity covering range [i:j)
-                    }
-                    else {
-                        int rsubt2 = jl_egal((jl_value_t*)matc2->spec_types, m2->sig);
-                        jl_value_t *ti;
-                        if (subt) {
-                            ti = (jl_value_t*)matc2->spec_types;
-                            isect2 = NULL;
-                        }
-                        else if (subt2) {
-                            ti = (jl_value_t*)matc->spec_types;
-                            isect2 = NULL;
-                        }
-                        else if (rsubt && rsubt2 && lim == -1 && ambig == NULL) {
-                            // these would only be filtered out of the list as
-                            // ambiguous if they are also type-equal, as we
-                            // aren't skipping matches and the user doesn't
-                            // care if we report any ambiguities
-                            ti = jl_bottom_type;
-                        }
-                        else {
-                            jl_type_intersection2((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types, &env.match.ti, &isect2);
-                            ti = env.match.ti;
-                        }
-                        if (ti != jl_bottom_type) {
-                            if (!jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
-                                // m and m2 are ambiguous, but let's see if we can find another method (m3)
-                                // that dominates their intersection, and means we can ignore this
-                                size_t k;
-                                for (k = j; k > 0; k--) {
-                                    jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(env.t, k - 1);
-                                    jl_method_t *m3 = matc3->method;
-                                    if ((jl_subtype(ti, m3->sig) || (isect2 && jl_subtype(isect2, m3->sig)))
-                                            && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m->sig)
-                                            && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m2->sig))
-                                        break;
-                                }
-                                if (k == 0) {
-                                    ambig_groupid[i] = j - 1; // ambiguity covering range [i:j)
-                                }
-                            }
-                            disjoint = 0;
-                        }
+                    int rsubt2 = jl_egal((jl_value_t*)matc2->spec_types, m2->sig);
+                    jl_value_t *ti;
+                    if (subt) {
+                        ti = (jl_value_t*)matc2->spec_types;
                         isect2 = NULL;
                     }
+                    else if (subt2) {
+                        ti = (jl_value_t*)matc->spec_types;
+                        isect2 = NULL;
+                    }
+                    else if (rsubt && rsubt2 && lim == -1 && ambig == NULL) {
+                        // these would only be filtered out of the list as
+                        // ambiguous if they are also type-equal, as we
+                        // aren't skipping matches and the user doesn't
+                        // care if we report any ambiguities
+                        ti = jl_bottom_type;
+                    }
+                    else {
+                        jl_type_intersection2((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types, &env.match.ti, &isect2);
+                        ti = env.match.ti;
+                    }
+                    if (ti != jl_bottom_type && !jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig)) {
+                        disjoint = 0;
+                        // m and m2 are ambiguous, but let's see if we can find another method (m3)
+                        // that dominates their intersection, and means we can ignore this
+                        size_t k;
+                        for (k = i; k > 0; k--) {
+                            jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(env.t, k - 1);
+                            jl_method_t *m3 = matc3->method;
+                            if ((jl_subtype(ti, m3->sig) || (isect2 && jl_subtype(isect2, m3->sig)))
+                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m->sig)
+                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m2->sig))
+                                break;
+                        }
+                        if (k == 0) {
+                            ambig_groupid[j - 1] = i; // ambiguity covering range [i:j)
+                            isect2 = NULL;
+                            break;
+                        }
+                    }
+                    isect2 = NULL;
                 }
                 if (disjoint && lim >= 0) {
                     ndisjoint += 1;

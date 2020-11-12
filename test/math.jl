@@ -283,6 +283,7 @@ end
             @test hypot(T(Inf), T(x)) === T(Inf)
             @test hypot(T(Inf), T(NaN)) === T(Inf)
             @test isnan_type(T, hypot(T(x), T(NaN)))
+            @test tanh(T(Inf)) === T(1)
         end
     end
 end
@@ -1074,6 +1075,19 @@ float(x::FloatWrapper) = x
     @test isa(exp(z), Complex)
     @test isa(sin(z), Complex)
     @test isa(cos(z), Complex)
+end
+
+# Define simple wrapper of a Float type:
+struct FloatWrapper2 <: Real
+    x::Float64
+end
+
+float(x::FloatWrapper2) = x.x
+@testset "inverse hyperbolic trig functions of non-standard float" begin
+    x = FloatWrapper2(3.1)
+    @test asinh(sinh(x)) == asinh(sinh(3.1))
+    @test acosh(cosh(x)) == acosh(cosh(3.1))
+    @test atanh(tanh(x)) == atanh(tanh(3.1))
 end
 
 @testset "cbrt" begin

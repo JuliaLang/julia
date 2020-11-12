@@ -20,8 +20,8 @@ extern "C" {
 
 static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
 {
-    unsigned long self = jl_thread_self();
-    unsigned long owner = jl_atomic_load_relaxed(&lock->owner);
+    jl_thread_t self = jl_thread_self();
+    jl_thread_t owner = jl_atomic_load_relaxed(&lock->owner);
     if (owner == self) {
         lock->count++;
         return;
@@ -93,8 +93,8 @@ static inline void jl_mutex_lock(jl_mutex_t *lock)
 
 static inline int jl_mutex_trylock_nogc(jl_mutex_t *lock)
 {
-    unsigned long self = jl_thread_self();
-    unsigned long owner = jl_atomic_load_acquire(&lock->owner);
+    jl_thread_t self = jl_thread_self();
+    jl_thread_t owner = jl_atomic_load_acquire(&lock->owner);
     if (owner == self) {
         lock->count++;
         return 1;
