@@ -99,9 +99,9 @@ mutable struct Worker
     add_msgs::Array{Any,1}
     gcflag::Bool
     state::WorkerState
-    c_state::Event          # wait for state changes
-    ct_time::Float64        # creation time
-    conn_func::Any          # used to setup connections lazily
+    c_state::Threads.Condition # wait for state changes
+    ct_time::Float64           # creation time
+    conn_func::Any             # used to setup connections lazily
 
     r_stream::IO
     w_stream::IO
@@ -133,7 +133,7 @@ mutable struct Worker
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
-        w=new(id, [], [], false, W_CREATED, Event(), time(), conn_func)
+        w=new(id, [], [], false, W_CREATED, Threads.Condition(), time(), conn_func)
         w.initialized = Event()
         register_worker(w)
         w
@@ -143,8 +143,10 @@ mutable struct Worker
 end
 
 function set_worker_state(w, state)
-    w.state = state
-    notify(w.c_state)
+    lock(w.c_state) do
+        w.state = state
+        notify(w.c_state; all=true)
+    end
 end
 
 function check_worker_state(w::Worker)
@@ -189,9 +191,17 @@ function wait_for_conn(w)
         timeout =  worker_timeout() - (time() - w.ct_time)
         timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
 
-        @async (sleep(timeout); notify(w.c_state))
-        wait(w.c_state)
-        w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+        @async begin
+            sleep(timeout)
+            lock(w.c_state) do
+                # Note: This could wakeup other listeners on `c_state`
+                notify(w.c_state; all=true)
+            end
+        end
+        lock(w.c_state) do
+            wait(w.c_state)
+            w.state === W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+        end
     end
     nothing
 end
@@ -626,7 +636,13 @@ function create_worker(manager, wconfig)
         # require the value of config.connect_at which is set only upon connection completion
         for jw in PGRP.workers
             if (jw.id != 1) && (jw.id < w.id)
-                (jw.state == W_CREATED) && wait(jw.c_state)
+                # wait for wl to join
+                if jw.state === W_CREATED
+                    lock(jw.c_state) do
+                       wait(jw.c_state)
+                    end
+                    # Note: jw.state could still be in W_CREATED if we got woke to early,
+                end
                 push!(join_list, jw)
             end
         end
@@ -649,7 +665,17 @@ function create_worker(manager, wconfig)
         end
 
         for wl in wlist
+<<<<<<< HEAD
             (wl.state == W_CREATED) && wait(wl.c_state)
+=======
+            if wl.state === W_CREATED
+                # wait for wl to join
+                lock(wl.c_state) do
+                   wait(wl.c_state)
+                end
+                # Note: wl.state could still be in W_CREATED if we got woke to early,
+            end
+>>>>>>> 7cfb502b24... Use Threads.Condition instead of Event
             push!(join_list, wl)
         end
     end
