@@ -247,22 +247,34 @@ function del_clients(pairs::Vector)
     end
 end
 
-const any_gc_flag = Condition()
+const any_gc_flag = Threads.Condition()
 function start_gc_msgs_task()
-    @async while true
-        wait(any_gc_flag)
-        flush_gc_msgs()
+    @async begin
+        while true
+            lock(any_gc_flag) do
+                wait(any_gc_flag)
+                flush_gc_msgs()
+            end
+        end
     end
 end
 
+# Function can be called within a finalizer
 function send_del_client(rr)
     if rr.where == myid()
         del_client(rr)
     elseif id_in_procs(rr.where) # process only if a valid worker
         w = worker_from_id(rr.where)
-        push!(w.del_msgs, (remoteref_id(rr), myid()))
-        w.gcflag = true
-        notify(any_gc_flag)
+        msg = (remoteref_id(rr), myid())
+        Threads.@spawn begin # Need to spawn task since we can be in finalizer
+            lock(w.msg_lock) do
+              push!(w.del_msgs, $msg)
+              w.gcflag = true
+            end
+            lock(any_gc_flag) do
+                notify(any_gc_flag)
+            end
+        end
     end
 end
 
@@ -288,9 +300,13 @@ function send_add_client(rr::AbstractRemoteRef, i)
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        push!(w.add_msgs, (remoteref_id(rr), i))
-        w.gcflag = true
-        notify(any_gc_flag)
+        lock(w.msg_lock) do
+            push!(w.add_msgs, (remoteref_id(rr), i))
+            w.gcflag = true
+        end
+        lock(any_gc_flag) do
+            notify(any_gc_flag)
+        end
     end
 end
 
