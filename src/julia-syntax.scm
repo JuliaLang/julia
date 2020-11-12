@@ -2115,14 +2115,14 @@
                          ;; skip last assignment if it is an all-underscore vararg
                          (n   (if (> n 0)
                                   (let ((l (last lhss)))
-                                    (if (and (pair? l) (eq? (car l) '|...|)
+                                    (if (and (vararg? l)
                                              (underscore-symbol? (cadr l)))
                                         (- n 1)
                                         n))
                                   n))
                          (st  (gensy)))
                     `(block
-                      ,.(if (> n 0) `((local ,st)) '())
+                      ,@(if (> n 0) `((local ,st)) '())
                       ,@ini
                       ,.(map (lambda (i lhs)
                                (expand-forms
