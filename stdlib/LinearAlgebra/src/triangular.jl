@@ -303,8 +303,10 @@ function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
     end
     return true
 end
+istril(A::Union{UpperTriangular,UnitUpperTriangular}) = false
 istril(A::Adjoint) = istriu(A.parent)
 istril(A::Transpose) = istriu(A.parent)
+istriu(A::Union{LowerTriangular,UnitLowerTriangular}) = false
 istriu(A::Adjoint) = istril(A.parent)
 istriu(A::Transpose) = istril(A.parent)
 
