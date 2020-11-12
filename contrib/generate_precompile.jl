@@ -195,6 +195,7 @@ function generate_precompile_statements()
         p = withenv("JULIA_HISTORY" => blackhole,
                     "JULIA_PROJECT" => nothing, # remove from environment
                     "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib",
+                    "JULIA_PKG_PRECOMPILE_AUTO" => "0",
                     "TERM" => "") do
             run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
                    --cpu-target=native --startup-file=no --color=yes
