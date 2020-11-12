@@ -32,6 +32,7 @@ let
             :Libdl,
             :Printf,
             :Markdown,
+            :NetworkOptions,
             :LibGit2,
             :Logging,
             :Sockets,

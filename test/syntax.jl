@@ -2602,4 +2602,14 @@ end
     end
 end
 
+@testset "issue #33460" begin
+    err = Expr(:error, "more than one semicolon in argument list")
+    @test Meta.lower(Main, :(f(a; b=1; c=2) = 2))  == err
+    @test Meta.lower(Main, :(f( ; b=1; c=2)))      == err
+    @test Meta.lower(Main, :(f(a; b=1; c=2)))      == err
+    @test Meta.lower(Main, :(f(a; b=1, c=2; d=3))) == err
+    @test Meta.lower(Main, :(f(a; b=1; c=2, d=3))) == err
+    @test Meta.lower(Main, :(f(a; b=1; c=2; d=3))) == err
+end
+
 @test eval(Expr(:if, Expr(:block, Expr(:&&, true, Expr(:call, :(===), 1, 1))), 1, 2)) == 1

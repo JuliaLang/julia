@@ -969,3 +969,73 @@ let ex = :(something_complex + [1, 2, 3])
         @test eof(b)
     end
 end
+
+@testset "verbose option" begin
+    expected = """
+    Test Summary: | Pass  Total
+    Parent        |    9      9
+      Child 1     |    3      3
+        Child 1.1 |    1      1
+        Child 1.2 |    1      1
+        Child 1.3 |    1      1
+      Child 2     |    3      3
+      Child 3     |    3      3
+        Child 3.1 |    1      1
+        Child 3.2 |    1      1
+        Child 3.3 |    1      1
+    """
+
+    mktemp() do f, _
+        write(f,
+        """
+        using Test
+
+        @testset "Parent" verbose = true begin
+            @testset "Child 1" verbose = true begin
+                @testset "Child 1.1" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 1.2" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 1.3" begin
+                    @test 1 == 1
+                end
+            end
+
+            @testset "Child 2" begin
+                @testset "Child 2.1" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 2.2" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 2.3" begin
+                    @test 1 == 1
+                end
+            end
+
+            @testset "Child 3" verbose = true begin
+                @testset "Child 3.1" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 3.2" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 3.3" begin
+                    @test 1 == 1
+                end
+            end
+        end
+        """)
+        cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+        result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+        @test occursin(expected, result)
+    end
+end

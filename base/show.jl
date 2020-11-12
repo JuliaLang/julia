@@ -1138,7 +1138,7 @@ is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
 Return whether the symbol or string `s` contains characters that are parsed as
 a valid identifier in Julia code.
 
-Internally Julia allows any sequence of characters in a `Symbol` (except `\0`s),
+Internally Julia allows any sequence of characters in a `Symbol` (except `\\0`s),
 and macros automatically use variable names containing `#` in order to avoid
 naming collision with the surrounding code. In order for the parser to
 recognize a variable, it uses a limited set of characters (greatly extended by

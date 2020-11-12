@@ -54,7 +54,7 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 // the call instruction. The first `skip` frames are not included in `bt_data`.
 //
 // `maxsize` is the size of the buffer `bt_data` (and `sp` if non-NULL). It
-// must be at least JL_BT_MAX_ENTRY_SIZE to accommodate extended backtrace
+// must be at least `JL_BT_MAX_ENTRY_SIZE + 1` to accommodate extended backtrace
 // entries.  If `sp != NULL`, the stack pointer corresponding `bt_data[i]` is
 // stored in `sp[i]`.
 //

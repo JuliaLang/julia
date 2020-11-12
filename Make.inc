@@ -81,8 +81,7 @@ endif
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
 
-# Set to 1 to enable profiling with perf
-USE_PERF_JITEVENTS ?= 1
+# USE_PERF_JITEVENTS defined below since default is OS specific
 
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP := 0
@@ -417,6 +416,13 @@ EXE := .exe
 else
 fPIC := -fPIC
 EXE :=
+endif
+
+# Set to 1 to enable profiling with perf
+ifeq ("$(OS)", "Linux")
+USE_PERF_JITEVENTS ?= 1
+else
+USE_PERF_JITEVENTS ?= 0
 endif
 
 JULIACODEGEN := LLVM
