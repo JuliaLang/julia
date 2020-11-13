@@ -27,6 +27,8 @@ struct InferenceFrameInfo
     world::UInt64
     sptypes::Vector{Any}
     slottypes::Vector{Any}
+    nargs::Int
+    limited::Bool
 end
 
 function _typeinf_identifier(frame::Core.Compiler.InferenceState)
@@ -35,6 +37,8 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
         frame.world,
         copy(frame.sptypes),
         copy(frame.slottypes),
+        frame.nargs,
+        frame.limited,
     )
     return mi_info
 end
@@ -81,7 +85,7 @@ function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
         # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)]),
+        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1, false),
         _time_ns()))
     return nothing
 end
