@@ -454,9 +454,10 @@ function show_function(io::IO, f::Function, compact::Bool)
     elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
         if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
-            print(io, mt.name)
+            show_sym(io, mt.name)
         else
-            print(io, mt.module, ".", mt.name)
+            print(io, mt.module, ".")
+            show_sym(io, mt.name)
         end
     else
         show_default(io, f)
