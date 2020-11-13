@@ -390,6 +390,10 @@ end
     @test muladd(Diagonal(v3), I, I).diag == v3 .+ 1
     @test muladd(2*I, 3*I, I).λ == 7
     @test muladd(A33, A33', I) == A33 * A33' + I
+
+    # https://github.com/JuliaLang/julia/issues/38426
+    @test @evalpoly(A33, 1.0*I, 1.0*I) == I + A33
+    @test @evalpoly(A33, 1.0*I, 1.0*I, 1.0*I) == I + A33 + A33^2
 end
 
 # issue #6450
