@@ -374,17 +374,17 @@ end
     A33 = reshape(1:9, 3,3) .+ im
     v3 = [3,5,7im]
 
-    # nothing special
+    # no special treatment
     @test muladd(Symmetric(A33), Symmetric(A33), 1) == Symmetric(A33) * Symmetric(A33) .+ 1
     @test muladd(Hermitian(A33), Hermitian(A33), v3) == Hermitian(A33) * Hermitian(A33) .+ v3
     @test muladd(adjoint(A33), transpose(A33), A33) == A33' * transpose(A33) .+ A33
 
-    # diagonal & triangular
-    @test muladd(Diagonal(v3), Diagonal(A33), Diagonal(v3)).diag == ([1,5,9] .+ im .+ 1) .* v3
-
     u1 = muladd(UpperTriangular(A33), UpperTriangular(A33), Diagonal(v3))
     @test u1 isa UpperTriangular
     @test u1 == UpperTriangular(A33) * UpperTriangular(A33) + Diagonal(v3)
+
+    # diagonal
+    @test muladd(Diagonal(v3), Diagonal(A33), Diagonal(v3)).diag == ([1,5,9] .+ im .+ 1) .* v3
 
     # uniformscaling
     @test muladd(Diagonal(v3), I, I).diag == v3 .+ 1
