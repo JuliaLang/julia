@@ -50,7 +50,7 @@ function sinh_kernel(x::Float64)
     x2 = x*x
     x2lo = fma(x,x,-x2)
     hi_order = evalpoly(x2, (8.333333333336817e-3, 1.9841269840165435e-4,
-			     2.7557319381151335e-6, 2.5052096530035283e-8,
+                             2.7557319381151335e-6, 2.5052096530035283e-8,
                              1.6059550718903307e-10, 7.634842144412119e-13,
                              2.9696954760355812e-15))
     hi,lo = exthorner(x2, (1.0, 0.16666666666666635, hi_order))
@@ -152,7 +152,7 @@ function tanh(x::T) where T<:Union{Float32, Float64}
     #    2. Find the branch and the expression to calculate and return it
     #      a) 0 <= x < H_SMALL_X
     #             Use a minimax polynomial over the range
-    #      b) H_SMALL_X <= x < < TANH_LARGE_X
+    #      b) H_SMALL_X <= x < TANH_LARGE_X
     #           1 - 2/(exp(2x) + 1)
     #      c) TANH_LARGE_X <= x
     #            return 1
