@@ -987,4 +987,6 @@ p0 = copy(p)
          (1.0, "c") (2, "c") (3, "c")]
     @test typeof.([iszero, isdigit]) == [typeof(iszero), typeof(isdigit)]
     @test typeof.([iszero, iszero]) == [typeof(iszero), typeof(iszero)]
+    @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
+                  [[1, 2],[missing, 1]])
 end
