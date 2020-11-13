@@ -1499,7 +1499,11 @@ LIBGCC_NAME := libgcc_s_seh-1.$(SHLIB_EXT)
 endif
 endif
 ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
+LIBGCC_NAME := libgcc_s.2.$(SHLIB_EXT)
+else
 LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
+endif
 endif
 ifneq ($(findstring $(OS),Linux FreeBSD),)
 LIBGCC_NAME := libgcc_s.$(SHLIB_EXT).1
