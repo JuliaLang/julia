@@ -927,7 +927,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
     return jv;
 }
 
-static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na)
+static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na) JL_NOTSAFEPOINT
 {
     if (na < jl_datatype_nfields(type)) {
         char *data = (char*)jl_data_ptr(jv);
@@ -951,12 +951,10 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
     if (type->instance != NULL)
         return type->instance;
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
-    JL_GC_PUSH1(&jv);
     for (size_t i = 0; i < na; i++) {
         set_nth_field(type, (void*)jv, i, args[i]);
     }
     init_struct_tail(type, jv, na);
-    JL_GC_POP();
     return jv;
 }
 
@@ -983,13 +981,13 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
     }
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
     jl_value_t *fi = NULL;
-    JL_GC_PUSH2(&jv, &fi);
     if (type->layout->npointers > 0) {
         // if there are references, zero the space first to prevent the GC
         // from seeing uninitialized references during jl_get_nth_field and jl_isa,
         // which can allocate.
         memset(jl_data_ptr(jv), 0, jl_datatype_size(type));
     }
+    JL_GC_PUSH2(&jv, &fi);
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *ft = jl_field_type_concrete(type, i);
         fi = jl_get_nth_field(tup, i);
