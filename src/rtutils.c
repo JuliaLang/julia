@@ -644,7 +644,10 @@ static size_t jl_static_show_x_sym_escaped(JL_STREAM *out, jl_sym_t *name) JL_NO
 // `jl_static_show()` cannot call `jl_subtype()`, for the GC reasons
 // explained in the comment on `jl_static_show_x_()`, below.
 // This function checks if `vt <: Function` without triggering GC.
-static int jl_static_is_function_(jl_datatype_t *vt) {
+static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
+    if (!jl_function_type) {  // Make sure there's a Function type defined.
+        return 0;
+    }
     while (vt != jl_any_type) {
         if (vt == jl_function_type) {
             return 1;
@@ -1012,7 +1015,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, *(jl_value_t**)v, depth);
         n += jl_printf(out, ")");
     }
-    else if (jl_function_type && jl_static_is_function_(vt)) {
+    else if (jl_static_is_function_(vt)) {
         // v is function instance (an instance of a Function type).
         jl_datatype_t *dv = (jl_datatype_t*)vt;
         jl_sym_t *sym = dv->name->mt->name;
