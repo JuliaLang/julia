@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# sinh, cosh, tanh, asinh, acosh, and atanh are heavily based on FDLIBM code:
+# asinh, acosh, and atanh are heavily based on FDLIBM code:
 # e_sinh.c, e_sinhf, e_cosh.c, e_coshf, s_tanh.c, s_tanhf.c, s_asinh.c,
 # s_asinhf.c, e_acosh.c, e_coshf.c, e_atanh.c, and e_atanhf.c
 # that are made available under the following licence:
@@ -132,45 +132,35 @@ cosh(x::Real) = cosh(float(x))
 # tanh methods
 TANH_LARGE_X(::Type{Float64}) = 22.0
 TANH_LARGE_X(::Type{Float32}) = 9.0f0
+TANH_SMALL_X(::Type{Float64}) = 1.0
+TANH_SMALL_X(::Type{Float32}) = 1.3862944f0       #2*log(2)
+@inline function tanh_kernel(x::Float64)
+    return evalpoly(x, (1.0, -0.33333333333332904, 0.13333333333267555,
+                        -0.05396825393066753, 0.02186948742242217,
+                        -0.008863215974794633, 0.003591910693118715,
+                        -0.0014542587440487815, 0.0005825521659411748,
+                        -0.00021647574085351332, 5.5752458452673005e-5))
+end
+@inline function tanh_kernel(x::Float32)
+    return evalpoly(x, (1.0f0, -0.3333312f0, 0.13328037f0,
+                        -0.05350336f0, 0.019975215f0, -0.0050525228f0))
+end
 function tanh(x::T) where T<:Union{Float32, Float64}
     # Method
     # mathematically tanh(x) is defined to be (exp(x)-exp(-x))/(exp(x)+exp(-x))
     #    1. reduce x to non-negative by tanh(-x) = -tanh(x).
     #    2. Find the branch and the expression to calculate and return it
     #      a) 0 <= x < H_SMALL_X
-    #             return x
-    #      b) H_SMALL_X <= x < 1
-    #            -expm1(-2x)/(expm1(-2x) + 2)
-    #      c) 1 <= x < TANH_LARGE_X
-    #           1 - 2/(expm1(2x) + 2)
-    #      d) TANH_LARGE_X <= x
+    #             Use a minimax polynomial over the range
+    #      b) H_SMALL_X <= x < TANH_LARGE_X
+    #           1 - 2/(exp(2x) + 1)
+    #      c) TANH_LARGE_X <= x
     #            return 1
-    if isnan(x)
-        return x
-    elseif isinf(x)
-        return copysign(T(1), x)
-    end
-
-    absx = abs(x)
-    if absx < TANH_LARGE_X(T)
-        # in a)
-        if absx < H_SMALL_X(T)
-            return x
-        end
-        if absx >= T(1)
-            # in c)
-            t = expm1(T(2)*absx)
-            z = T(1) - T(2)/(t + T(2))
-        else
-            # in b)
-            t = expm1(-T(2)*absx)
-            z = -t/(t + T(2))
-        end
-    else
-        # in d)
-        z = T(1)
-    end
-    return copysign(z, x)
+    abs2x = abs(2x)
+    abs2x >= TANH_LARGE_X(T) && return copysign(one(T), x)
+    abs2x <= TANH_SMALL_X(T) && return x*tanh_kernel(x*x)
+    k = exp(abs2x)
+    return copysign(1 - 2/(k+1), x)
 end
 tanh(x::Real) = tanh(float(x))
 
