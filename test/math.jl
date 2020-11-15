@@ -1193,11 +1193,7 @@ end
 
 @testset "not impelemented errors" begin
     x = BadFloatWrapper(1.9)
-    @test_throws ErrorException asinh(x)
-    @test_throws ErrorException sinh(x)
-    @test_throws ErrorException cosh(x)
-    @test_throws ErrorException tanh(x)
-    @test_throws ErrorException atan(x)
-    @test_throws ErrorException exp(x)
-    @test_throws ErrorException expm1(x)
+    for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, expm1, log)
+        @test_throws ErrorException f(x)
+    end
 end
