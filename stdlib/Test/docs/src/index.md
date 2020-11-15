@@ -134,7 +134,8 @@ Foo Tests     |    8      8
 ```
 
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
-summary. If we do have a test failure, only the details for the failed test sets will be shown:
+summary, unless the `verbose=true` option is passed.
+If we do have a test failure, only the details for the failed test sets will be shown:
 
 ```julia-repl
 julia> @testset "Foo Tests" begin
