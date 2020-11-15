@@ -546,7 +546,7 @@ cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
 """
     cispi(z)
 
-Return ``\\exp(iπz)``.
+Compute ``\\exp(i\\pi x)`` more accurately than `cis(pi*x)`, especially for large `x`.
 
 # Examples
 ```jldoctest
