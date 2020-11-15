@@ -550,11 +550,11 @@ Compute ``\\exp(i\\pi x)`` more accurately than `cis(pi*x)`, especially for larg
 
 # Examples
 ```jldoctest
-julia> cispi(1) == -1
-true
+julia> cispi(1)
+-1.0 + 0.0im
 
-julia> cispi(0) == 1
-true
+julia> cispi(0.25 + 1im)
+0.030556854645952924 + 0.030556854645952924im
 ```
 
 !!! compat "Julia 1.6"
