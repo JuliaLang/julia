@@ -548,15 +548,6 @@ cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
 
 Return ``\\exp(iπz)``.
 
-This function also accepts integer or boolean arguments, and then
-returns integer results. This allows calculating ``(-1)^s``
-conveniently and efficiently.
-
-`cispi` is related to [`signbit`](@ref), and allows decomposing
-integers into sign bit and absolute value: ``cispi(signbit(n)) *
-abs(n) == n``. For boolean values, it is also, ``signbit(cispi(b)) ==
-b``.
-
 # Examples
 ```jldoctest
 julia> cispi(1) == -1
