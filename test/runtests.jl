@@ -77,6 +77,14 @@ linalg_tests = tests[linalg_test_ids]
 deleteat!(tests, linalg_test_ids)
 prepend!(tests, linalg_tests)
 
+# do inference_qa at the beginning (in a fresh session) to avoid trouble from specializations
+# introduced by running other tests
+idx = findfirst(isequal("inference_qa"), tests)
+if idx !== nothing
+    deleteat!(tests, idx)
+    pushfirst!(tests, "inference_qa")
+end
+
 import LinearAlgebra
 cd(@__DIR__) do
     n = 1
