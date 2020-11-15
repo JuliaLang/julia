@@ -1346,7 +1346,7 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
         isptr = (elsize >> 15) & 1;
         hasptr = (elsize >> 14) & 1;
         isunion = (elsize >> 13) & 1;
-        elsize = elsize & 0x3fff;
+        elsize = elsize & 0x1fff;
     }
     uintptr_t pos = backref_list.len;
     arraylist_push(&backref_list, NULL);

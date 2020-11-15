@@ -544,6 +544,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (npointers)
                 free(pointers);
         }
+        st->zeroinit = zeroinit;
     }
     // now finish deciding if this instantiation qualifies for special properties
     assert(!isbitstype || st->layout->npointers == 0); // the definition of isbits
