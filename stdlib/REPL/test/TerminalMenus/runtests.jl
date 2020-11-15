@@ -4,7 +4,8 @@ import REPL
 using REPL.TerminalMenus
 using Test
 
-function simulate_input(expected, menu::TerminalMenus.AbstractMenu, keys...)
+function simulate_input(expected, menu::TerminalMenus.AbstractMenu, keys...;
+                        kwargs...)
     keydict =  Dict(:up => "\e[A",
                     :down => "\e[B",
                     :enter => "\r")
@@ -17,12 +18,13 @@ function simulate_input(expected, menu::TerminalMenus.AbstractMenu, keys...)
         end
     end
 
-    request(menu; suppress_output=true) == expected
+    request(menu; suppress_output=true, kwargs...) == expected
 end
 
 include("radio_menu.jl")
 include("multiselect_menu.jl")
 include("dynamic_menu.jl")
+include("multiselect_with_skip_menu.jl")
 
 # Legacy tests
 include("legacytests/old_radio_menu.jl")
