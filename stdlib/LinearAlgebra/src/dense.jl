@@ -1225,7 +1225,7 @@ julia> A = Array(Bidiagonal(fill(1.0, (5, 5)), :U))
  0.0  0.0  0.0  0.0  1.0
 
 julia> factorize(A) # factorize will check to see that A is already factorized
-5×5 Bidiagonal{Float64,Vector{Float64}}:
+5×5 Bidiagonal{Float64, Vector{Float64}}:
  1.0  1.0   ⋅    ⋅    ⋅
   ⋅   1.0  1.0   ⋅    ⋅
   ⋅    ⋅   1.0  1.0   ⋅
@@ -1284,12 +1284,10 @@ function factorize(A::StridedMatrix{T}) where T
                 return Bidiagonal(diag(A), diag(A, 1), :U)
             end
             if utri1
-                if (herm & (T <: Complex)) | sym
-                    try
-                        return ldlt!(SymTridiagonal(diag(A), diag(A, -1)))
-                    catch
-                    end
-                end
+                # TODO: enable once a specialized, non-dense bunchkaufman method exists
+                # if (herm & (T <: Complex)) | sym
+                    # return bunchkaufman(SymTridiagonal(diag(A), diag(A, -1)))
+                # end
                 return lu(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
             end
         end

@@ -17,7 +17,7 @@ using Base.GMP: Limb
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
 import Base: copymutable, copy, copy!, ==, hash, convert,
-             rand, randn
+             rand, randn, show
 
 export rand!, randn!,
        randexp, randexp!,

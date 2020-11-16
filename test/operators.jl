@@ -243,3 +243,6 @@ end
     @test gt5(6) && !gt5(5)
     @test lt5(4) && !lt5(5)
 end
+
+a = rand(3, 3)
+@test transpose(a) === a'ᵀ

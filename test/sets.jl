@@ -447,6 +447,9 @@ end
     @test @inferred(unique!(iseven, [2, 3, 5, 7, 9])) == [2, 3]
     @test @inferred(unique!(x -> x % 2 == 0 ? :even : :odd, [1, 2, 3, 4, 2, 2, 1])) == [1, 2]
     @test @inferred(unique!(x -> x % 2 == 0 ? :even : "odd", [1, 2, 3, 4, 2, 2, 1]; seen=Set{Union{Symbol,String}}())) == [1, 2]
+
+    @test isempty(unique!(Union{}[]))
+    @test eltype(unique!([i for i in ["1"] if i isa Int])) <: Union{}
 end
 
 @testset "allunique" begin
@@ -642,6 +645,26 @@ end
     @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
     x = @inferred replace([1, missing], missing=>2, 1=>missing)
     @test isequal(x, [missing, 2]) && x isa Vector{Union{Int, Missing}}
+
+    # eltype promotion for dicts
+    d = Dict(1=>2, 3=>4)
+    f = replace(d, (1=>2) => (1=>nothing))
+    @test f == Dict(3=>4, 1=>nothing)
+    @test eltype(f) == Pair{Int, Union{Nothing, Int}}
+    f = replace(d, (1=>2) => (1=>missing), (3=>4)=>(3=>missing))
+    @test valtype(f) == Union{Missing,Int}
+    f = replace(d, (1=>2) => (1=>'a'), (3=>4)=>(3=>'b'))
+    @test valtype(f) == Any
+    @test f == Dict(3=>'b', 1=>'a')
+
+    # eltype promotion for sets
+    s = Set([1, 2, 3])
+    f = replace(s, 2=>missing, 3=>nothing)
+    @test f == Set([1, missing, nothing])
+    @test eltype(f) == Union{Int,Missing,Nothing}
+    f = replace(s, 2=>'a')
+    @test eltype(f) == Any
+    @test f == Set([1, 3, 'a'])
 
     # test that isequal is used
     @test replace([NaN, 1.0], NaN=>0.0) == [0.0, 1.0]

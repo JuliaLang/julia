@@ -70,7 +70,7 @@ abstract type Real <: Number end
 ```
 [`Number`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
 """
-kw"abstract type"
+kw"abstract type", kw"abstract"
 
 """
     module
@@ -106,7 +106,7 @@ kw"module"
 `__init__()` function in your module would executes immediately *after* the module is loaded at
 runtime for the first time (i.e., it is only called once and only after all statements in the
 module have been executed). Because it is called *after* fully importing the module, `__init__`
-functions of submodules will be executed *first*. Two typical uses of __init__ are calling
+functions of submodules will be executed *first*. Two typical uses of `__init__` are calling
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
@@ -150,6 +150,7 @@ include(p) = Base.include(Mod, p)
 ...
 
 end
+```
 """
 kw"baremodule"
 
@@ -182,6 +183,9 @@ Macros are a way to run generated code without calling [`eval`](@ref Base.eval),
 code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
+Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
+and file name the macro is called from, and `__module__`, which is the module the macro is expanded
+in.
 
 # Examples
 ```jldoctest
@@ -270,11 +274,11 @@ Assigning `a` to `b` does not create a copy of `b`; instead use [`copy`](@ref) o
 
 ```jldoctest
 julia> b = [1]; a = b; b[1] = 2; a
-1-element Array{Int64,1}:
+1-element Array{Int64, 1}:
  2
 
 julia> b = [1]; a = copy(b); b[1] = 2; a
-1-element Array{Int64,1}:
+1-element Array{Int64, 1}:
  1
 
 ```
@@ -284,7 +288,7 @@ julia> function f!(x); x[:] .+= 1; end
 f! (generic function with 1 method)
 
 julia> a = [1]; f!(a); a
-1-element Array{Int64,1}:
+1-element Array{Int64, 1}:
  2
 
 ```
@@ -303,7 +307,7 @@ julia> a, b
 Assignment can operate on multiple variables in series, and will return the value of the right-hand-most expression:
 ```jldoctest
 julia> a = [1]; b = [2]; c = [3]; a = b = c
-1-element Array{Int64,1}:
+1-element Array{Int64, 1}:
  3
 
 julia> b[1] = 2; a, b, c
@@ -313,11 +317,11 @@ julia> b[1] = 2; a, b, c
 Assignment at out-of-bounds indices does not grow a collection. If the collection is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
 ```jldoctest
 julia> a = [1, 1]; a[3] = 2
-ERROR: BoundsError: attempt to access 2-element Array{Int64,1} at index [3]
+ERROR: BoundsError: attempt to access 2-element Array{Int64, 1} at index [3]
 [...]
 
 julia> push!(a, 2, 3)
-4-element Array{Int64,1}:
+4-element Array{Int64, 1}:
  1
  1
  2
@@ -331,7 +335,7 @@ ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
-2-element Array{Int64,1}:
+2-element Array{Int64, 1}:
  2
  3
 
@@ -354,14 +358,14 @@ assignment expression is converted into a single loop.
 julia> A = zeros(4, 4); B = [1, 2, 3, 4];
 
 julia> A .= B
-4×4 Array{Float64,2}:
+4×4 Array{Float64, 2}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
  4.0  4.0  4.0  4.0
 
 julia> A
-4×4 Array{Float64,2}:
+4×4 Array{Float64, 2}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
@@ -643,6 +647,13 @@ otherwise the condition expression `x > y` is evaluated, and if it is true, the
 corresponding block is evaluated; if neither expression is true, the `else` block is
 evaluated. The `elseif` and `else` blocks are optional, and as many `elseif` blocks as
 desired can be used.
+
+In contrast to some other languages conditions must be of type `Bool`. It does not
+suffice for conditions to be convertible to `Bool`.
+```jldoctest
+julia> if 1 end
+ERROR: TypeError: non-boolean (Int64) used in boolean context
+```
 """
 kw"if", kw"elseif", kw"else"
 
@@ -722,12 +733,12 @@ the last index of a dimension.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Array{Int64, 2}:
  1  2
  3  4
 
 julia> A[end, :]
-2-element Array{Int64,1}:
+2-element Array{Int64, 1}:
  3
  4
 ```
@@ -951,24 +962,23 @@ In most cases, this simply results in a call to `convert(argtype, argvalue)`.
 kw"ccall"
 
 """
-    llvmcall(IR::String, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
-    llvmcall((declarations::String, IR::String), ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
+    llvmcall(fun_ir::String, returntype, Tuple{argtype1, ...}, argvalue1, ...)
+    llvmcall((mod_ir::String, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
+    llvmcall((mod_bc::Vector{UInt8}, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
 
-Call LLVM IR string in the first argument. Similar to an LLVM function `define` block,
-arguments are available as consecutive unnamed SSA variables (%0, %1, etc.).
+Call the LLVM code provided in the first argument. There are several ways to specify this
+first argument:
 
-The optional declarations string contains external functions declarations that are
-necessary for llvm to compile the IR string. Multiple declarations can be passed in by
-separating them with line breaks.
+- as a literal string, representing function-level IR (similar to an LLVM `define` block),
+  with arguments are available as consecutive unnamed SSA variables (%0, %1, etc.);
+- as a 2-element tuple, containing a string of module IR and a string representing the name
+  of the entry-point function to call;
+- as a 2-element tuple, but with the module provided as an `Vector{UINt8}` with bitcode.
 
-Note that the argument type tuple must be a literal tuple, and not a tuple-valued
-variable or expression.
-
-Each `ArgumentValue` to `llvmcall` will be converted to the corresponding
-`ArgumentType`, by automatic insertion of calls to `unsafe_convert(ArgumentType,
-cconvert(ArgumentType, ArgumentValue))`. (See also the documentation for
-[`unsafe_convert`](@ref Base.unsafe_convert) and [`cconvert`](@ref Base.cconvert) for further details.)
-In most cases, this simply results in a call to `convert(ArgumentType, ArgumentValue)`.
+Note that contrary to `ccall`, the argument types must be specified as a tuple type, and not
+a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
+not as variables or expressions (it may be necessary to use `@eval` to generate these
+literals).
 
 See `test/llvmcall.jl` for usage examples.
 """
@@ -1846,7 +1856,7 @@ Rational{Int64}
 julia> M = [1 2; 3.5 4];
 
 julia> typeof(M)
-Matrix{Float64} = Array{Float64,2}
+Matrix{Float64} (alias for Array{Float64, 2})
 ```
 """
 typeof
@@ -1897,7 +1907,7 @@ Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`undef`](@ref
 # Examples
 ```julia-repl
 julia> Vector{Float64}(undef, 3)
-3-element Array{Float64,1}:
+3-element Array{Float64, 1}:
  6.90966e-310
  6.90966e-310
  6.90966e-310
@@ -1947,7 +1957,7 @@ Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`undef`](@
 # Examples
 ```julia-repl
 julia> Matrix{Float64}(undef, 2, 3)
-2×3 Array{Float64,2}:
+2×3 Array{Float64, 2}:
  6.93517e-310  6.93517e-310  6.93517e-310
  6.93517e-310  6.93517e-310  1.29396e-320
 ```
@@ -2001,13 +2011,13 @@ match the length or number of `dims`. See [`undef`](@ref).
 
 # Examples
 ```julia-repl
-julia> A = Array{Float64,2}(undef, 2, 3) # N given explicitly
-2×3 Array{Float64,2}:
+julia> A = Array{Float64, 2}(undef, 2, 3) # N given explicitly
+2×3 Array{Float64, 2}:
  6.90198e-310  6.90198e-310  6.90198e-310
  6.90198e-310  6.90198e-310  0.0
 
 julia> B = Array{Float64}(undef, 2) # N determined by the input
-2-element Array{Float64,1}:
+2-element Array{Float64, 1}:
  1.87103e-320
  0.0
 ```
@@ -2070,8 +2080,8 @@ an alias for `UndefInitializer()`.
 
 # Examples
 ```julia-repl
-julia> Array{Float64,1}(UndefInitializer(), 3)
-3-element Array{Float64,1}:
+julia> Array{Float64, 1}(UndefInitializer(), 3)
+3-element Array{Float64, 1}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
@@ -2088,8 +2098,8 @@ array-constructor-caller would like an uninitialized array.
 
 # Examples
 ```julia-repl
-julia> Array{Float64,1}(undef, 3)
-3-element Array{Float64,1}:
+julia> Array{Float64, 1}(undef, 3)
+3-element Array{Float64, 1}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
@@ -2335,8 +2345,8 @@ arguments accepted by varargs methods (see the section on [Varargs Functions](@r
 
 # Examples
 ```jldoctest
-julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
-Tuple{AbstractString,Vararg{Int64,N} where N}
+julia> mytupletype = Tuple{AbstractString, Vararg{Int}}
+Tuple{AbstractString, Vararg{Int64, N} where N}
 
 julia> isa(("1",), mytupletype)
 true
@@ -2390,6 +2400,17 @@ Construct a named tuple by selecting fields in `names` (a tuple of Symbols) from
 another named tuple.
 """
 NamedTuple{names}(nt::NamedTuple)
+
+"""
+    NamedTuple(itr)
+
+Construct a named tuple from an iterator of key-value pairs (where the keys must be
+`Symbol`s). Equivalent to `(; itr...)`.
+
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+"""
+NamedTuple(itr)
 
 """
     typeassert(x, type)

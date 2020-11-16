@@ -146,30 +146,33 @@ function _views(ex::Expr)
     if ex.head in (:(=), :(.=))
         # don't use view for ref on the lhs of an assignment,
         # but still use views for the args of the ref:
-        lhs = ex.args[1]
-        Expr(ex.head, Meta.isexpr(lhs, :ref) ?
-                      Expr(:ref, mapany(_views, lhs.args)...) : _views(lhs),
-             _views(ex.args[2]))
+        arg1 = ex.args[1]
+        Expr(ex.head, Meta.isexpr(arg1, :ref) ?
+                        Expr(:ref, mapany(_views, (arg1::Expr).args)...) : _views(arg1),
+                _views(ex.args[2]))
     elseif ex.head === :ref
-        Expr(:call, maybeview, mapany(_views, ex.args)...)
+        Expr(:call, maybeview, mapany(_views, ex.args)...)::Expr
     else
         h = string(ex.head)
         # don't use view on the lhs of an op-assignment a[i...] += ...
         if last(h) == '=' && Meta.isexpr(ex.args[1], :ref)
-            lhs = ex.args[1]
+            lhs = ex.args[1]::Expr
 
             # temp vars to avoid recomputing a and i,
             # which will be assigned in a let block:
             a = gensym(:a)
-            i = [gensym(:i) for k = 1:length(lhs.args)-1]
+            i = let lhs=lhs     # #15276
+                [gensym(:i) for k = 1:length(lhs.args)-1]
+            end
 
             # for splatted indices like a[i, j...], we need to
             # splat the corresponding temp var.
             I = similar(i, Any)
             for k = 1:length(i)
-                if Meta.isexpr(lhs.args[k+1], :...)
+                argk1 = lhs.args[k+1]
+                if Meta.isexpr(argk1, :...)
                     I[k] = Expr(:..., i[k])
-                    lhs.args[k+1] = lhs.args[k+1].args[1] # unsplat
+                    lhs.args[k+1] = (argk1::Expr).args[1] # unsplat
                 else
                     I[k] = i[k]
                 end
@@ -178,13 +181,13 @@ function _views(ex::Expr)
             Expr(:let,
                  Expr(:block,
                       :($a = $(_views(lhs.args[1]))),
-                      [:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...),
+                      Any[:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...),
                  Expr(first(h) == '.' ? :(.=) : :(=), :($a[$(I...)]),
                       Expr(:call, Symbol(h[1:end-1]),
                            :($maybeview($a, $(I...))),
                            mapany(_views, ex.args[2:end])...)))
         else
-            Expr(ex.head, mapany(_views, ex.args)...)
+            exprarray(ex.head, mapany(_views, ex.args))
         end
     end
 end

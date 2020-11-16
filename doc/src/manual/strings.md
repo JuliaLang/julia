@@ -1030,7 +1030,7 @@ produce arrays of bytes. Here is an example using all three:
 
 ```jldoctest
 julia> b"DATA\xff\u2200"
-8-element Base.CodeUnits{UInt8,String}:
+8-element Base.CodeUnits{UInt8, String}:
  0x44
  0x41
  0x54
@@ -1050,12 +1050,12 @@ julia> isvalid("DATA\xff\u2200")
 false
 ```
 
-As it was mentioned `CodeUnits{UInt8,String}` type behaves like read only array of `UInt8` and
+As it was mentioned `CodeUnits{UInt8, String}` type behaves like read only array of `UInt8` and
 if you need a standard vector you can convert it using `Vector{UInt8}`:
 
 ```jldoctest
 julia> x = b"123"
-3-element Base.CodeUnits{UInt8,String}:
+3-element Base.CodeUnits{UInt8, String}:
  0x31
  0x32
  0x33
@@ -1064,7 +1064,7 @@ julia> x[1]
 0x31
 
 julia> x[1] = 0x32
-ERROR: setindex! not defined for Base.CodeUnits{UInt8,String}
+ERROR: setindex! not defined for Base.CodeUnits{UInt8, String}
 [...]
 
 julia> Vector{UInt8}(x)
@@ -1080,11 +1080,11 @@ is encoded as two bytes in UTF-8:
 
 ```jldoctest
 julia> b"\xff"
-1-element Base.CodeUnits{UInt8,String}:
+1-element Base.CodeUnits{UInt8, String}:
  0xff
 
 julia> b"\uff"
-2-element Base.CodeUnits{UInt8,String}:
+2-element Base.CodeUnits{UInt8, String}:
  0xc3
  0xbf
 ```

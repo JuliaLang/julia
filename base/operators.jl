@@ -125,9 +125,9 @@ isequal(x, y) = x == y
 signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
 signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
 
-isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
-isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
-isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)::Bool
+isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)::Bool
+isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)::Bool
 
 """
     isless(x, y)
@@ -150,15 +150,17 @@ This is the default comparison used by [`sort`](@ref).
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
+See the documentation on [Alternate orderings](@ref) for how to define alternate
+ordering methods that can be used in sorting and related functions.
 
 # Examples
- ```jldoctest
- julia> isless(1, 3)
- true
+```jldoctest
+julia> isless(1, 3)
+true
 
- julia> isless("Red", "Blue")
- false
- ```
+julia> isless("Red", "Blue")
+false
+```
 """
 function isless end
 
@@ -545,6 +547,7 @@ end
 function kron! end
 
 const var"'" = adjoint
+const var"'ᵀ" = transpose
 
 """
     \\(x, y)
@@ -871,26 +874,58 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 ```
+See also [`ComposedFunction`](@ref).
 """
 function ∘ end
 
-struct ComposedFunction{F,G} <: Function
-    f::F
-    g::G
-    ComposedFunction{F, G}(f, g) where {F, G} = new{F, G}(f, g)
-    ComposedFunction(f, g) = new{Core.Typeof(f),Core.Typeof(g)}(f, g)
+"""
+    ComposedFunction{Outer,Inner} <: Function
+
+Represents the composition of two callable objects `outer::Outer` and `inner::Inner`. That is
+```julia
+ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...))
+```
+The preferred way to construct instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
+```jldoctest
+julia> sin ∘ cos === ComposedFunction(sin, cos)
+true
+
+julia> typeof(sin∘cos)
+ComposedFunction{typeof(sin), typeof(cos)}
+```
+The composed pieces are stored in the fields of `ComposedFunction` and can be retrieved as follows:
+```jldoctest
+julia> composition = sin ∘ cos
+sin ∘ cos
+
+julia> composition.outer === sin
+true
+
+julia> composition.inner === cos
+true
+```
+!!! compat "Julia 1.6"
+    ComposedFunction requires at least Julia 1.6. In earlier versions `∘` returns an anonymous function instead.
+
+See also [`∘`](@ref).
+"""
+struct ComposedFunction{O,I} <: Function
+    outer::O
+    inner::I
+    ComposedFunction{O, I}(outer, inner) where {O, I} = new{O, I}(outer, inner)
+    ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...) = c.f(c.g(x...))
+(c::ComposedFunction)(x...) = c.outer(c.inner(x...))
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    show(io, c.f)
+    show(io, c.outer)
     print(io, " ∘ ")
-    show(io, c.g)
+    show(io, c.inner)
 end
 
 """
@@ -1063,7 +1098,8 @@ splat(f) = args->f(args...)
     in(x)
 
 Create a function that checks whether its argument is [`in`](@ref) `x`, i.e.
-a function equivalent to `y -> y in x`.
+a function equivalent to `y -> y in x`. See also [`insorted`](@ref) for the use
+with sorted collections.
 
 The returned function is of type `Base.Fix2{typeof(in)}`, which can be
 used to implement specialized methods.

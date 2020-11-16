@@ -99,7 +99,6 @@ static arraylist_t deser_sym;
 static htable_t backref_table;
 static int backref_table_numel;
 static arraylist_t layout_table;
-static arraylist_t builtin_typenames;
 
 // list of (size_t pos, (void *f)(jl_value_t*)) entries
 // for the serializer to mark values in need of rework by function f
@@ -168,9 +167,9 @@ typedef enum {
 } jl_callingconv_t;
 
 
-// this supports up to 1 GB images and 16 RefTags
+// this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
 // if a larger size is required, will need to add support for writing larger relocations in many cases below
-#define RELOC_TAG_OFFSET 28
+#define RELOC_TAG_OFFSET 29
 
 
 /* read and write in host byte order */
@@ -259,8 +258,8 @@ static uintptr_t jl_fptr_id(void *fptr)
         return *(uintptr_t*)pbp;
 }
 
-#define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
-static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v);
+#define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v),1)
+static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recursive);
 
 
 static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
@@ -287,7 +286,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
 
 #define NBOX_C 1024
 
-static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
+static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recursive)
 {
     // ignore items that are given a special representation
     if (v == NULL || jl_is_symbol(v)) {
@@ -331,6 +330,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         // skip it
     }
     else if (jl_is_svec(v)) {
+        if (!recursive)
+            return;
         size_t i, l = jl_svec_len(v);
         jl_value_t **data = jl_svec_data(v);
         for (i = 0; i < l; i++) {
@@ -365,6 +366,17 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
+    }
+    else if (jl_is_typename(v)) {
+        jl_typename_t *tn = (jl_typename_t*)v;
+        jl_serialize_value(s, tn->name);
+        jl_serialize_value(s, tn->module);
+        jl_serialize_value(s, tn->names);
+        jl_serialize_value(s, tn->wrapper);
+        jl_serialize_value_(s, (jl_value_t*)tn->cache, 0);
+        jl_serialize_value_(s, (jl_value_t*)tn->linearcache, 0);
+        jl_serialize_value(s, tn->mt);
+        jl_serialize_value(s, tn->partial);
     }
     else if (t->layout->nfields > 0) {
         char *data = (char*)jl_data_ptr(v);
@@ -949,7 +961,7 @@ static void jl_read_symbols(jl_serializer_state *s)
         const char *str = (const char*)base;
         base += len + 1;
         //printf("symbol %3d: %s\n", len, str);
-        jl_sym_t *sym = jl_symbol_n(str, len);
+        jl_sym_t *sym = _jl_symbol(str, len);
         arraylist_push(&deser_sym, (void*)sym);
     }
 }
@@ -1029,6 +1041,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
             return (uintptr_t)jl_box_uint8(offset);
         // offset -= 256;
         assert(0 && "corrupt relocation item id");
+        jl_unreachable(); // terminate control flow if assertion is disabled.
     case BuiltinFunctionRef:
         assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer ID");
         return (uintptr_t)id_to_fptrs[offset];
@@ -1234,7 +1247,7 @@ static void jl_finalize_serializer(jl_serializer_state *s, arraylist_t *list)
 }
 
 
-static void jl_reinit_item(jl_value_t *v, int how)
+static void jl_reinit_item(jl_value_t *v, int how) JL_GC_DISABLED
 {
     switch (how) {
         case 1: { // rehash IdDict
@@ -1279,7 +1292,7 @@ static void jl_reinit_item(jl_value_t *v, int how)
 }
 
 
-static void jl_finalize_deserializer(jl_serializer_state *s)
+static void jl_finalize_deserializer(jl_serializer_state *s) JL_GC_DISABLED
 {
     // run reinitialization functions
     uintptr_t base = (uintptr_t)&s->s->buf[0];
@@ -1297,21 +1310,40 @@ static void jl_finalize_deserializer(jl_serializer_state *s)
 // --- helper functions ---
 
 // remove cached types not referenced in the stream
-static void jl_prune_type_cache(jl_svec_t *cache)
+static int keep_type_cache_entry(jl_value_t *ti)
+{
+    if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(native_functions, ti) != 0)
+        return 1;
+    if (jl_is_datatype(ti)) {
+        jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
+        if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND ||
+                    jl_get_llvm_gv(native_functions, singleton) != 0))
+            return 1;
+    }
+    return 0;
+}
+
+static void jl_prune_type_cache_hash(jl_svec_t *cache)
+{
+    size_t l = jl_svec_len(cache), i;
+    for (i = 0; i < l; i++) {
+        jl_value_t *ti = jl_svecref(cache, i);
+        if (ti == NULL || ti == jl_nothing)
+            continue;
+        if (!keep_type_cache_entry(ti))
+            jl_svecset(cache, i, jl_nothing);
+    }
+}
+
+static void jl_prune_type_cache_linear(jl_svec_t *cache)
 {
     size_t l = jl_svec_len(cache), ins = 0, i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
         if (ti == NULL)
             break;
-        if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(native_functions, ti) != 0)
+        if (keep_type_cache_entry(ti))
             jl_svecset(cache, ins++, ti);
-        else if (jl_is_datatype(ti)) {
-            jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
-            if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND ||
-                        jl_get_llvm_gv(native_functions, singleton) != 0))
-                jl_svecset(cache, ins++, ti);
-        }
     }
     if (i > ins) {
         memset(&jl_svec_data(cache)[ins], 0, (i - ins) * sizeof(jl_value_t*));
@@ -1324,7 +1356,7 @@ static void jl_prune_type_cache(jl_svec_t *cache)
 static void jl_init_serializer2(int);
 static void jl_cleanup_serializer2(void);
 
-static void jl_save_system_image_to_stream(ios_t *f)
+static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
@@ -1375,15 +1407,13 @@ static void jl_save_system_image_to_stream(ios_t *f)
             jl_value_t *tag = *tags[i];
             jl_serialize_value(&s, tag);
         }
-        for (i = 0; i < builtin_typenames.len; i++) {
-            jl_typename_t *tn = (jl_typename_t*)builtin_typenames.items[i];
-            jl_prune_type_cache(tn->cache);
-            jl_prune_type_cache(tn->linearcache);
-        }
-        for (i = 0; i < builtin_typenames.len; i++) {
-            jl_typename_t *tn = (jl_typename_t*)builtin_typenames.items[i];
-            jl_serialize_value(&s, tn->cache);
-            jl_serialize_value(&s, tn->linearcache);
+        // prune unused entries from built-in type caches
+        for (i = 0; i < backref_table.size; i += 2) {
+            jl_typename_t *tn = (jl_typename_t*)backref_table.table[i];
+            if (tn == HT_NOTFOUND || !jl_is_typename(tn))
+                continue;
+            jl_prune_type_cache_hash(tn->cache);
+            jl_prune_type_cache_linear(tn->linearcache);
         }
     }
 
@@ -1393,6 +1423,12 @@ static void jl_save_system_image_to_stream(ios_t *f)
         jl_write_relocations(&s);
         jl_write_gv_syms(&s, jl_get_root_symbol());
         jl_write_gv_ints(&s);
+    }
+
+    if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET) ||
+        const_data.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)) {
+        jl_printf(JL_STDERR, "ERROR: system image too large\n");
+        jl_exit(1);
     }
 
     // step 3: combine all of the sections into one file
@@ -1475,9 +1511,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     JL_SIGATOMIC_END();
 }
 
-extern void jl_init_int32_int64_cache(void);
-extern void jl_gc_set_permalloc_region(void *start, void *end);
-
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 {
@@ -1505,7 +1538,7 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
     sysimg_fptrs = jl_init_processor_sysimg(handle);
 }
 
-static void jl_restore_system_image_from_stream(ios_t *f)
+static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
 {
     JL_TIMING(SYSIMG_LOAD);
     int en = jl_gc_enable(0);
@@ -1682,7 +1715,6 @@ static void jl_init_serializer2(int for_serialize)
         htable_new(&symbol_table, 0);
         htable_new(&fptr_to_id, sizeof(id_to_fptrs) / sizeof(*id_to_fptrs));
         htable_new(&backref_table, 0);
-        arraylist_new(&builtin_typenames, 0);
         uintptr_t i;
         for (i = 0; id_to_fptrs[i] != NULL; i++) {
             ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
@@ -1700,7 +1732,6 @@ static void jl_cleanup_serializer2(void)
     htable_reset(&fptr_to_id, 0);
     htable_reset(&backref_table, 0);
     arraylist_free(&deser_sym);
-    arraylist_free(&builtin_typenames);
 }
 
 #ifdef __cplusplus

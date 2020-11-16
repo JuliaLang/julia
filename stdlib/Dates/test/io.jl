@@ -5,6 +5,9 @@ module IOTests
 using Test
 using Dates
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+include(joinpath(BASE_TEST_PATH, "testhelpers", "withlocales.jl"))
+
 @testset "string/show representation of Date" begin
     @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
     @test sprint(show, Dates.Date(1, 1, 1)) == "Dates.Date(\"0001-01-01\")"
@@ -515,36 +518,31 @@ end
 end
 
 @testset "AM/PM" begin
-    # get the current locale
-    LC_TIME = 2
-    time_locale = ccall(:setlocale, Cstring, (Cint, Cstring), LC_TIME, C_NULL)
-    try
-        # set the locale
-        ccall(:setlocale, Cstring, (Cint, Cstring), LC_TIME, "C")
-
-        for (t12,t24) in (("12:00am","00:00"), ("12:07am","00:07"), ("01:24AM","01:24"),
-                        ("12:00pm","12:00"), ("12:15pm","12:15"), ("11:59PM","23:59"))
-            d = DateTime("2018-01-01T$t24:00")
-            t = Time("$t24:00")
-            for HH in ("HH","II")
-                @test DateTime("2018-01-01 $t12","yyyy-mm-dd $HH:MMp") == d
-                @test Time("$t12","$HH:MMp") == t
-            end
+    for (t12,t24) in (("12:00am","00:00"), ("12:07am","00:07"), ("01:24AM","01:24"),
+                    ("12:00pm","12:00"), ("12:15pm","12:15"), ("11:59PM","23:59"))
+        d = DateTime("2018-01-01T$t24:00")
+        t = Time("$t24:00")
+        for HH in ("HH","II")
+            @test DateTime("2018-01-01 $t12","yyyy-mm-dd $HH:MMp") == d
+            @test Time("$t12","$HH:MMp") == t
+        end
+        local tmstruct, strftime
+        withlocales(["C"]) do
+            # test am/pm comparison handling
             tmstruct = Libc.strptime("%I:%M%p", t12)
-            @test Time(tmstruct) == t
-            @test uppercase(t12) == Dates.format(t, "II:MMp") ==
-                                    Dates.format(d, "II:MMp") ==
-                Libc.strftime("%I:%M%p", tmstruct)
+            strftime = Libc.strftime("%I:%M%p", tmstruct)
+            nothing
         end
-        for bad in ("00:24am", "00:24pm", "13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
-            @eval @test_throws ArgumentError Time($bad, "II:MMp")
-        end
-        # if am/pm is missing, defaults to 24-hour clock
-        @eval Time("13:24", "II:MMp") == Time("13:24", "HH:MM")
-    finally
-        # recover the locale
-        ccall(:setlocale, Cstring, (Cint, Cstring), LC_TIME, time_locale)
+        @test Time(tmstruct) == t
+        @test uppercase(t12) == Dates.format(t, "II:MMp") ==
+                                Dates.format(d, "II:MMp") ==
+                                strftime
     end
+    for bad in ("00:24am", "00:24pm", "13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
+        @test_throws ArgumentError Time(bad, "II:MMp")
+    end
+    # if am/pm is missing, defaults to 24-hour clock
+    @test Time("13:24", "II:MMp") == Time("13:24", "HH:MM")
 end
 
 end

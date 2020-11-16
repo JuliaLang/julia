@@ -499,4 +499,13 @@ end
     end
 end
 
+@testset "Missing arithmetic" begin
+    for t ∈ [Date, Time, Day, Month, Week, Year, Hour, Microsecond, Millisecond, Minute, Nanosecond, Second]
+        @test ismissing(t(1) + missing)
+        @test ismissing(missing + t(1))
+        @test ismissing(t(1) - missing)
+        @test ismissing(missing - t(1))
+    end
+end
+
 end

@@ -14,6 +14,19 @@ folder by specifying `USECLANG=1` while overriding the `CC` and `CXX` variables.
 To use one of of the sanitizers set `SANITIZE=1` and then the appropriate flag for the sanitizer you
 want to use.
 
+On macOS, this might need some extra flags also to work. Altogether, it might
+look like this, plus one or more of the `SANITIZE_*` flags listed below:
+
+    make -C deps USE_BINARYBUILDER_LLVM=0 LLVM_VER=svn stage-llvm
+
+    make -C src SANITIZE=1 USECLANG=1 \
+        CC=~+/deps/scratch/llvm-svn/build_Release/bin/clang \
+        CXX=~+/deps/scratch/llvm-svn/build_Release/bin/clang++ \
+        CPPFLAGS="-isysroot $(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" \
+        CXXFLAGS="-isystem $(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"
+
+(or put these into your `Make.user`, so you don't need to remember them every time).
+
 ## Address Sanitizer (ASAN)
 
 For detecting or debugging memory bugs, you can use Clang's [address sanitizer (ASAN)](http://clang.llvm.org/docs/AddressSanitizer.html).

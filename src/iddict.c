@@ -81,9 +81,9 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            tab[empty_slot] = key;
+            jl_atomic_store_relaxed(&tab[empty_slot], key);
             jl_gc_wb(a, key);
-            tab[empty_slot + 1] = val;
+            jl_atomic_store_relaxed(&tab[empty_slot + 1], val);
             jl_gc_wb(a, val);
             return 1;
         }
@@ -127,7 +127,7 @@ jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
         if (k2 == NULL)
             return NULL;
         if (jl_egal(key, k2)) {
-            if (tab[index + 1] != NULL)
+            if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL)
                 return (jl_value_t**)&tab[index + 1];
             // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
             if (key != jl_nothing)
@@ -159,7 +159,7 @@ JL_DLLEXPORT
 jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
 {
     jl_value_t **bp = jl_table_peek_bp(h, key);
-    return (bp == NULL) ? deflt : *bp;
+    return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp);
 }
 
 JL_DLLEXPORT

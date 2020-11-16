@@ -56,7 +56,7 @@ function pwd()
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
         else
-            uv_error(:cwd, rc)
+            uv_error("pwd()", rc)
         end
     end
 end
@@ -81,7 +81,9 @@ julia> pwd()
 ```
 """
 function cd(dir::AbstractString)
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
+    err = ccall(:uv_chdir, Cint, (Cstring,), dir)
+    err < 0 && uv_error("cd($(repr(dir)))", err)
+    return nothing
 end
 cd() = cd(homedir())
 
@@ -174,7 +176,7 @@ function mkdir(path::AbstractString; mode::Integer = 0o777)
                     C_NULL, req, path, checkmode(mode), C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("mkdir", ret)
+            uv_error("mkdir($(repr(path)); mode=0o$(string(mode,base=8)))", ret)
         end
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
         return path
@@ -187,7 +189,8 @@ end
     mkpath(path::AbstractString; mode::Unsigned = 0o777)
 
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
-`0o777`, modified by the current file creation mask.
+`0o777`, modified by the current file creation mask. Unlike [`mkdir`](@ref), `mkpath`
+does not error if `path` (or parts of it) already exists.
 Return `path`.
 
 # Examples
@@ -251,7 +254,7 @@ julia> rm("my", recursive=true)
 julia> rm("this_file_does_not_exist", force=true)
 
 julia> rm("this_file_does_not_exist")
-ERROR: IOError: unlink: no such file or directory (ENOENT)
+ERROR: IOError: unlink("this_file_does_not_exist"): no such file or directory (ENOENT)
 Stacktrace:
 [...]
 ```
@@ -261,7 +264,8 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
-                if (filemode(lstat(path)) & 0o222) == 0
+                st = lstat(path)
+                if ispath(st) && (filemode(st) & 0o222) == 0
                     chmod(path, 0o777)
                 end
             end
@@ -453,7 +457,33 @@ function tempdir()
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1)  # space for null-terminator implied by StringVector
         else
-            uv_error(:tmpdir, rc)
+            uv_error("tempdir()", rc)
+        end
+    end
+end
+
+"""
+    prepare_for_deletion(path::AbstractString)
+
+Prepares the given `path` for deletion by ensuring that all directories within that
+`path` have write permissions, so that files can be removed from them.  This is
+automatically invoked by methods such as `mktempdir()` to ensure that no matter what
+weird permissions a user may have created directories with within the temporary prefix,
+it will always be deleted.
+"""
+function prepare_for_deletion(path::AbstractString)
+    # Nothing to do for non-directories
+    if !isdir(path)
+        return
+    end
+
+    try chmod(path, filemode(path) | 0o333)
+    catch; end
+    for (root, dirs, files) in walkdir(path)
+        for dir in dirs
+            dpath = joinpath(root, dir)
+            try chmod(dpath, filemode(dpath) | 0o333)
+            catch; end
         end
     end
 end
@@ -484,6 +514,7 @@ function temp_cleanup_purge(; force::Bool=false)
             if (force || asap) && ispath(path)
                 need_gc && GC.gc(true)
                 need_gc = false
+                prepare_for_deletion(path)
                 rm(path, recursive=true, force=true)
             end
             !ispath(path) && delete!(TEMP_CLEANUP, path)
@@ -635,7 +666,7 @@ function mktempdir(parent::AbstractString=tempdir();
                     C_NULL, req, tpath, C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("mktempdir", ret)
+            uv_error("mktempdir($(repr(parent)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
@@ -682,7 +713,10 @@ function mktempdir(fn::Function, parent::AbstractString=tempdir();
         fn(tmpdir)
     finally
         try
-            ispath(tmpdir) && rm(tmpdir, recursive=true)
+            if ispath(tmpdir)
+                prepare_for_deletion(tmpdir)
+                rm(tmpdir, recursive=true)
+            end
         catch ex
             @error "mktempdir cleanup" _group=:file exception=(ex, catch_backtrace())
             # might be possible to remove later
@@ -777,7 +811,7 @@ function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
     err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
                 C_NULL, uv_readdir_req, dir, 0, C_NULL)
-    err < 0 && throw(_UVError("readdir", err, "with ", repr(dir)))
+    err < 0 && uv_error("readdir($(repr(dir)))", err)
 
     # iterate the listing into entries
     entries = String[]
@@ -876,12 +910,12 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         end
         nothing
     end
-    return Channel(chnl -> _walkdir(chnl, root))
+    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, root))
 end
 
 function unlink(p::AbstractString)
     err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
-    uv_error("unlink", err)
+    err < 0 && uv_error("unlink($(repr(p)))", err)
     nothing
 end
 
@@ -945,12 +979,16 @@ function symlink(p::AbstractString, np::AbstractString)
         end
     end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
-    @static if Sys.iswindows()
-        if err < 0 && !isdir(p)
-            @warn "On Windows, creating file symlinks requires Administrator privileges" maxlog=1 _group=:file
+    if err < 0
+        msg = "symlink($(repr(p)), $(repr(np)))"
+        @static if Sys.iswindows()
+            if !isdir(p)
+                msg = "On Windows, creating symlinks requires Administrator privileges.\n$msg"
+            end
         end
+        uv_error(msg, err)
     end
-    uv_error("symlink",err)
+    return nothing
 end
 
 """
@@ -966,7 +1004,7 @@ function readlink(path::AbstractString)
             C_NULL, req, path, C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("readlink", ret)
+            uv_error("readlink($(repr(path)))", ret)
             @assert false
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
@@ -992,7 +1030,7 @@ Return `path`.
 """
 function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
-    uv_error("chmod", err)
+    err < 0 && uv_error("chmod($(repr(path)), 0o$(string(mode, base=8)))", err)
     if recursive && isdir(path)
         for p in readdir(path)
             if !islink(joinpath(path, p))
@@ -1012,6 +1050,6 @@ Return `path`.
 """
 function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
-    uv_error("chown",err)
+    err < 0 && uv_error("chown($(repr(path)), $owner, $group)", err)
     path
 end

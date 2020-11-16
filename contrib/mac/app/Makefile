@@ -49,6 +49,7 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 	-mkdir -p $@/Contents/Resources/julia
 	make -C $(JULIAHOME) binary-dist
 	tar zxf $(JULIAHOME)/$(JULIA_BINARYDIST_FILENAME).tar.gz -C $@/Contents/Resources/julia --strip-components 1
+	find $@/Contents/Resources/julia -type f -exec chmod -w {} \;
 	if [ -n "$$MACOS_CODESIGN_IDENTITY" ]; then \
 	    echo "Codesigning with identity $$MACOS_CODESIGN_IDENTITY"; \
 		MACHO_FILES=$$(find "$@" -type f -perm -755 | cut -d: -f1); \

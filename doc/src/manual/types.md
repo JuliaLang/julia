@@ -875,7 +875,7 @@ tuple type is generated on demand:
 
 ```jldoctest
 julia> typeof((1,"foo",2.5))
-Tuple{Int64,String,Float64}
+Tuple{Int64, String, Float64}
 ```
 
 Note the implications of covariance:
@@ -901,7 +901,7 @@ of trailing elements:
 
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
-Tuple{AbstractString,Vararg{Int64,N} where N}
+Tuple{AbstractString, Vararg{Int64, N} where N}
 
 julia> isa(("1",), mytupletype)
 true
@@ -929,7 +929,7 @@ symbols giving the field names, and a tuple type giving the field types.
 
 ```jldoctest
 julia> typeof((a=1,b="hello"))
-NamedTuple{(:a, :b),Tuple{Int64,String}}
+NamedTuple{(:a, :b), Tuple{Int64, String}}
 ```
 
 The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax for declaring
@@ -937,13 +937,13 @@ The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax 
 
 ```jldoctest
 julia> @NamedTuple{a::Int, b::String}
-NamedTuple{(:a, :b),Tuple{Int64,String}}
+NamedTuple{(:a, :b), Tuple{Int64, String}}
 
 julia> @NamedTuple begin
            a::Int
            b::String
        end
-NamedTuple{(:a, :b),Tuple{Int64,String}}
+NamedTuple{(:a, :b), Tuple{Int64, String}}
 ```
 
 A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
@@ -1033,10 +1033,10 @@ consider the two types created by the following declarations:
 
 ```jldoctest
 julia> const T1 = Array{Array{T,1} where T, 1}
-Vector{Vector{T} where T} = Array{Array{T,1} where T,1}
+Vector{Vector{T} where T} (alias for Array{Array{T, 1} where T, 1})
 
-julia> const T2 = Array{Array{T,1}, 1} where T
-Array{Vector{T},1} where T
+julia> const T2 = Array{Array{T, 1}, 1} where T
+Array{Vector{T}, 1} where T
 ```
 
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each
@@ -1048,7 +1048,7 @@ There is a convenient syntax for naming such types, similar to the short form of
 definition syntax:
 
 ```julia
-Vector{T} = Array{T,1}
+Vector{T} = Array{T, 1}
 ```
 
 This is equivalent to `const Vector = Array{T,1} where T`.

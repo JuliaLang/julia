@@ -168,11 +168,21 @@ for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, T) === Union{Int, T}
     @test Base.promote_typejoin(T, String) === Union{T, String}
     @test Base.promote_typejoin(Vector{Int}, T) === Union{Vector{Int}, T}
-    @test Base.promote_typejoin(Vector, T) === Any
-    @test Base.promote_typejoin(Real, T) === Any
-    @test Base.promote_typejoin(Int, String) === Any
-    @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
-    @test Base.promote_typejoin(Int, Union{String, T}) === Any
+    @test Base.promote_typejoin(Vector, T) === Union{Vector, T}
+    @test Base.promote_typejoin(Real, T) === Union{Real, T}
+    for U in (String, Float64)
+        @test Base.promote_typejoin(Int, U) === typejoin(Int, U)
+        @test Base.promote_typejoin(Int, Union{U, T}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{Int, U}, T) === Union{Union{Int, U}, T}
+        @test Base.promote_typejoin(Union{T, U}, Int) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{T, Int}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{Missing, Int}) ===
+            Union{typejoin(Int, U), T, Missing}
+        @test Base.promote_typejoin(Union{T, U}, Union{Nothing, Int}) ===
+            Union{typejoin(Int, U), T, Nothing}
+        @test Base.promote_typejoin(Union{T, Nothing, U}, Union{Nothing, Missing, Int}) ===
+            Union{typejoin(Int, U), T, Nothing, Missing}
+    end
     @test Base.promote_typejoin(T, Union{}) === T
     @test Base.promote_typejoin(Union{}, T) === T
 end
@@ -2120,7 +2130,7 @@ f5577(::Type) = true
 # issue #6426
 f6426(x,args...) = f6426(x,map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 f6426(x,t::Tuple{Vararg{Type}}) = string(t)
-@test f6426(1, (1.,2.)) == "(Tuple{Float64,Float64},)"
+@test f6426(1, (1.,2.)) == "(Tuple{Float64, Float64},)"
 
 # issue #6502
 f6502() = convert(Tuple{Vararg{Int}}, (10,))
@@ -5178,6 +5188,30 @@ end
 @test let_Box5()() == 46
 @test let_noBox()() == 21
 
+# issue #37690
+function foo37690()
+    local f
+    local x
+    for k = 1:2
+        x = k
+        if k == 1
+            f = () -> x
+        end
+    end
+    f
+end
+@test foo37690()() == 2
+
+function g37690()
+    local x
+    local f
+    for k = 1:2
+    end
+    x = 0
+    ()->x
+end
+@test g37690().x === 0
+
 function _assigns_and_captures_arg(a)
     a = a
     return ()->a
@@ -7229,7 +7263,7 @@ struct NFANode34126
     NFANode34126() = new(Tuple{Nothing,NFANode34126}[])
 end
 
-@test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing,$NFANode34126}[])"
+@test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing, $NFANode34126}[])"
 
 # issue #35416
 struct Node35416{T,K,X}
@@ -7270,3 +7304,207 @@ primitive type P36104 8 end
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
 @test_throws TypeError f_bad_invoke(1)
+
+# Fixup for #37044, make sure mutation of `types` field of `DataType` is respected.
+struct A37044{T1,T2}
+    x::T1
+    y::T2
+end
+struct Ref37044
+    x::DataType
+end
+function f37044(r)
+    t = r.x
+    if !isdefined(t, :types)
+        Base.datatype_fieldtypes(t)
+    end
+    return t.types
+end
+r37044 = Ref37044(A37044{Int}.body)
+@test f37044(r37044)[1] === Int
+
+a37265() = 0
+b37265() = 0
+function c37265(d)
+    if d == 1
+        e = a37265
+    elseif d == 2
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws UndefVarError c37265(0)
+@test c37265(1) === a37265
+@test c37265(2) === b37265
+
+function c37265_2(d)
+    if 0
+        e = a37265
+    elseif 0
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws TypeError c37265_2(0)
+
+struct PointerImmutable
+    a::Any
+    b::Int
+end
+struct NullableHomogeneousPointerImmutable
+    x1::PointerImmutable
+    x2::PointerImmutable
+    x3::PointerImmutable
+    NullableHomogeneousPointerImmutable() = new()
+    NullableHomogeneousPointerImmutable(x1) = new(x1)
+    NullableHomogeneousPointerImmutable(x1, x2) = new(x1, x2)
+    NullableHomogeneousPointerImmutable(x1, x2, x3) = new(x1, x2, x3)
+end
+
+function getfield_knownindex_unused(v)
+    v.x1
+    return
+end
+
+function getfield_unknownindex_unused(v, n)
+    getfield(v, n)
+    return
+end
+
+function getfield_knownindex_used1(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld
+end
+
+function getfield_knownindex_used2(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld.a
+end
+
+function getfield_knownindex_used3(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld.b
+end
+
+let v = NullableHomogeneousPointerImmutable(),
+    v2 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2)),
+    r = Ref(0)
+    @test_throws UndefRefError getfield_knownindex_unused(v)
+    @test_throws UndefRefError getfield_unknownindex_unused(v, 1)
+    @test_throws UndefRefError getfield_unknownindex_unused(v, :x1)
+    @test_throws UndefRefError getfield_knownindex_used1(r, v)
+    @test r[] == 0
+    @test_throws UndefRefError getfield_knownindex_used2(r, v)
+    @test r[] == 0
+    @test_throws UndefRefError getfield_knownindex_used3(r, v)
+    @test r[] == 0
+
+    @test getfield_knownindex_unused(v2) === nothing
+    @test getfield_unknownindex_unused(v2, 1) === nothing
+    @test getfield_unknownindex_unused(v2, :x1) === nothing
+    @test getfield_knownindex_used1(r, v2) === PointerImmutable(1, 2)
+    @test r[] == 1
+    @test getfield_knownindex_used2(r, v2) === 1
+    @test r[] == 2
+    @test getfield_knownindex_used3(r, v2) === 2
+    @test r[] == 3
+end
+
+struct RedefinedSingleton
+end
+redefined_singleton_ref = Ref{Any}(RedefinedSingleton())
+struct RedefinedSingleton
+end
+cmp_refs(a::Ref{Any}) = a[] === RedefinedSingleton()
+@test cmp_refs(redefined_singleton_ref)
+
+struct PointerNopadding{T}
+    a::Symbol
+    b::T
+end
+struct ContainsPointerNopadding{T}
+    a::PointerNopadding{T}
+    ContainsPointerNopadding{T}() where T = new{T}()
+    ContainsPointerNopadding{T}(a) where T = new{T}(a)
+end
+
+@test !Base.datatype_haspadding(PointerNopadding{Symbol})
+@test !Base.datatype_haspadding(PointerNopadding{Int})
+# Sanity check to make sure the meaning of haspadding didn't change.
+@test Base.datatype_haspadding(PointerNopadding{Any})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Symbol}})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Int}})
+@test !Base.datatype_haspadding(ContainsPointerNopadding{Symbol})
+@test Base.datatype_haspadding(ContainsPointerNopadding{Int})
+
+# Test the codegen optimized version as well as the unoptimized version of `jl_egal`
+@noinline unopt_jl_egal(@nospecialize(a), @nospecialize(b)) =
+    ccall(:jl_egal, Cint, (Any, Any), a, b) != 0
+@noinline opt_jl_egal(a, b) = a === b
+
+let aint = ContainsPointerNopadding{Int}(), asym = ContainsPointerNopadding{Symbol}(),
+    hint = objectid(aint), hsym = objectid(asym)
+    # Test that the uninitialized bits field doesn't affect the objectid or ===
+    for i in 1:100
+        local i
+        # Increase the chance one of the objects contains garbage int
+        local bint = ContainsPointerNopadding{Int}()
+        local bsym = ContainsPointerNopadding{Symbol}()
+        @test objectid(bint) === hint
+        @test objectid(bsym) === hsym
+        @test aint === bint
+        @test asym === bsym
+        @test unopt_jl_egal(aint, bint)
+        @test unopt_jl_egal(asym, bsym)
+        @test opt_jl_egal(aint, bint)
+        @test opt_jl_egal(asym, bsym)
+        aint = bint
+        asym = bsym
+    end
+end
+
+# Check === for potentially NULL field
+let vnull1 = NullableHomogeneousPointerImmutable(),
+    vnull2 = NullableHomogeneousPointerImmutable(),
+    v1 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2)),
+    v2 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2))
+
+    @test vnull1 === vnull2
+    @test unopt_jl_egal(vnull1, vnull2)
+    @test opt_jl_egal(vnull1, vnull2)
+    @test v1 === v2
+    @test unopt_jl_egal(v1, v2)
+    @test opt_jl_egal(v1, v2)
+
+    @test vnull1 !== v1
+    @test !unopt_jl_egal(vnull1, v1)
+    @test !opt_jl_egal(vnull1, v1)
+    @test vnull2 !== v2
+    @test !unopt_jl_egal(vnull2, v2)
+    @test !opt_jl_egal(vnull2, v2)
+end
+
+# Make sure non-allbits union is handled correctly
+@noinline returns_union37557(r) = r[]
+@noinline compare_union37557(r1, r2) = returns_union37557(r1) === returns_union37557(r2)
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(Int[]), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                          Ref{Union{Int,Vector{Int}}}(3))
+let array = Int[]
+    @test compare_union37557(Ref{Union{Int,Vector{Int}}}(array),
+                             Ref{Union{Int,Vector{Int}}}(array))
+end
+@test compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                         Ref{Union{Int,Vector{Int}}}(1))

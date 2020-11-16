@@ -283,6 +283,7 @@ end
             @test hypot(T(Inf), T(x)) === T(Inf)
             @test hypot(T(Inf), T(NaN)) === T(Inf)
             @test isnan_type(T, hypot(T(x), T(NaN)))
+            @test tanh(T(Inf)) === T(1)
         end
     end
 end
@@ -450,7 +451,7 @@ end
     @test ismissing(scdm[2])
 end
 
-@testset "Integer args to sinpi/cospi/sinc/cosc" begin
+@testset "Integer and Inf args for sinpi/cospi/sinc/cosc" begin
     for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
         @test sinpi(1) == 0
         @test sinpi(-1) == -0
@@ -466,6 +467,44 @@ end
     @test cosc(0) == 0
     @test cosc(complex(1,0)) == -1
     @test cosc(Inf) == 0
+
+    @test sinc(Inf + 3im) == 0
+    @test cosc(Inf + 3im) == 0
+
+    @test isequal(sinc(Inf + Inf*im), NaN + NaN*im)
+    @test isequal(cosc(Inf + Inf*im), NaN + NaN*im)
+end
+
+# issue #37227
+@testset "sinc/cosc accuracy" begin
+    setprecision(256) do
+        for R in (BigFloat, Float16, Float32, Float64)
+            for T in (R, Complex{R})
+                for x in (0, 1e-5, 1e-20, 1e-30, 1e-40, 1e-50, 1e-60, 1e-70, 5.07138898934e-313)
+                    if x < eps(R)
+                        @test sinc(T(x)) == 1
+                    end
+                    @test cosc(T(x)) ≈ pi*(-R(x)*pi)/3 rtol=max(eps(R)*100, (pi*R(x))^2)
+                end
+            end
+        end
+    end
+    @test @inferred(sinc(0//1)) === 1.0
+    @test @inferred(cosc(0//1)) === -0.0
+
+    # test right before/after thresholds of Taylor series
+    @test sinc(0.001) ≈ 0.999998355066745 rtol=1e-15
+    @test sinc(0.00099) ≈ 0.9999983878009009 rtol=1e-15
+    @test sinc(0.05f0) ≈ 0.9958927352435614 rtol=1e-7
+    @test sinc(0.0499f0) ≈ 0.9959091277049384 rtol=1e-7
+    @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
+    @test cosc(0.1399) ≈ -0.45142306168781854 rtol=1e-14
+    @test cosc(0.26f0) ≈ -0.7996401373462212 rtol=5e-7
+    @test cosc(0.2599f0) ≈ -0.7993744054401625 rtol=5e-7
+    setprecision(256) do
+        @test cosc(big"0.5") ≈ big"-1.273239544735162686151070106980114896275677165923651589981338752471174381073817" rtol=1e-76
+        @test cosc(big"0.499") ≈ big"-1.272045747741181369948389133250213864178198918667041860771078493955590574971317" rtol=1e-76
+    end
 end
 
 @testset "Irrational args to sinpi/cospi/sinc/cosc" begin
@@ -1038,6 +1077,19 @@ float(x::FloatWrapper) = x
     @test isa(cos(z), Complex)
 end
 
+# Define simple wrapper of a Float type:
+struct FloatWrapper2 <: Real
+    x::Float64
+end
+
+float(x::FloatWrapper2) = x.x
+@testset "inverse hyperbolic trig functions of non-standard float" begin
+    x = FloatWrapper2(3.1)
+    @test asinh(sinh(x)) == asinh(sinh(3.1))
+    @test acosh(cosh(x)) == acosh(cosh(3.1))
+    @test atanh(tanh(x)) == atanh(tanh(3.1))
+end
+
 @testset "cbrt" begin
     for T in (Float32, Float64)
         @test cbrt(zero(T)) === zero(T)
@@ -1069,8 +1121,68 @@ end
 
     isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
     using .Main.Furlongs
-    @test hypot(Furlong(0), Furlong(0)) == Furlong(0.0)
-    @test hypot(Furlong(3), Furlong(4)) == Furlong(5.0)
-    @test hypot(Complex(3), Complex(4)) === 5.0
-    @test hypot(Complex(6, 8), Complex(8, 6)) === 10.0*sqrt(2)
+    @test (@inferred hypot(Furlong(0), Furlong(0))) == Furlong(0.0)
+    @test (@inferred hypot(Furlong(3), Furlong(4))) == Furlong(5.0)
+    @test (@inferred hypot(Furlong(NaN), Furlong(Inf))) == Furlong(Inf)
+    @test (@inferred hypot(Furlong(Inf), Furlong(NaN))) == Furlong(Inf)
+    @test (@inferred hypot(Furlong(0), Furlong(0), Furlong(0))) == Furlong(0.0)
+    @test (@inferred hypot(Furlong(Inf), Furlong(Inf))) == Furlong(Inf)
+    @test (@inferred hypot(Furlong(1), Furlong(1), Furlong(1))) == Furlong(sqrt(3))
+    @test (@inferred hypot(Furlong(Inf), Furlong(NaN), Furlong(0))) == Furlong(Inf)
+    @test (@inferred hypot(Furlong(Inf), Furlong(Inf), Furlong(Inf))) == Furlong(Inf)
+    @test isnan(hypot(Furlong(NaN), Furlong(0), Furlong(1)))
+    ex = @test_throws ErrorException hypot(Furlong(1), 1)
+    @test startswith(ex.value.msg, "promotion of types ")
+
+    @test_throws MethodError hypot()
+    @test (@inferred hypot(floatmax())) == floatmax()
+    @test (@inferred hypot(floatmax(), floatmax())) == Inf
+    @test (@inferred hypot(floatmin(), floatmin())) == √2floatmin()
+    @test (@inferred hypot(floatmin(), floatmin(), floatmin())) == √3floatmin()
+    @test (@inferred hypot(1e-162)) ≈ 1e-162
+    @test (@inferred hypot(2e-162, 1e-162, 1e-162)) ≈ hypot(2, 1, 1)*1e-162
+    @test (@inferred hypot(1e162)) ≈ 1e162
+    @test hypot(-2) === 2.0
+    @test hypot(-2, 0) === 2.0
+    let i = typemax(Int)
+        @test (@inferred hypot(i, i)) ≈ i * √2
+        @test (@inferred hypot(i, i, i)) ≈ i * √3
+        @test (@inferred hypot(i, i, i, i)) ≈ 2.0i
+        @test (@inferred hypot(i//1, 1//i, 1//i)) ≈ i
+    end
+    let i = typemin(Int)
+        @test (@inferred hypot(i, i)) ≈ -√2i
+        @test (@inferred hypot(i, i, i)) ≈ -√3i
+        @test (@inferred hypot(i, i, i, i)) ≈ -2.0i
+    end
+    @testset "$T" for T in (Float32, Float64)
+        @test (@inferred hypot(T(Inf), T(NaN))) == T(Inf) # IEEE754 says so
+        @test (@inferred hypot(T(Inf), T(3//2), T(NaN))) == T(Inf)
+        @test (@inferred hypot(T(1e10), T(1e10), T(1e10), T(1e10))) ≈ 2e10
+        @test isnan_type(T, hypot(T(3), T(3//4), T(NaN)))
+        @test hypot(T(1), T(0)) === T(1)
+	    @test hypot(T(1), T(0), T(0)) === T(1)
+        @test (@inferred hypot(T(Inf), T(Inf), T(Inf))) == T(Inf)
+        for s in (zero(T), floatmin(T)*1e3, floatmax(T)*1e-3, T(Inf))
+            @test hypot(1s, 2s)     ≈ s * hypot(1, 2)   rtol=8eps(T)
+            @test hypot(1s, 2s, 3s) ≈ s * hypot(1, 2, 3) rtol=8eps(T)
+        end
+    end
+    @testset "$T" for T in (Float16, Float32, Float64, BigFloat)
+        let x = 1.1sqrt(floatmin(T))
+            @test (@inferred hypot(x, x/4)) ≈ x * sqrt(17/BigFloat(16))
+            @test (@inferred hypot(x, x/4, x/4)) ≈ x * sqrt(9/BigFloat(8))
+        end
+        let x = 2sqrt(nextfloat(zero(T)))
+            @test (@inferred hypot(x, x/4)) ≈ x * sqrt(17/BigFloat(16))
+            @test (@inferred hypot(x, x/4, x/4)) ≈ x * sqrt(9/BigFloat(8))
+        end
+        let x = sqrt(nextfloat(zero(T))/eps(T))/8, f = sqrt(4eps(T))
+            @test hypot(x, x*f) ≈ x * hypot(one(f), f) rtol=eps(T)
+            @test hypot(x, x*f, x*f) ≈ x * hypot(one(f), f, f) rtol=eps(T)
+        end
+    end
+    # hypot on Complex returns Real
+    @test (@inferred hypot(3, 4im)) === 5.0
+    @test (@inferred hypot(3, 4im, 12)) === 13.0
 end

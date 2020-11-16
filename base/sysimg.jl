@@ -32,6 +32,7 @@ let
             :Libdl,
             :Printf,
             :Markdown,
+            :NetworkOptions,
             :LibGit2,
             :Logging,
             :Sockets,
@@ -46,10 +47,18 @@ let
             :SuiteSparse,
             :Distributed,
             :SharedArrays,
+            :TOML,
+            :Artifacts,
             :Pkg,
             :Test,
             :REPL,
             :Statistics,
+            :MozillaCACerts_jll,
+            :LibCURL_jll,
+            :LibCURL,
+            :Downloads,
+            :ArgTools,
+            :Tar,
         ]
 
     maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)
@@ -102,6 +111,8 @@ let
     empty!(DEPOT_PATH)
 end
 
+empty!(Base.TOML_CACHE.d)
+Base.TOML.reinit!(Base.TOML_CACHE.p, "")
 @eval Sys begin
     BINDIR = ""
     STDLIB = ""

@@ -27,7 +27,7 @@ using namespace llvm;
 static std::map<std::string, void*> libMap;
 static jl_mutex_t libmap_lock;
 extern "C"
-void *jl_get_library_(const char *f_lib, int throw_err)
+void *jl_get_library_(const char *f_lib, int throw_err) JL_NOTSAFEPOINT
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
@@ -54,13 +54,30 @@ void *jl_get_library_(const char *f_lib, int throw_err)
 }
 
 extern "C" JL_DLLEXPORT
-void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
+void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd) JL_NOTSAFEPOINT
 {
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)
         jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
     void * ptr;
     jl_dlsym(handle, f_name, &ptr, 1);
+    return ptr;
+}
+
+// jl_load_and_lookup, but with library computed at run time on first call
+extern "C" JL_DLLEXPORT
+void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name)
+{
+    char *f_lib;
+
+    if (jl_is_symbol(lib_val))
+        f_lib = jl_symbol_name((jl_sym_t*)lib_val);
+    else if (jl_is_string(lib_val))
+        f_lib = jl_string_data(lib_val);
+    else
+        jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
+    void *ptr;
+    jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
     return ptr;
 }
 
@@ -112,8 +129,6 @@ jl_value_t *jl_get_JIT(void)
 #ifndef MAXHOSTNAMELEN
 # define MAXHOSTNAMELEN 256
 #endif
-
-extern "C" int jl_getpid();
 
 // Form a file name from a pattern made by replacing tokens,
 // similar to many of those provided by ssh_config TOKENS:

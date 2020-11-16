@@ -114,20 +114,21 @@ function define_default_editors()
     define_editor(r".*") do cmd, path, line
         `$cmd $path`
     end
-    define_editor([r"\bemacs", "gedit", r"\bgvim"]) do cmd, path, line
+    define_editor(Any[r"\bemacs", "gedit", r"\bgvim"]) do cmd, path, line
         `$cmd +$line $path`
     end
     # Must check that emacs not running in -t/-nw before regex match for general emacs
-    define_editor([
-        "vim", "vi", "nvim", "mvim", "nano",
+    define_editor(Any[
+        "vim", "vi", "nvim", "mvim", "nano", "micro",
         r"\bemacs\b.*\s(-nw|--no-window-system)\b",
-        r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b"], wait=true) do cmd, path, line
+        r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b",
+    ], wait=true) do cmd, path, line
         `$cmd +$line $path`
     end
     define_editor(["textmate", "mate", "kate"]) do cmd, path, line
         `$cmd $path -l $line`
     end
-    define_editor([r"\bsubl", r"\batom", "pycharm", "bbedit"]) do cmd, path, line
+    define_editor(Any[r"\bsubl", r"\batom", "pycharm", "bbedit"]) do cmd, path, line
         `$cmd $path:$line`
     end
     define_editor(["code", "code-insiders"]) do cmd, path, line
@@ -159,6 +160,7 @@ function define_default_editors()
         end
     end
 end
+define_default_editors()
 
 """
     editor()
@@ -191,7 +193,6 @@ by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 See also: [`define_editor`](@ref)
 """
 function edit(path::AbstractString, line::Integer=0)
-    isempty(EDITOR_CALLBACKS) && define_default_editors()
     path isa String || (path = convert(String, path))
     if endswith(path, ".jl")
         p = find_source_file(path)

@@ -12,7 +12,7 @@ if len(sys.argv) < 2:
 arch_mapping = {
     'x86_64': '(x86_|amd)64',
     'i686': "i\\d86",
-    'aarch64': "aarch64",
+    'aarch64': "(arm|aarch)64",
     'armv7l': "arm(v7l)?",
     'powerpc64le': "p(ower)?pc64le",
 }
@@ -117,6 +117,7 @@ if libgfortran_version == "blank_libgfortran":
             "8":  "libgfortran5",
             "9":  "libgfortran5",
             "10": "libgfortran5",
+            "11": "libgfortran5",
         }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1].split('.')[0]]
 
 if cxx_abi == "blank_cxx_abi":

@@ -445,8 +445,12 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
                                                        :help  => help_mode))
-
-        REPL.hist_from_file(hp, IOBuffer(fakehistory), "fakehistorypath")
+        hist_path = tempname()
+        write(hist_path, fakehistory)
+        REPL.hist_from_file(hp, hist_path)
+        f = open(hist_path, read=true, write=true, create=true)
+        hp.history_file = f
+        seekend(f)
         REPL.history_reset_state(hp)
 
         histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
@@ -790,7 +794,7 @@ let exename = Base.julia_cmd()
 
         output = readuntil(ptm, ' ', keep=true)
         if Sys.iswindows()
-	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
+        # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
             @test output == "1\n\njulia> "
         else
             @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
@@ -1052,7 +1056,7 @@ for (line, expr) in Pair[
 end
 
 # PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
-for line in ["′", "abstract", "type"]
+for line in ["′", "type"]
     @test occursin("No documentation found.",
         sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
@@ -1215,12 +1219,12 @@ end
     @async REPL.start_repl_backend(backend)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == (2, false)
+    @test reply == Pair{Any, Bool}(2, false)
     twice(ex) = Expr(:tuple, ex, ex)
     push!(backend.ast_transforms, twice)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == ((2, 2), false)
+    @test reply == Pair{Any, Bool}((2, 2), false)
     put!(backend.repl_channel, (nothing, -1))
     Base.wait(backend.backend_task)
 end
@@ -1232,12 +1236,12 @@ frontend_task = @async begin
         @testset "AST Transformations Async" begin
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == (2, false)
+            @test reply == Pair{Any, Bool}(2, false)
             twice(ex) = Expr(:tuple, ex, ex)
             push!(backend.ast_transforms, twice)
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == ((2, 2), false)
+            @test reply == Pair{Any, Bool}((2, 2), false)
         end
     catch e
         Base.rethrow(e)
@@ -1250,42 +1254,4 @@ Base.wait(frontend_task)
 
 macro throw_with_linenumbernode(err)
     Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
-end
-
-@testset "last shown line infos" begin
-    out_stream = IOBuffer()
-    term = REPL.TTYTerminal("dumb", IOBuffer(), out_stream, IOBuffer())
-    repl = REPL.LineEditREPL(term, false)
-    repl.specialdisplay = REPL.REPLDisplay(repl)
-
-    REPL.print_response(repl, (methods(+), false), true, false)
-    seekstart(out_stream)
-    @test count(
-        contains(
-            "To edit a specific method, type the corresponding number into the REPL and " *
-            "press Ctrl+Q"
-        ),
-        eachline(out_stream),
-    ) == 1
-    take!(out_stream)
-
-    err = ErrorException("Foo")
-    bt = try
-        @throw_with_linenumbernode(err)()
-    catch
-        Base.catch_stack()
-    end
-
-    repl.backendref = REPL.REPLBackendRef(Channel(1), Channel(1))
-    put!(repl.backendref.response_channel, (bt, true))
-
-    REPL.print_response(repl, (bt, true), true, false)
-    seekstart(out_stream)
-    @test count(
-        contains(
-            "To edit a specific method, type the corresponding number into the REPL and " *
-            "press Ctrl+Q"
-        ),
-        eachline(out_stream),
-    ) == 1
 end

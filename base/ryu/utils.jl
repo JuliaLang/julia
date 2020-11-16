@@ -355,8 +355,9 @@ function pow5invsplit_lookup end
 for T in (Float64, Float32, Float16)
     e2_max = exponent_max(T) - precision(T) - 2
     i_max = log10pow2(e2_max)
-    table = [pow5invsplit(T, i) for i = 0:i_max]
-    @eval pow5invsplit_lookup(::Type{$T}, i) = @inbounds($table[i+1])
+    table_sym = Symbol("pow5invsplit_table_", string(T))
+    @eval const $table_sym = Tuple(Any[pow5invsplit($T, i) for i = 0:$i_max])
+    @eval pow5invsplit_lookup(::Type{$T}, i) = @inbounds($table_sym[i+1])
 end
 
 
@@ -382,8 +383,9 @@ function pow5split_lookup end
 for T in (Float64, Float32, Float16)
     e2_min = 1 - exponent_bias(T) - significand_bits(T) - 2
     i_max = 1 - e2_min - log10pow5(-e2_min)
-    table = [pow5split(T, i) for i = 0:i_max]
-    @eval pow5split_lookup(::Type{$T}, i) = @inbounds($table[i+1])
+    table_sym = Symbol("pow5split_table_", string(T))
+    @eval const $table_sym = Tuple(Any[pow5split($T, i) for i = 0:$i_max])
+    @eval pow5split_lookup(::Type{$T}, i) = @inbounds($table_sym[i+1])
 end
 
 const DIGIT_TABLE = UInt8[

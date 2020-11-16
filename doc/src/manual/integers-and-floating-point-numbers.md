@@ -257,7 +257,7 @@ second argument is zero.
 ## Floating-Point Numbers
 
 Literal floating-point numbers are represented in the standard formats, using
-[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E-notation) when necessary:
+[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E_notation) when necessary:
 
 ```jldoctest
 julia> 1.0
@@ -534,9 +534,18 @@ the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and th
 respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in Julia for arbitrary
 precision integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, and the [string literal](@ref non-standard-string-literals) [`@big_str`](@ref) or [`parse`](@ref)
-can be used to construct them from `AbstractString`s.  Once created, they participate in arithmetic
-with all other numeric types thanks to Julia's [type promotion and conversion mechanism](@ref conversion-and-promotion):
+Constructors exist to create these types from primitive numerical types, and the
+[string literal](@ref non-standard-string-literals) [`@big_str`](@ref) or [`parse`](@ref)
+can be used to construct them from `AbstractString`s.
+`BigInt`s can also be input as integer literals when
+they are too big for other built-in integer types. Note that as there
+is no unsigned arbitrary-precision integer type in `Base` (`BigInt` is
+sufficient in most cases), hexadecimal, octal and binary literals can
+be used (in addition to decimal literals).
+
+Once created, they participate in arithmetic
+with all other numeric types thanks to Julia's
+[type promotion and conversion mechanism](@ref conversion-and-promotion):
 
 ```jldoctest
 julia> BigInt(typemax(Int64)) + 1
@@ -547,6 +556,18 @@ julia> big"123456789012345678901234567890" + 1
 
 julia> parse(BigInt, "123456789012345678901234567890") + 1
 123456789012345678901234567891
+
+julia> string(big"2"^200, base=16)
+"100000000000000000000000000000000000000000000000000"
+
+julia> 0x100000000000000000000000000000000-1 == typemax(UInt128)
+true
+
+julia> 0x000000000000000000000000000000000
+0
+
+julia> typeof(ans)
+BigInt
 
 julia> big"1.23456789012345678901"
 1.234567890123456789010000000000000000000000000000000000000000000000000000000004
@@ -680,12 +701,13 @@ and the identifier or parenthesized expression which it multiplies.
 
 ### Syntax Conflicts
 
-Juxtaposed literal coefficient syntax may conflict with two numeric literal syntaxes: hexadecimal
-integer literals and engineering notation for floating-point literals. Here are some situations
+Juxtaposed literal coefficient syntax may conflict with some numeric literal syntaxes: hexadecimal,
+octal and binary integer literals and engineering notation for floating-point literals. Here are some situations
 where syntactic conflicts arise:
 
   * The hexadecimal integer literal expression `0xff` could be interpreted as the numeric literal
-    `0` multiplied by the variable `xff`.
+    `0` multiplied by the variable `xff`. Similar ambiguities arise with octal and binary literals like
+    `0o777` or `0b01001010`.
   * The floating-point literal expression `1e10` could be interpreted as the numeric literal `1` multiplied
     by the variable `e10`, and similarly with the equivalent `E` form.
   * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
@@ -693,7 +715,7 @@ where syntactic conflicts arise:
 
 In all cases the ambiguity is resolved in favor of interpretation as numeric literals:
 
-  * Expressions starting with `0x` are always hexadecimal literals.
+  * Expressions starting with `0x`/`0o`/`0b` are always hexadecimal/octal/binary literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
   * Expressions starting with a numeric literal followed by `f` are always 32-bit floating-point literals.
 

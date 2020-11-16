@@ -226,6 +226,8 @@ end
     @test Dates.string(Dates.Year(1)) == "1 year"
     @test Dates.string(Dates.Year(-1)) == "-1 year"
     @test Dates.string(Dates.Year(2)) == "2 years"
+    @test isfinite(Dates.Year)
+    @test isfinite(Dates.Year(0))
     @test zero(Dates.Year) == Dates.Year(0)
     @test zero(Dates.Year(10)) == Dates.Year(0)
     @test zero(Dates.Month) == Dates.Month(0)
@@ -378,6 +380,18 @@ end
     @test Dates.Date(2009, 2, 1) - (Dates.Month(1) + Dates.Day(1)) == Dates.Date(2008, 12, 31)
     @test_throws MethodError (Dates.Month(1) + Dates.Day(1)) - Dates.Date(2009,2,1)
 end
+
+@testset "canonicalize Period" begin
+    # reduce individual Period into most basic CompoundPeriod
+    @test Dates.canonicalize(Dates.Nanosecond(1000000)) == Dates.canonicalize(Dates.Millisecond(1))
+    @test Dates.canonicalize(Dates.Millisecond(1000)) == Dates.canonicalize(Dates.Second(1))
+    @test Dates.canonicalize(Dates.Second(60)) == Dates.canonicalize(Dates.Minute(1))
+    @test Dates.canonicalize(Dates.Minute(60)) == Dates.canonicalize(Dates.Hour(1))
+    @test Dates.canonicalize(Dates.Hour(24)) == Dates.canonicalize(Dates.Day(1))
+    @test Dates.canonicalize(Dates.Day(7)) == Dates.canonicalize(Dates.Week(1))
+    @test Dates.canonicalize(Dates.Month(12)) == Dates.canonicalize(Dates.Year(1))
+    @test Dates.canonicalize(Dates.Minute(24*60*1 + 12*60)) == Dates.canonicalize(Dates.CompoundPeriod([Dates.Day(1),Dates.Hour(12)]))
+end
 @testset "unary ops and vectorized period arithmetic" begin
     pa = [1y 1m 1w 1d; 1h 1mi 1s 1ms]
     cpa = [1y + 1s 1m + 1s 1w + 1s 1d + 1s; 1h + 1s 1mi + 1s 2m + 1s 1s + 1ms]
@@ -460,6 +474,29 @@ end
         @test hash(y) == hash(z)
     end
 end
+@testset "Equality and hashing between FixedPeriod/OtherPeriod/CompoundPeriod (#37459)" begin
+    function test_hash_equality(x, y)
+        @test x == y
+        @test y == x
+        @test isequal(x, y)
+        @test isequal(y, x)
+        @test hash(x) == hash(y)
+    end
+    for FP = (Dates.Week, Dates.Day, Dates.Hour, Dates.Minute,
+              Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond)
+        for OP = (Dates.Year, Dates.Quarter, Dates.Month)
+            test_hash_equality(FP(0), OP(0))
+        end
+    end
+end
+@testset "Hashing for CompoundPeriod (#37447)" begin
+    periods = [Dates.Year(0), Dates.Minute(0), Dates.Second(0), Dates.CompoundPeriod(),
+               Dates.Minute(2), Dates.Second(120), Dates.CompoundPeriod(Dates.Minute(2)),
+               Dates.CompoundPeriod(Dates.Second(120)), Dates.CompoundPeriod(Dates.Minute(1), Dates.Second(60))]
+    for x = periods, y = periods
+        @test isequal(x,y) == (hash(x) == hash(y))
+    end
+end
 
 @testset "#30832" begin
     @test Dates.toms(Dates.Second(1) + Dates.Nanosecond(1)) == 1e3
@@ -467,4 +504,19 @@ end
     @test Dates.toms(Dates.Second(1) + Dates.Microsecond(1)) == 1e3
 end
 
+@testset "CompoundPeriod and Period isless()" begin
+    #tests for allowed comparisons
+    #FixedPeriod
+    @test (h - ms < h + ns) == true
+    @test (h + ns < h -ms) == false
+    @test (h  < h -ms) == false
+    @test (h-ms  < h) == true
+    #OtherPeriod
+    @test (2y-m < 25m+1y) == true
+    @test (2y < 25m+1y) == true
+    @test (25m+1y < 2y) == false
+    #Test combined Fixed and Other Periods
+    @test (1m + 1d < 1m + 1s) == false
 end
+end
+

@@ -575,3 +575,21 @@ end
     @test_throws BoundsError (1,2.0)[0:1]
     @test_throws BoundsError (1,2.0)[0:0]
 end
+
+@testset "Base.rest" begin
+    t = (1, 2.0, 0x03, 4f0)
+    @test Base.rest(t) === t
+    @test Base.rest(t, 2) === (2.0, 0x03, 4f0)
+
+    a = [1 2; 3 4]
+    @test Base.rest(a) == a[:]
+    @test pointer(Base.rest(a)) != pointer(a)
+    @test Base.rest(a, 3) == [2, 4]
+
+    itr = (-i for i in a)
+    @test Base.rest(itr) == itr
+    _, st = iterate(itr)
+    r = Base.rest(itr, st)
+    @test r isa Iterators.Rest
+    @test collect(r) == -[3, 2, 4]
+end

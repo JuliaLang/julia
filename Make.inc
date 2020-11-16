@@ -49,6 +49,7 @@ USE_SYSTEM_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
 USE_SYSTEM_MBEDTLS:=0
 USE_SYSTEM_LIBSSH2:=0
+USE_SYSTEM_NGHTTP2:=0
 USE_SYSTEM_CURL:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
@@ -80,11 +81,7 @@ endif
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
 
-# Set to 1 to enable profiling with perf
-USE_PERF_JITEVENTS ?= 0
-
-# libc++ is standard on OS X 10.9, but not for earlier releases
-USE_LIBCPP := 0
+# USE_PERF_JITEVENTS defined below since default is OS specific
 
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP := 0
@@ -98,7 +95,7 @@ ARCH:=
 
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
-PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
 PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
 
 # If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
@@ -342,6 +339,9 @@ USE_POLLY_ACC := 0     # Enable GPU code-generation
 # Options to use MLIR
 USE_MLIR := 0
 
+# Options to use RegionVectorizer
+USE_RV := 0
+
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
 #XC_HOST := x86_64-w64-mingw32
@@ -418,6 +418,13 @@ fPIC := -fPIC
 EXE :=
 endif
 
+# Set to 1 to enable profiling with perf
+ifeq ("$(OS)", "Linux")
+USE_PERF_JITEVENTS ?= 1
+else
+USE_PERF_JITEVENTS ?= 0
+endif
+
 JULIACODEGEN := LLVM
 
 # flag for disabling assertions
@@ -463,8 +470,6 @@ else
 FC := $(CROSS_COMPILE)gfortran
 endif
 
-STDLIBCPP_FLAG :=
-
 ifeq ($(OS), FreeBSD)
 USEGCC := 0
 USECLANG := 1
@@ -472,29 +477,28 @@ endif
 
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
-DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
-ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
+DARWINVER_GTE11 := $(shell expr $(DARWINVER) \>= 11)
+DARWINVER_GTE13 := $(shell expr $(DARWINVER) \>= 13)
+ifeq ($(DARWINVER_GTE11),0) # Snow Leopard specific configuration
 USEGCC := 1
 USECLANG := 0
+MACOSX_VERSION_MIN := 10.6
 OPENBLAS_TARGET_ARCH:=NEHALEM
 OPENBLAS_DYNAMIC_ARCH:=0
 USE_SYSTEM_LIBUNWIND:=1
 else
-ifeq ($(DARWINVER_GTE13),1)
-USE_LIBCPP := 1
-STDLIBCPP_FLAG := -stdlib=libstdc++
-else
-USE_LIBCPP := 0
-endif
+ifeq ($(DARWINVER_GTE13),0) # Lion / Mountain Lion specific configuration
+USEGCC := 0
+USECLANG := 1
+MACOSX_VERSION_MIN := 10.6
+else # Newer versions
 USEGCC := 0
 USECLANG := 1
 endif
 endif
+endif
 
 ifeq ($(USEGCC),1)
-ifeq ($(USE_LIBCPP),1)
-$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
-endif
 ifeq ($(SANITIZE),1)
 $(error Sanitizers are only supported with clang. Try setting SANITIZE=0)
 endif
@@ -522,16 +526,12 @@ JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
 DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
-ifeq ($(USE_LIBCPP), 1)
-MACOSX_VERSION_MIN := 10.8
-CC += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-CXX += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-else
-MACOSX_VERSION_MIN := 10.6
-CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+ifeq ($(MACOSX_VERSION_MIN),)
+MACOSX_VERSION_MIN := 10.9
 endif
+CC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+CXX += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 # export MACOSX_DEPLOYMENT_TARGET so that ld picks it up, especially for deps
 export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
@@ -539,9 +539,6 @@ endif
 endif
 
 ifeq ($(USEICC),1)
-ifeq ($(USE_LIBCPP),1)
-$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
-endif
 ifeq ($(SANITIZE),1)
 $(error Sanitizers only supported with clang. Try setting SANITIZE=0)
 endif
@@ -617,10 +614,31 @@ else
 endif
 
 # On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
+# We also don't really have a private bindir on windows right now, due to lack of RPATH.
 ifeq ($(OS),WINNT)
+shlibdir := $(bindir)
+private_shlibdir := $(bindir)
 build_shlibdir := $(build_bindir)
+build_private_shlibdir := $(build_bindir)
 else
+shlibdir := $(libdir)
+private_shlibdir := $(private_libdir)
 build_shlibdir := $(build_libdir)
+build_private_shlibdir := $(build_private_libdir)
+endif
+
+# If we're on windows, don't do versioned shared libraries.  If we're on OSX,
+# put the version number before the .dylib.  Otherwise, put it after.
+ifeq ($(OS), WINNT)
+JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT)
+else
+ifeq ($(OS), Darwin)
+JL_MAJOR_MINOR_SHLIB_EXT := $(SOMAJOR).$(SOMINOR).$(SHLIB_EXT)
+JL_MAJOR_SHLIB_EXT := $(SOMAJOR).$(SHLIB_EXT)
+else
+JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR).$(SOMINOR)
+JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
+endif
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -1112,7 +1130,7 @@ USE_BINARYBUILDER ?= 0
 endif
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1462,6 +1480,60 @@ JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
 JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
 JULIA_SYSIMG := $(JULIA_SYSIMG_$(JULIA_BUILD_MODE))
+
+define dep_lib_path
+$$($(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(1) $(2))
+endef
+
+LIBJULIA_BUILD_DEPLIB := $(call dep_lib_path,$(build_bindir),$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIA_INSTALL_DEPLIB := $(call dep_lib_path,$(bindir),$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT))
+
+LIBJULIA_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_bindir),$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIA_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(bindir),$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
+
+ifeq ($(OS),WINNT)
+ifeq ($(BINARY),32)
+LIBGCC_NAME := libgcc_s_sjlj-1.$(SHLIB_EXT)
+else
+LIBGCC_NAME := libgcc_s_seh-1.$(SHLIB_EXT)
+endif
+endif
+ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
+LIBGCC_NAME := libgcc_s.2.$(SHLIB_EXT)
+else
+LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
+endif
+endif
+ifneq ($(findstring $(OS),Linux FreeBSD),)
+LIBGCC_NAME := libgcc_s.$(SHLIB_EXT).1
+endif
+
+
+LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_bindir),$(build_shlibdir)/$(LIBGCC_NAME))
+LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(bindir),$(private_shlibdir)/$(LIBGCC_NAME))
+
+# USE_SYSTEM_LIBM causes it to get symlinked into build_private_shlibdir
+ifeq ($(USE_SYSTEM_LIBM),1)
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_bindir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+else
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_bindir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+endif
+LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(bindir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+
+# We list:
+#  * libgcc_s, because FreeBSD needs to load ours, not the system one.
+#  * libopenlibm, because Windows has an untrustworthy libm, and we want to use ours more than theirs
+#  * libjulia, which must always come last.
+#
+# We need these four separate variables because:
+#  * debug builds must link against libjuliadebug, not libjulia
+#  * install time relative paths are not equal to build time relative paths (../lib vs. ../lib/julia)
+# That second point will no longer be true for most deps once they are placed within Artifacts directories.
+LOADER_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIA_BUILD_DEPLIB)
+LOADER_DEBUG_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIA_DEBUG_BUILD_DEPLIB)
+LOADER_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIA_INSTALL_DEPLIB)
+LOADER_DEBUG_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIA_DEBUG_INSTALL_DEPLIB)
 
 # Colors for make
 ifndef VERBOSE

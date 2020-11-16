@@ -10,6 +10,7 @@
 #include <llvm/Transforms/Utils/LoopUtils.h>
 
 #include "llvm-pass-helpers.h"
+#include "julia.h"
 
 #define DEBUG_TYPE "julia-licm"
 
@@ -70,8 +71,8 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                 auto call = dyn_cast<CallInst>(&*II++);
                 if (!call)
                     continue;
-                auto callee = call->getCalledValue();
-                assert(callee);
+                Value *callee = call->getCalledOperand();
+                assert(callee != nullptr);
                 // It is always legal to extend the preserve period
                 // so we only need to make sure it is legal to move/clone
                 // the calls.
@@ -131,4 +132,9 @@ static RegisterPass<JuliaLICMPass>
 Pass *createJuliaLICMPass()
 {
     return new JuliaLICMPass();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraJuliaLICMPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createJuliaLICMPass());
 }

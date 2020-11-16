@@ -190,10 +190,10 @@ julia> collect(StepRange(1, Int8(2), 10))
  9
 
 julia> typeof(StepRange(1, Int8(2), 10))
-StepRange{Int64,Int8}
+StepRange{Int64, Int8}
 
 julia> typeof(1:3:6)
-StepRange{Int64,Int64}
+StepRange{Int64, Int64}
 ```
 """
 struct StepRange{T,S} <: OrdinalRange{T,S}
@@ -201,8 +201,11 @@ struct StepRange{T,S} <: OrdinalRange{T,S}
     step::S
     stop::T
 
-    function StepRange{T,S}(start::T, step::S, stop::T) where {T,S}
-        new(start, step, steprange_last(start,step,stop))
+    function StepRange{T,S}(start, step, stop) where {T,S}
+        sta = convert(T, start)
+        ste = convert(S, step)
+        sto = convert(T, stop)
+        new(sta, ste, steprange_last(sta,ste,sto))
     end
 end
 
@@ -253,6 +256,7 @@ end
 # For types where x+oneunit(x) may not be well-defined
 steprange_last_empty(start, step, stop) = start - step
 
+StepRange{T}(start, step::S, stop) where {T,S} = StepRange{T,S}(start, step, stop)
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
 """
@@ -602,6 +606,40 @@ maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be 
 minimum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
+"""
+    argmin(r::AbstractRange)
+
+Ranges can have multiple minimal elements. In that case
+`argmin` will return a minimal index, but not necessarily the
+first one.
+"""
+function argmin(r::AbstractRange)
+    if isempty(r)
+        throw(ArgumentError("range must be non-empty"))
+    elseif step(r) > 0
+        firstindex(r)
+    else
+        first(searchsorted(r, last(r)))
+    end
+end
+
+"""
+    argmax(r::AbstractRange)
+
+Ranges can have multiple maximal elements. In that case
+`argmax` will return a maximal index, but not necessarily the
+first one.
+"""
+function argmax(r::AbstractRange)
+    if isempty(r)
+        throw(ArgumentError("range must be non-empty"))
+    elseif step(r) > 0
+        first(searchsorted(r, last(r)))
+    else
+        firstindex(r)
+    end
+end
+
 extrema(r::AbstractRange) = (minimum(r), maximum(r))
 
 # Ranges are immutable
@@ -785,28 +823,29 @@ union(r::OneTo, s::OneTo) = OneTo(max(r.stop,s.stop))
 
 intersect(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) = max(first(r),first(s)):min(last(r),last(s))
 
-intersect(i::Integer, r::AbstractUnitRange{<:Integer}) =
-    i < first(r) ? (first(r):i) :
-    i > last(r)  ? (i:last(r))  : (i:i)
+intersect(i::Integer, r::AbstractUnitRange{<:Integer}) = range(max(i, first(r)), length=in(i, r))
 
 intersect(r::AbstractUnitRange{<:Integer}, i::Integer) = intersect(i, r)
 
 function intersect(r::AbstractUnitRange{<:Integer}, s::StepRange{<:Integer})
+    T = promote_type(eltype(r), eltype(s))
     if isempty(s)
-        range(first(r), length=0)
-    elseif step(s) == 0
-        intersect(first(s), r)
-    elseif step(s) < 0
-        intersect(r, reverse(s))
+        StepRange{T}(first(r), +step(s), first(r)-step(s))
     else
-        sta = first(s)
-        ste = step(s)
-        sto = last(s)
+        sta, ste, sto = first_step_last_ascending(s)
         lo = first(r)
         hi = last(r)
         i0 = max(sta, lo + mod(sta - lo, ste))
         i1 = min(sto, hi - mod(hi - sta, ste))
-        i0:ste:i1
+        StepRange{T}(i0, ste, i1)
+    end
+end
+
+function first_step_last_ascending(r::StepRange)
+    if step(r) < zero(step(r))
+        last(r), -step(r), first(r)
+    else
+        first(r), +step(r), last(r)
     end
 end
 
@@ -819,38 +858,25 @@ function intersect(r::StepRange{<:Integer}, s::AbstractUnitRange{<:Integer})
 end
 
 function intersect(r::StepRange, s::StepRange)
+    T = promote_type(eltype(r), eltype(s))
+    S = promote_type(typeof(step(r)), typeof(step(s)))
     if isempty(r) || isempty(s)
-        return range(first(r), step=step(r), length=0)
-    elseif step(s) < zero(step(s))
-        return intersect(r, reverse(s))
-    elseif step(r) < zero(step(r))
-        return reverse(intersect(reverse(r), s))
+        return StepRange{T,S}(first(r), step(r), first(r)-step(r))
     end
 
-    start1 = first(r)
-    step1 = step(r)
-    stop1 = last(r)
-    start2 = first(s)
-    step2 = step(s)
-    stop2 = last(s)
+    start1, step1, stop1 = first_step_last_ascending(r)
+    start2, step2, stop2 = first_step_last_ascending(s)
     a = lcm(step1, step2)
-
-    # if a == 0
-    #     # One or both ranges have step 0.
-    #     if step1 == 0 && step2 == 0
-    #         return start1 == start2 ? r : AbstractRange(start1, 0, 0)
-    #     elseif step1 == 0
-    #         return start2 <= start1 <= stop2 && rem(start1 - start2, step2) == 0 ? r : AbstractRange(start1, 0, 0)
-    #     else
-    #         return start1 <= start2 <= stop1 && rem(start2 - start1, step1) == 0 ? (start2:step1:start2) : AbstractRange(start1, step1, 0)
-    #     end
-    # end
 
     g, x, y = gcdx(step1, step2)
 
     if !iszero(rem(start1 - start2, g))
         # Unaligned, no overlap possible.
-        return range(start1, step=a, length=0)
+        if  step(r) < zero(step(r))
+            return StepRange{T,S}(stop1, -a, stop1+a)
+        else
+            return StepRange{T,S}(start1, a, start1-a)
+        end
     end
 
     z = div(start1 - start2, g)
@@ -860,7 +886,7 @@ function intersect(r::StepRange, s::StepRange)
     # Determine where in the sequence to start and stop.
     m = max(start1 + mod(b - start1, a), start2 + mod(b - start2, a))
     n = min(stop1 - mod(stop1 - b, a), stop2 - mod(stop2 - b, a))
-    m:a:n
+    step(r) < zero(step(r)) ? StepRange{T,S}(n, -a, m) : StepRange{T,S}(m, a, n)
 end
 
 function intersect(r1::AbstractRange, r2::AbstractRange, r3::AbstractRange, r::AbstractRange...)
@@ -934,6 +960,11 @@ AbstractUnitRange{T}(r::AbstractUnitRange{T}) where {T} = r
 AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
 AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
 
+OrdinalRange{T1, T2}(r::StepRange) where {T1, T2<: Integer} = StepRange{T1, T2}(r)
+OrdinalRange{T1, T2}(r::AbstractUnitRange{T1}) where {T1, T2<:Integer} = r
+OrdinalRange{T1, T2}(r::UnitRange) where {T1, T2<:Integer} = UnitRange{T1}(r)
+OrdinalRange{T1, T2}(r::OneTo) where {T1, T2<:Integer} = OneTo{T1}(r)
+
 promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
     el_same(promote_type(T1a,T2a),
             # el_same only operates on array element type, so just promote second type parameter
@@ -998,15 +1029,15 @@ end
 Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
 collect(r::AbstractRange) = vcat(r)
 
-reverse(r::OrdinalRange) = (:)(last(r), -step(r), first(r))
-function reverse(r::StepRangeLen)
+_reverse(r::OrdinalRange, ::Colon) = (:)(last(r), -step(r), first(r))
+function _reverse(r::StepRangeLen, ::Colon)
     # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
     # invalid. As `reverse(r)` is also empty, any offset would work so we keep
     # `r.offset`
     offset = isempty(r) ? r.offset : length(r)-r.offset+1
     StepRangeLen(r.ref, -r.step, length(r), offset)
 end
-reverse(r::LinRange{T}) where {T} = LinRange{T}(r.stop, r.start, length(r))
+_reverse(r::LinRange{T}, ::Colon) where {T} = LinRange{T}(r.stop, r.start, length(r))
 
 ## sorting ##
 

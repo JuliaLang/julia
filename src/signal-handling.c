@@ -17,7 +17,8 @@ extern "C" {
 
 #include <threading.h>
 
-// Profiler control variables //
+// Profiler control variables
+// Note: these "static" variables are also used in "signals-*.c"
 static volatile jl_bt_element_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
@@ -27,6 +28,14 @@ static const    uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
+void jl_lock_profile(void);
+void jl_unlock_profile(void);
+
+JL_DLLEXPORT int jl_profile_is_buffer_full(void)
+{
+    // the latter `+ 1` is for the block terminator `0`.
+    return bt_size_cur + (JL_BT_MAX_ENTRY_SIZE + 1) + 1 > bt_size_max;
+}
 
 static uint64_t jl_last_sigint_trigger = 0;
 static uint64_t jl_disable_sigint_time = 0;
@@ -235,7 +244,7 @@ void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data,
     if (context) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
         // is properly rooted.
-        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL, 1);
+        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
     }
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
         jl_print_bt_entry_codeloc(bt_data + i);

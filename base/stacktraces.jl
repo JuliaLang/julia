@@ -104,12 +104,12 @@ up stack frame context information. Returns an array of frame information for al
 inlined at that point, innermost function first.
 """
 function lookup(pointer::Ptr{Cvoid})
-    infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)
+    infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
     res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
-        info = infos[i]
+        info = infos[i]::Core.SimpleVector
         @assert(length(info) == 6)
         res[i] = StackFrame(info[1], info[2], info[3], info[4], info[5], info[6], pointer)
     end
@@ -119,32 +119,32 @@ end
 const top_level_scope_sym = Symbol("top-level scope")
 
 function lookup(ip::Base.InterpreterIP)
-    if ip.code isa MethodInstance && ip.code.def isa Method
-        codeinfo = ip.code.uninferred
-        func = ip.code.def.name
-        file = ip.code.def.file
-        line = ip.code.def.line
-    elseif ip.code === nothing
+    code = ip.code
+    if code === nothing
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
+    end
+    codeinfo = (code isa MethodInstance ? code.uninferred : code)::CodeInfo
+    # prepare approximate code info
+    if code isa MethodInstance && code.def isa Method
+        func = code.def.name
+        file = code.def.file
+        line = code.def.line
     else
-        @assert ip.code isa CodeInfo
-        codeinfo = ip.code
         func = top_level_scope_sym
         file = empty_sym
         line = 0
     end
     i = max(ip.stmt+1, 1)  # ip.stmt is 0-indexed
     if i > length(codeinfo.codelocs) || codeinfo.codelocs[i] == 0
-        return [StackFrame(func, file, line, ip.code, false, false, 0)]
+        return [StackFrame(func, file, line, code, false, false, 0)]
     end
     lineinfo = codeinfo.linetable[codeinfo.codelocs[i]]
     scopes = StackFrame[]
     while true
-        push!(scopes, StackFrame(lineinfo.method, lineinfo.file, lineinfo.line, ip.code, false, false, 0))
-        if lineinfo.inlined_at == 0
-            break
-        end
+        inlined = lineinfo.inlined_at != 0
+        push!(scopes, StackFrame(lineinfo.method, lineinfo.file, lineinfo.line, inlined ? nothing : code, false, inlined, 0))
+        inlined || break
         lineinfo = codeinfo.linetable[lineinfo.inlined_at]
     end
     return scopes
@@ -210,27 +210,28 @@ end
 is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
 
 function show_spec_linfo(io::IO, frame::StackFrame)
-    if frame.linfo === nothing
+    linfo = frame.linfo
+    if linfo === nothing
         if frame.func === empty_sym
             print(io, "ip:0x", string(frame.pointer, base=16))
         elseif frame.func === top_level_scope_sym
             print(io, "top-level scope")
         else
-            print(io, Base.demangle_function_name(string(frame.func)))
+            Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
         end
-    elseif frame.linfo isa MethodInstance
-        def = frame.linfo.def
+    elseif linfo isa MethodInstance
+        def = linfo.def
         if isa(def, Method)
-            sig = frame.linfo.specTypes
+            sig = linfo.specTypes
             argnames = Base.method_argnames(def)
             if def.nkw > 0
                 # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
                 kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
-                uw = Base.unwrap_unionall(sig)
+                uw = Base.unwrap_unionall(sig)::DataType
                 pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
                 kwnames = argnames[2:(def.nkw+1)]
                 for i = 1:length(kwnames)
-                    str = string(kwnames[i])
+                    str = string(kwnames[i])::String
                     if endswith(str, "...")
                         kwnames[i] = Symbol(str[1:end-3])
                     end
@@ -240,9 +241,9 @@ function show_spec_linfo(io::IO, frame::StackFrame)
                 Base.show_tuple_as_call(io, def.name, sig, true, nothing, argnames)
             end
         else
-            Base.show(io, frame.linfo)
+            Base.show(io, linfo)
         end
-    elseif frame.linfo isa CodeInfo
+    elseif linfo isa CodeInfo
         print(io, "top-level scope")
     end
 end

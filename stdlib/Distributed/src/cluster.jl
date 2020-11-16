@@ -46,12 +46,12 @@ Some fields are used by both `LocalManager`s and `SSHManager`s:
 mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
     io::Union{IO, Nothing}
-    host::Union{AbstractString, Nothing}
+    host::Union{String, Nothing}
     port::Union{Int, Nothing}
 
     # Used when launching additional workers at a host
     count::Union{Int, Symbol, Nothing}
-    exename::Union{AbstractString, Cmd, Nothing}
+    exename::Union{String, Cmd, Nothing}
     exeflags::Union{Cmd, Nothing}
 
     # External cluster managers can use this to store information at a per-worker level
@@ -61,8 +61,8 @@ mutable struct WorkerConfig
     # SSHManager / SSH tunnel connections to workers
     tunnel::Union{Bool, Nothing}
     multiplex::Union{Bool, Nothing}
-    forward::Union{AbstractString, Nothing}
-    bind_addr::Union{AbstractString, Nothing}
+    forward::Union{String, Nothing}
+    bind_addr::Union{String, Nothing}
     sshflags::Union{Cmd, Nothing}
     max_parallel::Union{Int, Nothing}
 
@@ -200,9 +200,9 @@ end
 
 mutable struct LocalProcess
     id::Int
-    bind_addr::AbstractString
+    bind_addr::String
     bind_port::UInt16
-    cookie::AbstractString
+    cookie::String
     LocalProcess() = new(1)
 end
 
@@ -516,7 +516,7 @@ end
 default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
     :dir      => pwd(),
-    :exename  => joinpath(Sys.BINDIR, julia_exename()),
+    :exename  => joinpath(Sys.BINDIR::String, julia_exename()),
     :exeflags => ``,
     :enable_threaded_blas => false,
     :lazy => true)
@@ -654,10 +654,10 @@ function create_worker(manager, wconfig)
         end
     end
 
-    all_locs = map(x -> isa(x, Worker) ?
-                   (something(x.config.connect_at, ()), x.id) :
-                   ((), x.id, true),
-                   join_list)
+    all_locs = mapany(x -> isa(x, Worker) ?
+                      (something(x.config.connect_at, ()), x.id) :
+                      ((), x.id, true),
+                      join_list)
     send_connection_hdr(w, true)
     enable_threaded_blas = something(wconfig.enable_threaded_blas, false)
     join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, enable_threaded_blas, isclusterlazy())
@@ -765,7 +765,7 @@ let next_pid = 2    # 1 is reserved for the client (always)
 end
 
 mutable struct ProcessGroup
-    name::AbstractString
+    name::String
     workers::Array{Any,1}
     refs::Dict{RRID,Any}                  # global references
     topology::Symbol
@@ -1024,8 +1024,8 @@ end
 function _rmprocs(pids, waitfor)
     lock(worker_lock)
     try
-        rmprocset = []
-        for p in vcat(pids...)
+        rmprocset = Union{LocalProcess, Worker}[]
+        for p in pids
             if p == 1
                 @warn "rmprocs: process 1 not removed"
             else

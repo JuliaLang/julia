@@ -15,17 +15,17 @@ let m = Meta.@lower 1 + 1
         Expr(:call, :opaque),
         GotoIfNot(Core.SSAValue(1), 10),
         # block 2
-        Core.PhiNode(Any[8], Any[Core.SSAValue(7)]), # <- This phi must not get replaced by %7
-        Core.PhiNode(Any[2, 8], Any[true, false]),
+        Core.PhiNode(Int32[8], Any[Core.SSAValue(7)]), # <- This phi must not get replaced by %7
+        Core.PhiNode(Int32[2, 8], Any[true, false]),
         GotoIfNot(Core.SSAValue(1), 7),
         # block 3
         Expr(:call, :+, Core.SSAValue(3), 1),
         # block 4
-        Core.PhiNode(Any[5, 6], Any[0, Core.SSAValue(6)]),
+        Core.PhiNode(Int32[5, 6], Any[0, Core.SSAValue(6)]),
         Expr(:call, >, Core.SSAValue(7), 10),
         GotoIfNot(Core.SSAValue(8), 3),
         # block 5
-        Core.PhiNode(Any[2, 8], Any[0, Core.SSAValue(7)]),
+        Core.PhiNode(Int32[2, 8], Any[0, Core.SSAValue(7)]),
         ReturnNode(Core.SSAValue(10)),
     ]
     nstmts = length(src.code)
@@ -34,7 +34,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.inst[3]
@@ -62,7 +62,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end
@@ -147,7 +147,7 @@ let m = Meta.@lower 1 + 1
         # block 1
         nothing,
         # block 2
-        PhiNode(Any[1, 7], Any[Core.Argument(2), SSAValue(9)]),
+        PhiNode(Int32[1, 7], Any[Core.Argument(2), SSAValue(9)]),
         Expr(:call, isa, SSAValue(2), UnionAll),
         GotoIfNot(Core.SSAValue(3), 11),
         # block 3
@@ -180,8 +180,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
     @test Core.Compiler.verify_ir(ir) === nothing
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
-    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir, domtree)
+    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
@@ -257,6 +256,30 @@ let m = Meta.@lower 1 + 1
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
 
+let m = Meta.@lower 1 + 1
+    # Test that CFG simplify doesn't try to merge every block in a loop into
+    # its predecessor
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::Core.CodeInfo
+    src.code = Any[
+        # Block 1
+        Core.Compiler.GotoNode(2),
+        # Block 2
+        Core.Compiler.GotoNode(3),
+        # Block 3
+        Core.Compiler.GotoNode(1)
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 1
+end
+
 # Issue #29213
 function f_29213()
     while true
@@ -296,3 +319,26 @@ end
 const _some_coeffs = (1,[2],3,4)
 splat_from_globalref(x) = (x, _some_coeffs...,)
 @test splat_from_globalref(0) == (0, 1, [2], 3, 4)
+
+function pi_on_argument(x)
+    if isa(x, Core.Argument)
+        return x.n
+    end
+    return -2
+end
+let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
+    nisa = 0, found_pi = false
+    for stmt in code
+        if Meta.isexpr(stmt, :call)
+            callee = stmt.args[1]
+            if (callee === isa || callee === :isa || (isa(callee, GlobalRef) &&
+                                                      callee.name === :isa))
+                nisa += 1
+            end
+        elseif stmt === Core.PiNode(Core.Argument(2), Core.Argument)
+            found_pi = true
+        end
+    end
+    @test nisa == 1
+    @test found_pi
+end

@@ -156,20 +156,12 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
     jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
-void jl_write_coverage_data(const char*);
-void jl_write_malloc_log(void);
-void jl_write_compiler_output(void);
-
 static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
 {
     struct uv_shutdown_queue_item *rv = item->next;
     free(item);
     return rv;
 }
-
-void jl_init_timing(void);
-void jl_destroy_timing(void);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 static void jl_close_item_atexit(uv_handle_t *handle)
 {
@@ -231,8 +223,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 ptls->world_age = last_age;
             }
             JL_CATCH {
-                jl_printf(JL_STDERR, "\natexit hook threw an error: ");
-                jl_static_show(JL_STDERR, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
             }
         }
     }
@@ -266,8 +260,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 //error handling -- continue cleanup, as much as possible
                 assert(item);
                 uv_unref(item->h);
-                jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-                jl_static_show(JL_STDERR, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
                 item = next_shutdown_queue_item(item);
             }
         }
@@ -309,7 +305,7 @@ void *jl_winsock_handle;
 uv_loop_t *jl_io_loop;
 
 #ifdef _OS_WINDOWS_
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     HANDLE current_process;
 
     if (fd == UV_STDIN_FD || fd == UV_STDOUT_FD || fd == UV_STDERR_FD)
@@ -343,7 +339,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     return 0;
 }
 #else
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     if ((*dupfd = fcntl(fd, F_DUPFD_CLOEXEC, 3)) == -1)
         return -errno;
     return 0;
@@ -424,7 +420,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     return handle;
 }
 
-void init_stdio(void)
+static void init_stdio(void)
 {
     JL_STDIN  = (uv_stream_t*)init_stdio_handle("stdin", UV_STDIN_FD, 1);
     JL_STDOUT = (uv_stream_t*)init_stdio_handle("stdout", UV_STDOUT_FD, 0);
@@ -444,7 +440,9 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-int isabspath(const char *in)
+char jl_using_gdb_jitevents = 0;
+
+int isabspath(const char *in) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];
@@ -661,8 +659,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #endif
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
     jl_exe_handle = GetModuleHandleA(NULL);
-    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-    if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
+    JL_MUTEX_INIT(&jl_in_stackwalk);
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
+    if (!SymInitialize(GetCurrentProcess(), "", 1)) {
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
     }
     needsSymRefreshModuleList = 0;
@@ -696,6 +695,15 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_perf_jitevents= 1;
+    }
+#endif
+
+#if defined(JL_DEBUG_BUILD)
+    jl_using_gdb_jitevents = 1;
+# else
+    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
+    if (jit_gdb && atoi(jit_gdb)) {
+        jl_using_gdb_jitevents = 1;
     }
 #endif
 

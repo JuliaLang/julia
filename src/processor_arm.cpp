@@ -89,7 +89,8 @@ enum class CPU : uint32_t {
     arm_cortex_x1,
     arm_neoverse_e1,
     arm_neoverse_n1,
-    arm_zeus,
+    arm_neoverse_v1,
+    arm_neoverse_n2,
 
     // Cavium
     // aarch64
@@ -277,7 +278,9 @@ constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a, i8mm, bf16);
 //     .DIT: dit
 //     .BT: bti
 
-// ID_AA64PFR1_EL1.SSBS: ssbs
+// ID_AA64PFR1_EL1
+//     .SSBS: ssbs
+//     .MTE: mte
 
 // ID_AA64MMFR2_EL1.AT: uscat
 
@@ -305,7 +308,9 @@ constexpr auto arm_cortex_a78 = armv8_2a | get_feature_masks(dotprod, rcpc, full
 constexpr auto arm_cortex_x1 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs); // spe
 constexpr auto arm_neoverse_e1 = armv8_2a | get_feature_masks(rcpc, fullfp16, ssbs);
 constexpr auto arm_neoverse_n1 = armv8_2a | get_feature_masks(dotprod, rcpc, fullfp16, ssbs);
-constexpr auto arm_zeus = armv8_4a | get_feature_masks(sve, i8mm, bf16, fullfp16, ssbs, rand);
+constexpr auto arm_neoverse_v1 = armv8_4a | get_feature_masks(sve, i8mm, bf16, fullfp16, ssbs, rand);
+constexpr auto arm_neoverse_n2 = armv8_5a | get_feature_masks(sve, i8mm, bf16, fullfp16, sve2,
+                                                              sve2_bitperm, rand, mte);
 constexpr auto cavium_thunderx = armv8a_crc_crypto;
 constexpr auto cavium_thunderx88 = armv8a_crc_crypto;
 constexpr auto cavium_thunderx88p1 = armv8a_crc_crypto;
@@ -360,14 +365,15 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"cortex-a72", CPU::arm_cortex_a72, CPU::generic, 0, Feature::arm_cortex_a72},
     {"cortex-a73", CPU::arm_cortex_a73, CPU::generic, 0, Feature::arm_cortex_a73},
     {"cortex-a75", CPU::arm_cortex_a75, CPU::generic, 0, Feature::arm_cortex_a75},
-    {"cortex-a76", CPU::arm_cortex_a76, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
-    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
+    {"cortex-a76", CPU::arm_cortex_a76, CPU::generic, 0, Feature::arm_cortex_a76},
+    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::generic, 0, Feature::arm_cortex_a76},
     {"cortex-a77", CPU::arm_cortex_a77, CPU::arm_cortex_a76, 110000, Feature::arm_cortex_a77},
     {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, 110000, Feature::arm_cortex_a78},
     {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, 110000, Feature::arm_cortex_x1},
     {"neoverse-e1", CPU::arm_neoverse_e1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_e1},
     {"neoverse-n1", CPU::arm_neoverse_n1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_n1},
-    {"zeus", CPU::arm_zeus, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_zeus},
+    {"neoverse-v1", CPU::arm_neoverse_v1, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_neoverse_v1},
+    {"neoverse-n2", CPU::arm_neoverse_n2, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_neoverse_n2},
     {"thunderx", CPU::cavium_thunderx, CPU::generic, 0, Feature::cavium_thunderx},
     {"thunderxt88", CPU::cavium_thunderx88, CPU::generic, 0, Feature::cavium_thunderx88},
     {"thunderxt88p1", CPU::cavium_thunderx88p1, CPU::cavium_thunderx88, UINT32_MAX,
@@ -558,6 +564,8 @@ constexpr auto arm_cortex_a77 = armv8_2a;
 constexpr auto arm_cortex_a78 = armv8_2a;
 constexpr auto arm_cortex_x1 = armv8_2a;
 constexpr auto arm_neoverse_n1 = armv8_2a;
+constexpr auto arm_neoverse_v1 = armv8_4a;
+constexpr auto arm_neoverse_n2 = armv8_5a;
 constexpr auto nvidia_denver1 = armv8a; // TODO? (crc, crypto)
 constexpr auto nvidia_denver2 = armv8a_crc_crypto;
 constexpr auto apm_xgene1 = armv8a;
@@ -634,12 +642,14 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"cortex-a72", CPU::arm_cortex_a72, CPU::generic, 0, Feature::arm_cortex_a72},
     {"cortex-a73", CPU::arm_cortex_a73, CPU::generic, 0, Feature::arm_cortex_a73},
     {"cortex-a75", CPU::arm_cortex_a75, CPU::generic, 0, Feature::arm_cortex_a75},
-    {"cortex-a76", CPU::arm_cortex_a76, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
-    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::arm_cortex_a75, 90000, Feature::arm_cortex_a76},
+    {"cortex-a76", CPU::arm_cortex_a76, CPU::generic, 0, Feature::arm_cortex_a76},
+    {"cortex-a76ae", CPU::arm_cortex_a76ae, CPU::generic, 0, Feature::arm_cortex_a76},
     {"cortex-a77", CPU::arm_cortex_a77, CPU::arm_cortex_a76, 110000, Feature::arm_cortex_a77},
     {"cortex-a78", CPU::arm_cortex_a78, CPU::arm_cortex_a77, 110000, Feature::arm_cortex_a78},
     {"cortex-x1", CPU::arm_cortex_x1, CPU::arm_cortex_a78, 110000, Feature::arm_cortex_x1},
     {"neoverse-n1", CPU::arm_neoverse_n1, CPU::arm_cortex_a76, 100000, Feature::arm_neoverse_n1},
+    {"neoverse-v1", CPU::arm_neoverse_v1, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_neoverse_v1},
+    {"neoverse-n2", CPU::arm_neoverse_n2, CPU::arm_neoverse_n1, UINT32_MAX, Feature::arm_neoverse_n2},
     {"denver1", CPU::nvidia_denver1, CPU::arm_cortex_a53, UINT32_MAX, Feature::nvidia_denver1},
     {"denver2", CPU::nvidia_denver2, CPU::arm_cortex_a57, UINT32_MAX, Feature::nvidia_denver2},
     {"xgene1", CPU::apm_xgene1, CPU::armv8_a, UINT32_MAX, Feature::apm_xgene1},
@@ -809,7 +819,7 @@ static std::set<CPUID> get_cpuinfo(void)
 static CPU get_cpu_name(CPUID cpuid)
 {
     switch (cpuid.implementer) {
-    case 0x41: // ARM
+    case 0x41: // 'A': ARM
         switch (cpuid.part) {
         case 0xb02: return CPU::arm_mpcore;
         case 0xb36: return CPU::arm_1136jf_s;
@@ -849,20 +859,22 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0xd20: return CPU::arm_cortex_m23;
         case 0xd21: return CPU::arm_cortex_m33;
             // case 0xd22: return CPU::arm_cortex_m55;
-        case 0xd40: return CPU::arm_zeus;
+        case 0xd40: return CPU::arm_neoverse_v1;
         case 0xd41: return CPU::arm_cortex_a78;
         case 0xd43: return CPU::arm_cortex_a65ae;
         case 0xd44: return CPU::arm_cortex_x1;
+        case 0xd49: return CPU::arm_neoverse_n2;
         case 0xd4a: return CPU::arm_neoverse_e1;
         default: return CPU::generic;
         }
-    case 0x42: // Broadcom (Cavium)
+    case 0x42: // 'B': Broadcom (Cavium)
         switch (cpuid.part) {
+            // case 0x00f: return CPU::broadcom_brahma_b15;
             // case 0x100: return CPU::broadcom_brahma_b53;
         case 0x516: return CPU::cavium_thunderx2t99p1;
         default: return CPU::generic;
         }
-    case 0x43: // Cavium
+    case 0x43: // 'C': Cavium
         switch (cpuid.part) {
         case 0xa0: return CPU::cavium_thunderx;
         case 0xa1:
@@ -881,31 +893,32 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0xb8: return CPU::marvell_thunderx3t110;
         default: return CPU::generic;
         }
-    case 0x46: // Fujitsu
+    case 0x46: // 'F': Fujitsu
         switch (cpuid.part) {
         case 0x1: return CPU::fujitsu_a64fx;
         default: return CPU::generic;
         }
-    case 0x48: // HiSilicon
+    case 0x48: // 'H': HiSilicon
         switch (cpuid.part) {
         case 0xd01: return CPU::hisilicon_tsv110;
+        case 0xd40: return CPU::arm_cortex_a76; // Kirin 980
         default: return CPU::generic;
         }
-    case 0x4e: // NVIDIA
+    case 0x4e: // 'N': NVIDIA
         switch (cpuid.part) {
         case 0x000: return CPU::nvidia_denver1;
         case 0x003: return CPU::nvidia_denver2;
         case 0x004: return CPU::nvidia_carmel;
         default: return CPU::generic;
         }
-    case 0x50: // AppliedMicro
+    case 0x50: // 'P': AppliedMicro
         // x-gene 2
         // x-gene 3
         switch (cpuid.part) {
         case 0x000: return CPU::apm_xgene1;
         default: return CPU::generic;
         }
-    case 0x51: // Qualcomm
+    case 0x51: // 'Q': Qualcomm
         switch (cpuid.part) {
         case 0x00f:
         case 0x02d:
@@ -913,41 +926,54 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0x04d:
         case 0x06f:
             return CPU::qualcomm_krait;
-        case 0x201:
-        case 0x205:
-        case 0x211:
+        case 0x201: // silver
+        case 0x205: // gold
+        case 0x211: // silver
             return CPU::qualcomm_kyro;
-        case 0x800:
-        case 0x801:
-        case 0x802:
-        case 0x803:
-        case 0x804:
-        case 0x805:
-            return CPU::arm_cortex_a73; // second-generation Kryo
+            // kryo 2xx
+        case 0x800: // gold
+            return CPU::arm_cortex_a73;
+        case 0x801: // silver
+            return CPU::arm_cortex_a53;
+            // kryo 3xx
+        case 0x802: // gold
+            return CPU::arm_cortex_a75;
+        case 0x803: // silver
+            return CPU::arm_cortex_a55;
+            // kryo 4xx
+        case 0x804: // gold
+            return CPU::arm_cortex_a76;
+        case 0x805: // silver
+            return CPU::arm_cortex_a55;
+            // kryo 5xx seems to be using ID for cortex-a77 directly
         case 0xc00:
             return CPU::qualcomm_falkor;
         case 0xc01:
             return CPU::qualcomm_saphira;
         default: return CPU::generic;
         }
-    case 0x53: // Samsung
-        if (cpuid.part == 1)
+    case 0x53: // 'S': Samsung
+        if (cpuid.part == 1) {
+            if (cpuid.variant == 4)
+                return CPU::samsung_exynos_m2;
             return CPU::samsung_exynos_m1;
+        }
         if (cpuid.variant != 1)
             return CPU::generic;
         switch (cpuid.part) {
         case 0x2: return CPU::samsung_exynos_m3;
         case 0x3: return CPU::samsung_exynos_m4;
+        case 0x4: return CPU::samsung_exynos_m5;
         default: return CPU::generic;
         }
-    case 0x56: // Marvell
+    case 0x56: // 'V': Marvell
         switch (cpuid.part) {
         case 0x581:
         case 0x584:
             return CPU::marvell_pj4;
         default: return CPU::generic;
         }
-    case 0x61: // Apple
+    case 0x61: // 'a': Apple
         // https://opensource.apple.com/source/xnu/xnu-6153.81.5/osfmk/arm/cpuid.h.auto.html
         switch (cpuid.part) {
         case 0x0: // Swift
@@ -978,12 +1004,12 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::apple_a13;
         default: return CPU::generic;
         }
-    case 0x68: // Huaxintong Semiconductor
+    case 0x68: // 'h': Huaxintong Semiconductor
         switch (cpuid.part) {
         case 0x0: return CPU::hxt_phecda;
         default: return CPU::generic;
         }
-    case 0x69: // Intel
+    case 0x69: // 'i': Intel
         switch (cpuid.part) {
         case 0x001: return CPU::intel_3735d;
         default: return CPU::generic;
@@ -1195,17 +1221,41 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 
     std::set<uint32_t> cpus;
     std::vector<std::pair<uint32_t,CPUID>> list;
+    // Ideally the feature detection above should be enough.
+    // However depending on the kernel version not all features are available
+    // and it's also impossible to detect the ISA version which contains
+    // some features not yet exposed by the kernel.
+    // We therefore try to get a more complete feature list from the CPU name.
+    // Since it is possible to pair cores that have different feature set
+    // (Observed for exynos 9810 with exynos-m3 + cortex-a55) we'll compute
+    // an intersection of the known features from each core.
+    // If there's a core that we don't recognize, treat it as generic.
+    bool extra_initialized = false;
+    FeatureList<feature_sz> extra_features = {};
     for (auto info: cpuinfo) {
         auto name = (uint32_t)get_cpu_name(info);
-        if (name == 0)
+        if (name == 0) {
+            // no need to clear the feature set if it wasn't initialized
+            if (extra_initialized)
+                extra_features = FeatureList<feature_sz>{};
+            extra_initialized = true;
             continue;
+        }
         if (!check_cpu_arch_ver(name, arch))
             continue;
         if (cpus.insert(name).second) {
-            features = features | find_cpu(name)->features;
+            if (extra_initialized) {
+                extra_features = extra_features & find_cpu(name)->features;
+            }
+            else {
+                extra_initialized = true;
+                extra_features = find_cpu(name)->features;
+            }
             list.emplace_back(name, info);
         }
     }
+    features = features | extra_features;
+
     // Not all elements/pairs are valid
     static constexpr CPU v8order[] = {
         CPU::arm_cortex_a35,
@@ -1217,6 +1267,8 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
         CPU::arm_cortex_a75,
         CPU::arm_cortex_a76,
         CPU::arm_neoverse_n1,
+        CPU::arm_neoverse_n2,
+        CPU::arm_neoverse_v1,
         CPU::nvidia_denver2,
         CPU::nvidia_carmel,
         CPU::samsung_exynos_m1,
@@ -1303,6 +1355,8 @@ static inline const char *normalize_cpu_name(llvm::StringRef name)
 {
     if (name == "ares")
         return "neoverse-n1";
+    if (name == "zeus")
+        return "neoverse-v1";
     if (name == "cyclone")
         return "apple-a7";
     if (name == "typhoon")
@@ -1562,17 +1616,6 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
         const char *fename_str = fename.name;
         bool enable = test_nbit(features, fename.bit);
         bool disable = test_nbit(data.dis.features, fename.bit);
-#if defined(_CPU_ARM_) && JL_LLVM_VERSION < 90000
-        if (fename.bit == Feature::d32) {
-            if (enable) {
-                feature_strs.push_back("-d16");
-            }
-            else if (disable) {
-                feature_strs.push_back("+d16");
-            }
-            continue;
-        }
-#endif
         if (enable) {
             feature_strs.insert(feature_strs.begin(), std::string("+") + fename_str);
         }
@@ -1723,7 +1766,7 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 #  if JL_LLVM_VERSION > 100000
                 "+tme,"
 #  endif
-                "+am,+specrestrict,+predres,+mte,+lor,+perfmon,+spe,+tracev8.4",
+                "+am,+specrestrict,+predres,+lor,+perfmon,+spe,+tracev8.4",
 #else
                 "+dotprod",
 #endif

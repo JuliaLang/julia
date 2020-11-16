@@ -56,6 +56,18 @@ static int literal_val_id(jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
     return jl_array_len(rs) - 1;
 }
 
+static void jl_encode_int32(jl_ircode_state *s, int32_t x)
+{
+    if (x >= INT16_MIN && x <= INT16_MAX) {
+        write_uint8(s->s, TAG_SHORT_INT32);
+        write_uint16(s->s, (uint16_t)x);
+    }
+    else {
+        write_uint8(s->s, TAG_INT32);
+        write_int32(s->s, x);
+    }
+}
+
 static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
 {
     size_t i;
@@ -181,7 +193,11 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
             write_int32(s->s, jl_array_len(values));
         }
         for (i = 0; i < l; i++) {
-            jl_encode_value(s, jl_array_ptr_ref(edges, i));
+            int32_t e = ((int32_t*)jl_array_data(edges))[i];
+            if (e <= 20)
+                jl_encode_value(s, jl_box_int32(e));
+            else
+                jl_encode_int32(s, e);
         }
         l = jl_array_len(values);
         for (i = 0; i < l; i++) {
@@ -236,15 +252,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         }
     }
     else if (jl_typeis(v, jl_int32_type)) {
-        void *data = jl_data_ptr(v);
-        if (*(int32_t*)data >= INT16_MIN && *(int32_t*)data <= INT16_MAX) {
-            write_uint8(s->s, TAG_SHORT_INT32);
-            write_uint16(s->s, (uint16_t)*(int32_t*)data);
-        }
-        else {
-            write_uint8(s->s, TAG_INT32);
-            write_int32(s->s, *(int32_t*)data);
-        }
+        jl_encode_int32(s, *(int32_t*)jl_data_ptr(v));
     }
     else if (jl_typeis(v, jl_uint8_type)) {
         write_uint8(s->s, TAG_UINT8);
@@ -315,7 +323,8 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
     }
     else {
         if (!as_literal && !(jl_is_uniontype(v) || jl_is_newvarnode(v) || jl_is_tuple(v) ||
-                             jl_is_linenode(v) || jl_is_upsilonnode(v) || jl_is_pinode(v))) {
+                             jl_is_linenode(v) || jl_is_upsilonnode(v) || jl_is_pinode(v) ||
+                             jl_is_slot(v) || jl_is_ssavalue(v))) {
             int id = literal_val_id(s, v);
             assert(id >= 0);
             if (id < 256) {
@@ -495,12 +504,12 @@ static jl_value_t *jl_decode_value_phi(jl_ircode_state *s, uint8_t tag) JL_GC_DI
         len_e = read_int32(s->s);
         len_v = read_int32(s->s);
     }
-    jl_array_t *e = jl_alloc_vec_any(len_e);
+    jl_array_t *e = jl_alloc_array_1d(jl_array_int32_type, len_e);
     jl_array_t *v = jl_alloc_vec_any(len_v);
     jl_value_t *phi = jl_new_struct(jl_phinode_type, e, v);
-    jl_value_t **data_e = (jl_value_t**)(e->data);
+    int32_t *data_e = (int32_t*)(e->data);
     for (i = 0; i < len_e; i++) {
-        data_e[i] = jl_decode_value(s);
+        data_e[i] = jl_unbox_int32(jl_decode_value(s));
     }
     jl_value_t **data_v = (jl_value_t**)(v->data);
     for (i = 0; i < len_v; i++) {
@@ -924,7 +933,7 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms)
     JL_GC_PUSH1(&names);
     for (i = 0; i < len; i++) {
         size_t namelen = strlen(namestr);
-        jl_sym_t *name = jl_symbol_n(namestr, namelen);
+        jl_sym_t *name = _jl_symbol(namestr, namelen);
         jl_array_ptr_set(names, i, name);
         namestr += namelen + 1;
     }
@@ -940,7 +949,7 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i)
     while (remaining) {
         size_t namelen = strlen(namestr);
         if (i-- == 0) {
-            jl_sym_t *name = jl_symbol_n(namestr, namelen);
+            jl_sym_t *name = _jl_symbol(namestr, namelen);
             return (jl_value_t*)name;
         }
         namestr += namelen + 1;
