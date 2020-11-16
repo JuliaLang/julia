@@ -420,7 +420,7 @@ end
     @test isemoji("🎅🏼")
     @test isemoji("😈😘")
     @test isemoji("🚴🏿")
-    @test !isemoji("👨‍👧" * ZWJ)
-    @test isemoji("🛌" * ZWJ * '😎')
-    @test !isemoji("🤦🏽" * ZWJ * ZWJ * '😎')
+    @test !isemoji("👨‍👧" * Unicode.ZWJ)
+    @test isemoji("🛌" * Unicode.ZWJ * '😎')
+    @test !isemoji("🤦🏽" * Unicode.ZWJ * Unicode.ZWJ * '😎')
 end
