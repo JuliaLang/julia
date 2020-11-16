@@ -404,3 +404,23 @@ end
     @test prod(["*" for i in 1:3]) == "***"
     @test prod(["*" for i in 1:0]) == ""
 end
+
+@testset "Emoji tests" begin
+    @test !isemoji('A')
+    @test !isemoji("🔹 some text bounded by emojis 🔹")
+    @test !isemoji("🚍 some text after an emoji")
+    @test !isemoji("some text before an emoji 🚘")
+    @test !isemoji("😮 😥 😨 😩 😪") # There are spaces between the emojis
+    @test !isemoji("No emojis here")
+
+    @test isemoji('🏿')
+    @test isemoji('🤘')
+    @test isemoji("🤘🏾")
+    @test isemoji('🚼')
+    @test isemoji("🎅🏼")
+    @test isemoji("😈😘")
+    @test isemoji("🚴🏿")
+    @test !isemoji("👨‍👧" * ZWJ)
+    @test isemoji("🛌" * ZWJ * '😎')
+    @test !isemoji("🤦🏽" * ZWJ * ZWJ * '😎')
+end
