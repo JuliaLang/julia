@@ -104,7 +104,12 @@ const ZWJ = '\u200d'    # Zero-width joiner
 """
     isemoji(Union{AbstractChar, AbstractString}) -> Bool
 
-Test whether a character is an emoji, or whether all elements in a given string are emoji. Includes identifying composite emoji.
+Test whether a character is an emoji, or whether all elements in a given string are emoji. 
+Empty strings return `true` as they contain no characters which aren't emoji. 
+
+Combined emoji sequences separated by the zero-width joiner character `'\u200d'` 
+such as ✊🏿 `['✊',  '\u200d', '🏿']` are supported, though this function cannot determine whether a
+given sequence of emoji and zero-width joiners would result in a valid composite emoji.
 """
 function isemoji(c::AbstractChar)
     u = UInt32(c)
