@@ -1272,11 +1272,13 @@
                                        (parse-raw-literal s t)))
                         (nxt (peek-token s))
                         (macname (macroify-name ex (macsuffix t))))
-                   (if (and (symbol? nxt) (not (operator? nxt))
+                   (if (and (or (symbol? nxt) (number? nxt) (large-number? nxt)) (not (operator? nxt))
                             (not (ts:space? s)))
                        ;; string literal suffix, "s"x
                        (loop `(macrocall ,macname ,startloc ,macstr
-                                         ,(string (take-token s))))
+                                         ,(if (symbol? nxt)
+                                              (string (take-token s))
+                                              (take-token s))))
                        (loop `(macrocall ,macname ,startloc ,macstr))))
                  ex))
             (else ex))))))

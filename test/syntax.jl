@@ -60,6 +60,9 @@ macro test999_str(args...); args; end
     a
     b""" == ("a\nb",)
 
+# make sure a trailing integer, not just a symbol, is allowed also
+@test test999"foo"123 == ("foo", 123)
+
 # issue #5997
 @test_throws ParseError Meta.parse(": x")
 @test_throws ParseError Meta.parse("""begin
