@@ -12,6 +12,28 @@ FooBase_module = :FooBase4b3a94a1a081a8cb
 end
 using .ConflictingBindings
 
+function precompile_test_harness(@nospecialize(f), testset::String)
+    @testset "$testset" begin
+        precompile_test_harness(f)
+    end
+end
+function precompile_test_harness(@nospecialize(f), separate::Bool=true)
+    load_path = mktempdir()
+    load_cache_path = separate ? mktempdir() : load_path
+    try
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, load_cache_path)
+        f(load_path)
+    finally
+        rm(load_path, recursive=true, force=true)
+        separate && rm(load_cache_path, recursive=true, force=true)
+        filter!((≠)(load_path), LOAD_PATH)
+        separate && filter!((≠)(load_cache_path), DEPOT_PATH)
+    end
+    nothing
+end
+
+
 (f -> f())() do # wrap in function scope, so we can test world errors
 dir = mktempdir()
 dir2 = mktempdir()
@@ -902,6 +924,28 @@ let
         filter!((≠)(load_path), LOAD_PATH)
         filter!((≠)(load_cache_path), DEPOT_PATH)
     end
+end
+
+# Issue #38312
+let
+    TheType = """Array{Ref{Val{1}}, 1}"""
+    write(joinpath(load_path, "Foo38312.jl"),
+        """
+        module Foo38312
+        const TheType = $TheType
+        end
+        """)
+    write(joinpath(load_path, "Bar38312.jl"),
+        """
+        module Bar38312
+        const TheType = $TheType
+        end
+        """)
+    Base.compilecache(Base.PkgId("Foo38312"))
+    Base.compilecache(Base.PkgId("Bar38312"))
+    @test pointer_from_objref((@eval (using Foo38312; Foo38312)).TheType) ===
+          pointer_from_objref(eval(Meta.parse(TheType))) ===
+          pointer_from_objref((@eval (using Bar38312; Bar38312)).TheType)
 end
 
 end # !withenv
