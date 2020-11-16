@@ -409,6 +409,9 @@ end
     u1 = reinterpret(Char, UInt32(0xc0) << 24)
     u2 = reinterpret(Char, UInt32(0xc1) << 24)
 
+    overlong_uint =  UInt32(0xc0) << 24
+    overlong_char = reinterpret(Char, overlong_uint)
+
     state = Ref(Int32(1))
     @test Base.Unicode.isgraphemebreak(u1, u2)
     @test Base.Unicode.isgraphemebreak!(state, u1, u2)
@@ -421,5 +424,5 @@ end
     gi = Base.Unicode.graphemes("This is a string")
     @test gi isa Base.Unicode.GraphemeIterator{String}
     @test Base.Unicode.isvalid(Char, 'c')
-    @test !Base.Unicode.isvalid(Char, overlong_chars[1])
+    @test !Base.Unicode.isvalid(Char, overlong_char)
 end
