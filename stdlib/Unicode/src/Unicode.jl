@@ -89,27 +89,49 @@ letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
 
-const EMOJI_RANGES = [
-    0x1F600:0x1F64F,  # Emoticons
-    0x1F300:0x1F5FF,  # Misc Symbols and Pictographs
-    0x1F680:0x1F6FF,  # Transport and Map
-    0x02600:0x026FF,  # Misc symbols
-    0x02700:0x027BF,  # Dingbats
-    0x0FE00:0x0FE0F,  # Variation Selectors
-    0x1F900:0x1F9FF,   # Supplemental Symbols and Pictographs
-];
+const emoji_data = download("https://www.unicode.org/Public/13.0.0/ucd/emoji/emoji-data.txt")
 
+"""
+    extract_emoji_column(emoji_data, column = 1; type_field = "")
+Read the selected column from a provided unicode emoji data file
+(i.e. https://www.unicode.org/Public/13.0.0/ucd/emoji/emoji-data.txt).
+Optionally select only columns beginning with `type_field`
+"""
+function extract_emoji_column(emoji_data, column = 1; type_field = "")
+    lines = readlines(emoji_data)
+    filter!(line -> !isempty(line) && !startswith(line, "#"),  lines)
+    splitlines = [strip.(split(line, ";")) for line in lines]
+    first_col = [splitline[column] for splitline in splitlines if startswith(splitline[2], type_field)]
+end
+
+# parse a string of the form "AAAA...FFFF" into 0xAAAA:0xFFFF
+parse_unicode_range_str(range_str) = let s = split(range_str, "..")
+    if length(s) > 2 || length(s) < 1
+        return nothing
+    else
+        s1 = tryparse(UInt32, "0x" * s[1])
+        s1 === nothing && return nothing
+        if length(s) == 1
+            return s1:s1
+        else
+            s2 = tryparse(UInt32, "0x" * s[2])
+            s2 === nothing && return nothing
+            return s1:s2
+        end
+    end
+end
+
+# Get all ranges containing valid single emoji from file
+const EMOJI_RANGES = parse_unicode_range_str.(extract_emoji_column(emoji_data, 1, type_field = "Emoji"))
 const ZWJ = '\u200d'    # Zero-width joiner
+const VAR_SELECTOR = '\uFE0F'   # Variation selector
+# Handle England, Scotland, Wales flags and keycaps
+const SPECIAL_CASES = ["🏴󠁧󠁢󠁥󠁮󠁧󠁿", "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "#️⃣", "*️⃣", "0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"]
 
 """
     isemoji(Union{AbstractChar, AbstractString}) -> Bool
 
-Test whether a character is an emoji, or whether all elements in a given string are emoji. 
-Empty strings return `true` as they contain no characters which aren't emoji. 
-
-Combined emoji sequences separated by the zero-width joiner character `'\u200d'` 
-such as ✊🏿 `['✊',  '\u200d', '🏿']` are supported, though this function cannot determine whether a
-given sequence of emoji and zero-width joiners would result in a valid composite emoji.
+Test whether a character is an emoji, or whether all elements in a given string are emoji. Includes identifying composite emoji.
 """
 function isemoji(c::AbstractChar)
     u = UInt32(c)
@@ -120,16 +142,26 @@ function isemoji(c::AbstractChar)
 end
 
 function isemoji(s::AbstractString)
+    s in SPECIAL_CASES && return true
     isempty(s) && return true
-    ZWJ_allowed = false
     s[end] == ZWJ && return false
+    ZWJ_allowed = false
+    VAR_SELECTOR_allowed = false
+    emoji_allowed = true
+    # make sure string follows sequence of basic emoji chars
+    # separated by ZWJ and VAR_SELECTOR characters
     @inbounds for c in s
         if c == ZWJ
             !ZWJ_allowed && return false
             ZWJ_allowed = false
+            VAR_SELECTOR_allowed = false
+        elseif c == VAR_SELECTOR
+            !VAR_SELECTOR_allowed && return false
+            VAR_SELECTOR_allowed = false
         else
             !isemoji(c) && return false
             ZWJ_allowed = true
+            VAR_SELECTOR_allowed = true
         end
     end
     return true
