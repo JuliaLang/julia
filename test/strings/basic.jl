@@ -1094,10 +1094,6 @@ end
     @test sprint(summary, "") == "empty String"
 end
 
-struct StringWrapper <: AbstractString
-    str::String
-end
-
 @testset "Plug holes in test coverage" begin
     @test_throws MethodError checkbounds(Bool, "abc", [1.0, 2.0])
 
@@ -1110,8 +1106,7 @@ end
 
     @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
 
-    Base.iterate(s::StringWrapper, firstind::Integer = 1) = iterate(s.str, firstind)
-    @test isascii(StringWrapper("abc"))
+    @test isascii(GenericString("abc"))
 
     code_units = Base.CodeUnits("abc")
     @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
