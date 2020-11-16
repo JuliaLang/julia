@@ -423,4 +423,5 @@ end
     @test !isemoji("👨‍👧" * Unicode.ZWJ)
     @test isemoji("🛌" * Unicode.ZWJ * '😎')
     @test !isemoji("🤦🏽" * Unicode.ZWJ * Unicode.ZWJ * '😎')
+    @test isemoji("")
 end
