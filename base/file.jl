@@ -640,7 +640,9 @@ and `io` is an open file object for this path. The `cleanup` option controls whe
 the temporary file is automatically deleted when the process exits.
 
 !!! compat "Julia 1.3"
-    The `cleanup` keyword argument was added in Julia 1.3.
+    The `cleanup` keyword argument was added in Julia 1.3. Relatedly, starting from 1.3,
+    Julia will remove the temporary paths created by `mktemp` when the Julia process exits,
+    unless `cleanup` is explicitly set to `false`.
 """
 mktemp(parent)
 
@@ -657,7 +659,9 @@ the temporary directory is automatically deleted when the process exits.
     The `prefix` keyword argument was added in Julia 1.2.
 
 !!! compat "Julia 1.3"
-    The `cleanup` keyword argument was added in Julia 1.3.
+    The `cleanup` keyword argument was added in Julia 1.3. Relatedly, starting from 1.3,
+    Julia will remove the temporary paths created by `mktempdir` when the Julia process
+    exits, unless `cleanup` is explicitly set to `false`.
 """
 function mktempdir(parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix, cleanup::Bool=true)
