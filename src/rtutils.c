@@ -648,11 +648,17 @@ static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
     if (!jl_function_type) {  // Make sure there's a Function type defined.
         return 0;
     }
+    int _iter_count = 0;  // To prevent infinite loops from corrupt type objects.
     while (vt != jl_any_type) {
-        if (vt == jl_function_type) {
+        if (vt == NULL) {
+            jl_error("static_show: Nullptr encountered inside datatype.");
+        } else if (_iter_count > 10000) {
+            jl_error("static_show: Exit after 10,000 iterations of supertype(). Presuming invalid cycle in datatype object.");
+        } else if (vt == jl_function_type) {
             return 1;
         }
         vt = vt->super;
+        _iter_count += 1;
     }
     return 0;
 }
