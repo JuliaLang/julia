@@ -69,10 +69,18 @@ function sizehint!(d::IdDict, newsz)
 end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
-    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)
     end
+    return _iddict_setindex!(d, val, key)
+end
+
+function setindex!(d::IdDict{K,V}, @nospecialize(val::V), @nospecialize(key)) where {K, V}
+    return _iddict_setindex!(d, val, key)
+end
+
+function _iddict_setindex!(d::IdDict{K,V}, @nospecialize(val::V), @nospecialize(key)) where {K, V}
+    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max(length(d.ht)>>1, 32))
         d.ndel = 0
