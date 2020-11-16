@@ -406,6 +406,42 @@ end
 end
 
 @testset "Emoji tests" begin
+    # parse a string of the form "AAAA BBBB CCCC" into [0xAAAA, 0xBBBB, 0xCCCC]
+    function parse_sequence_str(seq_str)
+        s = split(seq_str)
+        res = tryparse.(UInt32, "0x" .* s)
+        if all(isnothing.(res))
+            return nothing
+        else
+            return res
+        end
+    end
+
+    # Parse string containing range (i.e. AAAA..FFFF) or sequence (AAAA BBBB CCCC) of unicode codepoints into an array of strings
+    # Ranges are parsed as independent characters ("AAAA...FFFF") -> ["\uAAAA", "\uBBBB", ..., "\u"FFFF"]
+    # Sequences are parsed as a single string ("AAAA BBBB") -> ["\uAAAA\uBBBB"]
+    function parse_col_entry(seq_str)
+        s = parse_sequence_str(seq_str)
+        if s === nothing
+            s = "" .* Char.(Unicode.parse_unicode_range_str(seq_str) |> collect)
+        else
+            s = [Char.(s) |> String]
+        end
+        return s
+    end
+
+    function extract_emoji_sequences(emoji_data)
+        codepoints = Unicode.extract_emoji_column(emoji_data)
+        emojis = parse_col_entry.(codepoints)
+        vcat(emojis...)
+    end
+
+    # See if all emojis are caught by the isemoji function
+    emoji_sequences = download("https://www.unicode.org/Public/emoji/13.1/emoji-sequences.txt")
+    emoji_zwj_sequences = download("https://www.unicode.org/Public/emoji/13.1/emoji-zwj-sequences.txt")
+    all_emojis = [extract_emoji_sequences(emoji_sequences) ; extract_emoji_sequences(emoji_zwj_sequences)]
+    @test all(isemoji.(all_emojis))
+
     @test !isemoji('A')
     @test !isemoji("🔹 some text bounded by emojis 🔹")
     @test !isemoji("🚍 some text after an emoji")
@@ -413,11 +449,7 @@ end
     @test !isemoji("😮 😥 😨 😩 😪") # There are spaces between the emojis
     @test !isemoji("No emojis here")
 
-    @test isemoji('🏿')
-    @test isemoji('🤘')
-    @test isemoji("🤘🏾")
-    @test isemoji('🚼')
-    @test isemoji("🎅🏼")
+    # Test emoji sequences
     @test isemoji("😈😘")
     @test isemoji("🚴🏿")
     @test !isemoji("👨‍👧" * Unicode.ZWJ)
