@@ -115,6 +115,7 @@ function isemoji(c::AbstractChar)
 end
 
 function isemoji(s::AbstractString)
+    isempty(s) && return true
     ZWJ_allowed = false
     s[end] == ZWJ && return false
     @inbounds for c in s
