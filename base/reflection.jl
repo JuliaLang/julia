@@ -638,7 +638,13 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
-fieldindex(t::UnionAll, name::Symbol, err::Bool=true) = fieldindex(something(argument_datatype(t)), name, err)
+function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
+    t = argument_datatype(t)
+    if t === nothing
+        throw(ArgumentError("type does not have definite fields"))
+    end
+    return fieldindex(t, name, err)
+end
 
 argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
 
@@ -747,6 +753,13 @@ function signature_type(@nospecialize(f), @nospecialize(args))
     end
 end
 
+function call_type(@nospecialize(tt))
+    ft = tt.parameters[1]
+    argt = Tuple{tt.parameters[2:end]...}
+    name = Symbol(String(ft.name.name)[2:end])  # strip off leading '#'
+    return (getfield(ft.name.module, name), argt)
+end
+
 """
     code_lowered(f, types; generated=true, debuginfo=:default)
 
@@ -806,7 +819,7 @@ function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt)
 end
 
 function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt)
-    return _methods_by_ftype(t, lim, world, false, UInt[typemin(UInt)], UInt[typemax(UInt)], Cint[0])
+    return _methods_by_ftype(t, lim, world, false, RefValue{UInt}(typemin(UInt)), RefValue{UInt}(typemax(UInt)), Ptr{Int32}(C_NULL))
 end
 function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool, min::Array{UInt,1}, max::Array{UInt,1}, has_ambig::Array{Int32,1})
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
@@ -870,10 +883,9 @@ methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
     world = typemax(UInt)
-    min = UInt[typemin(UInt)]
-    max = UInt[typemax(UInt)]
-    has_ambig = Int32[0]
-    ms = _methods_by_ftype(tt, -1, world, true, min, max, has_ambig)
+    min = RefValue{UInt}(typemin(UInt))
+    max = RefValue{UInt}(typemax(UInt))
+    ms = _methods_by_ftype(tt, -1, world, true, min, max, Ptr{Int32}(C_NULL))
     isa(ms, Bool) && return ms
     return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
 end
@@ -924,6 +936,14 @@ function visit(f, d::Core.TypeMapEntry)
     end
     nothing
 end
+function visit(f, d::SimpleVector)
+    for i = 1:length(d)
+        if isassigned(d, i)
+            f(d[i])
+        end
+    end
+    nothing
+end
 
 function length(mt::Core.MethodTable)
     n = 0
@@ -947,7 +967,7 @@ const _uncompressed_ast = _uncompressed_ir
 function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
-    for match in _methods_by_ftype(tt, -1, world)
+    for match in _methods_by_ftype(tt, -1, world)::Vector
         instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
             (Any, Any, Any), match.method, match.spec_types, match.sparams)
         push!(results, instance)
@@ -1402,7 +1422,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = UInt[typemin(UInt)]
         max = UInt[typemax(UInt)]
         has_ambig = Int32[0]
-        ms = _methods_by_ftype(ti, -1, typemax(UInt), true, min, max, has_ambig)
+        ms = _methods_by_ftype(ti, -1, typemax(UInt), true, min, max, has_ambig)::Vector
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
             filter!(ms) do m

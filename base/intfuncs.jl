@@ -74,7 +74,7 @@ end
 """
     lcm(x, y...)
 
-Least common (non-negative) multiple.
+Least common (positive) multiple (or zero if any argument is zero).
 The arguments may be integer and rational numbers.
 
 !!! compat "Julia 1.4"
@@ -134,7 +134,7 @@ lcm(abc::AbstractArray{<:Real}) = reduce(lcm, abc; init=one(eltype(abc)))
 function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
     for b in abc
-        a = gcd(a,b)
+        a = gcd(a, b)
         if a == 1
             return a
         end
@@ -142,13 +142,13 @@ function gcd(abc::AbstractArray{<:Integer})
     return a
 end
 
-# return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
+# return (gcd(a, b), x, y) such that ax+by == gcd(a, b)
 """
-    gcdx(x,y)
+    gcdx(a, b)
 
-Computes the greatest common (positive) divisor of `x` and `y` and their Bézout
+Computes the greatest common (positive) divisor of `a` and `b` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
-``ux+vy = d = gcd(x,y)``. ``gcdx(x,y)`` returns ``(d,u,v)``.
+``ua+vb = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
 
 The arguments may be integer and rational numbers.
 
@@ -175,8 +175,8 @@ julia> gcdx(240, 46)
     their `typemax`, and the identity then holds only via the unsigned
     integers' modulo arithmetic.
 """
-function gcdx(a::U, b::V) where {U<:Integer, V<:Integer}
-    T = promote_type(U, V)
+function gcdx(a::Integer, b::Integer)
+    T = promote_type(typeof(a), typeof(b))
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
@@ -197,11 +197,11 @@ gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
 # multiplicative inverse of n mod m, error if none
 
 """
-    invmod(x,m)
+    invmod(n, m)
 
-Take the inverse of `x` modulo `m`: `y` such that ``x y = 1 \\pmod m``,
-with ``div(x,y) = 0``. This is undefined for ``m = 0``, or if
-``gcd(x,m) \\neq 1``.
+Take the inverse of `n` modulo `m`: `y` such that ``n y = 1 \\pmod m``,
+and ``div(y,m) = 0``. This will throw an error if ``m = 0``, or if
+``gcd(n,m) \\neq 1``.
 
 # Examples
 ```jldoctest
@@ -216,14 +216,24 @@ julia> invmod(5,6)
 ```
 """
 function invmod(n::Integer, m::Integer)
+    iszero(m) && throw(DomainError(m, "`m` must not be 0."))
+    if n isa Signed && hastypemax(typeof(n))
+        # work around inconsistencies in gcdx
+        # https://github.com/JuliaLang/julia/issues/33781
+        T = promote_type(typeof(n), typeof(m))
+        n == typemin(typeof(n)) && m == typeof(n)(-1) && return T(0)
+        n == typeof(n)(-1) && m == typemin(typeof(n)) && return T(-1)
+    end
     g, x, y = gcdx(n, m)
     g != 1 && throw(DomainError((n, m), "Greatest common divisor is $g."))
-    m == 0 && throw(DomainError(m, "`m` must not be 0."))
     # Note that m might be negative here.
-    # For unsigned T, x might be close to typemax; add m to force a wrap-around.
-    r = mod(x + m, m)
-    # The postcondition is: mod(r * n, m) == mod(T(1), m) && div(r, m) == 0
-    r
+    if n isa Unsigned && hastypemax(typeof(n)) && x > typemax(n)>>1
+        # x might have wrapped if it would have been negative
+        # adding back m forces a correction
+        x += m
+    end
+    # The postcondition is: mod(result * n, m) == mod(T(1), m) && div(result, m) == 0
+    return mod(x, m)
 end
 
 # ^ for any x supporting *
@@ -831,10 +841,10 @@ end
 """
     hastypemax(T::Type) -> Bool
 
-Return `true` if and only if `typemax(T)` is defined.
+Return true if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
 hastypemax(::Base.BitIntegerType) = true
-hastypemax(::Type{T}) where {T} = applicable(typemax, T)
+hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
 
 """
     digits!(array, n::Integer; base::Integer = 10)

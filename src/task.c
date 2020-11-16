@@ -558,10 +558,10 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
 
 JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
 {
-    jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
-    jl_static_show(JL_STDERR, e);
-    jl_printf(JL_STDERR, "\n");
-    jlbacktrace();
+    jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
+    jl_static_show((JL_STREAM*)STDERR_FILENO, e);
+    jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+    jlbacktrace(); // written to STDERR_FILENO
     jl_exit(1);
 }
 

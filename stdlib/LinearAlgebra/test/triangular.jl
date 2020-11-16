@@ -277,7 +277,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test sqrt(A1) |> t -> t*t ≈ A1
+        @test sqrt(A1) |> (t -> (t*t)::typeof(t)) ≈ A1
 
         # naivesub errors
         @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(undef,n+1))
@@ -303,6 +303,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             elty1 <: BlasFloat && svd!(copy(A1))
             svdvals(A1)
         end
+
+        @test ((A1*A1)::t1) ≈ Matrix(A1) * Matrix(A1)
+        @test ((A1/A1)::t1) ≈ Matrix(A1) / Matrix(A1)
+        @test ((A1\A1)::t1) ≈ Matrix(A1) \ Matrix(A1)
 
         # Begin loop for second Triangular matrix
         for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
@@ -338,6 +342,27 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1'A2' ≈ Matrix(A1)'Matrix(A2)'
                 @test A1/A2 ≈ Matrix(A1)/Matrix(A2)
                 @test A1\A2 ≈ Matrix(A1)\Matrix(A2)
+                if uplo1 === :U && uplo2 === :U
+                    if t1 === UnitUpperTriangular && t2 === UnitUpperTriangular
+                        @test A1*A2 isa UnitUpperTriangular
+                        @test A1/A2 isa UnitUpperTriangular
+                        @test A1\A2 isa UnitUpperTriangular
+                    else
+                        @test A1*A2 isa UpperTriangular
+                        @test A1/A2 isa UpperTriangular
+                        @test A1\A2 isa UpperTriangular
+                    end
+                elseif uplo1 === :L && uplo2 === :L
+                    if t1 === UnitLowerTriangular && t2 === UnitLowerTriangular
+                        @test A1*A2 isa UnitLowerTriangular
+                        @test A1/A2 isa UnitLowerTriangular
+                        @test A1\A2 isa UnitLowerTriangular
+                    else
+                        @test A1*A2 isa LowerTriangular
+                        @test A1/A2 isa LowerTriangular
+                        @test A1\A2 isa LowerTriangular
+                    end
+                end
                 offsizeA = Matrix{Float64}(I, n+1, n+1)
                 @test_throws DimensionMismatch offsizeA / A2
                 @test_throws DimensionMismatch offsizeA / transpose(A2)

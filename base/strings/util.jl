@@ -22,7 +22,7 @@ function startswith(a::AbstractString, b::AbstractString)
     a, b = Iterators.Stateful(a), Iterators.Stateful(b)
     all(splat(==), zip(a, b)) && isempty(b)
 end
-startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
+startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::AbstractChar in chars
 
 """
     endswith(s::AbstractString, suffix::AbstractString)
@@ -546,7 +546,7 @@ If `count` is provided, replace at most `count` occurrences.
 `pat` may be a single character, a vector or a set of characters, a string,
 or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
-where `s` is the matched substring (when `pat` is a `Regex` or `AbstractString`) or
+where `s` is the matched substring (when `pat` is a `AbstractPattern` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
@@ -711,3 +711,12 @@ julia> ascii("abcdefgh")
 ```
 """
 ascii(x::AbstractString) = ascii(String(x))
+
+Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
+function Base.rest(s::AbstractString, st...)
+    io = IOBuffer()
+    for c in Iterators.rest(s, st...)
+        print(io, c)
+    end
+    return String(take!(io))
+end

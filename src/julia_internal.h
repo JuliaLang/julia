@@ -86,7 +86,7 @@ extern "C" {
 //--------------------------------------------------
 // timers
 // Returns time in nanosec
-JL_DLLEXPORT uint64_t jl_hrtime(void);
+JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT;
 
 // number of cycles since power-on
 static inline uint64_t cycleclock(void)
@@ -283,6 +283,13 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     jl_set_typeof(v, ty);
     return v;
 }
+
+/* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
+ * gc frame, until it has been fully initialized. An uninitialized value in a
+ * gc frame can crash upon encountering the first safepoint. By delaying use of
+ * the JL_GC_PUSH macro until the value has been initialized, any accidental
+ * safepoints will be caught by the GC analyzer.
+ */
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__

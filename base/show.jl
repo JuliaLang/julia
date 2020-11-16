@@ -341,6 +341,8 @@ getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
 get(io::IOContext, key, default) = get(io.dict, key, default)
 get(io::IO, key, default) = default
+keys(io::IOContext) = keys(io.dict)
+keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
 
@@ -452,9 +454,10 @@ function show_function(io::IO, f::Function, compact::Bool)
     elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
         if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
-            print(io, mt.name)
+            show_sym(io, mt.name)
         else
-            print(io, mt.module, ".", mt.name)
+            print(io, mt.module, ".")
+            show_sym(io, mt.name)
         end
     else
         show_default(io, f)
@@ -648,8 +651,10 @@ function make_typealiases(@nospecialize(x::Type))
     aliases = SimpleVector[]
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
+    each = Any[]
     for p in uniontypes(unwrap_unionall(x))
         p isa UnionAll && push!(xenv, p)
+        push!(each, rewrap_unionall(p, x))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
@@ -682,7 +687,12 @@ function make_typealiases(@nospecialize(x::Type))
                     has_free_typevars(applied) && continue
                     applied <: x || continue # parameter matching didn't make a subtype
                     print_without_params(x) && (env = Core.svec())
-                    push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                    for typ in each # check that the alias also fully subsumes at least component of the input
+                        if typ <: applied
+                            push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
+                            break
+                        end
+                    end
                 end
             end
         end
@@ -1110,7 +1120,7 @@ const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
     :(.=), :(.+=), :(.-=), :(.*=), :(./=), :(.\=), :(.^=), :(.&=), :(.|=), :(.÷=), :(.%=), :(.>>>=), :(.>>=), :(.<<=),
     :(&&), :(||), :(<:), :($=), :(⊻=), :(>:), :(-->)])
-const expr_infix = Set{Symbol}([:(:), :(->), Symbol("::")])
+const expr_infix = Set{Symbol}([:(:), :(->), :(::)])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
                          :ref => ('[',']'), :curly => ('{','}'), :(.) => ('(',')'))
@@ -1122,6 +1132,26 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 
 is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
 is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
+
+"""
+     isidentifier(s) -> Bool
+
+Return whether the symbol or string `s` contains characters that are parsed as
+a valid identifier in Julia code.
+
+Internally Julia allows any sequence of characters in a `Symbol` (except `\\0`s),
+and macros automatically use variable names containing `#` in order to avoid
+naming collision with the surrounding code. In order for the parser to
+recognize a variable, it uses a limited set of characters (greatly extended by
+Unicode). `isidentifier()` makes it possible to query the parser directly
+whether a symbol contains valid characters.
+
+# Examples
+```jldoctest
+julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
+(true, false)
+```
+"""
 function isidentifier(s::AbstractString)
     isempty(s) && return false
     (s == "true" || s == "false") && return false
@@ -1142,7 +1172,7 @@ Return `true` if the symbol can be used as an operator, `false` otherwise.
 
 # Examples
 ```jldoctest
-julia> Base.isoperator(:+), Base.isoperator(:f)
+julia> Meta.isoperator(:+), Meta.isoperator(:f)
 (true, false)
 ```
 """
@@ -1155,12 +1185,13 @@ Return `true` if the symbol can be used as a unary (prefix) operator, `false` ot
 
 # Examples
 ```jldoctest
-julia> Base.isunaryoperator(:-), Base.isunaryoperator(:√), Base.isunaryoperator(:f)
+julia> Meta.isunaryoperator(:-), Meta.isunaryoperator(:√), Meta.isunaryoperator(:f)
 (true, true, false)
 ```
 """
 isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
 is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
+is_syntactic_operator(s::Symbol) = ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0
 
 """
     isbinaryoperator(s::Symbol)
@@ -1169,7 +1200,7 @@ Return `true` if the symbol can be used as a binary (infix) operator, `false` ot
 
 # Examples
 ```jldoctest
-julia> Base.isbinaryoperator(:-), Base.isbinaryoperator(:√), Base.isbinaryoperator(:f)
+julia> Meta.isbinaryoperator(:-), Meta.isbinaryoperator(:√), Meta.isbinaryoperator(:f)
 (true, false, false)
 ```
 """
@@ -1185,7 +1216,7 @@ Return `true` if the symbol can be used as a postfix operator, `false` otherwise
 
 # Examples
 ```jldoctest
-julia> Base.ispostfixoperator(Symbol("'")), Base.ispostfixoperator(Symbol("'ᵀ")), Base.ispostfixoperator(:-)
+julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ")), Meta.ispostfixoperator(:-)
 (true, true, false)
 ```
 """
@@ -1315,7 +1346,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
             (first && prec >= prec_power &&
              ((item isa Expr && item.head === :call && (callee = item.args[1]; isa(callee, Symbol) && callee in uni_ops)) ||
               (item isa Real && item < 0))) ||
-              (enclose_operators && item isa Symbol && isoperator(item))
+            (enclose_operators && item isa Symbol && isoperator(item) && is_valid_identifier(item))
         parens && print(io, '(')
         if kw && is_expr(item, :kw, 2)
             item = item::Expr
@@ -1337,11 +1368,20 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
     print(io, cl)
 end
 
+function is_valid_identifier(sym)
+    return isidentifier(sym) || (
+        _isoperator(sym) &&
+        !(sym in (Symbol("'"), :(::), :?)) &&
+        !is_syntactic_operator(sym)
+    )
+end
+
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 # kw: `=` expressions are parsed with head `kw` in this context
 function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
+            (isa(func, Symbol) && !is_valid_identifier(func)) ||
             (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
             isa(func, GlobalRef)
         show_unquoted(io, func, indent, 0, quote_level)
@@ -1368,7 +1408,7 @@ end
 # * Print valid identifiers & operators literally; also macros names if allow_macroname=true
 # * Escape invalid identifiers with var"" syntax
 function show_sym(io::IO, sym; allow_macroname=false)
-    if isidentifier(sym) || (isoperator(sym) && sym !== Symbol("'"))
+    if is_valid_identifier(sym)
         print(io, sym)
     elseif allow_macroname && (sym_str = string(sym); startswith(sym_str, '@'))
         print(io, '@')
@@ -1427,14 +1467,16 @@ function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
 end
 
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int, quote_level::Int)
-    if isa(value, Symbol) && !(value in quoted_syms)
-        value = value::Symbol
-        s = string(value)
-        if isidentifier(s) || (isoperator(value) && value !== Symbol("'"))
-            print(io, ":")
-            print(io, value)
+    if isa(value, Symbol)
+        sym = value::Symbol
+        if value in quoted_syms
+            print(io, ":(", sym, ")")
         else
-            print(io, "Symbol(", repr(s), ")")
+            if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
+                print(io, ":", sym)
+            else
+                print(io, "Symbol(", repr(String(sym)), ")")
+            end
         end
     else
         if isa(value,Expr) && value.head === :block
@@ -1491,10 +1533,12 @@ function show_import_path(io::IO, ex, quote_level)
         end
     elseif ex.head === :(.)
         for i = 1:length(ex.args)
-            if i > 1 && ex.args[i-1] !== :(.)
+            if ex.args[i] === :(.)
                 print(io, '.')
+            else
+                show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
+                i < length(ex.args) && print(io, '.')
             end
-            show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
         end
     else
         show_unquoted(io, ex, 0, 0, quote_level)
@@ -1625,7 +1669,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     )
         op, arg1 = head === Symbol("'") ? (head, args[1]) : (args[1], args[2])
         if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
-            show_enclosed_list(io, '(', [arg1], ", ", ')', indent, 0)
+            show_enclosed_list(io, '(', [arg1::Union{Expr, Symbol}], ", ", ')', indent, 0)
         else
             show_unquoted(io, arg1, indent, 0, quote_level)
         end
@@ -1662,7 +1706,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         elseif isa(func,Symbol) && length(func_args) == 1 && func in uni_ops
             show_unquoted(io, func, indent, 0, quote_level)
             arg1 = func_args[1]
-            if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
+            if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1) && is_valid_identifier(arg1))
                 show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
                 show_unquoted(io, arg1, indent, func_prec, quote_level)
@@ -2064,7 +2108,8 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
         isdefined(uw.name.module, uw.name.mt.name) &&
         ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        print(io, (demangle ? demangle_function_name : identity)(uw.name.mt.name))
+        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
+        print_within_stacktrace(io, s, bold=true)
     elseif isa(ft, DataType) && ft.name === Type.body.name &&
         (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
@@ -2076,19 +2121,20 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         if html
             print(io, "($fargname::<b>", ft, "</b>)")
         else
-            print(io, "($fargname::", ft, ")")
+            print_within_stacktrace(io, "($fargname::", ft, ")", bold=true)
         end
     end
     nothing
 end
 
-function print_within_stacktrace(io, s...; color, bold=false)
+function print_within_stacktrace(io, s...; color=:normal, bold=false)
     if get(io, :backtrace, false)::Bool
         printstyled(io, s...; color, bold)
     else
         print(io, s...)
     end
 end
+
 function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing, argnames=nothing)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
@@ -2105,16 +2151,16 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
     sig = (sig::DataType).parameters
     show_signature_function(env_io, sig[1], demangle)
     first = true
-    print_within_stacktrace(io, "(", color=:light_black)
+    print_within_stacktrace(io, "(", bold=true)
     show_argnames = argnames !== nothing && length(argnames) == length(sig)
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         if show_argnames
-            print_within_stacktrace(io, argnames[i]; bold=true, color=:light_black)
+            print_within_stacktrace(io, argnames[i]; color=:light_black)
         end
         print(io, "::")
-        print_within_stacktrace(env_io, sig[i]; color=:light_black)
+        print_type_stacktrace(env_io, sig[i])
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -2122,14 +2168,25 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         for (k, t) in kwargs
             first || print(io, ", ")
             first = false
-            print_within_stacktrace(io, k; bold=true, color=:light_black)
+            print_within_stacktrace(io, k; color=:light_black)
             print(io, "::")
-            print_within_stacktrace(io, t; color=:light_black)
+            print_type_stacktrace(io, t)
         end
     end
-    print_within_stacktrace(io, ")", color=:light_black)
+    print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     nothing
+end
+
+function print_type_stacktrace(io, type; color=:normal)
+    str = sprint(show, type, context=io)
+    i = findfirst('{', str)
+    if isnothing(i) || !get(io, :backtrace, false)::Bool
+        printstyled(io, str; color=color)
+    else
+        printstyled(io, str[1:i-1]; color=color)
+        printstyled(io, str[i:end]; color=:light_black)
+    end
 end
 
 resolvebinding(@nospecialize(ex)) = ex

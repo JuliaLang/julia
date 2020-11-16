@@ -938,12 +938,15 @@ end
 _bool(f) = x->f(x)::Bool
 
 """
-    count(p, itr) -> Integer
-    count(itr) -> Integer
+    count([f=identity,] itr; init=0) -> Integer
 
-Count the number of elements in `itr` for which predicate `p` returns `true`.
-If `p` is omitted, counts the number of `true` elements in `itr` (which
-should be a collection of boolean values).
+Count the number of elements in `itr` for which the function `f` returns `true`.
+If `f` is omitted, count the number of `true` elements in `itr` (which
+should be a collection of boolean values). `init` optionally specifies the value
+to start counting from and therefore also determines the output type.
+
+!!! compat "Julia 1.6"
+    `init` keyword was added in Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -952,32 +955,35 @@ julia> count(i->(4<=i<=6), [2,3,4,5,6])
 
 julia> count([true, false, true, true])
 3
+
+julia> count(>(3), 1:7, init=0x03)
+0x07
 ```
 """
-count(itr) = count(identity, itr)
+count(itr; init=0) = count(identity, itr; init)
 
-count(f, itr) = _simple_count(f, itr)
+count(f, itr; init=0) = _simple_count(f, itr, init)
 
-function _simple_count(pred, itr)
-    n = 0
+function _simple_count(pred, itr, init::T) where {T}
+    n::T = init
     for x in itr
         n += pred(x)::Bool
     end
     return n
 end
 
-function count(::typeof(identity), x::Array{Bool})
-    n = 0
+function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
+    n::T = init
     chunks = length(x) ÷ sizeof(UInt)
     mask = 0x0101010101010101 % UInt
     GC.@preserve x begin
         ptr = Ptr{UInt}(pointer(x))
         for i in 1:chunks
-            n += count_ones(unsafe_load(ptr, i) & mask)
+            n = (n + count_ones(unsafe_load(ptr, i) & mask)) % T
         end
     end
     for i in sizeof(UInt)*chunks+1:length(x)
-        n += x[i]
+        n = (n + x[i]) % T
     end
     return n
 end

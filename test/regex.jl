@@ -52,6 +52,13 @@
     subst = s"FROM: \g<name>\n MESSAGE: \1"
     @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
 
+    # Issue #36550
+    @test repr(s"\x") == "s\"\\x\""
+    @test repr(s"\\x") == "s\"\\\\x\""
+    @test repr(s"\\\x") == "s\"\\\\\\x\""
+    @test repr(s"x\\") == "s\"x\\\""
+    @test repr(s"a\1b") == "s\"a\\1b\""
+
     # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]

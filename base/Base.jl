@@ -324,9 +324,6 @@ using .MPFR
 
 include("combinatorics.jl")
 
-# more hashing definitions
-include("hashing2.jl")
-
 # irrational mathematical constants
 include("irrationals.jl")
 include("mathconstants.jl")

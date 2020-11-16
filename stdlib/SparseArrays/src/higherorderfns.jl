@@ -9,7 +9,7 @@ import Base: map, map!, broadcast, copy, copyto!, _extrema_dims, _extrema_itr
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector, AbstractSparseMatrixCSC,
                       AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange,
-                      SparseVectorUnion, AdjOrTransSparseVectorUnion, nonzeroinds, nonzeros, rowvals, getcolptr
+                      SparseVectorUnion, AdjOrTransSparseVectorUnion, nonzeroinds, nonzeros, rowvals, getcolptr, widelength
 using Base.Broadcast: BroadcastStyle, Broadcasted, flatten
 using LinearAlgebra
 
@@ -159,7 +159,7 @@ end
 function _noshapecheck_map(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
-    maxnnzC = fpreszeros ? min(length(A), _sumnnzs(A, Bs...)) : length(A)
+    maxnnzC = Int(fpreszeros ? min(widelength(A), _sumnnzs(A, Bs...)) : widelength(A))
     entrytypeC = Base.Broadcast.combine_eltypes(f, (A, Bs...))
     indextypeC = _promote_indtype(A, Bs...)
     C = _allocres(size(A), indextypeC, entrytypeC, maxnnzC)
@@ -388,7 +388,7 @@ function _map_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMat,N}) 
             vals, ks, rows = _fusedupdate_all(rowsentinel, activerow, rows, ks, stopks, As)
             Cx = f(vals...)
             if !_iszero(Cx)
-                Ck > spaceC && (spaceC = expandstorage!(C, min(length(C), Ck + _sumnnzs(As...) - (sum(ks) - N))))
+                Ck > spaceC && (spaceC = expandstorage!(C, Int(min(widelength(C), Ck + _sumnnzs(As...) - (sum(ks) - N)))))
                 storedinds(C)[Ck] = activerow
                 storedvals(C)[Ck] = Cx
                 Ck += 1

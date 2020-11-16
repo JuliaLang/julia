@@ -81,8 +81,7 @@ endif
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
 
-# Set to 1 to enable profiling with perf
-USE_PERF_JITEVENTS ?= 1
+# USE_PERF_JITEVENTS defined below since default is OS specific
 
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP := 0
@@ -96,7 +95,7 @@ ARCH:=
 
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
-PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
 PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
 
 # If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
@@ -417,6 +416,13 @@ EXE := .exe
 else
 fPIC := -fPIC
 EXE :=
+endif
+
+# Set to 1 to enable profiling with perf
+ifeq ("$(OS)", "Linux")
+USE_PERF_JITEVENTS ?= 1
+else
+USE_PERF_JITEVENTS ?= 0
 endif
 
 JULIACODEGEN := LLVM
@@ -1493,7 +1499,11 @@ LIBGCC_NAME := libgcc_s_seh-1.$(SHLIB_EXT)
 endif
 endif
 ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
+LIBGCC_NAME := libgcc_s.2.$(SHLIB_EXT)
+else
 LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
+endif
 endif
 ifneq ($(findstring $(OS),Linux FreeBSD),)
 LIBGCC_NAME := libgcc_s.$(SHLIB_EXT).1

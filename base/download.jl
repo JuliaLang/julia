@@ -25,11 +25,10 @@ specified, a temporary path. Returns the path of the downloaded file.
     around `Downloads.download`. In new code, you should use that function
     directly instead of calling this.
 """
-function download(url::AbstractString, path::AbstractString)
+download(url::AbstractString, path::AbstractString) = do_download(url, path)
+download(url::AbstractString) = do_download(url, nothing)
+
+function do_download(url::AbstractString, path::Union{AbstractString, Nothing})
     depwarn("Base.download is deprecated; use Downloads.download instead", :download)
     invokelatest(Downloads().download, download_url(url), path)
-end
-function download(url::AbstractString)
-    depwarn("Base.download is deprecated; use Downloads.download instead", :download)
-    invokelatest(Downloads().download, download_url(url))
 end

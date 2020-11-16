@@ -6,7 +6,7 @@ using Unicode: normalize, isassigned
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
-    @test normalize("\u006e\u0303", :NFC) == "\u00f1"
+    @test normalize("\u006e\u0303", :NFC) == "\u00f1" == normalize(SubString("ab\u006e\u0303cd",3,4), :NFC)
     @test "\u006e\u0303" == normalize("\u00f1", :NFD)
     @test normalize("\ufb00", :NFC) != "ff"
     @test normalize("\ufb00", :NFKC) == "ff"

@@ -1149,7 +1149,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_uint8pointer(v)jl_typeis(v,jl_uint8pointer_type)
-#define jl_is_llvmpointer(v) jl_typeis(v,jl_llvmpointer_type)
+#define jl_is_llvmpointer(v) (((jl_datatype_t*)jl_typeof(v))->name == jl_llvmpointer_typename)
 #define jl_is_intrinsic(v)   jl_typeis(v,jl_intrinsic_type)
 #define jl_array_isbitsunion(a) (!(((jl_array_t*)(a))->flags.ptrarray) && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
 
@@ -1398,6 +1398,7 @@ JL_DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i,
 JL_DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
+int jl_uniontype_size(jl_value_t *ty, size_t *sz) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al) JL_NOTSAFEPOINT;
 
 // arrays
@@ -1500,6 +1501,7 @@ JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
 
 // environment entries
 JL_DLLEXPORT jl_value_t *jl_environ(int i);
@@ -1667,6 +1669,7 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(char *sym);
 JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym);
+JL_DLLEXPORT int jl_is_syntactic_operator(char *sym);
 JL_DLLEXPORT int jl_operator_precedence(char *sym);
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)

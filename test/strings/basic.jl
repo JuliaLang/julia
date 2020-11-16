@@ -1041,6 +1041,7 @@ let s = "∀x∃y", u = codeunits(s)
     @test u[8] == 0x79
     @test_throws ErrorException (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
+    @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
 end
 
 # issue #24388

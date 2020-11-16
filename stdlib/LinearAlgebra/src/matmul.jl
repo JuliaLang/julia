@@ -183,6 +183,53 @@ for elty in (Float32,Float64)
 end
 
 """
+    muladd(A, y, z)
+
+Combined multiply-add, `A*y .+ z`, for matrix-matrix or matrix-vector multiplication.
+The result is always the same size as `A*y`, but `z` may be smaller, or a scalar.
+
+!!! compat "Julia 1.6"
+     These methods require Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; z=[0, 100];
+
+julia> muladd(A, B, z)
+2×2 Matrix{Float64}:
+   3.0    3.0
+ 107.0  107.0
+```
+"""
+function Base.muladd(A::AbstractMatrix{TA}, y::AbstractVector{Ty}, z) where {TA, Ty}
+    T = promote_type(TA, Ty, eltype(z))
+    C = similar(A, T, axes(A,1))
+    C .= z
+    mul!(C, A, y, true, true)
+end
+
+function Base.muladd(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}, z) where {TA, TB}
+    T = promote_type(TA, TB, eltype(z))
+    C = similar(A, T, axes(A,1), axes(B,2))
+    C .= z
+    mul!(C, A, B, true, true)
+end
+
+Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z) = muladd(A', x', z')'
+Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z) = transpose(muladd(transpose(A), transpose(x), transpose(z)))
+
+function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z)
+    ndims(z) > 2 && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
+    (u .* v) .+ z
+end
+
+function Base.muladd(u::AdjOrTransAbsVec, v::AbstractVector, z)
+    uv = _dot_nonrecursive(u, v)
+    ndims(z) > ndims(uv) && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
+    uv .+ z
+end
+
+"""
     mul!(Y, A, B) -> Y
 
 Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,

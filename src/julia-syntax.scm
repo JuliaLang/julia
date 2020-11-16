@@ -1430,7 +1430,8 @@
                 ,@(reverse after)
                 (unnecessary (tuple ,@(reverse elts))))
         (let ((L (car lhss))
-              (R (car rhss)))
+              ;; rhss can be null iff L is a vararg
+              (R (if (null? rhss) '() (car rhss))))
           (cond ((and (symbol-like? L)
                       (or (not (pair? R)) (quoted? R) (equal? R '(null)))
                       ;; overwrite var immediately if it doesn't occur elsewhere
@@ -1442,6 +1443,16 @@
                        (cons (make-assignment L R) stmts)
                        after
                        (cons R elts)))
+                ((vararg? L)
+                 (if (null? (cdr lhss))
+                     (let ((temp (make-ssavalue)))
+                       `(block ,@(reverse stmts)
+                               (= ,temp (tuple ,@rhss))
+                               ,@(reverse after)
+                               (= ,(cadr L) ,temp)
+                               (unnecessary (tuple ,@(reverse elts) (... ,temp)))))
+                     (error (string "invalid \"...\" on non-final assignment location \""
+                                    (cadr L) "\""))))
                 ((vararg? R)
                  (let ((temp (make-ssavalue)))
                    `(block ,@(reverse stmts)
@@ -1537,7 +1548,8 @@
                                            (lambda (name) (string "keyword argument \"" name
                                                                   "\" repeated in call to \"" (deparse fexpr) "\""))
                                            "keyword argument"
-                                           "keyword argument syntax"))
+                                           "keyword argument syntax"
+                                           #t))
       ,(if (every vararg? kw)
            (kwcall-unless-empty f pa kw-container kw-container)
            `(call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
@@ -1846,7 +1858,8 @@
 (define (lower-named-tuple lst
                            (dup-error-fn (lambda (name) (string "field name \"" name "\" repeated in named tuple")))
                            (name-str     "named tuple field")
-                           (syntax-str   "named tuple element"))
+                           (syntax-str   "named tuple element")
+                           (call-with-keyword-arguments? #f))
   (let* ((names (apply append
                        (map (lambda (x)
                               (cond ((symbol? x) (list x))
@@ -1915,6 +1928,8 @@
                          (if current
                              (merge current (cadr el))
                              `(call (top merge) (call (top NamedTuple)) ,(cadr el))))))
+                ((and call-with-keyword-arguments? (has-parameters? L))
+                 (error "more than one semicolon in argument list"))
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
@@ -2066,35 +2081,61 @@
             (define (sides-match? l r)
               ;; l and r either have equal lengths, or r has a trailing ...
               (cond ((null? l)          (null? r))
+                    ((vararg? (car l))  #t)
                     ((null? r)          #f)
                     ((vararg? (car r))  (null? (cdr r)))
                     (else               (sides-match? (cdr l) (cdr r)))))
-            (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
+            (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple) (not (any assignment? (cdr x)))
+                     (not (has-parameters? (cdr x)))
                      (sides-match? lhss (cdr x)))
                 ;; (a, b, ...) = (x, y, ...)
                 (expand-forms
                  (tuple-to-assignments lhss x))
                 ;; (a, b, ...) = other
-                (let* ((xx  (if (or (and (symbol? x) (not (memq x lhss)))
-                                    (ssavalue? x))
-                                x (make-ssavalue)))
-                       (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
-                       (n   (length lhss))
-                       (st  (gensy)))
-                  `(block
-                    (local ,st)
-                    ,@ini
-                    ,.(map (lambda (i lhs)
-                             (expand-forms
-                              (lower-tuple-assignment
-                               (if (= i (- n 1))
-                                   (list lhs)
-                                   (list lhs st))
-                               `(call (top indexed_iterate)
-                                      ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st))))))
-                           (iota n)
-                           lhss)
-                    (unnecessary ,xx))))))
+                (begin
+                  ;; like memq, but if last element of lhss is (... sym),
+                  ;; check against sym instead
+                  (define (in-lhs? x lhss)
+                    (if (null? lhss)
+                        #f
+                        (let ((l (car lhss)))
+                          (cond ((and (pair? l) (eq? (car l) '|...|))
+                                 (if (null? (cdr lhss))
+                                     (eq? (cadr l) x)
+                                     (error (string "invalid \"...\" on non-final assignment location \""
+                                                    (cadr l) "\""))))
+                                ((eq? l x) #t)
+                                (else (in-lhs? x (cdr lhss)))))))
+                  ;; in-lhs? also checks for invalid syntax, so always call it first
+                  (let* ((xx  (if (or (and (not (in-lhs? x lhss)) (symbol? x))
+                                      (ssavalue? x))
+                                  x (make-ssavalue)))
+                         (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
+                         (n   (length lhss))
+                         ;; skip last assignment if it is an all-underscore vararg
+                         (n   (if (> n 0)
+                                  (let ((l (last lhss)))
+                                    (if (and (vararg? l) (underscore-symbol? (cadr l)))
+                                        (- n 1)
+                                        n))
+                                  n))
+                         (st  (gensy)))
+                    `(block
+                      ,@(if (> n 0) `((local ,st)) '())
+                      ,@ini
+                      ,@(map (lambda (i lhs)
+                               (expand-forms
+                                 (if (vararg? lhs)
+                                     `(= ,(cadr lhs) (call (top rest) ,xx ,@(if (eq? i 0) '() `(,st))))
+                                     (lower-tuple-assignment
+                                       (if (= i (- n 1))
+                                           (list lhs)
+                                           (list lhs st))
+                                       `(call (top indexed_iterate)
+                                              ,xx ,(+ i 1) ,@(if (eq? i 0) '() `(,st)))))))
+                             (iota n)
+                             lhss)
+                      (unnecessary ,xx)))))))
          ((typed_hcat)
           (error "invalid spacing in left side of indexed assignment"))
          ((typed_vcat)
@@ -4052,7 +4093,7 @@ f(x) = yt(x)
             ((if elseif)
              (let ((tests (let* ((cond (cadr e))
                                  (cond (if (and (pair? cond) (eq? (car cond) 'block))
-                                           (begin (compile (butlast cond) break-labels #f #f)
+                                           (begin (if (length> cond 2) (compile (butlast cond) break-labels #f #f))
                                                   (last cond))
                                            cond)))
                             (map (lambda (clause)

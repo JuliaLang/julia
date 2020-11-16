@@ -295,7 +295,7 @@ try
                  :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
                  :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
                  :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,
-                 :ArgTools, :Tar,]),
+                 :ArgTools, :Tar, :NetworkOptions,]),
            )
         @test discard_module.(deps) == deps1
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
@@ -419,7 +419,8 @@ try
           """)
 
     cachefile = Base.compilecache(Base.PkgId("FooBar"))
-    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"))
+    empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
+    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
     @test !isdefined(Main, :FooBar)

@@ -196,7 +196,7 @@ saved_depot_path = copy(DEPOT_PATH)
 saved_active_project = Base.ACTIVE_PROJECT[]
 
 push!(empty!(LOAD_PATH), "project")
-push!(empty!(DEPOT_PATH), "depot")
+append!(empty!(DEPOT_PATH), [mktempdir(), "depot"])
 Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]
@@ -231,6 +231,7 @@ end
         pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
+        @test Base.compilecache_path(pkg, UInt64(0)) == Base.compilecache_path(pkg, UInt64(0))
     end
     @test identify_package("Baz") == nothing
     @test identify_package("Qux") == nothing

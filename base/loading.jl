@@ -329,6 +329,7 @@ end
 
 const project_names = ("JuliaProject.toml", "Project.toml")
 const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
+const preferences_names = ("JuliaLocalPreferences.toml", "LocalPreferences.toml")
 
 # classify the LOAD_PATH entry to be one of:
 #  - `false`: nonexistant / nothing to see here
@@ -376,31 +377,6 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
         return implicit_manifest_deps_get(env, where, name)
     end
     return nothing
-end
-
-function uuid_in_environment(project_file::String, uuid::UUID)
-    # First, check to see if we're looking for the environment itself
-    proj_uuid = get(parsed_toml(project_file), "uuid", nothing)
-    if proj_uuid !== nothing && UUID(proj_uuid) == uuid
-        return true
-    end
-
-    # Check to see if there's a Manifest.toml associated with this project
-    manifest_file = project_file_manifest_path(project_file)
-    if manifest_file === nothing
-        return false
-    end
-    manifest = parsed_toml(manifest_file)
-    for (dep_name, entries) in manifest
-        for entry in entries
-            entry_uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
-            if uuid !== nothing && UUID(entry_uuid) == uuid
-                return true
-            end
-        end
-    end
-    # If all else fails, return `false`
-    return false
 end
 
 function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String}
@@ -516,7 +492,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
     for (dep_name, entries) in d
         entries::Vector{Any}
         for entry in entries
-            entry::Dict{String, Any}
+            entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && continue
             if UUID(uuid) === where
@@ -529,7 +505,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                     found_name = name in deps
                     break
                 else
-                    deps::Dict{String, Any}
+                    deps = deps::Dict{String, Any}
                     for (dep, uuid) in deps
                         uuid::String
                         if dep === name
@@ -562,7 +538,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
     entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
     entries === nothing && return nothing # TODO: allow name to mismatch?
     for entry in entries
-        entry::Dict{String, Any}
+        entry = entry::Dict{String, Any}
         uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
         uuid === nothing && continue
         if UUID(uuid) === pkg.uuid
@@ -1276,7 +1252,12 @@ end
 @assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), typeof(stderr), typeof(stdout)))
 @assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), typeof(stderr), typeof(stdout)))
 
-function compilecache_path(pkg::PkgId)::String
+function compilecache_dir(pkg::PkgId)
+    entrypath, entryfile = cache_file_entry(pkg)
+    return joinpath(DEPOT_PATH[1], entrypath)
+end
+
+function compilecache_path(pkg::PkgId, prefs_hash::UInt64)::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
@@ -1286,7 +1267,7 @@ function compilecache_path(pkg::PkgId)::String
         crc = _crc32c(something(Base.active_project(), ""))
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
-        crc = _crc32c(get_preferences_hash(pkg.uuid), crc)
+        crc = _crc32c(prefs_hash, crc)
         project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
@@ -1310,18 +1291,9 @@ const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     # decide where to put the resulting cache file
-    cachefile = compilecache_path(pkg)
-    cachepath = dirname(cachefile)
-    # prune the directory with cache files
-    if pkg.uuid !== nothing
-        entrypath, entryfile = cache_file_entry(pkg)
-        cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
-        if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
-            idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
-            rm(joinpath(cachepath, cachefiles[idx]))
-        end
-    end
-    # build up the list of modules that we want the` precompile process to preserve
+    cachepath = compilecache_dir(pkg)
+
+    # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
     for (key, mod) in loaded_modules
         if !(mod === Main || mod === Core || mod === Base)
@@ -1334,6 +1306,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
 
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
+    mkpath(cachepath)
     tmppath, tmpio = mktemp(cachepath)
     local p
     try
@@ -1347,6 +1320,21 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # inherit permission from the source file
             chmod(tmppath, filemode(path) & 0o777)
 
+            # Read preferences hash back from .ji file (we can't precompute because
+            # we don't actually know what the list of compile-time preferences are without compiling)
+            prefs_hash = preferences_hash(tmppath)
+            cachefile = compilecache_path(pkg, prefs_hash)
+
+            # prune the directory with cache files
+            if pkg.uuid !== nothing
+                entrypath, entryfile = cache_file_entry(pkg)
+                cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
+                if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
+                    idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
+                    rm(joinpath(cachepath, cachefiles[idx]))
+                end
+            end
+
             # this is atomic according to POSIX:
             rename(tmppath, cachefile; force=true)
             return cachefile
@@ -1357,7 +1345,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     if p.exitcode == 125
         return PrecompilableError()
     else
-        error("Failed to precompile $pkg to $cachefile.")
+        error("Failed to precompile $pkg to $tmppath.")
     end
 end
 
@@ -1383,17 +1371,23 @@ function parse_cache_header(f::IO)
         build_id = read(f, UInt64) # build UUID (mostly just a timestamp)
         push!(modules, PkgId(uuid, sym) => build_id)
     end
-    totbytes = read(f, Int64) # total bytes for file dependencies
+    totbytes = read(f, Int64) # total bytes for file dependencies + preferences
     # read the list of requirements
     # and split the list into include and requires statements
     includes = CacheHeaderIncludes[]
     requires = Pair{PkgId, PkgId}[]
     while true
         n2 = read(f, Int32)
-        n2 == 0 && break
+        totbytes -= 4
+        if n2 == 0
+            break
+        end
         depname = String(read(f, n2))
+        totbytes -= n2
         mtime = read(f, Float64)
+        totbytes -= 8
         n1 = read(f, Int32)
+        totbytes -= 4
         # map ids to keys
         modkey = (n1 == 0) ? PkgId("") : modules[n1].first
         modpath = String[]
@@ -1402,7 +1396,9 @@ function parse_cache_header(f::IO)
             while true
                 n1 = read(f, Int32)
                 totbytes -= 4
-                n1 == 0 && break
+                if n1 == 0
+                    break
+                end
                 push!(modpath, String(read(f, n1)))
                 totbytes -= n1
             end
@@ -1412,12 +1408,22 @@ function parse_cache_header(f::IO)
         else
             push!(includes, CacheHeaderIncludes(modkey, depname, mtime, modpath))
         end
-        totbytes -= 4 + 4 + n2 + 8
+    end
+    prefs = String[]
+    while true
+        n2 = read(f, Int32)
+        totbytes -= 4
+        if n2 == 0
+            break
+        end
+        push!(prefs, String(read(f, n2)))
+        totbytes -= n2
     end
     prefs_hash = read(f, UInt64)
     totbytes -= 8
-    @assert totbytes == 12 "header of cache file appears to be corrupt"
     srctextpos = read(f, Int64)
+    totbytes -= 8
+    @assert totbytes == 0 "header of cache file appears to be corrupt (totbytes == $(totbytes))"
     # read the list of modules that are required to be present during loading
     required_modules = Vector{Pair{PkgId, UInt64}}()
     while true
@@ -1428,7 +1434,7 @@ function parse_cache_header(f::IO)
         build_id = read(f, UInt64) # build id
         push!(required_modules, PkgId(uuid, sym) => build_id)
     end
-    return modules, (includes, requires), required_modules, srctextpos, prefs_hash
+    return modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash
 end
 
 function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
@@ -1437,21 +1443,37 @@ function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
         !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
         ret = parse_cache_header(io)
         srcfiles_only || return ret
-        modules, (includes, requires), required_modules, srctextpos, prefs_hash = ret
+        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash = ret
         srcfiles = srctext_files(io, srctextpos)
         delidx = Int[]
         for (i, chi) in enumerate(includes)
             chi.filename ∈ srcfiles || push!(delidx, i)
         end
         deleteat!(includes, delidx)
-        return modules, (includes, requires), required_modules, srctextpos, prefs_hash
+        return modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash
     finally
         close(io)
     end
 end
 
+
+
+preferences_hash(f::IO) = parse_cache_header(f)[end]
+function preferences_hash(cachefile::String)
+    io = open(cachefile, "r")
+    try
+        if !isvalid_cache_header(io)
+            throw(ArgumentError("Invalid header in cache file $cachefile."))
+        end
+        return preferences_hash(io)
+    finally
+        close(io)
+    end
+end
+
+
 function cache_dependencies(f::IO)
-    defs, (includes, requires), modules, srctextpos, prefs_hash = parse_cache_header(f)
+    defs, (includes, requires), modules, srctextpos, prefs, prefs_hash = parse_cache_header(f)
     return modules, map(chi -> (chi.filename, chi.mtime), includes)  # return just filename and mtime
 end
 
@@ -1466,7 +1488,7 @@ function cache_dependencies(cachefile::String)
 end
 
 function read_dependency_src(io::IO, filename::AbstractString)
-    modules, (includes, requires), required_modules, srctextpos, prefs_hash = parse_cache_header(io)
+    modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash = parse_cache_header(io)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
     return _read_dependency_src(io, filename)
@@ -1511,36 +1533,143 @@ function srctext_files(f::IO, srctextpos::Int64)
     return files
 end
 
-# Find the Project.toml that we should load/store to for Preferences
-function get_preferences_project_path(uuid::UUID)
-    for env in load_path()
-        project_file = env_project_file(env)
-        if !isa(project_file, String)
-            continue
-        end
-        if uuid_in_environment(project_file, uuid)
-            return project_file
+# Test to see if this UUID is mentioned in this `Project.toml`; either as
+# the top-level UUID (e.g. that of the project itself) or as a dependency.
+function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
+    uuid_p = get(project, "uuid", nothing)::Union{Nothing, String}
+    name = get(project, "name", nothing)::Union{Nothing, String}
+    if name !== nothing && uuid_p !== nothing && UUID(uuid_p) == uuid
+        return name
+    end
+    deps = get(project, "deps", nothing)::Union{Nothing, Dict{String, Any}}
+    if deps !== nothing
+        for (k, v) in deps
+            if uuid == UUID(v::String)
+                return k
+            end
         end
     end
     return nothing
 end
 
-function get_preferences(uuid::UUID;
-                         prefs_key::String = "compile-preferences")
-    project_path = get_preferences_project_path(uuid)
-    if project_path !== nothing
-        preferences = get(parsed_toml(project_path), prefs_key, Dict{String,Any}())
-        if haskey(preferences, string(uuid))
-            return preferences[string(uuid)]
+function get_uuid_name(project_toml::String, uuid::UUID)
+    project = parsed_toml(project_toml)
+    return get_uuid_name(project, uuid)
+end
+
+function collect_preferences(project_toml::String, uuid::UUID)
+    # We'll return a list of dicts to be merged
+    dicts = Dict{String, Any}[]
+
+    # Get the name of this UUID to this project; if it can't find it, skip out.
+    project = parsed_toml(project_toml)
+    pkg_name = get_uuid_name(project, uuid)
+    if pkg_name === nothing
+        return dicts
+    end
+
+    # Look first inside of `Project.toml` to see we have preferences embedded within there
+    proj = get(project, "preferences", nothing)
+    if proj isa Dict{String, Any}
+        push!(dicts, get(Dict{String, Any}, proj, pkg_name)::Dict{String, Any})
+    end
+
+    # Next, look for `(Julia)LocalPreferences.toml` files next to this `Project.toml`
+    project_dir = dirname(project_toml)
+    for name in preferences_names
+        toml_path = joinpath(project_dir, name)
+        if isfile(toml_path)
+            prefs = parsed_toml(toml_path)
+            push!(dicts, get(Dict{String, Any}, prefs, pkg_name)::Dict{String,Any})
+
+            # If we find `JuliaLocalPreferences.toml`, don't look for `LocalPreferences.toml`
+            break
         end
     end
-    # Fall back to default value of "no preferences".
-    return Dict{String,Any}()
-end
-get_preferences_hash(uuid::UUID) = UInt64(hash(get_preferences(uuid)))
-get_preferences_hash(m::Module) = get_preferences_hash(PkgId(m).uuid)
-get_preferences_hash(::Nothing) = UInt64(hash(Dict{String,Any}()))
 
+    return dicts
+end
+
+"""
+    recursive_prefs_merge(base::Dict, overrides::Dict...)
+
+Helper function to merge preference dicts recursively, honoring overrides in nested
+dictionaries properly.
+"""
+function recursive_prefs_merge(base::Dict{String, Any}, overrides::Dict{String, Any}...)
+    new_base = Base._typeddict(base, overrides...)
+
+    for override in overrides
+        # Clear entries are keys that should be deleted from any previous setting.
+        override_clear = get(override, "__clear__", nothing)
+        if override_clear isa Vector{String}
+            for k in override_clear
+                delete!(new_base, k)
+            end
+        end
+
+        for (k, override_k) in override
+            # Note that if `base` has a mapping that is _not_ a `Dict`, and `override`
+            new_base_k = get(new_base, k, nothing)
+            if new_base_k isa Dict{String, Any} && override_k isa Dict{String, Any}
+                new_base[k] = recursive_prefs_merge(new_base_k, override_k)
+            else
+                new_base[k] = override_k
+            end
+        end
+    end
+    return new_base
+end
+
+function get_preferences(uuid::UUID)
+    merged_prefs = Dict{String,Any}()
+    for env in reverse(load_path())
+        project_toml = env_project_file(env)
+        if !isa(project_toml, String)
+            continue
+        end
+
+        # Collect all dictionaries from the current point in the load path, then merge them in
+        dicts = collect_preferences(project_toml, uuid)
+        merged_prefs = recursive_prefs_merge(merged_prefs, dicts...)
+    end
+    return merged_prefs
+end
+
+function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{String})
+    # Start from the "null" hash
+    h = UInt64(0x6e65726566657250)
+    uuid === nothing && return h
+
+    # Load the preferences
+    prefs = get_preferences(uuid)
+
+    # Walk through each name that's called out as a compile-time preference
+    for name in prefs_list
+        prefs_name = get(prefs, name, nothing)::Union{String, Nothing}
+        if prefs_name !== nothing
+            h = hash(prefs_name, h)
+        end
+    end
+    return h
+end
+
+get_preferences_hash(m::Module, prefs_list::Vector{String}) = get_preferences_hash(PkgId(m).uuid, prefs_list)
+
+# This is how we keep track of who is using what preferences at compile-time
+const COMPILETIME_PREFERENCES = Dict{UUID,Set{String}}()
+
+# In `Preferences.jl`, if someone calls `load_preference(@__MODULE__, key)` while we're precompiling,
+# we mark that usage as a usage at compile-time and call this method, so that at the end of `.ji` generation,
+# we can record the list of compile-time preferences and embed that into the `.ji` header
+function record_compiletime_preference(uuid::UUID, key::String)
+    pref = get!(Set{String}, COMPILETIME_PREFERENCES, uuid)
+    push!(pref, key)
+    return nothing
+end
+get_compiletime_preferences(uuid::UUID) = collect(get(Vector{String}, COMPILETIME_PREFERENCES, uuid))
+get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uuid)
+get_compiletime_preferences(::Nothing) = String[]
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl"
 # otherwise returns the list of dependencies to also check
@@ -1551,7 +1680,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-        modules, (includes, requires), required_modules, srctextpos, prefs_hash = parse_cache_header(io)
+        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash = parse_cache_header(io)
         id = isempty(modules) ? nothing : first(modules).first
         modules = Dict{PkgId, UInt64}(modules)
 
@@ -1627,7 +1756,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
 
         if isa(id, PkgId)
-            curr_prefs_hash = get_preferences_hash(id.uuid)
+            curr_prefs_hash = get_preferences_hash(id.uuid, prefs)
             if prefs_hash != curr_prefs_hash
                 @debug "Rejecting cache file $cachefile because preferences hash does not match 0x$(string(prefs_hash, base=16)) != 0x$(string(curr_prefs_hash, base=16))"
                 return true
