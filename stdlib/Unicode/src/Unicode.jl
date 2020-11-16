@@ -2,7 +2,7 @@
 
 module Unicode
 
-export graphemes
+export graphemes, isemoji
 
 """
     Unicode.normalize(s::AbstractString; keywords...)
@@ -88,5 +88,45 @@ single characters, even though they may contain more than one codepoint; for exa
 letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
+
+const EMOJI_RANGES = [
+    0x1F600:0x1F64F,  # Emoticons
+    0x1F300:0x1F5FF,  # Misc Symbols and Pictographs
+    0x1F680:0x1F6FF,  # Transport and Map
+    0x2600:0x26FF,    # Misc symbols
+    0x2700:0x27BF,    # Dingbats
+    0xFE00:0xFE0F,    # Variation Selectors
+    0x1F900:0x1F9FF,   # Supplemental Symbols and Pictographs
+];
+
+const ZWJ = '\u200d'    # Zero-width joiner
+
+"""
+    isemoji(Union{AbstractChar, AbstractString}) -> Bool
+
+Test whether a character is an emoji, or whether all elements in a given string are emoji. Includes identifying composite emoji.
+"""
+function isemoji(c::AbstractChar)
+    u = UInt32(c)
+    @inbounds for emojiset in EMOJI_RANGES
+        u in emojiset && return true
+    end
+    return false
+end
+
+function isemoji(s::AbstractString)
+    ZWJ_allowed = false
+    s[end] == ZWJ && return false
+    @inbounds for c in s
+        if c == ZWJ
+            !ZWJ_allowed && return false
+            ZWJ_allowed = false
+        else
+            !isemoji(c) && return false
+            ZWJ_allowed = true
+        end
+    end
+    return true
+end
 
 end
