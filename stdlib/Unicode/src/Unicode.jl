@@ -89,8 +89,6 @@ letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
 
-const emoji_data = download("https://www.unicode.org/Public/13.0.0/ucd/emoji/emoji-data.txt")
-
 """
     extract_emoji_column(emoji_data, column = 1; type_field = "")
 Read the selected column from a provided unicode emoji data file
@@ -122,7 +120,9 @@ parse_unicode_range_str(range_str) = let s = split(range_str, "..")
 end
 
 # Get all ranges containing valid single emoji from file
-const EMOJI_RANGES = parse_unicode_range_str.(extract_emoji_column(emoji_data, 1, type_field = "Emoji"))
+const EMOJI_RANGES = let emoji_data = download("https://www.unicode.org/Public/13.0.0/ucd/emoji/emoji-data.txt")
+                parse_unicode_range_str.(extract_emoji_column(emoji_data, 1, type_field = "Emoji"))
+            end
 const ZWJ = '\u200d'    # Zero-width joiner
 const VAR_SELECTOR = '\uFE0F'   # Variation selector
 # Handle England, Scotland, Wales flags and keycaps
