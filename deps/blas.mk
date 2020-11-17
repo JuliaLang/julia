@@ -129,7 +129,6 @@ clean-openblas:
 
 get-openblas: $(OPENBLAS_SRC_FILE)
 extract-openblas: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
-checksum-openblas: get-openblas
 configure-openblas: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured
 compile-openblas: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
 fastcheck-openblas: check-openblas
