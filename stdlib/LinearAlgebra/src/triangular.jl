@@ -706,6 +706,29 @@ mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A,
 mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Adjoint}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Transpose}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
+# preserve triangular structure in in-place multiplication
+for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
+                        (:UpperTriangular, :UpperTriangular, :UnitUpperTriangular),
+                        (:UpperTriangular, :UnitUpperTriangular, :UpperTriangular),
+                        (:UnitUpperTriangular, :UnitUpperTriangular, :UnitUpperTriangular),
+                        (:LowerTriangular, :LowerTriangular, :LowerTriangular),
+                        (:LowerTriangular, :LowerTriangular, :UnitLowerTriangular),
+                        (:LowerTriangular, :UnitLowerTriangular, :LowerTriangular),
+                        (:UnitLowerTriangular, :UnitLowerTriangular, :UnitLowerTriangular))
+    @eval function mul!(C::$cty, A::$aty, B::$bty)
+        lmul!(A, copyto!(parent(C), B))
+        return C
+    end
+
+    @eval @inline function mul!(C::$cty, A::$aty, B::$bty, alpha::Number, beta::Number)
+        if isone(alpha) && iszero(beta)
+            return mul!(C, A, B)
+        else
+            return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+        end
+    end
+end
+
 # direct multiplication/division
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
