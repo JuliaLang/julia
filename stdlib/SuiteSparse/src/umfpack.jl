@@ -406,6 +406,29 @@ for itype in UmfpackIndexTypes
                         mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[], mz[])
         end
+
+        function logabsdet(F::UmfpackLU{Float64, $itype})  # return log(abs(det)) and sign(det)
+            n = checksquare(F)
+            issuccess(F) || return log(zero(real(T))), log(one(T))
+            L, U, p, q, Rs = SuiteSparse.UMFPACK.umf_extract(F)
+            c = 0
+            P = one(T)
+            abs_det = zero(real(T))
+            @inbounds for i in 1:n
+                dg_ii = U[i, i] / Rs[i]
+                P *= sign(dg_ii)
+                if p[i] != i
+                    c += 1
+                end
+                if q[i] != i
+                    c += 1
+                end
+                abs_det += log(abs(dg_ii))
+            end
+            s = ifelse(isodd(c), -one(real(T)), one(real(T))) * P
+            return abs_det, s
+        end
+
         function umf_lunz(lu::UmfpackLU{Float64,$itype})
             lnz = Ref{$itype}()
             unz = Ref{$itype}()

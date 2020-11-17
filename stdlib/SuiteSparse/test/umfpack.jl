@@ -26,6 +26,7 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
             @test (Diagonal(Rs) * A)[p,q] ≈ L * U
 
             det(lua) ≈ det(Array(A))
+            logabsdet(lua) ≈ logabsdet(Array(A))
 
             b = [8., 45., -3., 3., 19.]
             x = lua\b
