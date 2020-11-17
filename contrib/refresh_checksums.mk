@@ -27,7 +27,7 @@ NON_BB_PROJECTS=patchelf mozillacert lapack
 
 # Convert `openblas` to `OPENBLAS`
 define upper
-$(shell echo $(1) | tr '[:lower:]' '[:upper:]')
+$(shell echo $(1) | tr 'a-z' 'A-Z')
 endef
 
 # If $(2) == `src`, this will generate a `USE_BINARYBUILDER_FOO=0` make flag
