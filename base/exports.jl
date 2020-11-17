@@ -618,6 +618,7 @@ export
     IOContext,
     displaysize,
     dump,
+    format_bytes,
     print,
     println,
     printstyled,
