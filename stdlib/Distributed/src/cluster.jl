@@ -869,13 +869,13 @@ Get the number of available worker processes. This is one less than [`nprocs()`]
 
 # Examples
 ```julia-repl
-\$ julia -p 5
+\$ julia -p 2
 
 julia> nprocs()
-6
+3
 
 julia> nworkers()
-5
+2
 ```
 """
 function nworkers()
@@ -890,7 +890,7 @@ Return a list of all process identifiers, including pid 1 (which is not included
 
 # Examples
 ```julia-repl
-\$ julia -p 5
+\$ julia -p 2
 
 julia> procs()
 3-element Array{Int64,1}:
@@ -952,7 +952,7 @@ Return a list of all worker process identifiers.
 
 # Examples
 ```julia-repl
-\$ julia -p 5
+\$ julia -p 2
 
 julia> workers()
 2-element Array{Int64,1}:
