@@ -6,6 +6,7 @@ SRCCACHE := $(abspath $(SRCDIR)/srccache)
 BUILDDIR := .
 
 include $(JULIAHOME)/Make.inc
+include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/deps/tools/common.mk
 include $(JULIAHOME)/deps/tools/stdlib-external.mk
 
@@ -14,11 +15,30 @@ VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 $(build_datarootdir)/julia/stdlib/$(VERSDIR):
 	mkdir -p $@
 
+JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
+       OPENBLAS OPENLIBM P7ZIP PCRE SUITESPARSE ZLIB OSXUNWIND CSL \
+       UNWIND
+
+# Initialize this with JLLs that aren't in deps/Versions.make
+JLL_NAMES := MozillaCACerts_jll
+
+# Define rule to download `StdlibArtifacts.toml` files for each JLL we bundle.
+define download-artifacts-toml
+JLL_NAMES += $$($(1)_JLL_NAME)_jll
+$(1)_STDLIB_PATH := $$(JULIAHOME)/stdlib/$$($(1)_JLL_NAME)_jll
+$(1)_JLL_VER ?= $$(shell [ -f $$($(1)_STDLIB_PATH)/Project.toml ] && grep "^version" $$($(1)_STDLIB_PATH)/Project.toml | sed -E 's/version[[:space:]]*=[[:space:]]*"?([^"]+)"?/\1/')
+
+$$($(1)_STDLIB_PATH)/StdlibArtifacts.toml:
+	$(JLDOWNLOAD) $$@ https://github.com/JuliaBinaryWrappers/$$($(1)_JLL_NAME)_jll.jl/raw/$$($(1)_JLL_NAME)-$$($(1)_JLL_VER)/Artifacts.toml
+get-$$($(1)_JLL_NAME)_jll: $$($(1)_STDLIB_PATH)/StdlibArtifacts.toml
+endef
+$(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
+
 STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
           Future InteractiveUtils LazyArtifacts Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization SHA \
           SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
-          MozillaCACerts_jll LibCURL_jll
+          $(JLL_NAMES)
 
 STDLIBS_EXT = Pkg Statistics LibCURL Downloads ArgTools Tar NetworkOptions
 PKG_GIT_URL := git://github.com/JuliaLang/Pkg.jl.git
@@ -43,7 +63,7 @@ $(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/
 
 STDLIBS_LINK_TARGETS := $(addprefix $(build_datarootdir)/julia/stdlib/$(VERSDIR)/,$(STDLIBS))
 
-getall get: $(addprefix get-, $(STDLIBS_EXT))
+getall get: $(addprefix get-, $(STDLIBS_EXT) $(JLLS))
 install: $(addprefix install-, $(STDLIBS_EXT)) $(STDLIBS_LINK_TARGETS)
 clean: $(addprefix clean-, $(STDLIBS_EXT)) $(CLEAN_TARGETS)
 distclean: $(addprefix distclean-, $(STDLIBS_EXT)) clean
