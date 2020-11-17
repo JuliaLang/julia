@@ -11,6 +11,9 @@ $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/source-extracted: $(SRCCACHE)/nghttp2-$(NGHTT
 	touch -c $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/configure # old target
 	echo 1 > $@
 
+checksum-nghttp2: $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-configured: $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \

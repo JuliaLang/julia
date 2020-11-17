@@ -13,6 +13,9 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UN
 	touch -c $(SRCCACHE)/libunwind-$(UNWIND_VER)/configure # old target
 	echo 1 > $@
 
+checksum-libunwind: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
+	$(JLCHECKSUM) $<
+
 $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-prefer-extbl.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-prefer-extbl.patch
 	echo 1 > $@
@@ -71,6 +74,9 @@ $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/source-extracted: $(SRCCACHE)/libosxun
 	mkdir -p $(BUILDDIR)
 	cd $(BUILDDIR) && $(TAR) xfz $<
 	echo 1 > $@
+
+checksum-libosxunwind: $(SRCCACHE)/libosxunwind-$(OSXUNWIND_VER).tar.gz
+	$(JLCHECKSUM) $<
 
 $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/source-extracted
 	$(MAKE) -C $(dir $<) $(OSXUNWIND_FLAGS)

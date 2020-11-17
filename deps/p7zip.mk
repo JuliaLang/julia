@@ -11,6 +11,9 @@ $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).
 	cd $(dir $@) && $(TAR) --strip-components 1 -jxf $<
 	echo $1 > $@
 
+checksum-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-12-CVE-2016-9296.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
 	cd $(dir $@) && patch -p1 -f < $(SRCDIR)/patches/p7zip-12-CVE-2016-9296.patch
 	echo 1 > $@

@@ -19,6 +19,9 @@ $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	touch -c $(SRCCACHE)/gmp-$(GMP_VER)/configure # old target
 	echo 1 > $@
 
+checksum-gmp: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
 $(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-exception.patch
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
