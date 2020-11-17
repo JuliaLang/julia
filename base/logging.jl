@@ -282,7 +282,7 @@ function issimple(@nospecialize val)
     val isa Number && return true
     val isa Char && return true
     if val isa Expr
-        val.head === :quote && issimple(val[1]) && return true
+        val.head === :quote && issimple(val.args[1]) && return true
         val.head === :inert && return true
     end
     return false
