@@ -15,6 +15,9 @@ $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).ta
 	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/configure # old target
 	echo $1 > $@
 
+checksum-pcre2: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \

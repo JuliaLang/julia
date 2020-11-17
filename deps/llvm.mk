@@ -340,6 +340,7 @@ distclean-libcxx:
 distclean-libcxxabi:
 	-rm -rf $(LLVM_LIBCXXABI_TAR) $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_BUILD_DIR)/libcxxabi-build
 
+
 # We want to ensure that the libcxx linking flags don't get passed to the libcxx build, since it will
 # error on a fresh build
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)" \
@@ -353,6 +354,23 @@ LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LIBCXX_DEPENDENCY := $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1.0
 get-llvm: get-libcxx get-libcxxabi
+endif
+
+checksum-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
+ifneq ($(LLVM_CLANG_TAR),)
+	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
+endif
+ifneq ($(LLVM_COMPILER_RT_TAR),)
+	$(JLCHECKSUM) $(LLVM_COMPILER_RT_TAR)
+endif
+ifneq ($(LLVM_LIBCXX_TAR),)
+	$(JLCHECKSUM) $(LLVM_LIBCXX_TAR)
+endif
+ifneq ($(LLVM_VER),svn)
+	$(JLCHECKSUM) $(LLVM_TAR)
+endif
+ifneq ($(LLVM_LLDB_TAR),)
+	$(JLCHECKSUM) $(LLVM_LLDB_TAR)
 endif
 
 $(LLVM_SRC_DIR)/source-extracted: | $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
