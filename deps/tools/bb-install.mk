@@ -56,6 +56,10 @@ $$(build_prefix)/manifest/$(strip $1): $$(SRCCACHE)/$$($(2)_BB_BASENAME) | $(bui
 	$(UNTAR) $$< -C $$(build_prefix)
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
 
+# Special "checksum-foo" target to speed up `contrib/refresh_checksums.sh`
+checksum-$(1): $$(SRCCACHE)/$$($(2)_BB_BASENAME)
+	$$(JLCHECKSUM) $$<
+
 clean-bb-download-$(1):
 	rm -f $$(SRCCACHE)/$$($(2)_BB_BASENAME)
 

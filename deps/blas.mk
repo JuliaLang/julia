@@ -1,4 +1,5 @@
 ## OpenBLAS ##
+ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
 # LAPACK is built into OpenBLAS by default
 OPENBLAS_GIT_URL := git://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
@@ -92,8 +93,6 @@ endif
 # Do not overwrite the "-j" flag
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
-ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
-
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
 		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
@@ -163,6 +162,9 @@ $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_V
 	cd $(BUILDDIR) && $(TAR) -zxf $<
 	cp $(dir $@)INSTALL/make.inc.gfortran $(dir $@)make.inc
 	echo 1 > $@
+
+checksum-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
+	$(JLCHECKSUM) $<
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0: | $(build_prefix)/manifest/openblas
