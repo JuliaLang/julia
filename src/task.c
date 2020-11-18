@@ -393,9 +393,8 @@ static void ctx_switch(jl_ptls_t ptls)
     }
 
     // set up global state for new task
-    lastt->world_age = ptls->world_age;
     ptls->pgcstack = t->gcstack;
-    ptls->world_age = t->world_age;
+    ptls->world_age = 0;
     t->gcstack = NULL;
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
@@ -510,8 +509,14 @@ JL_DLLEXPORT void jl_switch(void)
     else if (t->tid != ptls->tid) {
         jl_error("cannot switch to task running on another thread");
     }
+
+    // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
+    size_t world_age = ptls->world_age;
+    int finalizers_inhibited = ptls->finalizers_inhibited;
+    ptls->world_age = 0;
+    ptls->finalizers_inhibited = 0;
 
 #ifdef ENABLE_TIMINGS
     jl_timing_block_t *blk = ct->timing_stack;
@@ -533,7 +538,12 @@ JL_DLLEXPORT void jl_switch(void)
     assert(ptls == refetch_ptls());
 #endif
 
-    ct = ptls->current_task;
+    // Pop old values back off the stack
+    assert(ct == ptls->current_task &&
+           0 == ptls->world_age &&
+           0 == ptls->finalizers_inhibited);
+    ptls->world_age = world_age;
+    ptls->finalizers_inhibited = finalizers_inhibited;
 
 #ifdef ENABLE_TIMINGS
     assert(blk == ct->timing_stack);
@@ -796,6 +806,7 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *t = ptls->current_task;
     jl_value_t *res;
+    assert(ptls->finalizers_inhibited == 0);
 
 #ifdef MIGRATE_TASKS
     jl_task_t *pt = ptls->previous_task;
