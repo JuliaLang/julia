@@ -651,12 +651,10 @@ static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
     int _iter_count = 0;  // To prevent infinite loops from corrupt type objects.
     while (vt != jl_any_type) {
         if (vt == NULL) {
-            jl_printf((JL_STREAM*)STDERR_FILENO,
-                "ERROR: static_show: Nullptr encountered inside datatype.\n");
             return 0;
         } else if (_iter_count > 10000) {
-            jl_printf((JL_STREAM*)STDERR_FILENO,
-                "ERROR: static_show: Exit after 10,000 iterations of supertype(). Presuming invalid cycle in datatype object.\n");
+            // We are very likely stuck in a cyclic datastructure, so we assume this is
+            // _not_ a Function.
             return 0;
         } else if (vt == jl_function_type) {
             return 1;
