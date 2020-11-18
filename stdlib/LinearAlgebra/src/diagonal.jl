@@ -419,35 +419,35 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 
-function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
-    if length(v) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
-    end
-    for i = 1:length(D.diag)
-        d = D.diag[i]
-        if iszero(d)
-            throw(SingularException(i))
-        end
-        v[i] = d\v[i]
-    end
-    v
-end
-function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
-    require_one_based_indexing(V)
-    if size(V,1) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
-    end
-    for i = 1:length(D.diag)
-        d = D.diag[i]
-        if iszero(d)
-            throw(SingularException(i))
-        end
-        for j = 1:size(V,2)
-            @inbounds V[i,j] = d\V[i,j]
-        end
-    end
-    V
-end
+# function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
+#     if length(v) != length(D.diag)
+#         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
+#     end
+#     for i = 1:length(D.diag)
+#         d = D.diag[i]
+#         if iszero(d)
+#             throw(SingularException(i))
+#         end
+#         v[i] = d\v[i]
+#     end
+#     v
+# end
+# function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
+#     require_one_based_indexing(V)
+#     if size(V,1) != length(D.diag)
+#         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
+#     end
+#     for i = 1:length(D.diag)
+#         d = D.diag[i]
+#         if iszero(d)
+#             throw(SingularException(i))
+#         end
+#         for j = 1:size(V,2)
+#             @inbounds V[i,j] = d\V[i,j]
+#         end
+#     end
+#     V
+# end
 ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
 ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
