@@ -1102,3 +1102,14 @@ extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
         return isZero;
     }
 }
+
+// X86 does not support default NaNs
+extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void)
+{
+    return 0;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault)
+{
+    return isDefault;
+}
