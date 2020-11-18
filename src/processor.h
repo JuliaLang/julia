@@ -166,6 +166,10 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
 
+JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);
+JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault);
+JL_DLLEXPORT int32_t jl_get_default_nans(void);
 #ifdef __cplusplus
 }
 
