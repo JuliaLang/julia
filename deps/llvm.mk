@@ -520,6 +520,7 @@ endif # LLVM_VER 11.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)
+$(eval $(call LLVM_PATCH,llvm-jl-prefix-static-variables))
 $(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
 endif
 
