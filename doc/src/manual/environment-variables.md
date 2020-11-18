@@ -137,6 +137,11 @@ chosen so that it would be possible to set an empty depot path via the environme
 variable. If you want the default depot path, either unset the environment variable
 or if it must have a value, set it to the string `:`.
 
+!!! note
+
+    On Windows, path elements are separated by the `;` character, as is the case with
+    most path lists on Windows.
+
 ### `JULIA_HISTORY`
 
 The absolute path `REPL.find_hist_file()` of the REPL's history file. If
