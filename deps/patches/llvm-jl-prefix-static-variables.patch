@@ -1,0 +1,82 @@
+From 1c9ea0493b3816b7efde54c33f79d4b73ac4fd2a Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Wed, 18 Nov 2020 12:49:56 -0500
+Subject: [PATCH] manually prefix global variables
+
+---
+ llvm/lib/Support/ManagedStatic.cpp | 28 ++++++++++++++--------------
+ 1 file changed, 14 insertions(+), 14 deletions(-)
+
+diff --git llvm/lib/Support/ManagedStatic.cpp llvm/lib/Support/ManagedStatic.cpp
+index 28ceb1a70e4..5fc9303407c 100644
+--- llvm/lib/Support/ManagedStatic.cpp
++++ llvm/lib/Support/ManagedStatic.cpp
+@@ -18,17 +18,17 @@
+ #include <cassert>
+ using namespace llvm;
+ 
+-static const ManagedStaticBase *StaticList = nullptr;
+-static sys::Mutex *ManagedStaticMutex = nullptr;
+-static llvm::once_flag mutex_init_flag;
++static const ManagedStaticBase *JL_StaticList = nullptr;
++static sys::Mutex *JL_ManagedStaticMutex = nullptr;
++static llvm::once_flag JL_mutex_init_flag;
+ 
+ static void initializeMutex() {
+-  ManagedStaticMutex = new sys::Mutex();
++  JL_ManagedStaticMutex = new sys::Mutex();
+ }
+ 
+ static sys::Mutex* getManagedStaticMutex() {
+-  llvm::call_once(mutex_init_flag, initializeMutex);
+-  return ManagedStaticMutex;
++  llvm::call_once(JL_mutex_init_flag, initializeMutex);
++  return JL_ManagedStaticMutex;
+ }
+ 
+ void ManagedStaticBase::RegisterManagedStatic(void *(*Creator)(),
+@@ -44,8 +44,8 @@ void ManagedStaticBase::RegisterManagedStatic(void *(*Creator)(),
+       DeleterFn = Deleter;
+ 
+       // Add to list of managed statics.
+-      Next = StaticList;
+-      StaticList = this;
++      Next = JL_StaticList;
++      JL_StaticList = this;
+     }
+   } else {
+     assert(!Ptr && !DeleterFn && !Next &&
+@@ -54,17 +54,17 @@ void ManagedStaticBase::RegisterManagedStatic(void *(*Creator)(),
+     DeleterFn = Deleter;
+ 
+     // Add to list of managed statics.
+-    Next = StaticList;
+-    StaticList = this;
++    Next = JL_StaticList;
++    JL_StaticList = this;
+   }
+ }
+ 
+ void ManagedStaticBase::destroy() const {
+   assert(DeleterFn && "ManagedStatic not initialized correctly!");
+-  assert(StaticList == this &&
++  assert(JL_StaticList == this &&
+          "Not destroyed in reverse order of construction?");
+   // Unlink from list.
+-  StaticList = Next;
++  JL_StaticList = Next;
+   Next = nullptr;
+ 
+   // Destroy memory.
+@@ -79,6 +79,6 @@ void ManagedStaticBase::destroy() const {
+ void llvm::llvm_shutdown() {
+   MutexGuard Lock(*getManagedStaticMutex());
+ 
+-  while (StaticList)
+-    StaticList->destroy();
++  while (JL_StaticList)
++    JL_StaticList->destroy();
+ }
+-- 
+2.29.2
+
