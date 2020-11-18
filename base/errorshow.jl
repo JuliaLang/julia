@@ -562,9 +562,9 @@ function replaceuserpath(str)
     return str
 end
 
-const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow,
-        :light_magenta, :light_green, :light_cyan, :light_red,
-        :blue, :yellow, :magenta, :green, :cyan, :red]
+const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
+const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+
 stacktrace_expand_basepaths()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
 stacktrace_contract_userdir()::Bool =
@@ -576,7 +576,7 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     n = length(trace)
     ndigits_max = ndigits(n)
 
-    modulecolordict = Dict{Module, Symbol}()
+    modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     println(io, "\nStacktrace:")
@@ -678,7 +678,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
     if m !== nothing
         while parentmodule(m) !== m
@@ -698,7 +698,7 @@ end
 
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = replaceuserpath(file))

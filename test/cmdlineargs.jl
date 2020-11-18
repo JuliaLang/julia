@@ -303,7 +303,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
     mktempdir() do dir
         helperdir = joinpath(@__DIR__, "testhelpers")
-        inputfile = joinpath(helperdir, "allocation_file.jl")
+        inputfile = joinpath(dir, "allocation_file.jl")
+        cp(joinpath(helperdir,"allocation_file.jl"), inputfile)
         pid = readchomp(`$exename -E "getpid()" -L $inputfile --track-allocation=user`)
         memfile = "$inputfile.$pid.mem"
         got = readlines(memfile)

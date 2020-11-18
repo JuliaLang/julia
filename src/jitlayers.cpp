@@ -38,6 +38,12 @@ void jl_dump_compiles(void *s)
 {
     dump_compiles_stream = (JL_STREAM*)s;
 }
+JL_STREAM *dump_llvm_opt_stream = NULL;
+extern "C" JL_DLLEXPORT
+void jl_dump_llvm_opt(void *s)
+{
+    dump_llvm_opt_stream = (JL_STREAM*)s;
+}
 
 static void jl_add_to_ee(std::unique_ptr<Module> m);
 static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
@@ -65,6 +71,12 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
     for (auto &global : globals) {
         jl_link_global(global.second, global.first);
     }
+}
+
+extern "C" JL_DLLEXPORT
+uint64_t jl_cumulative_compile_time_ns()
+{
+    return jl_cumulative_compile_time;
 }
 
 // this generates llvm code for the lambda info
@@ -98,7 +110,6 @@ static jl_callptr_t _jl_compile_codeinst(
     params.world = world;
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
     {
-        JL_TIMING(CODEGEN);
         jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
         if (std::get<0>(result))
             emitted[codeinst] = std::move(result);
@@ -210,6 +221,7 @@ extern "C" JL_DLLEXPORT
 void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&codegen_lock);
+    uint64_t compiler_start_time = jl_hrtime();
     jl_codegen_params_t params;
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     if (pparams == NULL)
@@ -228,6 +240,8 @@ void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declr
         if (llvmmod == NULL)
             jl_add_to_ee(std::unique_ptr<Module>(into));
     }
+    if (codegen_lock.count == 1)
+        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock);
 }
 
@@ -281,6 +295,7 @@ extern "C"
 jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    uint64_t compiler_start_time = jl_hrtime();
     // if we don't have any decls already, try to generate it now
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
@@ -317,6 +332,8 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
     else {
         codeinst = NULL;
     }
+    if (codegen_lock.count == 1)
+        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock);
     JL_GC_POP();
     return codeinst;
@@ -329,6 +346,7 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&codegen_lock);
+    uint64_t compiler_start_time = jl_hrtime();
     if (unspec->invoke == NULL) {
         jl_code_info_t *src = NULL;
         JL_GC_PUSH1(&src);
@@ -355,6 +373,8 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         }
         JL_GC_POP();
     }
+    if (codegen_lock.count == 1)
+        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock); // Might GC
 }
 
@@ -376,6 +396,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+            uint64_t compiler_start_time = jl_hrtime();
             specfptr = (uintptr_t)codeinst->specptr.fptr;
             if (specfptr == 0) {
                 jl_code_info_t *src = jl_type_infer(mi, world, 0);
@@ -399,6 +420,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
                 }
                 JL_GC_POP();
             }
+            jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
             JL_UNLOCK(&codegen_lock);
         }
         if (specfptr != 0)
@@ -501,13 +523,43 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
 {
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, optlevel);
+    addMachinePasses(&PM, &TM);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 }
 
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
+    uint64_t start_time = 0;
+    if (dump_llvm_opt_stream != NULL) {
+        // Print LLVM function statistics _before_ optimization
+        // Print all the information about this invocation as a YAML object
+        jl_printf(dump_llvm_opt_stream, "- \n");
+        // We print the name and some statistics for each function in the module, both
+        // before optimization and again afterwards.
+        jl_printf(dump_llvm_opt_stream, "  before: \n");
+        for (auto &F : M.functions()) {
+            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                continue;
+            }
+            // Count number of Basic Blocks
+            int bbs = 0;
+            for (auto &B : F.getBasicBlockList()) {
+                std::ignore = B;
+                ++bbs;
+            }
+
+            // Each function is printed as a YAML object with several attributes
+            jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
+            jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+        }
+
+        start_time = jl_hrtime();
+    }
+
     JL_TIMING(LLVM_OPT);
+
     int optlevel;
     if (jl_generating_output()) {
         optlevel = 0;
@@ -547,6 +599,32 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
         OS.flush();
         llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
                                  "The module's content was printed above. Please file a bug report");
+    }
+
+    uint64_t end_time = 0;
+    if (dump_llvm_opt_stream != NULL) {
+        end_time = jl_hrtime();
+        jl_printf(dump_llvm_opt_stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
+        jl_printf(dump_llvm_opt_stream, "  optlevel: %d\n", optlevel);
+
+        // Print LLVM function statistics _after_ optimization
+        jl_printf(dump_llvm_opt_stream, "  after: \n");
+        for (auto &F : M.functions()) {
+            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                continue;
+            }
+
+            // Count number of Basic Blocks
+            int bbs = 0;
+            for (auto &B : F.getBasicBlockList()) {
+                std::ignore = B;
+                ++bbs;
+            }
+
+            jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
+            jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+        }
     }
 
     return CompilerResultT(std::move(ObjBuffer));
@@ -793,6 +871,13 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
     return getMangledName(GV->getName());
 }
 
+size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm);
+
+size_t JuliaOJIT::getTotalBytes() const
+{
+    return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
+}
+
 JuliaOJIT *jl_ExecutionEngine;
 
 // destructively move the contents of src into dest
@@ -931,7 +1016,6 @@ void jl_jit_share_data(Module &M)
 
 static void jl_add_to_ee(std::unique_ptr<Module> m)
 {
-    JL_TIMING(LLVM_EMIT);
 #if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
     Type *T_uint32 = Type::getInt32Ty(m->getContext());
@@ -1029,4 +1113,10 @@ static uint64_t getAddressForFunction(StringRef fname)
 void add_named_global(StringRef name, void *addr)
 {
     jl_ExecutionEngine->addGlobalMapping(name, (uint64_t)(uintptr_t)addr);
+}
+
+extern "C" JL_DLLEXPORT
+size_t jl_jit_total_bytes(void)
+{
+    return jl_ExecutionEngine->getTotalBytes();
 }

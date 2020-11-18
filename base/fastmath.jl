@@ -158,7 +158,7 @@ end
 
 # Basic arithmetic
 
-const FloatTypes = Union{Float32,Float64}
+const FloatTypes = Union{Float16,Float32,Float64}
 
 sub_fast(x::FloatTypes) = neg_float_fast(x)
 

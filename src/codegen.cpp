@@ -69,6 +69,9 @@
 // for configuration options
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/CommandLine.h>
+#if JL_LLVM_VERSION >= 120000
+#include <llvm/Support/Process.h>
+#endif
 
 #include <llvm/IR/InlineAsm.h>
 #if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
@@ -94,6 +97,13 @@ typedef Instruction TerminatorInst;
 #include "codegen_shared.h"
 #include "processor.h"
 #include "julia_assert.h"
+
+JL_STREAM *dump_emitted_mi_name_stream = NULL;
+extern "C" JL_DLLEXPORT
+void jl_dump_emitted_mi_name(void *s)
+{
+    dump_emitted_mi_name_stream = (JL_STREAM*)s;
+}
 
 extern "C" {
 
@@ -137,8 +147,6 @@ extern void _chkstk(void);
 #if defined(_COMPILER_MICROSOFT_) && !defined(__alignof__)
 #define __alignof__ __alignof
 #endif
-
-#define DISABLE_FLOAT16
 
 // llvm state
 extern JITEventListener *CreateJuliaJITEventListener();
@@ -1206,8 +1214,13 @@ static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
 {
     // Almost all of our inttoptr are generated due to representing `Ptr` with `T_size`
     // in LLVM and most of these integers are generated from `ptrtoint` in the first place.
-    if (auto I = dyn_cast<PtrToIntInst>(v))
-        return ctx.builder.CreateBitCast(I->getOperand(0), ty);
+    if (auto I = dyn_cast<PtrToIntInst>(v)) {
+        auto ptr = I->getOperand(0);
+        if (ty->getPointerAddressSpace() == ptr->getType()->getPointerAddressSpace())
+            return ctx.builder.CreateBitCast(ptr, ty);
+        else if (ty->getPointerElementType() == ptr->getType()->getPointerElementType())
+            return ctx.builder.CreateAddrSpaceCast(ptr, ty);
+    }
     return ctx.builder.CreateIntToPtr(v, ty);
 }
 
@@ -2500,8 +2513,16 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 Value *nullcheck2 = nullptr;
                 auto fld1 = emit_getfield_knownidx(ctx, arg1, i, sty, &nullcheck1);
                 auto fld2 = emit_getfield_knownidx(ctx, arg2, i, sty, &nullcheck2);
-                answer = ctx.builder.CreateAnd(answer, emit_f_is(ctx, fld1, fld2,
-                                                                 nullcheck1, nullcheck2));
+                Value *fld_answer;
+                if (jl_field_isptr(sty, i) && jl_is_concrete_immutable(fldty)) {
+                    // concrete immutables that are !isinlinealloc might be reference cycles
+                    // issue #37872
+                    fld_answer = emit_box_compare(ctx, fld1, fld2, nullcheck1, nullcheck2);
+                }
+                else {
+                    fld_answer = emit_f_is(ctx, fld1, fld2, nullcheck1, nullcheck2);
+                }
+                answer = ctx.builder.CreateAnd(answer, fld_answer);
             }
             return answer;
         }
@@ -3361,11 +3382,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
 static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, StringRef specFunctionObject,
                                           jl_cgval_t *argv, size_t nargs, jl_value_t *inferred_retty)
 {
-    auto theFptr = cast<Function>(jl_Module->getOrInsertFunction(specFunctionObject, jl_func_sig)
-#if JL_LLVM_VERSION >= 90000
-                .getCallee()
-#endif
-            );
+    auto theFptr = cast<Function>(
+        jl_Module->getOrInsertFunction(specFunctionObject, jl_func_sig).getCallee());
     add_return_attr(theFptr, Attribute::NonNull);
     theFptr->addFnAttr(Thunk);
     Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, JLCALL_F_CC);
@@ -4593,11 +4611,8 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     Value *theFarg;
     if (codeinst->invoke != NULL) {
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->invoke, codeinst);
-        theFunc = cast<Function>(M->getOrInsertFunction(theFptrName, jlinvoke_func->_type(jl_LLVMContext))
-#if JL_LLVM_VERSION >= 90000
-                .getCallee()
-#endif
-                );
+        theFunc = cast<Function>(
+            M->getOrInsertFunction(theFptrName, jlinvoke_func->_type(jl_LLVMContext)).getCallee());
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
     else {
@@ -6863,14 +6878,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                    FromBB->getName() + "." + PhiBB->getName() + "_crit_edge");
                 Function::iterator FBBI = FromBB->getIterator();
                 ctx.f->getBasicBlockList().insert(++FBBI, NewBB); // insert after existing block
-#if JL_LLVM_VERSION >= 90000
                 terminator->replaceSuccessorWith(PhiBB, NewBB);
-#else
-                for (unsigned Idx = 0, NumSuccessors = terminator->getNumSuccessors(); Idx != NumSuccessors; ++Idx) {
-                    if (terminator->getSuccessor(Idx) == PhiBB)
-                      terminator->setSuccessor(Idx, NewBB);
-                }
-#endif
                 DebugLoc Loc = terminator->getDebugLoc();
                 terminator = BranchInst::Create(PhiBB);
                 terminator->setDebugLoc(Loc);
@@ -6972,17 +6980,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (FromBB != NewBB) {
                 BB_rewrite_map[LookupKey] = NewBB;
                 preds.insert(NewBB);
-#if JL_LLVM_VERSION >= 90000
                 PhiBB->replacePhiUsesWith(FromBB, NewBB);
-#else
-                for (BasicBlock::iterator I = PhiBB->begin(); isa<PHINode>(I); ++I) {
-                    PHINode *PN = cast<PHINode>(I);
-                    ssize_t BBIdx = PN->getBasicBlockIndex(FromBB);
-                    if (BBIdx == -1)
-                        continue;
-                    PN->setIncomingBlock(BBIdx, NewBB);
-                }
-#endif
             }
             ctx.builder.ClearInsertionPoint();
         }
@@ -7140,6 +7138,7 @@ jl_compile_result_t jl_emit_code(
         jl_value_t *jlrettype,
         jl_codegen_params_t &params)
 {
+    JL_TIMING(CODEGEN);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     std::unique_ptr<Module> m;
@@ -7148,6 +7147,16 @@ jl_compile_result_t jl_emit_code(
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
         std::tie(m, decls) = emit_function(li, src, jlrettype, params);
+        if (dump_emitted_mi_name_stream != NULL) {
+            jl_printf(dump_emitted_mi_name_stream, "%s\t", decls.specFunctionObject.c_str());
+            // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
+            // break CSV parsing if there are any internal quotes in the Type name (e.g. in
+            // Symbol("...")). The \t delineator should be enough to ensure whitespace is
+            // handled correctly. (And we don't need to worry about any tabs in the printed
+            // string, because tabs are printed as "\t" by `show`.)
+            jl_static_show(dump_emitted_mi_name_stream, li->specTypes);
+            jl_printf(dump_emitted_mi_name_stream, "\n");
+        }
     }
     JL_CATCH {
         // Something failed! This is very, very bad.
@@ -7170,6 +7179,7 @@ jl_compile_result_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params)
 {
+    JL_TIMING(CODEGEN);
     JL_GC_PUSH1(&src);
     if (!src) {
         src = (jl_code_info_t*)codeinst->inferred;
@@ -7242,6 +7252,7 @@ void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
     jl_codegen_params_t &params, CompilationPolicy policy)
 {
+    JL_TIMING(CODEGEN);
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     while (!params.workqueue.empty()) {
@@ -7640,7 +7651,24 @@ extern "C" void jl_init_llvm(void)
     const char *const argv_avoidsfb[] = {"", "-x86-disable-avoid-SFB"}; // llvm bug 41629, see https://gist.github.com/vtjnash/192cab72a6cfc00256ff118238163b55
     cl::ParseCommandLineOptions(sizeof(argv_avoidsfb)/sizeof(argv_avoidsfb[0]), argv_avoidsfb, "disable-avoidsfb\n");
 #endif
+#if JL_LLVM_VERSION >= 120000
+    // https://reviews.llvm.org/rGc068e9c8c123e7f8c8f3feb57245a012ccd09ccf
+    Optional<std::string> envValue = sys::Process::GetEnv("JULIA_LLVM_ARGS");
+    if (envValue) {
+        SmallVector<const char *, 20> newArgv;
+        BumpPtrAllocator A;
+        StringSaver Saver(A);
+        newArgv.push_back(Saver.save("Julia").data());
+
+        // Parse the value of the environment variable into a "command line"
+        // and hand it off to ParseCommandLineOptions().
+        cl::TokenizeGNUCommandLine(*envValue, Saver, newArgv);
+        int newArgc = static_cast<int>(newArgv.size());
+        cl::ParseCommandLineOptions(newArgc, &newArgv[0]);
+    }
+#else
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
+#endif
 
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
@@ -7679,7 +7707,11 @@ extern "C" void jl_init_llvm(void)
             // This is the only way I can find to print the help message once.
             // It'll be nice if we can iterate through the features and print our own help
             // message...
+#if JL_LLVM_VERSION >= 120000
+            MSTI->setDefaultFeatures("help", "", "");
+#else
             MSTI->setDefaultFeatures("help", "");
+#endif
         }
     }
     // Package up features to be passed to target/subtarget
@@ -7696,8 +7728,6 @@ extern "C" void jl_init_llvm(void)
         // Make sure we are using the large code model on 64bit
         // Let LLVM pick a default suitable for jitting on 32bit
         CodeModel::Large;
-#elif JL_LLVM_VERSION < 60000
-        CodeModel::JITDefault;
 #else
         None;
 #endif
@@ -7707,10 +7737,8 @@ extern "C" void jl_init_llvm(void)
             options,
             Reloc::Static, // Generate simpler code for JIT
             codemodel,
-            optlevel
-#if JL_LLVM_VERSION >= 60000
-            , /*JIT*/ true
-#endif
+            optlevel,
+            true // JIT
             );
     assert(jl_TargetMachine && "Failed to select target machine -"
                                " Is the LLVM backend for this CPU enabled?");
@@ -7728,10 +7756,9 @@ extern "C" void jl_init_llvm(void)
     std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
     jl_data_layout.reset(DL);
 
-// Register GDB event listener
-#ifdef JL_DEBUG_BUILD
-    jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
-#endif
+    // Register GDB event listener
+    if(jl_using_gdb_jitevents)
+        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
 
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)

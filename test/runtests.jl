@@ -147,12 +147,21 @@ cd(@__DIR__) do
         end
     end
 
-    function print_testworker_errored(name, wrkr)
+    function print_testworker_errored(name, wrkr, @nospecialize(e))
         lock(print_lock)
         try
             printstyled(name, color=:red)
             printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
                 " "^elapsed_align, " failed at $(now())\n", color=:red)
+            if isa(e, Test.TestSetException)
+                for t in e.errors_and_fails
+                    show(t)
+                    println()
+                end
+            elseif e !== nothing
+                Base.showerror(stdout, e)
+            end
+            println()
         finally
             unlock(print_lock)
         end
@@ -200,18 +209,17 @@ cd(@__DIR__) do
                     while length(tests) > 0
                         test = popfirst!(tests)
                         running_tests[test] = now()
-                        local resp
                         wrkr = p
-                        try
-                            resp = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
-                        catch e
-                            isa(e, InterruptException) && return
-                            resp = Any[e]
-                        end
+                        resp = try
+                                remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                            catch e
+                                isa(e, InterruptException) && return
+                                Any[CapturedException(e, catch_backtrace())]
+                            end
                         delete!(running_tests, test)
                         push!(results, (test, resp))
-                        if resp[1] isa Exception
-                            print_testworker_errored(test, wrkr)
+                        if length(resp) == 1
+                            print_testworker_errored(test, wrkr, exit_on_error ? nothing : resp[1])
                             if exit_on_error
                                 skipped = length(tests)
                                 empty!(tests)
@@ -260,12 +268,16 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
-            local resp
-            try
-                resp = eval(Expr(:call, () -> runtests(t, test_path(t), isolate, seed=seed))) # runtests is defined by the include above
+            resp = try
+                    Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                catch e
+                    isa(e, InterruptException) && rethrow()
+                    Any[CapturedException(e, catch_backtrace())]
+                end
+            if length(resp) == 1
+                print_testworker_errored(t, 1, resp[1])
+            else
                 print_testworker_stats(t, 1, resp)
-            catch e
-                resp = Any[e]
             end
             push!(results, (t, resp))
         end
@@ -311,6 +323,7 @@ cd(@__DIR__) do
     Errored, and execution continues until the summary at the end of the test
     run, where the test file is printed out as the "failed expression".
     =#
+    Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
@@ -320,29 +333,15 @@ cd(@__DIR__) do
             Test.push_testset(resp)
             Test.record(o_ts, resp)
             Test.pop_testset()
-        elseif isa(resp, Tuple{Int,Int})
+        elseif isa(resp, Test.TestSetException)
             fake = Test.DefaultTestSet(testname)
-            for i in 1:resp[1]
+            for i in 1:resp.pass
                 Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
             end
-            for i in 1:resp[2]
+            for i in 1:resp.broken
                 Test.record(fake, Test.Broken(:test, nothing))
             end
-            Test.push_testset(fake)
-            Test.record(o_ts, fake)
-            Test.pop_testset()
-        elseif isa(resp, RemoteException) && isa(resp.captured.ex, Test.TestSetException)
-            println("Worker $(resp.pid) failed running test $(testname):")
-            Base.showerror(stdout, resp.captured)
-            println()
-            fake = Test.DefaultTestSet(testname)
-            for i in 1:resp.captured.ex.pass
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
-            end
-            for i in 1:resp.captured.ex.broken
-                Test.record(fake, Test.Broken(:test, nothing))
-            end
-            for t in resp.captured.ex.errors_and_fails
+            for t in resp.errors_and_fails
                 Test.record(fake, t)
             end
             Test.push_testset(fake)
@@ -357,7 +356,7 @@ cd(@__DIR__) do
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
-            Test.record(fake, Test.Error(:test_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
+            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
@@ -371,6 +370,7 @@ cd(@__DIR__) do
         Test.record(o_ts, fake)
         Test.pop_testset()
     end
+    Test.TESTSET_PRINT_ENABLE[] = true
     println()
     Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass

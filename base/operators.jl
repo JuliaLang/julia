@@ -150,6 +150,8 @@ This is the default comparison used by [`sort`](@ref).
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
+See the documentation on [Alternate orderings](@ref) for how to define alternate
+ordering methods that can be used in sorting and related functions.
 
 # Examples
 ```jldoctest
@@ -545,6 +547,7 @@ end
 function kron! end
 
 const var"'" = adjoint
+const var"'ᵀ" = transpose
 
 """
     \\(x, y)
@@ -1095,7 +1098,8 @@ splat(f) = args->f(args...)
     in(x)
 
 Create a function that checks whether its argument is [`in`](@ref) `x`, i.e.
-a function equivalent to `y -> y in x`.
+a function equivalent to `y -> y in x`. See also [`insorted`](@ref) for the use
+with sorted collections.
 
 The returned function is of type `Base.Fix2{typeof(in)}`, which can be
 used to implement specialized methods.

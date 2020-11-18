@@ -4,8 +4,19 @@
 #    3 gfortran, \             # signifies a GCC ABI (e.g. libgfortran version) dependency
 #    4 cxx11)                  # signifies a cxx11 ABI dependency
 
+# Hardcode Darwin AArch64 triplet for now, since we're using an unstable toolchain that
+# we don't expect the user to have
+ifeq ($(OS)$(ARCH),Darwinaarch64)
+
+BB_TRIPLET_LIBGFORTRAN_CXXABI := aarch64-apple-darwin-libgfortran5
+
+else
+
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
 BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(shell $(FC) --version | head -1)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
+
+endif
+
 BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI)))))
@@ -44,6 +55,10 @@ $$(build_prefix)/manifest/$(strip $1): $$(SRCCACHE)/$$($(2)_BB_BASENAME) | $(bui
 	mkdir -p $$(build_prefix)
 	$(UNTAR) $$< -C $$(build_prefix)
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
+
+# Special "checksum-foo" target to speed up `contrib/refresh_checksums.sh`
+checksum-$(1): $$(SRCCACHE)/$$($(2)_BB_BASENAME)
+	$$(JLCHECKSUM) $$<
 
 clean-bb-download-$(1):
 	rm -f $$(SRCCACHE)/$$($(2)_BB_BASENAME)

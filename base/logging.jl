@@ -258,7 +258,7 @@ function log_record_id(_module, level, message, log_kws)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
     # Use an arbitrarily chosen eight hex digits here. TODO: Figure out how to
     # make the id exactly the same on 32 and 64 bit systems.
-    h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
+    h = UInt32(hash(string(modname, level, message, log_kws)::String) & 0xFFFFFFFF)
     while true
         id = Symbol(modname, '_', string(h, base = 16, pad = 8))
         # _log_record_ids is a registry of log record ids for use during
@@ -282,7 +282,7 @@ function issimple(@nospecialize val)
     val isa Number && return true
     val isa Char && return true
     if val isa Expr
-        val.head === :quote && issimple(val[1]) && return true
+        val.head === :quote && issimple(val.args[1]) && return true
         val.head === :inert && return true
     end
     return false
@@ -350,7 +350,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
         let
             level = $level
             std_level = convert(LogLevel, level)
-            if std_level >= getindex(_min_enabled_level)
+            if std_level >= _min_enabled_level[]
                 group = $(log_data._group)
                 _module = $(log_data._module)
                 logger = current_logger_for_env(std_level, group, _module)
@@ -458,7 +458,7 @@ function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
 end
 
 # Global log limiting mechanism for super fast but inflexible global log limiting.
-const _min_enabled_level = Ref(Debug)
+const _min_enabled_level = Ref{LogLevel}(Debug)
 
 # LogState - a cache of data extracted from the logger, plus the logger itself.
 struct LogState
@@ -634,19 +634,19 @@ min_enabled_level(logger::SimpleLogger) = logger.min_level
 
 catch_exceptions(logger::SimpleLogger) = false
 
-function handle_message(logger::SimpleLogger, level, message, _module, group, id,
+function handle_message(logger::SimpleLogger, level::LogLevel, message, _module, group, id,
                         filepath, line; kwargs...)
     @nospecialize
     maxlog = get(kwargs, :maxlog, nothing)
     if maxlog isa Integer
-        remaining = get!(logger.message_limits, id, maxlog)
+        remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
     end
     buf = IOBuffer()
     iob = IOContext(buf, logger.stream)
     levelstr = level == Warn ? "Warning" : string(level)
-    msglines = split(chomp(string(message)), '\n')
+    msglines = split(chomp(string(message)::String), '\n')
     println(iob, "┌ ", levelstr, ": ", msglines[1])
     for i in 2:length(msglines)
         println(iob, "│ ", msglines[i])
@@ -655,8 +655,7 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
         key === :maxlog && continue
         println(iob, "│   ", key, " = ", val)
     end
-    println(iob, "└ @ ", something(_module, "nothing"), " ",
-            something(filepath, "nothing"), ":", something(line, "nothing"))
+    println(iob, "└ @ ", _module, " ", filepath, ":", line)
     write(logger.stream, take!(buf))
     nothing
 end

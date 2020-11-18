@@ -353,11 +353,9 @@ end
     @test istaskdone(t)
     @test fetch(t)
     @test run[] == 3
-    @test fetch(errstream) == """
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        """
+    output = fetch(errstream)
+    @test 3 == length(findall(
+        """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
     t._state = 66

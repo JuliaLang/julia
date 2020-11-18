@@ -259,6 +259,15 @@ julia> Array{Union{Missing, String}}(missing, 2, 3)
  missing  missing  missing
 ```
 
+!!! note
+    Currently for `T` that is bits type (`isbitstype(T)` returns `true`), if `T`
+    is not a singleton type then `Array{Union{Missing, T}}(undef, dims)` creates
+    an array filled with `missing` values. Also in this case calling `similar`
+    to create an unitialized array that has element type of the form
+    `Union{Missing, T}` creates an array filled with `missing`. If `T` is a
+    singleton type the value that is used to fill the array is undefined and
+    could change in the future, so it should not be relied upon.
+
 An array allowing for `missing` values but which does not contain any such value
 can be converted back to an array which does not allow for missing values using
 [`convert`](@ref). If the array contains `missing` values, a `MethodError` is thrown

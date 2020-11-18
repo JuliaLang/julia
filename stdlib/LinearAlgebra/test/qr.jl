@@ -180,8 +180,12 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
 
                 b = similar(a); rand!(b)
                 c = similar(a)
+                d = similar(a[:,1:n1])
                 @test mul!(c, q, b) ≈ q*b
+                @test mul!(d, q, r) ≈ q*r ≈ a[:,qrpa.p]
                 @test mul!(c, q', b) ≈ q'*b
+                @test mul!(d, q', a[:,qrpa.p])[1:n1,:] ≈ r
+                @test all(x -> abs(x) < ε*norm(a), d[n1+1:end,:])
                 @test mul!(c, b, q) ≈ b*q
                 @test mul!(c, b, q') ≈ b*q'
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
@@ -196,7 +200,10 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch q * Matrix{Int8}(I, n+4, n+4)
 
                 @test mul!(c, q, b) ≈ q*b
+                @test mul!(d, q, r) ≈ a[:,1:n1]
                 @test mul!(c, q', b) ≈ q'*b
+                @test mul!(d, q', a[:,1:n1])[1:n1,:] ≈ r
+                @test all(x -> abs(x) < ε*norm(a), d[n1+1:end,:])
                 @test mul!(c, b, q) ≈ b*q
                 @test mul!(c, b, q') ≈ b*q'
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)

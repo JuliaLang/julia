@@ -309,7 +309,7 @@ For global variables, only the bindings are captured in a closure, not the data.
 const foo = rand(10^8);
 wp = CachingPool(workers())
 let foo = foo
-    pmap(wp, i -> sum(foo) + i, 1:100);
+    pmap(i -> sum(foo) + i, wp, 1:100);
 end
 ```
 

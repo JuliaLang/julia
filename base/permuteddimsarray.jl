@@ -144,7 +144,7 @@ julia> permutedims(X)
  [5 6; 7 8]  [13 14; 15 16]
 
 julia> transpose(X)
-2×2 Transpose{Transpose{Int64, Matrix{Int64}}, Matrix{Matrix{Int64}}}:
+2×2 transpose(::Matrix{Matrix{Int64}}) with eltype Transpose{Int64, Matrix{Int64}}:
  [1 3; 2 4]  [9 11; 10 12]
  [5 7; 6 8]  [13 15; 14 16]
 ```
@@ -174,7 +174,7 @@ julia> permutedims(V)
  [1 2; 3 4]  [5 6; 7 8]
 
 julia> transpose(V)
-1×2 Transpose{Transpose{Int64, Matrix{Int64}}, Vector{Matrix{Int64}}}:
+1×2 transpose(::Vector{Matrix{Int64}}) with eltype Transpose{Int64, Matrix{Int64}}:
  [1 3; 2 4]  [5 7; 6 8]
 ```
 """

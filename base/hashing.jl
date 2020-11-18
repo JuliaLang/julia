@@ -66,6 +66,23 @@ else
     hash_uint(x::UInt)     = hash_32_32(x)
 end
 
+## efficient value-based hashing of integers ##
+
+hash(x::Int64,  h::UInt) = hash_uint64(bitcast(UInt64, x)) - 3h
+hash(x::UInt64, h::UInt) = hash_uint64(x) - 3h
+hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
+
+function hash_integer(n::Integer, h::UInt)
+    h ⊻= hash_uint((n % UInt) ⊻ h)
+    n = abs(n)
+    n >>>= sizeof(UInt) << 3
+    while n != 0
+        h ⊻= hash_uint((n % UInt) ⊻ h)
+        n >>>= sizeof(UInt) << 3
+    end
+    return h
+end
+
 ## symbol & expression hashing ##
 
 if UInt === UInt64

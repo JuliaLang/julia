@@ -210,6 +210,15 @@ dimg  = randn(n)/2
             @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
+
+    @testset "Factorization of symtridiagonal dense matrix with zero ldlt-pivot (#38026)" begin
+        A = [0.0 -1.0 0.0 0.0
+            -1.0 0.0 0.0 0.0
+            0.0 0.0 0.0 -1.0
+            0.0 0.0 -1.0 0.0]
+        F = factorize(A)
+        @test all((!isnan).(Matrix(F)))
+    end
 end
 
 @testset "Singular matrices" for T in (Float64, ComplexF64)

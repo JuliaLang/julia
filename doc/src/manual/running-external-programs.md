@@ -37,14 +37,15 @@ The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). The r
 returns `nothing`, and throws an [`ErrorException`](@ref) if the external command fails to run
 successfully.
 
-If you want to read the output of the external command, [`read`](@ref) can be used instead:
+If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
+can be used instead:
 
 ```jldoctest
-julia> a = read(`echo hello`, String)
+julia> read(`echo hello`, String)
 "hello\n"
 
-julia> chomp(a) == "hello"
-true
+julia> readchomp(`echo hello`)
+"hello"
 ```
 
 More generally, you can use [`open`](@ref) to read from or write to an external command.

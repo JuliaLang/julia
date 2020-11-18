@@ -234,7 +234,7 @@ void jl_init_threadinginfra(void)
 }
 
 
-void JL_NORETURN jl_finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED);
+void JL_NORETURN jl_finish_task(jl_task_t *t);
 
 // thread function: used by all except the main thread
 void jl_threadfun(void *arg)
@@ -261,8 +261,7 @@ void jl_threadfun(void *arg)
     free(targ);
 
     (void)jl_gc_unsafe_enter(ptls);
-    jl_current_task->exception = jl_nothing;
-    jl_finish_task(jl_current_task, jl_nothing); // noreturn
+    jl_finish_task(jl_current_task); // noreturn
 }
 
 
@@ -349,9 +348,9 @@ static void wake_libuv(void)
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    int16_t uvlock = jl_atomic_load(&jl_uv_mutex.owner);
+    jl_thread_t uvlock = jl_atomic_load(&jl_uv_mutex.owner);
     int16_t self = ptls->tid;
-    unsigned long system_self = jl_all_tls_states[self]->system_id;
+    jl_thread_t system_self = jl_all_tls_states[self]->system_id;
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
     if (tid == self || tid == -1) {
         // we're already awake, but make sure we'll exit uv_run
@@ -364,7 +363,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         // something added to the sticky-queue: notify that thread
         wake_thread(tid);
         // check if we need to notify uv_run too
-        unsigned long system_tid = jl_all_tls_states[tid]->system_id;
+        jl_thread_t system_tid = jl_all_tls_states[tid]->system_id;
         if (uvlock != system_self && jl_atomic_load(&jl_uv_mutex.owner) == system_tid)
             wake_libuv();
     }

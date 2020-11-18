@@ -223,8 +223,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 ptls->world_age = last_age;
             }
             JL_CATCH {
-                jl_printf(JL_STDERR, "\natexit hook threw an error: ");
-                jl_static_show(JL_STDERR, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
             }
         }
     }
@@ -258,8 +260,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 //error handling -- continue cleanup, as much as possible
                 assert(item);
                 uv_unref(item->h);
-                jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-                jl_static_show(JL_STDERR, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
                 item = next_shutdown_queue_item(item);
             }
         }
@@ -435,6 +439,8 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 #ifdef JL_USE_PERF_JITEVENTS
 char jl_using_perf_jitevents = 0;
 #endif
+
+char jl_using_gdb_jitevents = 0;
 
 int isabspath(const char *in) JL_NOTSAFEPOINT
 {
@@ -654,8 +660,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
     jl_exe_handle = GetModuleHandleA(NULL);
     JL_MUTEX_INIT(&jl_in_stackwalk);
-    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-    if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
+    if (!SymInitialize(GetCurrentProcess(), "", 1)) {
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
     }
     needsSymRefreshModuleList = 0;
@@ -689,6 +695,15 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_perf_jitevents= 1;
+    }
+#endif
+
+#if defined(JL_DEBUG_BUILD)
+    jl_using_gdb_jitevents = 1;
+# else
+    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
+    if (jit_gdb && atoi(jit_gdb)) {
+        jl_using_gdb_jitevents = 1;
     }
 #endif
 

@@ -5188,6 +5188,30 @@ end
 @test let_Box5()() == 46
 @test let_noBox()() == 21
 
+# issue #37690
+function foo37690()
+    local f
+    local x
+    for k = 1:2
+        x = k
+        if k == 1
+            f = () -> x
+        end
+    end
+    f
+end
+@test foo37690()() == 2
+
+function g37690()
+    local x
+    local f
+    for k = 1:2
+    end
+    x = 0
+    ()->x
+end
+@test g37690().x === 0
+
 function _assigns_and_captures_arg(a)
     a = a
     return ()->a
