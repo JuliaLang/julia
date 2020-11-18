@@ -475,6 +475,19 @@ JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
     ret[8] = FE_TOWARDZERO;
 }
 
+// TODO: Windows binaries currently load msvcrt which doesn't have these C99 functions.
+//       the mingw compiler ships additional definitions, but only for use in C code.
+//       remove this when we switch to ucrt, make the version in openlibm portable,
+//       or figure out how to reexport the defs from libmingwex (see JuliaLang/julia#38466).
+JL_DLLEXPORT int jl_get_fenv_rounding(void)
+{
+    return fegetround();
+}
+JL_DLLEXPORT int jl_set_fenv_rounding(int i)
+{
+    return fesetround(i);
+}
+
 
 #ifdef JL_ASAN_ENABLED
 JL_DLLEXPORT const char* __asan_default_options()
