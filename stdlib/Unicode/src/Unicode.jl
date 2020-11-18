@@ -89,86 +89,91 @@ letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
 
-"""
-    extract_emoji_column(emoji_data, column = 1; type_field = "")
-Read the selected column from a provided unicode emoji data file
-(i.e. https://www.unicode.org/Public/13.0.0/ucd/emoji/emoji-data.txt).
-Optionally select only columns beginning with `type_field`
-"""
-function extract_emoji_column(emoji_data, column = 1; type_field = "")
-    lines = readlines(emoji_data)
-    filter!(line -> !isempty(line) && !startswith(line, "#"),  lines)
-    splitlines = [strip.(split(line, ";")) for line in lines]
-    first_col = [splitline[column] for splitline in splitlines if startswith(splitline[2], type_field)]
-end
 
-# parse a string of the form "AAAA...FFFF" into 0xAAAA:0xFFFF
-parse_unicode_range_str(range_str) = let s = split(range_str, "..")
-    if length(s) > 2 || length(s) < 1
-        return nothing
-    else
-        s1 = tryparse(UInt32, "0x" * s[1])
-        s1 === nothing && return nothing
-        if length(s) == 1
-            return s1:s1
-        else
-            s2 = tryparse(UInt32, "0x" * s[2])
-            s2 === nothing && return nothing
-            return s1:s2
-        end
-    end
-end
 
-# Get all ranges containing valid single emoji from file
-const EMOJI_RANGES = let emoji_data = download("https://www.unicode.org/Public/13.0.0/ucd/emoji/emoji-data.txt")
-                parse_unicode_range_str.(extract_emoji_column(emoji_data, 1, type_field = "Emoji"))
-            end
+include("emoji_ranges.jl")
+const SKIN_COLORS = 0x1F3FB:0x1F3FF
+const REGIONAL_INDICATORS = 0x1F1E6:0x1F1FF
 const ZWJ = '\u200d'    # Zero-width joiner
-const VAR_SELECTOR = '\uFE0F'   # Variation selector
-# Handle England, Scotland, Wales flags and keycaps
-const SPECIAL_CASES = ["🏴󠁧󠁢󠁥󠁮󠁧󠁿", "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "#️⃣", "*️⃣", "0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"]
 
 """
     isemoji(Union{AbstractChar, AbstractString}) -> Bool
-
-Test whether a character is an emoji, or whether all elements in a given string are emoji. Includes identifying composite emoji.
-Empty strings return `true` as they contain no characters which aren't emoji.
+Test whether a character or string is a single emoji
 Combined emoji sequences separated by the zero-width joiner character `'\u200d'`
-such as 👨‍❤️‍👨 `['👨',  '\u200d', '❤', '\uFE0F', '\u200d', '👨']` are supported, though this function cannot determine whether a
-given sequence of emoji and zero-width joiners would result in a valid composite emoji.
+such as 👨‍❤️‍👨 `['👨',  '\u200d', '❤', '\uFE0F', '\u200d', '👨']` are supported,
+though this function cannot determine whether a given sequence of emoji and
+zero-width joiners would result in a valid composite emoji.
+### Examples
+```jldoctest
+julia> Unicode.isemoji("👨‍❤️‍👨")
+true
+
+julia> Unicode.isemoji('👨')
+true
+
+julia> Unicode.isemoji('A')
+false
+```
 """
 function isemoji(c::AbstractChar)
     u = UInt32(c)
+    isemoji_code(u)
+end
+
+isemoji(s::AbstractString) = _isemoji(s)
+
+function isemoji_code(u::UInt32)
     @inbounds for emojiset in EMOJI_RANGES
         u in emojiset && return true
     end
     return false
 end
 
-function isemoji(s::AbstractString)
-    s in SPECIAL_CASES && return true
-    isempty(s) && return true
-    s[end] == ZWJ && return false
-    ZWJ_allowed = false
-    VAR_SELECTOR_allowed = false
-    emoji_allowed = true
-    # make sure string follows sequence of basic emoji chars
-    # separated by ZWJ and VAR_SELECTOR characters
-    @inbounds for c in s
-        if c == ZWJ
-            !ZWJ_allowed && return false
-            ZWJ_allowed = false
-            VAR_SELECTOR_allowed = false
-        elseif c == VAR_SELECTOR
-            !VAR_SELECTOR_allowed && return false
-            VAR_SELECTOR_allowed = false
+# a single emoji comprises one of several patterns
+# 1. a single character which is a basic emoji
+# 2. a pair of two regional indicator flags
+# 3. a single emoji character with a modifier character (FE0F or skin color after it)
+# 4. a pound sign, asterisk, or digit followed by FE0F 20E3
+# 5. a single regional indicator and then 6 small letter characters
+#     (subnational flags, currently only england, scotland and wales)
+# 6. Several emojis separated by zero-width joiners
+function _isemoji(s::AbstractString; ZWJ_allowed = true)
+    isempty(s) && return false
+    codepoints = codepoint.(c for c in s)
+    L = length(codepoints)
+    if L == 1 # single character emoji (pattern 1)
+        isemoji_code(codepoints[1]) && return true
+    elseif L == 2
+        # Check for country flag pattern (pattern 2)
+        if (codepoints[2] in REGIONAL_INDICATORS &&
+            codepoints[1] in REGIONAL_INDICATORS)
+                return true
+        elseif isemoji_code(codepoints[1])
+            # Check for skin color or FE0F modifier pattern (pattern 2)
+            if codepoints[2] in SKIN_COLORS || codepoints[2] == 0x0FE0F
+                return true
+            end
         else
-            !isemoji(c) && return false
-            ZWJ_allowed = true
-            VAR_SELECTOR_allowed = true
+            return false
+        end
+    else
+        # Check for keycap pattern (pattern 4)
+        if L == 3 && (isdigit(s[1]) || s[1] == '#' || s[1] == '*')
+            if codepoints[2] == 0x0FE0F && codepoints[end] == 0x020E3
+                return true
+            else
+                return false
+            end
+        # Check for England, Scotland and Wales (pattern 5)
+        elseif L == 7 && codepoints[1] == 0x1F3F4 && all(c in 0xE0062:0xE007F for c in codepoints[2:end])
+            return true
+        elseif ZWJ_allowed
+            # check for zero-width join patterns (pattern 6)
+            s[1] == ZWJ || s[end] == ZWJ && return false
+            splitstr = split(s, ZWJ)
+            all(x -> (_isemoji(x, ZWJ_allowed = false)), splitstr) && return true
         end
     end
-    return true
+    return false
 end
-
 end

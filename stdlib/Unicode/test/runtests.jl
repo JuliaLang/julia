@@ -406,6 +406,38 @@ end
 end
 
 @testset "Emoji tests" begin
+
+    """
+    extract_emoji_column(emoji_data, column = 1; type_field = "")
+    Read the selected column from a provided unicode emoji data file
+    (i.e. https://www.unicode.org/Public/13.0.0/ucd/emoji/emoji-data.txt).
+    Optionally select only columns beginning with `type_field`
+    """
+    function extract_emoji_column(emoji_data, column = 1; type_field = "")
+        lines = readlines(emoji_data)
+        filter!(line -> !isempty(line) && !startswith(line, "#"),  lines)
+        splitlines = [strip.(split(line, ";")) for line in lines]
+        first_col = [splitline[column] for splitline in splitlines if startswith(splitline[2], type_field)]
+    end
+
+    # parse a string of the form "AAAA...FFFF" into 0xAAAA:0xFFFF
+    function parse_unicode_range_str(range_str)
+        s = split(range_str, "..")
+        if length(s) > 2 || length(s) < 1
+            return nothing
+        else
+            s1 = tryparse(UInt32, "0x" * s[1])
+            s1 === nothing && return nothing
+            if length(s) == 1
+                return s1:s1
+            else
+                s2 = tryparse(UInt32, "0x" * s[2])
+                s2 === nothing && return nothing
+                return s1:s2
+            end
+        end
+    end
+
     # parse a string of the form "AAAA BBBB CCCC" into [0xAAAA, 0xBBBB, 0xCCCC]
     function parse_sequence_str(seq_str)
         s = split(seq_str)
@@ -423,37 +455,47 @@ end
     function parse_col_entry(seq_str)
         s = parse_sequence_str(seq_str)
         if s === nothing
-            s = "" .* Char.(Unicode.parse_unicode_range_str(seq_str) |> collect)
+            s = "" .* Char.(parse_unicode_range_str(seq_str) |> collect)
         else
             s = [Char.(s) |> String]
         end
         return s
     end
 
-    function extract_emoji_sequences(emoji_data)
-        codepoints = Unicode.extract_emoji_column(emoji_data)
+    function extract_emoji_sequences(emoji_data; type_field = "")
+        codepoints = extract_emoji_column(emoji_data; type_field)
         emojis = parse_col_entry.(codepoints)
         vcat(emojis...)
     end
 
     # See if all emojis are caught by the isemoji function
+    emoji_data = download("https://unicode.org/Public/13.0.0/ucd/emoji/emoji-data.txt")
     emoji_sequences = download("https://www.unicode.org/Public/emoji/13.1/emoji-sequences.txt")
     emoji_zwj_sequences = download("https://www.unicode.org/Public/emoji/13.1/emoji-zwj-sequences.txt")
-    all_emojis = [extract_emoji_sequences(emoji_sequences) ; extract_emoji_sequences(emoji_zwj_sequences)]
-    @test all(isemoji.(all_emojis))
 
+    all_emojis = [
+        extract_emoji_sequences(emoji_sequences);
+        extract_emoji_sequences(emoji_zwj_sequences);
+        extract_emoji_sequences(emoji_data, type_field = "Emoji");
+    ]
+    #@show filter(!isemoji, all_emojis)
+    @test all(isemoji.(all_emojis))
     @test !isemoji('A')
     @test !isemoji("🔹 some text bounded by emojis 🔹")
     @test !isemoji("🚍 some text after an emoji")
     @test !isemoji("some text before an emoji 🚘")
-    @test !isemoji("😮 😥 😨 😩 😪") # There are spaces between the emojis
+    @test !isemoji("😮 😥 😨 😩 😪")
     @test !isemoji("No emojis here")
 
     # Test emoji sequences
-    @test isemoji("😈😘")
+    @test !isemoji("😈😘")
     @test isemoji("🚴🏿")
     @test !isemoji("👨‍👧" * Unicode.ZWJ)
     @test isemoji("🛌" * Unicode.ZWJ * '😎')
     @test !isemoji("🤦🏽" * Unicode.ZWJ * Unicode.ZWJ * '😎')
-    @test isemoji("")
+    @test !isemoji("")
+
+    teststring = "My family looks like this: 👩‍👩‍👦‍👦 and I ❤️ them"
+    test_graphemes = [g for g in graphemes(teststring)]
+    @test filter(isemoji, test_graphemes) == SubString{String}["👩‍👩‍👦‍👦", "❤️"]
 end
