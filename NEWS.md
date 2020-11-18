@@ -88,6 +88,7 @@ Multi-threading changes
 * `@threads` now allows an optional schedule argument. Use `@threads :static ...` to
   ensure that the same schedule will be used as in past versions; the default schedule
   is likely to change in the future.
+* Locks now automatically inhibit finalizers from running, to avoid deadlock ([#38487]).
 
 Build system changes
 --------------------
