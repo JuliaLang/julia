@@ -84,11 +84,9 @@ static inline void jl_lock_frame_pop(void)
 
 static inline void jl_mutex_lock(jl_mutex_t *lock)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
     jl_mutex_wait(lock, 1);
     jl_lock_frame_push(lock);
-    jl_gc_enable_finalizers(ptls, 0);
 }
 
 static inline int jl_mutex_trylock_nogc(jl_mutex_t *lock)
@@ -111,10 +109,8 @@ static inline int jl_mutex_trylock(jl_mutex_t *lock)
 {
     int got = jl_mutex_trylock_nogc(lock);
     if (got) {
-        jl_ptls_t ptls = jl_get_ptls_states();
         JL_SIGATOMIC_BEGIN();
         jl_lock_frame_push(lock);
-        jl_gc_enable_finalizers(ptls, 0);
     }
     return got;
 }
@@ -134,9 +130,12 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_mutex_unlock_nogc(lock);
-    jl_gc_enable_finalizers(ptls, 1);
     jl_lock_frame_pop();
     JL_SIGATOMIC_END();
+    if (ptls->locks.len == 0 && ptls->finalizers_inhibited == 0) {
+        ptls->finalizers_inhibited = 1;
+        jl_gc_enable_finalizers(ptls, 1); // call run_finalizers (may GC)
+    }
 }
 
 static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT

@@ -218,7 +218,6 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     eh->gc_state = ptls->gc_state;
     eh->locks_len = ptls->locks.len;
     eh->defer_signal = ptls->defer_signal;
-    eh->finalizers_inhibited = ptls->finalizers_inhibited;
     eh->world_age = ptls->world_age;
     current_task->eh = eh;
 #ifdef ENABLE_TIMINGS
@@ -249,14 +248,14 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     current_task->eh = eh->prev;
     ptls->pgcstack = eh->gcstack;
     small_arraylist_t *locks = &ptls->locks;
-    if (locks->len > eh->locks_len) {
-        for (size_t i = locks->len;i > eh->locks_len;i--)
+    int unlocks = locks->len > eh->locks_len;
+    if (unlocks) {
+        for (size_t i = locks->len; i > eh->locks_len; i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
         locks->len = eh->locks_len;
     }
     ptls->world_age = eh->world_age;
     ptls->defer_signal = eh->defer_signal;
-    ptls->finalizers_inhibited = eh->finalizers_inhibited;
     if (old_gc_state != eh->gc_state) {
         jl_atomic_store_release(&ptls->gc_state, eh->gc_state);
         if (old_gc_state) {
@@ -265,6 +264,11 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
     if (old_defer_signal && !eh->defer_signal) {
         jl_sigint_safepoint(ptls);
+    }
+    if (unlocks && eh->locks_len == 0 && ptls->finalizers_inhibited == 0) {
+        // call run_finalizers
+        ptls->finalizers_inhibited = 1;
+        jl_gc_enable_finalizers(ptls, 1);
     }
 }
 

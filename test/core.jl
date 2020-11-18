@@ -6,7 +6,6 @@ using Random, SparseArrays, InteractiveUtils
 
 const Bottom = Union{}
 
-
 # For curmod_*
 include("testenv.jl")
 
@@ -2081,7 +2080,7 @@ mutable struct A6142 <: AbstractMatrix{Float64}; end
 +(x::A6142, y::AbstractRange) = "AbstractRange method called" #16324 ambiguity
 
 # issue #6175
-function g6175(); print(""); (); end
+function g6175(); GC.safepoint(); (); end
 g6175(i::Real, I...) = g6175(I...)
 g6175(i, I...) = tuple(length(i), g6175(I...)...)
 @test g6175(1:5) === (5,)
@@ -2221,7 +2220,7 @@ day_in(obj6387)
 function segfault6793(;gamma=1)
     A = 1
     B = 1
-    print()
+    GC.safepoint()
     return
     -gamma
     nothing
@@ -3327,7 +3326,7 @@ function f11065()
         if i == 1
             z = "z is defined"
         elseif i == 2
-            print(z)
+            print(z) # z is undefined
         end
     end
 end
@@ -4244,7 +4243,10 @@ end
 end
 # disable GC to make sure no collection/promotion happens
 # when we are constructing the objects
+get_finalizers_inhibited() = ccall(:jl_gc_get_finalizers_inhibited, Int32, (Ptr{Cvoid},), C_NULL)
 let gc_enabled13995 = GC.enable(false)
+    @assert gc_enabled13995
+    @assert get_finalizers_inhibited() == 0
     finalized13995 = [false, false, false, false]
     create_dead_object13995(finalized13995)
     GC.enable(true)
