@@ -1631,7 +1631,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, map(cat_size, X)::Tuple{Vararg{Union{Int,Dims}}})::Dims
+    shape = cat_shape(catdims, map(cat_size, X))
     A = cat_similar(X[1], T, shape)
     if count(!iszero, catdims)::Int > 1
         fill!(A, zero(T))
@@ -1639,7 +1639,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
     return __cat(A, shape, catdims, X...)
 end
 
-function __cat(A, shape::NTuple{M,Int}, catdims, X...) where M
+function __cat(A, shape::NTuple{M}, catdims, X...) where M
     N = M::Int
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(undef, N)

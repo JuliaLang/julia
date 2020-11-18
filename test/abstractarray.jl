@@ -1200,3 +1200,8 @@ end
     _, st = iterate(a)
     @test Base.rest(a, st) == [3, 2, 4]
 end
+
+@testset "issue #37741, non-int cat" begin
+    @test [1; 1:BigInt(5)] == [1; 1:5]
+    @test [1:BigInt(5); 1] == [1:5; 1]
+end
