@@ -641,6 +641,30 @@ static size_t jl_static_show_x_sym_escaped(JL_STREAM *out, jl_sym_t *name) JL_NO
     return n;
 }
 
+// `jl_static_show()` cannot call `jl_subtype()`, for the GC reasons
+// explained in the comment on `jl_static_show_x_()`, below.
+// This function checks if `vt <: Function` without triggering GC.
+static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
+    if (!jl_function_type) {  // Make sure there's a Function type defined.
+        return 0;
+    }
+    int _iter_count = 0;  // To prevent infinite loops from corrupt type objects.
+    while (vt != jl_any_type) {
+        if (vt == NULL) {
+            return 0;
+        } else if (_iter_count > 10000) {
+            // We are very likely stuck in a cyclic datastructure, so we assume this is
+            // _not_ a Function.
+            return 0;
+        } else if (vt == jl_function_type) {
+            return 1;
+        }
+        vt = vt->super;
+        _iter_count += 1;
+    }
+    return 0;
+}
+
 // `v` might be pointing to a field inlined in a structure therefore
 // `jl_typeof(v)` may not be the same with `vt` and only `vt` should be
 // used to determine the type of the value.
@@ -999,7 +1023,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, *(jl_value_t**)v, depth);
         n += jl_printf(out, ")");
     }
-    else if (jl_function_type && jl_isa(v, (jl_value_t*)jl_function_type)) {
+    else if (jl_static_is_function_(vt)) {
         // v is function instance (an instance of a Function type).
         jl_datatype_t *dv = (jl_datatype_t*)vt;
         jl_sym_t *sym = dv->name->mt->name;
