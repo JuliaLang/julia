@@ -23,7 +23,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
     assert(nfields > 0);
     if (nfields < 2)
         return nullptr;
-#if JL_LLVM_VERSION >= 120000
+#if JL_LLVM_VERSION >= 110000
     static Type *T_vec64 = FixedVectorType::get(T_int32, 2);
     static Type *T_vec128 = FixedVectorType::get(T_int32, 4);
 #else
