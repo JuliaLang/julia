@@ -107,6 +107,12 @@ static inline uint64_t cycleclock(void)
     int64_t virtual_timer_value;
     __asm__ volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
     return virtual_timer_value;
+#elif defined(_CPU_PPC64_)
+    // This returns a time-base, which is not always precisely a cycle-count.
+    // https://reviews.llvm.org/D78084
+    int64_t tb;
+    asm volatile("mfspr %0, 268" : "=r" (tb));
+    return tb;
 #else
     #warning No cycleclock() definition for your platform
     // copy from https://github.com/google/benchmark/blob/v1.5.0/src/cycleclock.h
