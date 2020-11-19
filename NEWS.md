@@ -253,6 +253,7 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
+- Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in the future.
 
 * The `Base.download` function has been deprecated (silently, by default) in favor of the new `Downloads.download` standard library function ([#37340]).
 * The `Base.Grisu` code has been officially removed (float printing was switched to the ryu algorithm code in 1.4).
