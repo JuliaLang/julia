@@ -753,7 +753,7 @@ end
 # 1d/2d error shouldn't appear in unsupported keywords arg #36325
 let err = nothing
     try
-        identity([1,1]; bad_kwards = :julia)
+        identity([1 1]; bad_kwards = :julia)
     catch err
         err_str = sprint(showerror, err)
         @test !occursin("2d", err_str)
