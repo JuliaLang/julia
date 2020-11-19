@@ -117,16 +117,16 @@ static int statestack_get(jl_unionstate_t *st, int i) JL_NOTSAFEPOINT
 {
     assert(i >= 0 && i < sizeof(st->stack) * 8);
     // get the `i`th bit in an array of 32-bit words
-    return (st->stack[i>>5] & (1<<(i&31))) != 0;
+    return (st->stack[i>>5] & (1u<<(i&31))) != 0;
 }
 
 static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
 {
     assert(i >= 0 && i < sizeof(st->stack) * 8);
     if (val)
-        st->stack[i>>5] |= (1<<(i&31));
+        st->stack[i>>5] |= (1u<<(i&31));
     else
-        st->stack[i>>5] &= ~(1<<(i&31));
+        st->stack[i>>5] &= ~(1u<<(i&31));
 }
 
 typedef struct {
