@@ -402,7 +402,11 @@ julia> exp10(2)
 exp10(x::AbstractFloat) = 10^x
 
 for f in (:sin, :cos, :tan, :sinh, :cosh, :tanh, :atan, :acos, :asin, :asinh, :acosh, :atanh, :exp, :expm1, :log)
-    @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
+    @eval function ($f)(x::Real)
+        xf = float(x)
+        x === xf && throw(MethodError(f, (x,)))
+        return ($f)(xf)
+    end
 end
 
 # functions with special cases for integer arguments
