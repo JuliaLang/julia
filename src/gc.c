@@ -2662,7 +2662,7 @@ mark: {
             if (npointers == 0)
                 goto pop;
             uintptr_t nptr = npointers << 2 | (bits & GC_OLD);
-            assert(layout->nfields > 0 && layout->fielddesc_type != 3 && "opaque types should have been handled specially");
+            assert((layout->nfields > 0 || layout->fielddesc_type == 3) && "opaque types should have been handled specially");
             if (layout->fielddesc_type == 0) {
                 obj8_parent = (char*)new_obj;
                 obj8_begin = (uint8_t*)jl_dt_layout_ptrs(layout);
