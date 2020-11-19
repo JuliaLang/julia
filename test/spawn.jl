@@ -720,8 +720,7 @@ if Sys.iswindows()
 end
 
 
-# shell escaping on Windows
-@testset "shell_escape_winsomely" begin
+@testset "shell escaping on Windows" begin
     # Note  argument A can be parsed both as A or "A".
     # We do not test that the parsing satisfies either of these conditions.
     # In other words, tests may fail even for valid parsing.
@@ -729,77 +728,101 @@ end
 
     # input :
     # output: ""
-    @test Base.shell_escape_winsomely("") == "\"\""
+    @test Base.escape_microsoft_c_args("") == "\"\""
 
-    @test Base.shell_escape_winsomely("A") == "A"
+    @test Base.escape_microsoft_c_args("A") == "A"
 
-    @test Base.shell_escape_winsomely(`A`) == "A"
+    @test Base.escape_microsoft_c_args(`A`) == "A"
 
     # input : hello world
     # output: "hello world"
-    @test Base.shell_escape_winsomely("hello world") == "\"hello world\""
+    @test Base.escape_microsoft_c_args("hello world") == "\"hello world\""
 
     # input : hello  world
     # output: "hello  world"
-    @test Base.shell_escape_winsomely("hello\tworld") == "\"hello\tworld\""
+    @test Base.escape_microsoft_c_args("hello\tworld") == "\"hello\tworld\""
 
     # input : hello"world
     # output: "hello\"world" (also valid) hello\"world
-    @test Base.shell_escape_winsomely("hello\"world") == "\"hello\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\"world") == "\"hello\\\"world\""
 
     # input : hello""world
     # output: "hello\"\"world" (also valid) hello\"\"world
-    @test Base.shell_escape_winsomely("hello\"\"world") == "\"hello\\\"\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\"\"world") == "\"hello\\\"\\\"world\""
 
     # input : hello\world
     # output: hello\world
-    @test Base.shell_escape_winsomely("hello\\world") == "hello\\world"
+    @test Base.escape_microsoft_c_args("hello\\world") == "hello\\world"
 
     # input : hello\\world
     # output: hello\\world
-    @test Base.shell_escape_winsomely("hello\\\\world") == "hello\\\\world"
+    @test Base.escape_microsoft_c_args("hello\\\\world") == "hello\\\\world"
 
     # input : hello\"world
     # output: "hello\"world" (also valid) hello\"world
-    @test Base.shell_escape_winsomely("hello\\\"world") == "\"hello\\\\\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\\\"world") == "\"hello\\\\\\\"world\""
 
     # input : hello\\"world
     # output: "hello\\\\\"world" (also valid) hello\\\\\"world
-    @test Base.shell_escape_winsomely("hello\\\\\"world")  == "\"hello\\\\\\\\\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\\\\\"world")  == "\"hello\\\\\\\\\\\"world\""
 
     # input : hello world\
     # output: "hello world\\"
-    @test Base.shell_escape_winsomely("hello world\\") == "\"hello world\\\\\""
+    @test Base.escape_microsoft_c_args("hello world\\") == "\"hello world\\\\\""
 
     # input : A\B
     # output: A\B"
-    @test Base.shell_escape_winsomely("A\\B") == "A\\B"
+    @test Base.escape_microsoft_c_args("A\\B") == "A\\B"
 
     # input : [A\, B]
     # output: "A\ B"
-    @test Base.shell_escape_winsomely("A\\", "B") == "A\\ B"
+    @test Base.escape_microsoft_c_args("A\\", "B") == "A\\ B"
 
     # input : A"B
     # output: "A\"B"
-    @test Base.shell_escape_winsomely("A\"B") ==  "\"A\\\"B\""
+    @test Base.escape_microsoft_c_args("A\"B") ==  "\"A\\\"B\""
 
     # input : [A B\, C]
     # output: "A B\\" C
-    @test Base.shell_escape_winsomely("A B\\", "C") == "\"A B\\\\\" C"
+    @test Base.escape_microsoft_c_args("A B\\", "C") == "\"A B\\\\\" C"
 
     # input : [A "B, C]
     # output: "A \"B" C
-    @test Base.shell_escape_winsomely("A \"B", "C") == "\"A \\\"B\" C"
+    @test Base.escape_microsoft_c_args("A \"B", "C") == "\"A \\\"B\" C"
 
     # input : [A B\, C]
     # output: "A B\\" C
-    @test Base.shell_escape_winsomely("A B\\", "C") == "\"A B\\\\\" C"
+    @test Base.escape_microsoft_c_args("A B\\", "C") == "\"A B\\\\\" C"
 
     # input :[A\ B\, C]
     # output: "A\ B\\" C
-    @test Base.shell_escape_winsomely("A\\ B\\", "C") == "\"A\\ B\\\\\" C"
+    @test Base.escape_microsoft_c_args("A\\ B\\", "C") == "\"A\\ B\\\\\" C"
 
     # input : [A\ B\, C, D K]
     # output: "A\ B\\" C "D K"
-    @test Base.shell_escape_winsomely("A\\ B\\", "C", "D K") == "\"A\\ B\\\\\" C \"D K\""
+    @test Base.escape_microsoft_c_args("A\\ B\\", "C", "D K") == "\"A\\ B\\\\\" C \"D K\""
+
+    # shell_escape_wincmd
+    @test Base.shell_escape_wincmd("") == ""
+    @test Base.shell_escape_wincmd("\"") == "^\""
+    @test Base.shell_escape_wincmd("\"\"") == "\"\""
+    @test Base.shell_escape_wincmd("\"\"\"") == "\"\"^\""
+    @test Base.shell_escape_wincmd("\"\"\"\"") == "\"\"\"\""
+    @test Base.shell_escape_wincmd("a^\"^o\"^u\"") == "a^^\"^o\"^^u^\""
+    @test Base.shell_escape_wincmd("ä^\"^ö\"^ü\"") == "ä^^\"^ö\"^^ü^\""
+    @test Base.shell_escape_wincmd("@@()!^<>&|\"") == "^@@^(^)^!^^^<^>^&^|^\""
+    @test_throws ArgumentError Base.shell_escape_wincmd("\0")
+    @test_throws ArgumentError Base.shell_escape_wincmd("\r")
+    @test_throws ArgumentError Base.shell_escape_wincmd("\n")
+
+    # combined tests of shell_escape_wincmd and escape_microsoft_c_args
+    @test Base.shell_escape_wincmd(Base.escape_microsoft_c_args(
+        "julia", "-e", "println(ARGS)", raw"He said \"a^2+b^2=c^2\"!" )) ==
+            "julia -e println^(ARGS^) \"He said \\\"a^^2+b^^2=c^^2\\\"!\""
+
+    ascii95 = String(range(' ',stop='~')); # all printable ASCII characters
+    args = ["ab ^` c", " \" ", "\"", ascii95, ascii95,
+            "\"\\\"\\", "", "|", "&&", ";"];
+    @test Base.shell_escape_wincmd(Base.escape_microsoft_c_args(args...)) == "\"ab ^` c\" \" \\\" \" \"\\\"\" \" !\\\"#\$%^&'^(^)*+,-./0123456789:;^<=^>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^^_`abcdefghijklmnopqrstuvwxyz{^|}~\" \" ^!\\\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\" \"\\\"\\\\\\\"\\\\\" \"\" ^| ^&^& ;"
+
 end
