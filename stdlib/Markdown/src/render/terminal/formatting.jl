@@ -13,16 +13,13 @@ function wrapped_lines!(lines, io::IO, s::AbstractString, width, i)
     ws = words(s)
     for word in ws
         word_length = ansi_length(word)
-        if i + word_length + 1 > width
+        word_length == 0 && continue
+        if isempty(lines) || i + word_length + 1 > width
             i = word_length
             push!(lines, word)
         else
             i += word_length + 1
-            if isempty(lines)
-                push!(lines, word)
-            else
-                lines[end] *= " " * word   # this could be more efficient
-            end
+            lines[end] *= " " * word   # this could be more efficient
         end
     end
     return i
