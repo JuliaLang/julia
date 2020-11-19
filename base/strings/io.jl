@@ -559,7 +559,6 @@ function escape_raw_string(io, str::AbstractString)
                 write(io, '\\')
                 escapes -= 1
             end
-            escapes = 0
             write(io, c)
         end
     end
