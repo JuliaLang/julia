@@ -609,7 +609,7 @@ Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(
 
 \(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ copy(B)
 
-function diag(M::Tridiagonal{T}, n::Integer=0) where T
+function diag(M::Tridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
