@@ -9,9 +9,8 @@ end
 words(s) = split(s, " ")
 lines(s) = split(s, "\n")
 
-function _wrapped_lines(s::AbstractString, width, i)
+function wrapped_lines!(lines, io::IO, s::AbstractString, width, i)
     ws = words(s)
-    lines = String[]
     for word in ws
         word_length = ansi_length(word)
         if i + word_length + 1 > width
@@ -26,14 +25,17 @@ function _wrapped_lines(s::AbstractString, width, i)
             end
         end
     end
-    return i, lines
+    return i
 end
 
 function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
-    lines = String[]
-    for ss in split(s, "\n")
-        i, line = _wrapped_lines(ss, width, i)
-        append!(lines, line)
+    lines = AbstractString[]
+    if occursin(r"\n", s)
+        for ss in split(s, "\n")
+            i = wrapped_lines!(lines, io, ss, width, i)
+        end
+    else
+        wrapped_lines!(lines, io, s, width, i)
     end
     return lines
 end
