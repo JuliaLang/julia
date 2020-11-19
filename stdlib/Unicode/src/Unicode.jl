@@ -133,7 +133,7 @@ end
 # 1. a single character which is a basic emoji
 # 2. a pair of two regional indicator flags
 # 3. a single emoji character with a modifier character (FE0F or skin color after it)
-# 4. a pound sign, asterisk, or digit followed by FE0F 20E3
+# 4. a pound sign, asterisk, or digit followed by FE0F 20E3 or just 20E3
 # 5. a single regional indicator and then 6 small letter characters
 #     (subnational flags, currently only england, scotland and wales)
 # 6. Several emojis separated by zero-width joiners
@@ -153,7 +153,10 @@ function _isemoji(s::AbstractString; ZWJ_allowed = true)
             if codepoints[2] in SKIN_COLORS || codepoints[2] == 0x0FE0F
                 return true
             end
-        else
+        elseif isdigit(s[1]) && codepoints[end] == 0x020E3
+	    # Check for keycap pattern (pattern 4)
+            return true
+	else
             return false
         end
     else
