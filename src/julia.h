@@ -442,7 +442,7 @@ typedef struct {
     int32_t first_ptr; // index of the first pointer (or -1)
     uint16_t alignment; // strictest alignment over all fields
     uint16_t haspadding : 1; // has internal undefined bytes
-    uint16_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
+    uint16_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32, 3 -> foreign type
     // union {
     //     jl_fielddesc8_t field8[nfields];
     //     jl_fielddesc16_t field16[nfields];
@@ -1030,6 +1030,7 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s) JL_NOTSAFEPOINT
 
 static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type) JL_NOTSAFEPOINT
 {
+    assert(fielddesc_type >= 0 && fielddesc_type <= 2);
     return 2 << fielddesc_type;
     //if (fielddesc_type == 0) {
     //    return sizeof(jl_fielddesc8_t);
@@ -1061,6 +1062,7 @@ static inline const char *jl_dt_layout_ptrs(const jl_datatype_layout_t *l) JL_NO
             return ((const jl_fielddesc16_t*)jl_dt_layout_fields(ly))[i].f;   \
         }                                                                     \
         else {                                                                \
+            assert(ly->fielddesc_type == 2);                                  \
             return ((const jl_fielddesc32_t*)jl_dt_layout_fields(ly))[i].f;   \
         }                                                                     \
     }                                                                         \
