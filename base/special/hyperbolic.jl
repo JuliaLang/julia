@@ -89,7 +89,6 @@ function sinh(x::T) where T<:Union{Float32,Float64}
     E = exp(absx)
     return copysign(T(.5)*(E - 1/E),x)
 end
-sinh(x::Real) = sinh(float(x))
 
 COSH_SMALL_X(::Type{T}) where T= one(T)
 
@@ -127,7 +126,6 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     E = exp(absx)
     return T(.5)*(E + 1/E)
 end
-cosh(x::Real) = cosh(float(x))
 
 # tanh methods
 TANH_LARGE_X(::Type{Float64}) = 22.0
@@ -162,7 +160,6 @@ function tanh(x::T) where T<:Union{Float32, Float64}
     k = exp(abs2x)
     return copysign(1 - 2/(k+1), x)
 end
-tanh(x::Real) = tanh(float(x))
 
 # Inverse hyperbolic functions
 AH_LN2(::Type{Float64}) = 6.93147180559945286227e-01
@@ -203,7 +200,6 @@ function asinh(x::T) where T <: Union{Float32, Float64}
     end
     return copysign(w, x)
 end
-asinh(x::Real) = asinh(float(x))
 
 # acosh methods
 @noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x ≥ 1."))
@@ -242,7 +238,6 @@ function acosh(x::T) where T <: Union{Float32, Float64}
         return log(x) + AH_LN2(T)
     end
 end
-acosh(x::Real) = acosh(float(x))
 
 # atanh methods
 @noinline atanh_domain_error(x) = throw(DomainError(x, "atanh(x) is only defined for |x| ≤ 1."))
@@ -284,4 +279,3 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     end
     return copysign(t, x)
 end
-atanh(x::Real) = atanh(float(x))

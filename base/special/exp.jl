@@ -198,7 +198,11 @@ end
 # The solution is to do the scaling back in 2 steps as just messing with the exponent wouldn't work.
 for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
     @eval begin
-        ($func)(x::Real) = ($func)(float(x))
+        function ($func)(x::Real)
+            xf = float(x)
+            x === xf && throw(MethodError($func, (x,)))
+            return ($func)(xf)
+        end
         function ($func)(x::T) where T<:Float64
             N_float = muladd(x, LogBo256INV($base, T), MAGIC_ROUND_CONST(T))
             N = reinterpret(uinttype(T), N_float) % Int32
