@@ -2184,7 +2184,7 @@ function print_type_stacktrace(io, type; color=:normal)
     if isnothing(i) || !get(io, :backtrace, false)::Bool
         printstyled(io, str; color=color)
     else
-        printstyled(io, str[1:i-1]; color=color)
+        printstyled(io, str[1:prevind(str,i)]; color=color)
         printstyled(io, str[i:end]; color=:light_black)
     end
 end
