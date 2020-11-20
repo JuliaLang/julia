@@ -660,6 +660,16 @@ end
     checkindex(Bool, IA1, I[1]) & checkbounds_indices(Bool, IArest, tail(I))
 end
 
+
+@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{},
+    I::Tuple{AbstractArray{Bool,N},Vararg{Any}}) where N
+    return checkbounds_indices(Bool, IA, (LogicalIndex(I[1]), tail(I)...))
+end
+@inline function checkbounds_indices(::Type{Bool}, IA::Tuple,
+    I::Tuple{AbstractArray{Bool,N},Vararg{Any}}) where N
+    return checkbounds_indices(Bool, IA, (LogicalIndex(I[1]), tail(I)...))
+end
+
 function checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{<:CartesianIndex})
     b = true
     for i in I
@@ -773,7 +783,7 @@ end
     eachindex(IndexLinear(), A) == eachindex(IndexLinear(), I.mask)
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = axes(A) == axes(I.mask)
 @inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == axes(I.mask)
-checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = false
+checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = checkbounds_indices(Bool, inds, axes(I.mask))
 
 ensure_indexable(I::Tuple{}) = ()
 @inline ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
