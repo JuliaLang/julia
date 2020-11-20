@@ -212,6 +212,36 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
 end
 
+struct ForwardEdges
+    edges::Vector{Int}
+end
+ForwardEdges() = ForwardEdges(Int[])
+succs(f::ForwardEdges) = f.edges
+push!(f::ForwardEdges, i::Int) = push!(f.edges, i)
+
+function postorder_sort_frames(frames)
+    length(frames) == 1 && return frames
+    roots = Int[i for i in 1:length(frames) if frames[i].saw_noinline]
+    # If there are no noinline annoations, just leave the default order
+    isempty(roots) && return frames
+
+    # Number frames
+    numbering = IdDict{Any, Int}(frames[i] => i for i in 1:length(frames))
+
+    # Compute forward edges
+    forward_edges = ForwardEdges[ForwardEdges() for i in 1:length(frames)]
+    for i in 1:length(frames)
+        frame = frames[i]
+        for (edge, _) in frame.cycle_backedges
+            push!(forward_edges[numbering[edge]], i)
+        end
+    end
+
+    # Compute postorder
+    dfs_tree = DFS(forward_edges; roots=roots)
+    return InferenceState[frames[i] for i in dfs_tree.from_post]
+end
+
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
@@ -224,19 +254,26 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     for caller in frames
         finish(caller, interp)
     end
+    # We postorder sort frames rooted on any frames marked noinline (if any).
+    # This makes sure that the inliner has the maximum opportunity to inline.
+    frames = postorder_sort_frames(frames)
     # collect results for the new expanded frame
     results = Tuple{InferenceResult, Bool}[ ( frames[i].result,
         frames[i].cached || frames[i].parent !== nothing ) for i in 1:length(frames) ]
     # empty!(frames)
     valid_worlds = frame.valid_worlds
     cached = frame.cached
+    caches = InferenceCaches(interp)
+    cycle_cache = CycleInferenceCache(caches.mi_cache)
+    caches = InferenceCaches(caches.inf_cache, cycle_cache)
     if cached || frame.parent !== nothing
         for (caller, doopt) in results
             opt = caller.src
             if opt isa OptimizationState
                 run_optimizer = doopt && may_optimize(interp)
                 if run_optimizer
-                    optimize(opt, OptimizationParams(interp), caller.result)
+                    cycle_cache[opt.linfo] = caller
+                    optimize(opt, OptimizationParams(interp), caches, caller.result)
                     finish(opt.src, interp)
                     # finish updating the result struct
                     validate_code_in_debug_mode(opt.linfo, opt.src, "optimized")
@@ -255,7 +292,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
                 end
                 # As a hack the et reuses frame_edges[1] to push any optimization
                 # edges into, so we don't need to handle them specially here
-                valid_worlds = intersect(valid_worlds, opt.inlining.et.valid_worlds[])
+                valid_worlds = intersect(valid_worlds, opt.et.valid_worlds[])
             end
         end
     end
@@ -772,7 +809,7 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
         opt = OptimizationState(frame, opt_params, interp)
-        optimize(opt, opt_params, result.result)
+        optimize(opt, opt_params, InferenceCaches(interp), result.result)
         opt.src.inferred = true
     end
     ccall(:jl_typeinf_end, Cvoid, ())

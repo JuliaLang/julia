@@ -109,9 +109,14 @@ end
 
 length(D::DFSTree) = length(D.from_pre)
 
-function DFS!(D::DFSTree, blocks::Vector{BasicBlock})
+succs(bb::BasicBlock) = bb.succs
+
+function DFS!(D::DFSTree, blocks::Vector; roots = 1)
     copy!(D, DFSTree(length(blocks)))
-    to_visit = Tuple{BBNumber, PreNumber, Bool}[(1, 0, false)]
+    to_visit = Tuple{BBNumber, PreNumber, Bool}[]
+    for root in roots
+        push!(to_visit, (root, 0, false))
+    end
     pre_num = 1
     post_num = 1
     while !isempty(to_visit)
@@ -144,7 +149,7 @@ function DFS!(D::DFSTree, blocks::Vector{BasicBlock})
             to_visit[end] = (current_node_bb, parent_pre, true)
 
             # Push children to the stack
-            for succ_bb in blocks[current_node_bb].succs
+            for succ_bb in succs(blocks[current_node_bb])
                 push!(to_visit, (succ_bb, pre_num, false))
             end
 
@@ -161,7 +166,7 @@ function DFS!(D::DFSTree, blocks::Vector{BasicBlock})
     return D
 end
 
-DFS(blocks::Vector{BasicBlock}) = DFS!(DFSTree(0), blocks)
+DFS(blocks::Vector; roots = 1) = DFS!(DFSTree(0), blocks; roots)
 
 """
 Keeps the per-BB state of the Semi NCA algorithm. In the original formulation,

@@ -16,7 +16,6 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
 
-
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods::Int = InferenceParams(interp).MAX_METHODS)
     if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
@@ -1380,7 +1379,11 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if isa(fname, Slot)
                         changes = StateUpdate(fname, VarState(Any, false), changes)
                     end
-                elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect
+                elseif hd === :meta
+                    if stmt.args[1] == :noinline
+                        frame.saw_noinline = true
+                    end
+                elseif hd === :inbounds || hd === :loopinfo || hd === :code_coverage_effect
                     # these do not generate code
                 else
                     t = abstract_eval_statement(interp, stmt, changes, frame)
