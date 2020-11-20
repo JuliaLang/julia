@@ -837,4 +837,112 @@ if Limb === UInt
     end
 end
 
+module MPQ
+
+# Rational{BigFloat}
+import .Base: unsafe_rational, __throw_rational_argerror_zero
+import ..GMP: BigInt, MPZ, Limb
+
+mutable struct _MPQ
+    num_alloc::Cint
+    num_size::Cint
+    num_d::Ptr{Limb}
+    den_alloc::Cint
+    den_size::Cint
+    den_d::Ptr{Limb}
+    # to prevent GC
+    rat::Rational{BigInt}
+end
+
+const mpq_t = Ref{_MPQ}
+
+_MPQ(x::BigInt,y::BigInt) = _MPQ(x.alloc, x.size, x.d,
+                                 y.alloc, y.size, y.d,
+                                 unsafe_rational(BigInt, x, y))
+_MPQ() = _MPQ(BigInt(), BigInt())
+_MPQ(x::Rational{BigInt}) = _MPQ(x.num, x.den)
+
+function _sync!(xq::_MPQ)
+    xq.rat.num.alloc = xq.num_alloc
+    xq.rat.num.size  = xq.num_size
+    xq.rat.num.d     = xq.num_d
+    xq.rat.den.alloc = xq.den_alloc
+    xq.rat.den.size  = xq.den_size
+    xq.rat.den.d     = xq.den_d
+end
+
+function Rational{BigInt}(num::BigInt, den::BigInt)
+    if iszero(den)
+        iszero(num) && __throw_rational_argerror_zero(BigInt)
+        num = isneg(num) ? -one(BigInt) : one(BigInt)
+        return unsafe_rational(BigInt, num, den)
+    end
+    xq = _MPQ(MPZ.set(num), MPZ.set(den))
+    ccall((:__gmpq_canonicalize, :libgmp), Cvoid, (mpq_t,), xq)
+    _sync!(xq)
+    return xq.rat
+end
+
+function Base.:+(x::Rational{BigInt}, y::Rational{BigInt})
+    if iszero(x.den) || iszero(y.den)
+        if iszero(x.den) && iszero(y.den) && signbit(x.num) != signbit(y.num)
+            throw(DivideError())
+        end
+        return iszero(x.den) ? x : y
+    end
+    zq = _MPQ()
+    ccall((:__gmpq_add, :libgmp), Cvoid,
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+    _sync!(zq)
+    return zq.rat
+end
+function Base.:-(x::Rational{BigInt}, y::Rational{BigInt})
+    if iszero(x.den) || iszero(y.den)
+        if iszero(x.den) && iszero(y.den) && signbit(x.num) == signbit(y.num)
+            throw(DivideError())
+        end
+        return iszero(x.den) ? x : -y
+    end
+    zq = _MPQ()
+    ccall((:__gmpq_sub, :libgmp), Cvoid,
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+    _sync!(zq)
+    return zq.rat
+end
+function Base.:*(x::Rational{BigInt}, y::Rational{BigInt})
+    if iszero(x.den) || iszero(y.den)
+        if iszero(x.num) || iszero(y.num)
+            throw(DivideError())
+        end
+        return xor(signbit(x.num),signbit(y.num)) ? -one(BigInt)//zero(BigInt) : one(BigInt)//zero(BigInt)
+    end
+    zq = _MPQ()
+    ccall((:__gmpq_mul, :libgmp), Cvoid,
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+    _sync!(zq)
+    return zq.rat
+end
+function Base.://(x::Rational{BigInt}, y::Rational{BigInt})
+    if iszero(x.den)
+        if iszero(y.den)
+            throw(DivideError())
+        end
+        return isneg(y.num) ? -x : x
+    elseif iszero(y.den)
+        return y.den // y.num
+    elseif iszero(y.num)
+        if iszero(x.num)
+            throw(DivideError())
+        end
+        return (isneg(x.num) ? -one(BigFloat) : one(BigFloat)) // y.num
+    end
+    zq = _MPQ()
+    ccall((:__gmpq_div, :libgmp), Cvoid,
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+    _sync!(zq)
+    return zq.rat
+end
+
+end # MPQ module
+
 end # module
