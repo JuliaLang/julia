@@ -3,6 +3,7 @@
 using Test
 using Unicode
 using Unicode: normalize, isassigned
+using Downloads
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
@@ -469,14 +470,12 @@ end
     end
 
     # See if all emojis are caught by the isemoji function
-    emoji_data = download("https://unicode.org/Public/13.0.0/ucd/emoji/emoji-data.txt")
-    emoji_sequences = download("https://www.unicode.org/Public/emoji/13.1/emoji-sequences.txt")
-    emoji_zwj_sequences = download("https://www.unicode.org/Public/emoji/13.1/emoji-zwj-sequences.txt")
+    emoji_sequences = Downloads.download("https://www.unicode.org/Public/emoji/13.1/emoji-sequences.txt")
+    emoji_zwj_sequences = Downloads.download("https://www.unicode.org/Public/emoji/13.1/emoji-zwj-sequences.txt")
 
     all_emojis = [
         extract_emoji_sequences(emoji_sequences);
         extract_emoji_sequences(emoji_zwj_sequences);
-        extract_emoji_sequences(emoji_data, type_field = "Emoji");
     ]
     #@show filter(!isemoji, all_emojis)
     @test all(isemoji.(all_emojis))

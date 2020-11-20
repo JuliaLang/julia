@@ -62,7 +62,6 @@ julia> Unicode.normalize("JúLiA", stripmark=true)
 function normalize end
 normalize(s::AbstractString, nf::Symbol) = Base.Unicode.normalize(s, nf)
 normalize(s::AbstractString; kwargs...) = Base.Unicode.normalize(s; kwargs...)
-
 """
     Unicode.isassigned(c) -> Bool
 
