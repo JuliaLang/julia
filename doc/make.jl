@@ -38,6 +38,8 @@ cd(joinpath(@__DIR__, "src")) do
             else
                 symlink_q(sourcefile, targetfile)
             end
+        else
+            endswith(dir, "_jll") || @warn "Missing documentation for $dir stdlib" # TODO(#38462): make this an error on CI
         end
     end
 end

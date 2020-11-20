@@ -22,6 +22,8 @@ mv "$ROOT/Makefile.tmp" "$ROOT/Makefile"
 mkdir "$ROOT/$NAME"
 mkdir "$ROOT/$NAME/src"
 mkdir "$ROOT/$NAME/test"
+mkdir "$ROOT/$NAME/docs"
+mkdir "$ROOT/$NAME/docs/src"
 
 cat >"$ROOT/$NAME/Project.toml" <<EOF
 name = "$NAME"
@@ -38,6 +40,13 @@ using $NAME
 using Test
 @test "your tests here"
 EOF
+
+cat >"$ROOT/$NAME/docs/src/index.md" <<EOF
+# $NAME
+
+DOCUMENTATION MISSING
+EOF
+
 
 git add "$ROOT/$NAME"
 git add -p "$ROOT/Makefile"
