@@ -992,9 +992,11 @@ end
         @test isnan_type(T, tanh(T(NaN)))
         for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), T(1.0), H_MEDIUM_X(T)]))
             @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
-            @test tanh(-x) ≈ tanh(big(-x)) rtol=eps(T)
+            @test tanh(-x) ≈ -tanh(big(x)) rtol=eps(T)
         end
     end
+    @test tanh(18.0) ≈ tanh(big(18.0)) rtol=eps(Float64)
+    @test tanh(8.0) ≈ tanh(big(8.0)) rtol=eps(Float32)
 end
 
 @testset "asinh" begin
