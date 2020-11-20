@@ -1128,7 +1128,6 @@ function _tri_matmul(A,B,C,δ=nothing)
 end
 
 # Fast path for two arrays * one scalar is opt-in, via mat_vec_scalar and mat_mat_scalar.
-StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
 
 mat_vec_scalar(A, x, γ) = A * (x .* γ)  # fallback
 mat_vec_scalar(A::StridedMaybeAdjOrTransMat, x::StridedVector, γ) = _mat_vec_scalar(A, x, γ)
