@@ -625,7 +625,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
                 // We may need to insert padding first to get to the right offset
                 if (al > MAX_ALIGN) {
                     Type *AlignmentType;
-#if JL_LLVM_VERSION >= 120000
+#if JL_LLVM_VERSION >= 110000
                     AlignmentType = ArrayType::get(FixedVectorType::get(T_int8, al), 0);
 #else
                     AlignmentType = ArrayType::get(VectorType::get(T_int8, al), 0);
@@ -669,7 +669,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
         }
         else if (isarray && !type_is_ghost(lasttype)) {
             if (isTuple && isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
-#if JL_LLVM_VERSION >= 120000
+#if JL_LLVM_VERSION >= 110000
                 struct_decl = FixedVectorType::get(lasttype, ntypes);
 #else
                 struct_decl = VectorType::get(lasttype, ntypes);
