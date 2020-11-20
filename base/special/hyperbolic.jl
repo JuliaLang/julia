@@ -130,8 +130,8 @@ end
 cosh(x::Real) = cosh(float(x))
 
 # tanh methods
-TANH_LARGE_X(::Type{Float64}) = 22.0
-TANH_LARGE_X(::Type{Float32}) = 9.0f0
+TANH_LARGE_X(::Type{Float64}) = 44.0
+TANH_LARGE_X(::Type{Float32}) = 18.0f0
 TANH_SMALL_X(::Type{Float64}) = 1.0
 TANH_SMALL_X(::Type{Float32}) = 1.3862944f0       #2*log(2)
 @inline function tanh_kernel(x::Float64)
