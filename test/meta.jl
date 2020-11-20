@@ -233,3 +233,8 @@ macro m() 2 end
 end
 
 @test _lower(TestExpandInWorldModule, :(@m), TestExpandInWorldModule.wa) == 1
+
+f(::T) where {T} = T
+ci = code_lowered(f, Tuple{Int})[1]
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(f),Int}, Any[Int], 0, 0, :propagate) ==
+    Any[Core.ReturnNode(QuoteNode(Int))]
