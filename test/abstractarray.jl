@@ -93,6 +93,11 @@ end
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 2)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(5, 4), trues(2)) == false
+    @test checkbounds(Bool, A, trues(6, 4), trues(3)) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(4)) == false
 end
 
 @testset "array of CartesianIndex" begin
@@ -453,6 +458,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] ==
                 B[LinearIndices(mask1)[findall(mask1)], LinearIndices(mask2)[findall(mask2)], trailing2]
             @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
+
+            if ndims(B) > 1
+                maskfront = bitrand(shape[1:end-1])
+                Bslice = B[ntuple(i->(:), ndims(B)-1)..., 1]
+                @test B[maskfront,1] == Bslice[maskfront]
+                @test size(B[maskfront, 1:1]) == (sum(maskfront), 1)
+            end
         end
     end
 end
@@ -836,6 +848,13 @@ end
     @test ndims((1:3)[:,:,1:1,:]) == 4
     @test ndims((1:3)[:,:,1:1]) == 3
     @test ndims((1:3)[:,:,1:1,:,:,[1]]) == 6
+end
+
+@testset "issue #38192" begin
+    img = cat([1 2; 3 4], [1 5; 6 7]; dims=3)
+    mask = img[:,:,1] .== img[:,:,2]
+    img[mask,2] .= 0
+    @test img == cat([1 2; 3 4], [0 5; 6 7]; dims=3)
 end
 
 @testset "dispatch loop introduced in #19305" begin
