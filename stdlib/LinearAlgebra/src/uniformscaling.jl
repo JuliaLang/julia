@@ -483,3 +483,12 @@ Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
 dot(x::AbstractVector, J::UniformScaling, y::AbstractVector) = dot(x, J.λ, y)
 dot(x::AbstractVector, a::Number, y::AbstractVector) = sum(t -> dot(t[1], a, t[2]), zip(x, y))
 dot(x::AbstractVector, a::Union{Real,Complex}, y::AbstractVector) = a*dot(x, y)
+
+# muladd
+Base.muladd(A::UniformScaling, B::UniformScaling, z::UniformScaling) =
+    UniformScaling(A.λ * B.λ + z.λ)
+Base.muladd(A::Union{Diagonal, UniformScaling}, B::Union{Diagonal, UniformScaling}, z::Union{Diagonal, UniformScaling}) =
+    Diagonal(_diag_or_value(A) .* _diag_or_value(B) .+ _diag_or_value(z))
+
+_diag_or_value(A::Diagonal) = A.diag
+_diag_or_value(A::UniformScaling) = A.λ
