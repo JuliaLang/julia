@@ -28,7 +28,6 @@ Build system changes
 New library functions
 ---------------------
 
-* New function `isgreater(a, b)` defines a descending total order where `missing` and normally unordered values, such as `NaN`, are ordered smaller than any regular value.
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
 
 New library features
