@@ -851,50 +851,10 @@ findmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)
 _rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
 
 findmax(a) = _findmax(a, :)
-
-function _findmax(a, ::Colon)
-    p = pairs(a)
-    y = iterate(p)
-    if y === nothing
-        throw(ArgumentError("collection must be non-empty"))
-    end
-    (mi, m), s = y
-    i = mi
-    while true
-        y = iterate(p, s)
-        y === nothing && break
-        m != m && break
-        (i, ai), s = y
-        if ai != ai || isless(m, ai)
-            m = ai
-            mi = i
-        end
-    end
-    return (m, mi)
-end
+_findmax(a, ::Colon) = findmax(idx -> a[idx], keys(a))
 
 findmin(a) = _findmin(a, :)
-
-function _findmin(a, ::Colon)
-    p = pairs(a)
-    y = iterate(p)
-    if y === nothing
-        throw(ArgumentError("collection must be non-empty"))
-    end
-    (mi, m), s = y
-    i = mi
-    while true
-        y = iterate(p, s)
-        y === nothing && break
-        m != m && break
-        (i, ai), s = y
-        if ai != ai || isless(ai, m)
-            m = ai
-            mi = i
-        end
-    end
-    return (m, mi)
-end
+_findmin(a, ::Colon) = findmin(idx -> a[idx], keys(a))
 
 """
     argmax(f, domain)
