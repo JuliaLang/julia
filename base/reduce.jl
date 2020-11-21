@@ -790,16 +790,19 @@ julia> findmax(identity, 5:9)
 julia> findmax(-, 1:10)
 (-1, 1)
 
+julia> findmax(first, [(1, :a), (2, :b), (2, :c)])
+(2, (2, :b))
+
 julia> findmax(cos, 0:π/2:2π)
 (1.0, 0.0)
 
-julia> findmax([8,0.1,-9,pi])
+julia> findmax([8, 0.1, -9, pi])
 (8.0, 1)
 
-julia> findmax([1,7,7,6])
+julia> findmax([1, 7, 7, 6])
 (7, 2)
 
-julia> findmax([1,7,7,NaN])
+julia> findmax([1, 7, 7, NaN])
 (NaN, 4)
 ```
 
@@ -833,16 +836,19 @@ julia> findmin(identity, 5:9)
 julia> findmin(-, 1:10)
 (-10, 10)
 
+julia> findmin(first, [(1, :a), (1, :b), (2, :c)])
+(1, (1, :a))
+
 julia> findmin(cos, 0:π/2:2π)
 (-1.0, 3.141592653589793)
 
-julia> findmin([8,0.1,-9,pi])
+julia> findmin([8, 0.1, -9, pi])
 (-9.0, 3)
 
-julia> findmin([1,7,7,6])
+julia> findmin([1, 7, 7, 6])
 (1, 1)
 
-julia> findmin([1,7,7,NaN])
+julia> findmin([1, 7, 7, NaN])
 (NaN, 4)
 ```
 
