@@ -517,7 +517,7 @@ Provides a convenient way to call [`Base.invokelatest`](@ref).
 `Base.invokelatest(f, args...; kwargs...)`.
 """
 macro invokelatest(ex)
-    @assert is_expr(ex, :call) "call expression f(args...; kwargs...) should be given"
+    is_expr(ex, :call) || throw(ArgumentError("a call expression f(args...; kwargs...) should be given"))
 
     f = first(ex.args)
     args = []
