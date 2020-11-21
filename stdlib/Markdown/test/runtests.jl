@@ -494,6 +494,12 @@ foo()
                                                           "f"]],
                                                   [:l, :r, :r]))
 @test md"""
+    |   | b |
+    |:--|--:|
+    | 1 |   |""" == MD(Table(Any[[Any[],"b"],
+                                 ["1",Any[]]], [:l, :r]))
+
+@test md"""
 no|table
 no error
 """ == MD([Paragraph(Any["no|table no error"])])
