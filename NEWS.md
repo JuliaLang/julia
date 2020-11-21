@@ -164,6 +164,10 @@ Standard library changes
 * `(+)(::UniformScaling)` is now defined, making `+I` a valid unary operation ([#36784]).
 * Instances of `UniformScaling` are no longer `isequal` to matrices. Previous
   behaviour violated the rule that `isequal(x, y)` implies `hash(x) == hash(y)`.
+* Transposing `*Triangular` matrices now returns matrices of the opposite triangular type, consistently
+  with `adjoint!(::*Triangular)` and `transpose!(::*Triangular)`. Packages containing methods with, e.g.,
+  `Adjoint{<:Any,<:LowerTriangular{<:Any,<:OwnMatrixType}}` should replace that by
+  `UpperTriangular{<:Any,<:Adjoint{<:Any,<:OwnMatrixType}}` in the method signature ([#38168]).
 
 #### Markdown
 
