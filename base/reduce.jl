@@ -884,15 +884,15 @@ julia> argmax(abs, -10:5)
 -10
 
 julia> argmax(cos, 0:π/2:2π)
-0
+0.0
 
-julia> argmax([8,0.1,-9,pi])
+julia> argmax([8, 0.1, -9, pi])
 1
 
-julia> argmax([1,7,7,6])
+julia> argmax([1, 7, 7, 6])
 2
 
-julia> argmax([1,7,7,NaN])
+julia> argmax([1, 7, 7, NaN])
 4
 ```
 """
@@ -926,13 +926,13 @@ julia> argmin(x -> -x^3 + x^2 - 10, -5:5)
 julia> argmin(acos, 0:0.1:1)
 1.0
 
-julia> argmin([8,0.1,-9,pi])
+julia> argmin([8, 0.1, -9, pi])
 3
 
-julia> argmin([7,1,1,6])
+julia> argmin([7, 1, 1, 6])
 2
 
-julia> argmin([7,1,1,NaN])
+julia> argmin([7, 1, 1, NaN])
 4
 ```
 """
