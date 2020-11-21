@@ -26,7 +26,9 @@ export # also exported by Base
     issorted,
     searchsorted,
     searchsortedfirst,
+    searchsortedfirst!,
     searchsortedlast,
+    searchsortedlast!,
     insorted,
     # order & algorithm:
     sort,
@@ -229,91 +231,85 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
+function _searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering; a_len = convert(keytype(a), length(a)))::keytype(a)
     if step(a) == 0
-        lt(o, x, first(a)) ? 0 : length(a)
+        lt(o, x, first(a)) ? zero(keytype(a)) : a_len
     else
-        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
-        lt(o, x, a[n]) ? n - 1 : n
+        n = round(keytype(a), clamp((x - first(a)) / step(a) + one(keytype(a)), one(keytype(a)), a_len))
+        lt(o, x, a[n]) ? n - one(keytype(a)) : n
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
+function _searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering; a_len = convert(keytype(a), length(a)))::keytype(a)
     if step(a) == 0
-        lt(o, first(a), x) ? length(a) + 1 : 1
+        lt(o, first(a), x) ? a_len + one(keytype(a)) : one(keytype(a))
     else
-        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
-        lt(o, a[n], x) ? n + 1 : n
+        n = round(keytype(a), clamp((x - first(a)) / step(a) + one(keytype(a)), one(keytype(a)), a_len))
+        lt(o, a[n], x) ? n + one(keytype(a)) : n
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
+function _searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering; a_len = convert(keytype(a), length(a)))::keytype(a)
     h = step(a)
     if h == 0
-        lt(o, x, first(a)) ? 0 : length(a)
+        lt(o, x, first(a)) ? zero(keytype(a)) : a_len
     elseif h > 0 && x < first(a)
-        firstindex(a) - 1
+        firstindex(a) - one(keytype(a))
     elseif h > 0 && x >= last(a)
         lastindex(a)
     elseif h < 0 && x > first(a)
-        firstindex(a) - 1
+        firstindex(a) - one(keytype(a))
     elseif h < 0 && x <= last(a)
         lastindex(a)
     else
         if o isa ForwardOrdering
-            fld(floor(Integer, x) - first(a), h) + 1
+            fld(floor(keytype(a), x) - first(a), h) + one(keytype(a))
         else
-            fld(ceil(Integer, x) - first(a), h) + 1
+            fld(ceil(keytype(a), x) - first(a), h) + one(keytype(a))
         end
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
+function _searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering; a_len = convert(keytype(a), length(a)))::keytype(a)
     h = step(a)
     if h == 0
-        lt(o, first(a), x) ? length(a)+1 : 1
+        lt(o, first(a), x) ? a_len + one(keytype(a)) : one(keytype(a))
     elseif h > 0 && x <= first(a)
         firstindex(a)
     elseif h > 0 && x > last(a)
-        lastindex(a) + 1
+        lastindex(a) + one(keytype(a))
     elseif h < 0 && x >= first(a)
         firstindex(a)
     elseif h < 0 && x < last(a)
-        lastindex(a) + 1
+        lastindex(a) + one(keytype(a))
     else
         if o isa ForwardOrdering
-            -fld(floor(Integer, -x) + Signed(first(a)), h) + 1
+            -fld(floor(keytype(a), -x) + Signed(first(a)), h) + one(keytype(a))
         else
-            -fld(ceil(Integer, -x) + Signed(first(a)), h) + 1
+            -fld(ceil(keytype(a), -x) + Signed(first(a)), h) + one(keytype(a))
         end
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
+function _searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering; a_len = convert(keytype(a), length(a)))::keytype(a)
     if lt(o, first(a), x)
         if step(a) == 0
-            length(a) + 1
+            a_len + one(keytype(a))
         else
-            min(cld(x - first(a), step(a)), length(a)) + 1
+            min(cld(x - first(a), step(a)), a_len) + one(keytype(a))
         end
     else
-        1
+        one(keytype(a))
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
+function _searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering; a_len = convert(keytype(a), length(a)))::keytype(a)
     if lt(o, x, first(a))
-        0
+        zero(keytype(a))
     elseif step(a) == 0
-        length(a)
+        a_len
     else
-        min(fld(x - first(a), step(a)) + 1, length(a))
+        min(fld(x - first(a), step(a)) + one(keytype(a)), a_len)
     end
 end
 
@@ -326,6 +322,43 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
         $s(v::AbstractVector, x;
            lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
+    end
+end
+for n in zip([:searchsortedfirst, :searchsortedlast],
+        [:_searchsortedfirst, :_searchsortedlast],
+        [:searchsortedfirst!, :searchsortedlast!],
+        [:_searchsortedfirst!, :_searchsortedlast!])
+    s = n[1] # The Symbol construction method isn't available at Core.Compile time, so each name is written out manually
+    us = n[2]
+    mut = n[3]
+    usmut = n[4]
+    @eval begin
+        function $s(a::AbstractRange, x, o::DirectOrdering)::keytype(a)
+            require_one_based_indexing(a)
+            $us(a, x, o)
+        end
+        $mut(i::AbstractArray, v::AbstractVector, x;
+            lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
+            $mut(i,v,x,ord(lt,by,rev,order))
+        function $mut(i::AbstractArray, a::AbstractRange, x::AbstractArray, o::DirectOrdering)
+            require_one_based_indexing(a)
+            $usmut(i, a, x, o)
+            return i
+        end
+        function $s(a::AbstractRange, x::AbstractArray, o::DirectOrdering)
+            require_one_based_indexing(a)
+            i = similar(x, keytype(a))
+            $usmut(i, a, x, o)
+            return i
+        end
+        function $usmut(i::AbstractArray, a::AbstractRange, x::AbstractArray, o::DirectOrdering)
+            size(i) != size(x) && error("The sizes of arrays i and x must match. Got i: $(size(i)), x: $(size(x))")
+            a_len = convert(keytype(a), length(a))
+            @inbounds for ci in CartesianIndices(x)
+                i[ci] = $us(a, x[ci], o; a_len = a_len)
+            end
+            return i
+        end
     end
 end
 
@@ -380,7 +413,41 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1
 ```
+
+When `a` is an AbstractRange, `x` can also be an AbstractArray
+
+```jldoctest
+julia> a = 0:0.1:1; x = [0.23 0.534; 0.325 0.987];
+
+julia> searchsortedfirst(a, x)
+2×2 Matrix{Int64}:
+ 4   7
+ 5  11
+````
 """ searchsortedfirst
+
+"""
+    searchsortedfirst!(i::AbstractArray, a, x::AbstractArray; by=<transform>, lt=<comparison>, rev=false)
+
+An in-place `searchsortedfirst`, where results are entered into i, an array that should match the dimensions
+of `x`, and the element type of the indices of `a`.
+
+```jldoctest
+julia> a = 0:0.1:1; x = [0.23 0.534; 0.325 0.987];
+
+julia> i = similar(x, keytype(a)); # preallocate an array with the same type as `a`'s indices
+
+julia> searchsortedfirst!(i, a, x)
+2×2 Matrix{Int64}:
+ 4   7
+ 5  11
+
+julia> i
+2×2 Matrix{Int64}:
+ 4   7
+ 5  11
+ ````
+""" searchsortedfirst!
 
 """
     searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)
@@ -406,7 +473,41 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 0
 ```
+
+When `a` is an AbstractRange, `x` can also be an AbstractArray
+
+```jldoctest
+julia> a = 0:0.1:1; x = [0.23 0.534; 0.325 0.987];
+
+julia> searchsortedlast(a, x)
+2×2 Matrix{Int64}:
+ 3   6
+ 4  10
+````
 """ searchsortedlast
+
+"""
+    searchsortedlast!(i::AbstractArray, a, x::AbstractArray; by=<transform>, lt=<comparison>, rev=false)
+
+An in-place `searchsortedlast`, where results are entered into i, an array that should match the dimensions
+of `x`, and the element type of the indices of `a`.
+
+```jldoctest
+julia> a = 0:0.1:1; x = [0.23 0.534; 0.325 0.987];
+
+julia> i = similar(x, keytype(a)); # preallocate an array with the same type as `a`'s indices
+
+julia> searchsortedlast!(i, a, x)
+2×2 Matrix{Int64}:
+ 3   6
+ 4  10
+
+julia> i
+2×2 Matrix{Int64}:
+ 3   6
+ 4  10
+ ````
+""" searchsortedfirst!
 
 """
     insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
