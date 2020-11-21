@@ -183,12 +183,8 @@ smallest.
 # Implementation
 Types should not usually implement this function. Instead, implement `isless`.
 """
-isgreater(x, y) = _is_reflexive(x) && _is_reflexive(y) ? isless(y, x) : isless(x, y)
-_is_reflexive(x) = let eq = x == x
-    isa(eq, Bool) && eq
-end
-
-
+isgreater(x, y) = _is_reflexive_eq(x) && _is_reflexive_eq(y) ? isless(y, x) : isless(x, y)
+_is_reflexive_eq(x) = (x == x) === true
 
 function ==(T::Type, S::Type)
     @_pure_meta
