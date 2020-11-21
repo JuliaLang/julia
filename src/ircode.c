@@ -418,7 +418,7 @@ static jl_value_t *jl_decode_value_array(jl_ircode_state *s, uint8_t tag) JL_GC_
         isptr = (elsize >> 15) & 1;
         hasptr = (elsize >> 14) & 1;
         isunion = (elsize >> 13) & 1;
-        elsize = elsize & 0x3fff;
+        elsize = elsize & 0x1fff;
     }
     size_t *dims = (size_t*)alloca(ndims * sizeof(size_t));
     for (i = 0; i < ndims; i++) {
