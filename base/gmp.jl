@@ -841,7 +841,7 @@ module MPQ
 
 # Rational{BigInt}
 import .Base: unsafe_rational, __throw_rational_argerror_zero
-import ..GMP: BigInt, MPZ, Limb
+import ..GMP: BigInt, MPZ, Limb, isneg
 
 mutable struct _MPQ
     num_alloc::Cint
@@ -885,7 +885,7 @@ end
 
 function Base.:+(x::Rational{BigInt}, y::Rational{BigInt})
     if iszero(x.den) || iszero(y.den)
-        if iszero(x.den) && iszero(y.den) && signbit(x.num) != signbit(y.num)
+        if iszero(x.den) && iszero(y.den) && isneg(x.num) != isneg(y.num)
             throw(DivideError())
         end
         return iszero(x.den) ? x : y
@@ -897,7 +897,7 @@ function Base.:+(x::Rational{BigInt}, y::Rational{BigInt})
 end
 function Base.:-(x::Rational{BigInt}, y::Rational{BigInt})
     if iszero(x.den) || iszero(y.den)
-        if iszero(x.den) && iszero(y.den) && signbit(x.num) == signbit(y.num)
+        if iszero(x.den) && iszero(y.den) && isneg(x.num) == isneg(y.num)
             throw(DivideError())
         end
         return iszero(x.den) ? x : -y
@@ -912,7 +912,7 @@ function Base.:*(x::Rational{BigInt}, y::Rational{BigInt})
         if iszero(x.num) || iszero(y.num)
             throw(DivideError())
         end
-        return xor(signbit(x.num),signbit(y.num)) ? -one(BigInt)//zero(BigInt) : one(BigInt)//zero(BigInt)
+        return xor(isneg(x.num),isneg(y.num)) ? -one(BigInt)//zero(BigInt) : one(BigInt)//zero(BigInt)
     end
     zq = _MPQ()
     ccall((:__gmpq_mul, :libgmp), Cvoid,
