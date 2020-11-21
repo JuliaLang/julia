@@ -1250,6 +1250,14 @@ STATIC_INLINE int jl_is_type_type(jl_value_t *v) JL_NOTSAFEPOINT
             ((jl_datatype_t*)(v))->name == ((jl_datatype_t*)jl_type_type->body)->name);
 }
 
+STATIC_INLINE int jl_is_array_zeroinit(jl_array_t *a) JL_NOTSAFEPOINT
+{
+    if (a->flags.ptrarray || a->flags.hasptr)
+        return 1;
+    jl_value_t *elty = jl_tparam0(jl_typeof(a));
+    return jl_is_datatype(elty) && ((jl_datatype_t*)elty)->zeroinit;
+}
+
 // object identity
 JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
