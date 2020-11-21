@@ -347,7 +347,14 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
     if isa(x, Core.ReturnNode)
         return Core.ReturnNode(
             _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
-                               slot_offset, statement_offset, boundscheck)
+                               slot_offset, statement_offset, boundscheck),
+        )
+    end
+    if isa(x, Core.GotoIfNot)
+        return Core.GotoIfNot(
+            _partially_inline!(x.cond, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+            x.dest,
         )
     end
     if isa(x, Expr)
