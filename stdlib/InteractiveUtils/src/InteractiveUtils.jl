@@ -11,7 +11,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
-    to_tuple_type, signature_type, format_bytes
+    to_tuple_type, signature_type, formatbytes
 
 using Markdown
 
@@ -43,7 +43,7 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
                     ("", typemax(Int))
                 else
                     ss = summarysize(value)
-                    (format_bytes(ss), ss)
+                    (formatbytes(ss), ss)
                 end
                 Any[string(prep, v), ssize_str, summary(value), ssize]
             end
