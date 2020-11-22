@@ -97,6 +97,11 @@ function clamp!(x::AbstractArray, lo, hi)
     x
 end
 
+function clamp!(x::Ref, lo, hi)
+    x[] = clamp(x[], lo, hi)
+    x
+end
+
 """
     clamp(x::Integer, r::AbstractUnitRange)
 

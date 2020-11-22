@@ -31,6 +31,15 @@ end
         x = [0.0, 1.0, 2.0, 3.0, 4.0]
         clamp!(x, 1, 3)
         @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
+
+        x5 = Ref(x, 5)
+        clamp!(x5, 0, 1)
+        @test x5[] == 1.0
+        @test x[5] == 1.0
+
+        y = Ref(2*pi)
+        clamp!(y, 0, 5)
+        @test y[] == 5.0
     end
 end
 
