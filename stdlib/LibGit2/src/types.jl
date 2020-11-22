@@ -222,7 +222,7 @@ Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_
     sideband_progress::Ptr{Cvoid}      = C_NULL
     completion::Ptr{Cvoid}             = C_NULL
     credentials::Ptr{Cvoid}            = C_NULL
-    certificate_check::Ptr{Cvoid}      = C_NULL
+    certificate_check::Ptr{Cvoid}      = certificate_cb()
     transfer_progress::Ptr{Cvoid}      = C_NULL
     update_tips::Ptr{Cvoid}            = C_NULL
     pack_progress::Ptr{Cvoid}          = C_NULL
@@ -310,7 +310,7 @@ julia> fetch(remote, "master", options=fo)
     proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
     url::Cstring                 = Cstring(C_NULL)
     credential_cb::Ptr{Cvoid}    = C_NULL
-    certificate_cb::Ptr{Cvoid}   = C_NULL
+    certificate_cb::Ptr{Cvoid}   = certificate_cb()
     payload::Any                 = nothing
 end
 @assert ProxyOptions.isinlinealloc
