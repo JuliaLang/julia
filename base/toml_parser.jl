@@ -675,7 +675,7 @@ end
 
 function parse_array(l::Parser)::Err{Vector}
     skip_ws_nl(l)
-    array = Union{}[]
+    array = Vector{Union{}}()
     empty_array = accept(l, ']')
     while !empty_array
         v = @try parse_value(l)
