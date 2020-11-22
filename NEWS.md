@@ -49,6 +49,8 @@ Language changes
   behaviour violated the rule that `isequal(x, y)` implies `hash(x) == hash(y)`.
 * `⌿` (U+233F) and `¦` (U+00A6) are now infix operators with times-like and plus-like precedence,
   respectively. Previously they were parsed as identifier characters ([#37973]).
+* `@macroexpand` and `@macroexpand1` no longer wrap errors with `LoadError`. To reduce breakage,
+`@test_throws` has been modified so that affected tests will still pass ([#38379]].
 
 Compiler/Runtime improvements
 -----------------------------
