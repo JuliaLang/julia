@@ -666,9 +666,6 @@ function create_worker(manager, wconfig)
         end
 
         for wl in wlist
-<<<<<<< HEAD
-            (wl.state == W_CREATED) && wait(wl.c_state)
-=======
             if wl.state === W_CREATED
                 # wait for wl to join
                 lock(wl.c_state) do
@@ -676,7 +673,6 @@ function create_worker(manager, wconfig)
                 end
                 # Note: wl.state could still be in W_CREATED if we got woke to early,
             end
->>>>>>> 7cfb502b24... Use Threads.Condition instead of Event
             push!(join_list, wl)
         end
     end
