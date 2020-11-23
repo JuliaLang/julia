@@ -385,7 +385,7 @@ julia> exp2(5)
 32.0
 ```
 """
-#exp2(x::AbstractFloat) = 2^x
+exp2(x::AbstractFloat) = 2^x
 
 """
     exp10(x)
@@ -398,7 +398,7 @@ julia> exp10(2)
 100.0
 ```
 """
-#exp10(x::AbstractFloat) = 10^x
+exp10(x::AbstractFloat) = 10^x
 
 for f in (:sin, :cos, :tan,  :sinh, :cosh, :tanh, :atan, :acos, :asin, :asinh, :acosh, :atanh, :expm1, :log, :log1p)
     @eval function ($f)(x::Real)
