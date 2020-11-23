@@ -105,7 +105,7 @@ function padded_nonzero_print(value, str)
 end
 
 """
-    formatbytes(bytes; digits = 3)
+    formatbytes(bytes; digits::Int = 3)
 
 Converts from an integer number of bytes to a pretty printed string in nearest significant size units.
 
@@ -114,7 +114,7 @@ julia> formatbytes(123456789)
 "117.738 MiB"
 ```
 """
-function formatbytes(bytes; digits = 3) # also used by InteractiveUtils
+function formatbytes(bytes; digits::Int = 3) # also used by InteractiveUtils
     bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
     if mb == 1
         return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
