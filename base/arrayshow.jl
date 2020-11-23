@@ -286,7 +286,6 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
                                 @goto skip
                             end
                         end
-                        #println(io, idxs)
                         print(io, "...\n\n")
                         @goto skip
                     end
@@ -297,15 +296,21 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
             end
         end
         if label_slices
-            print(io, "[:, :, ")
-            for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
-            println(io, idxs[end], "] =")
+            _show_nd_label(io, a, idxs)
         end
         slice = view(a, axes(a,1), axes(a,2), idxs...)
         print_matrix(io, slice)
         print(io, idxs == map(last,tailinds) ? "" : "\n\n")
         @label skip
     end
+end
+
+function _show_nd_label(io::IO, a::AbstractArray, idxs)
+    print(io, "[:, :, ")
+    for i = 1:length(idxs)-1
+        print(io, idxs[i], ", ")
+    end
+    println(io, idxs[end], "] =")
 end
 
 # print_array: main helper functions for show(io, text/plain, array)
