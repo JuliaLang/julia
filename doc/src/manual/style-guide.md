@@ -4,7 +4,7 @@ The following sections explain a few aspects of idiomatic Julia coding style. No
 are absolute; they are only suggestions to help familiarize you with the language and to help
 you choose among alternative designs.
 
-## Indention
+## Indentation
 
 Use 4 spaces per indentation level.
 
