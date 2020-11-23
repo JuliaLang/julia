@@ -176,8 +176,6 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
     if cursor isa Int
         cursor = Ref(cursor)
     end
-    menu_header = header(m)
-    !suppress_output && !isempty(menu_header) && println(term.out_stream, menu_header)
 
     state = nothing
     if !suppress_output
@@ -327,6 +325,12 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
         print(buf, "\x1b[999D\x1b[$(ncleared)A")   # move left 999 spaces and up `ncleared` lines
     end
 
+    nheaderlines = 0
+    for headerline in split(header(m), "\n", keepempty=false)
+        print(buf, "\x1b[2K", headerline, "\r\n")
+        nheaderlines += 1
+    end
+
     firstline = m.pageoffset+1
     lastline = min(m.pagesize+m.pageoffset, lastoption)
 
@@ -353,7 +357,8 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
         (firstline == lastline || i != lastline) && print(buf, "\r\n")
     end
 
-    newstate = lastline-firstline  # final line doesn't have `\n`
+    newstate = nheaderlines + lastline - firstline  # final line doesn't have `\n`
+
     if newstate < ncleared && oldstate !== nothing
         # we printed fewer lines than last time. Erase the leftovers.
         for i = newstate+1:ncleared

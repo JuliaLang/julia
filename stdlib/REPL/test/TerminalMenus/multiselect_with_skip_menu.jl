@@ -30,7 +30,7 @@ function MultiSelectWithSkipMenu(options::Array{String,1}; pagesize::Int=10,
                             TerminalMenus.MultiSelectConfig(; kwargs...))
 end
 
-TerminalMenus.header(m::MultiSelectWithSkipMenu) = "[press: d=done, a=all, c=none, npNP=move with skip]"
+TerminalMenus.header(m::MultiSelectWithSkipMenu) = "[press: d=done, a=all, c=none, npNP=move with skip, $(length(m.selected)) items selected]"
 
 TerminalMenus.options(m::MultiSelectWithSkipMenu) = m.options
 
@@ -118,7 +118,13 @@ end
 # These tests are specifically designed to verify that a `RefValue`
 # input to the AbstractMenu `request` function works as intended.
 menu = MultiSelectWithSkipMenu(string.(1:5), selected=[2, 3])
+buf = IOBuffer()
+TerminalMenus.printmenu(buf, menu, 1; init=true)
+@test occursin("2 items selected", String(take!(buf)))
 @test simulate_input(Set([2, 3, 4]), menu, 'n', :enter, 'd')
+buf = IOBuffer()
+TerminalMenus.printmenu(buf, menu, 1; init=true)
+@test occursin("3 items selected", String(take!(buf)))
 
 menu = MultiSelectWithSkipMenu(string.(1:5), selected=[2, 3])
 @test simulate_input(Set([2]), menu, 'P', :enter, 'd', cursor=5)
