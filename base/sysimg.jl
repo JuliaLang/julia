@@ -68,6 +68,9 @@ let
 
         # 4-depth packages
         :Pkg,
+
+        # 5-depth packages
+        :LazyArtifacts,
     ]
     maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)
 
