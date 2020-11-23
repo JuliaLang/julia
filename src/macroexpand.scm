@@ -383,7 +383,7 @@
                  ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
 
            ((= function)
-            (if (and (pair? (cadr e)) (function-def? e))
+            (if (and (pair? (cadr e)) (function-def? e) (length> e 2))
                 ;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
                 `(,(car e) ,(resolve-in-function-lhs (cadr e) env m parent-scope inarg)
                   ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg))
