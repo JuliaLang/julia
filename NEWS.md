@@ -94,7 +94,7 @@ New library functions
 * New function `insorted` for determining whether an element is in a sorted collection or not ([#37490]).
 * New function `Base.rest` for taking the rest of a collection, starting from a specific
   iteration state, in a generic way ([#37410]).
-* The internal function for pretty-printing a number of bytes `format_bytes` is now named `formatbytes` and exported
+* The internal function for pretty-printing a number of bytes `format_bytes` is now named `formatbytes` and exported ([#38464]).
 
 New library features
 --------------------
