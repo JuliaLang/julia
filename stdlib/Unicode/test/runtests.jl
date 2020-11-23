@@ -332,6 +332,7 @@ end
 
 @testset "#37680: initial graphemes" begin
     @test collect(graphemes("🤦🏼‍♂️")) == ["🤦🏼‍♂️"]
+    @test collect(graphemes("👨🏻‍🤝‍👨🏽")) == ["👨🏻‍🤝‍👨🏽"]
     @test collect(graphemes("🇸🇪🇸🇪")) == ["🇸🇪","🇸🇪"]
 end
 
