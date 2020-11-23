@@ -123,8 +123,9 @@ _maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A
     view(A, inds...)
 
 Like [`getindex`](@ref), but returns a view into the parent array `A` with the
-given indices instead of making a copy.  Calling [`getindex`](@ref) or
-[`setindex!`](@ref) on the returned `SubArray` computes the
+given indices instead of making a copy, unless `A` is immutable.  
+Calling [`getindex`](@ref) or
+[`setindex!`](@ref) on the returned value (usually a `SubArray`) computes the
 indices to the parent array on the fly without checking bounds.
 
 # Examples
@@ -148,6 +149,9 @@ julia> A # Note A has changed even though we modified b
 2×2 Matrix{Int64}:
  0  2
  0  4
+
+julia> view(2:5, 2:3) # returns a range as type is immutable
+3:4
 ```
 """
 function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
