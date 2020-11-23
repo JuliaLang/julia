@@ -7,6 +7,8 @@ using Test, LinearAlgebra, Random, SparseArrays
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
 
 Random.seed!(123)
 
@@ -502,6 +504,14 @@ end
         @test @inferred(F \ I) ≈ Z
         @test @inferred(F \ J) ≈ Z * J
     end
+end
+
+@testset "offset arrays" begin
+    A = OffsetArray(zeros(4,4), -1:2, 0:3)
+    @test sum(I + A) ≈ 3.0
+    @test sum(A + I) ≈ 3.0
+    @test sum(I - A) ≈ 3.0
+    @test sum(A - I) ≈ -3.0
 end
 
 end # module TestUniformscaling
