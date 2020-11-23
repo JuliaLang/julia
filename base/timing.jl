@@ -113,6 +113,9 @@ Converts from an integer number of bytes to a pretty printed string in nearest s
 julia> formatbytes(123456789)
 "117.738 MiB"
 ```
+
+!!! compat "Julia 1.6"
+    This function was an internal function named `format_bytes` prior to Julia 1.6.
 """
 function formatbytes(bytes; digits::Int = 3) # also used by InteractiveUtils
     bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
