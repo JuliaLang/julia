@@ -1132,9 +1132,9 @@ end
 """
     getindex(A, inds...)
 
-Return a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref). See the manual section on
-[array indexing](@ref man-array-indexing) for details.
+Return a subset of array `A` as specified by `inds`, where each `ind` may be in
+particular an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+See the manual section on [array indexing](@ref man-array-indexing) for details.
 
 # Examples
 ```jldoctest
