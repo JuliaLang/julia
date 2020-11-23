@@ -240,6 +240,6 @@ cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not re
 
 # format_bytes was an internal function that a fair few packages use. Now renamed to formatbytes and exported
 # https://github.com/JuliaLang/julia/pull/38464
-@deprecate format_bytes(bytes) formatbytes(bytes; digits::Int = 3) false
+@deprecate format_bytes(bytes) formatbytes(bytes) false
 
 # END 1.6 deprecations
