@@ -553,6 +553,21 @@ julia> for i = 1:2, j = 3:4
 If this example were rewritten to use a `for` keyword for each variable, then the output would
 be different: the second and fourth values would contain `0`.
 
+Multiple containers can be iterated over at the same time in a single `for` loop using [`zip`](@ref):
+
+```jldoctest
+julia> for (j, k) in zip([1 2 3], [4 5 6 7])
+           println((j,k))
+       end
+(1, 4)
+(2, 5)
+(3, 6)
+```
+
+Using [`zip`](@ref) will create an iterator that is a tuple containing the subiterators for the containers passed to it.
+The `zip` iterator will iterate over all subiterators in order, choosing the ``i``th element of each subiterator in the
+``i``th iteration of the `for` loop. Once any of the subiterators run out, the `for` loop will stop.
+
 ## Exception Handling
 
 When an unexpected condition occurs, a function may be unable to return a reasonable value to
