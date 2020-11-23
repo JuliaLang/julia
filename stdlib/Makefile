@@ -15,7 +15,7 @@ $(build_datarootdir)/julia/stdlib/$(VERSDIR):
 	mkdir -p $@
 
 STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
-          Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
+          Future InteractiveUtils LazyArtifacts Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization SHA \
           SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
           MozillaCACerts_jll LibCURL_jll
