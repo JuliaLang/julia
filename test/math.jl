@@ -733,7 +733,6 @@ end
   @test !isapprox(1, 1+1.0e-12, norm=x->1)
 end
 
-#= disabled for now
 # test AbstractFloat fallback pr22716
 struct Float22716{T<:AbstractFloat} <: AbstractFloat
     x::T
@@ -743,7 +742,7 @@ let x = 2.0
     @test exp2(Float22716(x)) === 2^x
     @test exp10(Float22716(x)) === 10^x
 end
-=#
+
 @testset "asin #23088" begin
     for T in (Float32, Float64)
         @test asin(zero(T)) === zero(T)
