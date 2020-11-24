@@ -627,7 +627,7 @@ function find_all_in_cache_path(pkg::PkgId)
     entrypath, entryfile = cache_file_entry(pkg)
     for path in joinpath.(DEPOT_PATH, entrypath)
         isdir(path) || continue
-        for file in readdir(path)
+        for file in readdir(path, sort = false) # no sort given we sort later
             if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
                  (pkg.uuid !== nothing && startswith(file, entryfile * "_")))
                  continue
@@ -636,7 +636,14 @@ function find_all_in_cache_path(pkg::PkgId)
             isfile_casesensitive(filepath) && push!(paths, filepath)
         end
     end
-    return paths
+    if length(paths) > 1
+        # allocating the sort vector is less expensive than using sort!(.. by=mtime), which would
+        # call the relatively slow mtime multiple times per path
+        p = sortperm(mtime.(paths), rev = true)
+        return paths[p]
+    else
+        return paths
+    end
 end
 
 # these return either the array of modules loaded from the path / content given
