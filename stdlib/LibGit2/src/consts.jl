@@ -313,6 +313,7 @@ const CERT_TYPE_TLS = 1 # GIT_CERT_X509
 const CERT_TYPE_SSH = 2 # GIT_CERT_HOSTKEY_LIBSSH2
 
 # certificate callback return values
+const PASSTHROUGH = -30
 const CERT_REJECT = -1
 const CERT_ACCEPT =  0
 
