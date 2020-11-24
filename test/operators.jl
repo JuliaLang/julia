@@ -84,13 +84,12 @@ import Base.<
 @test isless('a','b')
 
 @testset "isgreater" begin
-    let isgreater = Base.isgreater
-        @test !isgreater(missing, 1)
-        @test  isgreater(5, 1)
-        @test !isgreater(1, 5)
-        @test  isgreater(1, missing)
-        @test  isgreater(1, NaN)
-    end
+    isgreater = Base.isgreater
+    @test !isgreater(missing, 1)
+    @test  isgreater(5, 1)
+    @test !isgreater(1, 5)
+    @test  isgreater(1, missing)
+    @test  isgreater(1, NaN)
 end
 
 @testset "vectorized comparisons between numbers" begin
