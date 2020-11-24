@@ -115,7 +115,7 @@ Keyword arguments:
   workers. Default is true.
 
 * `env`: provide an array of string pairs such as
-  `env=["JULIA_DEPOT_PATH"=>"/depot"] to request that environment variables
+  `env=["JULIA_DEPOT_PATH"=>"/depot"]` to request that environment variables
   are set on the remote machine. By default only the environment variable
   `JULIA_WORKER_TIMEOUT` is passed automatically from the local to the remote
   environment.
