@@ -70,23 +70,6 @@ Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
 """
 Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
 
-function Random.rand!(rng::Random.AbstractRNG, A::Diagonal, sp::Random.Sampler)
-    return _rand!(rng, A, sp)
-end
-
-function Random.rand!(rng::Random._GLOBAL_RNG, A::Diagonal{Float64}, I::Random.SamplerTrivial{<:Random.FloatInterval_64})
-    return _rand!(rng, A, I)
-end
-
-function Random.rand!(rng::Random.MersenneTwister, A::Diagonal{Float64}, I::Random.SamplerTrivial{<:Random.FloatInterval_64})
-    return _rand!(rng, A, I)
-end
-
-function _rand!(rng::Random.AbstractRNG, A::Diagonal, sp::Random.Sampler)
-    Random.rand!(rng, A.diag, sp)
-    return A
-end
-
 # For D<:Diagonal, similar(D[, neweltype]) should yield a Diagonal matrix.
 # On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
 # The first method below effects the former, and the second the latter.
