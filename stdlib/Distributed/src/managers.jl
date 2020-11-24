@@ -35,7 +35,7 @@ end
 
 
 function check_addprocs_args(kwargs)
-    valid_kw_names = collect(keys(default_addprocs_params()))
+    valid_kw_names = keys(default_addprocs_params(manager))
     for keyname in keys(kwargs)
         !(keyname in valid_kw_names) && throw(ArgumentError("Invalid keyword argument $(keyname)"))
     end
@@ -137,11 +137,23 @@ This timeout can be controlled via environment variable `JULIA_WORKER_TIMEOUT`.
 The value of `JULIA_WORKER_TIMEOUT` on the master process specifies the number of seconds a
 newly launched worker waits for connection establishment.
 """
-function addprocs(machines::AbstractVector; tunnel=false, multiplex=false, sshflags=``, max_parallel=10, kwargs...)
-    check_addprocs_args(kwargs)
-    addprocs(SSHManager(machines); tunnel=tunnel, multiplex=multiplex, sshflags=sshflags, max_parallel=max_parallel, kwargs...)
+function addprocs(machines::AbstractVector; , kwargs...)
+    manager = SSHManager(machines)
+    check_addprocs_args(manager, kwargs)
+    addprocs(manager; kwargs...)
 end
 
+default_addprocs_params(::SSHManager) =
+    merge(default_addprocs_params(),
+          Dict{Symbol,Any}(
+              :ssh            => "ssh",
+              :sshflags       => ``,
+              :shell          => :posix,
+              :cmdline_cookie => false,
+              :env            => [],
+              :tunnel         => false,
+              :multiplex      => false,
+              :max_parallel   => 10))
 
 function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy::Condition)
     # Launch one worker on each unique host in parallel. Additional workers are launched later.
@@ -426,8 +438,9 @@ processes on the local machine. If `restrict` is `true`, binding is restricted t
 `enable_threaded_blas` have the same effect as documented for `addprocs(machines)`.
 """
 function addprocs(np::Integer; restrict=true, kwargs...)
+    manager = LocalManager(np, restrict)
     check_addprocs_args(kwargs)
-    addprocs(LocalManager(np, restrict); kwargs...)
+    addprocs(manager; kwargs...)
 end
 
 Base.show(io::IO, manager::LocalManager) = print(io, "LocalManager()")
