@@ -95,6 +95,23 @@ function chkfinite(A::AbstractMatrix)
     return true
 end
 
+function chkuplofinite(A::AbstractMatrix, uplo::AbstractChar)
+    m, n = size(A)
+    if uplo == 'U'
+        for i in 1:m, j in i:n
+            if !isfinite(A[i,j])
+                throw(ArgumentError("matrix contains Infs or NaNs"))
+            end
+        end
+    else
+        for i in 1:m, j in 1:i
+            if !isfinite(A[i,j])
+                throw(ArgumentError("matrix contains Infs or NaNs"))
+            end
+        end
+    end
+end
+
 # LAPACK version number
 function version()
     major = Ref{BlasInt}(0)
@@ -5030,7 +5047,7 @@ for (syev, syevr, sygvd, elty) in
                         vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
             chkstride1(A)
             n = checksquare(A)
-            chkfinite(A)
+            chkuplofinite(A, uplo)
             if range == 'I' && !(1 <= il <= iu <= n)
                 throw(ArgumentError("illegal choice of eigenvalue indices (il = $il, iu = $iu), which must be between 1 and n = $n"))
             end
