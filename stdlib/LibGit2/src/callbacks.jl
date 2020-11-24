@@ -371,7 +371,7 @@ function certificate_callback(
     transport = cert_type == Consts.CERT_TYPE_TLS ? "TLS" :
                 cert_type == Consts.CERT_TYPE_SSH ? "SSH" : nothing
     verify = NetworkOptions.verify_host(host, transport)
-    verify ? Consts.CERT_REJECT : Consts.CERT_ACCEPT
+    verify ? Consts.PASSTHROUGH : Consts.CERT_ACCEPT
 end
 
 "C function pointer for `mirror_callback`"
