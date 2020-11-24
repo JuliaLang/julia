@@ -314,6 +314,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->sparam_vals = jl_emptysvec;
     li->uninferred = NULL;
     li->backedges = NULL;
+    li->callbacks = NULL;
     li->cache = NULL;
     li->inInference = 0;
     return li;

@@ -1318,6 +1318,40 @@ JL_DLLEXPORT jl_value_t *jl_debug_method_invalidation(int state)
     return jl_nothing;
 }
 
+// call external callbacks registered with this method_instance
+static void invalidate_external(jl_method_instance_t *mi, size_t max_world) {
+    jl_array_t *callbacks = mi->callbacks;
+    if (callbacks) {
+        // AbstractInterpreter allows for MethodInstances to be present in non-local caches
+        // inform those caches about the invalidation.
+        JL_TRY {
+            size_t i, l = jl_array_len(callbacks);
+            jl_value_t **args;
+            JL_GC_PUSHARGS(args, 3);
+            // these arguments are constant per call
+            args[1] = (jl_value_t*)mi;
+            args[2] = jl_box_uint32(max_world);
+
+            size_t last_age = jl_get_ptls_states()->world_age;
+            jl_get_ptls_states()->world_age = jl_get_world_counter();
+
+            jl_value_t **cbs = (jl_value_t**)jl_array_ptr_data(callbacks);
+            for (i = 0; i < l; i++) {
+                args[0] = cbs[i];
+                jl_apply(args, 3);
+            }
+            jl_get_ptls_states()->world_age = last_age;
+            JL_GC_POP();
+        }
+        JL_CATCH {
+            jl_printf((JL_STREAM*)STDERR_FILENO, "error in invalidation callback: ");
+            jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+            jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+            jlbacktrace(); // writen to STDERR_FILENO
+        }
+    }
+}
+
 // recursively invalidate cached methods that had an edge to a replaced method
 static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
@@ -1526,6 +1560,7 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *m
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
         if (mi) {
             invalidated = 1;
+            invalidate_external(mi, methodentry->max_world);
             invalidate_backedges(mi, methodentry->max_world, "jl_method_table_disable");
         }
     }
@@ -1644,6 +1679,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 }
                 if (isect != jl_bottom_type) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
+                    invalidate_external(backedge, max_world);
                     invalidate_method_instance(backedge, max_world, 0);
                     invalidated = 1;
                     if (_jl_debug_method_invalidation)
@@ -1711,6 +1747,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                 continue;
                         }
                         jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
+                        invalidate_external(mi, max_world);
                         if (mi->backedges) {
                             invalidated = 1;
                             invalidate_backedges(mi, max_world, "jl_method_table_insert");
