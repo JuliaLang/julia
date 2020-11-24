@@ -137,7 +137,7 @@ This timeout can be controlled via environment variable `JULIA_WORKER_TIMEOUT`.
 The value of `JULIA_WORKER_TIMEOUT` on the master process specifies the number of seconds a
 newly launched worker waits for connection establishment.
 """
-function addprocs(machines::AbstractVector; , kwargs...)
+function addprocs(machines::AbstractVector; kwargs...)
     manager = SSHManager(machines)
     check_addprocs_args(manager, kwargs)
     addprocs(manager; kwargs...)
