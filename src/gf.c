@@ -1342,7 +1342,6 @@ static void invalidate_external(jl_method_instance_t *mi, size_t max_world) {
             }
             jl_get_ptls_states()->world_age = last_age;
             JL_GC_POP();
-            jl_exception_clear();
         }
         JL_CATCH {
             jl_printf((JL_STREAM*)STDERR_FILENO, "error in invalidation callback: ");
