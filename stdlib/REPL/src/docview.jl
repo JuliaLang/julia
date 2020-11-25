@@ -534,8 +534,6 @@ function printmatch(io::IO, word, match)
     end
 end
 
-printmatch(args...) = printmatch(stdout, args...)
-
 function printmatches(io::IO, word, matches; cols = displaysize(io)[2])
     total = 0
     for match in matches
