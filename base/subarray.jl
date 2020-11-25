@@ -128,10 +128,6 @@ Like [`getindex`](@ref), but returns a lightweight array that lazily references
 Calling [`getindex`](@ref) or [`setindex!`](@ref) on the returned value
 (often a [`SubArray`](@ref)) computes the indices to access or modify the
 parent array on the fly (without checking bounds a second time).
-given indices instead of making a copy if (but not only if) `A` supports `setindex!`.
-Otherwise, it may create a new object if that is a cheap operation (e.g., `UnitRange`).
-Calling [`getindex`](@ref) or
-[`setindex!`](@ref) on the returned value (usually a `SubArray`) computes the
 
 Some immutable parent arrays (like ranges) may choose to simply
 recompute a new array in some circumstances instead of returning
