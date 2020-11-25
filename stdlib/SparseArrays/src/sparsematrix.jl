@@ -53,22 +53,29 @@ function sparse_check_Ti(m::Integer, n::Integer, Ti::Type)
 end
 
 function sparse_check(n::Integer, colptr::Vector{Ti}, rowval, nzval) where Ti
+    # String interpolation is a performance bottleneck when it's part of the same function,
+    # ensure we only do it once committed to the error.
+    throwstart(ckp) = throw(ArgumentError("$ckp == colptr[1] != 1"))
+    throwmonotonic(ckp, ck, k) = throw(ArgumentError("$ckp == colptr[$(k-1)] > colptr[$k] == $ck"))
+
     sparse_check_length("colptr", colptr, n+1, String) # don't check upper bound
     ckp = Ti(1)
-    ckp == colptr[1] || throw(ArgumentError("$ckp == colptr[1] != 1"))
+    ckp == colptr[1] || throwstart(ckp)
     @inbounds for k = 2:n+1
         ck = colptr[k]
-        ckp <= ck || throw(ArgumentError("$ckp == colptr[$(k-1)] > colptr[$k] == $ck"))
+        ckp <= ck || throwmonotonic(ckp, ck, k)
         ckp = ck
     end
     sparse_check_length("rowval", rowval, ckp-1, Ti)
     sparse_check_length("nzval", nzval, 0, Ti) # we allow empty nzval !!!
 end
 function sparse_check_length(rowstr, rowval, minlen, Ti)
+    throwmin(len, minlen, rowstr) = throw(ArgumentError("$len == length($rowstr) < $minlen"))
+    throwmax(len, max, rowstr) = throw(ArgumentError("$len == length($rowstr) >= $max"))
+
     len = length(rowval)
-    len >= minlen || throw(ArgumentError("$len == length($rowstr) < $minlen"))
-    !isbitstype(Ti) || len < typemax(Ti) ||
-        throw(ArgumentError("$len == length($rowstr) >= $(typemax(Ti))"))
+    len >= minlen || throwmin(len, minlen, rowstr)
+    !isbitstype(Ti) || len < typemax(Ti) || throwmax(len, typemax(Ti), rowstr)
 end
 
 size(S::SparseMatrixCSC) = (getfield(S, :m), getfield(S, :n))
