@@ -92,7 +92,7 @@ end
 
 @testset "#5939 uft8proc character predicates" begin
     alower=['a', 'd', 'j', 'y', 'z']
-    ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
+    ulower=['α', 'β', 'γ', 'δ', 'ф', 'я', 'ª']
     for c in vcat(alower,ulower)
         @test islowercase(c) == true
         @test isuppercase(c) == false
@@ -101,7 +101,7 @@ end
     end
 
     aupper=['A', 'D', 'J', 'Y', 'Z']
-    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
+    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'Ж', 'Д', 'Ⓐ']
 
     for c in vcat(aupper,uupper)
         @test islowercase(c) == false
@@ -109,6 +109,9 @@ end
         @test isdigit(c) == false
         @test isnumeric(c) == false
     end
+
+    @test !isuppercase('ǅ') # titlecase is not uppercase
+    @test Base.Unicode.iscased('ǅ') # but is "cased"
 
     nocase=['א','ﺵ']
     alphas=vcat(alower,ulower,aupper,uupper,nocase)
