@@ -127,7 +127,9 @@ Like [`getindex`](@ref), but returns a lightweight array that lazily references
 `inds` instead of eagerly extracting elements or constructing a copied subset.
 Calling [`getindex`](@ref) or [`setindex!`](@ref) on the returned value
 (often a [`SubArray`](@ref)) computes the indices to access or modify the
-parent array on the fly (without checking bounds a second time).
+parent array on the fly.  The behavior is undefined if the shape of the parent array is
+changed after `view` is called because there is no bound check for the parent array; e.g.,
+it may cause a segmentation fault.
 
 Some immutable parent arrays (like ranges) may choose to simply
 recompute a new array in some circumstances instead of returning
