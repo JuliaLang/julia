@@ -1239,7 +1239,7 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; _ind2sub(sz, i))
     A[inds...] = X
 
 Store values from array `X` within some subset of `A` as specified by `inds`.
-The syntax `A[inds...] = X` is equivalent to `setindex!(A, X, inds...)`.
+The syntax `A[inds...] = X` is equivalent to `(setindex!(A, X, inds...); X)`.
 
 # Examples
 ```jldoctest
