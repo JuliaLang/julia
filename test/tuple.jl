@@ -138,6 +138,16 @@ end
     # @test_throws ArgumentError size((1,2), 2)
 end
 
+@testset "haskey" begin
+    @test haskey((), 1) == false
+    @test haskey((1,), 1) == true
+    @test haskey((1,2), 1) == true
+    @test haskey((1,2), 1.0) == true
+    @test haskey((1,2), 2) == true
+    @test haskey((1,2,3), 2) == true
+    @test haskey((1,2,3), 6) == false
+end
+
 @testset "indexing" begin
     @test getindex((1,), 1) === 1
     @test getindex((1,2), 2) === 2
