@@ -92,8 +92,8 @@ end
 
 @testset "#5939 uft8proc character predicates" begin
     alower=['a', 'd', 'j', 'y', 'z']
-    ulower=['α', 'β', 'γ', 'δ', 'ф', 'я', 'ª']
-    for c in vcat(alower,ulower)
+    ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
+    for c in vcat(alower,ulower,['ª'])
         @test islowercase(c) == true
         @test isuppercase(c) == false
         @test isdigit(c) == false
@@ -101,9 +101,9 @@ end
     end
 
     aupper=['A', 'D', 'J', 'Y', 'Z']
-    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'Ж', 'Д', 'Ⓐ']
+    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'Ж', 'Д']
 
-    for c in vcat(aupper,uupper)
+    for c in vcat(aupper,uupper,['Ⓐ'])
         @test islowercase(c) == false
         @test isuppercase(c) == true
         @test isdigit(c) == false
