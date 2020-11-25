@@ -107,3 +107,14 @@ language. In addition to the above, some advantages of Julia over comparable sys
   * Call C functions directly (no wrappers or special APIs needed)
   * Powerful shell-like capabilities for managing other processes
   * Lisp-like macros and other metaprogramming facilities
+
+Some disadvantages of Julia over comparable systems include:
+
+  * Less mature ecosystem than e.g. Python or C++, because Julia is still a young language (2012).
+    Note that the scientific ecosystem is much greater than the general purpose ecosystem.
+  * Many Julia packages, have online manuals, but documentation of specific functions is usually only available through the REPL and not available online.
+    Note that there exists [a tool](https://juliadocs.github.io/Documenter.jl) that can generate html documentation from the REPL help.
+  * Very slow startup speed when using a lot of large dependencies (known as the "time-to-first-plot problem").
+    Therefore, it is common workflow to very rarely restart Julia, see [Workflow Tips](@ref man-workflow-tips).
+    Note that you can use the [PackageCompiler.jl](https://julialang.github.io/PackageCompiler.jl/dev) to drastically decrease this time.
+    Also note that there is very active development to decrease this startup time.
