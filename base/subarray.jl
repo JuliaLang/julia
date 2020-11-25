@@ -132,7 +132,10 @@ given indices instead of making a copy if (but not only if) `A` supports `setind
 Otherwise, it may create a new object if that is a cheap operation (e.g., `UnitRange`).
 Calling [`getindex`](@ref) or
 [`setindex!`](@ref) on the returned value (usually a `SubArray`) computes the
-indices to the parent array on the fly without checking bounds.
+
+Some immutable parent arrays (like ranges) may choose to simply
+recompute a new array in some circumstances instead of returning
+a `SubArray` if doing so is efficient and provides compatible semantics.
 
 # Examples
 ```jldoctest
