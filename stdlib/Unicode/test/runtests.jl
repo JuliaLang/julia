@@ -114,7 +114,7 @@ end
     @test Base.Unicode.iscased('ǅ') # but is "cased"
 
     nocase=['א','ﺵ']
-    alphas=vcat(alower,ulower,aupper,uupper,nocase)
+    alphas=vcat(alower,ulower,aupper,uupper,nocase,['ǅ'])
 
     for c in alphas
         @test isletter(c) == true
