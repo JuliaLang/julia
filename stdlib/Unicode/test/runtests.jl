@@ -330,6 +330,12 @@ end
     @test collect(g) == ["1","2","3","α","5"]
 end
 
+@testset "#37680: initial graphemes" begin
+    @test collect(graphemes("🤦🏼‍♂️")) == ["🤦🏼‍♂️"]
+    @test collect(graphemes("👨🏻‍🤝‍👨🏽")) == ["👨🏻‍🤝‍👨🏽"]
+    @test collect(graphemes("🇸🇪🇸🇪")) == ["🇸🇪","🇸🇪"]
+end
+
 @testset "uppercasefirst/lowercasefirst" begin
     @test uppercasefirst("Hola")=="Hola"
     @test uppercasefirst("hola")=="Hola"
