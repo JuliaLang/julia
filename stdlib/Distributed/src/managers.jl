@@ -34,7 +34,7 @@ struct SSHManager <: ClusterManager
 end
 
 
-function check_addprocs_args(kwargs)
+function check_addprocs_args(manager, kwargs)
     valid_kw_names = keys(default_addprocs_params(manager))
     for keyname in keys(kwargs)
         !(keyname in valid_kw_names) && throw(ArgumentError("Invalid keyword argument $(keyname)"))
@@ -439,7 +439,7 @@ processes on the local machine. If `restrict` is `true`, binding is restricted t
 """
 function addprocs(np::Integer; restrict=true, kwargs...)
     manager = LocalManager(np, restrict)
-    check_addprocs_args(kwargs)
+    check_addprocs_args(manager, kwargs)
     addprocs(manager; kwargs...)
 end
 
