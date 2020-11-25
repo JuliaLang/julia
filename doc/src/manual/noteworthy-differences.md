@@ -198,7 +198,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     `x[x.>3]` and `x = x[x.>3]`. Using [`filter!`](@ref) reduces the use of temporary arrays.
 
 ## Noteworthy differences from Python
-  * Python's `import mod` is fast, but Julia's `import mod` or `using mod` is slow. This is known as the "time-to-first-plot" problem, because the "Plots" library is one of the slowest module to import. You can use [sysimages](https://julialang.github.io/PackageCompiler.jl/dev/devdocs/sysimages_part_1) to counter this problem.
+
   * Julia's `for`, `if`, `while`, etc. blocks are terminated by the `end` keyword. Indentation level
     is not significant as it is in Python. Unlike Python, Julia has no `pass` keyword.
   * Strings are denoted by double quotation marks (`"text"`) in Julia (with three double quotation marks for multi-line strings), whereas in Python they can be denoted either by single (`'text'`) or double quotation marks (`"text"`). Single quotation marks are used for characters in Julia (`'c'`).
@@ -251,9 +251,6 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Be careful with non-constant global variables in Julia, especially in tight loops. Since you can write close-to-metal code in Julia (unlike Python), the effect of globals can be drastic (see [Performance Tips](@ref man-performance-tips)).
   * In Python, the majority of values can be used in logical contexts (e.g. `if "a":` means the following block is executed, and `if "":` means it is not). In Julia, you need explicit conversion to `Bool` (e.g. `if "a"` throws an exception). If you want to test for a non-empty string in Julia, you would explicitly write `if !isempty("")`.
   * In Julia, a new local scope is introduced by most code blocks, including loops and `try` — `catch` — `finally`. Note that comprehensions (list, generator, etc.) introduce a new local scope both in Python and Julia, whereas `if` blocks do not introduce a new local scope in both languages.
-  
-## Noteworthy differences from Rust
-  * If you add a new dependency in Rust and run `cargo build` for the first time, this dependency will get compiled (slow). But if you run `cargo build` a second time, your dependency will not need to be compiled again. In Julia if you add a new dependency for the first time, this dependency will get precompiled (slow). But everytime a new Julia process runs `import ...` or `using ...` the compilation process of this dependency will need to get finalized (slow). This results in slow startup times for Julia when using a lot of dependencies/modules and is known as the "time-to-first-plot" problem, because the "Plots" library is one of the slowest module to import. You can use [sysimages](https://julialang.github.io/PackageCompiler.jl/dev/devdocs/sysimages_part_1) to counter this problem.
 
 ## Noteworthy differences from C/C++
 
