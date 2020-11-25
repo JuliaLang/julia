@@ -1188,3 +1188,14 @@ end
     @test (@inferred hypot(3, 4im)) === 5.0
     @test (@inferred hypot(3, 4im, 12)) === 13.0
 end
+
+struct BadFloatWrapper <: AbstractFloat
+    x::Float64
+end
+
+@testset "not impelemented errors" begin
+    x = BadFloatWrapper(1.9)
+    for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, log1p, expm1, log) #exp2, exp10 broken for now
+        @test_throws MethodError f(x)
+    end
+end

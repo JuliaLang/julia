@@ -390,8 +390,3 @@ function log1p(x::Float32)
     end
 end
 
-for f in (:log,:log1p)
-    @eval begin
-        ($f)(x::Real) = ($f)(float(x))
-    end
-end
