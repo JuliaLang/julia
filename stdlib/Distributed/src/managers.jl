@@ -258,9 +258,6 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
             env[var] = ENV[var]
         end
     end
-    for var in keys(ENV)
-        occursin(r"^[a-zA-Z0-9_]+$", var) || throw(ArgumentError(var))
-    end
 
     # Julia process with passed in command line flag arguments
     if shell == :posix
@@ -269,6 +266,8 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
         cmds = "$(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
         # set environment variables
         for (var, val) in env
+            occursin(r"^[a-zA-Z_][a-zA-Z_0-9]*\z", var) ||
+                throw(ArgumentError("invalid env key $var"))
             cmds = "export $(var)=$(shell_escape_posixly(val))\n$cmds"
         end
         # change working directory
@@ -290,6 +289,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
         end
         # set environment variables
         for (var, val) in env
+            occursin(r"^[a-zA-Z0-9_()[\]{}\$\\/#',;\.@!?*+-]+\z", var) || throw(ArgumentError("invalid env key $var"))
             remotecmd = "set $(var)=$(shell_escape_wincmd(val))&& $remotecmd"
         end
 
