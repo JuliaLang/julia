@@ -15,10 +15,12 @@ tests = unique(tests)
 
 if use_revise
     using Revise
+    union!(Revise.stdlib_names, Symbol.(STDLIBS))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
         using Revise
         const STDLIBS = $STDLIBS
+        union!(Revise.stdlib_names, Symbol.(STDLIBS))
         revise_trackall()
     end
 end
