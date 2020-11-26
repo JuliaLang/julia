@@ -76,6 +76,7 @@ end
     @test Float16(0.5f0)^2 ≈ Float16(0.5f0^2)
     @test sin(f) ≈ sin(2f0)
     @test log10(Float16(100)) == Float16(2.0)
+    @test sin(ComplexF16(f)) ≈ sin(complex(2f0))
 
     # no domain error is thrown for negative values
     @test cbrt(Float16(-1.0)) == -1.0
