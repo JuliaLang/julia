@@ -407,6 +407,10 @@ end
             @test sincosd(convert(T,  90))::fTsc === (   one(fT), zero(fT) )
             @test sincosd(convert(T, 180))::fTsc === (  zero(fT), -one(fT) )
             @test sincosd(convert(T, 270))::fTsc === (  -one(fT), zero(fT) )
+            if T <: AbstractFloat
+                @test_throws DomainError sincosd(T(Inf))
+                @test all(isnan.(sincosd(T(NaN))))
+            end
         end
 
         @testset "$name" for (name, (sinpi, cospi)) in (
