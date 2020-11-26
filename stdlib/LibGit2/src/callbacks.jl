@@ -359,9 +359,26 @@ function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
     return Cint(0)
 end
 
+function certificate_callback(
+    cert_p :: Ptr{Cvoid},
+    valid  :: Cint,
+    host_p :: Ptr{Cchar},
+    user_p :: Ptr{Cvoid},
+)::Cint
+    valid != 0 && return Consts.CERT_ACCEPT
+    host = unsafe_string(host_p)
+    cert_type = unsafe_load(convert(Ptr{Cint}, cert_p))
+    transport = cert_type == Consts.CERT_TYPE_TLS ? "TLS" :
+                cert_type == Consts.CERT_TYPE_SSH ? "SSH" : nothing
+    verify = NetworkOptions.verify_host(host, transport)
+    verify ? Consts.PASSTHROUGH : Consts.CERT_ACCEPT
+end
+
 "C function pointer for `mirror_callback`"
 mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}))
 "C function pointer for `credentials_callback`"
 credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any))
 "C function pointer for `fetchhead_foreach_callback`"
 fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Any))
+"C function pointer for `certificate_callback`"
+certificate_cb() = @cfunction(certificate_callback, Cint, (Ptr{Cvoid}, Cint, Ptr{Cchar}, Ptr{Cvoid}))

@@ -250,7 +250,7 @@ else
     VersionNumber(libllvm_version_string)
 end
 
-libllvm() = ccall(:jl_get_libllvm, Any, ())
+libllvm_path() = ccall(:jl_get_libllvm, Any, ())
 
 function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit

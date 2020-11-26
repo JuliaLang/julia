@@ -4,6 +4,10 @@ The following sections explain a few aspects of idiomatic Julia coding style. No
 are absolute; they are only suggestions to help familiarize you with the language and to help
 you choose among alternative designs.
 
+## Indentation
+
+Use 4 spaces per indentation level.
+
 ## Write functions, not just scripts
 
 Writing code as a series of steps at the top level is a quick way to get started solving a problem,

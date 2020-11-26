@@ -450,17 +450,24 @@ function readbytes_all!(s::IOStream,
                         nb::Integer)
     olb = lb = length(b)
     nr = 0
-    @_lock_ios s begin
-    GC.@preserve b while nr < nb
-        if lb < nr+1
-            lb = max(65536, (nr+1) * 2)
-            resize!(b, lb)
+    let l = s._dolock, slock = s.lock
+        l && lock(slock)
+        GC.@preserve b while nr < nb
+            if lb < nr+1
+                try
+                    lb = max(65536, (nr+1) * 2)
+                    resize!(b, lb)
+                catch
+                    l && unlock(slock)
+                    rethrow()
+                end
+            end
+            thisr = Int(ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+                            s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
+            nr += thisr
+            (nr == nb || thisr == 0 || _eof_nolock(s)) && break
         end
-        thisr = Int(ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-                          s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
-        nr += thisr
-        (nr == nb || thisr == 0 || _eof_nolock(s)) && break
-    end
+        l && unlock(slock)
     end
     if lb > olb && lb > nr
         resize!(b, max(olb, nr)) # shrink to just contain input data if was resized

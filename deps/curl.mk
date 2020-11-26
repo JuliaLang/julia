@@ -26,6 +26,9 @@ $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.
 	touch -c $(SRCCACHE)/curl-$(CURL_VER)/configure # old target
 	echo 1 > $@
 
+checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \

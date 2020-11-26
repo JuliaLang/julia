@@ -1214,8 +1214,13 @@ static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
 {
     // Almost all of our inttoptr are generated due to representing `Ptr` with `T_size`
     // in LLVM and most of these integers are generated from `ptrtoint` in the first place.
-    if (auto I = dyn_cast<PtrToIntInst>(v))
-        return ctx.builder.CreateBitCast(I->getOperand(0), ty);
+    if (auto I = dyn_cast<PtrToIntInst>(v)) {
+        auto ptr = I->getOperand(0);
+        if (ty->getPointerAddressSpace() == ptr->getType()->getPointerAddressSpace())
+            return ctx.builder.CreateBitCast(ptr, ty);
+        else if (ty->getPointerElementType() == ptr->getType()->getPointerElementType())
+            return ctx.builder.CreateAddrSpaceCast(ptr, ty);
+    }
     return ctx.builder.CreateIntToPtr(v, ty);
 }
 

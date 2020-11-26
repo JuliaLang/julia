@@ -283,6 +283,7 @@ end
             @test hypot(T(Inf), T(x)) === T(Inf)
             @test hypot(T(Inf), T(NaN)) === T(Inf)
             @test isnan_type(T, hypot(T(x), T(NaN)))
+            @test tanh(T(Inf)) === T(1)
         end
     end
 end
@@ -991,9 +992,11 @@ end
         @test isnan_type(T, tanh(T(NaN)))
         for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), T(1.0), H_MEDIUM_X(T)]))
             @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
-            @test tanh(-x) ≈ tanh(big(-x)) rtol=eps(T)
+            @test tanh(-x) ≈ -tanh(big(x)) rtol=eps(T)
         end
     end
+    @test tanh(18.0) ≈ tanh(big(18.0)) rtol=eps(Float64)
+    @test tanh(8.0) ≈ tanh(big(8.0)) rtol=eps(Float32)
 end
 
 @testset "asinh" begin
@@ -1074,6 +1077,19 @@ float(x::FloatWrapper) = x
     @test isa(exp(z), Complex)
     @test isa(sin(z), Complex)
     @test isa(cos(z), Complex)
+end
+
+# Define simple wrapper of a Float type:
+struct FloatWrapper2 <: Real
+    x::Float64
+end
+
+float(x::FloatWrapper2) = x.x
+@testset "inverse hyperbolic trig functions of non-standard float" begin
+    x = FloatWrapper2(3.1)
+    @test asinh(sinh(x)) == asinh(sinh(3.1))
+    @test acosh(cosh(x)) == acosh(cosh(3.1))
+    @test atanh(tanh(x)) == atanh(tanh(3.1))
 end
 
 @testset "cbrt" begin
@@ -1171,4 +1187,15 @@ end
     # hypot on Complex returns Real
     @test (@inferred hypot(3, 4im)) === 5.0
     @test (@inferred hypot(3, 4im, 12)) === 13.0
+end
+
+struct BadFloatWrapper <: AbstractFloat
+    x::Float64
+end
+
+@testset "not impelemented errors" begin
+    x = BadFloatWrapper(1.9)
+    for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, log1p, expm1, log) #exp2, exp10 broken for now
+        @test_throws MethodError f(x)
+    end
 end

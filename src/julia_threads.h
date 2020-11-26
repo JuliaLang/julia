@@ -77,10 +77,16 @@ typedef struct {
 #endif
 #endif
 
+// handle to reference an OS thread
+#ifdef _OS_WINDOWS_
+typedef DWORD jl_thread_t;
+#else
+typedef pthread_t jl_thread_t;
+#endif
 
 // Recursive spin lock
 typedef struct {
-    volatile unsigned long owner;
+    volatile jl_thread_t owner;
     uint32_t count;
 } jl_mutex_t;
 
@@ -221,7 +227,7 @@ struct _jl_tls_states_t {
 #else
     void *signal_stack;
 #endif
-    unsigned long system_id;
+    jl_thread_t system_id;
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
@@ -327,6 +333,17 @@ JL_DLLEXPORT void (jl_gc_safepoint)(void);
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
+
+// Copied from libuv. Add `JL_CONST_FUNC` so that the compiler
+// can optimize this better.
+static inline jl_thread_t JL_CONST_FUNC jl_thread_self(void)
+{
+#ifdef _OS_WINDOWS_
+    return GetCurrentThreadId();
+#else
+    return pthread_self();
+#endif
+}
 
 #ifdef __cplusplus
 }

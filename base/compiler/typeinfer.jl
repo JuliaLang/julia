@@ -27,6 +27,8 @@ struct InferenceFrameInfo
     world::UInt64
     sptypes::Vector{Any}
     slottypes::Vector{Any}
+    nargs::Int
+    limited::Bool
 end
 
 function _typeinf_identifier(frame::Core.Compiler.InferenceState)
@@ -35,6 +37,8 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
         frame.world,
         copy(frame.sptypes),
         copy(frame.slottypes),
+        frame.nargs,
+        frame.limited,
     )
     return mi_info
 end
@@ -81,7 +85,7 @@ function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
         # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)]),
+        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1, false),
         _time_ns()))
     return nothing
 end
@@ -232,7 +236,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
             if opt isa OptimizationState
                 run_optimizer = doopt && may_optimize(interp)
                 if run_optimizer
-                    optimize(opt, OptimizationParams(interp), caller.result)
+                    optimize(interp, opt, OptimizationParams(interp), caller.result)
                     finish(opt.src, interp)
                     # finish updating the result struct
                     validate_code_in_debug_mode(opt.linfo, opt.src, "optimized")
@@ -768,7 +772,7 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
         opt = OptimizationState(frame, opt_params, interp)
-        optimize(opt, opt_params, result.result)
+        optimize(interp, opt, opt_params, result.result)
         opt.src.inferred = true
     end
     ccall(:jl_typeinf_end, Cvoid, ())

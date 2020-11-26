@@ -340,6 +340,7 @@ distclean-libcxx:
 distclean-libcxxabi:
 	-rm -rf $(LLVM_LIBCXXABI_TAR) $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_BUILD_DIR)/libcxxabi-build
 
+
 # We want to ensure that the libcxx linking flags don't get passed to the libcxx build, since it will
 # error on a fresh build
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)" \
@@ -353,6 +354,23 @@ LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LIBCXX_DEPENDENCY := $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1.0
 get-llvm: get-libcxx get-libcxxabi
+endif
+
+checksum-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
+ifneq ($(LLVM_CLANG_TAR),)
+	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
+endif
+ifneq ($(LLVM_COMPILER_RT_TAR),)
+	$(JLCHECKSUM) $(LLVM_COMPILER_RT_TAR)
+endif
+ifneq ($(LLVM_LIBCXX_TAR),)
+	$(JLCHECKSUM) $(LLVM_LIBCXX_TAR)
+endif
+ifneq ($(LLVM_VER),svn)
+	$(JLCHECKSUM) $(LLVM_TAR)
+endif
+ifneq ($(LLVM_LLDB_TAR),)
+	$(JLCHECKSUM) $(LLVM_LLDB_TAR)
 endif
 
 $(LLVM_SRC_DIR)/source-extracted: | $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
@@ -498,23 +516,23 @@ endif
 endif # LLVM_VER 10.0
 
 ifeq ($(LLVM_VER_SHORT),11.0)
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
-$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # replaced by D90969 for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS)) # Needs upstreaming
 $(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
-$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485)) # Needs upstreaming
 $(eval $(call LLVM_PATCH,llvm-11-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 $(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa))
+$(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa)) # Needs upstreaming
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
 endif
 $(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-rtdyld-empty-symbol)) # FIXME(vchuravy): This should not be necessary
+$(eval $(call LLVM_PATCH,llvm-11-D90722-rtdyld-absolute-relocs)) # remove for LLVM 12
 endif # LLVM_VER 11.0
 
 

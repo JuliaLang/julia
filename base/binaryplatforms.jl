@@ -53,7 +53,7 @@ struct Platform <: AbstractPlatform
             "os" => os,
         )
         for (tag, value) in kwargs
-            tag = lowercase(string(tag))
+            tag = lowercase(string(tag::Symbol))
             if tag ∈ ("arch", "os")
                 throw(ArgumentError("Cannot double-pass key $(tag)"))
             end
@@ -68,17 +68,14 @@ struct Platform <: AbstractPlatform
             # doesn't parse nicely into a VersionNumber to persist, but if `validate_strict` is
             # set to `true`, it will cause an error later on.
             if tag ∈ ("libgfortran_version", "libstdcxx_version", "os_version")
-                normver(x::VersionNumber) = string(x)
-                function normver(str::AbstractString)
-                    v = tryparse(VersionNumber, str)
-                    if v === nothing
-                        # If this couldn't be parsed as a VersionNumber, return the original.
-                        return str
+                if isa(value, VersionNumber)
+                    value = string(value)
+                elseif isa(value, AbstractString)
+                    v = tryparse(VersionNumber, value)
+                    if isa(v, VersionNumber)
+                        value = string(v)
                     end
-                    # Otherwise, return the `string(VersionNumber(str))` version.
-                    return normver(v)
                 end
-                value = normver(value)
             end
 
             # Use `add_tag!()` to add the tag to our collection of tags
@@ -430,7 +427,7 @@ function VNorNothing(d::Dict, key)
     if v === nothing
         return nothing
     end
-    return VersionNumber(v)
+    return VersionNumber(v)::VersionNumber
 end
 
 """

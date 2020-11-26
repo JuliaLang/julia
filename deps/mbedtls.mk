@@ -28,6 +28,9 @@ $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 	touch -c $(SRCCACHE)/$(MBEDTLS_SRC)/CMakeLists.txt # old target
 	echo 1 > $@
 
+checksum-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \

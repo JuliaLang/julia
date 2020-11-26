@@ -1,8 +1,9 @@
+## Zlib ##
+ifneq ($(USE_BINARYBUILDER_ZLIB), 1)
 ZLIB_GIT_URL := git://github.com/madler/zlib.git
 ZLIB_TAR_URL = https://api.github.com/repos/madler/zlib/tarball/$1
 $(eval $(call git-external,zlib,ZLIB,,,$(SRCCACHE)))
 
-ifneq ($(USE_BINARYBUILDER_ZLIB), 1)
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured: $(SRCCACHE)/$(ZLIB_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && $(CMAKE) -DCMAKE_INSTALL_PREFIX=$(abspath $(build_prefix)) -DCMAKE_BUILD_TYPE=Release -DUNIX=true $(dir $<)

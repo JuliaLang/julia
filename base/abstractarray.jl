@@ -45,11 +45,24 @@ Return the valid range of indices for array `A` along dimension `d`.
 See also [`size`](@ref), and the manual chapter on [arrays with custom indices](@ref man-custom-indices).
 
 # Examples
+
 ```jldoctest
 julia> A = fill(1, (5,6,7));
 
 julia> axes(A, 2)
 Base.OneTo(6)
+```
+
+# Usage note
+
+Each of the indices has to be an `AbstractUnitRange{<:Integer}`, but at the same time can be
+a type that uses custom indices. So, for example, if you need a subset, use generalized
+indexing constructs like `begin`/`end` or [`firstindex`](@ref)/[`lastindex`](@ref):
+
+```julia
+ix = axes(v, 1)
+ix[2:end]          # will work for eg Vector, but may fail in general
+ix[(begin+1):end]  # works for generalized indexes
 ```
 """
 function axes(A::AbstractArray{T,N}, d) where {T,N}
@@ -63,6 +76,7 @@ end
 Return the tuple of valid indices for array `A`.
 
 # Examples
+
 ```jldoctest
 julia> A = fill(1, (5,6,7));
 
@@ -1225,7 +1239,7 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; _ind2sub(sz, i))
     A[inds...] = X
 
 Store values from array `X` within some subset of `A` as specified by `inds`.
-The syntax `A[inds...] = X` is equivalent to `setindex!(A, X, inds...)`.
+The syntax `A[inds...] = X` is equivalent to `(setindex!(A, X, inds...); X)`.
 
 # Examples
 ```jldoctest

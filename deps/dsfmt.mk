@@ -26,6 +26,9 @@ $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted: $(SRCCACHE)/dsfmt-$(DSFMT_VER).
 	cd $(dir $@) && patch < $(SRCDIR)/patches/dSFMT.c.patch
 	echo 1 > $@
 
+checksum-dsfmt: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted
 	cd $(dir $<) && \
 	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dSFMT.c -o libdSFMT.$(SHLIB_EXT)

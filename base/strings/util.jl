@@ -22,7 +22,7 @@ function startswith(a::AbstractString, b::AbstractString)
     a, b = Iterators.Stateful(a), Iterators.Stateful(b)
     all(splat(==), zip(a, b)) && isempty(b)
 end
-startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
+startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::AbstractChar in chars
 
 """
     endswith(s::AbstractString, suffix::AbstractString)

@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+// Note that this file is `#include`d by "signal-handling.c"
+
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -223,7 +225,7 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
 }
 
 #if defined(HAVE_MACH)
-#include <signals-mach.c>
+#include "signals-mach.c"
 #else
 
 static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
@@ -690,7 +692,11 @@ static void *signal_listener(void *arg)
 
             // do backtrace for profiler
             if (profile && running) {
-                if (bt_size_cur < bt_size_max - 1) {
+                if (jl_profile_is_buffer_full()) {
+                    // Buffer full: Delete the timer
+                    jl_profile_stop_timer();
+                }
+                else {
                     // unwinding can fail, so keep track of the current state
                     // and restore from the SEGV handler if anything happens.
                     jl_ptls_t ptls = jl_get_ptls_states();
@@ -709,10 +715,6 @@ static void *signal_listener(void *arg)
 
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++].uintptr = 0;
-                }
-                if (bt_size_cur >= bt_size_max - 1) {
-                    // Buffer full: Delete the timer
-                    jl_profile_stop_timer();
                 }
             }
 

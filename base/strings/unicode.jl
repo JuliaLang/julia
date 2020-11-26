@@ -145,7 +145,7 @@ const UTF8PROC_STRIPMARK = (1<<13)
 
 utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (Cssize_t,), result)))
 
-function utf8proc_map(str::String, options::Integer)
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer)
     nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                    str, sizeof(str), C_NULL, 0, options)
     nwords < 0 && utf8proc_error(nwords)

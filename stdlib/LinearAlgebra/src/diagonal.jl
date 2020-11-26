@@ -752,3 +752,7 @@ function logabsdet(A::Diagonal)
      mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),
                A.diag)
 end
+
+function Base.muladd(A::Diagonal, B::Diagonal, z::Diagonal)
+    Diagonal(A.diag .* B.diag .+ z.diag)
+end

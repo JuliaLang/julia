@@ -7508,3 +7508,14 @@ let array = Int[]
 end
 @test compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
                          Ref{Union{Int,Vector{Int}}}(1))
+
+# issue #38224
+struct S38224
+    i::Union{Int,Missing}
+end
+@test S38224.zeroinit
+for _ in 1:5
+    let a = Vector{S38224}(undef, 1000000)
+        @test all(x->ismissing(x.i), a)
+    end
+end

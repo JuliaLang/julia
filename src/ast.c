@@ -935,6 +935,15 @@ JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym)
     return res;
 }
 
+JL_DLLEXPORT int jl_is_syntactic_operator(char *sym)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    int res = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "syntactic-op?")), symbol(fl_ctx, sym)) == fl_ctx->T;
+    jl_ast_ctx_leave(ctx);
+    return res;
+}
+
 JL_DLLEXPORT int jl_operator_precedence(char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();

@@ -1548,7 +1548,8 @@
                                            (lambda (name) (string "keyword argument \"" name
                                                                   "\" repeated in call to \"" (deparse fexpr) "\""))
                                            "keyword argument"
-                                           "keyword argument syntax"))
+                                           "keyword argument syntax"
+                                           #t))
       ,(if (every vararg? kw)
            (kwcall-unless-empty f pa kw-container kw-container)
            `(call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
@@ -1857,7 +1858,8 @@
 (define (lower-named-tuple lst
                            (dup-error-fn (lambda (name) (string "field name \"" name "\" repeated in named tuple")))
                            (name-str     "named tuple field")
-                           (syntax-str   "named tuple element"))
+                           (syntax-str   "named tuple element")
+                           (call-with-keyword-arguments? #f))
   (let* ((names (apply append
                        (map (lambda (x)
                               (cond ((symbol? x) (list x))
@@ -1926,6 +1928,8 @@
                          (if current
                              (merge current (cadr el))
                              `(call (top merge) (call (top NamedTuple)) ,(cadr el))))))
+                ((and call-with-keyword-arguments? (has-parameters? L))
+                 (error "more than one semicolon in argument list"))
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
@@ -2108,20 +2112,27 @@
                                   x (make-ssavalue)))
                          (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                          (n   (length lhss))
+                         ;; skip last assignment if it is an all-underscore vararg
+                         (n   (if (> n 0)
+                                  (let ((l (last lhss)))
+                                    (if (and (vararg? l) (underscore-symbol? (cadr l)))
+                                        (- n 1)
+                                        n))
+                                  n))
                          (st  (gensy)))
                     `(block
-                      (local ,st)
+                      ,@(if (> n 0) `((local ,st)) '())
                       ,@ini
-                      ,.(map (lambda (i lhs)
+                      ,@(map (lambda (i lhs)
                                (expand-forms
-                                 (if (and (pair? lhs) (eq? (car lhs) '|...|))
-                                     `(= ,(cadr lhs) (call (top rest) ,xx ,.(if (eq? i 0) '() `(,st))))
+                                 (if (vararg? lhs)
+                                     `(= ,(cadr lhs) (call (top rest) ,xx ,@(if (eq? i 0) '() `(,st))))
                                      (lower-tuple-assignment
-                                      (if (= i (- n 1))
-                                          (list lhs)
-                                          (list lhs st))
-                                      `(call (top indexed_iterate)
-                                             ,xx ,(+ i 1) ,.(if (eq? i 0) '() `(,st)))))))
+                                       (if (= i (- n 1))
+                                           (list lhs)
+                                           (list lhs st))
+                                       `(call (top indexed_iterate)
+                                              ,xx ,(+ i 1) ,@(if (eq? i 0) '() `(,st)))))))
                              (iota n)
                              lhss)
                       (unnecessary ,xx)))))))

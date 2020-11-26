@@ -158,9 +158,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test copy(viewA1') == Matrix(viewA1)'
             # transpose!
             @test transpose!(copy(A1)) == transpose(A1)
+            @test typeof(transpose!(copy(A1))).name == typeof(transpose(A1)).name
             @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == transpose(viewA1)
             # adjoint!
             @test adjoint!(copy(A1)) == adjoint(A1)
+            @test typeof(adjoint!(copy(A1))).name == typeof(adjoint(A1)).name
             @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == adjoint(viewA1)
         end
 
@@ -304,6 +306,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             svdvals(A1)
         end
 
+        @test ((A1*A1)::t1) ≈ Matrix(A1) * Matrix(A1)
+        @test ((A1/A1)::t1) ≈ Matrix(A1) / Matrix(A1)
+        @test ((A1\A1)::t1) ≈ Matrix(A1) \ Matrix(A1)
+
         # Begin loop for second Triangular matrix
         for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
             for (t2, uplo2) in ((UpperTriangular, :U),
@@ -338,6 +344,27 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1'A2' ≈ Matrix(A1)'Matrix(A2)'
                 @test A1/A2 ≈ Matrix(A1)/Matrix(A2)
                 @test A1\A2 ≈ Matrix(A1)\Matrix(A2)
+                if uplo1 === :U && uplo2 === :U
+                    if t1 === UnitUpperTriangular && t2 === UnitUpperTriangular
+                        @test A1*A2 isa UnitUpperTriangular
+                        @test A1/A2 isa UnitUpperTriangular
+                        @test A1\A2 isa UnitUpperTriangular
+                    else
+                        @test A1*A2 isa UpperTriangular
+                        @test A1/A2 isa UpperTriangular
+                        @test A1\A2 isa UpperTriangular
+                    end
+                elseif uplo1 === :L && uplo2 === :L
+                    if t1 === UnitLowerTriangular && t2 === UnitLowerTriangular
+                        @test A1*A2 isa UnitLowerTriangular
+                        @test A1/A2 isa UnitLowerTriangular
+                        @test A1\A2 isa UnitLowerTriangular
+                    else
+                        @test A1*A2 isa LowerTriangular
+                        @test A1/A2 isa LowerTriangular
+                        @test A1\A2 isa LowerTriangular
+                    end
+                end
                 offsizeA = Matrix{Float64}(I, n+1, n+1)
                 @test_throws DimensionMismatch offsizeA / A2
                 @test_throws DimensionMismatch offsizeA / transpose(A2)
@@ -602,6 +629,47 @@ end
         @test isa(similar(trisparsemat, Float32), TriType{Float32,<:SparseMatrixCSC{Float32}})
         @test isa(similar(trisparsemat, (n, n)), typeof(sparsemat))
         @test isa(similar(trisparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
+    end
+end
+
+@testset "inplace mul of appropriate types should preserve triagular structure" begin
+    for elty1 in (Float64, ComplexF32), elty2 in (Float64, ComplexF32)
+        T = promote_type(elty1, elty2)
+        M1 = rand(elty1, 5, 5)
+        M2 = rand(elty2, 5, 5)
+        A = UpperTriangular(M1)
+        A2 = UpperTriangular(M2)
+        Au = UnitUpperTriangular(M1)
+        Au2 = UnitUpperTriangular(M2)
+        B = LowerTriangular(M1)
+        B2 = LowerTriangular(M2)
+        Bu = UnitLowerTriangular(M1)
+        Bu2 = UnitLowerTriangular(M2)
+
+        @test mul!(similar(A), A, A)::typeof(A) == A*A
+        @test mul!(similar(A, T), A, A2) ≈ A*A2
+        @test mul!(similar(A, T), A2, A) ≈ A2*A
+        @test mul!(typeof(similar(A, T))(A), A, A2, 2.0, 3.0) ≈ 2.0*A*A2 + 3.0*A
+        @test mul!(typeof(similar(A2, T))(A2), A2, A, 2.0, 3.0) ≈ 2.0*A2*A + 3.0*A2
+
+        @test mul!(similar(A), A, Au)::typeof(A) == A*Au
+        @test mul!(similar(A), Au, A)::typeof(A) == Au*A
+        @test mul!(similar(Au), Au, Au)::typeof(Au) == Au*Au
+        @test mul!(similar(A, T), A, Au2) ≈ A*Au2
+        @test mul!(similar(A, T), Au2, A) ≈ Au2*A
+        @test mul!(similar(Au2), Au2, Au2) == Au2*Au2
+
+        @test mul!(similar(B), B, B)::typeof(B) == B*B
+        @test mul!(similar(B, T), B, B2) ≈ B*B2
+        @test mul!(similar(B, T), B2, B) ≈ B2*B
+        @test mul!(typeof(similar(B, T))(B), B, B2, 2.0, 3.0) ≈ 2.0*B*B2 + 3.0*B
+        @test mul!(typeof(similar(B2, T))(B2), B2, B, 2.0, 3.0) ≈ 2.0*B2*B + 3.0*B2
+
+        @test mul!(similar(B), B, Bu)::typeof(B) == B*Bu
+        @test mul!(similar(B), Bu, B)::typeof(B) == Bu*B
+        @test mul!(similar(Bu), Bu, Bu)::typeof(Bu) == Bu*Bu
+        @test mul!(similar(B, T), B, Bu2) ≈ B*Bu2
+        @test mul!(similar(B, T), Bu2, B) ≈ Bu2*B
     end
 end
 

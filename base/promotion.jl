@@ -333,7 +333,9 @@ If `y` is an `Int` literal (e.g. `2` in `x^2` or `-3` in `x^-3`), the Julia code
 enable compile-time specialization on the value of the exponent.
 (As a default fallback we have `Base.literal_pow(^, x, Val(y)) = ^(x,y)`,
 where usually `^ == Base.^` unless `^` has been defined in the calling
-namespace.)
+namespace.) If `y` is a negative integer literal, then `Base.literal_pow`
+transforms the operation to `inv(x)^-y` by default, where `-y` is positive.
+
 
 ```jldoctest
 julia> 3^5
