@@ -139,6 +139,7 @@ import NiceStuff
 ```
 
 brings *only* the module name into scope. Users would need to use `NiceStuff.DOG`, `NiceStuff.Dog`, and `NiceStuff.nice` to access its contents. Usually, `import ModuleName` is used in contexts when the user wants to keep the namespace clean.
+As we will see in the next section `import NiceStuff` is equivalent to `using NiceStuff: NiceStuff`.
 
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
