@@ -471,7 +471,7 @@ function ssh_knownhost_check(
 )
     hashes.sha1 === hashes.sha256 === nothing &&
         return Consts.SSH_HOST_BAD_HASH
-    session = @ccall libssh2_session_init_ex(
+    session = @ccall "libssh2".libssh2_session_init_ex(
         C_NULL :: Ptr{Cvoid},
         C_NULL :: Ptr{Cvoid},
         C_NULL :: Ptr{Cvoid},
@@ -479,24 +479,24 @@ function ssh_knownhost_check(
     ) :: Ptr{Cvoid}
     for file in files
         ispath(file) || continue
-        hosts = @ccall libssh2_knownhost_init(
+        hosts = @ccall "libssh2".libssh2_knownhost_init(
             session :: Ptr{Cvoid},
         ) :: Ptr{Cvoid}
-        count = @ccall libssh2_knownhost_readfile(
+        count = @ccall "libssh2".libssh2_knownhost_readfile(
             hosts :: Ptr{Cvoid},
             file  :: Cstring,
             1     :: Cint, # standard OpenSSH format
         ) :: Cint
         if count < 0
             @warn("Error parsing SSH known hosts file `$file`")
-            @ccall libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
+            @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
             continue
         end
         name_match = false
         prev = Ptr{KnownHost}(0)
         store = Ref{Ptr{KnownHost}}()
         while true
-            get = @ccall libssh2_knownhost_get(
+            get = @ccall "libssh2".libssh2_knownhost_get(
                 hosts :: Ptr{Cvoid},
                 store :: Ptr{Ptr{KnownHost}},
                 prev  :: Ptr{KnownHost},
@@ -519,18 +519,18 @@ function ssh_knownhost_check(
             end
             key_match || continue
             # name and key match found
-            @ccall libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
-            @assert 0 == @ccall libssh2_session_free(session::Ptr{Cvoid})::Cint
+            @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
+            @assert 0 == @ccall "libssh2".libssh2_session_free(session::Ptr{Cvoid})::Cint
             return Consts.SSH_HOST_KNOWN
         end
-        @ccall libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
+        @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
         name_match || continue # no name match, search more files
         # name match but no key match => host mismatch
-        @assert 0 == @ccall libssh2_session_free(session::Ptr{Cvoid})::Cint
+        @assert 0 == @ccall "libssh2".libssh2_session_free(session::Ptr{Cvoid})::Cint
         return Consts.SSH_HOST_MISMATCH
     end
     # name not found in any known hosts files
-    @assert 0 == @ccall libssh2_session_free(session::Ptr{Cvoid})::Cint
+    @assert 0 == @ccall "libssh2".libssh2_session_free(session::Ptr{Cvoid})::Cint
     return Consts.SSH_HOST_UNKNOWN
 end
 
