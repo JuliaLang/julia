@@ -391,12 +391,18 @@ end
             T != Rational{Int} && @test sind(convert(T,-0.0))::fT === -zero(fT)
             @test sind(convert(T,-180.0))::fT === -zero(fT)
             @test sind(convert(T,-360.0))::fT === -zero(fT)
+            if T <: AbstractFloat
+                @test isnan(sind(T(NaN)))
+            end
         end
         @testset "cosd" begin
             @test cosd(convert(T,90))::fT === zero(fT)
             @test cosd(convert(T,270))::fT === zero(fT)
             @test cosd(convert(T,-90))::fT === zero(fT)
             @test cosd(convert(T,-270))::fT === zero(fT)
+            if T <: AbstractFloat
+                @test isnan(cosd(T(NaN)))
+            end
         end
         @testset "sincosd" begin
             @test sincosd(convert(T,-360))::fTsc === ( -zero(fT),  one(fT) )
@@ -407,6 +413,10 @@ end
             @test sincosd(convert(T,  90))::fTsc === (   one(fT), zero(fT) )
             @test sincosd(convert(T, 180))::fTsc === (  zero(fT), -one(fT) )
             @test sincosd(convert(T, 270))::fTsc === (  -one(fT), zero(fT) )
+            if T <: AbstractFloat
+                @test_throws DomainError sincosd(T(Inf))
+                @test all(isnan.(sincosd(T(NaN))))
+            end
         end
 
         @testset "$name" for (name, (sinpi, cospi)) in (
