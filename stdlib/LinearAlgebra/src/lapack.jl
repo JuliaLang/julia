@@ -96,15 +96,16 @@ function chkfinite(A::AbstractMatrix)
 end
 
 function chkuplofinite(A::AbstractMatrix, uplo::AbstractChar)
+    require_one_based_indexing(A)
     m, n = size(A)
     if uplo == 'U'
-        for i in 1:m, j in i:n
+        @inbounds for j in 1:n, i in 1:j
             if !isfinite(A[i,j])
                 throw(ArgumentError("matrix contains Infs or NaNs"))
             end
         end
     else
-        for i in 1:m, j in 1:i
+        @inbounds for j in 1:n, i in j:m
             if !isfinite(A[i,j])
                 throw(ArgumentError("matrix contains Infs or NaNs"))
             end
