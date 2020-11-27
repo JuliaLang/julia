@@ -404,8 +404,7 @@ function certificate_callback(
         # incoming `valid` flag, so if we get here then host verification failed
         verify_host_error("TLS host verification: the identity of the server `$host` could not be verified. Someone could be trying to man-in-the-middle your connection. It is also possible that the correct server is using an invalid certificate or that your system's certificate authority root store is misconfigured.")
         return Consts.CERT_REJECT
-    end
-    if transport == "SSH"
+    elseif transport == "SSH"
         # SSH verification has to be done here
         files = [joinpath(homedir(), ".ssh", "known_hosts")]
         check = ssh_knownhost_check(files, host, KeyHashes(cert_p))
@@ -416,11 +415,11 @@ function certificate_callback(
             if Sys.which("ssh-keyscan") !== nothing
                 msg = "Please run `ssh-keyscan $host >> $(files[1])` in order to add the server to your known hosts file and the try again."
             else
-                msg = "Please connect once using `ssh $host` in order to add the server to your known hosts file and the try again. You may not be allowed to log in (wrong user and/or no login allowed), but ssh will prompt you about adding a host key for the server first, which will allow libgit2 to verify the server."
+                msg = "Please connect once using `ssh $host` in order to add the server to your known hosts file and then try again. You may not be allowed to log in (wrong user and/or no login allowed), but ssh will prompt you to add a host key for the server which will allow libgit2 to verify the server."
             end
             verify_host_error("SSH host verification: the server `$host` is not a known host. $msg")
         elseif check == Consts.SSH_HOST_MISMATCH
-            verify_host_error("SSH host verification: the identity of the server `$host` does not match its known hosts record. Someone could be trying to man-in-the-middle your connection. It is also possible that the server has changed its key, in which case you should check with the server administrator and use `ssh $host` to login into the server and update your known hosts file.")
+            verify_host_error("SSH host verification: the identity of the server `$host` does not match its known hosts record. Someone could be trying to man-in-the-middle your connection. It is also possible that the server has changed its key, in which case you should check with the server administrator and if they confirm that the key has been changed, update your known hosts file.")
         elseif check == Consts.SSH_HOST_BAD_HASH
             verify_host_error("SSH host verification: no secure certificate hash available for `$host`, cannot verify server identity.")
         else
