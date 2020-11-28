@@ -317,6 +317,25 @@ const PASSTHROUGH = -30
 const CERT_REJECT = -1
 const CERT_ACCEPT =  0
 
+# certificate hash flags
+const CERT_SSH_MD5    = 1 << 0
+const CERT_SSH_SHA1   = 1 << 1
+const CERT_SSH_SHA256 = 1 << 2
+
+# libssh2 known host constants
+const LIBSSH2_KNOWNHOST_TYPE_PLAIN  = 1
+const LIBSSH2_KNOWNHOST_TYPE_SHA1   = 2
+const LIBSSH2_KNOWNHOST_TYPE_CUSTOM = 3
+
+const LIBSSH2_KNOWNHOST_KEYENC_RAW    = 1 << 16
+const LIBSSH2_KNOWNHOST_KEYENC_BASE64 = 2 << 16
+
+# internal constants for SSH host verification outcomes
+const SSH_HOST_KNOWN    = 0
+const SSH_HOST_UNKNOWN  = 1
+const SSH_HOST_MISMATCH = 2
+const SSH_HOST_BAD_HASH = 3
+
 @enum(GIT_SUBMODULE_IGNORE, SUBMODULE_IGNORE_UNSPECIFIED  = -1, # use the submodule's configuration
                             SUBMODULE_IGNORE_NONE         = 1,  # any change or untracked == dirty
                             SUBMODULE_IGNORE_UNTRACKED    = 2,  # dirty if tracked files change
