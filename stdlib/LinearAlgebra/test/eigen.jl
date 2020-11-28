@@ -101,11 +101,12 @@ end
         @test_throws(ArgumentError, eigen(fill(eltya, 1, 1)))
         @test_throws(ArgumentError, eigen(fill(eltya, 2, 2)))
         test_matrix = rand(typeof(eltya),3,3)
-        test_matrix[2,2] = eltya
+        test_matrix[1,3] = eltya
         @test_throws(ArgumentError, eigen(test_matrix))
         @test_throws(ArgumentError, eigen(Symmetric(test_matrix)))
         @test_throws(ArgumentError, eigen(Hermitian(test_matrix)))
-        @test_throws(ArgumentError, eigen(Diagonal(test_matrix)))
+        @test eigen(Symmetric(transpose(test_matrix))) isa Eigen
+        @test eigen(Hermitian(transpose(test_matrix))) isa Eigen
     end
 end
 
