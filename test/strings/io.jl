@@ -64,6 +64,8 @@
     @test typeof(escape_string("test", "t")) == String
     @test escape_string("test", "t") == "\\tes\\t"
 
+    @test escape_string("\\cdot", "", true) == "\\cdot"
+
     for i = 1:size(cx,1)
         cp, ch, st = cx[i,:]
         @test cp == convert(UInt32, ch)

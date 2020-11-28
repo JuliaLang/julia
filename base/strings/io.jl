@@ -310,8 +310,8 @@ escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
-    escape_string(str::AbstractString[, esc])::AbstractString
-    escape_string(io, str::AbstractString[, esc::])::Nothing
+    escape_string(str::AbstractString[, esc, bsescaped])::AbstractString
+    escape_string(io, str::AbstractString[, esc, bsescaped])::Nothing
 
 General escaping of traditional C and Unicode escape sequences. The first form returns the
 escaped string, the second prints the result to `io`.
@@ -322,6 +322,10 @@ unambiguous), unicode code point (`"\\u"` prefix) or hex (`"\\x"` prefix).
 
 The optional `esc` argument specifies any additional characters that should also be
 escaped by a prepending backslash (`\"` is also escaped by default in the first form).
+
+By default, this function escapes all backslashes, meaning that `\\cdot` becomes
+`\\\\cdot`. If the argument `bsescaped` is `true` then it assumes that all
+backslashes are already escaped. Hence, for example, `\\cdot` does not change.
 
 # Examples
 ```jldoctest
@@ -341,7 +345,8 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 ## See also
 [`unescape_string`](@ref) for the reverse operation.
 """
-function escape_string(io::IO, s::AbstractString, esc="")
+function escape_string(io::IO, s::AbstractString, esc="", bsescaped = false)
+    bse = bsescaped
     a = Iterators.Stateful(s)
     for c::AbstractChar in a
         if c in esc
@@ -349,7 +354,7 @@ function escape_string(io::IO, s::AbstractString, esc="")
         elseif isascii(c)
             c == '\0'          ? print(io, escape_nul(peek(a)::Union{AbstractChar,Nothing})) :
             c == '\e'          ? print(io, "\\e") :
-            c == '\\'          ? print(io, "\\\\") :
+            c == '\\' && !bse  ? print(io, "\\\\") :
             '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
             isprint(c)         ? print(io, c) :
                                  print(io, "\\x", string(UInt32(c), base = 16, pad = 2))
@@ -368,7 +373,8 @@ function escape_string(io::IO, s::AbstractString, esc="")
     end
 end
 
-escape_string(s::AbstractString, esc=('\"',)) = sprint(escape_string, s, esc, sizehint=lastindex(s))
+escape_string(s::AbstractString, esc=('\"',), bsescaped = false) =
+    sprint(escape_string, s, esc, bsescaped, sizehint=lastindex(s))
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')
