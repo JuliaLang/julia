@@ -831,6 +831,9 @@ julia> floatmax(Float32)
 
 julia> floatmax()
 1.7976931348623157e308
+
+julia> typemax(Float64)
+Inf
 ```
 """
 floatmax(x::T) where {T<:AbstractFloat} = floatmax(T)

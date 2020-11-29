@@ -709,6 +709,12 @@ julia> typemax(Int8)
 
 julia> typemax(UInt32)
 0xffffffff
+
+julia> typemax(Float64)
+Inf
+
+julia> floatmax(Float32)  # largest finite floating point number
+3.4028235f38
 ```
 """
 function typemax end
