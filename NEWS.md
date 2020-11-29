@@ -127,7 +127,7 @@ Standard library changes
 * `ispow2(x)` now supports non-`Integer` arguments `x` ([#37635]).
 * `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
 * All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
-* `sum`, `prod`, `maximum`, and `minimum` now support `init` keyword argument ([#36188], [#35839]).
+* `sum`, `prod`, `maximum`, `minimum`, and `extrema` now support `init` keyword argument ([#36188], [#35839], [#36265]).
 * `unique(f, itr; seen=Set{T}())` now allows you to declare the container type used for
   keeping track of values returned by `f` on elements of `itr` ([#36280]).
 * `Libdl` has been moved to `Base.Libc.Libdl`, however it is still accessible as an stdlib ([#35628]).
