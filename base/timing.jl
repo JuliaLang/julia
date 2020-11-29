@@ -144,7 +144,7 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, ou
     parens && print(")")
     if outer_compile_time > 0
         print(" + ")
-        print(Ryu.writefixed(Float64(outer_compile_time/1e9), 6), " seconds top-level compilation time")
+        print(Ryu.writefixed(Float64(outer_compile_time/1e9), 6), " seconds static compilation time")
     end
     nothing
 end
@@ -230,17 +230,19 @@ macro time(ex)
 end
 
 function _time_expr(ex)
-    Expr(:toplevel, quote
-        while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
-        local stats = gc_num()
-        local compiletime = cumulative_compile_time_ns()
-        local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        compiletime = cumulative_compile_time_ns() - compiletime
-        local gcdiff = GC_Diff(gc_num(), stats)
-        elapsedtime, compiletime, gcdiff, val
-    end)
+    quote
+        Base.inferencebarrier(()->begin
+            while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+            local stats = gc_num()
+            local compiletime = cumulative_compile_time_ns()
+            local elapsedtime = time_ns()
+            local val = $(esc(ex))
+            elapsedtime = time_ns() - elapsedtime
+            compiletime = cumulative_compile_time_ns() - compiletime
+            local gcdiff = GC_Diff(gc_num(), stats)
+            elapsedtime, compiletime, gcdiff, val
+        end)()
+    end
 end
 
 
