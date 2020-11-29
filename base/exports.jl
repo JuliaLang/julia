@@ -229,6 +229,7 @@ export
     cbrt,
     ceil,
     cis,
+    cispi,
     clamp,
     cld,
     cmp,
