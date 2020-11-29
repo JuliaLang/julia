@@ -541,6 +541,30 @@ function cis(z::Complex)
     Complex(v * c, v * s)
 end
 
+cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
+
+"""
+    cispi(z)
+
+Compute ``\\exp(i\\pi x)`` more accurately than `cis(pi*x)`, especially for large `x`.
+
+# Examples
+```jldoctest
+julia> cispi(1)
+-1.0 + 0.0im
+
+julia> cispi(0.25 + 1im)
+0.030556854645952924 + 0.030556854645952924im
+```
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
+"""
+function cispi(z::Complex)
+    sipi, copi = sincospi(z)
+    return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))
+end
+
 """
     angle(z)
 
