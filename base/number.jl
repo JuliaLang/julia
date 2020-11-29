@@ -138,6 +138,20 @@ Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).
 
 See also [`signbit`](@ref), [`zero`](@ref).
 
+# Examples
+```jldoctest
+julia> sign(-4.0)
+-1.0
+
+julia> sign(99)
+1
+
+julia> sign(-0.0)
+-0.0
+
+julia> sign(0 + im)
+0.0 + 1.0im
+```
 """
 sign(x::Number) = iszero(x) ? x/abs(oneunit(x)) : x/abs(x)
 sign(x::Real) = ifelse(x < zero(x), oftype(one(x),-1), ifelse(x > zero(x), one(x), typeof(one(x))(x)))
