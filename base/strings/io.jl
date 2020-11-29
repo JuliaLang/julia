@@ -331,8 +331,8 @@ they are. Notice that `esc` has precedence here.
 julia> escape_string("aaa\\nbbb")
 "aaa\\\\nbbb"
 
-julia> escape_string("\\cdot"; keep = '\\')
-"\\cdot"
+julia> escape_string("aaa\\nbbb"; keep = '\\n')
+"aaa\\nbbb"
 
 julia> escape_string("\\xfe\\xff") # invalid utf-8
 "\\\\xfe\\\\xff"
