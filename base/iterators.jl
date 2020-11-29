@@ -441,6 +441,12 @@ julia> foreach(println, f)
 1
 3
 5
+
+julia> [x for x in [1, 2, 3, 4, 5] if isodd(x)]  # collects a generator over Iterators.filter
+3-element Vector{Int64}:
+ 1
+ 3
+ 5
 ```
 """
 filter(flt, itr) = Filter(flt, itr)
@@ -925,6 +931,9 @@ julia> collect(Iterators.product(1:2, 3:5))
 2×3 Matrix{Tuple{Int64, Int64}}:
  (1, 3)  (1, 4)  (1, 5)
  (2, 3)  (2, 4)  (2, 5)
+
+julia> ans == [(x,y) for x in 1:2, y in 3:5]  # lowers to the same code
+true
 ```
 """
 product(iters...) = ProductIterator(iters)
