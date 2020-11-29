@@ -2016,14 +2016,19 @@ See also: [`undef`](@ref), [`similar`](@ref).
 # Examples
 ```julia-repl
 julia> A = Array{Float64, 2}(undef, 2, 3) # N given explicitly
-2×3 Array{Float64, 2}:
+2×3 Matrix{Float64}:
  6.90198e-310  6.90198e-310  6.90198e-310
  6.90198e-310  6.90198e-310  0.0
 
 julia> B = Array{Float64}(undef, 2) # N determined by the input
-2-element Array{Float64, 1}:
+2-element Vector{Float64}:
  1.87103e-320
  0.0
+
+julia> similar(A, Int16) #
+2×3 Matrix{Int16}:
+ -14496  1  74
+  16160  0   0
 ```
 """
 Array{T,N}(::UndefInitializer, dims)
@@ -2105,7 +2110,7 @@ See also: [`missing`](@ref), [`similar`](@ref).
 # Examples
 ```julia-repl
 julia> Array{Float64, 1}(undef, 3)
-3-element Array{Float64, 1}:
+3-element Vector{Float64}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
