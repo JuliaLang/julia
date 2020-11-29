@@ -232,6 +232,11 @@ See also [`sortperm`](@ref), [`invpermute!`](@ref), [`isperm`](@ref), [`permuted
 
 # Examples
 ```jldoctest
+julia> p = (2, 3, 1);
+
+julia> invperm(p)
+(3, 1, 2)
+
 julia> v = [2; 4; 3; 1];
 
 julia> invperm(v)

@@ -83,8 +83,8 @@ end
 """
     permutedims(A::AbstractArray, perm)
 
-Permute the dimensions of array `A`. `perm` is a vector specifying a permutation of length
-`ndims(A)`.
+Permute the dimensions of array `A`. `perm` is a vector or a tuple of length `ndims(A)`,
+specifying the permutation.
 
 See also: [`permutedims!`](@ref), [`PermutedDimsArray`](@ref), [`transpose`](@ref), [`invperm`](@ref).
 
@@ -100,7 +100,7 @@ julia> A = reshape(Vector(1:8), (2,2,2))
  5  7
  6  8
 
-julia> permutedims(A, [3, 2, 1])
+julia> permutedims(A, (3, 2, 1))
 2×2×2 Array{Int64, 3}:
 [:, :, 1] =
  1  3
@@ -109,6 +109,16 @@ julia> permutedims(A, [3, 2, 1])
 [:, :, 2] =
  2  4
  6  8
+
+julia> B = randn(5, 7, 11, 13);
+
+julia> perm = [4,1,3,2];
+
+julia> size(permutedims(B, perm))
+(13, 5, 11, 7)
+
+julia> size(B)[perm] == ans
+true
 ```
 """
 function permutedims(A::AbstractArray, perm)
