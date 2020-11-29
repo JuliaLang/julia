@@ -532,6 +532,7 @@ export
     mergewith!,
     merge,
     mergewith,
+    modify!,
     pairs,
     reduce,
     setdiff!,
