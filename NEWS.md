@@ -30,6 +30,8 @@ New language features
   for example `a, b... = [1, 2, 3]`. This syntax is implemented using `Base.rest`,
   which can be overloaded to customize its behavior for different collection types
   ([#37410]).
+* `escape_string` can now receive a collection of characters in the keyword
+  `keep` that are to be kept as they are. ([#38597])
 
 Language changes
 ----------------
