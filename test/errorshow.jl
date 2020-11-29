@@ -545,15 +545,9 @@ let
     @test startswith(sprint(showerror, method_error),
         "MethodError: no method matching $(EnclosingModule.AbstractTypeNoConstructors)()")
 
-    # Test that the 'default' sysimg.jl method is not displayed.
-    @test !occursin("where T at sysimg.jl", sprint(showerror, method_error))
-
-    # Test that tab-completion will not show the 'default' sysimg.jl method.
+    # Test that tab-completion will not show the 'default' Base.jl method.
     completions = REPL.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()), @__MODULE__)
     @test !isempty(completions)
-    for method_string in completions
-        @test !startswith(REPL.REPLCompletions.completion_text(method_string), "(::Type{T})(arg) where T in Base at sysimg.jl")
-    end
 end
 
 @testset "show for manually thrown MethodError" begin

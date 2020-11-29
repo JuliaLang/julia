@@ -1,3 +1,5 @@
+/generate_minimal.jl
+/generate_full.jl
 /srccache
 /Pkg-*
 /Pkg

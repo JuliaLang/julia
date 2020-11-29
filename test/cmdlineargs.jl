@@ -52,11 +52,12 @@ end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no`
     # tests for handling of ENV errors
-    let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
-                setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
-                    "JULIA_LOAD_PATH" => "",
-                    "JULIA_DEPOT_PATH" => "",
-                    "HOME" => homedir()))
+    let v = writereadpipeline(
+            """println("REPL: ", @which(less), @isdefined(InteractiveUtils))""",
+            setenv(`$exename -i -E '@assert isempty(LOAD_PATH); push!(LOAD_PATH, "@stdlib"); @isdefined InteractiveUtils'`,
+                   "JULIA_LOAD_PATH" => "",
+                   "JULIA_DEPOT_PATH" => ":",
+                   "HOME" => homedir()))
         @test v[1] == "false\nREPL: InteractiveUtilstrue\n"
         @test v[2]
     end
@@ -69,11 +70,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test v[1] == "REPL: 3\n"
         @test v[2]
     end
-    let v = readchomperrors(`$exename -i -e '
-            empty!(LOAD_PATH)
-            Base.unreference_module(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-            '`)
-        # simulate not having a working version of InteractiveUtils,
+    let v = readchomperrors(`$exename -i -e 'empty!(LOAD_PATH)'`)
+        # simulate having InteractiveUtils not available:
         # make sure this is a non-fatal error and the REPL still loads
         @test v[1]
         @test isempty(v[2])

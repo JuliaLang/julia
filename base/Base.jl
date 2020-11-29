@@ -424,4 +424,11 @@ end
 
 end
 
+# Ensure this file is also tracked
+pushfirst!(_included_files, (Main, abspath(@__FILE__)))
+
 end # baremodule Base
+
+# Set up Main module
+using .Base
+import Base.MainInclude: eval, include

@@ -5,6 +5,7 @@ module SparseTests
 using Test
 using SparseArrays
 using SparseArrays: getcolptr, nonzeroinds, _show_with_braille_patterns
+Base.USE_GPL_LIBS && using SuiteSparse
 using LinearAlgebra
 using Printf: @printf # for debug
 using Random

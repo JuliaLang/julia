@@ -94,6 +94,7 @@ function append_default_depot_path!(DEPOT_PATH)
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     path = abspath(Sys.BINDIR::String, "..", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    return DEPOT_PATH
 end
 
 function init_depot_path()
@@ -112,6 +113,7 @@ function init_depot_path()
     else
         append_default_depot_path!(DEPOT_PATH)
     end
+    nothing
 end
 
 ## LOAD_PATH & ACTIVE_PROJECT ##
@@ -217,9 +219,7 @@ function parse_load_path(str::String)
 end
 
 function init_load_path()
-    if Base.creating_sysimg
-        paths = ["@stdlib"]
-    elseif haskey(ENV, "JULIA_LOAD_PATH")
+    if haskey(ENV, "JULIA_LOAD_PATH")
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
         paths = filter!(env -> env !== nothing,
