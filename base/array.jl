@@ -343,6 +343,8 @@ end
 Create a shallow copy of `x`: the outer structure is copied, but not all internal values.
 For example, copying an array produces a new array with identically-same elements as the
 original.
+
+See also [`copy!`](@ref), [`copyto!`](@ref).
 """
 copy
 
@@ -420,6 +422,8 @@ array of floats, with each element initialized to `1.0`.
 `dims` may be specified as either a tuple or a sequence of arguments. For example,
 the common idiom `fill(x)` creates a zero-dimensional array containing the single value `x`.
 
+See also: [`fill!`](@ref), [`zeros`](@ref), [`ones`](@ref), [`similar`](@ref).
+
 # Examples
 ```jldoctest
 julia> fill(1.0, (2,3))
@@ -456,7 +460,7 @@ fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
     zeros([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
-See also [`fill`](@ref), [`ones`](@ref).
+See also [`fill`](@ref), [`ones`](@ref), [`zero`](@ref).
 
 # Examples
 ```jldoctest
@@ -906,6 +910,8 @@ collection to it. The result of the preceding example is equivalent to `append!(
 5, 6])`. For `AbstractSet` objects, [`union!`](@ref) can be used instead.
 
 See [`sizehint!`](@ref) for notes about the performance model.
+
+See also [`pushfirst!`](@ref).
 """
 function push! end
 
@@ -955,6 +961,9 @@ themselves in another collection. The result of the preceding example is equival
 `push!([1, 2, 3], 4, 5, 6)`.
 
 See [`sizehint!`](@ref) for notes about the performance model.
+
+See also [`vcat`](@ref) for vectors, [`union!`](@ref) for sets,
+and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
 function append!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)

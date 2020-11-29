@@ -373,6 +373,8 @@ first(a::AbstractArray) = a[first(eachindex(a))]
 Get the first element of an iterable collection. Return the start point of an
 [`AbstractRange`](@ref) even if it is empty.
 
+See also: [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
+
 # Examples
 ```jldoctest
 julia> first(2:2:10)
@@ -422,6 +424,8 @@ Get the last element of an ordered collection, if it can be computed in O(1) tim
 accomplished by calling [`lastindex`](@ref) to get the last index. Return the end
 point of an [`AbstractRange`](@ref) even if it is empty.
 
+See also [`first`](@ref).
+
 # Examples
 ```jldoctest
 julia> last(1:2:10)
@@ -465,6 +469,8 @@ end
 
 Return a tuple of the memory strides in each dimension.
 
+See also: [`stride`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = fill(1, (3,4,5));
@@ -479,6 +485,8 @@ function strides end
     stride(A, k::Integer)
 
 Return the distance in memory (in number of elements) between adjacent elements in dimension `k`.
+
+See also: [`strides`](@ref).
 
 # Examples
 ```jldoctest
@@ -653,6 +661,8 @@ Return `true` if the given `index` is within the bounds of
 arrays can extend this method in order to provide a specialized bounds
 checking implementation.
 
+See also [`checkbounds`](@ref).
+
 # Examples
 ```jldoctest
 julia> checkindex(Bool, 1:20, 8)
@@ -728,6 +738,7 @@ julia> similar(falses(10), Float64, 2, 4)
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 ```
 
+See also: [`undef`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
 similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(axes(a)))
@@ -783,6 +794,8 @@ similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
 Create an empty vector similar to `v`, optionally changing the `eltype`.
 
+See also: [`empty!`](@ref), [`isempty`](@ref).
+
 # Examples
 
 ```jldoctest
@@ -807,6 +820,7 @@ elements in `dst`.
 If `dst` and `src` are of the same type, `dst == src` should hold after
 the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
+
 See also [`copyto!`](@ref).
 
 !!! compat "Julia 1.1"
@@ -918,6 +932,8 @@ end
 Copy all elements from collection `src` to array `dest`, whose length must be greater than
 or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
 the other elements are left untouched.
+
+See also [`copy!`](@ref), [`copy`](@ref).
 
 # Examples
 ```jldoctest
@@ -2143,6 +2159,8 @@ colons go in this expression. The results are concatenated along the remaining d
 For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
 for all `i` and `j`.
 
+See also [`eachcol`](@ref), [`eachslice`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = reshape(Vector(1:16),(2,2,2,2))
@@ -2291,7 +2309,7 @@ mapany(f, itr) = Any[f(x) for x in itr]
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise.
 
-See also: [`mapslices`](@ref)
+See also: [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref).
 
 # Examples
 ```jldoctest

@@ -138,6 +138,8 @@ Circularly shift, i.e. rotate, the data in an array. The second argument is a tu
 vector giving the amount to shift in each dimension, or an integer to shift only in the
 first dimension.
 
+See also: [`circshift!`](@ref), [`circcopy!`](@ref).
+
 # Examples
 ```jldoctest
 julia> b = reshape(Vector(1:16), (4,4))
@@ -185,8 +187,6 @@ julia> circshift(a, -1)
  1
  1
 ```
-
-See also [`circshift!`](@ref).
 """
 function circshift(a::AbstractArray, shiftamt)
     circshift!(similar(a), a, map(Integer, (shiftamt...,)))
@@ -460,7 +460,7 @@ the data from the other dimensions in `A`.
 Only a single dimension in `dims` is currently supported. Equivalent to `(view(A,:,:,...,i,:,:
 ...)) for i in axes(A, dims))`, where `i` is in position `dims`.
 
-See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
+See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref), and [`selectdim`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.

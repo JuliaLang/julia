@@ -1159,6 +1159,8 @@ their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
 
+See also: [`circshift`](@ref).
+
 # Examples
 ```julia-repl
 julia> src = reshape(Vector(1:16), (4,4))

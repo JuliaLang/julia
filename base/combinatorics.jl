@@ -228,6 +228,8 @@ invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
 Return the inverse permutation of `v`.
 If `B = A[v]`, then `A == B[invperm(v)]`.
 
+See also [`sortperm`](@ref), [`invpermute!`](@ref), [`isperm`](@ref), [`permutedims`](@ref).
+
 # Examples
 ```jldoctest
 julia> v = [2; 4; 3; 1];

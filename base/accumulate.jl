@@ -204,6 +204,8 @@ Cumulative product of an iterator. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
+See also [`cumprod!`](@ref), [`accumulate`](@ref), [`cumsum`](@ref).
+
 !!! compat "Julia 1.5"
     `cumprod` on a non-array iterator requires at least Julia 1.5.
 

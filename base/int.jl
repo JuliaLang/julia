@@ -700,6 +700,8 @@ function typemin end
 
 The highest value representable by the given (real) numeric `DataType`.
 
+See also: [`floatmax`](@ref), [`typemin`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
 julia> typemax(Int8)

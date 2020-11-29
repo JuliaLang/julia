@@ -446,6 +446,8 @@ Return `true` iff value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
+See also [`isbits`](@ref).
+
 # Examples
 ```jldoctest
 julia> ismutable(1)
@@ -516,7 +518,7 @@ isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitst
 """
     isbits(x)
 
-Return `true` if `x` is an instance of an `isbitstype` type.
+Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 """
 isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
 

@@ -469,6 +469,8 @@ abs(x::Float64) = abs_float(x)
 
 Test whether a number value is a NaN, an indeterminate value which is neither an infinity
 nor a finite number ("not a number").
+
+See also: [`iszero`](@ref), [`isone`](@ref), [`isinf`](@ref).
 """
 isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Number) = false
@@ -481,6 +483,8 @@ isfinite(x::Integer) = true
     isinf(f) -> Bool
 
 Test whether a number is infinite.
+
+See also: [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 """
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 
@@ -641,7 +645,7 @@ uabs(x::BitSigned) = unsigned(abs(x))
     nextfloat(x::AbstractFloat, n::Integer)
 
 The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
-applications of `prevfloat` if `n < 0`.
+applications of [`prevfloat`](@ref) if `n < 0`.
 """
 function nextfloat(f::IEEEFloat, d::Integer)
     F = typeof(f)
@@ -686,6 +690,8 @@ end
 
 Return the smallest floating point number `y` of the same type as `x` such `x < y`. If no
 such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
+
+See also: [`prevfloat`](@ref), [`eps`](@ref), [`issubnormal`](@ref).
 """
 nextfloat(x::AbstractFloat) = nextfloat(x,1)
 
@@ -693,7 +699,7 @@ nextfloat(x::AbstractFloat) = nextfloat(x,1)
     prevfloat(x::AbstractFloat, n::Integer)
 
 The result of `n` iterative applications of `prevfloat` to `x` if `n >= 0`, or `-n`
-applications of `nextfloat` if `n < 0`.
+applications of [`nextfloat`](@ref) if `n < 0`.
 """
 prevfloat(x::AbstractFloat, d::Integer) = nextfloat(x, -d)
 
@@ -813,6 +819,8 @@ floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 Return the largest finite number representable by the floating-point type `T`.
 
+See also: [`typemax`](@ref), [`floatmin`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
 julia> floatmax(Float16)
@@ -876,6 +884,8 @@ is the nearest floating point number to ``y``, then
 ```math
 |y-x| \\leq \\operatorname{eps}(x)/2.
 ```
+
+See also: [`nextfloat`](@ref), [`issubnormal`](@ref), [`floatmax`](@ref).
 
 # Examples
 ```jldoctest

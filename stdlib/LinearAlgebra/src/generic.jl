@@ -1541,6 +1541,8 @@ end
 
 Matrix determinant.
 
+See also: [`logdet`](@ref) and [`logabsdet`](@ref).
+
 # Examples
 ```jldoctest
 julia> M = [1 0; 2 2]

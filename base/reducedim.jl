@@ -615,6 +615,8 @@ maximum(A::AbstractArray; dims)
 Compute the maximum value from of calling the function `f` on each element of an array over the given
 dimensions.
 
+See also: [`maximum!`](@ref), [`extrema`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]

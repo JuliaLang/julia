@@ -25,6 +25,8 @@ isinteger(x::Integer) = true
 Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
 
+See also: [`isone`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+
 # Examples
 ```jldoctest
 julia> iszero(0.0)
@@ -110,6 +112,8 @@ copy(x::Number) = x # some code treats numbers as collection-like
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 
+See also [`sign`](@ref).
+
 # Examples
 ```jldoctest
 julia> signbit(-4)
@@ -131,6 +135,9 @@ signbit(x::Real) = x < 0
     sign(x)
 
 Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).
+
+See also [`signbit`](@ref), [`zero`](@ref).
+
 """
 sign(x::Number) = iszero(x) ? x/abs(oneunit(x)) : x/abs(x)
 sign(x::Real) = ifelse(x < zero(x), oftype(one(x),-1), ifelse(x > zero(x), one(x), typeof(one(x))(x)))
@@ -242,6 +249,8 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
     zero(::Type)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+
+See also [`iszero`](@ref), [`one`](@ref), [`oneunit`](@ref), [`oftype`](@ref).
 
 # Examples
 ```jldoctest
