@@ -1135,3 +1135,21 @@ end
         @test testdict[:b] == 1
     end
 end
+
+@testset "setindex" begin
+    ==ₜ(_, _) = false
+    ==ₜ(x::T, y::T) where T = x == y
+
+    @test @inferred(Base.setindex(Dict(:a=>1, :b=>2), 10, :a)) ==ₜ
+        Dict(:a=>10, :b=>2)
+    @test @inferred(Base.setindex(Dict(:a=>1, :b=>2), 3, "c")) ==ₜ
+        Dict(:a=>1, :b=>2, "c"=>3)
+    @test @inferred(Base.setindex(Dict(:a=>1, :b=>2), 3.0, :c)) ==ₜ
+        Dict(:a=>1.0, :b=>2.0, :c=>3.0)
+
+    @testset "no mutation" begin
+        dict = Dict(:a=>1, :b=>2)
+        @test Base.setindex(dict, 10, :a) ==ₜ Dict(:a=>10, :b=>2)
+        @test dict == Dict(:a=>1, :b=>2)
+    end
+end

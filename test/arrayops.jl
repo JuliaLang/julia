@@ -2811,6 +2811,20 @@ end
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)
 
+@testset "setindex" begin
+    ==ₜ(_, _) = false
+    ==ₜ(x::T, y::T) where T = x == y
+
+    @test @inferred(Base.setindex(Int[1, 2], 3.0, 2)) ==ₜ [1.0, 3.0]
+    @test @inferred(Base.setindex(Int[1, 2, 3], :two, 2)) ==ₜ [1, :two, 3]
+
+    @testset "no mutation" begin
+        arr = [1]
+        @test Base.setindex(arr, 2, 1) ==ₜ [2]
+        @test arr == [1]
+    end
+end
+
 @testset "Issue 33919" begin
     A = Array[rand(2, 3), rand(3, 1)]
     B = Array[rand(2, 2), rand(1, 4)]
