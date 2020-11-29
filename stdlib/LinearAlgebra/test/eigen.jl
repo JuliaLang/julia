@@ -105,8 +105,8 @@ end
         @test_throws(ArgumentError, eigen(test_matrix))
         @test_throws(ArgumentError, eigen(Symmetric(test_matrix)))
         @test_throws(ArgumentError, eigen(Hermitian(test_matrix)))
-        @test eigen(Symmetric(transpose(test_matrix))) isa Eigen
-        @test eigen(Hermitian(transpose(test_matrix))) isa Eigen
+        @test eigen(Symmetric(test_matrix, :L)) isa Eigen
+        @test eigen(Hermitian(test_matrix, :L)) isa Eigen
     end
 end
 
