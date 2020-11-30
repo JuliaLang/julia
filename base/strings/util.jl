@@ -111,8 +111,7 @@ used to implement specialized methods.
 
 # Examples
 ```jldoctest
-julia> endswith_julia = endswith("Julia")
-(::Base.Fix2{typeof(endswith),String}) (generic function with 1 method)
+julia> endswith_julia = endswith("Julia");
 
 julia> endswith_julia("Julia")
 true
@@ -137,8 +136,7 @@ used to implement specialized methods.
 
 # Examples
 ```jldoctest
-julia> startswith_julia = startswith("Julia")
-(::Base.Fix2{typeof(startswith),String}) (generic function with 1 method)
+julia> startswith_julia = startswith("Julia");
 
 julia> startswith_julia("Julia")
 true
