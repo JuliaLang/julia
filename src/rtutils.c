@@ -221,7 +221,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     eh->world_age = ptls->world_age;
     current_task->eh = eh;
 #ifdef ENABLE_TIMINGS
-    eh->timing_stack = current_task->timing_stack;
+    eh->timing_stack = ptls->timing_stack;
 #endif
 }
 

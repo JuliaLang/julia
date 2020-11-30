@@ -519,9 +519,10 @@ JL_DLLEXPORT void jl_switch(void)
     ptls->finalizers_inhibited = 0;
 
 #ifdef ENABLE_TIMINGS
-    jl_timing_block_t *blk = ct->timing_stack;
+    jl_timing_block_t *blk = ptls->timing_stack;
     if (blk)
         jl_timing_block_stop(blk);
+    ptls->timing_stack = NULL;
 #endif
 
     ctx_switch(ptls);
@@ -546,7 +547,8 @@ JL_DLLEXPORT void jl_switch(void)
     ptls->finalizers_inhibited = finalizers_inhibited;
 
 #ifdef ENABLE_TIMINGS
-    assert(blk == ct->timing_stack);
+    assert(ptls->timing_stack == NULL);
+    ptls->timing_stack = blk;
     if (blk)
         jl_timing_block_start(blk);
 #else
@@ -600,7 +602,7 @@ static void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
     jl_handler_t *eh = ptls->current_task->eh;
     if (eh != NULL) {
 #ifdef ENABLE_TIMINGS
-        jl_timing_block_t *cur_block = ptls->current_task->timing_stack;
+        jl_timing_block_t *cur_block = ptls->timing_stack;
         while (cur_block && eh->timing_stack != cur_block) {
             cur_block = jl_pop_timing_block(cur_block);
         }
@@ -701,9 +703,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->started = 0;
     t->prio = -1;
     t->tid = -1;
-#ifdef ENABLE_TIMINGS
-    t->timing_stack = jl_root_timing;
-#endif
 
 #if defined(JL_DEBUG_BUILD)
     if (!t->copy_stack)
