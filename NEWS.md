@@ -66,7 +66,7 @@ Command-line option changes
   `dir = Base.current_project()`. In particular, this means that if you do
   `pkg> activate` after starting `julia` with the `--project` option (or with
   `JULIA_PROJECT` set) it will take you to the default active project, which is
-  `@v1.5` unless you have modified `LOAD_PATH` ([#36434]).
+  `@v1.6` unless you have modified `LOAD_PATH` ([#36434]).
 
 Multi-threading changes
 -----------------------
