@@ -448,7 +448,7 @@ function addprocs(manager::ClusterManager; kwargs...)
 end
 
 function addprocs_locked(manager::ClusterManager; kwargs...)
-    params = merge(default_addprocs_params(), Dict{Symbol,Any}(kwargs))
+    params = merge(default_addprocs_params(manager), Dict{Symbol,Any}(kwargs))
     topology(Symbol(params[:topology]))
 
     if PGRP.topology !== :all_to_all
@@ -513,12 +513,16 @@ function set_valid_processes(plist::Array{Int})
     end
 end
 
+"""
+    default_addprocs_params(mgr::ClusterManager) -> Dict{Symbol, Any}
+
+Implemented by cluster managers. The default keyword parameters passed when calling
+`addprocs(mgr)`. The minimal set of options is available by calling
+`default_addprocs_params()`
+"""
+default_addprocs_params(::ClusterManager) = default_addprocs_params()
 default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
-    :ssh      => "ssh",
-    :shell    => :posix,
-    :cmdline_cookie => false,
-    :env      => [],
     :dir      => pwd(),
     :exename  => joinpath(Sys.BINDIR::String, julia_exename()),
     :exeflags => ``,
