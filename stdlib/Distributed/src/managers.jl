@@ -75,7 +75,7 @@ Keyword arguments:
 * `ssh`: the name or path of the SSH client executable used to start the workers.
   Default is `"ssh"`.
 
-* `sshflags`: specifies additional ssh options, e.g. ```sshflags=\`-i /home/foo/bar.pem\````
+* `sshflags`: specifies additional ssh options, e.g. ``` sshflags=\`-i /home/foo/bar.pem\` ```
 
 * `max_parallel`: specifies the maximum number of workers connected to in parallel at a
   host. Defaults to 10.
