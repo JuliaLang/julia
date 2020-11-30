@@ -122,7 +122,7 @@ end
 
 # countfrom
 # ---------
-let i = 0, k = 1
+let i = 0, k = 1, l = 0
     for j = countfrom(0, 2)
         @test j == i*2
         i += 1
@@ -132,6 +132,12 @@ let i = 0, k = 1
         @test j == k
         k += 1
         k <= 10 || break
+    end
+    for j = countfrom(Int[0,0], Float64[1.0,2.0])
+        @test j isa Vector{Float64}
+        @test j == l*[1,2]
+        l += 1
+        l <= 10 || break
     end
 end
 
