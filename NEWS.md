@@ -44,8 +44,6 @@ Language changes
   a function like other operators. The dotted version `.-->` is now parsed as well.
   For backwards compatibility, `-->` still parses using its own expression head
   instead of `:call`.
-* Instances of `UniformScaling` are no longer `isequal` to matrices. Previous
-  behaviour violated the rule that `isequal(x, y)` implies `hash(x) == hash(y)`.
 * The `a[begin]` syntax now calls `firstindex(a,1)` rather than `first(axes(a,1))` ([#35779]).
 * `⌿` (U+233F) and `¦` (U+00A6) are now infix operators with times-like and plus-like precedence,
   respectively. Previously they were parsed as identifier characters ([#37973]).
