@@ -114,6 +114,7 @@ Standard library changes
 * The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside. ([#37320])
+* `Iterators.countfrom` now accepts any type that define `+`. ([#37747])
 
 #### LinearAlgebra
 
