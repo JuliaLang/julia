@@ -1765,8 +1765,6 @@ typedef struct _jl_task_t {
 
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
-
-    jl_timing_block_t *timing_stack;
 } jl_task_t;
 
 #define JL_TASK_STATE_RUNNABLE 0
