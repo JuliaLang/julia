@@ -7,7 +7,10 @@ module LibGit2
 
 import Base: ==
 using Base: something, notnothing
+using Base64: base64decode
+using NetworkOptions
 using Printf: @printf
+using SHA: sha1, sha256
 
 export with, GitRepo, GitConfig
 
@@ -983,19 +986,8 @@ end
         end
     end
 
-    # Look for OpenSSL env variable for CA bundle (linux only)
-    # windows and macOS use the OS native security backends
-    @static if Sys.islinux()
-        cert_loc = if "SSL_CERT_DIR" in keys(ENV)
-            ENV["SSL_CERT_DIR"]
-        elseif "SSL_CERT_FILE" in keys(ENV)
-            ENV["SSL_CERT_FILE"]
-        else
-            # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
-            abspath(ccall(:jl_get_julia_bindir, Any, ())::String, Base.DATAROOTDIR, "julia", "cert.pem")
-        end
-        set_ssl_cert_locations(cert_loc)
-    end
+    cert_loc = NetworkOptions.ca_roots()
+    cert_loc !== nothing && set_ssl_cert_locations(cert_loc)
 end
 
 function set_ssl_cert_locations(cert_loc)

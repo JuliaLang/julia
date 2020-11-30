@@ -8,8 +8,8 @@ highlighting = Dict{Symbol, Bool}(
 )
 
 llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
-    :default     => (false, :light_black), # e.g. comma, equal sign, unknown token
-    :comment     => (false, :green),
+    :default     => (false, :normal), # e.g. comma, equal sign, unknown token
+    :comment     => (false, :light_black),
     :label       => (false, :light_red),
     :instruction => ( true, :light_cyan),
     :type        => (false, :cyan),

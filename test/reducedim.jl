@@ -77,6 +77,15 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     @test @inferred(maximum(abs, Areduc, dims=region)) ≈ safe_maxabs(Areduc, region)
     @test @inferred(minimum(abs, Areduc, dims=region)) ≈ safe_minabs(Areduc, region)
     @test @inferred(count(!, Breduc, dims=region)) ≈ safe_count(.!Breduc, region)
+
+    @test isequal(
+        @inferred(count(Breduc, dims=region, init=0x02)),
+        safe_count(Breduc, region) .% UInt8 .+ 0x02,
+    )
+    @test isequal(
+        @inferred(count(!, Breduc, dims=region, init=Int16(0))),
+        safe_count(.!Breduc, region) .% Int16,
+    )
 end
 
 # Combining dims and init
@@ -446,3 +455,6 @@ end
     @test_throws TypeError count([1], dims=1)
     @test_throws TypeError count!([1], [1])
 end
+
+@test @inferred(count(false:true, dims=:, init=0x0004)) === 0x0005
+@test @inferred(count(isodd, reshape(1:9, 3, 3), dims=:, init=Int128(0))) === Int128(5)

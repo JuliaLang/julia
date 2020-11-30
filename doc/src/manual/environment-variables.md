@@ -80,7 +80,7 @@ Setting this environment variable has the same effect as specifying the `--proje
 start-up option, but `--project` has higher precedence. If the variable is set to `@.`
 then Julia tries to find a project directory that contains `Project.toml` or
 `JuliaProject.toml` file from the current directory and its parents. See also
-the chapter on [Code Loading](@ref).
+the chapter on [Code Loading](@ref code-loading).
 
 !!! note
 
@@ -91,7 +91,7 @@ the chapter on [Code Loading](@ref).
 
 The `JULIA_LOAD_PATH` environment variable is used to populate the global Julia
 [`LOAD_PATH`](@ref) variable, which determines which packages can be loaded via
-`import` and `using` (see [Code Loading](@ref)).
+`import` and `using` (see [Code Loading](@ref code-loading)).
 
 Unlike the shell `PATH` variable, empty entries in `JULIA_LOAD_PATH` are expanded to
 the default value of `LOAD_PATH`, `["@", "@v#.#", "@stdlib"]` when populating
@@ -136,6 +136,11 @@ zero-element array, not a one-element array of the empty string. This behavior w
 chosen so that it would be possible to set an empty depot path via the environment
 variable. If you want the default depot path, either unset the environment variable
 or if it must have a value, set it to the string `:`.
+
+!!! note
+
+    On Windows, path elements are separated by the `;` character, as is the case with
+    most path lists on Windows.
 
 ### `JULIA_HISTORY`
 

@@ -160,7 +160,7 @@ Building Julia requires that the following software be installed:
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
-sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config
+sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config curl
 ```
 
 Julia uses the following external libraries, which are automatically

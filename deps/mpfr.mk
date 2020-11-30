@@ -35,6 +35,9 @@ $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.
 	touch -c $(SRCCACHE)/mpfr-$(MPFR_VER)/configure # old target
 	echo 1 > $@
 
+checksum-mpfr: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \

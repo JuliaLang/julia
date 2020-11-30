@@ -27,7 +27,7 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 Adjoint{Complex{Int64}, Matrix{Complex{Int64}}}:
+2×2 adjoint(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3-2im  8-7im
  9-2im  4-6im
 ```
@@ -58,7 +58,7 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 Transpose{Complex{Int64}, Matrix{Complex{Int64}}}:
+2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3+2im  8+7im
  9+2im  4+6im
 ```
@@ -120,7 +120,7 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  8+7im  4+6im
 
 julia> adjoint(A)
-2×2 Adjoint{Complex{Int64}, Matrix{Complex{Int64}}}:
+2×2 adjoint(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3-2im  8-7im
  9-2im  4-6im
 
@@ -136,6 +136,7 @@ julia> x'x
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
 
 """
+    A'ᵀ
     transpose(A)
 
 Lazy transpose. Mutating the returned object should appropriately mutate `A`. Often,
@@ -145,6 +146,9 @@ that this operation is recursive.
 This operation is intended for linear algebra usage - for general data manipulation see
 [`permutedims`](@ref Base.permutedims), which is non-recursive.
 
+!!! compat "Julia 1.6"
+    The postfix operator `'ᵀ` requires Julia 1.6.
+
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
@@ -153,9 +157,17 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  8+7im  4+6im
 
 julia> transpose(A)
-2×2 Transpose{Complex{Int64}, Matrix{Complex{Int64}}}:
+2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3+2im  8+7im
  9+2im  4+6im
+
+julia> x = [3, 4im]
+2-element Vector{Complex{Int64}}:
+ 3 + 0im
+ 0 + 4im
+
+julia> x'ᵀx
+-7 + 0im
 ```
 """
 transpose(A::AbstractVecOrMat) = Transpose(A)
@@ -166,6 +178,19 @@ transpose(A::Transpose) = A.parent
 adjoint(A::Transpose{<:Real}) = A.parent
 transpose(A::Adjoint{<:Real}) = A.parent
 
+# printing
+function Base.showarg(io::IO, v::Adjoint, toplevel)
+    print(io, "adjoint(")
+    Base.showarg(io, parent(v), false)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(v))
+end
+function Base.showarg(io::IO, v::Transpose, toplevel)
+    print(io, "transpose(")
+    Base.showarg(io, parent(v), false)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(v))
+end
 
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}

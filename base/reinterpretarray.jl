@@ -205,7 +205,12 @@ struct SCartesianIndices2{K,R<:AbstractUnitRange{Int}} <: AbstractMatrix{SCartes
 end
 SCartesianIndices2{K}(indices2::AbstractUnitRange{Int}) where {K} = (@assert K::Int > 1; SCartesianIndices2{K,typeof(indices2)}(indices2))
 
-eachindex(::IndexSCartesian2{K}, A::AbstractArray) where {K} = SCartesianIndices2{K}(eachindex(IndexLinear(), parent(A)))
+eachindex(::IndexSCartesian2{K}, A::ReshapedReinterpretArray) where {K} = SCartesianIndices2{K}(eachindex(IndexLinear(), parent(A)))
+@inline function eachindex(style::IndexSCartesian2{K}, A::AbstractArray, B::AbstractArray...) where {K}
+    iter = eachindex(style, A)
+    Base._all_match_first(C->eachindex(style, C), iter, B...) || Base.throw_eachindex_mismatch_indices(IndexSCartesian2{K}(), axes(A), axes.(B)...)
+    return iter
+end
 
 size(iter::SCartesianIndices2{K}) where K = (K, length(iter.indices2))
 axes(iter::SCartesianIndices2{K}) where K = (Base.OneTo(K), iter.indices2)
@@ -257,15 +262,15 @@ end
 # but which don't handle SCartesianIndex2
 function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, ind::SCartesianIndex2) where {T,N}
     @_propagate_inbounds_meta
-    I = _to_subscript_indices(A, ind.i, ind.j)
-    getindex(A, I...)
+    J = _ind2sub(tail(axes(A)), ind.j)
+    getindex(A, ind.i, J...)
 end
 function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesianIndex2) where {T,N}
     @_propagate_inbounds_meta
-    I = _to_subscript_indices(A, ind.i, ind.j)
-    setindex!(A, v, I...)
+    J = _ind2sub(tail(axes(A)), ind.j)
+    setindex!(A, v, ind.i, J...)
 end
-
+eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A))
 
 ## AbstractArray interface
 

@@ -20,6 +20,9 @@ showstr(x, kv::Pair...) = sprint((io,x) -> show(IOContext(io, :limit => true, :d
     @test ioc.io == io
     @test ioc.dict == Base.ImmutableDict(Base.ImmutableDict{Symbol, Any}(:x, 1),
                                          :y => 2)
+    @test Base.ImmutableDict((key => ioc[key] for key in keys(ioc))...) == ioc.dict
+    @test keys(IOBuffer()) isa Base.KeySet
+    @test length(keys(IOBuffer())) == 0
 end
 
 @test replstr(Array{Any}(undef, 2)) == "2-element Vector{Any}:\n #undef\n #undef"
@@ -205,6 +208,11 @@ end
 @test_repr "import A.B.C: a, x, y.z"
 @test_repr "import ..A: a, x, y.z"
 @test_repr "import A.B, C.D"
+@test_repr "import A as B"
+@test_repr "import A.x as y"
+@test_repr "import A: x as y"
+@test_repr "import A.B: x, y as z"
+@test_repr "import A.B: x, y as z, a.b as c, xx"
 
 # keyword args (issue #34023 and #32775)
 @test_repr "f(a, b=c)"
@@ -472,6 +480,16 @@ end
 @test sprint(show, Symbol("'")) == "Symbol(\"'\")"
 @test_repr "var\"'\" = 5"
 
+# isidentifier
+@test Meta.isidentifier("x")
+@test Meta.isidentifier("x1")
+@test !Meta.isidentifier("x.1")
+@test !Meta.isidentifier("1x")
+@test Meta.isidentifier(Symbol("x"))
+@test Meta.isidentifier(Symbol("x1"))
+@test !Meta.isidentifier(Symbol("x.1"))
+@test !Meta.isidentifier(Symbol("1x"))
+
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
 @test sprint(show, Expr(:call, :foo, Symbol("##")))   == ":(foo(var\"##\"))"
@@ -487,6 +505,10 @@ end
 @test sprint(show, :(using A.@foo)) == ":(using A.@foo)"
 # Hidden macro names
 @test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
+
+# PR #38418
+module M1 var"#foo#"() = 2 end
+@test occursin("M1.var\"#foo#\"", sprint(show, M1.var"#foo#", context = :module=>@__MODULE__))
 
 # issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
@@ -775,7 +797,7 @@ Base.methodloc_callback[] = nothing
     @test replstr(Matrix(1.0I, 10, 10)) == "10×10 Matrix{Float64}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
     # an array too long vertically to fit on screen, and too long horizontally:
     @test replstr(Vector(1.:100.)) == "100-element Vector{Float64}:\n   1.0\n   2.0\n   3.0\n   4.0\n   5.0\n   6.0\n   7.0\n   8.0\n   9.0\n  10.0\n   ⋮\n  92.0\n  93.0\n  94.0\n  95.0\n  96.0\n  97.0\n  98.0\n  99.0\n 100.0"
-    @test occursin(r"1×100 (LinearAlgebra\.)?Adjoint{Float64, Vector{Float64}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0", replstr(Vector(1.:100.)'))
+    @test occursin(r"1×100 adjoint\(::Vector{Float64}\) with eltype Float64:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0", replstr(Vector(1.:100.)'))
     # too big in both directions to fit on screen:
     @test replstr((1.:100.)*(1:100)') == "100×100 Matrix{Float64}:\n   1.0    2.0    3.0    4.0    5.0    6.0  …    97.0    98.0    99.0    100.0\n   2.0    4.0    6.0    8.0   10.0   12.0      194.0   196.0   198.0    200.0\n   3.0    6.0    9.0   12.0   15.0   18.0      291.0   294.0   297.0    300.0\n   4.0    8.0   12.0   16.0   20.0   24.0      388.0   392.0   396.0    400.0\n   5.0   10.0   15.0   20.0   25.0   30.0      485.0   490.0   495.0    500.0\n   6.0   12.0   18.0   24.0   30.0   36.0  …   582.0   588.0   594.0    600.0\n   7.0   14.0   21.0   28.0   35.0   42.0      679.0   686.0   693.0    700.0\n   8.0   16.0   24.0   32.0   40.0   48.0      776.0   784.0   792.0    800.0\n   9.0   18.0   27.0   36.0   45.0   54.0      873.0   882.0   891.0    900.0\n  10.0   20.0   30.0   40.0   50.0   60.0      970.0   980.0   990.0   1000.0\n   ⋮                                  ⋮    ⋱                          \n  92.0  184.0  276.0  368.0  460.0  552.0     8924.0  9016.0  9108.0   9200.0\n  93.0  186.0  279.0  372.0  465.0  558.0     9021.0  9114.0  9207.0   9300.0\n  94.0  188.0  282.0  376.0  470.0  564.0     9118.0  9212.0  9306.0   9400.0\n  95.0  190.0  285.0  380.0  475.0  570.0     9215.0  9310.0  9405.0   9500.0\n  96.0  192.0  288.0  384.0  480.0  576.0  …  9312.0  9408.0  9504.0   9600.0\n  97.0  194.0  291.0  388.0  485.0  582.0     9409.0  9506.0  9603.0   9700.0\n  98.0  196.0  294.0  392.0  490.0  588.0     9506.0  9604.0  9702.0   9800.0\n  99.0  198.0  297.0  396.0  495.0  594.0     9603.0  9702.0  9801.0   9900.0\n 100.0  200.0  300.0  400.0  500.0  600.0     9700.0  9800.0  9900.0  10000.0"
 
@@ -1331,6 +1353,39 @@ end
 
 @test static_shown(QuoteNode(:x)) == ":(:x)"
 
+# PR #38049
+@test static_shown(sum) == "Base.sum"
+@test static_shown(+) == "Base.:(+)"
+@test static_shown(typeof(+)) == "typeof(Base.:(+))"
+
+struct var"#X#" end
+var"#f#"() = 2
+struct var"%X%" end  # Invalid name without '#'
+
+# (Just to make this test more sustainable,) we don't necesssarily need to test the exact
+# output format, just ensure that it prints at least the parts we expect:
+@test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
+@test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))
+
+# Test that static_shown is returning valid, correct julia expressions
+@testset "static_show() prints valid julia" begin
+    @testset for v in (
+            var"#X#",
+            var"#X#"(),
+            var"%X%",
+            var"%X%"(),
+            Vector,
+            Vector{<:Any},
+            Vector{var"#X#"},
+            +,
+            typeof(+),
+            var"#f#",
+            typeof(var"#f#"),
+        )
+        @test v == eval(Meta.parse(static_shown(v)))
+    end
+end
+
 # Test @show
 let fname = tempname()
     try
@@ -1603,7 +1658,7 @@ end
 
     # issue #27680
     @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
-              "Set([(3.0, 3.0), (2.0, 2.0), (1.0, 1.0)])" :
+              "Set([(1.0, 1.0), (3.0, 3.0), (2.0, 2.0)])" :
               "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
     # issue #27747
@@ -2020,6 +2075,49 @@ end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
+@test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector{T} where T}"
+@test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat{T} where T}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
+
+@test sprint(show, :(a'ᵀ)) == ":(a'ᵀ)"
+@test sprint(show, :((+)')) == ":((+)')"
+for s in (Symbol("'"), Symbol("'⁻¹"))
+    @test Base.isoperator(s)
+    @test !Base.isunaryoperator(s)
+    @test !Base.isbinaryoperator(s)
+    @test Base.ispostfixoperator(s)
+end
+
+@testset "method printing with non-standard identifiers ($mime)" for mime in (
+    MIME("text/plain"), MIME("text/html"),
+)
+    _show(io, x) = show(io, MIME(mime), x)
+
+    @eval var","(x) = x
+    @test occursin("var\",\"(x)", sprint(_show, methods(var",")))
+
+    @eval f1(var"a.b") = 3
+    @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
+
+    italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
+
+    @eval f2(; var"123") = 5
+    @test occursin("f2(; $(italic("var\"123\"")))", sprint(_show, methods(f2)))
+
+    @eval f3(; var"%!"...) = 7
+    @test occursin("f3(; $(italic("var\"%!\"...")))", sprint(_show, methods(f3)))
+
+    @eval f4(; var"...") = 9
+    @test_broken occursin("f4(; $(italic("var\"...\"")))", sprint(_show, methods(f4)))
+end
+
+@testset "printing of syntactic operators" begin
+    @test sprint(show, :(var"::" + var"$")) == ":(var\"::\" + (\$))"
+    @test sprint(show, :(!var"...")) == ":(!var\"...\")"
+    @test sprint(show, :(var"'ᵀ" - 1)) == ":(var\"'ᵀ\" - 1)"
+    @test sprint(show, :(::)) == ":(::)"
+    @test sprint(show, :?) == ":?"
+    @test sprint(show, :(var"?" + var"::" + var"'")) == ":(var\"?\" + var\"::\" + var\"'\")"
+end

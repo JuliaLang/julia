@@ -359,4 +359,12 @@ let ambig = Int32[0]
     @test ambig[1] == 1
 end
 
+struct B38280 <: Real; val; end
+let ambig = Int32[0]
+    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, 1, typemax(UInt), false, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    @test ms isa Vector
+    @test length(ms) == 1
+    @test ambig[1] == 1
+end
+
 nothing

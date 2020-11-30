@@ -494,7 +494,6 @@ end
 Return the generalized singular values from the generalized singular value
 decomposition of `A` and `B`, saving space by overwriting `A` and `B`.
 See also [`svd`](@ref) and [`svdvals`](@ref).
-```
 """
 function svdvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0

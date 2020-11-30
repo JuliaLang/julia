@@ -8,7 +8,211 @@ function typeinf(interp::AbstractInterpreter, result::InferenceResult, cached::B
     return typeinf(interp, frame)
 end
 
+"""
+The module `Core.Compiler.Timings` provides a simple implementation of nested timers that
+can be used to measure the exclusive time spent inferring each method instance that is
+recursively inferred during type inference.
+
+This is meant to be internal to the compiler, and makes some specific assumptions about
+being used for this purpose alone.
+"""
+module Timings
+
+using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
+    @inbounds, copy, backtrace
+
+# What we record for any given frame we infer during type inference.
+struct InferenceFrameInfo
+    mi::Core.MethodInstance
+    world::UInt64
+    sptypes::Vector{Any}
+    slottypes::Vector{Any}
+    nargs::Int
+    limited::Bool
+end
+
+function _typeinf_identifier(frame::Core.Compiler.InferenceState)
+    mi_info = InferenceFrameInfo(
+        frame.linfo,
+        frame.world,
+        copy(frame.sptypes),
+        copy(frame.slottypes),
+        frame.nargs,
+        frame.limited,
+    )
+    return mi_info
+end
+
+"""
+    Core.Compiler.Timing(mi_info, start_time, ...)
+
+Internal type containing the timing result for running type inference on a single
+MethodInstance.
+"""
+struct Timing
+    mi_info::InferenceFrameInfo
+    start_time::UInt64
+    cur_start_time::UInt64
+    time::UInt64
+    children::Core.Array{Timing,1}
+    bt         # backtrace collected upon initial entry to typeinf
+end
+Timing(mi_info, start_time, cur_start_time, time, children) = Timing(mi_info, start_time, cur_start_time, time, children, nothing)
+Timing(mi_info, start_time) = Timing(mi_info, start_time, start_time, UInt64(0), Timing[])
+
+_time_ns() = ccall(:jl_hrtime, UInt64, ())  # Re-implemented here because Base not yet available.
+
+# We keep a stack of the Timings for each of the MethodInstances currently being timed.
+# Since type inference currently operates via a depth-first search (during abstract
+# evaluation), this vector operates like a call stack. The last node in _timings is the
+# node currently being inferred, and its parent is directly before it, etc.
+# Each Timing also contains its own vector for all of its children, so that the tree
+# call structure through type inference is recorded. (It's recorded as a tree, not a graph,
+# because we create a new node for duplicates.)
+const _timings = Timing[]
+# ROOT() is an empty function used as the top-level Timing node to measure all time spent
+# *not* in type inference during a given recording trace. It is used as a "dummy" node.
+function ROOT() end
+const ROOTmi = Core.Compiler.specialize_method(
+    first(Core.Compiler.methods(ROOT)), Tuple{typeof(ROOT)}, Core.svec())
+"""
+    Core.Compiler.reset_timings()
+
+Empty out the previously recorded type inference timings (`Core.Compiler._timings`), and
+start the ROOT() timer again. `ROOT()` measures all time spent _outside_ inference.
+"""
+function reset_timings()
+    empty!(_timings)
+    push!(_timings, Timing(
+        # The MethodInstance for ROOT(), and default empty values for other fields.
+        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1, false),
+        _time_ns()))
+    return nothing
+end
+reset_timings()
+
+# (This is split into a function so that it can be called both in this module, at the top
+# of `enter_new_timer()`, and once at the Very End of the operation, by whoever started
+# the operation and called `reset_timings()`.)
+# NOTE: the @inline annotations here are not to make it faster, but to reduce the gap between
+# timer manipulations and the tasks we're timing.
+@inline function close_current_timer()
+    stop_time = _time_ns()
+    parent_timer = _timings[end]
+    accum_time = stop_time - parent_timer.cur_start_time
+
+    # Add in accum_time ("modify" the immutable struct)
+    @inbounds begin
+        _timings[end] = Timing(
+            parent_timer.mi_info,
+            parent_timer.start_time,
+            parent_timer.cur_start_time,
+            parent_timer.time + accum_time,
+            parent_timer.children,
+            parent_timer.bt,
+        )
+    end
+    return nothing
+end
+
+@inline function enter_new_timer(frame)
+    # Very first thing, stop the active timer: get the current time and add in the
+    # time since it was last started to its aggregate exclusive time.
+    close_current_timer()
+
+    mi_info = _typeinf_identifier(frame)
+
+    # Start the new timer right before returning
+    push!(_timings, Timing(mi_info, UInt64(0)))
+    len = length(_timings)
+    new_timer = @inbounds _timings[len]
+    # Set the current time _after_ appending the node, to try to exclude the
+    # overhead from measurement.
+    start = _time_ns()
+
+    @inbounds begin
+        _timings[len] = Timing(
+            new_timer.mi_info,
+            start,
+            start,
+            new_timer.time,
+            new_timer.children,
+        )
+    end
+
+    return nothing
+end
+
+# _expected_frame_ is not needed within this function; it is used in the `@assert`, to
+# assert that indeed we are always returning to a parent after finishing all of its
+# children (that is, asserting that inference proceeds via depth-first-search).
+@inline function exit_current_timer(_expected_frame_)
+    # Finish the new timer
+    stop_time = _time_ns()
+
+    expected_mi_info = _typeinf_identifier(_expected_frame_)
+
+    # Grab the new timer again because it might have been modified in _timings
+    # (since it's an immutable struct)
+    # And remove it from the current timings stack
+    new_timer = pop!(_timings)
+    Core.Compiler.@assert new_timer.mi_info.mi === expected_mi_info.mi
+
+    # Prepare to unwind one level of the stack and record in the parent
+    parent_timer = _timings[end]
+
+    accum_time = stop_time - new_timer.cur_start_time
+    # Add in accum_time ("modify" the immutable struct)
+    new_timer = Timing(
+        new_timer.mi_info,
+        new_timer.start_time,
+        new_timer.cur_start_time,
+        new_timer.time + accum_time,
+        new_timer.children,
+        parent_timer.mi_info.mi === ROOTmi ? backtrace() : nothing,
+    )
+    # Record the final timing with the original parent timer
+    push!(parent_timer.children, new_timer)
+
+    # And finally restart the parent timer:
+    len = length(_timings)
+    @inbounds begin
+        _timings[len] = Timing(
+            parent_timer.mi_info,
+            parent_timer.start_time,
+            _time_ns(),
+            parent_timer.time,
+            parent_timer.children,
+            parent_timer.bt,
+        )
+    end
+
+    return nothing
+end
+
+end  # module Timings
+
+"""
+    Core.Compiler.__set_measure_typeinf(onoff::Bool)
+
+If set to `true`, record per-method-instance timings within type inference in the Compiler.
+"""
+__set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
+const __measure_typeinf__ = fill(false)
+
+# Wrapper around _typeinf that optionally records the exclusive time for each invocation.
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    if __measure_typeinf__[]
+        Timings.enter_new_timer(frame)
+        v = _typeinf(interp, frame)
+        Timings.exit_current_timer(frame)
+        return v
+    else
+        return _typeinf(interp, frame)
+    end
+end
+
+function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
@@ -32,7 +236,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             if opt isa OptimizationState
                 run_optimizer = doopt && may_optimize(interp)
                 if run_optimizer
-                    optimize(opt, OptimizationParams(interp), caller.result)
+                    optimize(interp, opt, OptimizationParams(interp), caller.result)
                     finish(opt.src, interp)
                     # finish updating the result struct
                     validate_code_in_debug_mode(opt.linfo, opt.src, "optimized")
@@ -568,7 +772,7 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
         opt = OptimizationState(frame, opt_params, interp)
-        optimize(opt, opt_params, result.result)
+        optimize(interp, opt, opt_params, result.result)
         opt.src.inferred = true
     end
     ccall(:jl_typeinf_end, Cvoid, ())

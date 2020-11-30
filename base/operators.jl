@@ -547,6 +547,7 @@ end
 function kron! end
 
 const var"'" = adjoint
+const var"'ᵀ" = transpose
 
 """
     \\(x, y)

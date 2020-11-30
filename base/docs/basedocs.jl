@@ -150,6 +150,7 @@ include(p) = Base.include(Mod, p)
 ...
 
 end
+```
 """
 kw"baremodule"
 

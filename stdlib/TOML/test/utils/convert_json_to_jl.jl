@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # This converts the ground-truth JSON files to the Julia repr format so
 # we can use that without requiring a JSON parser during testing.
 

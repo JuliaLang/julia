@@ -17,7 +17,8 @@ extern "C" {
 
 #include <threading.h>
 
-// Profiler control variables //
+// Profiler control variables
+// Note: these "static" variables are also used in "signals-*.c"
 static volatile jl_bt_element_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
@@ -29,6 +30,12 @@ JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
 void jl_lock_profile(void);
 void jl_unlock_profile(void);
+
+JL_DLLEXPORT int jl_profile_is_buffer_full(void)
+{
+    // the latter `+ 1` is for the block terminator `0`.
+    return bt_size_cur + (JL_BT_MAX_ENTRY_SIZE + 1) + 1 > bt_size_max;
+}
 
 static uint64_t jl_last_sigint_trigger = 0;
 static uint64_t jl_disable_sigint_time = 0;

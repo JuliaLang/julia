@@ -10,6 +10,7 @@
 #include <llvm/Transforms/Utils/LoopUtils.h>
 
 #include "llvm-pass-helpers.h"
+#include "julia.h"
 
 #define DEBUG_TYPE "julia-licm"
 
@@ -131,4 +132,9 @@ static RegisterPass<JuliaLICMPass>
 Pass *createJuliaLICMPass()
 {
     return new JuliaLICMPass();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraJuliaLICMPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createJuliaLICMPass());
 }

@@ -86,7 +86,7 @@ extern "C" {
 //--------------------------------------------------
 // timers
 // Returns time in nanosec
-JL_DLLEXPORT uint64_t jl_hrtime(void);
+JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT;
 
 // number of cycles since power-on
 static inline uint64_t cycleclock(void)
@@ -107,6 +107,12 @@ static inline uint64_t cycleclock(void)
     int64_t virtual_timer_value;
     __asm__ volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
     return virtual_timer_value;
+#elif defined(_CPU_PPC64_)
+    // This returns a time-base, which is not always precisely a cycle-count.
+    // https://reviews.llvm.org/D78084
+    int64_t tb;
+    asm volatile("mfspr %0, 268" : "=r" (tb));
+    return tb;
 #else
     #warning No cycleclock() definition for your platform
     // copy from https://github.com/google/benchmark/blob/v1.5.0/src/cycleclock.h
@@ -115,6 +121,8 @@ static inline uint64_t cycleclock(void)
 }
 
 #include "timing.h"
+
+extern uint64_t jl_cumulative_compile_time;
 
 #ifdef _COMPILER_MICROSOFT_
 #  define jl_return_address() ((uintptr_t)_ReturnAddress())
@@ -281,6 +289,13 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     jl_set_typeof(v, ty);
     return v;
 }
+
+/* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
+ * gc frame, until it has been fully initialized. An uninitialized value in a
+ * gc frame can crash upon encountering the first safepoint. By delaying use of
+ * the JL_GC_PUSH macro until the value has been initialized, any accidental
+ * safepoints will be caught by the GC analyzer.
+ */
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__
@@ -490,7 +505,6 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_module_t *mod, jl_value_t *name);
 
 jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world);
 jl_value_t *jl_gf_invoke(jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs);
@@ -1242,7 +1256,7 @@ extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
 extern jl_sym_t *splatnew_sym;
 extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
-extern jl_sym_t *foreigncall_sym;
+extern jl_sym_t *foreigncall_sym; extern jl_sym_t *as_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *dot_sym;    extern jl_sym_t *newvar_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
@@ -1309,6 +1323,9 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #else
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
 #endif
+
+float __gnu_h2f_ieee(uint16_t param) JL_NOTSAFEPOINT;
+uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

@@ -1613,6 +1613,14 @@ end
     @test append!([1,2], g) == [1,2] == push!([1,2], g...)
     @test prepend!([1,2], g) == [1,2] == pushfirst!([1,2], g...)
 
+    # multiple items
+    A = [1]
+    @test append!(A, [2, 3], [4], [5, 6]) === A
+    @test A == [1, 2, 3, 4, 5, 6]
+    A = [1]
+    @test prepend!(A, [2, 3], [4], [5, 6]) === A
+    @test A == [2, 3, 4, 5, 6, 1]
+
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
     @test prepend!([1,2], OffsetArray([9,8], (-3,))) == [9,8,1,2]
