@@ -2879,16 +2879,36 @@ end
     timing1 = time_inference() do
         @eval M.g(2, 3.0)
     end
+    @test occursin(r"Core.Compiler.Timings.Timing\(InferenceFrameInfo for Core.Compiler.Timings.ROOT\(\)\) with \d+ children", sprint(show, timing1))
     # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
     # their concrete types.
     @test sort([mi_info.mi.def.name for (time,mi_info) in flatten_times(timing1)[end-1:end]]) == [:i, :i2]
     @test all(child->isa(child.bt, Vector), timing1.children)
     @test all(child->child.bt===nothing, timing1.children[1].children)
+    # Test the stacktrace
+    @test isa(stacktrace(timing1.children[1].bt), Vector{Base.StackTraces.StackFrame})
     # Test that inference has cached some of the Method Instances
     timing2 = time_inference() do
         @eval M.g(2, 3.0)
     end
     @test length(flatten_times(timing2)) < length(flatten_times(timing1))
+    # Printing of InferenceFrameInfo for mi.def isa Module
+    @eval module M
+        i(x) = x+5
+        i2(x) = x+2
+        h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
+        g(y::Integer, x) = h(Any[y]) + Int(x)
+    end
+    # BEGIN LINE NUMBER SENSITIVITY (adjust the line offset below as needed)
+    timingmod = time_inference() do
+        @eval @testset "Outer" begin
+            @testset "Inner" begin
+                for i = 1:2 M.g(2, 3.0) end
+            end
+        end
+    end
+    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 5)", string(timingmod.children))
+    # END LINE NUMBER SENSITIVITY
 
     # Recursive function
     @eval module _Recursive f(n::Integer) = n == 0 ? 0 : f(n-1) + 1 end
@@ -2903,12 +2923,38 @@ end
         i(x) = x === 0 ? 0 : 1 / x
         a(x) = i(0) * i(x)
         b() = i(0) * i(1) * i(0)
+        function loopc(n)
+            s = 0
+            for i = 1:n
+                s += i
+            end
+            return s
+        end
+        call_loopc() = loopc(5)
+        myfloor(::Type{T}, x) where T = floor(T, x)
+        d(x) = myfloor(Int16, x)
     end
     timing = time_inference() do
         @eval C.a(2)
         @eval C.b()
+        @eval C.call_loopc()
+        @eval C.d(3.2)
     end
-    @test !isempty(flatten_times(timing))
+    ft = flatten_times(timing)
+    @test !isempty(ft)
+    str = sprint(show, ft)
+    @test occursin("InferenceFrameInfo for /(1::$Int, ::$Int)", str)  # inference constants
+    @test occursin("InferenceFrameInfo for Core.Compiler.Timings.ROOT()", str) # qualified
+    # loopc has internal slots, check constant printing in this case
+    sel = filter(ti -> ti.second.mi.def.name === :loopc, ft)
+    ifi = sel[end].second
+    @test length(ifi.slottypes) > ifi.nargs
+    str = sprint(show, sel)
+    @test occursin("InferenceFrameInfo for $(@__MODULE__).C.loopc(5::$Int)", str)
+    # check that types aren't double-printed as `T::Type{T}`
+    sel = filter(ti -> ti.second.mi.def.name === :myfloor, ft)
+    str = sprint(show, sel)
+    @test occursin("InferenceFrameInfo for $(@__MODULE__).C.myfloor(::Type{Int16}, ::Float64)", str)
 end
 
 # issue #37638
@@ -2919,4 +2965,3 @@ f37943(x::Any, i::Int) = getfield((x::Pair{false, Int}), i)
 g37943(i::Int) = fieldtype(Pair{false, T} where T, i)
 @test only(Base.return_types(f37943, Tuple{Any, Int})) === Union{}
 @test only(Base.return_types(g37943, Tuple{Int})) === Union{Type{Union{}}, Type{Any}}
-

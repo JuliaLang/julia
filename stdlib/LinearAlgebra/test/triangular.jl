@@ -158,9 +158,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test copy(viewA1') == Matrix(viewA1)'
             # transpose!
             @test transpose!(copy(A1)) == transpose(A1)
+            @test typeof(transpose!(copy(A1))).name == typeof(transpose(A1)).name
             @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == transpose(viewA1)
             # adjoint!
             @test adjoint!(copy(A1)) == adjoint(A1)
+            @test typeof(adjoint!(copy(A1))).name == typeof(adjoint(A1)).name
             @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == adjoint(viewA1)
         end
 

@@ -378,6 +378,9 @@ julia> findall("a", "banana")
  4:4
  6:6
 ```
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
 """
 function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     found = UnitRange{Int}[]
@@ -405,6 +408,9 @@ calling `length(findall(pattern, string))` but more efficient.
 
 If `overlap=true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from disjoint character ranges.
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
 """
 function count(t::Union{AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0

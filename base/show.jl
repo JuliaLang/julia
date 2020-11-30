@@ -999,6 +999,33 @@ function show(io::IO, l::Core.MethodInstance)
     end
 end
 
+# These sometimes show up as Const-values in InferenceFrameInfo signatures
+show(io::IO, r::Core.Compiler.UnitRange) = show(io, r.start : r.stop)
+show(io::IO, mime::MIME{Symbol("text/plain")}, r::Core.Compiler.UnitRange) = show(io, mime, r.start : r.stop)
+
+function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
+    mi = mi_info.mi
+    def = mi.def
+    if isa(def, Method)
+        if isdefined(def, :generator) && mi === def.generator
+            print(io, "InferenceFrameInfo generator for ")
+            show(io, def)
+        else
+            print(io, "InferenceFrameInfo for ")
+            argnames = [isa(a, Core.Const) ? (isa(a.val, Type) ? "" : a.val) : "" for a in mi_info.slottypes[1:mi_info.nargs]]
+            show_tuple_as_call(io, def.name, mi.specTypes, false, nothing, argnames, true)
+        end
+    else
+        linetable = mi.uninferred.linetable
+        line = isempty(linetable) ? "" : (lt = linetable[1]; string(lt.file) * ':' * string(lt.line))
+        print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
+    end
+end
+
+function show(io::IO, tinf::Core.Compiler.Timings.Timing)
+    print(io, "Core.Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
+end
+
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
                           delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
@@ -2103,11 +2130,14 @@ end
 
 # show the called object in a signature, given its type `ft`
 # `io` should contain the UnionAll env of the signature
-function show_signature_function(io::IO, @nospecialize(ft), demangle=false, fargname="", html=false)
+function show_signature_function(io::IO, @nospecialize(ft), demangle=false, fargname="", html=false, qualified=false)
     uw = unwrap_unionall(ft)
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
         isdefined(uw.name.module, uw.name.mt.name) &&
         ft == typeof(getfield(uw.name.module, uw.name.mt.name))
+        if qualified && !is_exported_from_stdlib(uw.name.mt.name, uw.name.module) && uw.name.module !== Main
+            print_within_stacktrace(io, uw.name.module, '.', bold=true)
+        end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
         print_within_stacktrace(io, s, bold=true)
     elseif isa(ft, DataType) && ft.name === Type.body.name &&
@@ -2135,7 +2165,7 @@ function print_within_stacktrace(io, s...; color=:normal, bold=false)
     end
 end
 
-function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing, argnames=nothing)
+function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing, argnames=nothing, qualified=false)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
         print(io, demangle ? demangle_function_name(name) : name, "(...)")
@@ -2149,7 +2179,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         sig = sig.body
     end
     sig = (sig::DataType).parameters
-    show_signature_function(env_io, sig[1], demangle)
+    show_signature_function(env_io, sig[1], demangle, "", false, qualified)
     first = true
     print_within_stacktrace(io, "(", bold=true)
     show_argnames = argnames !== nothing && length(argnames) == length(sig)
@@ -2184,7 +2214,7 @@ function print_type_stacktrace(io, type; color=:normal)
     if isnothing(i) || !get(io, :backtrace, false)::Bool
         printstyled(io, str; color=color)
     else
-        printstyled(io, str[1:i-1]; color=color)
+        printstyled(io, str[1:prevind(str,i)]; color=color)
         printstyled(io, str[i:end]; color=:light_black)
     end
 end

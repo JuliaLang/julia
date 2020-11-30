@@ -66,7 +66,7 @@ Command-line option changes
   `dir = Base.current_project()`. In particular, this means that if you do
   `pkg> activate` after starting `julia` with the `--project` option (or with
   `JULIA_PROJECT` set) it will take you to the default active project, which is
-  `@v1.5` unless you have modified `LOAD_PATH` ([#36434]).
+  `@v1.6` unless you have modified `LOAD_PATH` ([#36434]).
 
 Multi-threading changes
 -----------------------
@@ -150,6 +150,8 @@ Standard library changes
 * The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside ([#37320]).
+* To download artifacts lazily, `LazyArtifacts` now must be explicitly listed as a dependency, to avoid needing the
+  support machinery to be available when it is not commonly needed ([#37844]).
 * `@time` now reports if the time presented included any compilation time, which is shown as a percentage ([#37678]).
 * `@varinfo` can now report non-exported objects within modules, look recursively into submodules, and return a sorted
   results table ([#38042]).
@@ -164,6 +166,10 @@ Standard library changes
 * `(+)(::UniformScaling)` is now defined, making `+I` a valid unary operation ([#36784]).
 * Instances of `UniformScaling` are no longer `isequal` to matrices. Previous
   behaviour violated the rule that `isequal(x, y)` implies `hash(x) == hash(y)`.
+* Transposing `*Triangular` matrices now returns matrices of the opposite triangular type, consistently
+  with `adjoint!(::*Triangular)` and `transpose!(::*Triangular)`. Packages containing methods with, e.g.,
+  `Adjoint{<:Any,<:LowerTriangular{<:Any,<:OwnMatrixType}}` should replace that by
+  `UpperTriangular{<:Any,<:Adjoint{<:Any,<:OwnMatrixType}}` in the method signature ([#38168]).
 
 #### Markdown
 
@@ -224,6 +230,9 @@ Standard library changes
 
 #### Distributed
 
+* Now supports invoking Windows workers via ssh (via new keyword argument `shell=:wincmd` in `addprocs`) ([#30614])
+
+* Other new keyword arguments in `addprocs`: `ssh` to specify the ssh client path, `env` to pass environment variables to workers, and `cmdline_cookie` to work around an ssh problem with Windows workers that run older (pre-ConPTY) versions of Windows, Julia or OpenSSH. ([#30614])
 
 #### UUIDs
 
