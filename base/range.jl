@@ -214,6 +214,9 @@ function steprange_last(start::T, step, stop) where T
     if isa(start,AbstractFloat) || isa(step,AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
+    if isa(start,Integer) && !isinteger(start + step)
+        throw(ArgumentError("StepRange{<:Integer} cannot have non-integer step"))
+    end
     z = zero(step)
     step == z && throw(ArgumentError("step cannot be zero"))
 
@@ -351,6 +354,9 @@ struct StepRangeLen{T,R,S} <: AbstractRange{T}
     offset::Int  # the index of ref
 
     function StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S}
+        if T <: Integer && !isinteger(ref + step)
+            throw(ArgumentError("StepRangeLen{<:Integer} cannot have non-integer step"))
+        end
         len >= 0 || throw(ArgumentError("length cannot be negative, got $len"))
         1 <= offset <= max(1,len) || throw(ArgumentError("StepRangeLen: offset must be in [1,$len], got $offset"))
         new(ref, step, len, offset)
@@ -410,7 +416,11 @@ struct LinRange{T} <: AbstractRange{T}
             start == stop || throw(ArgumentError("range($start, stop=$stop, length=$len): endpoints differ"))
             return new(start, stop, 1, 1)
         end
-        new(start,stop,len,max(len-1,1))
+        lendiv = max(len-1, 1)
+        if T <: Integer && !iszero(mod(stop-start, lendiv))
+            throw(ArgumentError("LinRange{<:Integer} cannot have non-integer step"))
+        end
+        new(start,stop,len,lendiv)
     end
 end
 

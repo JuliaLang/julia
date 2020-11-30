@@ -1002,6 +1002,15 @@ end
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
 end
 
+@testset "Ranges with <:Integer eltype but non-integer step (issue #32419)" begin
+    @test eltype(StepRange(1, 1//1, 2)) === Int
+    @test_throws ArgumentError StepRange(1, 1//2, 2)
+    @test eltype(StepRangeLen{Int}(1, 1//1, 2)) === Int
+    @test_throws ArgumentError StepRangeLen{Int}(1, 1//2, 2)
+    @test eltype(LinRange{Int}(1, 5, 3)) === Int
+    @test_throws ArgumentError LinRange{Int}(1, 5, 4)
+end
+
 @testset "LinRange ops" begin
     @test 2*LinRange(0,3,4) == LinRange(0,6,4)
     @test LinRange(0,3,4)*2 == LinRange(0,6,4)

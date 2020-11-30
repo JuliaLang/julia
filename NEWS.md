@@ -113,6 +113,7 @@ New library features
 Standard library changes
 ------------------------
 
+* It is no longer possible to create a `LinRange`, `StepRange`, or `StepRangeLen` with a `<: Integer` eltype but non-integer step ([#32439]).
 * `pkg> precompile` is now parallelized through depth-first precompilation of dependencies. Errors will only throw for
   direct dependencies listed in the `Project.toml`.
 * `pkg> precompile` is now automatically triggered whenever Pkg changes the active manifest. Auto-precompilation will
