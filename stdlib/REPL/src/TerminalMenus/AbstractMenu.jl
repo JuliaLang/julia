@@ -322,7 +322,14 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
         # like clamp, except this takes the min if max < min
         m.pageoffset = max(0, min(cursoridx - m.pagesize ÷ 2, lastoption - m.pagesize))
     else
-        print(buf, "\x1b[999D\x1b[$(ncleared)A")   # move left 999 spaces and up `ncleared` lines
+        print(buf, "\r")
+        if ncleared > 0
+            # Move up `ncleared` lines. However, moving up zero lines
+            # is interpreted as one line, so need to do this
+            # conditionally. (More specifically, the `0` value means
+            # to use the default, and for move up this is one.)
+            print(buf, "\x1b[$(ncleared)A")
+        end
     end
 
     nheaderlines = 0
@@ -354,7 +361,7 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
         printcursor(buf, m, i == cursoridx)
         writeline(buf, m, i, i == cursoridx)
 
-        (firstline == lastline || i != lastline) && print(buf, "\r\n")
+        (i != lastline) && print(buf, "\r\n")
     end
 
     newstate = nheaderlines + lastline - firstline  # final line doesn't have `\n`
