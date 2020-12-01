@@ -190,8 +190,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
     # -t, --threads
     code = "print(Threads.nthreads())"
-    cpu_threads = string(ccall(:jl_cpu_threads, Int32, ()))
-    @test cpu_threads ==
+    cpu_threads = ccall(:jl_cpu_threads, Int32, ())
+    @test string(cpu_threads) ==
           read(`$exename --threads auto -e $code`, String) ==
           read(`$exename --threads=auto -e $code`, String) ==
           read(`$exename -tauto -e $code`, String) ==
@@ -202,10 +202,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
                   read(`$exename -t 2 -e $code`, String) == "2"
         end
     end
-    cpu_threads *= "0"
-    @test read(`$exename -t $cpu_threads -e $code`, String) == cpu_threads
-    withenv("JULIA_NUM_THREADS" => cpu_threads) do
-        @test read(`$exename -e $code`, String) == cpu_threads
+    # We want to test oversubscription, but on manycore machines, this can
+    # actually exhaust limited PID spaces
+    cpu_threads = max(2*cpu_threads, min(200, 10*cpu_threads))
+    @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
+    withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
+        @test read(`$exename -e $code`, String) == string(cpu_threads)
     end
     @test !success(`$exename -t 0`)
     @test !success(`$exename -t -1`)
