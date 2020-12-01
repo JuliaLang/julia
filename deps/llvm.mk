@@ -533,6 +533,7 @@ $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
 endif
 $(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D90722-rtdyld-absolute-relocs)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-invalid-addrspacecast-sink)) # upstreamed as D92210
 endif # LLVM_VER 11.0
 
 
