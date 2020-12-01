@@ -91,6 +91,7 @@ New library functions
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
 * New function `sincospi` for simultaneously computing `sinpi(x)` and `cospi(x)` more
   efficiently ([#35816]).
+* New function `cispi(x)` for more accurately computing `cis(pi * x)` ([#38449]).
 * New function `addenv` for adding environment mappings into a `Cmd` object, returning the new `Cmd` object.
 * New function `insorted` for determining whether an element is in a sorted collection or not ([#37490]).
 * New function `Base.rest` for taking the rest of a collection, starting from a specific
