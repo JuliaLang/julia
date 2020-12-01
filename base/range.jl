@@ -292,6 +292,8 @@ unitrange_last(start::T, stop::T) where {T} =
     ifelse(stop >= start, convert(T,start+floor(stop-start)),
                           convert(T,start-oneunit(stop-start)))
 
+unitrange(x) = UnitRange(x)
+
 if isdefined(Main, :Base)
     # Constant-fold-able indexing into tuples to functionally expose Base.tail and Base.front
     function getindex(@nospecialize(t::Tuple), r::UnitRange)
