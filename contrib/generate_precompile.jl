@@ -288,7 +288,7 @@ function generate_precompile_statements()
     if have_repl
         # Seems like a reasonable number right now, adjust as needed
         # comment out if debugging script
-        @assert n_succeeded > 1200
+        @assert n_succeeded > 1100
     end
 
     tot_time = time_ns() - start_time
