@@ -1061,8 +1061,9 @@ along with a summary of the test results.
 
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
 also be used for any nested `@testset` invocations. The given options are only
-applied to the test set where they are given. The default test set type does
-not take any options.
+applied to the test set where they are given. The default test set type
+accepts the `verbose` boolean option: if `true`, the result summary of the
+nested testsets is shown even when they all pass (the default is `false`).
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
