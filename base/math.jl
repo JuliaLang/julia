@@ -673,19 +673,16 @@ function _hypot(x, y)
     end
 
     # Operands do not vary widely
-    L = sqrt(floatmin(ax))/2 # a power of 2, so inv(L) is exact
-    if ax > inv(L)
-        ax = ax*L
-        ay = ay*L
-        scale = inv(L)
-    elseif ay < L
-        scale = L*eps(typeof(ax))
-        # inv(scale) would underflow in Float16
-        # is a power of 2, so should be optimized to a multplication by the compiler for other types
+    scale = eps(typeof(ax))*sqrt(floatmin(ax))  #Rescaling constant
+    if ax > sqrt(floatmax(ax)/2)
+        ax = ax*scale
+        ay = ay*scale
+        scale = inv(scale)
+    elseif ay < sqrt(floatmin(ax))
         ax = ax/scale
         ay = ay/scale
     else
-        scale = oneunit(L)
+        scale = oneunit(scale)
     end
     h = sqrt(muladd(ax, ax, ay*ay))
     # This branch is correctly rounded but requires a native hardware fma.
@@ -705,6 +702,9 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
+_hypot(x::Float16, y::Float16) = Float16(_hypot(Float32(x), Float32(y)))
+_hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
+
 function _hypot(x...)
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
