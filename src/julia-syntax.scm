@@ -105,7 +105,7 @@
   (if (null? tuples)
       (if (and last (= n 1))
           `(call (top firstindex) ,a)
-          `(call (top first) (call (top axes) ,a ,n)))
+          `(call (top firstindex) ,a ,n))
       (let ((dimno `(call (top +) ,(- n (length tuples))
                           ,.(map (lambda (t) `(call (top length) ,t))
                                  tuples))))
