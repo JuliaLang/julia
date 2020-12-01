@@ -316,7 +316,7 @@ function showerror(io::IO, ex::MethodError)
             hasrows |= isrow
             push!(vec_args, isrow ? vec(arg) : arg)
         end
-        if hasrows && applicable(f, vec_args...)
+        if hasrows && applicable(f, vec_args...) && isempty(kwargs)
             print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.",
                       "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
                       "\nYou can convert to a column vector with the vec() function.")
