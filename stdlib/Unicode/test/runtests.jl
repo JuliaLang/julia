@@ -385,6 +385,7 @@ end
         @test titlecase("abc-def")                     == "Abc-Def"
         @test titlecase("abc-def", wordsep = !Base.Unicode.iscased) == "Abc-Def"
         @test titlecase("abc-def", wordsep = isspace)  == "Abc-def"
+        @test titlecase("bôrked") == "Bôrked"
     end
 end
 
