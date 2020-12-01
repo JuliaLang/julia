@@ -134,7 +134,28 @@ Foo Tests     |    8      8
 ```
 
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
-summary. If we do have a test failure, only the details for the failed test sets will be shown:
+summary, unless the `verbose=true` option is passed:
+
+```jldoctest testfoo
+julia> @testset verbose = true "Foo Tests" begin
+           @testset "Animals" begin
+               @test foo("cat") == 9
+               @test foo("dog") == foo("cat")
+           end
+           @testset "Arrays $i" for i in 1:3
+               @test foo(zeros(i)) == i^2
+               @test foo(fill(1.0, i)) == i^2
+           end
+       end;
+Test Summary: | Pass  Total
+Foo Tests     |    8      8
+  Animals     |    2      2
+  Arrays 1    |    2      2
+  Arrays 2    |    2      2
+  Arrays 3    |    2      2
+```
+
+If we do have a test failure, only the details for the failed test sets will be shown:
 
 ```julia-repl
 julia> @testset "Foo Tests" begin
