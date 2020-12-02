@@ -378,8 +378,10 @@ ifeq ($(XC_HOST),)
 CROSS_COMPILE:=
 # delayed expansion of $(CC), since it won't be computed until later
 HOSTCC = $(CC)
+HOSTCXX = $(CXX)
 else
 HOSTCC ?= gcc
+HOSTCXX ?= g++
 OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
