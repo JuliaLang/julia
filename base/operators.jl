@@ -188,20 +188,20 @@ largest values and `isgreater` defines a descending total order with `NaN` and
     lexigraphically with `isless(y, x)` rather than recursively with itself:
 
     ```jldoctest
-    julia> isgreater(1, NaN) # 1 is greater than NaN
+    julia> Base.isgreater(1, NaN) # 1 is greater than NaN
     true
 
-    julia> isgreater((1,), (NaN,)) # But (1,) is not greater than (NaN,)
+    julia> Base.isgreater((1,), (NaN,)) # But (1,) is not greater than (NaN,)
     false
 
-    julia> sort([1, 2, 3, NaN]; lt=isgreater)
+    julia> sort([1, 2, 3, NaN]; lt=Base.isgreater)
     4-element Vector{Float64}:
        3.0
        2.0
        1.0
      NaN
 
-    julia> sort(tuple.([1, 2, 3, NaN]); lt=isgreater)
+    julia> sort(tuple.([1, 2, 3, NaN]); lt=Base.isgreater)
     4-element Vector{Tuple{Float64}}:
      (NaN,)
      (3.0,)
