@@ -308,13 +308,15 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
-                 :Future, :LazyArtifacts, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
-                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,
-                 :ArgTools, :Tar, :NetworkOptions,]),
-           )
+                [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles,
+                 :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils,
+                 :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
+                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :Pkg, :Printf,
+                 :Profile, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
+                 :SparseArrays, :Statistics, :SuiteSparse, :TOML, :Tar, :Test, :UUIDs, :Unicode,
+                 :nghttp2_jll]
+            ),
+        )
         @test discard_module.(deps) == deps1
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
         @test map(x -> x.filename, deps) == [Foo_file]
