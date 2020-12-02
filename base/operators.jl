@@ -773,6 +773,10 @@ julia> x % y
 
 julia> x == div(x, y) * y + rem(x, y)
 true
+
+julia> rem.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -2  -1  0  -2  -1  0  1  2  0  1  2
 ```
 """
 rem
@@ -794,6 +798,10 @@ julia> -5 ÷ 3
 
 julia> 5.0 ÷ 2
 2.0
+
+julia> div.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -1  -1  -1  0  0  0  0  0  1  1  1
 ```
 """
 div

@@ -81,6 +81,10 @@ See also: [`div`](@ref)
 ```jldoctest
 julia> fld(7.3,5.5)
 1.0
+
+julia> fld.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -2  -2  -1  -1  -1  0  0  0  1  1  1
 ```
 Because `fld(x, y)` implements strictly correct floored rounding based on the true
 value of floating-point numbers, unintuitive situations can arise. For example:
@@ -111,6 +115,10 @@ See also: [`div`](@ref)
 ```jldoctest
 julia> cld(5.5,2.2)
 3.0
+
+julia> cld.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -1  -1  -1  0  0  0  1  1  1  2  2
 ```
 """
 cld(a, b) = div(a, b, RoundUp)

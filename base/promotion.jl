@@ -144,6 +144,15 @@ end
 Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.promote_typejoin(Int, Float64)
+Real
+
+julia> Base.promote_type(Int, Float64)
+Float64
+```
 """
 function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
@@ -335,7 +344,7 @@ where usually `^ == Base.^` unless `^` has been defined in the calling
 namespace.) If `y` is a negative integer literal, then `Base.literal_pow`
 transforms the operation to `inv(x)^-y` by default, where `-y` is positive.
 
-
+# Examples
 ```jldoctest
 julia> 3^5
 243

@@ -171,6 +171,9 @@ Get a tuple with the names of the fields of a `DataType`.
 ```jldoctest
 julia> fieldnames(Rational)
 (:num, :den)
+
+julia> fieldnames(typeof(1+im))
+(:re, :im)
 ```
 """
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough

@@ -246,6 +246,10 @@ julia> mod(eps(), 3)
 
 julia> mod(-eps(), 3)
 3.0
+
+julia> mod.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ 1  2  0  1  2  0  1  2  0  1  2
 ```
 """
 function mod(x::T, y::T) where T<:Integer

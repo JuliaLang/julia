@@ -379,6 +379,9 @@ julia> a = [1; 2; 3]
  2
  3
 
+julia> allunique(a)
+true
+
 julia> allunique([a, a])
 false
 ```

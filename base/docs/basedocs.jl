@@ -673,7 +673,7 @@ See the manual section on [control flow](@ref man-conditional-evaluation) for mo
 ```
 julia> x = 1; y = 2;
 
-julia> println(x > y ? "x is larger" : "y is larger")
+julia> x > y ? println("x is larger") : println("y is larger")
 y is larger
 ```
 """
@@ -930,6 +930,17 @@ kw";"
     x && y
 
 Short-circuiting boolean AND.
+
+# Examples
+```jldoctest
+julia> x = 3;
+
+julia> x > 1 && x < 10 && x isa Int
+true
+
+julia> x < 0 && error("expected positive x")
+false
+```
 """
 kw"&&"
 
@@ -937,6 +948,15 @@ kw"&&"
     x || y
 
 Short-circuiting boolean OR.
+
+# Examples
+```jldoctest
+julia> pi < 3 || ℯ < 3
+true
+
+julia> false || true || println("neither is true!")
+true
+```
 """
 kw"||"
 
@@ -1782,8 +1802,14 @@ Construct a tuple of the given objects.
 
 # Examples
 ```jldoctest
-julia> tuple(1, 'a', pi)
-(1, 'a', π)
+julia> tuple(1, 'b', pi)
+(1, 'b', π)
+
+julia> ans === (1, 'b', π)
+true
+
+julia> Tuple([1, 2, pi])  # takes a collection
+(1.0, 2.0, 3.141592653589793)
 ```
 """
 tuple
@@ -1960,8 +1986,13 @@ Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`undef`](@
 ```julia-repl
 julia> Matrix{Float64}(undef, 2, 3)
 2×3 Array{Float64, 2}:
- 6.93517e-310  6.93517e-310  6.93517e-310
- 6.93517e-310  6.93517e-310  1.29396e-320
+ 2.36365e-314  2.28473e-314    5.0e-324
+ 2.26704e-314  2.26711e-314  NaN
+
+julia> similar(ans, Int32, 2, 2)
+2×2 Matrix{Int32}:
+ 490537216  1277177453
+         1  1936748399
 ```
 """
 Matrix{T}(::UndefInitializer, m, n)
@@ -2020,15 +2051,18 @@ julia> A = Array{Float64, 2}(undef, 2, 3) # N given explicitly
  6.90198e-310  6.90198e-310  6.90198e-310
  6.90198e-310  6.90198e-310  0.0
 
-julia> B = Array{Float64}(undef, 2) # N determined by the input
-2-element Vector{Float64}:
- 1.87103e-320
- 0.0
+julia> B = Array{Float64}(undef, 4) # N determined by the input
+4-element Vector{Float64}:
+   2.360075077e-314
+ NaN
+   2.2671131793e-314
+   2.299821756e-314
 
-julia> similar(A, Int16) #
-2×3 Matrix{Int16}:
- -14496  1  74
-  16160  0   0
+julia> similar(B, 2, 4, 1) # use typeof(B), and the given size
+2×4×1 Array{Float64, 3}:
+[:, :, 1] =
+ 2.26703e-314  2.26708e-314  0.0           2.80997e-314
+ 0.0           2.26703e-314  2.26708e-314  0.0
 ```
 """
 Array{T,N}(::UndefInitializer, dims)

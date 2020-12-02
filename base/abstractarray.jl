@@ -353,6 +353,9 @@ lastindex(a, d) = (@_inline_meta; last(axes(a, d)))
 
 Return the first index of `collection`. If `d` is given, return the first index of `collection` along dimension `d`.
 
+The syntaxes `A[begin]` and `A[1, begin]` lower to `A[firstindex(A)]` and
+`A[1, firstindex(A, 2)]`, respectively.
+
 # Examples
 ```jldoctest
 julia> firstindex([1,2,4])
@@ -2127,18 +2130,28 @@ end
     foreach(f, c...) -> Nothing
 
 Call function `f` on each element of iterable `c`.
-For multiple iterable arguments, `f` is called elementwise.
-`foreach` should be used instead of `map` when the results of `f` are not
+For multiple iterable arguments, `f` is called elementwise, and iteration stops when
+any iterator is finished.
+
+`foreach` should be used instead of [`map`](@ref) when the results of `f` are not
 needed, for example in `foreach(println, array)`.
 
 # Examples
 ```jldoctest
-julia> a = 1:3:7;
+julia> tri = 1:3:7; res = Int[];
 
-julia> foreach(x -> println(x^2), a)
-1
-16
-49
+julia> foreach(x -> push!(res, x^2), tri)
+
+julia> res
+3-element Vector{$(Int)}:
+  1
+ 16
+ 49
+
+julia> foreach((x,y) -> println(x," & ",y), tri, 1:100)
+1 & 1
+4 & 2
+7 & 3
 ```
 """
 foreach(f) = (f(); nothing)
@@ -2307,7 +2320,7 @@ mapany(f, itr) = Any[f(x) for x in itr]
     map(f, c...) -> collection
 
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
-apply `f` elementwise.
+apply `f` elementwise, and stop when when any of them is exhausted.
 
 See also: [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref).
 
@@ -2319,7 +2332,7 @@ julia> map(x -> x * 2, [1, 2, 3])
  4
  6
 
-julia> map(+, [1, 2, 3], [10, 20, 30])
+julia> map(+, [1, 2, 3], [10, 20, 30, 400, 5000])
 3-element Vector{Int64}:
  11
  22
@@ -2364,7 +2377,7 @@ end
     map!(function, destination, collection...)
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
-collection. `destination` must be at least as large as the first collection.
+collection. `destination` must be at least as large as the smallest collection.
 
 # Examples
 ```jldoctest
@@ -2377,6 +2390,14 @@ julia> a
  2.0
  4.0
  6.0
+
+julia> map!(+, zeros(Int, 5), 100:999, 1:3)
+5-element Vector{$(Int)}:
+ 101
+ 103
+ 105
+   0
+   0
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
