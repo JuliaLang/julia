@@ -41,6 +41,7 @@ display([1])
 display([1 2; 3 4])
 @time 1+1
 ; pwd
+$CTRL_C
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
@@ -288,7 +289,7 @@ function generate_precompile_statements()
     if have_repl
         # Seems like a reasonable number right now, adjust as needed
         # comment out if debugging script
-        @assert n_succeeded > 1100
+        @assert n_succeeded > 1200
     end
 
     tot_time = time_ns() - start_time
