@@ -9,31 +9,30 @@ end
 words(s) = split(s, " ")
 lines(s) = split(s, "\n")
 
-function _wrapped_lines(s::AbstractString, width, i)
+function wrapped_lines!(lines, io::IO, s::AbstractString, width, i)
     ws = words(s)
-    lines = String[]
     for word in ws
         word_length = ansi_length(word)
-        if i + word_length + 1 > width
+        word_length == 0 && continue
+        if isempty(lines) || i + word_length + 1 > width
             i = word_length
             push!(lines, word)
         else
             i += word_length + 1
-            if isempty(lines)
-                push!(lines, word)
-            else
-                lines[end] *= " " * word   # this could be more efficient
-            end
+            lines[end] *= " " * word   # this could be more efficient
         end
     end
-    return i, lines
+    return i
 end
 
 function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
-    lines = String[]
-    for ss in split(s, "\n")
-        i, line = _wrapped_lines(ss, width, i)
-        append!(lines, line)
+    lines = AbstractString[]
+    if occursin(r"\n", s)
+        for ss in split(s, "\n")
+            i = wrapped_lines!(lines, io, ss, width, i)
+        end
+    else
+        wrapped_lines!(lines, io, s, width, i)
     end
     return lines
 end
