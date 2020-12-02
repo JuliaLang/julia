@@ -86,7 +86,7 @@ julia> axes(A)
 """
 function axes(A)
     @_inline_meta
-    map(OneTo, size(A))
+    map(oneto, size(A))
 end
 
 """
@@ -107,10 +107,10 @@ require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError
 # in other applications.
 axes1(A::AbstractArray{<:Any,0}) = OneTo(1)
 axes1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
-axes1(iter) = OneTo(length(iter))
+axes1(iter) = oneto(length(iter))
 
 unsafe_indices(A) = axes(A)
-unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
+unsafe_indices(r::AbstractRange) = (oneto(unsafe_length(r)),) # Ranges use checked_sub for size
 
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
@@ -308,7 +308,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     eachindex(IndexStyle(A,B...), A, B...)
 end
-eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(length(A)))
+eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; oneto(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta

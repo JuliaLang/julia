@@ -331,6 +331,7 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
+oneto(r) = OneTo(r)
 
 ## Step ranges parameterized by length
 

@@ -46,5 +46,6 @@ Base.first(r::OneToInf{T}) where {T} = oneunit(T)
 Base.length(r::OneToInf{T}) where {T} = Infinity()
 Base.last(r::OneToInf{T}) where {T} = Infinity()
 Base.unitrange(r::OneToInf) = r
+Base.oneto(::Infinity) = OneToInf()
 
 end
