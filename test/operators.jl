@@ -84,12 +84,16 @@ import Base.<
 @test isless('a','b')
 
 @testset "isgreater" begin
-    isgreater = Base.isgreater
-    @test !isgreater(missing, 1)
-    @test  isgreater(5, 1)
-    @test !isgreater(1, 5)
-    @test  isgreater(1, missing)
-    @test  isgreater(1, NaN)
+    # isgreater should be compatible with min.
+    min1(a, b) = isgreater(a, b) ? b : a
+    # min promotes numerical arguments to the same type, but our quick min1
+    # doesn't, so use float test values instead of ints.
+    values = (1.0, 5.0, NaN, missing, Inf)
+    for a in values, b in values
+        @test min(a, b) === min1(a, b)
+        @test min((a,), (b,)) === min1((a,), (b,))
+        @test all(min([a], [b]) .=== min1([a], [b]))
+    end
 end
 
 @testset "vectorized comparisons between numbers" begin

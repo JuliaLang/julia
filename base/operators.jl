@@ -171,20 +171,51 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 """
     isgreater(x, y)
 
-Test whether `x` is greater than `y`, according to a fixed total order.
-`isgreater` is defined in terms of `isless`, but is not the opposite of that function.
+Not the inverse of `isless`! Test whether `x` is greater than `y`, according to
+a fixed total order compatible with `min`.
 
-`isless` defines a fixed total order that ascends, while `isgreater` defines a
-fixed total order that descends. Both order values that are normally unordered,
-such as `NaN`, after all regular values and [`missing`](@ref) last. So for
-`isless` these values are biggest and for `isgreater` these values are
-smallest.
+Defined with `isless`, this function is usually `isless(y, x)`, but `NaN` and
+[`missing`](@ref) are ordered as smaller than any ordinary value with `missing`
+smaller than `NaN`.
+
+So `isless` defines an ascending total order with `NaN` and `missing` as the
+largest values and `isgreater` defines a descending total order with `NaN` and
+`missing` as the smallest values.
+
+!!! note
+
+    Like `min`, `isgreater` orders containers (tuples, vectors, etc)
+    lexigraphically with `isless(y, x)` rather than recursively with itself:
+
+    ```jldoctest
+    julia> isgreater(1, NaN) # 1 is greater than NaN
+    true
+
+    julia> isgreater((1,), (NaN,)) # But (1,) is not greater than (NaN,)
+    false
+
+    julia> sort([1, 2, 3, NaN]; lt=isgreater)
+    4-element Vector{Float64}:
+       3.0
+       2.0
+       1.0
+     NaN
+
+    julia> sort(tuple.([1, 2, 3, NaN]); lt=isgreater)
+    4-element Vector{Tuple{Float64}}:
+     (NaN,)
+     (3.0,)
+     (2.0,)
+     (1.0,)
+    ```
 
 # Implementation
-Types should not usually implement this function. Instead, implement `isless`.
+This is unexported. Types should not usually implement this function. Instead, implement `isless`.
 """
-isgreater(x, y) = _is_reflexive_eq(x) && _is_reflexive_eq(y) ? isless(y, x) : isless(x, y)
-_is_reflexive_eq(x) = (x == x) === true
+isgreater(x, y) = is_poisoning(x) || is_poisoning(y) ? isless(x, y) : isless(y, x)
+is_poisoning(x) = false
+is_poisoning(x::AbstractFloat) = isnan(x)
+is_poisoning(x::Missing) = true
 
 function ==(T::Type, S::Type)
     @_pure_meta
