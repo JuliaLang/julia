@@ -68,8 +68,6 @@ check-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-checked
 
 else
 
-DSFMT_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/dSFMT-v$(DSFMT_VER)-$(DSFMT_BB_REL)
-DSFMT_BB_NAME := dSFMT.v$(DSFMT_VER)
 $(eval $(call bb-install,dsfmt,DSFMT,false))
 
 endif # USE_BINARYBUILDER_DSFMT

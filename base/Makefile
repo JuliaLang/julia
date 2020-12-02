@@ -91,6 +91,7 @@ ifeq ($(DARWIN_FRAMEWORK), 1)
 else
 	@echo "const DARWIN_FRAMEWORK = false" >> $@
 endif
+	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible

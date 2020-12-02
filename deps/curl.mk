@@ -72,9 +72,5 @@ fastcheck-curl: #none
 check-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-checked
 
 else # USE_BINARYBUILDER_CURL
-
-CURL_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibCURL_jll.jl/releases/download/LibCURL-v$(CURL_VER)+$(CURL_BB_REL)
-CURL_BB_NAME := LibCURL.v$(CURL_VER)
-
 $(eval $(call bb-install,curl,CURL,false))
 endif

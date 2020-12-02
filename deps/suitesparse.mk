@@ -141,10 +141,8 @@ install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EX
 
 else # USE_BINARYBUILDER_SUITESPARSE
 
-SUITESPARSE_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl/releases/download/SuiteSparse-v$(SUITESPARSE_VER)+$(SUITESPARSE_BB_REL)
-SUITESPARSE_BB_NAME := SuiteSparse.v$(SUITESPARSE_VER)
-
 $(eval $(call bb-install,suitesparse,SUITESPARSE,false))
+
 get-suitesparse-wrapper: get-suitesparse
 extract-suitesparse-wrapper: extract-suitesparse
 configure-suitesparse-wrapper: configure-suitesparse

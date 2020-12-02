@@ -1,0 +1,10 @@
+name = "dSFMT_jll"
+uuid = "05ff407c-b0c1-5878-9df8-858cc2e60c36"
+version = "2.2.4+0"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[compat]
+julia = "1.6"

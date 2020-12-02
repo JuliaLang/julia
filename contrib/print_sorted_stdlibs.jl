@@ -1,6 +1,21 @@
 #!/usr/bin/env julia
 using TOML
 
+function check_flag(flag)
+    idxs = findall(flag .== ARGS)
+    for idx in reverse(idxs)
+        popat!(ARGS, idx)
+    end
+    return !isempty(idxs)
+end
+
+if check_flag("--help") || check_flag("-h")
+    println("Usage: julia print_sorted_stdlibs.jl [stdlib_dir] [--exclude-jlls]")
+end
+
+# Allow users to ask for JLL or no JLLs
+exclude_jlls = check_flag("--exclude-jlls")
+
 # Default to the `stdlib/vX.Y` directory
 STDLIB_DIR = get(ARGS, 1, joinpath(@__DIR__, "..", "usr", "share", "julia", "stdlib"))
 vXYdirs = readdir(STDLIB_DIR)
@@ -59,9 +74,16 @@ end
 
 sorted_projects = sort(collect(keys(project_depths)), lt=project_isless)
 
+if exclude_jlls
+    filter!(p -> !endswith(p, "_jll"), sorted_projects)
+end
+
 # Print out sorted projects, ready to be pasted into `sysimg.jl`
 last_depth = 0
 println("    # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl")
+if exclude_jlls
+    println("    # Run with the `--exclude-jlls` option to filter out all JLL packages")
+end
 println("    stdlibs = [")
 println("        # No dependencies")
 for p in sorted_projects

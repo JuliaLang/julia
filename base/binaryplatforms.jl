@@ -232,14 +232,14 @@ function validate_tags(tags::Dict)
         throw_version_number("libgfortran_version")
     end
 
-    # Validate `libstdcxx_version` is a parsable `VersionNumber`
-    if "libstdcxx_version" in keys(tags) && tryparse(VersionNumber, tags["libstdcxx_version"]) === nothing
-        throw_version_number("libstdcxx_version")
-    end
-
     # Validate `cxxstring_abi` is one of the two valid options:
     if "cxxstring_abi" in keys(tags) && tags["cxxstring_abi"] ∉ ("cxx03", "cxx11")
         throw_invalid_key("cxxstring_abi")
+    end
+
+    # Validate `libstdcxx_version` is a parsable `VersionNumber`
+    if "libstdcxx_version" in keys(tags) && tryparse(VersionNumber, tags["libstdcxx_version"]) === nothing
+        throw_version_number("libstdcxx_version")
     end
 end
 
@@ -508,11 +508,11 @@ function triplet(p::AbstractPlatform)
     if libgfortran_version(p) !== nothing
         str = string(str, "-libgfortran", libgfortran_version(p).major)
     end
-    if libstdcxx_version(p) !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
-    end
     if cxxstring_abi(p) !== nothing
         str = string(str, "-", cxxstring_abi(p))
+    end
+    if libstdcxx_version(p) !== nothing
+        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
     end
 
     # Tack on all extra tags
@@ -637,14 +637,14 @@ const libgfortran_version_mapping = Dict(
     "libgfortran4" => "(-libgfortran4)|(-gcc7)",
     "libgfortran5" => "(-libgfortran5)|(-gcc8)",
 )
-const libstdcxx_version_mapping = Dict{String,String}(
-    "libstdcxx_nothing" => "",
-    "libstdcxx" => "-libstdcxx\\d+",
-)
 const cxxstring_abi_mapping = Dict(
     "cxxstring_nothing" => "",
     "cxx03" => "-cxx03",
     "cxx11" => "-cxx11",
+)
+const libstdcxx_version_mapping = Dict{String,String}(
+    "libstdcxx_nothing" => "",
+    "libstdcxx" => "-libstdcxx\\d+",
 )
 
 """
@@ -667,8 +667,8 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         c(call_abi_mapping),
         # Next, optional things, like libgfortran/libstdcxx/cxxstring abi
         c(libgfortran_version_mapping),
-        c(libstdcxx_version_mapping),
         c(cxxstring_abi_mapping),
+        c(libstdcxx_version_mapping),
         # Finally, the catch-all for extended tags
         "(?<tags>(?:-[^-]+\\+[^-]+)*)?",
         "\$",
@@ -736,8 +736,8 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
             libc,
             call_abi,
             libgfortran_version,
-            libstdcxx_version,
             cxxstring_abi,
+            libstdcxx_version,
             os_version,
             tags...,
         )
@@ -929,25 +929,33 @@ detect compiler ABI values such as `libgfortran_version`, `libstdcxx_version` an
 we have much of that built.
 """
 function host_triplet()
-    str = Sys.MACHINE
-    libgfortran_version = detect_libgfortran_version()
-    if libgfortran_version !== nothing
-        str = string(str, "-libgfortran", libgfortran_version.major)
+    str = Base.BUILD_TRIPLET
+
+    if !occursin("-libgfortran", str)
+        libgfortran_version = detect_libgfortran_version()
+        if libgfortran_version !== nothing
+            str = string(str, "-libgfortran", libgfortran_version.major)
+        end
     end
 
-    libstdcxx_version = detect_libstdcxx_version()
-    if libstdcxx_version !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version.patch)
+    if !occursin("-cxx", str)
+        cxxstring_abi = detect_cxxstring_abi()
+        if cxxstring_abi !== nothing
+            str = string(str, "-", cxxstring_abi)
+        end
     end
 
-    cxxstring_abi = detect_cxxstring_abi()
-    if cxxstring_abi !== nothing
-        str = string(str, "-", cxxstring_abi)
+    if !occursin("-libstdcxx", str)
+        libstdcxx_version = detect_libstdcxx_version()
+        if libstdcxx_version !== nothing
+            str = string(str, "-libstdcxx", libstdcxx_version.patch)
+        end
     end
 
     # Add on julia_version extended tag
-    str = string(str, "-julia_version+", VersionNumber(VERSION.major, VERSION.minor, VERSION.patch))
-
+    if !occursin("-julia_version+", str)
+        str = string(str, "-julia_version+", VersionNumber(VERSION.major, VERSION.minor, VERSION.patch))
+    end
     return str
 end
 

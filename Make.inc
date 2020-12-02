@@ -32,6 +32,7 @@ OPENBLAS_USE_THREAD:=1
 # Flags for using libraries available on the system instead of building them.
 # Please read the notes around usage of SYSTEM flags in README.md
 # Issues resulting from use of SYSTEM versions will generally not be accepted.
+USE_SYSTEM_CSL:=0
 USE_SYSTEM_LLVM:=0
 USE_SYSTEM_LIBUNWIND:=0
 DISABLE_LIBUNWIND:=0
@@ -92,6 +93,15 @@ WITH_GC_DEBUG_ENV := 0
 
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
+
+
+# Literal values that are hard to use in Makefiles otherwise:
+define newline # a literal \n
+
+
+endef
+COMMA:=,
+SPACE:=$(eval) $(eval)
 
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
@@ -999,19 +1009,25 @@ ifeq ($(USE_SYSTEM_LLVM), 1)
 JCPPFLAGS+=-DSYSTEM_LLVM
 endif # SYSTEM_LLVM
 
+# Windows builds need a little help finding the LLVM libraries for llvm-config
+LLVM_CONFIG_PATH_FIX :=
+ifeq ($(OS),WINNT)
+LLVM_CONFIG_PATH_FIX := PATH="$(PATH):$(build_bindir)"
+endif
+
 ifeq ($(BUILD_OS),$(OS))
 LLVM_CONFIG_HOST := $(LLVM_CONFIG)
 else
 LLVM_CONFIG_HOST := $(basename $(LLVM_CONFIG))-host$(BUILD_EXE)
 ifeq (exists, $(shell [ -f '$(LLVM_CONFIG_HOST)' ] && echo exists ))
-ifeq ($(shell $(LLVM_CONFIG_HOST) --version),3.3)
+ifeq ($(shell $(LLVM_CONFIG_PATH_FIX) $(LLVM_CONFIG_HOST) --version),3.3)
 # llvm-config-host <= 3.3 is broken, use llvm-config instead (in an emulator)
 # use delayed expansion (= not :=) because spawn isn't defined until later
-LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
+LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_FIX) $(call spawn,$(LLVM_CONFIG))
 endif
 else
 # llvm-config-host does not exist (cmake build)
-LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
+LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_FIX) $(call spawn,$(LLVM_CONFIG))
 endif
 endif
 
@@ -1129,8 +1145,14 @@ endif
 USE_BINARYBUILDER ?= 0
 endif
 
+# Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
+BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(shell $(FC) --version | head -1)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
+BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
+BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
+BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI)))))
+
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1576,18 +1598,8 @@ PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
-
-define newline # a literal \n
-
-
-endef
-
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable
 # (hardened against any special characters appearing in the output)
 print-%:
 	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
-
-# Literal values that are hard to use in Makefiles otherwise:
-COMMA:=,
-SPACE:=$(eval) $(eval)

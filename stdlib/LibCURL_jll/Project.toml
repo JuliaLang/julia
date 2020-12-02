@@ -1,12 +1,20 @@
 name = "LibCURL_jll"
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "7.71.1"
+version = "7.73.0+3"
 
 [deps]
+LibSSH2_jll = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+nghttp2_jll = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+MbedTLS_jll = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+Zlib_jll = "83775a58-1f1d-513f-b197-d71354ab007a"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Test"]
+
+[compat]
+julia = "1.6"
