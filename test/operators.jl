@@ -85,7 +85,7 @@ import Base.<
 
 @testset "isgreater" begin
     # isgreater should be compatible with min.
-    min1(a, b) = isgreater(a, b) ? b : a
+    min1(a, b) = Base.isgreater(a, b) ? b : a
     # min promotes numerical arguments to the same type, but our quick min1
     # doesn't, so use float test values instead of ints.
     values = (1.0, 5.0, NaN, missing, Inf)
