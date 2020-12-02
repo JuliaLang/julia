@@ -69,12 +69,8 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
 
 /// ----- Definitions for various internal TypeMaps ----- ///
 
-static const struct jl_typemap_info method_defs = {
-    1, &jl_method_type
-};
-static const struct jl_typemap_info lambda_cache = {
-    0, &jl_method_instance_type
-};
+static struct jl_typemap_info method_defs = {1};
+static struct jl_typemap_info lambda_cache = {1};
 
 static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 {

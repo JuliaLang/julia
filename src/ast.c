@@ -32,7 +32,7 @@ jl_sym_t *empty_sym;   jl_sym_t *top_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *toplevel_sym; jl_sym_t *quote_sym;
-jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
+jl_sym_t *line_sym;    jl_sym_t *incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *return_sym;  jl_sym_t *lineinfo_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
@@ -341,7 +341,7 @@ void jl_init_common_symbols(void)
     globalref_sym = jl_symbol("globalref");
     line_sym = jl_symbol("line");
     lineinfo_sym = jl_symbol("lineinfo");
-    jl_incomplete_sym = jl_symbol("incomplete");
+    incomplete_sym = jl_symbol("incomplete");
     error_sym = jl_symbol("error");
     goto_sym = jl_symbol("goto");
     goto_ifnot_sym = jl_symbol("gotoifnot");

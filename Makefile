@@ -72,16 +72,16 @@ julia-libccalltest: julia-deps
 julia-libllvmcalltest: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libllvmcalltest
 
-julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libjulia-$*
+julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony julia-cli-%
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src $*
 
-julia-cli-release julia-cli-debug : julia-cli-% : julia-src-%
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/cli julia-$*
+julia-cli-release julia-cli-debug: julia-cli-% :
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/cli $*
 
-julia-sysimg-ji : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) | $(build_private_libdir)
+julia-sysimg-ji : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-ji JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
-julia-sysimg-bc : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) | $(build_private_libdir)
+julia-sysimg-bc : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-bc JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-cli-%
@@ -155,13 +155,16 @@ julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir
 		$(call cygpath_w,$(build_datarootdir)/julia/base.cache))
 
 # public libraries, that are installed in $(prefix)/lib
-JL_TARGETS := julia julialoader
+JL_TARGETS := julia
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-JL_TARGETS += julia-debug julialoader-debug
+JL_TARGETS += julia-debug
 endif
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest
+JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+JL_TARGETS += libjulia-internal-debug
+endif
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS-0 += libsuitesparse_wrapper
 JL_PRIVATE_LIBS-$(USE_SYSTEM_SUITESPARSE) += libamd libbtf libcamd libccolamd libcholmod libcolamd libklu libldl librbio libspqr libsuitesparseconfig libumfpack
@@ -356,13 +359,11 @@ endif
 endif
 
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
-	# Next, overwrite relative path to libjulia in our loaders if $(LOADER_BUILD_DEP_LIBS) != $(LOADER_INSTALL_DEP_LIBS)
-	$(call stringreplace,$(DESTDIR)$(bindir)/julia,$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
-	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulialoader.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
+	# Next, overwrite relative path to libjulia-internal in our loader if $(LOADER_BUILD_DEP_LIBS) != $(LOADER_INSTALL_DEP_LIBS)
+	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
 
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	$(call stringreplace,$(DESTDIR)$(bindir)/julia-debug,$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
-	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulialoader-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
+	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
 endif
 endif
 
