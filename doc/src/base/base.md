@@ -235,6 +235,7 @@ Base.hasmethod
 Core.applicable
 Core.invoke
 Base.invokelatest
+Base.@invokelatest
 new
 Base.:(|>)
 Base.:(∘)
