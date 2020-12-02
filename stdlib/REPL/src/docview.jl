@@ -349,15 +349,36 @@ function repl_latex(io::IO, s::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
+        state = '\0'
         with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
-                    print(io, symbols_latex[cstr], "<tab>")
+                    latex = symbols_latex[cstr]
+                    if length(latex) == 3 && latex[2] in ('^','_')
+                        # coalesce runs of sub/superscripts
+                        if state != latex[2]
+                            '\0' != state && print(io, "<tab>")
+                            print(io, latex[1:2])
+                            state = latex[2]
+                        end
+                        print(io, latex[3])
+                    else
+                        if '\0' != state
+                            print(io, "<tab>")
+                            state = '\0'
+                        end
+                        print(io, latex, "<tab>")
+                    end
                 else
+                    if '\0' != state
+                        print(io, "<tab>")
+                        state = '\0'
+                    end
                     print(io, c)
                 end
             end
+            '\0' != state && print(io, "<tab>")
         end
         println(io, '\n')
     end

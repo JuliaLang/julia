@@ -209,6 +209,9 @@ Standard library changes
   + `suppress_output` (primarily a testing option) has been added as a keyword argument to `request`,
     rather than a configuration option.
 
+* Tab completion now supports runs of consecutive sub/superscript characters,
+  e.g. `\^(3)` tab-completes to `⁽³⁾` ([#38649]).
+
 * Windows REPL now supports 24-bit colors, by correctly interpreting virtual terminal escapes.
 
 #### SparseArrays

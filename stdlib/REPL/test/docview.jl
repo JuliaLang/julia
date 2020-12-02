@@ -14,6 +14,11 @@ import Markdown
             Core.eval(Main, REPL.helpmode(buf, "🐨"))
             String(take!(buf))
         end, "\"🐨\" can be typed by \\:koala:<tab>\n")
+
+    @test startswith(let buf = IOBuffer()
+            Core.eval(Main, REPL.helpmode(buf, "ᵞ₁₂₃¹²³α"))
+            String(take!(buf))
+        end, "\"ᵞ₁₂₃¹²³α\" can be typed by \\^gamma<tab>\\_123<tab>\\^123<tab>\\alpha<tab>\n")
 end
 
 @testset "Non-Markdown" begin
