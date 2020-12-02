@@ -549,6 +549,9 @@ else
 LLVM_SIZE := $(build_depsbindir)/llvm-size$(EXE)
 endif
 build-stats:
+ifeq ($(USE_BINARYBUILDER_LLVM),1)
+	@$(MAKE) -C deps install-llvm-tools
+endif
 	@printf $(JULCOLOR)' ==> ./julia binary sizes\n'$(ENDCOLOR)
 	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
