@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia%shlibext -LowerExcHandlers -S %s | FileCheck %s
+; RUN: opt -load libjulia-internal%shlibext -LowerExcHandlers -S %s | FileCheck %s
 
 attributes #1 = { returns_twice }
 declare i32 @julia.except_enter() #1

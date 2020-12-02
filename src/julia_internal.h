@@ -152,7 +152,7 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 // useful constants
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
 extern jl_methtable_t *jl_nonfunction_mt JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT extern size_t jl_world_counter;
+extern size_t jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
 extern tracer_cb jl_newmeth_tracer;
@@ -1244,7 +1244,7 @@ extern jl_sym_t *empty_sym;   extern jl_sym_t *top_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
 extern jl_sym_t *toplevel_sym; extern jl_sym_t *quote_sym;
-extern jl_sym_t *line_sym;    extern jl_sym_t *jl_incomplete_sym;
+extern jl_sym_t *line_sym;     extern jl_sym_t *incomplete_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;

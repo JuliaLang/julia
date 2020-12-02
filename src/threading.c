@@ -205,29 +205,13 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
     }
 }
 
-#  if JL_USE_IFUNC
-static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
-    if (jl_tls_states_cb != jl_get_ptls_states_init)
-        return jl_tls_states_cb;
-    // If we can't find the static version, return the wrapper instead
-    // of the slow version so that we won't resolve to the slow version
-    // due to issues in the relocation order.
-    // This may not be necessary once `ifunc` support in glibc is more mature.
-    if (!jl_get_ptls_states_static)
-        return jl_get_ptls_states_wrapper;
-    jl_tls_states_cb = jl_get_ptls_states_static;
-    return jl_tls_states_cb;
+#ifndef __clang_analyzer__
+    return (*jl_tls_states_cb)();
+#endif
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
-    __attribute__((ifunc ("jl_get_ptls_states_resolve")));
-#  else // JL_TLS_USE_IFUNC
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
-{
-    return jl_get_ptls_states_wrapper();
-}
-#  endif // JL_TLS_USE_IFUNC
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 {
     if (jl_tls_states_cb == jl_get_ptls_states_init)
