@@ -77,7 +77,7 @@
     @test count(r"\b", "foo bar") == 4
     # count with char as argument
     @test count('a', "batman") == 2
-    @test count('a', "aaa",overlap=true) == 3
+    @test count('a', "aaa", overlap=true) == 3
     @test count('a', "") == 0
     @test count('→', "OH⁻ + H₃CBr →  (HOH₃CBr⁻)† → HOCH₃ + Br⁻") == 2
     
