@@ -12,12 +12,18 @@
 #define DEBUGINFO(name)
 #endif
 
+#if defined(__CET__) && __CET__ & 1 != 0
+#define CET_START() endbr32
+#else
+#define CET_START()
+#endif
+
 #define XX(name) \
 DEBUGINFO(name); \
 .global name; \
 .cfi_startproc; \
 name##:; \
-    endbr32; \
+    CET_START(); \
     jmpl *(CNAME(name##_addr)); \
     ud2; \
 .cfi_endproc; \
