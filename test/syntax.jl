@@ -2096,6 +2096,16 @@ end
 end
 @test z28789 == 42
 
+# issue #38650, `struct` should always be a hard scope
+f38650() = 0
+@eval begin
+    $(Expr(:softscope, true))
+    struct S38650
+        f38650() = 1
+    end
+end
+@test f38650() == 0
+
 # issue #37126
 @test isempty(Test.collect_test_logs() do
     include_string(@__MODULE__, """
