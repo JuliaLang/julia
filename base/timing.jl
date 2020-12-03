@@ -109,9 +109,27 @@ end
 
 Converts from an integer number of bytes to a pretty printed string in nearest significant size units.
 
-```julia-repl
-julia> formatbytes(123456789)
-"117.738 MiB"
+```jldoctest
+julia> formatbytes(123)
+"123 bytes"
+
+julia> formatbytes(1234)
+"1.205 KiB"
+
+julia> formatbytes(1234567)
+"1.177 MiB"
+
+julia> formatbytes(1234567891)
+"1.150 GiB"
+
+julia> formatbytes(1234567891234)
+"1.123 TiB"
+
+julia> formatbytes(1234567891234567)
+"1.097 PiB"
+
+julia> formatbytes(1234567891234567891)
+"1096.517 PiB"
 ```
 
 !!! compat "Julia 1.6"
