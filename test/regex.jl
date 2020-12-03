@@ -70,7 +70,10 @@
     @test count(r"\w+", "foo bar", overlap=true) == 6
     @test count(r"\w*", "foo bar") == 4
     @test count(r"\b", "foo bar") == 4
+    # count with char as argument
     @test count('a',"batman") == 2
+    @test count('a',"aaa",overlap=true) == 3
+    @test count('a',"") == 0
 
     # Unnamed subpatterns
     let m = match(r"(.)(.)(.)", "xyz")
