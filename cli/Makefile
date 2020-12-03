@@ -6,7 +6,7 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 
-HEADERS := jl_exports.h loader.h $(addprefix $(JULIAHOME)/src/support/,platform.h dirpath.h) $(addprefix $(JULIAHOME)/src/,jl_exported_data.inc jl_exported_funcs.inc)
+HEADERS := $(addprefix $(JULIAHOME)/cli/,jl_exports.h loader.h) $(addprefix $(JULIAHOME)/src/support/,platform.h dirpath.h) $(addprefix $(JULIAHOME)/src/,jl_exported_data.inc jl_exported_funcs.inc)
 
 LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding
 LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding -L$(build_shlibdir) -L$(build_libdir)
