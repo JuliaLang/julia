@@ -410,7 +410,7 @@ If `overlap=true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from disjoint character ranges.
 
 !!! compat "Julia 1.3"
-     This method requires at least Julia 1.3.
+     This method requires at least Julia 1.3; using a character as the pattern requires Julia 1.6+.
 """
 function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
