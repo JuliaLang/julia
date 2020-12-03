@@ -234,6 +234,7 @@ Core.Function
 Base.hasmethod
 Core.applicable
 Core.invoke
+Base.@invoke
 Base.invokelatest
 Base.@invokelatest
 new
