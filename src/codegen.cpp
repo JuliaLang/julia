@@ -2582,7 +2582,9 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     // so a pointer comparison should be no worse than that even in imaging mode
     // when the constant pointer has to be loaded.
     if ((arg1.V || arg1.constant) && (arg2.V || arg2.constant) &&
-        (jl_pointer_egal(rt1) || jl_pointer_egal(rt2)))
+        (jl_pointer_egal(rt1) || jl_pointer_egal(rt2)) &&
+        // jl_pointer_egal returns true for Bool, which is not helpful here
+        (rt1 != (jl_value_t*)jl_bool_type || rt2 != (jl_value_t*)jl_bool_type))
         return ctx.builder.CreateICmpEQ(boxed(ctx, arg1), boxed(ctx, arg2));
 
     bool justbits1 = jl_is_concrete_immutable(rt1);
