@@ -133,11 +133,12 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
         else {
             jl_datatype_t *vecty = (jl_datatype_t*)jl_field_type(ty0, 0);
             assert(jl_is_datatype(vecty) && vecty->name == jl_vecelement_typename);
-            jl_value_t *elemty = jl_tparam0(vecty);
-            assert(jl_is_primitivetype(elemty));
-
-            Type *ety = julia_type_to_llvm(elemty);
+            Type *ety = bitstype_to_llvm(jl_tparam0(vecty));
+#if JL_LLVM_VERSION >= 110000
+            Type *vty = FixedVectorType::get(ety, jl_datatype_nfields(ty0));
+#else
             Type *vty = VectorType::get(ety, jl_datatype_nfields(ty0));
+#endif
             return ArrayType::get(vty, hfa);
         }
     }

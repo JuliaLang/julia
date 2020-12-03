@@ -307,6 +307,20 @@ n = similar(m, 12)
 @test size(n) == (12,)
 finalize(m); m = nothing; GC.gc()
 
+if Sys.isunix()
+    file = tempname()
+    write(file, rand(Float64, 20))
+    A = Mmap.mmap(file, Vector{Float64}, 20)
+    @test Mmap.madvise!(A, Mmap.MADV_WILLNEED) === nothing # checking for no error
+    finalize(A); A = nothing; GC.gc()
+
+    write(file, BitArray(rand(Bool, 20)))
+    b = Mmap.mmap(file, BitArray, 20)
+    @test Mmap.madvise!(b, Mmap.MADV_WILLNEED) === nothing
+    finalize(b); b = nothing; GC.gc()
+    rm(file)
+end
+
 # test #14885
 file = tempname()
 touch(file)

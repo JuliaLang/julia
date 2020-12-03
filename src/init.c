@@ -28,6 +28,7 @@
 #undef DEFINE_BUILTIN_GLOBALS
 #include "threading.h"
 #include "julia_assert.h"
+#include "processor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,15 +50,6 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
-
-#ifdef JL_ASAN_ENABLED
-JL_DLLEXPORT const char* __asan_default_options() {
-    return "allow_user_segv_handler=1:detect_leaks=0";
-    // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
-    //        or defining __lsan_default_options = exitcode=0 once publicly available
-    //        (here and in flisp/flmain.c)
-}
-#endif
 
 size_t jl_page_size;
 
@@ -165,20 +157,12 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
     jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
-void jl_write_coverage_data(const char*);
-void jl_write_malloc_log(void);
-void jl_write_compiler_output(void);
-
 static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
 {
     struct uv_shutdown_queue_item *rv = item->next;
     free(item);
     return rv;
 }
-
-void jl_init_timing(void);
-void jl_destroy_timing(void);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 static void jl_close_item_atexit(uv_handle_t *handle)
 {
@@ -240,8 +224,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 ptls->world_age = last_age;
             }
             JL_CATCH {
-                jl_printf(JL_STDERR, "\natexit hook threw an error: ");
-                jl_static_show(JL_STDERR, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
             }
         }
     }
@@ -275,8 +261,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 //error handling -- continue cleanup, as much as possible
                 assert(item);
                 uv_unref(item->h);
-                jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-                jl_static_show(JL_STDERR, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
                 item = next_shutdown_queue_item(item);
             }
         }
@@ -299,6 +287,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 #ifdef ENABLE_TIMINGS
     jl_print_timings();
 #endif
+
+    jl_teardown_codegen();
 }
 
 static void post_boot_hooks(void);
@@ -316,7 +306,7 @@ void *jl_winsock_handle;
 uv_loop_t *jl_io_loop;
 
 #ifdef _OS_WINDOWS_
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     HANDLE current_process;
 
     if (fd == UV_STDIN_FD || fd == UV_STDOUT_FD || fd == UV_STDERR_FD)
@@ -350,7 +340,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     return 0;
 }
 #else
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     if ((*dupfd = fcntl(fd, F_DUPFD_CLOEXEC, 3)) == -1)
         return -errno;
     return 0;
@@ -431,7 +421,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     return handle;
 }
 
-void init_stdio(void)
+static void init_stdio(void)
 {
     JL_STDIN  = (uv_stream_t*)init_stdio_handle("stdin", UV_STDIN_FD, 1);
     JL_STDOUT = (uv_stream_t*)init_stdio_handle("stdout", UV_STDOUT_FD, 0);
@@ -451,7 +441,9 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-int isabspath(const char *in)
+char jl_using_gdb_jitevents = 0;
+
+int isabspath(const char *in) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];
@@ -601,6 +593,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.outputji = abspath(jl_options.outputji, 0);
     if (jl_options.outputbc)
         jl_options.outputbc = abspath(jl_options.outputbc, 0);
+    if (jl_options.outputasm)
+        jl_options.outputasm = abspath(jl_options.outputasm, 0);
     if (jl_options.machine_file)
         jl_options.machine_file = abspath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
@@ -623,6 +617,15 @@ static void jl_set_io_wait(int v)
     ptls->io_wait = v;
 }
 
+extern jl_mutex_t jl_modules_mutex;
+
+static void restore_fp_env(void)
+{
+    if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
+        jl_error("Failed to configure floating point environment");
+    }
+}
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
@@ -633,15 +636,20 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_safepoint_init();
     libsupport_init();
     htable_new(&jl_current_modules, 0);
+    JL_MUTEX_INIT(&jl_modules_mutex);
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_init_uv();
     init_stdio();
+    restore_fp_env();
     restore_signals();
 
     jl_page_size = jl_getpagesize();
     uint64_t total_mem = uv_get_total_memory();
+    uint64_t constrained_mem = uv_get_constrained_memory();
+    if (constrained_mem > 0 && constrained_mem < total_mem)
+        total_mem = constrained_mem;
     if (total_mem >= (size_t)-1) {
         total_mem = (size_t)-1;
     }
@@ -660,8 +668,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #endif
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
     jl_exe_handle = GetModuleHandleA(NULL);
-    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-    if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
+    JL_MUTEX_INIT(&jl_in_stackwalk);
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
+    if (!SymInitialize(GetCurrentProcess(), "", 1)) {
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
     }
     needsSymRefreshModuleList = 0;
@@ -698,9 +707,18 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 #endif
 
-    if ((jl_options.outputo || jl_options.outputbc) &&
+#if defined(JL_DEBUG_BUILD)
+    jl_using_gdb_jitevents = 1;
+# else
+    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
+    if (jit_gdb && atoi(jit_gdb)) {
+        jl_using_gdb_jitevents = 1;
+    }
+#endif
+
+    if ((jl_options.outputo || jl_options.outputbc || jl_options.outputasm) &&
         (jl_options.code_coverage || jl_options.malloc_log)) {
-        jl_error("cannot generate code-coverage or track allocation information while generating a .o or .bc output file");
+        jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
     }
 
     jl_gc_init();
@@ -717,7 +735,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    arraylist_new(&partial_inst, 0);
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
     }
@@ -731,13 +748,13 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #ifdef ENABLE_TIMINGS
     jl_root_task->timing_stack = jl_root_timing;
 #endif
-    jl_init_frontend();
-
-    jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used by ml_matches
+    jl_init_common_symbols();
+    jl_init_flisp();
     jl_init_serializer();
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module->parent = jl_core_module;
         jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
@@ -747,16 +764,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         post_boot_hooks();
     }
 
-    // the Main module is the one which is always open, and set as the
-    // current module for bare (non-module-wrapped) toplevel expressions.
-    // it does "using Base" if Base is available.
     if (jl_base_module != NULL) {
-        jl_add_standard_imports(jl_main_module);
-        jl_value_t *maininclude = jl_get_global(jl_base_module, jl_symbol("MainInclude"));
-        if (maininclude && jl_is_module(maininclude)) {
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("include"));
-            jl_module_import(jl_main_module, (jl_module_t*)maininclude, jl_symbol("eval"));
-        }
         // Do initialization needed before starting child threads
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
         if (f) {

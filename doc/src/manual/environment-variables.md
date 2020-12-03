@@ -80,7 +80,7 @@ Setting this environment variable has the same effect as specifying the `--proje
 start-up option, but `--project` has higher precedence. If the variable is set to `@.`
 then Julia tries to find a project directory that contains `Project.toml` or
 `JuliaProject.toml` file from the current directory and its parents. See also
-the chapter on [Code Loading](@ref).
+the chapter on [Code Loading](@ref code-loading).
 
 !!! note
 
@@ -91,7 +91,7 @@ the chapter on [Code Loading](@ref).
 
 The `JULIA_LOAD_PATH` environment variable is used to populate the global Julia
 [`LOAD_PATH`](@ref) variable, which determines which packages can be loaded via
-`import` and `using` (see [Code Loading](@ref)).
+`import` and `using` (see [Code Loading](@ref code-loading)).
 
 Unlike the shell `PATH` variable, empty entries in `JULIA_LOAD_PATH` are expanded to
 the default value of `LOAD_PATH`, `["@", "@v#.#", "@stdlib"]` when populating
@@ -136,6 +136,11 @@ zero-element array, not a one-element array of the empty string. This behavior w
 chosen so that it would be possible to set an empty depot path via the environment
 variable. If you want the default depot path, either unset the environment variable
 or if it must have a value, set it to the string `:`.
+
+!!! note
+
+    On Windows, path elements are separated by the `;` character, as is the case with
+    most path lists on Windows.
 
 ### `JULIA_HISTORY`
 
@@ -182,18 +187,22 @@ A [`Float64`](@ref) that sets the value of `Distributed.worker_timeout()` (defau
 This function gives the number of seconds a worker process will wait for
 a master process to establish a connection before dying.
 
-### `JULIA_NUM_THREADS`
+### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
 An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
 available to Julia. If `$JULIA_NUM_THREADS` exceeds the number of available
-physical CPU cores, then the number of threads is set to the number of cores. If
+CPU threads (logical cores), then the number of threads is set to the number of CPU threads. If
 `$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
-cores cannot be determined through system calls, then the number of threads is
+threads cannot be determined through system calls, then the number of threads is
 set to `1`.
 
 !!! note
 
     `JULIA_NUM_THREADS` must be defined before starting julia; defining it in `startup.jl` is too late in the startup process.
+
+!!! compat "Julia 1.5"
+    In Julia 1.5 and above the number of threads can also be specified on startup
+    using the `-t`/`--threads` command line argument.
 
 ### `JULIA_THREAD_SLEEP_THRESHOLD`
 
@@ -241,17 +250,11 @@ should have at the terminal.
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
-### `JULIA_STACKFRAME_LINEINFO_COLOR`
-
-The formatting `Base.stackframe_lineinfo_color()` (default: bold, `"\033[1m"`)
-that line info should have during a stack trace at the terminal.
-
-### `JULIA_STACKFRAME_FUNCTION_COLOR`
-
-The formatting `Base.stackframe_function_color()` (default: bold, `"\033[1m"`)
-that function calls should have during a stack trace at the terminal.
-
 ## Debugging and profiling
+
+### `JULIA_DEBUG`
+
+Enable debug logging for a file or module, see [`Logging`](@ref Logging) for more information.
 
 ### `JULIA_GC_ALLOC_POOL`, `JULIA_GC_ALLOC_OTHER`, `JULIA_GC_ALLOC_PRINT`
 
@@ -315,6 +318,14 @@ event listener for just-in-time (JIT) profiling.
       (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
     * [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
       in the build configuration).
+    * [Perf](https://perf.wiki.kernel.org) (`USE_PERF_JITEVENTS` set to `1`
+      in the build configuration). This integration is enabled by default.
+
+### `ENABLE_GDBLISTENER`
+
+If set to anything besides `0` enables GDB registration of Julia code on release builds.
+On debug builds of Julia this is always enabled. Recommended to use with `-g 2`.
+
 
 ### `JULIA_LLVM_ARGS`
 

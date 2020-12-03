@@ -33,6 +33,7 @@ Base.which(::Any, ::Any)
 Base.methods
 Base.@show
 ans
+Base.active_project
 ```
 
 ## Keywords
@@ -49,7 +50,7 @@ The following two-word sequences are reserved:
 However, you can create variables with names:
 `abstract`, `mutable`, `primitive` and `type`.
 
-Finally,`where` is parsed as an infix operator for writing parametric method
+Finally, `where` is parsed as an infix operator for writing parametric method
 and type definitions. Also `in` and `isa` are parsed as infix operators.
 Creation of a variable named `where`, `in` or `isa` is allowed though.
 
@@ -85,6 +86,7 @@ where
 ...
 ;
 =
+?:
 ```
 
 ## Standard Modules
@@ -146,6 +148,8 @@ Base.identity
 
 ```@docs
 Base.supertype
+Core.Type
+Core.DataType
 Core.:(<:)
 Base.:(>:)
 Base.typejoin
@@ -158,6 +162,7 @@ Base.isdispatchtuple
 ### Declared structure
 
 ```@docs
+Base.ismutable
 Base.isimmutable
 Base.isabstracttype
 Base.isprimitivetype
@@ -207,6 +212,7 @@ Union{}
 Core.UnionAll
 Core.Tuple
 Core.NamedTuple
+Base.@NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -229,9 +235,11 @@ Base.hasmethod
 Core.applicable
 Core.invoke
 Base.invokelatest
+Base.@invokelatest
 new
 Base.:(|>)
 Base.:(∘)
+Base.ComposedFunction
 ```
 
 ## Syntax
@@ -332,6 +340,8 @@ Base.backtrace
 Base.catch_backtrace
 Base.catch_stack
 Base.@assert
+Base.Experimental.register_error_hint
+Base.Experimental.show_error_hints
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError
@@ -380,6 +390,9 @@ Base.parentmodule
 Base.pathof(::Module)
 Base.moduleroot
 Base.@__MODULE__
+Base.@__FILE__
+Base.@__DIR__
+Base.@__LINE__
 Base.fullname
 Base.names
 Core.nfields
@@ -414,5 +427,9 @@ Base.precompile
 ```@docs
 Meta.quot
 Meta.isexpr
+Meta.isidentifier
+Meta.isoperator
+Meta.isunaryoperator
+Meta.isbinaryoperator
 Meta.show_sexpr
 ```

@@ -25,7 +25,7 @@ if Sys.isapple()
 
         # See above comment in `clipboard(x)`
         if Sys.which("reattach-to-user-namespace") !== nothing
-            pbcopy_cmd = `reattach-to-user-namespace pbpaste`
+            pbpaste_cmd = `reattach-to-user-namespace pbpaste`
         end
         return read(pbpaste_cmd, String)
     end
@@ -34,7 +34,7 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
     _clipboardcmd = nothing
     const _clipboard_copy = Dict(
             :xsel  => Sys.islinux() ?
-                `xsel --nodetach --input --clipboard` :
+                `xsel --input --clipboard` :
                 `xsel -c`,
             :xclip => `xclip -silent -in -selection clipboard`,
         )
@@ -67,7 +67,7 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
     end
     function clipboard()
         c = clipboardcmd()
-        cmd = _clipboardcmds_paste[c]
+        cmd = _clipboard_paste[c]
         return read(pipeline(cmd, stderr=stderr), String)
     end
 

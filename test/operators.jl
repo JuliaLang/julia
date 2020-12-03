@@ -133,6 +133,11 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test ∘(FreeMagma(1), FreeMagma(2)) === FreeMagma((1,2))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((1,2), 3))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((1,2), 3), 4))
+
+    @test fieldtypes(typeof(Float64 ∘ Int)) == (Type{Float64}, Type{Int})
+
+    @test repr(uppercase ∘ first) == "uppercase ∘ first"
+    @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
 end
 
 @testset "function negation" begin
@@ -238,3 +243,6 @@ end
     @test gt5(6) && !gt5(5)
     @test lt5(4) && !lt5(5)
 end
+
+a = rand(3, 3)
+@test transpose(a) === a'ᵀ

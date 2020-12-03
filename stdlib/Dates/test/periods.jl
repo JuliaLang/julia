@@ -52,6 +52,7 @@ end
 end
 
 y = Dates.Year(1)
+q = Dates.Quarter(1)
 m = Dates.Month(1)
 w = Dates.Week(1)
 d = Dates.Day(1)
@@ -64,6 +65,7 @@ ns = Dates.Nanosecond(1)
 emptyperiod = ((y + d) - d) - y
 @testset "Period arithmetic" begin
     @test Dates.Year(y) == y
+    @test Dates.Quarter(q) == q
     @test Dates.Month(m) == m
     @test Dates.Week(w) == w
     @test Dates.Day(d) == d
@@ -171,7 +173,22 @@ end
     @test y + Dates.Year(1f0) == Dates.Year(2)
     @test y * 4 == Dates.Year(4)
     @test y * 4f0 == Dates.Year(4)
-    @test_throws InexactError y * 3//4 == Dates.Year(1)
+    @test Dates.Year(2) * 0.5 == y
+    @test Dates.Year(2) * 3//2 == Dates.Year(3)
+    @test_throws InexactError y * 0.5
+    @test_throws InexactError y * 3//4
+    @test (1:1:5)*Second(5) === Second(5)*(1:1:5) === Second(5):Second(5):Second(25) === (1:5)*Second(5)
+    @test collect(1:1:5)*Second(5) == Second(5)*collect(1:1:5) == (1:5)*Second(5)
+    @test (Second(2):Second(2):Second(10))/Second(2) === 1.0:1.0:5.0
+    @test collect(Second(2):Second(2):Second(10))/Second(2) == 1:1:5
+    @test (Second(2):Second(2):Second(10)) / 2 === Second(1):Second(1):Second(5)
+    @test collect(Second(2):Second(2):Second(10)) / 2 == Second(1):Second(1):Second(5)
+    @test Dates.Year(4) / 2 == Dates.Year(2)
+    @test Dates.Year(4) / 2f0 == Dates.Year(2)
+    @test Dates.Year(4) / 0.5 == Dates.Year(8)
+    @test Dates.Year(4) / 2//3 == Dates.Year(6)
+    @test_throws InexactError Dates.Year(4) / 3.0
+    @test_throws InexactError Dates.Year(4) / 3//2
     @test div(y, 2) == Dates.Year(0)
     @test_throws MethodError div(2, y) == Dates.Year(2)
     @test div(y, y) == 1
@@ -209,6 +226,8 @@ end
     @test Dates.string(Dates.Year(1)) == "1 year"
     @test Dates.string(Dates.Year(-1)) == "-1 year"
     @test Dates.string(Dates.Year(2)) == "2 years"
+    @test isfinite(Dates.Year)
+    @test isfinite(Dates.Year(0))
     @test zero(Dates.Year) == Dates.Year(0)
     @test zero(Dates.Year(10)) == Dates.Year(0)
     @test zero(Dates.Month) == Dates.Month(0)
@@ -274,6 +293,7 @@ end
 
 @testset "basic properties" begin
     @test Dates.Year("1") == y
+    @test Dates.Quarter("1") == q
     @test Dates.Month("1") == m
     @test Dates.Week("1") == w
     @test Dates.Day("1") == d
@@ -288,6 +308,7 @@ end
 
     dt = Dates.DateTime(2014)
     @test typeof(Dates.Year(dt)) <: Dates.Year
+    @test typeof(Dates.Quarter(dt)) <: Dates.Quarter
     @test typeof(Dates.Month(dt)) <: Dates.Month
     @test typeof(Dates.Week(dt)) <: Dates.Week
     @test typeof(Dates.Day(dt)) <: Dates.Day
@@ -298,6 +319,7 @@ end
 end
 @testset "Default values" begin
     @test Dates.default(Dates.Year) == y
+    @test Dates.default(Dates.Quarter) == q
     @test Dates.default(Dates.Month) == m
     @test Dates.default(Dates.Week) == w
     @test Dates.default(Dates.Day) == d
@@ -357,6 +379,18 @@ end
 
     @test Dates.Date(2009, 2, 1) - (Dates.Month(1) + Dates.Day(1)) == Dates.Date(2008, 12, 31)
     @test_throws MethodError (Dates.Month(1) + Dates.Day(1)) - Dates.Date(2009,2,1)
+end
+
+@testset "canonicalize Period" begin
+    # reduce individual Period into most basic CompoundPeriod
+    @test Dates.canonicalize(Dates.Nanosecond(1000000)) == Dates.canonicalize(Dates.Millisecond(1))
+    @test Dates.canonicalize(Dates.Millisecond(1000)) == Dates.canonicalize(Dates.Second(1))
+    @test Dates.canonicalize(Dates.Second(60)) == Dates.canonicalize(Dates.Minute(1))
+    @test Dates.canonicalize(Dates.Minute(60)) == Dates.canonicalize(Dates.Hour(1))
+    @test Dates.canonicalize(Dates.Hour(24)) == Dates.canonicalize(Dates.Day(1))
+    @test Dates.canonicalize(Dates.Day(7)) == Dates.canonicalize(Dates.Week(1))
+    @test Dates.canonicalize(Dates.Month(12)) == Dates.canonicalize(Dates.Year(1))
+    @test Dates.canonicalize(Dates.Minute(24*60*1 + 12*60)) == Dates.canonicalize(Dates.CompoundPeriod([Dates.Day(1),Dates.Hour(12)]))
 end
 @testset "unary ops and vectorized period arithmetic" begin
     pa = [1y 1m 1w 1d; 1h 1mi 1s 1ms]
@@ -428,6 +462,39 @@ end
         z = convert(Dates.Month, y)
         @test y == z
         @test hash(y) == hash(z)
+
+        y = Dates.Quarter(x)
+        z = convert(Dates.Month, y)
+        @test y == z
+        @test hash(y) == hash(z)
+
+        y = Dates.Year(x)
+        z = convert(Dates.Quarter, y)
+        @test y == z
+        @test hash(y) == hash(z)
+    end
+end
+@testset "Equality and hashing between FixedPeriod/OtherPeriod/CompoundPeriod (#37459)" begin
+    function test_hash_equality(x, y)
+        @test x == y
+        @test y == x
+        @test isequal(x, y)
+        @test isequal(y, x)
+        @test hash(x) == hash(y)
+    end
+    for FP = (Dates.Week, Dates.Day, Dates.Hour, Dates.Minute,
+              Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond)
+        for OP = (Dates.Year, Dates.Quarter, Dates.Month)
+            test_hash_equality(FP(0), OP(0))
+        end
+    end
+end
+@testset "Hashing for CompoundPeriod (#37447)" begin
+    periods = [Dates.Year(0), Dates.Minute(0), Dates.Second(0), Dates.CompoundPeriod(),
+               Dates.Minute(2), Dates.Second(120), Dates.CompoundPeriod(Dates.Minute(2)),
+               Dates.CompoundPeriod(Dates.Second(120)), Dates.CompoundPeriod(Dates.Minute(1), Dates.Second(60))]
+    for x = periods, y = periods
+        @test isequal(x,y) == (hash(x) == hash(y))
     end
 end
 
@@ -437,4 +504,19 @@ end
     @test Dates.toms(Dates.Second(1) + Dates.Microsecond(1)) == 1e3
 end
 
+@testset "CompoundPeriod and Period isless()" begin
+    #tests for allowed comparisons
+    #FixedPeriod
+    @test (h - ms < h + ns) == true
+    @test (h + ns < h -ms) == false
+    @test (h  < h -ms) == false
+    @test (h-ms  < h) == true
+    #OtherPeriod
+    @test (2y-m < 25m+1y) == true
+    @test (2y < 25m+1y) == true
+    @test (25m+1y < 2y) == false
+    #Test combined Fixed and Other Periods
+    @test (1m + 1d < 1m + 1s) == false
 end
+end
+

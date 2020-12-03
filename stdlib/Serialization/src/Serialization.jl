@@ -9,7 +9,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall, require_one_based_indexing
+using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -31,7 +31,7 @@ Serializer(io::IO) = Serializer{typeof(io)}(io)
 
 const n_int_literals = 33
 const n_reserved_slots = 24
-const n_reserved_tags = 11
+const n_reserved_tags = 8
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
@@ -57,6 +57,8 @@ const TAGS = Any[
     Symbol, # FULL_GLOBALREF_TAG
     Symbol, # HEADER_TAG
     Symbol, # IDDICT_TAG
+    Symbol, # SHARED_REF_TAG
+    ReturnNode, GotoIfNot,
     fill(Symbol, n_reserved_tags)...,
 
     (), Bool, Any, Bottom, Core.TypeofBottom, Type, svec(), Tuple{}, false, true, nothing,
@@ -76,7 +78,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 9 # do not make changes without bumping the version #!
+const ser_version = 13 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -135,6 +137,7 @@ const REF_OBJECT_TAG       = Int32(o0+13)
 const FULL_GLOBALREF_TAG   = Int32(o0+14)
 const HEADER_TAG           = Int32(o0+15)
 const IDDICT_TAG           = Int32(o0+16)
+const SHARED_REF_TAG       = Int32(o0+17)
 
 writetag(s::IO, tag) = (write(s, UInt8(tag)); nothing)
 
@@ -232,12 +235,12 @@ function serialize_array_data(s::IO, a)
     require_one_based_indexing(a)
     isempty(a) && return 0
     if eltype(a) === Bool
-        last = a[1]
+        last = a[1]::Bool
         count = 1
         for i = 2:length(a)
-            if a[i] != last || count == 127
+            if a[i]::Bool != last || count == 127
                 write(s, UInt8((UInt8(last) << 7) | count))
-                last = a[i]
+                last = a[i]::Bool
                 count = 1
             else
                 count += 1
@@ -284,6 +287,10 @@ end
 
 function serialize(s::AbstractSerializer, ss::String)
     len = sizeof(ss)
+    if len > 7
+        serialize_cycle(s, ss) && return
+        writetag(s.io, SHARED_REF_TAG)
+    end
     if len <= 255
         writetag(s.io, STRING_TAG)
         write(s.io, UInt8(len))
@@ -437,7 +444,7 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    state = [t.code, t.storage, t.state, t.result, t.exception]
+    state = [t.code, t.storage, t.state, t.result, t._isexception]
     writetag(s.io, TASK_TAG)
     for fld in state
         serialize(s, fld)
@@ -679,6 +686,38 @@ function writeheader(s::AbstractSerializer)
     nothing
 end
 
+function readheader(s::AbstractSerializer)
+    # Tag already read
+    io = s.io
+    m1 = read(io, UInt8)
+    m2 = read(io, UInt8)
+    if m1 != UInt8('J') || m2 != UInt8('L')
+        error("Unsupported serialization format (got header magic bytes $m1 $m2)")
+    end
+    version    = read(io, UInt8)
+    flags      = read(io, UInt8)
+    reserved1  = read(io, UInt8)
+    reserved2  = read(io, UInt8)
+    reserved3  = read(io, UInt8)
+    endianflag = flags & 0x3
+    wordflag   = (flags >> 2) & 0x3
+    wordsize = wordflag == 0 ? 4 :
+               wordflag == 1 ? 8 :
+               error("Unknown word size flag in header")
+    endian_bom = endianflag == 0 ? 0x04030201 :
+                 endianflag == 1 ? 0x01020304 :
+                 error("Unknown endianness flag in header")
+    # Check protocol compatibility.
+    endian_bom == ENDIAN_BOM  || error("Serialized byte order mismatch ($(repr(endian_bom)))")
+    # We don't check wordsize == sizeof(Int) here, as Int is encoded concretely
+    # as Int32 or Int64, which should be enough to correctly deserialize a range
+    # of data structures between Julia versions.
+    if version > ser_version
+        error("""Cannot read stream serialized with a newer version of Julia.
+                 Got data version $version > current version $ser_version""")
+    end
+end
+
 """
     serialize(stream::IO, value)
 
@@ -802,6 +841,11 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         push!(s.pending_refs, slot)
         t = deserialize(s)
         return deserialize(s, t)
+    elseif b == SHARED_REF_TAG
+        slot = s.counter; s.counter += 1
+        obj = deserialize(s)
+        s.table[slot] = obj
+        return obj
     elseif b == SYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == SHORTINT64_TAG
@@ -832,9 +876,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
     elseif b == LONGSYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     elseif b == HEADER_TAG
-        for _ = 1:7
-            read(s.io, UInt8)
-        end
+        readheader(s)
         return deserialize(s)
     elseif b == INT8_TAG
         return read(s.io, Int8)
@@ -888,7 +930,7 @@ function deserialize_symbol(s::AbstractSerializer, len::Int)
     return sym
 end
 
-deserialize_tuple(s::AbstractSerializer, len) = ntuple(i->deserialize(s), len)
+deserialize_tuple(s::AbstractSerializer, len) = ntupleany(i->deserialize(s), len)
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
@@ -996,18 +1038,43 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
-    _meth = deserialize(s)
-    if _meth isa Module
-        # pre v1.2, skip
-        _meth = deserialize(s)
+    mod = deserialize(s)
+    if mod isa Module
+        method = deserialize(s)
+    else
+        # files post v1.2 and pre v1.6 are broken
+        method = mod
+        mod = Main
     end
-    return Core.LineInfoNode(_meth::Symbol, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{PhiNode})
+    edges = deserialize(s)
+    if edges isa Vector{Any}
+        edges = Vector{Int32}(edges)
+    end
+    values = deserialize(s)::Vector{Any}
+    return PhiNode(edges, values)
 end
 
 function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     deserialize_cycle(s, ci)
-    ci.code = deserialize(s)::Vector{Any}
+    code = deserialize(s)::Vector{Any}
+    ci.code = code
+    # allow older-style IR with return and gotoifnot Exprs
+    for i in 1:length(code)
+        stmt = code[i]
+        if isa(stmt, Expr)
+            ex = stmt::Expr
+            if ex.head === :return
+                code[i] = ReturnNode(isempty(ex.args) ? nothing : ex.args[1])
+            elseif ex.head === :gotoifnot
+                code[i] = GotoIfNot(ex.args[1], ex.args[2])
+            end
+        end
+    end
     ci.codelocs = deserialize(s)::Vector{Int32}
     _x = deserialize(s)
     if _x isa Array || _x isa Int
@@ -1100,7 +1167,7 @@ function deserialize_array(s::AbstractSerializer)
     end
     A = Array{elty, length(dims)}(undef, dims)
     s.table[slot] = A
-    sizehint!(s.table, s.counter + div(length(A),4))
+    sizehint!(s.table, s.counter + div(length(A)::Int,4))
     deserialize_fillarray!(A, s)
     return A
 end
@@ -1270,9 +1337,26 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     deserialize_cycle(s, t)
     t.code = deserialize(s)
     t.storage = deserialize(s)
-    t.state = deserialize(s)
+    state = deserialize(s)
+    if state === :runnable
+        t._state = Base.task_state_runnable
+    elseif state === :done
+        t._state = Base.task_state_done
+    elseif state === :failed
+        t._state = Base.task_state_failed
+    else
+        @assert false
+    end
     t.result = deserialize(s)
-    t.exception = deserialize(s)
+    exc = deserialize(s)
+    if exc === nothing
+        t._isexception = false
+    elseif exc isa Bool
+        t._isexception = exc
+    else
+        t._isexception = true
+        t.result = exc
+    end
     t
 end
 

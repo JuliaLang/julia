@@ -22,6 +22,8 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
+    AbstractMatch,
+    AbstractPattern,
     AbstractDict,
     BigFloat,
     BigInt,
@@ -38,6 +40,7 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
+    ComposedFunction,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -220,10 +223,13 @@ export
     atanh,
     big,
     binomial,
+    bitreverse,
+    bitrotate,
     bswap,
     cbrt,
     ceil,
     cis,
+    cispi,
     clamp,
     cld,
     cmp,
@@ -327,6 +333,7 @@ export
     sinc,
     sincos,
     sincosd,
+    sincospi,
     sind,
     sinh,
     sinpi,
@@ -437,6 +444,7 @@ export
     zeros,
 
 # search, find, match and related functions
+    contains,
     eachmatch,
     endswith,
     findall,
@@ -453,12 +461,16 @@ export
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     startswith,
 
 # linear algebra
+    var"'", # to enable syntax a' for adjoint
     adjoint,
+    var"'ᵀ",
     transpose,
     kron,
+    kron!,
 
 # bitarrays
     falses,
@@ -468,6 +480,7 @@ export
     append!,
     insert!,
     pop!,
+    popat!,
     prepend!,
     push!,
     resize!,
@@ -482,6 +495,7 @@ export
     any,
     firstindex,
     collect,
+    count!,
     count,
     delete!,
     deleteat!,
@@ -641,7 +655,7 @@ export
     identity,
     isbits,
     isequal,
-    isimmutable,
+    ismutable,
     isless,
     ifelse,
     objectid,
@@ -775,6 +789,7 @@ export
     close,
     countlines,
     eachline,
+    readeach,
     eof,
     fd,
     fdio,
@@ -790,6 +805,7 @@ export
     bytesavailable,
     ntoh,
     open,
+    peek,
     pipeline,
     Pipe,
     PipeBuffer,
@@ -904,11 +920,13 @@ export
     process_running,
     run,
     setenv,
+    addenv,
     success,
     withenv,
 
 # C interface
     @cfunction,
+    @ccall,
     cglobal,
     disable_sigint,
     pointer,
@@ -942,6 +960,7 @@ export
     @s_str,    # regex substitution string
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
+    @NamedTuple,
 
     # documentation
     @text_str,

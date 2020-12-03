@@ -12,7 +12,7 @@ else
 CPP_STDOUT := $(CPP) -E
 endif
 
-all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony file_constants.jl uv_constants.jl version_git.jl.phony)
+all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony features_h.jl file_constants.jl uv_constants.jl version_git.jl.phony)
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -21,8 +21,20 @@ else
   PCRE_INCL_PATH := $(build_includedir)/pcre2.h
 endif
 
+define parse_features
+@echo "# $(2) features" >> $@
+@$(call PRINT_PERL, cat $(SRCDIR)/../src/features_$(1).h | perl -lne 'print "const JL_$(2)_$$1 = UInt32($$2)" if /^\s*JL_FEATURE_DEF(?:_NAME)?\(\s*(\w+)\s*,\s*([^,]+)\s*,.*\)\s*(?:\/\/.*)?$$/' >> $@)
+@echo >> $@
+endef
+
+$(BUILDDIR)/features_h.jl: $(SRCDIR)/../src/features_x86.h $(SRCDIR)/../src/features_aarch32.h $(SRCDIR)/../src/features_aarch64.h
+	@-rm -f $@
+	@$(call parse_features,x86,X86)
+	@$(call parse_features,aarch32,AArch32)
+	@$(call parse_features,aarch64,AArch64)
+
 $(BUILDDIR)/pcre_h.jl: $(PCRE_INCL_PATH)
-	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = $$2 % UInt32"' | LC_ALL=C sort > $@)
+	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print index($$1, "ERROR_") == 0 ? "const $$1 = Cint($$2)" : "const $$1 = UInt32($$2)"' | LC_ALL=C sort > $@)
 
 $(BUILDDIR)/errno_h.jl:
 	@$(call PRINT_PERL, echo '#include <errno.h>' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | LC_ALL=C sort > $@)
@@ -79,6 +91,7 @@ ifeq ($(DARWIN_FRAMEWORK), 1)
 else
 	@echo "const DARWIN_FRAMEWORK = false" >> $@
 endif
+	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
@@ -192,6 +205,7 @@ $(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
 $(eval $(call symlink_system_library,libmbedcrypto,MBEDTLS))
 $(eval $(call symlink_system_library,libmbedx509,MBEDTLS))
 $(eval $(call symlink_system_library,libssh2,LIBSSH2))
+$(eval $(call symlink_system_library,libnghttp2,NGHTTP2))
 $(eval $(call symlink_system_library,libcurl,CURL))
 $(eval $(call symlink_system_library,libgit2,LIBGIT2))
 $(eval $(call symlink_system_library,libamd,SUITESPARSE))
@@ -236,6 +250,7 @@ clean:
 	-rm -f $(BUILDDIR)/errno_h.jl
 	-rm -f $(BUILDDIR)/build_h.jl
 	-rm -f $(BUILDDIR)/build_h.jl.phony
+	-rm -f $(BUILDDIR)/features_h.jl
 	-rm -f $(BUILDDIR)/uv_constants.jl
 	-rm -f $(BUILDDIR)/file_constants.jl
 	-rm -f $(BUILDDIR)/version_git.jl

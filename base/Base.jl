@@ -84,6 +84,7 @@ include("range.jl")
 include("error.jl")
 
 # core numeric operations & types
+==(x, y) = x === y
 include("bool.jl")
 include("number.jl")
 include("int.jl")
@@ -105,12 +106,28 @@ include("baseext.jl")
 include("ntuple.jl")
 
 include("abstractdict.jl")
+include("iddict.jl")
+include("idset.jl")
 
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
 
 include("namedtuple.jl")
+
+# For OS specific stuff
+# We need to strcat things here, before strings are really defined
+function strcat(x::String, y::String)
+    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), Core.sizeof(x) + Core.sizeof(y))
+    GC.@preserve x y out begin
+        out_ptr = unsafe_convert(Ptr{UInt8}, out)
+        unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
+        unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
+    end
+    return out
+end
+include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
+include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
 # numeric operations
 include("hashing.jl")
@@ -127,6 +144,7 @@ include("abstractarraymath.jl")
 include("arraymath.jl")
 
 # SIMD loops
+@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
 include("simdloop.jl")
 using .SimdLoop
 
@@ -159,9 +177,19 @@ include("strings/basic.jl")
 include("strings/string.jl")
 include("strings/substring.jl")
 
-# For OS specific stuff
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+# Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
+# a slightly more verbose fashion than usual, because we're running so early.
+const DL_LOAD_PATH = String[]
+let os = ccall(:jl_get_UNAME, Any, ())
+    if os === :Darwin || os === :Apple
+        if Base.DARWIN_FRAMEWORK
+            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+        else
+            push!(DL_LOAD_PATH, "@loader_path/julia")
+        end
+        push!(DL_LOAD_PATH, "@loader_path")
+    end
+end
 
 include("osutils.jl")
 include("c.jl")
@@ -173,9 +201,9 @@ include("iobuffer.jl")
 # strings & printing
 include("intfuncs.jl")
 include("strings/strings.jl")
+include("regex.jl")
 include("parse.jl")
 include("shell.jl")
-include("regex.jl")
 include("show.jl")
 include("arrayshow.jl")
 include("methodshow.jl")
@@ -202,29 +230,24 @@ include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 
-const DL_LOAD_PATH = String[]
-if Sys.isapple()
-    if Base.DARWIN_FRAMEWORK
-        push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-    else
-        push!(DL_LOAD_PATH, "@loader_path/julia")
-    end
-    push!(DL_LOAD_PATH, "@loader_path")
-end
-
 include("env.jl")
 
-# Scheduling
+# Concurrency
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+include("channels.jl")
 include("task.jl")
+include("threads_overloads.jl")
 include("weakkeydict.jl")
 
 # Logging
 include("logging.jl")
 using .CoreLogging
+
+# BinaryPlatforms, used by Artifacts
+include("binaryplatforms.jl")
 
 # functions defined in Random
 function rand end
@@ -239,7 +262,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
-include("grisu/grisu.jl")
+include("ttyhascolor.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -253,7 +276,7 @@ const (∛)=cbrt
 delete_method(which(include, (Module, String)))
 let SOURCE_PATH = ""
     global function include(mod::Module, path::String)
-        prev = SOURCE_PATH
+        prev = SOURCE_PATH::String
         path = normpath(joinpath(dirname(prev), path))
         Core.println(path)
         ccall(:jl_uv_flush, Nothing, (Ptr{Nothing},), Core.io_pointer(Core.stdout))
@@ -301,9 +324,6 @@ using .MPFR
 
 include("combinatorics.jl")
 
-# more hashing definitions
-include("hashing2.jl")
-
 # irrational mathematical constants
 include("irrationals.jl")
 include("mathconstants.jl")
@@ -312,18 +332,15 @@ using .MathConstants: ℯ, π, pi
 # metaprogramming
 include("meta.jl")
 
-# concurrency and parallelism
-include("channels.jl")
+# Stack frames and traces
+include("stacktraces.jl")
+using .StackTraces
 
 # utilities
 include("deepcopy.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
-
-# Stack frames and traces
-include("stacktraces.jl")
-using .StackTraces
 
 include("initdefs.jl")
 
@@ -332,9 +349,12 @@ include("threadcall.jl")
 
 # code loading
 include("uuid.jl")
+include("pkgid.jl")
+include("toml_parser.jl")
 include("loading.jl")
 
 # misc useful functions & macros
+include("timing.jl")
 include("util.jl")
 
 include("asyncmap.jl")
@@ -363,29 +383,13 @@ for m in methods(include)
 end
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, path::AbstractString) = include(mod, convert(String, path))
-function include(mod::Module, _path::String)
-    path, prev = _include_dependency(mod, _path)
-    for callback in include_callbacks # to preserve order, must come before Core.include
-        invokelatest(callback, mod, path)
-    end
-    tls = task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        # result = Core.include(mod, path)
-        result = ccall(:jl_load_, Any, (Any, Any), mod, path)
-    finally
-        if prev === nothing
-            delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
-end
+include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
+include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 
 end_base_include = time_ns()
+
+const _sysimage_modules = PkgId[]
+in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
 if is_primary_base_module
 function __init__()
@@ -410,12 +414,14 @@ function __init__()
     # initialize loading
     init_depot_path()
     init_load_path()
+    init_active_project()
+    append!(empty!(_sysimage_modules), keys(loaded_modules))
+    if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
+        MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
+    end
     nothing
 end
 
-
 end
-
-const tot_time_stdlib = RefValue(0.0)
 
 end # baremodule Base

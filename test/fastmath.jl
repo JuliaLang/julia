@@ -235,3 +235,20 @@ end
 @testset "literal powers" begin
     @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
 end
+
+@testset "sincos fall-backs" begin
+    struct FloatWrapper
+        inner::Float64
+    end
+    Base.sin(outer::FloatWrapper) = sin(outer.inner)
+    Base.cos(outer::FloatWrapper) = cos(outer.inner)
+    for zilch in (FloatWrapper(0.0), 0, 0 + 0 * im)
+        @test (@fastmath sincos(zilch)) == (0, 1)
+    end
+end
+
+@testset "non-numeric fallbacks" begin
+    @test (@fastmath :(:sin)) == :(:sin)
+    @test (@fastmath "a" * "b") == "ab"
+    @test (@fastmath "a" ^ 2) == "aa"
+end

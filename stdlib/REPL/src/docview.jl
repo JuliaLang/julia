@@ -9,9 +9,13 @@ using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, 
 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
-using Base: with_output_color
+using Base: with_output_color, mapany
+
+import REPL
 
 using InteractiveUtils: subtypes
+
+using Unicode: normalize
 
 ## Help mode ##
 
@@ -23,7 +27,8 @@ const extended_help_on = Ref{Any}(nothing)
 
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
-    if startswith(line, '?')
+    ternary_operator_help = (line == "?" || line == "?:")
+    if startswith(line, '?') && !ternary_operator_help
         line = line[2:end]
         extended_help_on[] = line
         brief = false
@@ -31,12 +36,24 @@ function _helpmode(io::IO, line::AbstractString)
         extended_help_on[] = nothing
         brief = true
     end
+    # interpret anything starting with # or #= as asking for help on comments
+    if startswith(line, "#")
+        if startswith(line, "#=")
+            line = "#="
+        else
+            line = "#"
+        end
+    end
     x = Meta.parse(line, raise = false, depwarn = false)
+    assym = Symbol(line)
     expr =
-        if haskey(keywords, Symbol(line)) || isexpr(x, :error) || isexpr(x, :invalid)
+        if haskey(keywords, Symbol(line)) || Base.isoperator(assym) || isexpr(x, :error) ||
+            isexpr(x, :invalid) || isexpr(x, :incomplete)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
-            Symbol(line)
+            assym
+        elseif isexpr(x, (:using, :import))
+            (x::Expr).head
         else
             # Retrieving docs for macros requires us to make a distinction between the text
             # `@macroname` and `@macroname()`. These both parse the same, but are used by
@@ -56,6 +73,7 @@ function insert_hlines(io::IO, docs)
     if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
         return docs
     end
+    docs = docs::Markdown.MD
     v = Any[]
     for (n, doc) in enumerate(docs.content)
         push!(v, doc)
@@ -95,6 +113,8 @@ function Markdown.term(io::IO, msg::Message, columns)
     printstyled(io, msg.msg; msg.fmt...)
 end
 
+trimdocs(doc, brief::Bool) = doc
+
 function trimdocs(md::Markdown.MD, brief::Bool)
     brief || return md
     md, trimmed = _trimdocs(md, brief)
@@ -109,12 +129,15 @@ end
 function _trimdocs(md::Markdown.MD, brief::Bool)
     content, trimmed = [], false
     for c in md.content
-        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
-                                         lowercase(c.text[1]) ∈ ("extended help",
-                                                                 "extended documentation",
-                                                                 "extended docs")
-            trimmed = true
-            break
+        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) && !isempty(c.text)
+            item = c.text[1]
+            if isa(item, AbstractString) &&
+                lowercase(item) ∈ ("extended help",
+                                   "extended documentation",
+                                   "extended docs")
+                trimmed = true
+                break
+            end
         end
         c, trm = _trimdocs(c, brief)
         trimmed |= trm
@@ -166,7 +189,7 @@ function doc(binding::Binding, sig::Type = Union{})
             end
         end
         # Get parsed docs and concatenate them.
-        md = catdoc(map(parsedoc, results)...)
+        md = catdoc(mapany(parsedoc, results)...)
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
             md.meta[:results] = results
@@ -183,20 +206,33 @@ doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 
 function lookup_doc(ex)
+    if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
+        # handle syntactic operators, e.g. +=, ::, .=
+        ex = ex.head
+    end
     if haskey(keywords, ex)
-        parsedoc(keywords[ex])
+        return parsedoc(keywords[ex])
     elseif Meta.isexpr(ex, :incomplete)
         return :($(Markdown.md"No documentation found."))
-    elseif isa(ex, Union{Expr, Symbol})
-        binding = esc(bindingexpr(namify(ex)))
-        if isexpr(ex, :call) || isexpr(ex, :macrocall)
-            sig = esc(signature(ex))
-            :($(doc)($binding, $sig))
-        else
-            :($(doc)($binding))
+    elseif !isa(ex, Expr) && !isa(ex, Symbol)
+        return :($(doc)($(typeof)($(esc(ex)))))
+    end
+    if isa(ex, Symbol) && Base.isoperator(ex)
+        str = string(ex)
+        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment
+            op = str[1:end-1]
+            return Markdown.parse("`x $op= y` is a synonym for `x = x $op y`")
+        elseif startswith(str, ".")
+            op = str[2:end]
+            return Markdown.parse("`x $ex y` is equivalent to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
         end
+    end
+    binding = esc(bindingexpr(namify(ex)))
+    if isexpr(ex, :call) || isexpr(ex, :macrocall)
+        sig = esc(signature(ex))
+        :($(doc)($binding, $sig))
     else
-        :($(doc)($(typeof)($(esc(ex)))))
+        :($(doc)($binding))
     end
 end
 
@@ -219,13 +255,13 @@ function summarize(binding::Binding, sig)
     return md
 end
 
-function summarize(io::IO, λ::Function, binding)
+function summarize(io::IO, λ::Function, binding::Binding)
     kind = startswith(string(binding.var), '@') ? "macro" : "`Function`"
     println(io, "`", binding, "` is a ", kind, ".")
     println(io, "```\n", methods(λ), "\n```")
 end
 
-function summarize(io::IO, T::DataType, binding)
+function summarize(io::IO, T::DataType, binding::Binding)
     println(io, "# Summary")
     println(io, "```")
     println(io,
@@ -261,11 +297,11 @@ function summarize(io::IO, T::DataType, binding)
     end
 end
 
-function summarize(io::IO, m::Module, binding)
+function summarize(io::IO, m::Module, binding::Binding)
     println(io, "No docstring found for module `", m, "`.\n")
 end
 
-function summarize(io::IO, @nospecialize(T), binding)
+function summarize(io::IO, @nospecialize(T), binding::Binding)
     T = typeof(T)
     println(io, "`", binding, "` is of type `", T, "`.\n")
     summarize(io, T, binding)
@@ -273,10 +309,10 @@ end
 
 # repl search and completions for help
 
-function repl_search(io::IO, s)
+function repl_search(io::IO, s::Union{Symbol,String})
     pre = "search:"
     print(io, pre)
-    printmatches(io, s, doc_completions(s), cols = displaysize(io)[2] - length(pre))
+    printmatches(io, s, doc_completions(s), cols = _displaysize(io)[2] - length(pre))
     println(io, "\n")
 end
 repl_search(s) = repl_search(stdout, s)
@@ -292,13 +328,16 @@ repl_corrections(s) = repl_corrections(stdout, s)
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
     if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
-        for (k,v) in Base.REPL_MODULE_REF[].REPLCompletions.latex_symbols
+        for (k,v) in Iterators.flatten((REPLCompletions.latex_symbols,
+                                        REPLCompletions.emoji_symbols))
             symbols_latex[v] = k
         end
     end
     return get(symbols_latex, s, "")
 end
 function repl_latex(io::IO, s::String)
+    # decompose NFC-normalized identifier to match tab-completion input
+    s = normalize(s, :NFD)
     latex = symbol_latex(s)
     if !isempty(latex)
         print(io, "\"")
@@ -310,22 +349,43 @@ function repl_latex(io::IO, s::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
+        state = '\0'
         with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
-                    print(io, symbols_latex[cstr], "<tab>")
+                    latex = symbols_latex[cstr]
+                    if length(latex) == 3 && latex[2] in ('^','_')
+                        # coalesce runs of sub/superscripts
+                        if state != latex[2]
+                            '\0' != state && print(io, "<tab>")
+                            print(io, latex[1:2])
+                            state = latex[2]
+                        end
+                        print(io, latex[3])
+                    else
+                        if '\0' != state
+                            print(io, "<tab>")
+                            state = '\0'
+                        end
+                        print(io, latex, "<tab>")
+                    end
                 else
+                    if '\0' != state
+                        print(io, "<tab>")
+                        state = '\0'
+                    end
                     print(io, c)
                 end
             end
+            '\0' != state && print(io, "<tab>")
         end
         println(io, '\n')
     end
 end
 repl_latex(s::String) = repl_latex(stdout, s)
 
-macro repl(ex, brief=false) repl(ex; brief=brief) end
+macro repl(ex, brief::Bool=false) repl(ex; brief=brief) end
 macro repl(io, ex, brief) repl(io, ex; brief=brief) end
 
 function repl(io::IO, s::Symbol; brief::Bool=true)
@@ -333,7 +393,7 @@ function repl(io::IO, s::Symbol; brief::Bool=true)
     quote
         repl_latex($io, $str)
         repl_search($io, $str)
-        $(if !isdefined(Main, s) && !haskey(keywords, s)
+        $(if !isdefined(Main, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str))
           end)
         $(_repl(s, brief))
@@ -345,16 +405,17 @@ repl(io::IO, str::AbstractString; brief::Bool=true) = :(apropos($io, $str))
 repl(io::IO, other; brief::Bool=true) = esc(:(@doc $other))
 #repl(io::IO, other) = lookup_doc(other) # TODO
 
-repl(x; brief=true) = repl(stdout, x; brief=brief)
+repl(x; brief::Bool=true) = repl(stdout, x; brief=brief)
 
-function _repl(x, brief=true)
+function _repl(x, brief::Bool=true)
     if isexpr(x, :call)
+        x = x::Expr
         # determine the types of the values
         kwargs = nothing
         pargs = Any[]
         for arg in x.args[2:end]
             if isexpr(arg, :parameters)
-                kwargs = map(arg.args) do kwarg
+                kwargs = mapany(arg.args) do kwarg
                     if kwarg isa Symbol
                         kwarg = :($kwarg::Any)
                     elseif isexpr(kwarg, :kw)
@@ -449,7 +510,7 @@ fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), fiel
 
 # Fuzzy Search Algorithm
 
-function matchinds(needle, haystack; acronym = false)
+function matchinds(needle, haystack; acronym::Bool = false)
     chars = collect(needle)
     is = Int[]
     lastc = '\0'
@@ -486,8 +547,8 @@ function fuzzyscore(needle, haystack)
     return score
 end
 
-function fuzzysort(search, candidates)
-    scores = map(cand -> (fuzzyscore(search, cand), -levenshtein(search, cand)), candidates)
+function fuzzysort(search::String, candidates::Vector{String})
+    scores = map(cand -> (fuzzyscore(search, cand), -Float64(levenshtein(search, cand))), candidates)
     candidates[sortperm(scores)] |> reverse
 end
 
@@ -511,8 +572,8 @@ function levenshtein(s1, s2)
     return d[m+1, n+1]
 end
 
-function levsort(search, candidates)
-    scores = map(cand -> (levenshtein(search, cand), -fuzzyscore(search, cand)), candidates)
+function levsort(search::String, candidates::Vector{String})
+    scores = map(cand -> (Float64(levenshtein(search, cand)), -fuzzyscore(search, cand)), candidates)
     candidates = candidates[sortperm(scores)]
     i = 0
     for outer i = 1:length(candidates)
@@ -534,7 +595,9 @@ function printmatch(io::IO, word, match)
     end
 end
 
-function printmatches(io::IO, word, matches; cols = displaysize(io)[2])
+printmatch(args...) = printfuzzy(stdout, args...)
+
+function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
         total + length(match) + 1 > cols && break
@@ -545,9 +608,9 @@ function printmatches(io::IO, word, matches; cols = displaysize(io)[2])
     end
 end
 
-printmatches(args...; cols = displaysize(stdout)[2]) = printmatches(stdout, args..., cols = cols)
+printmatches(args...; cols::Int = _displaysize(stdout)[2]) = printmatches(stdout, args..., cols = cols)
 
-function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displaysize(io)[2])
+function print_joined_cols(io::IO, ss::Vector{String}, delim = "", last = delim; cols::Int = _displaysize(io)[2])
     i = 0
     total = 0
     for outer i = 1:length(ss)
@@ -557,13 +620,13 @@ function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displays
     join(io, ss[1:i], delim, last)
 end
 
-print_joined_cols(args...; cols = displaysize(stdout)[2]) = print_joined_cols(stdout, args...; cols=cols)
+print_joined_cols(args...; cols::Int = _displaysize(stdout)[2]) = print_joined_cols(stdout, args...; cols=cols)
 
-function print_correction(io, word)
+function print_correction(io::IO, word::String)
     cors = levsort(word, accessible(Main))
     pre = "Perhaps you meant "
     print(io, pre)
-    print_joined_cols(io, cors, ", ", " or "; cols = displaysize(io)[2] - length(pre))
+    print_joined_cols(io, cors, ", ", " or "; cols = _displaysize(io)[2] - length(pre))
     println(io)
     return
 end
@@ -572,21 +635,15 @@ print_correction(word) = print_correction(stdout, word)
 
 # Completion data
 
-const builtins = ["abstract type", "baremodule", "begin", "break",
-                  "catch", "ccall", "const", "continue", "do", "else",
-                  "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "import", "let",
-                  "local", "macro", "module", "mutable struct", "primitive type",
-                  "quote", "return", "struct", "try", "using", "while"]
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
 filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-    [filter!(s -> !Base.isdeprecated(mod, s), names(mod, all = true, imported = true));
-     map(names, moduleusings(mod))...;
-     builtins] |> unique |> filtervalid
+    Symbol[filter!(s -> !Base.isdeprecated(mod, s), names(mod, all=true, imported=true));
+           map(names, moduleusings(mod))...;
+           collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
 doc_completions(name) = fuzzysort(name, accessible(Main))
 doc_completions(name::Symbol) = doc_completions(string(name))
@@ -662,14 +719,16 @@ stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
-# Apropos searches through all available documentation for some string or regex
 """
-    apropos(string)
+    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
 
-Search through all documentation for a string, ignoring case.
+Search available docstrings for entries containing `pattern`.
+
+When `pattern` is a string, case is ignored. Results are printed to `io`.
 """
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
+
 function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict

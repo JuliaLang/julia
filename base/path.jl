@@ -72,7 +72,7 @@ function homedir()
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
         else
-            uv_error(:homedir, rc)
+            uv_error("homedir()", rc)
         end
     end
 end
@@ -165,10 +165,17 @@ See also: [`basename`](@ref)
 
 Get the file name part of a path.
 
+!!! note
+    This function differs slightly from the Unix `basename` program, where trailing slashes are ignored,
+    i.e. `\$ basename /foo/bar/` returns `bar`, whereas `basename` in Julia returns an empty string `""`.
+
 # Examples
 ```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
+
+julia> basename("/home/myuser/")
+""
 ```
 
 See also: [`dirname`](@ref)
@@ -180,7 +187,7 @@ basename(path::AbstractString) = splitdir(path)[2]
 
 If the last component of a path contains a dot, split the path into everything before the
 dot and everything including and after the dot. Otherwise, return a tuple of the argument
-unmodified and the empty string.
+unmodified and the empty string. "splitext" is short for "split extension".
 
 # Examples
 ```jldoctest
@@ -214,7 +221,7 @@ the path, including the root directory if present.
 # Examples
 ```jldoctest
 julia> splitpath("/home/myuser/example.jl")
-4-element Array{String,1}:
+4-element Vector{String}:
  "/"
  "home"
  "myuser"
@@ -426,7 +433,7 @@ function realpath(path::AbstractString)
                     C_NULL, req, path, C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("realpath", ret)
+            uv_error("realpath($(repr(path)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
@@ -444,11 +451,11 @@ else
 function expanduser(path::AbstractString)
     y = iterate(path)
     y === nothing && return path
-    c, i = y
+    c, i = y::Tuple{eltype(path),Int}
     c != '~' && return path
     y = iterate(path, i)
     y === nothing && return homedir()
-    y[1] == '/' && return homedir() * path[i:end]
+    y[1]::eltype(path) == '/' && return homedir() * path[i:end]
     throw(ArgumentError("~user tilde expansion not yet implemented"))
 end
 function contractuser(path::AbstractString)

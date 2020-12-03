@@ -266,23 +266,23 @@ representable by the element type of `A`, e.g. for integer types.
 # Examples
 ```jldoctest
 julia> a = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> qr!(a)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.316228  -0.948683
  -0.948683   0.316228
 R factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -3.16228  -4.42719
   0.0      -0.632456
 
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
@@ -349,20 +349,20 @@ It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
 # Examples
 ```jldoctest
 julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
-3×2 Array{Float64,2}:
+3×2 Matrix{Float64}:
  3.0  -6.0
  4.0  -8.0
  0.0   1.0
 
 julia> F = qr(A)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.6   0.0   0.8
  -0.8   0.0  -0.6
   0.0  -1.0   0.0
 R factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -5.0  10.0
   0.0  -1.0
 
@@ -466,6 +466,8 @@ Base.propertynames(F::QRPivoted, private::Bool=false) =
     (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
+
+inv(Q::AbstractQ) = Q'
 
 """
     QRPackedQ <: AbstractMatrix
@@ -749,7 +751,19 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ### mul!
-mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T} = lmul!(Q, copyto!(C, B))
+function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T}
+    require_one_based_indexing(C, B)
+    mB = size(B, 1)
+    mC = size(C, 1)
+    if mB < mC
+        inds = CartesianIndices(B)
+        copyto!(C, inds, B, inds)
+        C[CartesianIndices((mB+1:mC, axes(C, 2)))] .= zero(T)
+        return lmul!(Q, C)
+    else
+        return lmul!(Q, copyto!(C, B))
+    end
+end
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, Q::AbstractQ{T}) where {T} = rmul!(copyto!(C, A), Q)
 mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::StridedVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T} = rmul!(copyto!(C, A), adjQ)
@@ -845,7 +859,10 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     end
     return B
 end
-ldiv!(A::QR, B::StridedVector) = ldiv!(A, reshape(B, length(B), 1))[:]
+function ldiv!(A::QR, B::StridedVector)
+    ldiv!(A, reshape(B, length(B), 1))
+    B
+end
 function ldiv!(A::QRPivoted, b::StridedVector)
     ldiv!(QR(A.factors,A.τ), b)
     b[1:size(A.factors, 2)] = view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]

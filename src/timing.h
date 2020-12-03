@@ -3,6 +3,15 @@
 #ifndef JL_TIMING_H
 #define JL_TIMING_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+void jl_init_timing(void);
+void jl_destroy_timing(void);
+#ifdef __cplusplus
+}
+#endif
+
 #ifndef ENABLE_TIMINGS
 #define JL_TIMING(owner)
 #else
@@ -13,9 +22,7 @@
 extern "C" {
 #endif
 void jl_print_timings(void);
-void jl_init_timing(void);
 jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
-void jl_destroy_timing(void);
 extern jl_timing_block_t *jl_root_timing;
 void jl_timing_block_start(jl_timing_block_t *cur_block);
 void jl_timing_block_stop(jl_timing_block_t *cur_block);
@@ -35,31 +42,6 @@ void jl_timing_block_stop(jl_timing_block_t *cur_block);
 #define JL_TIMING(owner)
 #else
 
-// number of cycles since power-on
-static inline uint64_t cycleclock(void)
-{
-#if defined(_CPU_X86_64_)
-    uint64_t low, high;
-    __asm__ volatile("rdtsc" : "=a"(low), "=d"(high));
-    return (high << 32) | low;
-#elif defined(_CPU_X86_)
-    int64_t ret;
-    __asm__ volatile("rdtsc" : "=A"(ret));
-    return ret;
-#elif defined(_CPU_AARCH64_)
-    // System timer of ARMv8 runs at a different frequency than the CPU's.
-    // The frequency is fixed, typically in the range 1-50MHz.  It can be
-    // read at CNTFRQ special register.  We assume the OS has set up
-    // the virtual timer properly.
-    int64_t virtual_timer_value;
-    asm volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
-    return virtual_timer_value;
-#else
-    #error No cycleclock() definition for your platform
-    // copy from https://github.com/google/benchmark/blob/v1.5.0/src/cycleclock.h
-#endif
-}
-
 #define JL_TIMING_OWNERS          \
         X(ROOT),                  \
         X(GC),                    \
@@ -71,8 +53,6 @@ static inline uint64_t cycleclock(void)
         X(METHOD_LOOKUP_FAST),    \
         X(LLVM_OPT),              \
         X(LLVM_MODULE_FINISH),    \
-        X(LLVM_EMIT),             \
-        X(METHOD_LOOKUP_COMPILE), \
         X(METHOD_MATCH),          \
         X(TYPE_CACHE_LOOKUP),     \
         X(TYPE_CACHE_INSERT),     \

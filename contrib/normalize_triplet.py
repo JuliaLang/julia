@@ -12,8 +12,8 @@ if len(sys.argv) < 2:
 arch_mapping = {
     'x86_64': '(x86_|amd)64',
     'i686': "i\\d86",
-    'aarch64': "aarch64",
-    'arm': "arm(v7l)?",
+    'aarch64': "(arm|aarch)64",
+    'armv7l': "arm(v7l)?",
     'powerpc64le': "p(ower)?pc64le",
 }
 platform_mapping = {
@@ -93,9 +93,9 @@ def p(x):
     # These contain characters that can't be easily represented as
     # capture group names, unfortunately:
     os_remapping = {
-        'darwin': 'apple-darwin14',
+        'darwin': 'apple-darwin',
         'windows': 'w64-mingw32',
-        'freebsd': 'unknown-freebsd11.1',
+        'freebsd': 'unknown-freebsd',
     }
     x = r(x)
     if x:
@@ -110,13 +110,15 @@ def p(x):
 if libgfortran_version == "blank_libgfortran":
     if len(sys.argv) >= 3:
         libgfortran_version = {
-            "4": "libgfortran3",
-            "5": "libgfortran3",
-            "6": "libgfortran3",
-            "7": "libgfortran4",
-            "8": "libgfortran5",
-            "9": "libgfortran5",
-        }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1][0]]
+            "4":  "libgfortran3",
+            "5":  "libgfortran3",
+            "6":  "libgfortran3",
+            "7":  "libgfortran4",
+            "8":  "libgfortran5",
+            "9":  "libgfortran5",
+            "10": "libgfortran5",
+            "11": "libgfortran5",
+        }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1].split('.')[0]]
 
 if cxx_abi == "blank_cxx_abi":
     if len(sys.argv) == 4:

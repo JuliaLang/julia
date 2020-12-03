@@ -2,6 +2,7 @@
 
 #include <inttypes.h>
 #include "julia.h"
+#include "julia_internal.h"
 #include "options.h"
 #include "stdio.h"
 

@@ -312,3 +312,42 @@ resolution:
 julia> getaddrinfo("google.com")
 ip"74.125.226.225"
 ```
+
+## Asynchronous I/O
+
+
+All I/O operations exposed by [`Base.read`](@ref) and [`Base.write`](@ref) can be performed
+asynchronously through the use of [coroutines](@ref man-tasks). You can create a new coroutine to
+read from or write to a stream using the [`@async`](@ref) macro:
+
+```julia-repl
+julia> task = @async open("foo.txt", "w") do io
+           write(io, "Hello, World!")
+       end;
+
+julia> wait(task)
+
+julia> readlines("foo.txt")
+1-element Array{String,1}:
+ "Hello, World!"
+```
+
+It's common to run into situations where you want to perform multiple asynchronous operations
+concurrently and wait until they've all completed. You can use the [`@sync`](@ref) macro to cause
+your program to block until all of the coroutines it wraps around have exited:
+
+```julia-repl
+julia> using Sockets
+
+julia> @sync for hostname in ("google.com", "github.com", "julialang.org")
+           @async begin
+               conn = connect(hostname, 80)
+               write(conn, "GET / HTTP/1.1\r\nHost:$(hostname)\r\n\r\n")
+               readline(conn, keep=true)
+               println("Finished connection to $(hostname)")
+           end
+       end
+Finished connection to google.com
+Finished connection to julialang.org
+Finished connection to github.com
+```

@@ -7,7 +7,10 @@ module LibGit2
 
 import Base: ==
 using Base: something, notnothing
+using Base64: base64decode
+using NetworkOptions
 using Printf: @printf
+using SHA: sha1, sha256
 
 export with, GitRepo, GitConfig
 
@@ -18,10 +21,10 @@ const REFCOUNT = Threads.Atomic{Int}(0)
 
 function ensure_initialized end
 
+include("error.jl")
 include("utils.jl")
 include("consts.jl")
 include("types.jl")
-include("error.jl")
 include("signature.jl")
 include("oid.jl")
 include("reference.jl")
@@ -289,7 +292,7 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         fo = FetchOptions(callbacks=remote_callbacks)
         fetch(rmt, refspecs, msg="from $(url(rmt))", options=fo)
     catch err
-        if isa(err, GitError) && err.code == Error.EAUTH
+        if isa(err, GitError) && err.code === Error.EAUTH
             reject(cred_payload)
         else
             Base.shred!(cred_payload)
@@ -345,7 +348,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         push_opts = PushOptions(callbacks=remote_callbacks)
         push(rmt, refspecs, force=force, options=push_opts)
     catch err
-        if isa(err, GitError) && err.code == Error.EAUTH
+        if isa(err, GitError) && err.code === Error.EAUTH
             reject(cred_payload)
         else
             Base.shred!(cred_payload)
@@ -579,7 +582,7 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
         repo = try
             clone(repo_url, repo_path, clone_opts)
         catch err
-            if isa(err, GitError) && err.code == Error.EAUTH
+            if isa(err, GitError) && err.code === Error.EAUTH
                 reject(cred_payload)
             else
                 Base.shred!(cred_payload)
@@ -728,7 +731,7 @@ function merge!(repo::GitRepo;
                                "There is no fetch reference for this branch."))
             end
             Base.map(fh->GitAnnotated(repo,fh), fheads)
-        else # merge commitish
+        else # merge committish
             [GitAnnotated(repo, committish)]
         end
     else
@@ -785,7 +788,7 @@ function merge!(repo::GitRepo;
                merge_opts=merge_opts,
                checkout_opts=checkout_opts)
     finally
-        Base.map(close, upst_anns)
+        Base.foreach(close, upst_anns)
     end
 end
 
@@ -983,19 +986,8 @@ end
         end
     end
 
-    # Look for OpenSSL env variable for CA bundle (linux only)
-    # windows and macOS use the OS native security backends
-    @static if Sys.islinux()
-        cert_loc = if "SSL_CERT_DIR" in keys(ENV)
-            ENV["SSL_CERT_DIR"]
-        elseif "SSL_CERT_FILE" in keys(ENV)
-            ENV["SSL_CERT_FILE"]
-        else
-            # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
-            abspath(ccall(:jl_get_julia_bindir, Any, ()), Base.DATAROOTDIR, "julia", "cert.pem")
-        end
-        set_ssl_cert_locations(cert_loc)
-    end
+    cert_loc = NetworkOptions.ca_roots()
+    cert_loc !== nothing && set_ssl_cert_locations(cert_loc)
 end
 
 function set_ssl_cert_locations(cert_loc)

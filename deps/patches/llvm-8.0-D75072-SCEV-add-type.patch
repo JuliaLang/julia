@@ -1,0 +1,415 @@
+From f11f45a45ce8b90c798dd939d2782205e4291360 Mon Sep 17 00:00:00 2001
+From: Keno Fischer <keno@juliacomputing.com>
+Date: Fri, 6 Mar 2020 10:29:20 -0500
+Subject: [PATCH] [SCEV] Record NI types in add exprs
+
+Summary:
+(Rebased to LLVM 8 from the original LLVM 9 patch)
+This fixes a case where loop-reduce introduces ptrtoint/inttoptr for
+non-integral address space pointers. Over the past several years, we
+have gradually improved the SCEVExpander to actually do something
+sensible for non-integral pointer types. However, that obviously
+relies on the expander knowing what the type of the SCEV expression is.
+That is usually the case, but there is one important case where it's
+not: The type of an add expression is just the type of the last operand,
+so if the non-integral pointer is not the last operand, later uses of
+that SCEV may not realize that the given add expression contains
+non-integral pointers and may try to expand it as integers.
+
+One interesting observation is that we do get away with this scheme in
+shockingly many cases. The reason for this is that SCEV expressions
+often have an `scUnknown` pointer base, which our sort order on the
+operands of add expressions sort behind basically everything else,
+so it usually ends up as the last operand.
+
+One situation where this fails is included as a test case. This test
+case was bugpoint-reduced from the issue reported at
+https://github.com/JuliaLang/julia/issues/31156. What happens here
+is that the pointer base is an scAddRec from an outer loop, plus an
+scUnknown integer offset. By our sort order, the scUnknown gets sorted
+after the scAddRec pointer base, thus making an add expression of these
+two operands have integer type. This then confuses the expander, into
+attempting to expand the whole thing as integers, which will obviously
+fail when reaching the non-integral pointer.
+
+I considered a few options to solve this, but here's what I ended up
+settling on: The AddExpr class gains a new subclass that explicitly
+stores the type of the expression. This subclass is used whenever one
+of the operands is a non-integral pointer. To reduce the impact for the
+regular case (where the SCEV expression contains no non-integral
+pointers), a bit flag is kept in each flag expression to indicate
+whether it is of non-integral pointer type (this should give the same
+answer as asking if getType() is non-integral, but performing that
+query may involve a pointer chase and requires the DataLayout). For
+add expressions that flag is also used to indicate whether we're using
+the subclass or not. This is slightly inefficient, because it uses
+the subclass even in the (not uncommon) case where the last operand
+does actually accurately reflect the non-integral pointer type. However,
+it didn't seem worth the extra flag bit and complexity to do this
+micro-optimization.
+
+I had hoped that we could additionally restrict mul exprs from
+containing any non-integral pointers, and also require add exprs to
+only have one operand containg such pointers (but not more), but this
+turned out not to work. The reason for this is that SCEV wants to
+form differences between pointers, which it represents as `A + B*-1`,
+so we need to allow both multiplication by `-1` and addition with
+multiple non-integral pointer arguments. I'm not super happy with
+that situation, but I think it exposes a more general problem with
+non-integral pointers in LLVM. We don't actually have a way to express
+the difference between two non-integral pointers at the IR level.
+In theory this is a problem for SCEV, because it means that we can't
+materialize such SCEV expression. However, in practice, these
+expressions generally have the same base pointer, so SCEV will
+appropriately simplify them to just the integer components.
+Nevertheless it is a bit unsatisfying. Perhaps we could have an
+intrinsic that takes the byte difference between two pointers to the
+same allocated object (in the same sense as is used in getelementptr),
+which should be a sensible operation even for non-integral pointers.
+However, given the practical considerations above, that's a project
+for another time. For now, simply allowing the existing pointer-diff
+pattern for non-integral pointers seems to work ok.
+
+Reviewers: sanjoy, reames, vtjnash, vchuravy
+
+Subscribers: hiraditya, javed.absar, llvm-commits
+
+Tags: #llvm, #julialang
+
+Differential Revision: https://reviews.llvm.org/D75072
+---
+ llvm/include/llvm/Analysis/ScalarEvolution.h  | 26 +++++--
+ .../Analysis/ScalarEvolutionExpressions.h     | 70 ++++++++++++++++---
+ llvm/lib/Analysis/ScalarEvolution.cpp         | 44 +++++++++---
+ .../LoopStrengthReduce/nonintegral.ll         | 35 +++++++++-
+ 4 files changed, 150 insertions(+), 25 deletions(-)
+
+diff --git llvm/include/llvm/Analysis/ScalarEvolution.h llvm/include/llvm/Analysis/ScalarEvolution.h
+index 5286f6a220e..f27fceb70d2 100644
+--- llvm/include/llvm/Analysis/ScalarEvolution.h
++++ llvm/include/llvm/Analysis/ScalarEvolution.h
+@@ -116,6 +116,19 @@ public:
+     NoWrapMask = (1 << 3) - 1
+   };
+
++  /// HasNonIntegralPointerFlag are bitfield indices into SubclassData.
++  ///
++  /// When constructing SCEV expressions for LLVM expressions with non-integral
++  /// pointer types, some additional processing is required to ensure that we
++  /// don't introduce any illegal transformations. However, non-integral pointer
++  /// types are a very rarely used feature, so we want to make sure to only do
++  /// such processing if they are actually used. To ensure minimal performance
++  /// impact, we memoize that fact in using these flags.
++  enum HasNonIntegralPointerFlag {
++    FlagNoNIPointers = 0,
++    FlagHasNIPointers = (1 << 3)
++  };
++
+   explicit SCEV(const FoldingSetNodeIDRef ID, unsigned SCEVTy)
+       : FastID(ID), SCEVType(SCEVTy) {}
+   SCEV(const SCEV &) = delete;
+@@ -138,6 +138,10 @@ public:
+   /// Return true if the specified scev is negated, but not a constant.
+   bool isNonConstantNegative() const;
+ 
++  bool hasNonIntegralPointers() const {
++    return SubclassData & FlagHasNIPointers;
++  }
++
+   /// Print out the internal representation of this scalar to the specified
+   /// stream.  This should really only be used for debugging purposes.
+   void print(raw_ostream &OS) const;
+diff --git llvm/include/llvm/Analysis/ScalarEvolutionExpressions.h llvm/include/llvm/Analysis/ScalarEvolutionExpressions.h
+index 876d68438ef..b9ea23c0086 100644
+--- llvm/include/llvm/Analysis/ScalarEvolutionExpressions.h
++++ llvm/include/llvm/Analysis/ScalarEvolutionExpressions.h
+@@ -181,6 +184,13 @@ class Type;
+       return getNoWrapFlags(FlagNW) != FlagAnyWrap;
+     }
+ 
++    void setHasNIPtr(bool HasNIPtr) {
++      if (HasNIPtr)
++        SubclassData |= FlagHasNIPointers;
++      else
++        SubclassData &= ~FlagHasNIPointers;
++    }
++
+     /// Methods for support type inquiry through isa, cast, and dyn_cast:
+     static bool classof(const SCEV *S) {
+       return S->getSCEVType() == scAddExpr || S->getSCEVType() == scMulExpr ||
+@@ -215,24 +220,54 @@ class Type;
+   class SCEVAddExpr : public SCEVCommutativeExpr {
+     friend class ScalarEvolution;
+ 
++  protected:
+     SCEVAddExpr(const FoldingSetNodeIDRef ID,
+                 const SCEV *const *O, size_t N)
+       : SCEVCommutativeExpr(ID, scAddExpr, O, N) {}
+ 
+   public:
+-    Type *getType() const {
+-      // Use the type of the last operand, which is likely to be a pointer
+-      // type, if there is one. This doesn't usually matter, but it can help
+-      // reduce casts when the expressions are expanded.
+-      return getOperand(getNumOperands() - 1)->getType();
++    /// Returns the type of the add expression, by looking either at the last
++    /// operand or deferring to the SCEVAddNIExpr subclass for non-integral
++    /// pointers.
++    Type *getType() const;
++
++    /// Methods for support type inquiry through isa, cast, and dyn_cast:
++    static bool classof(const SCEV *S) { return S->getSCEVType() == scAddExpr; }
++  };
++
++  /// This node represents an addition of some number of SCEVs, one which
++  /// is a non-integral pointer type, requiring us to know the type exactly for
++  /// correctness.
++  class SCEVAddNIExpr : public SCEVAddExpr {
++    friend class ScalarEvolution;
++    PointerType *NIType;
++
++    SCEVAddNIExpr(const FoldingSetNodeIDRef ID, const SCEV *const *O, size_t N,
++                  PointerType *NIType)
++        : SCEVAddExpr(ID, O, N), NIType(NIType) {
++      SubclassData |= FlagHasNIPointers;
+     }
+ 
++  public:
++    Type *getType() const { return NIType; }
++
+     /// Methods for support type inquiry through isa, cast, and dyn_cast:
+     static bool classof(const SCEV *S) {
+-      return S->getSCEVType() == scAddExpr;
++      return S->getSCEVType() == scAddExpr && S->hasNonIntegralPointers();
+     }
+   };
+ 
++  inline Type *SCEVAddExpr::getType() const {
++    // In general, use the type of the last operand, which is likely to be a
++    // pointer type, if there is one. This doesn't usually matter, but it can
++    // help reduce casts when the expressions are expanded. In the (unusual)
++    // case that we're working with non-integral pointers, we have a subclass
++    // that stores that type explicitly.
++    if (hasNonIntegralPointers())
++      return cast<SCEVAddNIExpr>(this)->getType();
++    return getOperand(getNumOperands() - 1)->getType();
++  }
++
+   /// This node represents multiplication of some number of SCEVs.
+   class SCEVMulExpr : public SCEVCommutativeExpr {
+     friend class ScalarEvolution;
+@@ -242,6 +273,18 @@ class Type;
+       : SCEVCommutativeExpr(ID, scMulExpr, O, N) {}
+ 
+   public:
++    Type *getType() const {
++      // In general, we can't form SCEVMulExprs with non-integral pointer types,
++      // but for the moment we need to allow a special case: Multiplying by
++      // -1 to be able express the difference between two pointers. In order
++      // to maintain the invariant that SCEVs with the NI flag set should have
++      // a type corresponding to the contained NI ptr, we need to return the
++      // type of the pointer here.
++      if (hasNonIntegralPointers())
++        return getOperand(getNumOperands() - 1)->getType();
++      return SCEVCommutativeExpr::getType();
++    }
++
+     /// Methods for support type inquiry through isa, cast, and dyn_cast:
+     static bool classof(const SCEV *S) {
+       return S->getSCEVType() == scMulExpr;
+@@ -467,9 +690,12 @@ class Type;
+     /// instances owned by a ScalarEvolution.
+     SCEVUnknown *Next;
+ 
+-    SCEVUnknown(const FoldingSetNodeIDRef ID, Value *V,
+-                ScalarEvolution *se, SCEVUnknown *next) :
+-      SCEV(ID, scUnknown), CallbackVH(V), SE(se), Next(next) {}
++    SCEVUnknown(const FoldingSetNodeIDRef ID, Value *V, ScalarEvolution *se,
++                SCEVUnknown *next, bool ValueIsNIPtr)
++        : SCEV(ID, scUnknown), CallbackVH(V), SE(se), Next(next) {
++      if (ValueIsNIPtr)
++        SubclassData |= FlagHasNIPointers;
++    }
+ 
+     // Implement CallbackVH.
+     void deleted() override;
+diff --git llvm/lib/Analysis/ScalarEvolution.cpp llvm/lib/Analysis/ScalarEvolution.cpp
+index cd74815a895..09e98345d0f 100644
+--- llvm/lib/Analysis/ScalarEvolution.cpp
++++ llvm/lib/Analysis/ScalarEvolution.cpp
+@@ -354,12 +354,13 @@ Type *SCEV::getType() const {
+   case scSignExtend:
+     return cast<SCEVCastExpr>(this)->getType();
+   case scAddRecExpr:
+-  case scMulExpr:
+   case scUMaxExpr:
+   case scSMaxExpr:
+   case scUMinExpr:
+   case scSMinExpr:
+     return cast<SCEVNAryExpr>(this)->getType();
++  case scMulExpr:
++    return cast<SCEVMulExpr>(this)->getType();
+   case scAddExpr:
+     return cast<SCEVAddExpr>(this)->getType();
+   case scUDivExpr:
+@@ -2419,8 +2420,9 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
+   }
+ 
+   // Limit recursion calls depth.
+-  if (Depth > MaxArithDepth)
++  if (Depth > MaxArithDepth) {
+     return getOrCreateAddExpr(Ops, Flags);
++  }
+ 
+   // Okay, check to see if the same value occurs in the operand list more than
+   // once.  If so, merge them together into an multiply expression.  Since we
+@@ -2761,16 +2763,27 @@ ScalarEvolution::getOrCreateAddExpr(ArrayRef<const SCEV *> Ops,
+                                     SCEV::NoWrapFlags Flags) {
+   FoldingSetNodeID ID;
+   ID.AddInteger(scAddExpr);
+-  for (const SCEV *Op : Ops)
+-    ID.AddPointer(Op);
++  bool HasNIPtr = false;
++  PointerType *NIPtrType = nullptr;
++  for (unsigned i = 0, e = Ops.size(); i != e; ++i) {
++    ID.AddPointer(Ops[i]);
++    if (Ops[i]->hasNonIntegralPointers()) {
++      HasNIPtr = true;
++      NIPtrType = cast<PointerType>(Ops[i]->getType());
++    }
++  }
+   void *IP = nullptr;
+   SCEVAddExpr *S =
+       static_cast<SCEVAddExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
+   if (!S) {
+     const SCEV **O = SCEVAllocator.Allocate<const SCEV *>(Ops.size());
+     std::uninitialized_copy(Ops.begin(), Ops.end(), O);
+-    S = new (SCEVAllocator)
+-        SCEVAddExpr(ID.Intern(SCEVAllocator), O, Ops.size());
++    if (HasNIPtr)
++      S = new (SCEVAllocator)
++          SCEVAddNIExpr(ID.Intern(SCEVAllocator), O, Ops.size(), NIPtrType);
++    else
++      S = new (SCEVAllocator)
++          SCEVAddExpr(ID.Intern(SCEVAllocator), O, Ops.size());
+     UniqueSCEVs.InsertNode(S, IP);
+     addToLoopUseLists(S);
+   }
+@@ -2783,8 +2763,10 @@ ScalarEvolution::getOrCreateAddRecExpr(ArrayRef<const SCEV *> Ops,
+                                        const Loop *L, SCEV::NoWrapFlags Flags) {
+   FoldingSetNodeID ID;
+   ID.AddInteger(scAddRecExpr);
+-  for (unsigned i = 0, e = Ops.size(); i != e; ++i)
++  for (unsigned i = 0, e = Ops.size(); i != e; ++i) {
++    assert(i == 0 || !Ops[i]->hasNonIntegralPointers());
+     ID.AddPointer(Ops[i]);
++  }
+   ID.AddPointer(L);
+   void *IP = nullptr;
+   SCEVAddRecExpr *S =
+@@ -2798,6 +2813,7 @@ ScalarEvolution::getOrCreateAddRecExpr(ArrayRef<const SCEV *> Ops,
+     addToLoopUseLists(S);
+   }
+   S->setNoWrapFlags(Flags);
++  S->setHasNIPtr(Ops[0]->hasNonIntegralPointers());
+   return S;
+ }
+ 
+@@ -2806,8 +2822,11 @@ ScalarEvolution::getOrCreateMulExpr(ArrayRef<const SCEV *> Ops,
+                                     SCEV::NoWrapFlags Flags) {
+   FoldingSetNodeID ID;
+   ID.AddInteger(scMulExpr);
+-  for (unsigned i = 0, e = Ops.size(); i != e; ++i)
++  bool HasNIPtr = false;
++  for (unsigned i = 0, e = Ops.size(); i != e; ++i) {
++    HasNIPtr |= Ops[i]->hasNonIntegralPointers();
+     ID.AddPointer(Ops[i]);
++  }
+   void *IP = nullptr;
+   SCEVMulExpr *S =
+     static_cast<SCEVMulExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
+@@ -2820,6 +2839,7 @@ ScalarEvolution::getOrCreateMulExpr(ArrayRef<const SCEV *> Ops,
+     addToLoopUseLists(S);
+   }
+   S->setNoWrapFlags(Flags);
++  S->setHasNIPtr(HasNIPtr);
+   return S;
+ }
+ 
+@@ -3631,8 +3591,11 @@ const SCEV *ScalarEvolution::getMinMaxExpr(unsigned Kind,
+   if (const SCEV *S = UniqueSCEVs.FindNodeOrInsertPos(ID, IP)) return S;
+   const SCEV **O = SCEVAllocator.Allocate<const SCEV *>(Ops.size());
+   std::uninitialized_copy(Ops.begin(), Ops.end(), O);
+-  SCEV *S = new (SCEVAllocator) SCEVMinMaxExpr(
++  SCEVMinMaxExpr *S = new (SCEVAllocator) SCEVMinMaxExpr(
+       ID.Intern(SCEVAllocator), static_cast<SCEVTypes>(Kind), O, Ops.size());
++  // For MinMaxExprs it's sufficient to see if the first Op has NI data, as the
++  // operands all need to be of the same type.
++  S->setHasNIPtr(Ops[0]->hasNonIntegralPointers());
+   UniqueSCEVs.InsertNode(S, IP);
+   addToLoopUseLists(S);
+   return S;
+@@ -3708,8 +3731,9 @@ const SCEV *ScalarEvolution::getUnknown(Value *V) {
+            "Stale SCEVUnknown in uniquing map!");
+     return S;
+   }
++  bool ValueIsNIPtr = getDataLayout().isNonIntegralPointerType(V->getType());
+   SCEV *S = new (SCEVAllocator) SCEVUnknown(ID.Intern(SCEVAllocator), V, this,
+-                                            FirstUnknown);
++                                            FirstUnknown, ValueIsNIPtr);
+   FirstUnknown = cast<SCEVUnknown>(S);
+   UniqueSCEVs.InsertNode(S, IP);
+   return S;
+diff --git llvm/test/Transforms/LoopStrengthReduce/nonintegral.ll llvm/test/Transforms/LoopStrengthReduce/nonintegral.ll
+index 5648e3aa74a..6936521f3a6 100644
+--- llvm/test/Transforms/LoopStrengthReduce/nonintegral.ll
++++ llvm/test/Transforms/LoopStrengthReduce/nonintegral.ll
+@@ -2,7 +2,7 @@
+ 
+ ; Address Space 10 is non-integral. The optimizer is not allowed to use
+ ; ptrtoint/inttoptr instructions. Make sure that this doesn't happen
+-target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128-ni:10:11:12"
++target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128-ni:10:11:12:13"
+ target triple = "x86_64-unknown-linux-gnu"
+ 
+ define void @japi1__unsafe_getindex_65028(i64 addrspace(10)* %arg) {
+@@ -43,3 +43,36 @@ if38:                                             ; preds = %L119
+ done:                                             ; preds = %if38
+   ret void
+ }
++
++; This is a bugpoint-reduced regression test - It doesn't make too much sense by itself,
++; but creates the correct SCEV expressions to reproduce the issue. See
++; https://github.com/JuliaLang/julia/issues/31156 for the original bug report.
++define void @"japi1_permutedims!_4259"(i64 %a, i64 %b, i64 %c, i64 %d, i64 %e, i64 %f, i1 %g, i8 addrspace(13)* %base) #0 {
++; CHECK-NOT: inttoptr
++; CHECK-NOT: ptrtoint
++; CHECK: getelementptr i8, i8 addrspace(13)* {{.*}}, i64 {{.*}}
++top:
++  br label %L42.L46_crit_edge.us
++
++L42.L46_crit_edge.us:                             ; preds = %L82.us.us.loopexit, %top
++  %value_phi11.us = phi i64 [ %a, %top ], [ %2, %L82.us.us.loopexit ]
++  %0 = sub i64 %value_phi11.us, %b
++  %1 = add i64 %0, %c
++  %spec.select = select i1 %g, i64 %d, i64 0
++  br label %L62.us.us
++
++L82.us.us.loopexit:                               ; preds = %L62.us.us
++  %2 = add i64 %e, %value_phi11.us
++  br label %L42.L46_crit_edge.us
++
++L62.us.us:                                        ; preds = %L62.us.us, %L42.L46_crit_edge.us
++  %value_phi21.us.us = phi i64 [ %6, %L62.us.us ], [ %spec.select, %L42.L46_crit_edge.us ]
++  %3 = add i64 %1, %value_phi21.us.us
++  %4 = getelementptr inbounds i8, i8 addrspace(13)* %base, i64 %3
++  %5 = load i8, i8 addrspace(13)* %4, align 1
++  %6 = add i64 %f, %value_phi21.us.us
++  br i1 %g, label %L82.us.us.loopexit, label %L62.us.us, !llvm.loop !1
++}
++
++!1 = distinct !{!1, !2}
++!2 = !{!"llvm.loop.isvectorized", i32 1}
+-- 
+2.25.1
+

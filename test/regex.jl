@@ -52,11 +52,18 @@
     subst = s"FROM: \g<name>\n MESSAGE: \1"
     @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
 
+    # Issue #36550
+    @test repr(s"\x") == "s\"\\x\""
+    @test repr(s"\\x") == "s\"\\\\x\""
+    @test repr(s"\\\x") == "s\"\\\\\\x\""
+    @test repr(s"x\\") == "s\"x\\\""
+    @test repr(s"a\1b") == "s\"a\\1b\""
+
     # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
-    @test findall(r"\w*", "foo bar") == [1:3, 4:3, 5:7, 8:7]
-    @test findall(r"\b", "foo bar") == [1:0, 4:3, 5:4, 8:7]
+    @test all(findall(r"\w*", "foo bar") .=== [1:3, 4:3, 5:7, 8:7]) # use === to compare empty ranges
+    @test all(findall(r"\b", "foo bar") .=== [1:0, 4:3, 5:4, 8:7])  # use === to compare empty ranges
 
     # count
     @test count(r"\w+", "foo bar") == 2
@@ -64,8 +71,21 @@
     @test count(r"\w*", "foo bar") == 4
     @test count(r"\b", "foo bar") == 4
 
+    # Unnamed subpatterns
+    let m = match(r"(.)(.)(.)", "xyz")
+        @test haskey(m, 1)
+        @test haskey(m, 2)
+        @test haskey(m, 3)
+        @test !haskey(m, 44)
+        @test (m[1], m[2], m[3]) == ("x", "y", "z")
+        @test sprint(show, m) == "RegexMatch(\"xyz\", 1=\"x\", 2=\"y\", 3=\"z\")"
+    end
+
     # Named subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
+        @test haskey(m, :a)
+        @test haskey(m, "b")
+        @test !haskey(m, "foo")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
         @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
     end
@@ -139,4 +159,7 @@
     # Test that PCRE throws the correct kind of error
     # TODO: Uncomment this once the corresponding change has propagated to CI
     #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
+
+    # test that we can get the error message of negative error codes
+    @test Base.PCRE.err_message(Base.PCRE.ERROR_NOMEMORY) isa String
 end
