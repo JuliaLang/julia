@@ -41,6 +41,7 @@ display([1])
 display([1 2; 3 4])
 @time 1+1
 ; pwd
+$CTRL_C
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
