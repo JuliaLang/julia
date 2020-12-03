@@ -47,6 +47,8 @@ function showerror(io::IO, ex::BoundsError)
                 print(io, ex.i)
             elseif ex.i isa AbstractString
                 show(io, ex.i)
+            elseif ex.i isa BitArray
+                summary(io, ex.i)
             else
                 for (i, x) in enumerate(ex.i)
                     i > 1 && print(io, ", ")
