@@ -26,6 +26,12 @@
 #define SEH_END()
 #endif
 
+#if defined(__CET__) && __CET__ & 1 != 0
+#define CET_START() endbr64
+#else
+#define CET_START()
+#endif
+
 #define XX(name) \
 DEBUGINFO(name); \
 .global name; \
@@ -33,7 +39,7 @@ DEBUGINFO(name); \
 SEH_START1(name); \
 name##:; \
 SEH_START2(); \
-    endbr64; \
+    CET_START(); \
     mov CNAME(name##_addr)(%rip),%rax; \
     jmpq *%rax; \
     ud2; \
