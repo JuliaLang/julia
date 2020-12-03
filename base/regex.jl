@@ -397,7 +397,7 @@ function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; ov
 end
 
 """
-    findall(c :: AbstractChar, s :: AbstractString)
+    findall(c::AbstractChar, s::AbstractString)
   
 Return a vector `I` of the indices of `s` where `s[i] == c`. If there are no such 
 elements in `s`, return an empty array.
@@ -414,7 +414,7 @@ julia> findall('a', "batman")
      This method requires at least Julia 1.6.
 
 """
-findall(c :: AbstractChar, s :: AbstractString) = findall(isequal(c),s)
+findall(c::AbstractChar, s::AbstractString) = findall(isequal(c),s)
     
 
 """
