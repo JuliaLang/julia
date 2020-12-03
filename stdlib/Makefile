@@ -21,6 +21,8 @@ JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
 
 # Initialize this with JLLs that aren't in deps/Versions.make
 JLL_NAMES := MozillaCACerts_jll
+get-MozillaCACerts_jll:
+install-MozillaCACerts_jll:
 
 # Define rule to download `StdlibArtifacts.toml` files for each JLL we bundle.
 define download-artifacts-toml
@@ -29,10 +31,12 @@ $(1)_STDLIB_PATH := $$(JULIAHOME)/stdlib/$$($(1)_JLL_NAME)_jll
 $(1)_JLL_VER ?= $$(shell [ -f $$($(1)_STDLIB_PATH)/Project.toml ] && grep "^version" $$($(1)_STDLIB_PATH)/Project.toml | sed -E 's/version[[:space:]]*=[[:space:]]*"?([^"]+)"?/\1/')
 
 $$($(1)_STDLIB_PATH)/StdlibArtifacts.toml:
-	$(JLDOWNLOAD) $$@ https://github.com/JuliaBinaryWrappers/$$($(1)_JLL_NAME)_jll.jl/raw/$$($(1)_JLL_NAME)-$$($(1)_JLL_VER)/Artifacts.toml
+	$(JLDOWNLOAD) $$@ https://github.com/JuliaBinaryWrappers/$$($(1)_JLL_NAME)_jll.jl/raw/$$($(1)_JLL_NAME)-v$$($(1)_JLL_VER)/Artifacts.toml
 get-$$($(1)_JLL_NAME)_jll: $$($(1)_STDLIB_PATH)/StdlibArtifacts.toml
+install-$$($(1)_JLL_NAME)_jll: get-$$($(1)_JLL_NAME)_jll
 endef
 $(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
+
 
 STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
           Future InteractiveUtils LazyArtifacts Libdl LibGit2 LinearAlgebra Logging \
@@ -63,8 +67,8 @@ $(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/
 
 STDLIBS_LINK_TARGETS := $(addprefix $(build_datarootdir)/julia/stdlib/$(VERSDIR)/,$(STDLIBS))
 
-getall get: $(addprefix get-, $(STDLIBS_EXT) $(JLLS))
-install: $(addprefix install-, $(STDLIBS_EXT)) $(STDLIBS_LINK_TARGETS)
+getall get: $(addprefix get-, $(STDLIBS_EXT) $(JLL_NAMES))
+install: $(addprefix install-, $(STDLIBS_EXT) $(JLL_NAMES)) $(STDLIBS_LINK_TARGETS)
 clean: $(addprefix clean-, $(STDLIBS_EXT)) $(CLEAN_TARGETS)
 distclean: $(addprefix distclean-, $(STDLIBS_EXT)) clean
 checksumall: $(addprefix checksum-, $(STDLIBS_EXT))
