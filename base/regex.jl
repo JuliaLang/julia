@@ -398,7 +398,7 @@ end
 
 """
     count(
-        pattern::Union{AbstractString,AbstractPattern},
+        pattern::Union{AbstractChar,AbstractString,AbstractPattern},
         string::AbstractString;
         overlap::Bool = false,
     )
@@ -412,7 +412,7 @@ original string, otherwise they must be from disjoint character ranges.
 !!! compat "Julia 1.3"
      This method requires at least Julia 1.3.
 """
-function count(t::Union{AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
+function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
     i, e = firstindex(s), lastindex(s)
     while true
