@@ -904,6 +904,7 @@
        (global ,name) (const ,name)
        (scope-block
         (block
+         (hardscope)
          (local-def ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
@@ -934,6 +935,7 @@
        ;; "inner" constructors
        (scope-block
         (block
+         (hardscope)
          (global ,name)
          ,@(map (lambda (c)
                   (rewrite-ctor c name params field-names field-types))
