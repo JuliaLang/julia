@@ -702,6 +702,9 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
+_hypot(x::Float16, y::Float16) = Float16(_hypot(Float32(x), Float32(y)))
+_hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
+
 function _hypot(x...)
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
