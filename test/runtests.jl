@@ -65,6 +65,7 @@ end
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
+move_to_node1("Distributed")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
