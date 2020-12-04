@@ -62,6 +62,7 @@ else
 $(eval $(call copy_csl,$(call gen_libname,pthread,0)))
 endif
 
+get-csl:
 clean-csl:
 	-rm -f $(build_shlibdir)/libgfortran*$(SHLIB_EXT)*
 	-rm -f $(build_shlibdir)/libquadmath*$(SHLIB_EXT)*
