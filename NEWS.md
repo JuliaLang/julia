@@ -72,7 +72,7 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
-* Locks now automatically inhibit finalizers from running, to avoid deadlock ([#TBD]).
+* Locks now automatically inhibit finalizers from running, to avoid deadlock ([#38487]).
 * New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption ([#34543]).
 
 Build system changes
