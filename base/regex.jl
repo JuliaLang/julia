@@ -417,7 +417,7 @@ function count(t::Union{AbstractString,AbstractPattern}, s::AbstractString; over
     i, e = firstindex(s), lastindex(s)
     while true
         r = findnext(t, s, i)
-        isnothing(r) && break
+        r === nothing && break
         n += 1
         j = overlap || isempty(r) ? first(r) : last(r)
         j > e && break
