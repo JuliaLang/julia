@@ -6348,15 +6348,18 @@ end
 
 """
     trexc!(compq, ifst, ilst, T, Q) -> (T, Q)
+    trexc!(ifst, ilst, T, Q) -> (T, Q)
 
-Reorder the Schur factorization of a matrix. If `compq = V`, the Schur
-vectors `Q` are reordered. If `compq = N` they are not modified. `ifst`
-and `ilst` specify the reordering of the vectors.
+Reorder the Schur factorization `T` of a matrix, such that the diagonal block
+of `T` with row index `ifst` is moved to row index `ilst`. If `compq = V`, the Schur
+vectors `Q` are reordered. If `compq = N` they are not modified. The 4-arg method
+calls the 5-arg method with `compq = V`.
 """
 trexc!(compq::AbstractChar, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix, Q::AbstractMatrix)
 
 """
-    trsen!(compq, job, select, T, Q) -> (T, Q, w, s, sep)
+    trsen!(job, compq, select, T, Q) -> (T, Q, w, s, sep)
+    trsen!(select, T, Q) -> (T, Q, w, s, sep)
 
 Reorder the Schur factorization of a matrix and optionally finds reciprocal
 condition numbers. If `job = N`, no condition numbers are found. If `job = E`,
@@ -6365,7 +6368,8 @@ only the condition number for this cluster of eigenvalues is found. If
 If `job = B` then the condition numbers for the cluster and subspace are
 found. If `compq = V` the Schur vectors `Q` are updated. If `compq = N`
 the Schur vectors are not modified. `select` determines which
-eigenvalues are in the cluster.
+eigenvalues are in the cluster. The 3-arg method calls the 5-arg method
+with `job = N` and `compq = V`.
 
 Returns `T`, `Q`, reordered eigenvalues in `w`, the condition number of the
 cluster of eigenvalues `s`, and the condition number of the invariant subspace
