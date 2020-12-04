@@ -387,7 +387,7 @@ function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; ov
     i, e = firstindex(s), lastindex(s)
     while true
         r = findnext(t, s, i)
-        isnothing(r) && break
+        r === nothing && break
         push!(found, r)
         j = overlap || isempty(r) ? first(r) : last(r)
         j > e && break
