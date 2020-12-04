@@ -87,7 +87,8 @@ end
 
 ## unit tests of project parsing ##
 
-import Base: SHA1, PkgId, load_path, identify_package, locate_package, version_slug, dummy_uuid
+import Base: SHA1, PkgId, load_path, identify_package, locate_package, version_slug,
+            dummy_uuid, modulnamehint, require
 import UUIDs: UUID, uuid4, uuid_version
 import Random: shuffle, randstring
 using Test
@@ -267,6 +268,43 @@ end
 end
 
 module NotPkgModule; end
+
+@testset "modul name hints and require errors" begin
+    @test modulnamehint("Fooo") == "Foo"
+    @test modulnamehint("fooo") == "Foo"
+    @test modulnamehint("foo") == "Foo"
+    @test modulnamehint("xfooo") == "Foo"
+    @test modulnamehint("UUID") == "UUIDs"
+    @test modulnamehint("uuid") == "UUIDs"
+    @test modulnamehint("Rand") == "Random"
+    @test modulnamehint("ran") == nothing
+    @test modulnamehint("infoodrest") == nothing
+    @test modulnamehint("fo") == nothing
+    @test modulnamehint("xfoxox") == nothing
+
+    #test try-catch error for empty load_path()
+    l_p = copy(LOAD_PATH)
+    empty!(LOAD_PATH)
+    @test modulnamehint("Rand") == "Random"
+    append!(LOAD_PATH, l_p)
+
+    # using foo - Error with modulmamehint = "Foo"
+    @test_throws ArgumentError("""Did you mean Foo? Your entry foo is
+    not found in current path. Correct your entry and try again, or run
+    `import Pkg; Pkg.add("foo")` to install the foo package.
+    """) using foo
+
+    # using xfoxox - Error with modulnamehint = nothing
+    @test_throws ArgumentError("""Package xfoxox not found in current path:
+    - Run `import Pkg; Pkg.add("xfoxox")` to install the xfoxox package.
+    """) using xfoxox
+
+    # Error - xfoxox does not exist
+    @test_throws ArgumentError require(Test, :xfoxox)
+
+    # Warning - Loading Foo into Test
+    @test_logs (:warn, r"Loading Foo into Test from project dependency") require(Test, :Foo)
+end
 
 @testset "project & manifest import" begin
     @test !@isdefined Foo

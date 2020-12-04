@@ -863,10 +863,19 @@ function require(into::Module, mod::Symbol)
     if uuidkey === nothing
         where = PkgId(into)
         if where.uuid === nothing
-            throw(ArgumentError("""
+            hint = modulnamehint(String(mod)) # hint: String, if hint found, or nothing
+            if isnothing(hint)
+                throw(ArgumentError("""
                 Package $mod not found in current path:
                 - Run `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package.
                 """))
+            else
+                throw(ArgumentError("""
+                Did you mean $hint? Your entry $mod is
+                not found in current path. Correct your entry and try again, or run
+                `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package.
+                """))
+            end
         else
             s = """
             Package $(where.name) does not have $mod in its dependencies:
@@ -894,6 +903,27 @@ function require(into::Module, mod::Symbol)
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
     return require(uuidkey)
+end
+
+# return hint for modulname (if similar name in project deps / Stdlib) or return nothing
+function modulnamehint(tname::AbstractString)
+    hnames = vcat(try collect(keys(get(parsed_toml(load_path()[1]), "deps", nothing)))
+            catch; String[] end, isdir(Sys.STDLIB) && readdir(Sys.STDLIB))
+    ltn = length(tname)
+    ((ltn < 3) || isempty(hnames)) && return nothing
+    scores = similar(hnames, Int64)
+    for (index, hname) in enumerate(hnames)
+        lhn = length(hname)
+        if (ltn >= lhn)
+            scores[index] = ltn - lhn + (contains(tname, hname) ? 0 :
+            contains(lowercase(tname), lowercase(hname)) ? 1 : 4)
+        else
+            scores[index] = lhn - ltn + (contains(hname, tname) ? 0 :
+            contains(lowercase(hname), lowercase(tname)) ? 1 : 4)
+        end
+    end
+    x, i = findmin(scores)
+    return (x < 4) ? hnames[i] : nothing
 end
 
 mutable struct PkgOrigin
