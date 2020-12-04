@@ -745,9 +745,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_init_tasks();
     jl_init_root_task(stack_lo, stack_hi);
-#ifdef ENABLE_TIMINGS
-    jl_root_task->timing_stack = jl_root_timing;
-#endif
     jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
