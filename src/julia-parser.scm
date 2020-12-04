@@ -2263,7 +2263,10 @@
              (loop (read-char p) b e 0))))
 
       ((and (eqv? c #\$) (not raw))
-       (let ((ex (parse-interpolate s)))
+       (let* ((ex (parse-interpolate s))
+              ;; wrap interpolated literal strings in (string ) so we can
+              ;; distinguish them from the surrounding text (issue #38501)
+              (ex (if (string? ex) `(string ,ex) ex)))
          (loop (read-char p)
                (open-output-string)
                (list* ex (io.tostring! b) e)

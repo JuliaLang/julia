@@ -2308,7 +2308,13 @@
    'bracescat (lambda (e) (error "{ } matrix syntax is discontinued"))
 
    'string
-   (lambda (e) (expand-forms `(call (top string) ,@(cdr e))))
+   (lambda (e)
+     (expand-forms
+      `(call (top string) ,@(map (lambda (s)
+                                   (if (and (pair? s) (eq? (car s) 'string))
+                                       (cadr s)
+                                       s))
+                                 (cdr e)))))
 
    '|::|
    (lambda (e)
