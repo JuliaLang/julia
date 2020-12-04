@@ -217,7 +217,7 @@ Standard library changes
 #### SparseArrays
 
 * Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns,
-  and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
+  and display small sparse matrices by an `Matrix`-like 2d layout of their contents ([#33821]).
 * New convenient `spdiagm([m, n,] v::AbstractVector)` methods which call
   `spdiagm([m, n,] 0 => v)`, consistently with their dense `diagm` counterparts ([#37684]).
 
