@@ -2642,3 +2642,6 @@ end
     @test ncalls_in_lowered(quote a, _... = b, c end, GlobalRef(Base, :rest)) == 0
     @test ncalls_in_lowered(quote a, _... = (b...,) end, GlobalRef(Base, :rest)) == 0
 end
+
+# issue #38501
+@test :"a $b $("str") c" == Expr(:string, "a ", :b, " ", Expr(:string, "str"), " c")

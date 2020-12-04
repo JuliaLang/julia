@@ -152,6 +152,8 @@ end
 @test_repr ":(:(:(x)))"
 @test_repr "-\"\""
 @test_repr "-(<=)"
+@test_repr "\$x"
+@test_repr "\$(\"x\")"
 
 # order of operations
 @test_repr "x + y * z"
