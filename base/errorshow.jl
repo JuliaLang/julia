@@ -31,7 +31,7 @@ showerror(io::IO, ex) = show(io, ex)
 
 show_index(io::IO, x::Any) = show(io, x)
 show_index(io::IO, x::Slice) = show_index(io, x.indices)
-show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
+show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
@@ -47,8 +47,6 @@ function showerror(io::IO, ex::BoundsError)
                 print(io, ex.i)
             elseif ex.i isa AbstractString
                 show(io, ex.i)
-            elseif ex.i isa BitArray
-                summary(io, ex.i)
             else
                 for (i, x) in enumerate(ex.i)
                     i > 1 && print(io, ", ")
