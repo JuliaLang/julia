@@ -279,7 +279,7 @@ module NotPkgModule; end
     @test modulnamehint("Rand") == "Random"
     @test modulnamehint("ran") == nothing
     @test modulnamehint("infoodrest") == nothing
-    @test modulnamehint("fo") == nothing
+    @test modulnamehint("xx") == nothing
     @test modulnamehint("xfoxox") == nothing
 
     #test try-catch error for empty load_path()
@@ -288,16 +288,18 @@ module NotPkgModule; end
     @test modulnamehint("Rand") == "Random"
     append!(LOAD_PATH, l_p)
 
-    # using foo - Error with modulmamehint = "Foo"
+    # using/import foo - Error with modulmamehint = "Foo"
     @test_throws ArgumentError("""Did you mean Foo? Your entry foo is
     not found in current path. Correct your entry and try again, or run
     `import Pkg; Pkg.add("foo")` to install the foo package.
     """) using foo
+    @test_throws ArgumentError import foo
 
-    # using xfoxox - Error with modulnamehint = nothing
+    # using/import xfoxox - Error with modulnamehint = nothing
     @test_throws ArgumentError("""Package xfoxox not found in current path:
     - Run `import Pkg; Pkg.add("xfoxox")` to install the xfoxox package.
     """) using xfoxox
+    @test_throws ArgumentError import xfoxox
 
     # Error - xfoxox does not exist
     @test_throws ArgumentError require(Test, :xfoxox)

@@ -906,24 +906,18 @@ function require(into::Module, mod::Symbol)
 end
 
 # return hint for modulname (if similar name in project deps / Stdlib) or return nothing
-function modulnamehint(tname::AbstractString)
-    hnames = vcat(try collect(keys(get(parsed_toml(load_path()[1]), "deps", nothing)))
+function modulnamehint(tn::AbstractString)
+    hns = vcat(try collect(keys(get(parsed_toml(load_path()[1]), "deps", nothing)))
             catch; String[] end, isdir(Sys.STDLIB) && readdir(Sys.STDLIB))
-    ltn = length(tname)
-    ((ltn < 3) || isempty(hnames)) && return nothing
-    scores = similar(hnames, Int64)
-    for (index, hname) in enumerate(hnames)
-        lhn = length(hname)
-        if (ltn >= lhn)
-            scores[index] = ltn - lhn + (contains(tname, hname) ? 0 :
-            contains(lowercase(tname), lowercase(hname)) ? 1 : 4)
-        else
-            scores[index] = lhn - ltn + (contains(hname, tname) ? 0 :
-            contains(lowercase(hname), lowercase(tname)) ? 1 : 4)
-        end
+    ((length(tn) < 3) || isempty(hns)) && return nothing
+    scores = similar(hns, Int64)
+    for (index, hn) in enumerate(hns)
+        (length(tn) > length(hn)) ? (o1 = tn ; o2 = hn) : (o1 = hn; o2 = tn)
+        scores[index] = length(o1) - length(o2) + (contains(o1, o2) ? 0 :
+                        contains(lowercase(o1), lowercase(o2)) ? 1 : 4)
     end
     x, i = findmin(scores)
-    return (x < 4) ? hnames[i] : nothing
+    return (x < 4) ? hns[i] : nothing
 end
 
 mutable struct PkgOrigin
