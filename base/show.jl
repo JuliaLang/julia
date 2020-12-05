@@ -999,7 +999,7 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
     else
         print(io, "Toplevel MethodInstance thunk")
         # `thunk` is not very much information to go on. If this
-        # MethodInstance is part of a stacktrace, it get location info
+        # MethodInstance is part of a stacktrace, it gets location info
         # added by other means.  But if it isn't, then we should try
         # to print a little more identifying information.
         if !from_stackframe
