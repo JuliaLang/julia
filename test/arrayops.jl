@@ -2842,7 +2842,7 @@ end
     b = IOBuffer()
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 2-element BitArray{1}]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 2-element BitVector]"
 
     # Also test : directly for custom types for which it may appear as-is
     err = BoundsError(x, (10, :))
