@@ -460,7 +460,6 @@ public:
 
     std::map<size_t, ObjectInfo, revcomp>& getObjectMap() JL_NOTSAFEPOINT
     {
-        uv_rwlock_rdlock(&threadsafe);
         return objectmap;
     }
 };
@@ -544,7 +543,11 @@ static int lookup_pointer(
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
 
+    // DWARFContext/DWARFUnit update some internal tables during these queries, so
+    // a lock is needed.
+    uv_rwlock_wrlock(&threadsafe);
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+    uv_rwlock_wrunlock(&threadsafe);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
@@ -567,7 +570,9 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
+            uv_rwlock_wrlock(&threadsafe);
             info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+            uv_rwlock_wrunlock(&threadsafe);
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -1215,6 +1220,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
+    uv_rwlock_wrlock(&threadsafe);
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
 
@@ -1230,7 +1236,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         }
         found = 1;
     }
-    uv_rwlock_rdunlock(&threadsafe);
+    uv_rwlock_wrunlock(&threadsafe);
     return found;
 }
 
@@ -1675,6 +1681,7 @@ extern "C"
 uint64_t jl_getUnwindInfo(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
+    uv_rwlock_rdlock(&threadsafe);
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the start of the section (if found)
