@@ -734,9 +734,14 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
         }
     }
 #endif
+#if JL_LLVM_VERSION >= 120000
+    // TODO: what is the performance characteristics of this?
+    cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
+#else
     auto key = ES.allocateVModule();
     // TODO: what is the performance characteristics of this?
     cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx), key));
+#endif
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
