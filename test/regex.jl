@@ -80,7 +80,7 @@
     @test count('a', "aaa", overlap=true) == 3
     @test count('a', "") == 0
     @test count('→', "OH⁻ + H₃CBr →  (HOH₃CBr⁻)† → HOCH₃ + Br⁻") == 2
-    
+
     # Unnamed subpatterns
     let m = match(r"(.)(.)(.)", "xyz")
         @test haskey(m, 1)
