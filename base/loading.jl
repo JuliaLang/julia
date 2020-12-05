@@ -863,7 +863,7 @@ function require(into::Module, mod::Symbol)
     if uuidkey === nothing
         where = PkgId(into)
         if where.uuid === nothing
-            hint = modulnamehint(String(mod)) # hint: String, if hint found, or nothing
+            hint = modulnamehint(String(mod))
             if isnothing(hint)
                 throw(ArgumentError("""
                 Package $mod not found in current path:
@@ -905,19 +905,19 @@ function require(into::Module, mod::Symbol)
     return require(uuidkey)
 end
 
-# return hint for modulname (if similar name in project deps / Stdlib) or return nothing
+# return hint for modulname (if similar name in project deps / Stdlib) or nothing
 function modulnamehint(tn::AbstractString)
     hns = vcat(try collect(keys(get(parsed_toml(load_path()[1]), "deps", nothing)))
-            catch; String[] end, isdir(Sys.STDLIB) && readdir(Sys.STDLIB))
+            catch; String[] end, isdir(Sys.STDLIB) ? readdir(Sys.STDLIB) : String[])
     ((length(tn) < 3) || isempty(hns)) && return nothing
     scores = similar(hns, Int64)
     for (index, hn) in enumerate(hns)
-        (length(tn) > length(hn)) ? (o1 = tn ; o2 = hn) : (o1 = hn; o2 = tn)
+        (length(tn) >= length(hn)) ? (o1 = tn ; o2 = hn) : (o1 = hn; o2 = tn)
         scores[index] = length(o1) - length(o2) + (contains(o1, o2) ? 0 :
                         contains(lowercase(o1), lowercase(o2)) ? 1 : 4)
     end
-    x, i = findmin(scores)
-    return (x < 4) ? hns[i] : nothing
+    score, index = findmin(scores)
+    return (score < 4) ? hns[index] : nothing
 end
 
 mutable struct PkgOrigin

@@ -269,7 +269,7 @@ end
 
 module NotPkgModule; end
 
-@testset "modul name hints and require errors" begin
+@testset "require exceptions and modul name hints" begin
     @test modulnamehint("Fooo") == "Foo"
     @test modulnamehint("fooo") == "Foo"
     @test modulnamehint("foo") == "Foo"
@@ -279,10 +279,10 @@ module NotPkgModule; end
     @test modulnamehint("Rand") == "Random"
     @test modulnamehint("ran") == nothing
     @test modulnamehint("infoodrest") == nothing
-    @test modulnamehint("xx") == nothing
+    @test modulnamehint("fo") == nothing
     @test modulnamehint("xfoxox") == nothing
 
-    #test try-catch error for empty load_path()
+    #test Stdlib still works with empty load_path() for Project
     l_p = copy(LOAD_PATH)
     empty!(LOAD_PATH)
     @test modulnamehint("Rand") == "Random"
@@ -301,11 +301,11 @@ module NotPkgModule; end
     """) using xfoxox
     @test_throws ArgumentError import xfoxox
 
-    # Error - xfoxox does not exist
+    # require Error - xfoxox does not exist
     @test_throws ArgumentError require(Test, :xfoxox)
 
-    # Warning - Loading Foo into Test
-    @test_logs (:warn, r"Loading Foo into Test from project dependency") require(Test, :Foo)
+    # require Warning - Loading Foo into Test
+    @test_logs (:warn, r"Loading Foo into Test from") require(Test, :Foo)
 end
 
 @testset "project & manifest import" begin
