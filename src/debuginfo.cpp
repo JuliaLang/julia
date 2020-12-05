@@ -227,16 +227,13 @@ public:
         if (!SavedObject.first) {
             auto NewBuffer = MemoryBuffer::getMemBufferCopy(
                     Object.getData(), Object.getFileName());
-            auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
-            assert(NewObj);
-            SavedObject = std::make_pair(std::move(*NewObj), std::move(NewBuffer));
+            auto NewObj = cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
+            SavedObject = std::make_pair(std::move(NewObj), std::move(NewBuffer));
         }
         const object::ObjectFile &debugObj = *SavedObject.first.release();
         SavedObject.second.release();
 
-        object::section_iterator Section = debugObj.section_begin();
         object::section_iterator EndSection = debugObj.section_end();
-
         std::map<StringRef, object::SectionRef, strrefcomp> loadedSections;
         for (const object::SectionRef &lSection: Object.sections()) {
 #if JL_LLVM_VERSION >= 100000
@@ -322,10 +319,7 @@ public:
         uint64_t SectionLoadOffset = 1; // The real offset shouldn't be 1.
         uint8_t *catchjmp = NULL;
         for (const object::SymbolRef &sym_iter : debugObj.symbols()) {
-            StringRef sName;
-            auto sNameOrError = sym_iter.getName();
-            assert(sNameOrError);
-            sName = sNameOrError.get();
+            StringRef sName = cantFail(sym_iter.getName());
             uint8_t **pAddr = NULL;
             if (sName.equals("__UnwindData")) {
                 pAddr = &UnwindData;
@@ -334,23 +328,16 @@ public:
                 pAddr = &catchjmp;
             }
             if (pAddr) {
-                uint64_t Addr, SectionAddr, SectionLoadAddr;
-                auto AddrOrError = sym_iter.getAddress();
-                assert(AddrOrError);
-                Addr = AddrOrError.get();
-                auto SectionOrError = sym_iter.getSection();
-                assert(SectionOrError);
-                Section = SectionOrError.get();
+                uint64_t Addr = cantFail(sym_iter.getAddress());
+                auto Section = cantFail(sym_iter.getSection());
                 assert(Section != EndSection && Section->isText());
-                SectionAddr = Section->getAddress();
+                uint64_t SectionAddr = Section->getAddress();
 #if JL_LLVM_VERSION >= 100000
-                auto secName = Section->getName();
-                assert(secName);
-                SectionLoadAddr = getLoadAddress(*secName);
+                sName = cantFail(Section->getName());
 #else
                 Section->getName(sName);
-                SectionLoadAddr = getLoadAddress(sName);
 #endif
+                uint64_t SectionLoadAddr = getLoadAddress(sName);
                 Addr -= SectionAddr - SectionLoadAddr;
                 *pAddr = (uint8_t*)Addr;
                 if (SectionAddrCheck)
@@ -393,32 +380,22 @@ public:
         bool first = true;
         for (const auto &sym_size : symbols) {
             const object::SymbolRef &sym_iter = sym_size.first;
-            auto SymbolTypeOrError = sym_iter.getType();
-            assert(SymbolTypeOrError);
-            object::SymbolRef::Type SymbolType = SymbolTypeOrError.get();
+            object::SymbolRef::Type SymbolType = cantFail(sym_iter.getType());
             if (SymbolType != object::SymbolRef::ST_Function) continue;
-            auto AddrOrError = sym_iter.getAddress();
-            assert(AddrOrError);
-            uint64_t Addr = AddrOrError.get();
-            auto SectionOrError = sym_iter.getSection();
-            assert(SectionOrError);
-            Section = SectionOrError.get();
+            uint64_t Addr = cantFail(sym_iter.getAddress());
+            auto Section = cantFail(sym_iter.getSection());
             if (Section == EndSection) continue;
             if (!Section->isText()) continue;
             uint64_t SectionAddr = Section->getAddress();
 #if JL_LLVM_VERSION >= 100000
-            Expected<StringRef> secName = Section->getName();
-            assert(secName);
-            uint64_t SectionLoadAddr = getLoadAddress(*secName);
+            StringRef secName = cantFail(Section->getName());
 #else
             StringRef secName;
             Section->getName(secName);
-            uint64_t SectionLoadAddr = getLoadAddress(secName);
 #endif
+            uint64_t SectionLoadAddr = getLoadAddress(secName);
             Addr -= SectionAddr - SectionLoadAddr;
-            auto sNameOrError = sym_iter.getName();
-            assert(sNameOrError);
-            StringRef sName = sNameOrError.get();
+            StringRef sName = cantFail(sym_iter.getName());
             uint64_t SectionSize = Section->getSize();
             size_t Size = sym_size.second;
 #if defined(_OS_WINDOWS_)
@@ -821,9 +798,8 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
         }
         if (distance != (size_t)-1) {
             if (needs_saddr) {
-                auto addr = sym_found.getAddress();
-                assert(addr);
-                *saddr = (void*)(uintptr_t)(addr.get() - slide);
+                uintptr_t addr = cantFail(sym_found.getAddress());
+                *saddr = (void*)(addr - slide);
                 needs_saddr = false;
             }
             if (needs_name) {
