@@ -101,6 +101,7 @@ New library functions
 New library features
 --------------------
 
+* The `redirect_*` functions now accept `devnull` to discard all output redirected to it, and as an empty input. ([#36146]).
 * The `redirect_*` functions can now be called on `IOContext` objects. ([#36688]).
 * `findfirst`, `findnext`, `findlast`, and `findall` now support `AbstractVector{<:Union{Int8,UInt8}}` (pattern, array) arguments ([#37283]).
 * New constructor `NamedTuple(iterator)` that constructs a named tuple from a key-value pair iterator.
