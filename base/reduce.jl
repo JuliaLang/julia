@@ -810,6 +810,9 @@ julia> findmax([1, 7, 7, NaN])
 findmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)
 _rf_findmax((fm, m), (fx, x)) = isless(fm, fx) ? (fx, x) : (fm, m)
 
+findmax(a) = _findmax(a, :)
+_findmax(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmax, pairs(a) )
+
 """
     findmin(f, domain) -> (f(x), x)
     findmin(f)
@@ -856,11 +859,8 @@ julia> findmin([1, 7, 7, NaN])
 findmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)
 _rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
 
-findmax(a) = _findmax(a, :)
-_findmax(a, ::Colon) = findmax(idx -> a[idx], keys(a))
-
 findmin(a) = _findmin(a, :)
-_findmin(a, ::Colon) = findmin(idx -> a[idx], keys(a))
+_findmin(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmin, pairs(a) )
 
 """
     argmax(f, domain)
