@@ -161,7 +161,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, vectors and matrices are concatenated using [`hcat`](@ref), [`vcat`](@ref) and
     [`hvcat`](@ref), not `c`, `rbind` and `cbind` like in R.
   * In Julia, a range like `a:b` is not shorthand for a vector like in R, but is a specialized `AbstractRange`
-    object that is used for iteration without high memory overhead. To convert a range into a vector, use
+    object that is used for iteration. To convert a range into a vector, use
     [`collect(a:b)`](@ref).
   * Julia's [`max`](@ref) and [`min`](@ref) are the equivalent of `pmax` and `pmin` respectively
     in R, but both arguments need to have the same dimensions.  While [`maximum`](@ref) and [`minimum`](@ref)
