@@ -116,7 +116,7 @@ filtered, before any other work is done to construct the log record data
 structure itself.
 
 # Examples
-```julia
+```julia-repl
 julia> Logging.LogLevel(0) == Logging.Info
 true
 ```
