@@ -5625,7 +5625,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     AttributeList attributes; // function declaration attributes
     if (props.cc == jl_returninfo_t::SRet) {
         unsigned argno = 1;
-        attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::StructRet);
+        Attribute sret = Attribute::getWithStructRetType(jl_LLVMContext, fsig.front()->getPointerElementType());
+        attributes = attributes.addAttribute(jl_LLVMContext, argno, sret);
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoAlias);
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoCapture);
     }

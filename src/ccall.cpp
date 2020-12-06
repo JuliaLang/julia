@@ -1014,7 +1014,7 @@ std::string generate_func_sig(const char *fname)
         else if (abi->use_sret((jl_datatype_t*)rt)) {
             AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
-            retattrs.addAttribute(Attribute::StructRet);
+            retattrs.addStructRetAttr(lrt);
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
             paramattrs.push_back(std::move(retattrs));
