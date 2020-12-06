@@ -900,13 +900,26 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test !isempty(d26939)
     @test count(d26939) == 0
     empty!(d26939)
-    (@noinline d -> d[big(12345)] = 1)(d26939)
-    (@noinline d -> d[big(54321)] = 1)(d26939)
+    for i in 1:8
+        (@noinline (d, i) -> d[big(i + 12345)] = 1)(d26939, i)
+    end
     lock(GC.gc, d26939)
-    @test length(d26939.ht) == 2
-    @test length(d26939) == 2
+    @test length(d26939.ht) == 8
+    @test length(d26939) == 8
     @test !isempty(d26939)
     @test count(d26939) == 0
+    @test !haskey(d26939, nothing)
+    @test_throws KeyError(nothing) d26939[nothing]
+    @test_throws KeyError(nothing) get(d26939, nothing, 1)
+    @test_throws KeyError(nothing) get(() -> 1, d26939, nothing)
+    @test_throws KeyError(nothing) pop!(d26939, nothing)
+    @test getkey(d26939, nothing, 321) === 321
+    @test pop!(d26939, nothing, 321) === 321
+    @test delete!(d26939, nothing) === d26939
+    @test length(d26939.ht) == 8
+    @test_throws ArgumentError d26939[nothing] = 1
+    @test_throws ArgumentError get!(d26939, nothing, 1)
+    @test_throws ArgumentError get!(() -> 1, d26939, nothing)
     Base._cleanup_locked(d26939)
     @test length(d26939.ht) == 0
 

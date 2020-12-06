@@ -81,12 +81,16 @@ end
 sizehint!(d::WeakKeyDict, newsz) = sizehint!(d.ht, newsz)
 empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
 
+IteratorSize(::Type{<:WeakKeyDict}) = SizeUnknown()
+
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
 trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 
 function setindex!(wkh::WeakKeyDict{K}, v, key) where K
     !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
+    # 'nothing' is not valid both because 'finalizer' will reject it,
+    # and because we therefore use it as a sentinel value
     key === nothing && throw(ArgumentError("`nothing` is not a valid key for type WeakKeyDict"))
     lock(wkh) do
         _cleanup_locked(wkh)
@@ -103,7 +107,7 @@ function setindex!(wkh::WeakKeyDict{K}, v, key) where K
 end
 function get!(wkh::WeakKeyDict{K}, key, default) where {K}
     v = lock(wkh) do
-        if haskey(wkh.ht, key)
+        if key !== nothing && haskey(wkh.ht, key)
             wkh.ht[key]
         else
             wkh[key] = default
@@ -113,7 +117,7 @@ function get!(wkh::WeakKeyDict{K}, key, default) where {K}
 end
 function get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
     v = lock(wkh) do
-        if haskey(wkh.ht, key)
+        if key !== nothing && haskey(wkh.ht, key)
             wkh.ht[key]
         else
             wkh[key] = default()
@@ -132,14 +136,56 @@ function getkey(wkh::WeakKeyDict{K}, kk, default) where K
 end
 
 map!(f, iter::ValueIterator{<:WeakKeyDict})= map!(f, values(iter.dict.ht))
-get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
-get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
-pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
-pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
-delete!(wkh::WeakKeyDict, key) = (lock(() -> delete!(wkh.ht, key), wkh); wkh)
-empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
-haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, key), wkh)
-getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key), wkh)
+
+function get(wkh::WeakKeyDict{K}, key, default) where {K}
+    key === nothing && throw(KeyError(nothing))
+    lock(wkh) do
+        return get(wkh.ht, key, default)
+    end
+end
+function get(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
+    key === nothing && throw(KeyError(nothing))
+    lock(wkh) do
+        return get(default, wkh.ht, key)
+    end
+end
+function pop!(wkh::WeakKeyDict{K}, key) where {K}
+    key === nothing && throw(KeyError(nothing))
+    lock(wkh) do
+        return pop!(wkh.ht, key)
+    end
+end
+function pop!(wkh::WeakKeyDict{K}, key, default) where {K}
+    key === nothing && return default
+    lock(wkh) do
+        return pop!(wkh.ht, key, default)
+    end
+end
+function delete!(wkh::WeakKeyDict, key)
+    key === nothing && return wkh
+    lock(wkh) do
+        delete!(wkh.ht, key)
+    end
+    return wkh
+end
+function empty!(wkh::WeakKeyDict)
+    lock(wkh) do
+        empty!(wkh.ht)
+    end
+    return wkh
+end
+function haskey(wkh::WeakKeyDict{K}, key) where {K}
+    key === nothing && return false
+    lock(wkh) do
+        return haskey(wkh.ht, key)
+    end
+end
+function getindex(wkh::WeakKeyDict{K}, key) where {K}
+    key === nothing && throw(KeyError(nothing))
+    lock(wkh) do
+        return getindex(wkh.ht, key)
+    end
+end
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 length(t::WeakKeyDict) = length(t.ht)
 
