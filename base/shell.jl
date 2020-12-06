@@ -292,7 +292,7 @@ wincmd_echo(s::String) =
 wincmd_echo("hello \$(ENV["USERNAME"]) & the \"whole\" world! (=^I^=)")
 ```
 
-But take head that if the input string `s` contains a `%`, the argument list
+But take note that if the input string `s` contains a `%`, the argument list
 and echo'ed text may get corrupted, resulting in arbitrary command execution.
 The argument can alternatively be passed as an environment variable, which
 avoids the problem with `%` and the need for the `windows_verbatim` flag:
