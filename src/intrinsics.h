@@ -97,8 +97,10 @@
     ALIAS(llvmcall, llvmcall) \
     /* object access */ \
     ADD_I(arraylen, 1) \
+    /* LLVM freeze */ \
+    ADD_I(freeze_llvm, 1) \
     /*  hidden intrinsics */ \
-    ADD_HIDDEN(cglobal_auto, 1)
+    ADD_HIDDEN(cglobal_auto, 1) \
 
 enum intrinsic {
 #define ADD_I(func, nargs) func,
