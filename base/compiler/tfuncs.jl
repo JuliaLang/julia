@@ -10,7 +10,7 @@ const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 
 const INT_INF = typemax(Int) # integer infinity
 
-const N_IFUNC = reinterpret(Int32, arraylen) + 1
+const N_IFUNC = reinterpret(Int32, Core.Intrinsics.freeze_llvm) + 1
 const T_IFUNC = Vector{Tuple{Int, Int, Any}}(undef, N_IFUNC)
 const T_IFUNC_COST = Vector{Int}(undef, N_IFUNC)
 const T_FFUNC_KEY = Vector{Any}()
@@ -205,6 +205,7 @@ add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 10)
     ## other, misc intrinsics ##
 add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF,
           (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 10)
+add_tfunc(Core.Intrinsics.freeze_llvm, 1, 1, math_tfunc, 1)
 cglobal_tfunc(@nospecialize(fptr)) = Ptr{Cvoid}
 cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
 cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
@@ -1534,6 +1535,7 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         # wrong # of args
         return false
     end
+    f === Intrinsics.freeze_llvm && return true
     # TODO: We could do better for cglobal
     f === Intrinsics.cglobal && return false
     # TODO: We can't know for sure, but the user should have a way to assert

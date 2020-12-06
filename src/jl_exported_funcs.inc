@@ -757,4 +757,5 @@
     XX(jl_wakeup_thread) \
     XX(jl_xor_int) \
     XX(jl_yield) \
-    XX(jl_zext_int)
+    XX(jl_zext_int) \
+    XX(jl_freeze_llvm)

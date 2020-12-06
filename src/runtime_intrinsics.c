@@ -31,6 +31,13 @@ JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
     return jl_new_bits(ty, jl_data_ptr(v));
 }
 
+
+// run time version of bitcast intrinsic
+JL_DLLEXPORT jl_value_t *jl_freeze_llvm(jl_value_t *v)
+{
+    return v;
+}
+
 // run time version of pointerref intrinsic (warning: i is not rooted)
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align)
 {

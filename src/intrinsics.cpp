@@ -1291,6 +1291,9 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
         return math_builder(ctx, true)().CreateCall(sqrtintr, x);
     }
+    case freeze_llvm: {
+        return ctx.builder.CreateFreeze(x);
+    }
 
     default:
         assert(0 && "invalid intrinsic");

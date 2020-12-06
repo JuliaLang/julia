@@ -1032,6 +1032,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
 JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *align, jl_value_t *i);
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty);
 JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v);
+JL_DLLEXPORT jl_value_t *jl_freeze_llvm(jl_value_t *v);
 
 JL_DLLEXPORT jl_value_t *jl_neg_int(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_add_int(jl_value_t *a, jl_value_t *b);

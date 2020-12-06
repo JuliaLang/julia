@@ -393,31 +393,33 @@ isless( x::Float64, y::Float64) = fpislt(x, y)
 #  a. convert fy back to Ti and compare with original y
 #  b. unsafe_convert undefined behaviour if fy == Tf(typemax(Ti))
 #     (but consequently x == fy > y)
+#     use `Intrinsics.freeze_llvm` to prevent poison propagation.
+freeze_trunc(::Type{T}, val) where T = Intrinsics.freeze_llvm(unsafe_trunc(T, val))
 for Ti in (Int64,UInt64,Int128,UInt128)
     for Tf in (Float16,Float32,Float64)
         @eval begin
             function ==(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
-                (x == fy) & (fy != $(Tf(typemax(Ti)))) & (y == unsafe_trunc($Ti,fy))
+                (x == fy) & (fy != $(Tf(typemax(Ti)))) & (y == freeze_trunc($Ti,fy))
             end
             ==(y::$Ti, x::$Tf) = x==y
 
             function <(x::$Ti, y::$Tf)
                 fx = ($Tf)(x)
-                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x < unsafe_trunc($Ti,fx)) ))
+                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x < freeze_trunc($Ti,fx)) ))
             end
             function <=(x::$Ti, y::$Tf)
                 fx = ($Tf)(x)
-                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x <= unsafe_trunc($Ti,fx)) ))
+                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x <= freeze_trunc($Ti,fx)) ))
             end
 
             function <(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
-                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (unsafe_trunc($Ti,fy) < y))
+                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (freeze_trunc($Ti,fy) < y))
             end
             function <=(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
-                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (unsafe_trunc($Ti,fy) <= y))
+                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (freeze_trunc($Ti,fy) <= y))
             end
         end
     end
