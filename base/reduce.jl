@@ -828,7 +828,7 @@ When `domain` is omitted, `f` must have an implicit domain. In particular, if
 (domain) to values (codomain), i.e. `findmin(itr)` returns the minimal element
 of the collection `itr` and its index.
 
-Values are compared with `isgreater`.
+`NaN` is treated as less than all other values except `missing`.
 
 # Examples
 
@@ -913,7 +913,7 @@ When `domain` is omitted, `f` must have an implicit domain. In particular, if
 (domain) to values (codomain), i.e. `argmin(itr)` returns the index of the
 minimal element in `itr`.
 
-Values are compared with `isgreater`.
+`NaN` is treated as less than all other values except `missing`.
 
 # Examples
 ```jldoctest
