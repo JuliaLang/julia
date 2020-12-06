@@ -41,7 +41,7 @@ Any object that defines this function is iterable and can be used in the [many f
 It can also be used directly in a [`for`](@ref) loop since the syntax:
 
 ```julia
-for i in iter   # or  "for i = iter"
+for item in iter   # or  "for item = iter"
     # body
 end
 ```
@@ -51,7 +51,7 @@ is translated into:
 ```julia
 next = iterate(iter)
 while next !== nothing
-    (i, state) = next
+    (item, state) = next
     # body
     next = iterate(iter, state)
 end
@@ -71,8 +71,8 @@ With only [`iterate`](@ref) definition, the `Squares` type is already pretty pow
 We can iterate over all the elements:
 
 ```jldoctest squaretype
-julia> for i in Squares(7)
-           println(i)
+julia> for item in Squares(7)
+           println(item)
        end
 1
 4
