@@ -144,10 +144,18 @@ for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
             # otherwise use the min/max of the first slice as initial value
             v0 = mapreduce(f, $f2, A1)
 
-            # but NaNs need to be avoided as initial values
-            v0 = v0 != v0 ? typeof(v0)($initval) : v0
-
             T = _realtype(f, promote_union(eltype(A)))
+
+            # but NaNs and missing need to be avoided as initial values
+            if (v0 != v0) === true
+                v0 = typeof(v0)($initval)
+            elseif ismissing(v0)
+                # If it's a union type, pick the initval from the other type.
+                if typeof(T) == Union
+                    v0 = (T.a == Missing ? T.b : T.a)($initval)
+                end
+            end
+
             Tr = v0 isa T ? T : typeof(v0)
             return reducedim_initarray(A, region, v0, Tr)
         end
@@ -926,7 +934,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             for i in axes(A,1)
                 k, kss = y::Tuple
                 tmpAv = A[i,IA]
-                if tmpRi == zi || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
+                if tmpRi == zi || f(tmpRv, tmpAv)
                     tmpRv = tmpAv
                     tmpRi = k
                 end
@@ -943,7 +951,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
                 tmpAv = A[i,IA]
                 tmpRv = Rval[i,IR]
                 tmpRi = Rind[i,IR]
-                if tmpRi == zi || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
+                if tmpRi == zi || f(tmpRv, tmpAv)
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
@@ -963,7 +971,7 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
 end
 
 """
@@ -996,12 +1004,10 @@ function _findmin(A, region)
         end
         (similar(A, ri), zeros(eltype(keys(A)), ri))
     else
-        findminmax!(isless, fill!(similar(A, ri), first(A)),
+        findminmax!(isgreater, fill!(similar(A, ri), first(A)),
                     zeros(eltype(keys(A)), ri), A)
     end
 end
-
-_isgreater(a, b) = isless(b,a)
 
 """
     findmax!(rval, rind, A) -> (maxval, index)
@@ -1012,7 +1018,7 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(_isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
 end
 
 """
@@ -1045,7 +1051,7 @@ function _findmax(A, region)
         end
         similar(A, ri), zeros(eltype(keys(A)), ri)
     else
-        findminmax!(_isgreater, fill!(similar(A, ri), first(A)),
+        findminmax!(isless, fill!(similar(A, ri), first(A)),
                     zeros(eltype(keys(A)), ri), A)
     end
 end

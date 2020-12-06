@@ -219,6 +219,26 @@ for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(maximum!(copy(rval), A, init=false), rval)
 end
 
+@testset "missing in findmin/findmax" begin
+    B = [1.0 missing NaN;
+         5.0 NaN missing]
+    for (tup, rval, rind) in [(1, [5.0 missing missing], [CartesianIndex(2, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
+                              (2, [missing; missing],    [CartesianIndex(1, 2) CartesianIndex(2, 3)] |> permutedims)]
+        (rval′, rind′) = findmax(B, dims=tup)
+        @test all(rval′ .=== rval)
+        @test all(rind′ .== rind)
+        @test all(maximum(B, dims=tup) .=== rval)
+    end
+
+    for (tup, rval, rind) in [(1, [1.0 missing missing], [CartesianIndex(1, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
+                              (2, [missing; missing],    [CartesianIndex(1, 2) CartesianIndex(2, 3)] |> permutedims)]
+        (rval′, rind′) = findmin(B, dims=tup)
+        @test all(rval′ .=== rval)
+        @test all(rind′ .== rind)
+        @test all(minimum(B, dims=tup) .=== rval)
+    end
+end
+
 #issue #23209
 
 A = [1.0 3.0 6.0;
