@@ -1446,6 +1446,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
                 }
                 if (CI->hasStructRetAttr()) {
+                    // TODO: get ElT from SRet attribute
                     Type *ElT = (CI->arg_begin()[0])->getType()->getPointerElementType();
                     auto tracked = CountTrackedPointers(ElT);
                     if (tracked.count) {
