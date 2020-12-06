@@ -214,6 +214,9 @@ function steprange_last(start::T, step, stop) where T
     if isa(start,AbstractFloat) || isa(step,AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
+    if isa(start,Integer) && !isinteger(start + step)
+        throw(ArgumentError("StepRange{<:Integer} cannot have non-integer step"))
+    end
     z = zero(step)
     step == z && throw(ArgumentError("step cannot be zero"))
 
@@ -351,6 +354,9 @@ struct StepRangeLen{T,R,S} <: AbstractRange{T}
     offset::Int  # the index of ref
 
     function StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S}
+        if T <: Integer && !isinteger(ref + step)
+            throw(ArgumentError("StepRangeLen{<:Integer} cannot have non-integer step"))
+        end
         len >= 0 || throw(ArgumentError("length cannot be negative, got $len"))
         1 <= offset <= max(1,len) || throw(ArgumentError("StepRangeLen: offset must be in [1,$len], got $offset"))
         new(ref, step, len, offset)
@@ -410,7 +416,11 @@ struct LinRange{T} <: AbstractRange{T}
             start == stop || throw(ArgumentError("range($start, stop=$stop, length=$len): endpoints differ"))
             return new(start, stop, 1, 1)
         end
-        new(start,stop,len,max(len-1,1))
+        lendiv = max(len-1, 1)
+        if T <: Integer && !iszero(mod(stop-start, lendiv))
+            throw(ArgumentError("LinRange{<:Integer} cannot have non-integer step"))
+        end
+        new(start,stop,len,lendiv)
     end
 end
 
@@ -959,6 +969,11 @@ UnitRange(r::AbstractUnitRange) = UnitRange(first(r), last(r))
 AbstractUnitRange{T}(r::AbstractUnitRange{T}) where {T} = r
 AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
 AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
+
+OrdinalRange{T1, T2}(r::StepRange) where {T1, T2<: Integer} = StepRange{T1, T2}(r)
+OrdinalRange{T1, T2}(r::AbstractUnitRange{T1}) where {T1, T2<:Integer} = r
+OrdinalRange{T1, T2}(r::UnitRange) where {T1, T2<:Integer} = UnitRange{T1}(r)
+OrdinalRange{T1, T2}(r::OneTo) where {T1, T2<:Integer} = OneTo{T1}(r)
 
 promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
     el_same(promote_type(T1a,T2a),

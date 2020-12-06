@@ -411,6 +411,16 @@ end
     # Check bug with trailing nul printing BigFloat
     @test (Printf.@sprintf("%.330f", BigFloat(1)))[end] != '\0'
 
+    # Check bugs with truncated output printing BigFloat
+    @test (Printf.@sprintf("%f", parse(BigFloat, "1e400"))) ==
+           "10000000000000000000000000000000000000000000000000000000000000000000000000000025262527574416492004687051900140830217136998040684679611623086405387447100385714565637522507383770691831689647535911648520404034824470543643098638520633064715221151920028135130764414460468236314621044034960475540018328999334468948008954289495190631358190153259681118693204411689043999084305348398480210026863210192871358464.000000"
+
+    # Check that does not attempt to output incredibly large amounts of digits
+    @test_throws ErrorException Printf.@sprintf("%f", parse(BigFloat, "1e99999"))
+
+    # Check bug with precision > length of string
+    @test Printf.@sprintf("%4.2s", "a") == "   a"
+
     # issue #29662
     @test (Printf.@sprintf "%12.3e" pi*1e100) == "  3.142e+100"
 

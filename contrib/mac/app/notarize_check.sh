@@ -1,4 +1,5 @@
 #!/bin/bash
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Note that you need to have exported `APPLEID` and `APPLEID_PASSWORD` for this to work.
 

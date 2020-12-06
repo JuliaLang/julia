@@ -23,8 +23,13 @@ $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
+	# Force-enable MD4
+	sed "s|//#define MBEDTLS_MD4_C|#define MBEDTLS_MD4_C|" -i $(SRCCACHE)/$(MBEDTLS_SRC)/include/mbedtls/config.h
 	touch -c $(SRCCACHE)/$(MBEDTLS_SRC)/CMakeLists.txt # old target
 	echo 1 > $@
+
+checksum-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
+	$(JLCHECKSUM) $<
 
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 	mkdir -p $(dir $@)
@@ -85,9 +90,6 @@ fastcheck-mbedtls: #check-mbedtls
 check-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked
 
 else # USE_BINARYBUILDER_MBEDTLS
-
-MBEDTLS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/MbedTLS_jll.jl/releases/download/MbedTLS-v$(MBEDTLS_VER)+$(MBEDTLS_BB_REL)
-MBEDTLS_BB_NAME := MbedTLS.v$(MBEDTLS_VER)
 
 $(eval $(call bb-install,mbedtls,MBEDTLS,false))
 

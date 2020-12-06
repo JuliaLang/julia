@@ -486,3 +486,27 @@ function gcdx(x::Rational, y::Rational)
     end
     c, a, b
 end
+
+## streamlined hashing for smallish rational types ##
+
+decompose(x::Rational) = numerator(x), 0, denominator(x)
+function hash(x::Rational{<:BitInteger64}, h::UInt)
+    num, den = Base.numerator(x), Base.denominator(x)
+    den == 1 && return hash(num, h)
+    den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
+    if isodd(den)
+        pow = trailing_zeros(num)
+        num >>= pow
+    else
+        pow = trailing_zeros(den)
+        den >>= pow
+        pow = -pow
+        if den == 1 && abs(num) < 9007199254740992
+            return hash(ldexp(Float64(num),pow),h)
+        end
+    end
+    h = hash_integer(den, h)
+    h = hash_integer(pow, h)
+    h = hash_integer(num, h)
+    return h
+end

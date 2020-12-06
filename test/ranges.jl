@@ -1002,6 +1002,15 @@ end
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
 end
 
+@testset "Ranges with <:Integer eltype but non-integer step (issue #32419)" begin
+    @test eltype(StepRange(1, 1//1, 2)) === Int
+    @test_throws ArgumentError StepRange(1, 1//2, 2)
+    @test eltype(StepRangeLen{Int}(1, 1//1, 2)) === Int
+    @test_throws ArgumentError StepRangeLen{Int}(1, 1//2, 2)
+    @test eltype(LinRange{Int}(1, 5, 3)) === Int
+    @test_throws ArgumentError LinRange{Int}(1, 5, 4)
+end
+
 @testset "LinRange ops" begin
     @test 2*LinRange(0,3,4) == LinRange(0,6,4)
     @test LinRange(0,3,4)*2 == LinRange(0,6,4)
@@ -1631,6 +1640,20 @@ end
     @test_throws MethodError mod(3, UnitRange(1.0,5.0))
     @test_throws MethodError mod(3, 1:2:7)
     @test_throws DivideError mod(3, 1:0)
+end
+
+@testset "clamp with unitrange" begin
+    for n in -10:10
+        @test clamp(n, 0:4) == clamp(n, 0, 4)
+        @test clamp(n, Base.OneTo(5)) == clamp(n, 1, 5)
+    end
+    @test clamp(Int32(3), 1:5) === Int(3)
+    @test clamp(big(typemax(Int))+99, 0:4) == 4
+    @test_throws MethodError clamp(3.141, 1:5)
+    @test_throws MethodError clamp(3, UnitRange(1.0,5.0))
+    @test_throws MethodError clamp(3, 1:2:7)
+    @test clamp(3, 1:0) == clamp(3, 1, 0) == 0
+    @test clamp(-3, 1:0) == clamp(-3, 1, 0) == 1
 end
 
 @testset "issue #33882" begin

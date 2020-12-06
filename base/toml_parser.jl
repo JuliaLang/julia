@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module TOML
 
 using Base: IdSet
@@ -102,7 +104,7 @@ function Parser(str::String; filepath=nothing)
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
-            get(Base.loaded_modules, DATES_PKGID, nothing),
+            isdefined(Base, :loaded_modules) ? get(Base.loaded_modules, DATES_PKGID, nothing) : nothing,
         )
     startup(l)
     return l
@@ -482,7 +484,7 @@ end
 
 function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
-        d::TOMLDict
+        d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector
@@ -673,7 +675,7 @@ end
 
 function parse_array(l::Parser)::Err{Vector}
     skip_ws_nl(l)
-    array = Union{}[]
+    array = Vector{Union{}}()
     empty_array = accept(l, ']')
     while !empty_array
         v = @try parse_value(l)

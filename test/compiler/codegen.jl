@@ -495,3 +495,20 @@ let x = reinterpret(Has256Bits, [0xfcdac822cac89d82de4f9b3326da8294, 0x6ebac4d59
     @test reinterpret(UInt128, [h(x)]) == lshifted
     @test reinterpret(UInt128, [Base.shl_int(x, 0x8)]) == lshifted
 end
+
+# issue #37872
+let f(@nospecialize(x)) = x===Base.ImmutableDict(Int128=>:big)
+    @test !f(Dict(Int=>Int))
+end
+
+# issue #37974
+primitive type UInt24 24 end
+let a = Core.Intrinsics.trunc_int(UInt24, 3),
+    f(t) = t[2]
+    @test f((a, true)) === true
+    @test f((a, false)) === false
+    @test sizeof(Tuple{UInt24,Bool}) == 8
+    @test sizeof(UInt24) == 3
+    @test sizeof(Union{UInt8,UInt24}) == 3
+    @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
+end

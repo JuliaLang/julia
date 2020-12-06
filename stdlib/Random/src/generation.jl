@@ -56,8 +56,8 @@ end
 Sampler(::Type{<:AbstractRNG}, I::FloatInterval{BigFloat}, ::Repetition) =
     SamplerBigFloat{typeof(I)}(precision(BigFloat))
 
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat)
-    z = BigFloat()
+function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat)
+    precision(z) == sp.prec || throw(ArgumentError("incompatible BigFloat precision"))
     limbs = sp.limbs
     rand!(rng, limbs)
     @inbounds begin
@@ -67,17 +67,17 @@ function _rand(rng::AbstractRNG, sp::SamplerBigFloat)
     end
     z.sign = 1
     GC.@preserve limbs unsafe_copyto!(z.d, pointer(limbs), sp.nlimbs)
-    (z, randbool)
+    randbool
 end
 
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen12{BigFloat})
-    z = _rand(rng, sp)[1]
+function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat, ::CloseOpen12{BigFloat})
+    _rand!(rng, z, sp)
     z.exp = 1
     z
 end
 
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat})
-    z, randbool = _rand(rng, sp)
+function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat, ::CloseOpen01{BigFloat})
+    randbool = _rand!(rng, z, sp)
     z.exp = 0
     randbool &&
         ccall((:mpfr_sub_d, :libmpfr), Int32,
@@ -88,15 +88,21 @@ end
 
 # alternative, with 1 bit less of precision
 # TODO: make an API for requesting full or not-full precision
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat}, ::Nothing)
-    z = _rand(rng, sp, CloseOpen12(BigFloat))
+function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat, ::CloseOpen01{BigFloat},
+                ::Nothing)
+    _rand!(rng, z, sp, CloseOpen12(BigFloat))
     ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Base.MPFR.MPFRRoundingMode),
           z, z, 1, Base.MPFR.ROUNDING_MODE[])
     z
 end
 
+rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat{T}
+      ) where {T<:FloatInterval{BigFloat}} =
+          _rand!(rng, z, sp, T())
+
 rand(rng::AbstractRNG, sp::SamplerBigFloat{T}) where {T<:FloatInterval{BigFloat}} =
-    _rand(rng, sp, T())
+    rand!(rng, BigFloat(; precision=sp.prec), sp)
+
 
 ### random integers
 
@@ -348,7 +354,7 @@ struct SamplerBigInt <: Sampler{BigInt}
     mask::Limb        # applied to the highest limb
 end
 
-function Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetition)
+function SamplerBigInt(r::AbstractUnitRange{BigInt})
     m = last(r) - first(r)
     m < 0 && throw(ArgumentError("range must be non-empty"))
     nd = ndigits(m, base=2)
@@ -359,8 +365,13 @@ function Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetiti
     return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, mask)
 end
 
-function rand(rng::AbstractRNG, sp::SamplerBigInt)
-    x = MPZ.realloc2(sp.nlimbsmax*8*sizeof(Limb))
+Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetition) = SamplerBigInt(r)
+
+rand(rng::AbstractRNG, sp::SamplerBigInt) =
+    rand!(rng, BigInt(nbits = sp.nlimbsmax*8*sizeof(Limb)), sp)
+
+function rand!(rng::AbstractRNG, x::BigInt, sp::SamplerBigInt)
+    MPZ.realloc2!(x, sp.nlimbsmax*8*sizeof(Limb))
     GC.@preserve x begin
         limbs = UnsafeView(x.d, sp.nlimbs)
         while true

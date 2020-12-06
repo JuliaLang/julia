@@ -70,7 +70,7 @@ julia> String(take!(io))
 "Hello, world\\n"
 ```
 """
-println(io::IO, xs...) = print(io, xs..., '\n')
+println(io::IO, xs...) = print(io, xs..., "\n")
 
 ## conversion of general objects to strings ##
 

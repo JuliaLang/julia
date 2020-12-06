@@ -451,10 +451,12 @@ end
 LinearIndices(::Tuple{}) = LinearIndices{0,typeof(())}(())
 LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
     LinearIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
-LinearIndices(sz::NTuple{N,<:Integer}) where {N} = LinearIndices(map(Base.OneTo, sz))
 LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
-    LinearIndices(map(i->first(i):last(i), inds))
+    LinearIndices(map(_convert2ind, inds))
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
+
+_convert2ind(i::Integer) = Base.OneTo(i)
+_convert2ind(ind::AbstractUnitRange) = first(ind):last(ind)
 
 promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
     LinearIndices{N,indices_promote_type(R1,R2)}

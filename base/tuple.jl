@@ -96,6 +96,40 @@ function indexed_iterate(I, i, state)
     x
 end
 
+"""
+    Base.rest(collection[, itr_state])
+
+Generic function for taking the tail of `collection`, starting from a specific iteration
+state `itr_state`. Return a `Tuple`, if `collection` itself is a `Tuple`, a subtype of
+`AbstractVector`, if `collection` is an `AbstractArray`, a subtype of `AbstractString`
+if `collection` is an `AbstractString`, and an arbitrary iterator, falling back to
+`Iterators.rest(collection[, itr_state])`, otherwise.
+Can be overloaded for user-defined collection types to customize the behavior of slurping
+in assignments, like `a, b... = collection`.
+
+!!! compat "Julia 1.6"
+    `Base.rest` requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> first, state = iterate(a)
+(1, 2)
+
+julia> first, Base.rest(a, state)
+(1, [3, 2, 4])
+```
+"""
+function rest end
+rest(t::Tuple) = t
+rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
+rest(a::Array, i::Int=1) = a[i:end]
+rest(itr, state...) = Iterators.rest(itr, state...)
+
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
 first(t::Tuple) = t[1]

@@ -27,6 +27,9 @@ include("forbidproperties.jl")
         @test map!(cos, X, A) == sparse(map!(cos, fX, fA))
         @test_throws DimensionMismatch map!(sin, X, spzeros((shapeA .- 1)...))
     end
+    # https://github.com/JuliaLang/julia/issues/37819
+    Z = spzeros(Float64, Int32, 50000, 50000)
+    @test isa(-Z, SparseMatrixCSC{Float64, Int32})
 end
 
 @testset "map[!] implementation specialized for a pair of (input) sparse vectors/matrices" begin
@@ -54,6 +57,9 @@ end
         @test map!(f, X, A, B) == sparse(map!(f, fX, fA, fB))
         @test_throws DimensionMismatch map!(f, X, A, spzeros((shapeA .- 1)...))
     end
+    # https://github.com/JuliaLang/julia/issues/37819
+    Z = spzeros(Float64, Int32, 50000, 50000)
+    @test isa(Z + Z, SparseMatrixCSC{Float64, Int32})
 end
 
 @testset "map[!] implementation capable of handling >2 (input) sparse vectors/matrices" begin

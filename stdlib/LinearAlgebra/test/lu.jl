@@ -210,6 +210,15 @@ dimg  = randn(n)/2
             @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
+
+    @testset "Factorization of symtridiagonal dense matrix with zero ldlt-pivot (#38026)" begin
+        A = [0.0 -1.0 0.0 0.0
+            -1.0 0.0 0.0 0.0
+            0.0 0.0 0.0 -1.0
+            0.0 0.0 -1.0 0.0]
+        F = factorize(A)
+        @test all((!isnan).(Matrix(F)))
+    end
 end
 
 @testset "Singular matrices" for T in (Float64, ComplexF64)
@@ -313,6 +322,22 @@ include("trickyarithmetic.jl")
     ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
     B = lu(A, Val(false))
     @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+end
+
+# dimensional correctness:
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
+@testset "lu factorization with dimension type" begin
+    n = 4
+    A = Matrix(Furlong(1.0) * I, n, n)
+    F = lu(A).factors
+    @test Diagonal(F) == Diagonal(A)
+    # upper triangular part has a unit Furlong{1}
+    @test all(x -> typeof(x) == Furlong{1, Float64}, F[i,j] for j=1:n for i=1:j)
+    # lower triangular part is unitless Furlong{0}
+    @test all(x -> typeof(x) == Furlong{0, Float64}, F[i,j] for j=1:n for i=j+1:n)
 end
 
 @testset "Issue #30917. Determinant of integer matrix" begin

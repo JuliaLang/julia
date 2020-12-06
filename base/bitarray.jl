@@ -1386,15 +1386,15 @@ circshift!(B::BitVector, i::Integer) = circshift!(B, B, i)
 
 ## count & find ##
 
-function bitcount(Bc::Vector{UInt64})
-    n = 0
+function bitcount(Bc::Vector{UInt64}; init::T=0) where {T}
+    n::T = init
     @inbounds for i = 1:length(Bc)
-        n += count_ones(Bc[i])
+        n = (n + count_ones(Bc[i])) % T
     end
     return n
 end
 
-count(B::BitArray) = bitcount(B.chunks)
+count(B::BitArray; init=0) = bitcount(B.chunks; init)
 
 function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1

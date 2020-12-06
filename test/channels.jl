@@ -255,12 +255,14 @@ using Distributed
 end
 
 @testset "timedwait" begin
-    @test timedwait(() -> true, 0) === :ok
-    @test timedwait(() -> false, 0) === :timed_out
-    @test_throws ArgumentError timedwait(() -> true, 0; pollint=0)
+    alwaystrue() = true
+    alwaysfalse() = false
+    @test timedwait(alwaystrue, 0) === :ok
+    @test timedwait(alwaysfalse, 0) === :timed_out
+    @test_throws ArgumentError timedwait(alwaystrue, 0; pollint=0)
 
     # Allowing a smaller positive `pollint` results in `timewait` hanging
-    @test_throws ArgumentError timedwait(() -> true, 0, pollint=1e-4)
+    @test_throws ArgumentError timedwait(alwaystrue, 0, pollint=1e-4)
 
     # Callback passed in raises an exception
     failure_cb = function (fail_on_call=1)
@@ -288,10 +290,10 @@ end
         @test e.ex isa ErrorException
     end
 
-    duration = @elapsed timedwait(() -> false, 1)  # Using default pollint of 0.1
+    duration = @elapsed timedwait(alwaysfalse, 1)  # Using default pollint of 0.1
     @test duration ≈ 1 atol=0.4
 
-    duration = @elapsed timedwait(() -> false, 0; pollint=1)
+    duration = @elapsed timedwait(alwaysfalse, 0; pollint=1)
     @test duration ≈ 1 atol=0.4
 end
 
@@ -353,11 +355,9 @@ end
     @test istaskdone(t)
     @test fetch(t)
     @test run[] == 3
-    @test fetch(errstream) == """
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        """
+    output = fetch(errstream)
+    @test 3 == length(findall(
+        """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
     t._state = 66

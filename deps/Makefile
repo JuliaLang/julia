@@ -39,6 +39,10 @@ unexport CONFIG_SITE
 
 DEP_LIBS :=
 
+ifeq ($(USE_SYSTEM_CSL), 0)
+DEP_LIBS += csl
+endif
+
 ifeq ($(USE_GPL_LIBS), 1)
 DEP_LIBS += suitesparse-wrapper
 endif
@@ -180,8 +184,19 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-nghttp2 get-curl get-libgit2 get-libwhich
+getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-nghttp2 get-curl get-libgit2 get-libwhich get-zlib get-p7zip get-csl
 
+# If we're building for MacOS, no matter what, `getall` should include `osxunwind`
+ifeq ($(OS),Darwin)
+getall: get-osxunwind
+endif
+
+# Same if we're building a purely-source archive, always include `osxunwind`
+ifeq ($(USE_BINARYBUILDER_OSXUNWIND),0)
+getall: get-osxunwind
+endif
+
+include $(SRCDIR)/csl.mk
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk

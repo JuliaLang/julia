@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia%shlibext -LateLowerGCFrame -S %s | FileCheck %s
+; RUN: opt -load libjulia-internal%shlibext -LateLowerGCFrame -S %s | FileCheck %s
 
 @tag = external addrspace(10) global {}, align 16
 

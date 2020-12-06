@@ -22,7 +22,7 @@ function startswith(a::AbstractString, b::AbstractString)
     a, b = Iterators.Stateful(a), Iterators.Stateful(b)
     all(splat(==), zip(a, b)) && isempty(b)
 end
-startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
+startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::AbstractChar in chars
 
 """
     endswith(s::AbstractString, suffix::AbstractString)
@@ -109,6 +109,16 @@ used to implement specialized methods.
 !!! compat "Julia 1.5"
     The single argument `endswith(suffix)` requires at least Julia 1.5.
 
+# Examples
+```jldoctest
+julia> endswith_julia = endswith("Julia");
+
+julia> endswith_julia("Julia")
+true
+
+julia> endswith_julia("JuliaLang")
+false
+```
 """
 endswith(s) = Base.Fix2(endswith, s)
 
@@ -124,6 +134,16 @@ used to implement specialized methods.
 !!! compat "Julia 1.5"
     The single argument `startswith(prefix)` requires at least Julia 1.5.
 
+# Examples
+```jldoctest
+julia> startswith_julia = startswith("Julia");
+
+julia> startswith_julia("Julia")
+true
+
+julia> startswith_julia("NotJulia")
+false
+```
 """
 startswith(s) = Base.Fix2(startswith, s)
 
@@ -546,7 +566,7 @@ If `count` is provided, replace at most `count` occurrences.
 `pat` may be a single character, a vector or a set of characters, a string,
 or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
-where `s` is the matched substring (when `pat` is a `Regex` or `AbstractString`) or
+where `s` is the matched substring (when `pat` is a `AbstractPattern` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
@@ -669,7 +689,7 @@ julia> bytes2hex(b)
 """
 function bytes2hex end
 
-function bytes2hex(a::AbstractArray{UInt8})
+function bytes2hex(a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
     b = Base.StringVector(2*length(a))
     @inbounds for (i, x) in enumerate(a)
         b[2i - 1] = hex_chars[1 + x >> 4]
@@ -678,10 +698,11 @@ function bytes2hex(a::AbstractArray{UInt8})
     return String(b)
 end
 
-bytes2hex(io::IO, a::AbstractArray{UInt8}) =
+function bytes2hex(io::IO, a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
     for x in a
         print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
     end
+end
 
 # check for pure ASCII-ness
 function ascii(s::String)
@@ -710,3 +731,12 @@ julia> ascii("abcdefgh")
 ```
 """
 ascii(x::AbstractString) = ascii(String(x))
+
+Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
+function Base.rest(s::AbstractString, st...)
+    io = IOBuffer()
+    for c in Iterators.rest(s, st...)
+        print(io, c)
+    end
+    return String(take!(io))
+end

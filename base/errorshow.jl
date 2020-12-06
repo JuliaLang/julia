@@ -316,7 +316,7 @@ function showerror(io::IO, ex::MethodError)
             hasrows |= isrow
             push!(vec_args, isrow ? vec(arg) : arg)
         end
-        if hasrows && applicable(f, vec_args...)
+        if hasrows && applicable(f, vec_args...) && isempty(kwargs)
             print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.",
                       "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
                       "\nYou can convert to a column vector with the vec() function.")
@@ -562,9 +562,9 @@ function replaceuserpath(str)
     return str
 end
 
-const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow,
-        :light_magenta, :light_green, :light_cyan, :light_red,
-        :blue, :yellow, :magenta, :green, :cyan, :red]
+const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
+const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+
 stacktrace_expand_basepaths()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
 stacktrace_contract_userdir()::Bool =
@@ -576,7 +576,7 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     n = length(trace)
     ndigits_max = ndigits(n)
 
-    modulecolordict = Dict{Module, Symbol}()
+    modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     println(io, "\nStacktrace:")

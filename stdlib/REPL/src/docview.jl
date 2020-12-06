@@ -69,10 +69,11 @@ end
 _helpmode(line::AbstractString) = _helpmode(stdout, line)
 
 # Print vertical lines along each docstring if there are multiple docs
-function insert_hlines(io::IO, docs::Markdown.MD)
+function insert_hlines(io::IO, docs)
     if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
         return docs
     end
+    docs = docs::Markdown.MD
     v = Any[]
     for (n, doc) in enumerate(docs.content)
         push!(v, doc)
@@ -128,13 +129,15 @@ end
 function _trimdocs(md::Markdown.MD, brief::Bool)
     content, trimmed = [], false
     for c in md.content
-        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
-            !isempty(c.text) && isa(c.text[1], AbstractString) &&
-            lowercase(c.text[1]) ∈ ("extended help",
-                                    "extended documentation",
-                                    "extended docs")
-            trimmed = true
-            break
+        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) && !isempty(c.text)
+            item = c.text[1]
+            if isa(item, AbstractString) &&
+                lowercase(item) ∈ ("extended help",
+                                   "extended documentation",
+                                   "extended docs")
+                trimmed = true
+                break
+            end
         end
         c, trm = _trimdocs(c, brief)
         trimmed |= trm
@@ -346,15 +349,36 @@ function repl_latex(io::IO, s::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
+        state = '\0'
         with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
-                    print(io, symbols_latex[cstr], "<tab>")
+                    latex = symbols_latex[cstr]
+                    if length(latex) == 3 && latex[2] in ('^','_')
+                        # coalesce runs of sub/superscripts
+                        if state != latex[2]
+                            '\0' != state && print(io, "<tab>")
+                            print(io, latex[1:2])
+                            state = latex[2]
+                        end
+                        print(io, latex[3])
+                    else
+                        if '\0' != state
+                            print(io, "<tab>")
+                            state = '\0'
+                        end
+                        print(io, latex, "<tab>")
+                    end
                 else
+                    if '\0' != state
+                        print(io, "<tab>")
+                        state = '\0'
+                    end
                     print(io, c)
                 end
             end
+            '\0' != state && print(io, "<tab>")
         end
         println(io, '\n')
     end
@@ -570,8 +594,6 @@ function printmatch(io::IO, word, match)
         end
     end
 end
-
-printmatch(args...) = printfuzzy(stdout, args...)
 
 function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0

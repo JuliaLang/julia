@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
 
 static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintptr_t sp) JL_NOTSAFEPOINT
 {
@@ -54,7 +54,7 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 // the call instruction. The first `skip` frames are not included in `bt_data`.
 //
 // `maxsize` is the size of the buffer `bt_data` (and `sp` if non-NULL). It
-// must be at least JL_BT_MAX_ENTRY_SIZE to accommodate extended backtrace
+// must be at least `JL_BT_MAX_ENTRY_SIZE + 1` to accommodate extended backtrace
 // entries.  If `sp != NULL`, the stack pointer corresponding `bt_data[i]` is
 // stored in `sp[i]`.
 //
@@ -96,9 +96,16 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 need_more_space = 1;
                 break;
             }
-            have_more_frames = jl_unw_step(cursor, &return_ip, &thesp);
+            uintptr_t oldsp = thesp;
+            have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
+            if (oldsp >= thesp) {
+                // The stack pointer is clearly bad, as it must grow downwards.
+                // But sometimes the external unwinder doesn't check that.
+                have_more_frames = 0;
+            }
             if (skip > 0) {
                 skip--;
+                from_signal_handler = 0;
                 continue;
             }
             if (sp)
@@ -132,10 +139,9 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             //   which we can get from the return address via `call_ip = return_ip - 1`.
             // * Code which was interrupted asynchronously (eg, via a signal)
             //   is expected to have `call_ip == return_ip`.
-            if (n != 0 || !from_signal_handler) {
-                // normal frame
-                call_ip -= 1;
-            }
+            if (!from_signal_handler)
+                call_ip -= 1; // normal frame
+            from_signal_handler = 0;
             if (call_ip == JL_BT_NON_PTR_ENTRY) {
                 // Never leave special marker in the bt data as it can corrupt the GC.
                 call_ip = 0;
@@ -462,7 +468,7 @@ static int readable_pointer(LPCVOID pointer)
     return 1;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
     // Might be called from unmanaged thread.
 #ifndef _CPU_X86_64_
@@ -482,7 +488,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 #else
     *ip = (uintptr_t)cursor->Rip;
     *sp = (uintptr_t)cursor->Rsp;
-    if (*ip == 0) {
+    if (*ip == 0 && from_signal_handler) {
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
         cursor->Rip = *(DWORD64*)*sp;      // POP RIP (aka RET)
@@ -490,12 +496,12 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
         return cursor->Rip != 0;
     }
 
-    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip);
+    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
     if (!ImageBase)
         return 0;
 
     PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
-        GetCurrentProcess(), cursor->Rip);
+        GetCurrentProcess(), cursor->Rip - !from_signal_handler);
     if (!FunctionEntry) {
         // Not code or bad unwind?
         return 0;
@@ -525,8 +531,9 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return unw_init_local(cursor, context) == 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
+    (void)from_signal_handler; // libunwind also tracks this
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
         return 0;
@@ -557,7 +564,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
     return 0;
 }

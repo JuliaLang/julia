@@ -433,7 +433,7 @@ end
 # TODO: use copy!, which is currently unavailable from here since it is defined in Future
 _copy_oftype(x, ::Type{T}) where {T} = copyto!(similar(x, T), x)
 # TODO: use similar() once deprecation is removed and it preserves keys
-_copy_oftype(x::AbstractDict, ::Type{T}) where {T} = merge!(empty(x, T), x)
+_copy_oftype(x::AbstractDict, ::Type{Pair{K,V}}) where {K,V} = merge!(empty(x, K, V), x)
 _copy_oftype(x::AbstractSet, ::Type{T}) where {T} = union!(empty(x, T), x)
 
 _copy_oftype(x::AbstractArray{T}, ::Type{T}) where {T} = copy(x)
@@ -617,8 +617,10 @@ replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b,
 askey(k, ::AbstractDict) = k.first
 askey(k, ::AbstractSet) = k
 
-function _replace!(new::Callable, res::T, A::T,
-                   count::Int) where T<:Union{AbstractDict,AbstractSet}
+function _replace!(new::Callable, res::Union{AbstractDict,AbstractSet},
+                   A::Union{AbstractDict,AbstractSet}, count::Int)
+    @assert res isa AbstractDict && A isa AbstractDict ||
+        res isa AbstractSet && A isa AbstractSet
     count == 0 && return res
     c = 0
     if res === A # cannot replace elements while iterating over A
@@ -682,4 +684,47 @@ function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::I
         end
     end
     res
+end
+
+### specialization for Dict / Set
+
+function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) where {K,V}
+    # we ignore A, which is supposed to be equal to the destination t,
+    # as it can generally be faster to just replace inline
+    count == 0 && return t
+    c = 0
+    news = Pair{K,V}[]
+    i = skip_deleted_floor!(t)
+    @inbounds while i != 0
+        k1, v1 = t.keys[i], t.vals[i]
+        x1 = Pair{K,V}(k1, v1)
+        x2 = new(x1)
+        if x1 !== x2
+            k2, v2 = first(x2), last(x2)
+            if isequal(k1, k2)
+                t.keys[i] = k2
+                t.vals[i] = v2
+                t.age += 1
+            else
+                _delete!(t, i)
+                push!(news, x2)
+            end
+            c += 1
+            c == count && break
+        end
+        i = i == typemax(Int) ? 0 : skip_deleted(t, i+1)
+    end
+    for n in news
+        push!(t, n)
+    end
+    t
+end
+
+function _replace!(new::Callable, t::Set{T}, ::AbstractSet, count::Int) where {T}
+    _replace!(t.dict, t.dict, count) do kv
+        k = first(kv)
+        k2 = new(k)
+        k2 === k ? kv : k2 => nothing
+    end
+    t
 end

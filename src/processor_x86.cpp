@@ -256,8 +256,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"knm", CPU::intel_knights_mill, CPU::generic, 0, Feature::knm},
     {"skylake-avx512", CPU::intel_corei7_skylake_avx512, CPU::generic, 0, Feature::skx},
     {"cascadelake", CPU::intel_corei7_cascadelake, CPU::generic, 0, Feature::cascadelake},
-    {"cooperlake", CPU::intel_corei7_cooperlake, CPU::intel_corei7_cascadelake,
-     90000, Feature::cooperlake},
+    {"cooperlake", CPU::intel_corei7_cooperlake, CPU::generic, 0, Feature::cooperlake},
     {"cannonlake", CPU::intel_corei7_cannonlake, CPU::generic, 0, Feature::cannonlake},
     {"icelake-client", CPU::intel_corei7_icelake_client, CPU::generic, 0, Feature::icelake},
     {"icelake-server", CPU::intel_corei7_icelake_server, CPU::generic, 0,
@@ -288,7 +287,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"bdver4", CPU::amd_bdver4, CPU::generic, 0, Feature::bdver4},
 
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
-    {"znver2", CPU::amd_znver2, CPU::amd_znver1, 90000, Feature::znver2},
+    {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -969,9 +968,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     // This can happen with virtualization.
     features.push_back("+64bit");
 #endif
-#if JL_LLVM_VERSION >= 90000
     features.push_back("+cx8");
-#endif
     return std::make_pair(std::move(name), std::move(features));
 }
 
@@ -1104,4 +1101,15 @@ extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
         // Report a failure only if user is trying to enable FTZ/DAZ.
         return isZero;
     }
+}
+
+// X86 does not support default NaNs
+extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void)
+{
+    return 0;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault)
+{
+    return isDefault;
 }

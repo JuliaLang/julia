@@ -39,7 +39,8 @@ const ByteArray = Union{Vector{UInt8},Vector{Int8}}
 Create a new `String` object from a byte vector `v` containing UTF-8 encoded
 characters. If `v` is `Vector{UInt8}` it will be truncated to zero length and
 future modification of `v` cannot affect the contents of the resulting string.
-To avoid truncation use `String(copy(v))`.
+To avoid truncation of `Vector{UInt8}` data, use `String(copy(v))`; for other
+`AbstractVector` types, `String(v)` already makes a copy.
 
 When possible, the memory of `v` will be used without copying when the `String`
 object is created. This is guaranteed to be the case for byte vectors returned

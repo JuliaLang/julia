@@ -484,6 +484,9 @@ end
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
 Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
 
+Base.isless(x::Period, y::CompoundPeriod) = CompoundPeriod(x) < y
+Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
+Base.isless(x::CompoundPeriod, y::CompoundPeriod) = tons(x) < tons(y)
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
 toms(c::Nanosecond)  = div(value(c), 1000000)

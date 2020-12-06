@@ -30,63 +30,182 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
+#define NUM_TAGS    146
+
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
-static void *const _tags[] = {
-         // builtin types
-         &jl_any_type, &jl_symbol_type, &jl_ssavalue_type, &jl_datatype_type, &jl_slotnumber_type,
-         &jl_simplevector_type, &jl_array_type, &jl_typedslot_type,
-         &jl_expr_type, &jl_globalref_type, &jl_string_type,
-         &jl_module_type, &jl_tvar_type, &jl_method_instance_type, &jl_method_type, &jl_code_instance_type,
-         &jl_linenumbernode_type, &jl_lineinfonode_type,
-         &jl_gotonode_type, &jl_quotenode_type, &jl_gotoifnot_type, &jl_argument_type, &jl_returnnode_type,
-         &jl_const_type, &jl_partial_struct_type, &jl_method_match_type,
-         &jl_pinode_type, &jl_phinode_type, &jl_phicnode_type, &jl_upsilonnode_type,
-         &jl_type_type, &jl_bottom_type, &jl_ref_type, &jl_pointer_type, &jl_llvmpointer_type,
-         &jl_vararg_type, &jl_abstractarray_type,
-         &jl_densearray_type, &jl_nothing_type, &jl_function_type, &jl_typeofbottom_type,
-         &jl_unionall_type, &jl_typename_type, &jl_builtin_type, &jl_code_info_type,
-         &jl_task_type, &jl_uniontype_type, &jl_abstractstring_type,
-         &jl_array_any_type, &jl_intrinsic_type, &jl_abstractslot_type,
-         &jl_methtable_type, &jl_typemap_level_type, &jl_typemap_entry_type,
-         &jl_voidpointer_type, &jl_uint8pointer_type, &jl_newvarnode_type,
-         &jl_anytuple_type_type, &jl_anytuple_type, &jl_namedtuple_type, &jl_emptytuple_type,
-         &jl_array_symbol_type, &jl_array_uint8_type, &jl_array_int32_type,
-         &jl_int32_type, &jl_int64_type, &jl_bool_type, &jl_uint8_type,
-         &jl_uint32_type, &jl_uint64_type, &jl_char_type, &jl_weakref_type,
-         &jl_int8_type, &jl_int16_type, &jl_uint16_type,
-         &jl_float16_type, &jl_float32_type, &jl_float64_type, &jl_floatingpoint_type,
-         &jl_number_type, &jl_signed_type,
-         // special typenames
-         &jl_tuple_typename, &jl_pointer_typename, &jl_llvmpointer_typename, &jl_array_typename, &jl_type_typename,
-         &jl_vararg_typename, &jl_namedtuple_typename,
-         &jl_vecelement_typename,
-         // special exceptions
-         &jl_errorexception_type, &jl_argumenterror_type, &jl_typeerror_type,
-         &jl_methoderror_type, &jl_loaderror_type, &jl_initerror_type,
-         &jl_undefvarerror_type, &jl_stackovf_exception, &jl_diverror_exception,
-         &jl_interrupt_exception, &jl_boundserror_type, &jl_memory_exception,
-         &jl_undefref_exception, &jl_readonlymemory_exception,
-#ifdef SEGV_EXCEPTION
-         &jl_segv_exception,
-#endif
-         // other special values
-         &jl_emptysvec, &jl_emptytuple, &jl_false, &jl_true, &jl_nothing,
-         &jl_an_empty_string, &jl_an_empty_vec_any,
+jl_value_t **const*const get_tags(void) {
+    // Make sure to keep an extra slot at the end to sentinel length
+    static void * _tags[NUM_TAGS] = {NULL};
 
-         &jl_module_init_order, &jl_core_module, &jl_base_module, &jl_main_module, &jl_top_module,
-         &jl_typeinf_func, &jl_type_type_mt, &jl_nonfunction_mt,
-         // some Core.Builtin Functions that we want to be able to reference:
-         &jl_builtin_throw, &jl_builtin_is, &jl_builtin_typeof, &jl_builtin_sizeof,
-         &jl_builtin_issubtype, &jl_builtin_isa, &jl_builtin_typeassert, &jl_builtin__apply,
-         &jl_builtin__apply_iterate,
-         &jl_builtin_isdefined, &jl_builtin_nfields, &jl_builtin_tuple, &jl_builtin_svec,
-         &jl_builtin_getfield, &jl_builtin_setfield, &jl_builtin_fieldtype, &jl_builtin_arrayref,
-         &jl_builtin_const_arrayref, &jl_builtin_arrayset, &jl_builtin_arraysize,
-         &jl_builtin_apply_type, &jl_builtin_applicable, &jl_builtin_invoke,
-         &jl_builtin__expr, &jl_builtin_ifelse, &jl_builtin__typebody,
-         NULL };
-static jl_value_t **const*const tags = (jl_value_t**const*const)_tags;
+    // Lazyily-initialize this list
+    if (_tags[0] == NULL) {
+        unsigned int i = 0;
+#define INSERT_TAG(sym) _tags[i++] = &(sym)
+        // builtin types
+        INSERT_TAG(jl_any_type);
+        INSERT_TAG(jl_symbol_type);
+        INSERT_TAG(jl_ssavalue_type);
+        INSERT_TAG(jl_datatype_type);
+        INSERT_TAG(jl_slotnumber_type);
+        INSERT_TAG(jl_simplevector_type);
+        INSERT_TAG(jl_array_type);
+        INSERT_TAG(jl_typedslot_type);
+        INSERT_TAG(jl_expr_type);
+        INSERT_TAG(jl_globalref_type);
+        INSERT_TAG(jl_string_type);
+        INSERT_TAG(jl_module_type);
+        INSERT_TAG(jl_tvar_type);
+        INSERT_TAG(jl_method_instance_type);
+        INSERT_TAG(jl_method_type);
+        INSERT_TAG(jl_code_instance_type);
+        INSERT_TAG(jl_linenumbernode_type);
+        INSERT_TAG(jl_lineinfonode_type);
+        INSERT_TAG(jl_gotonode_type);
+        INSERT_TAG(jl_quotenode_type);
+        INSERT_TAG(jl_gotoifnot_type);
+        INSERT_TAG(jl_argument_type);
+        INSERT_TAG(jl_returnnode_type);
+        INSERT_TAG(jl_const_type);
+        INSERT_TAG(jl_partial_struct_type);
+        INSERT_TAG(jl_method_match_type);
+        INSERT_TAG(jl_pinode_type);
+        INSERT_TAG(jl_phinode_type);
+        INSERT_TAG(jl_phicnode_type);
+        INSERT_TAG(jl_upsilonnode_type);
+        INSERT_TAG(jl_type_type);
+        INSERT_TAG(jl_bottom_type);
+        INSERT_TAG(jl_ref_type);
+        INSERT_TAG(jl_pointer_type);
+        INSERT_TAG(jl_llvmpointer_type);
+        INSERT_TAG(jl_vararg_type);
+        INSERT_TAG(jl_abstractarray_type);
+        INSERT_TAG(jl_densearray_type);
+        INSERT_TAG(jl_nothing_type);
+        INSERT_TAG(jl_function_type);
+        INSERT_TAG(jl_typeofbottom_type);
+        INSERT_TAG(jl_unionall_type);
+        INSERT_TAG(jl_typename_type);
+        INSERT_TAG(jl_builtin_type);
+        INSERT_TAG(jl_code_info_type);
+        INSERT_TAG(jl_task_type);
+        INSERT_TAG(jl_uniontype_type);
+        INSERT_TAG(jl_abstractstring_type);
+        INSERT_TAG(jl_array_any_type);
+        INSERT_TAG(jl_intrinsic_type);
+        INSERT_TAG(jl_abstractslot_type);
+        INSERT_TAG(jl_methtable_type);
+        INSERT_TAG(jl_typemap_level_type);
+        INSERT_TAG(jl_typemap_entry_type);
+        INSERT_TAG(jl_voidpointer_type);
+        INSERT_TAG(jl_uint8pointer_type);
+        INSERT_TAG(jl_newvarnode_type);
+        INSERT_TAG(jl_anytuple_type_type);
+        INSERT_TAG(jl_anytuple_type);
+        INSERT_TAG(jl_namedtuple_type);
+        INSERT_TAG(jl_emptytuple_type);
+        INSERT_TAG(jl_array_symbol_type);
+        INSERT_TAG(jl_array_uint8_type);
+        INSERT_TAG(jl_array_int32_type);
+        INSERT_TAG(jl_int32_type);
+        INSERT_TAG(jl_int64_type);
+        INSERT_TAG(jl_bool_type);
+        INSERT_TAG(jl_uint8_type);
+        INSERT_TAG(jl_uint32_type);
+        INSERT_TAG(jl_uint64_type);
+        INSERT_TAG(jl_char_type);
+        INSERT_TAG(jl_weakref_type);
+        INSERT_TAG(jl_int8_type);
+        INSERT_TAG(jl_int16_type);
+        INSERT_TAG(jl_uint16_type);
+        INSERT_TAG(jl_float16_type);
+        INSERT_TAG(jl_float32_type);
+        INSERT_TAG(jl_float64_type);
+        INSERT_TAG(jl_floatingpoint_type);
+        INSERT_TAG(jl_number_type);
+        INSERT_TAG(jl_signed_type);
+
+        // special typenames
+        INSERT_TAG(jl_tuple_typename);
+        INSERT_TAG(jl_pointer_typename);
+        INSERT_TAG(jl_llvmpointer_typename);
+        INSERT_TAG(jl_array_typename);
+        INSERT_TAG(jl_type_typename);
+        INSERT_TAG(jl_vararg_typename);
+        INSERT_TAG(jl_namedtuple_typename);
+        INSERT_TAG(jl_vecelement_typename);
+
+        // special exceptions
+        INSERT_TAG(jl_errorexception_type);
+        INSERT_TAG(jl_argumenterror_type);
+        INSERT_TAG(jl_typeerror_type);
+        INSERT_TAG(jl_methoderror_type);
+        INSERT_TAG(jl_loaderror_type);
+        INSERT_TAG(jl_initerror_type);
+        INSERT_TAG(jl_undefvarerror_type);
+        INSERT_TAG(jl_stackovf_exception);
+        INSERT_TAG(jl_diverror_exception);
+        INSERT_TAG(jl_interrupt_exception);
+        INSERT_TAG(jl_boundserror_type);
+        INSERT_TAG(jl_memory_exception);
+        INSERT_TAG(jl_undefref_exception);
+        INSERT_TAG(jl_readonlymemory_exception);
+
+        // other special values
+        INSERT_TAG(jl_emptysvec);
+        INSERT_TAG(jl_emptytuple);
+        INSERT_TAG(jl_false);
+        INSERT_TAG(jl_true);
+        INSERT_TAG(jl_nothing);
+        INSERT_TAG(jl_an_empty_string);
+        INSERT_TAG(jl_an_empty_vec_any);
+        INSERT_TAG(jl_module_init_order);
+        INSERT_TAG(jl_core_module);
+        INSERT_TAG(jl_base_module);
+        INSERT_TAG(jl_main_module);
+        INSERT_TAG(jl_top_module);
+        INSERT_TAG(jl_typeinf_func);
+        INSERT_TAG(jl_type_type_mt);
+        INSERT_TAG(jl_nonfunction_mt);
+
+        // some Core.Builtin Functions that we want to be able to reference:
+        INSERT_TAG(jl_builtin_throw);
+        INSERT_TAG(jl_builtin_is);
+        INSERT_TAG(jl_builtin_typeof);
+        INSERT_TAG(jl_builtin_sizeof);
+        INSERT_TAG(jl_builtin_issubtype);
+        INSERT_TAG(jl_builtin_isa);
+        INSERT_TAG(jl_builtin_typeassert);
+        INSERT_TAG(jl_builtin__apply);
+        INSERT_TAG(jl_builtin__apply_iterate);
+        INSERT_TAG(jl_builtin_isdefined);
+        INSERT_TAG(jl_builtin_nfields);
+        INSERT_TAG(jl_builtin_tuple);
+        INSERT_TAG(jl_builtin_svec);
+        INSERT_TAG(jl_builtin_getfield);
+        INSERT_TAG(jl_builtin_setfield);
+        INSERT_TAG(jl_builtin_fieldtype);
+        INSERT_TAG(jl_builtin_arrayref);
+        INSERT_TAG(jl_builtin_const_arrayref);
+        INSERT_TAG(jl_builtin_arrayset);
+        INSERT_TAG(jl_builtin_arraysize);
+        INSERT_TAG(jl_builtin_apply_type);
+        INSERT_TAG(jl_builtin_applicable);
+        INSERT_TAG(jl_builtin_invoke);
+        INSERT_TAG(jl_builtin__expr);
+        INSERT_TAG(jl_builtin_ifelse);
+        INSERT_TAG(jl_builtin__typebody);
+
+        // All optional tags must be placed at the end, so that we
+        // don't accidentally have a `NULL` in the middle
+#ifdef SEGV_EXCEPTION
+        INSERT_TAG(jl_segv_exception);
+#endif
+#undef INSERT_TAG
+        assert(i >= (NUM_TAGS-2) && i < NUM_TAGS);
+    }
+    return (jl_value_t**const*const) _tags;
+}
 
 // hash of definitions for predefined tagged object
 static htable_t symbol_table;
@@ -99,7 +218,6 @@ static arraylist_t deser_sym;
 static htable_t backref_table;
 static int backref_table_numel;
 static arraylist_t layout_table;
-static arraylist_t builtin_typenames;
 
 // list of (size_t pos, (void *f)(jl_value_t*)) entries
 // for the serializer to mark values in need of rework by function f
@@ -259,8 +377,8 @@ static uintptr_t jl_fptr_id(void *fptr)
         return *(uintptr_t*)pbp;
 }
 
-#define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
-static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v);
+#define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v),1)
+static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recursive);
 
 
 static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
@@ -287,7 +405,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
 
 #define NBOX_C 1024
 
-static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
+static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recursive)
 {
     // ignore items that are given a special representation
     if (v == NULL || jl_is_symbol(v)) {
@@ -331,6 +449,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         // skip it
     }
     else if (jl_is_svec(v)) {
+        if (!recursive)
+            return;
         size_t i, l = jl_svec_len(v);
         jl_value_t **data = jl_svec_data(v);
         for (i = 0; i < l; i++) {
@@ -365,6 +485,17 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
+    }
+    else if (jl_is_typename(v)) {
+        jl_typename_t *tn = (jl_typename_t*)v;
+        jl_serialize_value(s, tn->name);
+        jl_serialize_value(s, tn->module);
+        jl_serialize_value(s, tn->names);
+        jl_serialize_value(s, tn->wrapper);
+        jl_serialize_value_(s, (jl_value_t*)tn->cache, 0);
+        jl_serialize_value_(s, (jl_value_t*)tn->linearcache, 0);
+        jl_serialize_value(s, tn->mt);
+        jl_serialize_value(s, tn->partial);
     }
     else if (t->layout->nfields > 0) {
         char *data = (char*)jl_data_ptr(v);
@@ -1235,7 +1366,7 @@ static void jl_finalize_serializer(jl_serializer_state *s, arraylist_t *list)
 }
 
 
-static void jl_reinit_item(jl_value_t *v, int how)
+static void jl_reinit_item(jl_value_t *v, int how) JL_GC_DISABLED
 {
     switch (how) {
         case 1: { // rehash IdDict
@@ -1280,7 +1411,7 @@ static void jl_reinit_item(jl_value_t *v, int how)
 }
 
 
-static void jl_finalize_deserializer(jl_serializer_state *s)
+static void jl_finalize_deserializer(jl_serializer_state *s) JL_GC_DISABLED
 {
     // run reinitialization functions
     uintptr_t base = (uintptr_t)&s->s->buf[0];
@@ -1298,21 +1429,40 @@ static void jl_finalize_deserializer(jl_serializer_state *s)
 // --- helper functions ---
 
 // remove cached types not referenced in the stream
-static void jl_prune_type_cache(jl_svec_t *cache)
+static int keep_type_cache_entry(jl_value_t *ti)
+{
+    if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(native_functions, ti) != 0)
+        return 1;
+    if (jl_is_datatype(ti)) {
+        jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
+        if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND ||
+                    jl_get_llvm_gv(native_functions, singleton) != 0))
+            return 1;
+    }
+    return 0;
+}
+
+static void jl_prune_type_cache_hash(jl_svec_t *cache)
+{
+    size_t l = jl_svec_len(cache), i;
+    for (i = 0; i < l; i++) {
+        jl_value_t *ti = jl_svecref(cache, i);
+        if (ti == NULL || ti == jl_nothing)
+            continue;
+        if (!keep_type_cache_entry(ti))
+            jl_svecset(cache, i, jl_nothing);
+    }
+}
+
+static void jl_prune_type_cache_linear(jl_svec_t *cache)
 {
     size_t l = jl_svec_len(cache), ins = 0, i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
         if (ti == NULL)
             break;
-        if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(native_functions, ti) != 0)
+        if (keep_type_cache_entry(ti))
             jl_svecset(cache, ins++, ti);
-        else if (jl_is_datatype(ti)) {
-            jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
-            if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND ||
-                        jl_get_llvm_gv(native_functions, singleton) != 0))
-                jl_svecset(cache, ins++, ti);
-        }
     }
     if (i > ins) {
         memset(&jl_svec_data(cache)[ins], 0, (i - ins) * sizeof(jl_value_t*));
@@ -1325,7 +1475,7 @@ static void jl_prune_type_cache(jl_svec_t *cache)
 static void jl_init_serializer2(int);
 static void jl_cleanup_serializer2(void);
 
-static void jl_save_system_image_to_stream(ios_t *f)
+static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
@@ -1353,6 +1503,7 @@ static void jl_save_system_image_to_stream(ios_t *f)
     s.ptls = jl_get_ptls_states();
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
+    jl_value_t **const*const tags = get_tags();
 
     // empty!(Core.ARGS)
     if (jl_core_module != NULL) {
@@ -1376,15 +1527,13 @@ static void jl_save_system_image_to_stream(ios_t *f)
             jl_value_t *tag = *tags[i];
             jl_serialize_value(&s, tag);
         }
-        for (i = 0; i < builtin_typenames.len; i++) {
-            jl_typename_t *tn = (jl_typename_t*)builtin_typenames.items[i];
-            jl_prune_type_cache(tn->cache);
-            jl_prune_type_cache(tn->linearcache);
-        }
-        for (i = 0; i < builtin_typenames.len; i++) {
-            jl_typename_t *tn = (jl_typename_t*)builtin_typenames.items[i];
-            jl_serialize_value(&s, tn->cache);
-            jl_serialize_value(&s, tn->linearcache);
+        // prune unused entries from built-in type caches
+        for (i = 0; i < backref_table.size; i += 2) {
+            jl_typename_t *tn = (jl_typename_t*)backref_table.table[i];
+            if (tn == HT_NOTFOUND || !jl_is_typename(tn))
+                continue;
+            jl_prune_type_cache_hash(tn->cache);
+            jl_prune_type_cache_linear(tn->linearcache);
         }
     }
 
@@ -1509,7 +1658,7 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
     sysimg_fptrs = jl_init_processor_sysimg(handle);
 }
 
-static void jl_restore_system_image_from_stream(ios_t *f)
+static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
 {
     JL_TIMING(SYSIMG_LOAD);
     int en = jl_gc_enable(0);
@@ -1525,6 +1674,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     s.ptls = jl_get_ptls_states();
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
+    jl_value_t **const*const tags = get_tags();
 
     // step 1: read section map
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
@@ -1686,7 +1836,6 @@ static void jl_init_serializer2(int for_serialize)
         htable_new(&symbol_table, 0);
         htable_new(&fptr_to_id, sizeof(id_to_fptrs) / sizeof(*id_to_fptrs));
         htable_new(&backref_table, 0);
-        arraylist_new(&builtin_typenames, 0);
         uintptr_t i;
         for (i = 0; id_to_fptrs[i] != NULL; i++) {
             ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
@@ -1704,7 +1853,6 @@ static void jl_cleanup_serializer2(void)
     htable_reset(&fptr_to_id, 0);
     htable_reset(&backref_table, 0);
     arraylist_free(&deser_sym);
-    arraylist_free(&builtin_typenames);
 }
 
 #ifdef __cplusplus
