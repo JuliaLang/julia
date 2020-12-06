@@ -5,7 +5,7 @@ module Libc
 Interface to libc, the C standard library.
 """ Libc
 
-import Base: transcode, windowserror
+import Base: transcode, windowserror, show
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
@@ -401,5 +401,9 @@ rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
 Interface to the C `srand(seed)` function.
 """
 srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
+
+# Include dlopen()/dlpath() code
+include("libdl.jl")
+using .Libdl
 
 end # module

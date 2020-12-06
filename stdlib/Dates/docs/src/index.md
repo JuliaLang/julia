@@ -220,8 +220,7 @@ julia> Dates.Day(t)
 31 days
 ```
 
-Compound methods are provided, as they provide a measure of efficiency if multiple fields are
-needed at the same time:
+Compound methods are provided because it is more efficient to access multiple fields at the same time than individually:
 
 ```jldoctest tdate
 julia> Dates.yearmonth(t)
@@ -331,7 +330,7 @@ function `dayabbr` will error.
 
 ```jldoctest tdate2
 julia> Dates.dayabbr(t;locale="french")
-ERROR: BoundsError: attempt to access 1-element Array{String,1} at index [5]
+ERROR: BoundsError: attempt to access 1-element Vector{String} at index [5]
 Stacktrace:
 [...]
 ```
@@ -350,7 +349,7 @@ calculation in a conversation. Why all the fuss about this? Let's take a classic
 1 month to January 31st, 2014. What's the answer? Javascript will say [March 3](https://markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/)
 (assumes 31 days). PHP says [March 2](https://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month)
 (assumes 30 days). The fact is, there is no right answer. In the `Dates` module, it gives
-the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7
+the result of February 28th. How does it figure that out? Consider the classic 7-7-7
 gambling game in casinos.
 
 Now just imagine that instead of 7-7-7, the slots are Year-Month-Day, or in our example, 2014-01-31.
@@ -403,7 +402,7 @@ julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
 Date("2014-01-29"):Day(1):Date("2014-02-03")
 
 julia> collect(dr)
-6-element Array{Date,1}:
+6-element Vector{Date}:
  2014-01-29
  2014-01-30
  2014-01-31
@@ -415,7 +414,7 @@ julia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)
 Date("2014-01-29"):Month(1):Date("2014-07-29")
 
 julia> collect(dr)
-7-element Array{Date,1}:
+7-element Vector{Date}:
  2014-01-29
  2014-02-28
  2014-03-29
@@ -491,7 +490,7 @@ julia> filter(dr) do x
            Dates.April <= Dates.month(x) <= Dates.Nov &&
            Dates.dayofweekofmonth(x) == 2
        end
-8-element Array{Date,1}:
+8-element Vector{Date}:
  2014-04-08
  2014-05-13
  2014-06-10
@@ -643,6 +642,8 @@ Dates.TimeType
 Dates.DateTime
 Dates.Date
 Dates.Time
+Dates.TimeZone
+Dates.UTC
 ```
 
 ## Dates Functions
@@ -669,7 +670,7 @@ Dates.Time(::Function, ::Any...)
 Dates.Time(::Dates.DateTime)
 Dates.now()
 Dates.now(::Type{Dates.UTC})
-Base.eps
+Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, TimeType})
 ```
 
 ### Accessor Functions

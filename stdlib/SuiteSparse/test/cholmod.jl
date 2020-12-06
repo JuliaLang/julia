@@ -278,7 +278,7 @@ end
 
 # Test Dense wrappers (only Float64 supported a present)
 
-@testset "High level interface" for elty in (Float64, Complex{Float64})
+@testset "High level interface" for elty in (Float64, ComplexF64)
     local A, b
     if elty == Float64
         A = randn(5, 5)
@@ -325,7 +325,7 @@ end
     @test CHOLMOD.free!(p)
 end
 
-@testset "Core functionality" for elty in (Float64, Complex{Float64})
+@testset "Core functionality" for elty in (Float64, ComplexF64)
     A1 = sparse([1:5; 1], [1:5; 2], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
     A2 = sparse([1:5; 1], [1:5; 2], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
     A1pd = A1'A1
@@ -352,7 +352,7 @@ end
     if elty <: Real
         @test_throws ArgumentError convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, A1Sparse)
     else
-        @test_throws ArgumentError convert(Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Int}}, A1Sparse)
+        @test_throws ArgumentError convert(Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,Int}}, A1Sparse)
     end
     @test copy(A1Sparse) == A1Sparse
     @test size(A1Sparse, 3) == 1
@@ -866,11 +866,16 @@ end
     end
 end
 
-@testset "Issue #27860" begin
-    for typeA in (Float64, ComplexF64), typeB in (Float64, ComplexF64), transform in (adjoint, transpose)
+@testset "Issues #27860 & #28363" begin
+    for typeA in (Float64, ComplexF64), typeB in (Float64, ComplexF64), transform in (identity, adjoint, transpose)
         A = sparse(typeA[2.0 0.1; 0.1 2.0])
         B = randn(typeB, 2, 2)
         @test A \ transform(B) ≈ cholesky(A) \ transform(B) ≈ Matrix(A) \ transform(B)
+        C = randn(typeA, 2, 2)
+        sC = sparse(C)
+        sF = typeA <: Real ? cholesky(Symmetric(A)) : cholesky(Hermitian(A))
+        @test cholesky(A) \ transform(sC) ≈ Matrix(A) \ transform(C)
+        @test sF.PtL \ transform(A) ≈ sF.PtL \ Matrix(transform(A))
     end
 end
 

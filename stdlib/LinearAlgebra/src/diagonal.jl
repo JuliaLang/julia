@@ -21,13 +21,13 @@ Construct a matrix from the diagonal of `A`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  4  5  6
  7  8  9
 
 julia> Diagonal(A)
-3×3 Diagonal{Int64,Array{Int64,1}}:
+3×3 Diagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅
  ⋅  5  ⋅
  ⋅  ⋅  9
@@ -43,12 +43,12 @@ Construct a matrix with `V` as its diagonal.
 # Examples
 ```jldoctest
 julia> V = [1, 2]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
 julia> Diagonal(V)
-2×2 Diagonal{Int64,Array{Int64,1}}:
+2×2 Diagonal{Int64, Vector{Int64}}:
  1  ⋅
  ⋅  2
 ```
@@ -91,7 +91,7 @@ end
     r
 end
 diagzero(::Diagonal{T},i,j) where {T} = zero(T)
-diagzero(D::Diagonal{Matrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+diagzero(D::Diagonal{<:AbstractMatrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
@@ -174,8 +174,22 @@ end
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
-(*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
-(*)(D::Diagonal, V::AbstractVector) = D.diag .* V
+
+function (*)(Da::Diagonal, Db::Diagonal)
+    nDa, mDb = size(Da, 2), size(Db, 1)
+    if nDa != mDb
+        throw(DimensionMismatch("second dimension of Da, $nDa, does not match first dimension of Db, $mDb"))
+    end
+    return Diagonal(Da.diag .* Db.diag)
+end
+
+function (*)(D::Diagonal, V::AbstractVector)
+    nD = size(D, 2)
+    if nD != length(V)
+        throw(DimensionMismatch("second dimension of D, $nD, does not match length of V, $(length(V))"))
+    end
+    return D.diag .* V
+end
 
 (*)(A::AbstractTriangular, D::Diagonal) =
     rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
@@ -296,14 +310,6 @@ function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
     B = transB.parent
     return rmul!(A, transpose(B))
 end
-
-# Elements of `out` may not be defined (e.g., for `BigFloat`). To make
-# `mul!(out, A, B)` work for such cases, `out .*ₛ beta` short-circuits
-# `out * beta`.  Using `broadcasted` to avoid the multiplication
-# inside this function.
-function *ₛ end
-Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false : broadcasted(*, out, beta)
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
 @inline mul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
@@ -745,4 +751,8 @@ end
 function logabsdet(A::Diagonal)
      mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),
                A.diag)
+end
+
+function Base.muladd(A::Diagonal, B::Diagonal, z::Diagonal)
+    Diagonal(A.diag .* B.diag .+ z.diag)
 end

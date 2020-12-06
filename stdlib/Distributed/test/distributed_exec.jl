@@ -439,7 +439,7 @@ catch ex
     # test showerror
     err_str = sprint(showerror, ex)
     err_one_str = sprint(showerror, ex.exceptions[1])
-    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
+    @test err_str == err_one_str * "\n\n...and 4 more exceptions.\n"
 end
 @test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
@@ -1399,6 +1399,13 @@ let thrown = false
     @test thrown
 end
 
+# issue #34333
+let
+    @test fetch(remotecall(Float64, id_other, 1)) == Float64(1)
+    @test fetch(remotecall_wait(Float64, id_other, 1)) == Float64(1)
+    @test remotecall_fetch(Float64, id_other, 1) == Float64(1)
+end
+
 #19463
 function foo19463()
     w1 = workers()[1]
@@ -1683,16 +1690,20 @@ let (h, t) = Distributed.head_and_tail(Int[], 0)
 end
 
 # issue #35937
-let e
-    try
-        pmap(1) do _
+let e = @test_throws RemoteException pmap(1) do _
             wait(@async error(42))
         end
-    catch ex
-        e = ex
-    end
     # check that the inner TaskFailedException is correctly formed & can be printed
-    @test sprint(showerror, e) isa String
+    es = sprint(showerror, e.value)
+    @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
+    @test contains(es, "\n\n    nested task error:")
+    @test_broken contains(es, "\n\n    nested task error: 42\n")
+end
+
+# issue #27429, propagate relative `include` path to workers
+@everywhere include("includefile.jl")
+for p in procs()
+    @test @fetchfrom(p, i27429) == 27429
 end
 
 include("splitrange.jl")

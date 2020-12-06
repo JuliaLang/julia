@@ -156,10 +156,11 @@ Building Julia requires that the following software be installed:
 - **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
 - **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
 - **[powershell]** (>= 3.0)     — necessary only on Windows.
+- **[which]**                   — needed for checking build dependencies.
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
-sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config
+sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config curl
 ```
 
 Julia uses the following external libraries, which are automatically
@@ -181,7 +182,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 - **[GMP]**                  — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]**                 — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
 - **[libgit2]**              — Git linkable library, used by Julia's package manager.
-- **[curl]**                 — libcurl provides download and proxy support for Julia's package manager.
+- **[curl]**                 — libcurl provides download and proxy support.
 - **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
 - **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
@@ -220,6 +221,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 [powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
+[which]:        https://carlowood.github.io/which/
 
 ## Build dependencies
 
@@ -274,3 +276,11 @@ distribution does not include the source code of dependencies.
 
 For example, `julia-1.0.0.tar.gz` is the light source distribution for the `v1.0.0` release
 of Julia, while `julia-1.0.0-full.tar.gz` is the full source distribution.
+
+## Building Julia from source with a Git checkout of a stdlib
+
+If you need to build Julia from source with a Git checkout of a stdlib, then use `make DEPS_GIT=NAME_OF_STDLIB` when building Julia.
+
+For example, if you need to build Julia from source with a Git checkout of Pkg, then use `make DEPS_GIT=Pkg` when building Julia. The `Pkg` repo is in `stdlib/Pkg`, and created initially with a detached `HEAD`. If you're doing this from a pre-existing Julia repository, you may need to `make clean` beforehand.
+
+If you need to build Julia from source with Git checkouts of more than one stdlib, then `DEPS_GIT` should be a space-separated list of the stdlib names. For example, if you need to build Julia from source with a Git checkout of Pkg, Tar, and Downloads, then use `make DEPS_GIT='Pkg Tar Downloads'` when building Julia.

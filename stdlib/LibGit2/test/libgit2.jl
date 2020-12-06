@@ -47,9 +47,9 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         return "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
-    with_fake_pty() do pty_slave, pty_master
-        p = run(detach(cmd), pty_slave, pty_slave, pty_slave, wait=false)
-        Base.close_stdio(pty_slave)
+    with_fake_pty() do pts, ptm
+        p = run(detach(cmd), pts, pts, pts, wait=false)
+        Base.close_stdio(pts)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
         # for input.
@@ -79,25 +79,25 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         end
 
         for (challenge, response) in challenges
-            write(out, readuntil(pty_master, challenge, keep=true))
-            if !isopen(pty_master)
+            write(out, readuntil(ptm, challenge, keep=true))
+            if !isopen(ptm)
                 error("Could not locate challenge: \"$challenge\". ",
                       format_output(out))
             end
-            write(pty_master, response)
+            write(ptm, response)
         end
 
-        # Capture output from process until `pty_slave` is closed
+        # Capture output from process until `pts` is closed
         try
-            write(out, pty_master)
+            write(out, ptm)
         catch ex
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
-                rethrow() # ignore EIO from master after slave dies
+                rethrow() # ignore EIO from `ptm` after `pts` dies
             end
         end
 
         status = fetch(timer)
-        close(pty_master)
+        close(ptm)
         if status != :success
             if status == :timeout
                 error("Process timed out possibly waiting for a response. ",
@@ -111,7 +111,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
     nothing
 end
 
-const LIBGIT2_MIN_VER = v"0.23.0"
+const LIBGIT2_MIN_VER = v"1.0.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
 const KEY_DIR = joinpath(@__DIR__, "keys")
@@ -2388,6 +2388,103 @@ mktempdir() do dir
 
             Base.shred!(valid_cred)
             Base.shred!(valid_p_cred)
+        end
+
+        @testset "SSH known host checking" begin
+            key_hashes(sha1::String, sha256::String) = LibGit2.KeyHashes(
+                Tuple(hex2bytes(sha1)),
+                Tuple(hex2bytes(sha256)),
+            )
+            # randomly generated hashes matching no hosts
+            random_key_hashes = key_hashes(
+                "a9971372d02a67bdfea82e2b4808b4cf478b49c0",
+                "45aac5c20d5c7f8b998fee12fa9b75086c0d3ed6e33063f7ce940409ff4efbbc"
+            )
+            # hashes of the unique github.com fingerprint
+            github_key_hashes = key_hashes(
+                "bf6b6825d2977c511a475bbefb88aad54a92ac73",
+                "9d385b83a9175292561a5ec4d4818e0aca51a264f17420112ef88ac3a139498f"
+            )
+            # hashes of the middle github.com fingerprint
+            gitlab_key_hashes = key_hashes(
+                "4db6b9ab0209fcde106cbf0fc4560ad063a962ad",
+                "1db5b783ccd48cd4a4b056ea4e25163d683606ad71f3174652b9625c5cd29d4c"
+            )
+
+            # various key hash collections
+            partial_hashes(keys::LibGit2.KeyHashes) = [ keys,
+                LibGit2.KeyHashes(keys.sha1, nothing),
+                LibGit2.KeyHashes(nothing, keys.sha256),
+            ]
+            bad_hashes = LibGit2.KeyHashes(nothing, nothing)
+            random_hashes = partial_hashes(random_key_hashes)
+            github_hashes = partial_hashes(github_key_hashes)
+            gitlab_hashes = partial_hashes(gitlab_key_hashes)
+
+            # various known hosts files
+            no_file = tempname()
+            empty_file = tempname(); touch(empty_file)
+            known_hosts = joinpath(@__DIR__, "known_hosts")
+            wrong_hosts = tempname()
+            open(wrong_hosts, write=true) do io
+                for line in eachline(known_hosts)
+                    words = split(line)
+                    words[1] = words[1] == "github.com" ? "gitlab.com" :
+                               words[1] == "gitlab.com" ? "github.com" :
+                               words[1]
+                    println(io, join(words, " "))
+                end
+            end
+
+            @testset "bad hash errors" begin
+                hash = bad_hashes
+                for host in ["github.com", "gitlab.com", "unknown.host"],
+                    files in [[no_file], [empty_file], [known_hosts]]
+                    check = LibGit2.ssh_knownhost_check(files, host, hash)
+                    @test check == LibGit2.Consts.SSH_HOST_BAD_HASH
+                end
+            end
+
+            @testset "unknown hosts" begin
+                host = "unknown.host"
+                for hash in [github_hashes; gitlab_hashes; random_hashes],
+                    files in [[no_file], [empty_file], [known_hosts]]
+                    check = LibGit2.ssh_knownhost_check(files, host, hash)
+                    @test check == LibGit2.Consts.SSH_HOST_UNKNOWN
+                end
+            end
+
+            @testset "known hosts" begin
+                for (host, hashes) in [
+                        "github.com" => github_hashes,
+                        "gitlab.com" => gitlab_hashes,
+                    ], hash in hashes
+                    for files in [[no_file], [empty_file]]
+                        check = LibGit2.ssh_knownhost_check(files, host, hash)
+                        @test check == LibGit2.Consts.SSH_HOST_UNKNOWN
+                    end
+                    for files in [
+                            [known_hosts],
+                            [empty_file; known_hosts],
+                            [known_hosts; empty_file],
+                            [known_hosts; wrong_hosts],
+                        ]
+                        check = LibGit2.ssh_knownhost_check(files, host, hash)
+                        @test check == LibGit2.Consts.SSH_HOST_KNOWN
+                    end
+                    for files in [
+                            [wrong_hosts],
+                            [empty_file; wrong_hosts],
+                            [wrong_hosts; empty_file],
+                            [wrong_hosts; known_hosts],
+                        ]
+                        check = LibGit2.ssh_knownhost_check(files, host, hash)
+                        @test check == LibGit2.Consts.SSH_HOST_MISMATCH
+                    end
+                end
+            end
+
+            rm(empty_file)
         end
 
         @testset "HTTPS credential prompt" begin

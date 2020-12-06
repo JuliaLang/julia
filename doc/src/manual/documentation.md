@@ -1,7 +1,7 @@
-# Documentation
+# [Documentation](@id man-documentation)
 
 Julia enables package developers and users to document functions, types and other objects easily
-via a built-in documentation system since Julia 0.4.
+via a built-in documentation system.
 
 The basic syntax is simple: any string appearing at the toplevel right before an object
 (function, macro, type or instance) will be interpreted as documenting it (these are called

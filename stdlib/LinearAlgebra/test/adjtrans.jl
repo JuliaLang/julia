@@ -380,8 +380,8 @@ end
     # TODO tighten type asserts once pinv yields Transpose/Adjoint
     @test pinv(Adjoint(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
     @test pinv(Transpose(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
-    @test pinv(Adjoint(complexvec))::Vector{Complex{Float64}} ≈ pinv(conj(rowcomplexvec))
-    @test pinv(Transpose(complexvec))::Vector{Complex{Float64}} ≈ pinv(rowcomplexvec)
+    @test pinv(Adjoint(complexvec))::Vector{ComplexF64} ≈ pinv(conj(rowcomplexvec))
+    @test pinv(Transpose(complexvec))::Vector{ComplexF64} ≈ pinv(rowcomplexvec)
 end
 
 @testset "Adjoint/Transpose-wrapped vector left-division" begin
@@ -548,6 +548,13 @@ end
     # test if `conj(transpose(::Hermitian))` is a no-op
     hermitian = Hermitian([1 2+im; 2-im 3])
     @test conj(transpose(hermitian)) === hermitian
+end
+
+@testset "empty and mismatched lengths" begin
+    # issue 36678
+    @test_throws DimensionMismatch [1, 2]' * [1,2,3]
+    @test Int[]' * Int[] == 0
+    @test transpose(Int[]) * Int[] == 0
 end
 
 end # module TestAdjointTranspose

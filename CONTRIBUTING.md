@@ -189,7 +189,7 @@ Note: These instructions are for adding to or improving functionality in the bas
 
 Add new code to Julia's base libraries as follows (this is the "basic" approach; see a more efficient approach in the next section):
 
- 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `ui/`.
+ 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `cli/`.
 
  2. Add any new files to `sysimg.jl` in order to build them into the Julia system image.
 
@@ -266,11 +266,11 @@ runtest harness).
 #### General Formatting Guidelines For C code contributions
 
  - 4 spaces per indentation level, no tabs
- - space between if and ( (if (x) ...)
- - newline before opening { in function definitions
- - f(void) for 0-argument function declarations
- - newline between } and else instead of } else {
- - if one part of an if..else chain uses { } then all should
+ - space between `if` and `(` (`if (x) ...`)
+ - newline before opening `{` in function definitions
+ - `f(void)` for 0-argument function declarations
+ - newline between `}` and `else` instead of `} else {`
+ - if one part of an `if..else` chain uses `{ }` then all should
  - no whitespace at the end of a line
 
 ### Git Recommendations For Pull Requests

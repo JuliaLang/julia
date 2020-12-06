@@ -292,6 +292,110 @@ end
     end
 end
 
+@testset "muladd" begin
+    A23 = reshape(1:6, 2,3) .+ 0
+    B34 = reshape(1:12, 3,4) .+ im
+    u2 = [10,20]
+    v3 = [3,5,7] .+ im
+    w4 = [11,13,17,19im]
+
+    @testset "matrix-matrix" begin
+        @test muladd(A23, B34, 0) == A23 * B34
+        @test muladd(A23, B34, 100) == A23 * B34 .+ 100
+        @test muladd(A23, B34, u2) == A23 * B34 .+ u2
+        @test muladd(A23, B34, w4') == A23 * B34 .+ w4'
+        @test_throws DimensionMismatch muladd(B34, A23, 1)
+        @test muladd(ones(1,3), ones(3,4), ones(1,4)) == fill(4.0,1,4)
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(9,4))
+
+        # broadcasting fallback method allows trailing dims
+        @test muladd(A23, B34, ones(2,4,1)) == A23 * B34 + ones(2,4,1)
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(9,4,1))
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(1,4,9))
+        # and catches z::Array{T,0}
+        @test muladd(A23, B34, fill(0)) == A23 * B34
+    end
+    @testset "matrix-vector" begin
+        @test muladd(A23, v3, 0) == A23 * v3
+        @test muladd(A23, v3, 100) == A23 * v3 .+ 100
+        @test muladd(A23, v3, u2) == A23 * v3 .+ u2
+        @test muladd(A23, v3, im) isa Vector{Complex{Int}}
+        @test muladd(ones(1,3), ones(3), ones(1)) == [4]
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(7))
+
+        # fallback
+        @test muladd(A23, v3, ones(2,1,1)) == A23 * v3 + ones(2,1,1)
+        @test_throws DimensionMismatch muladd(A23, v3, ones(2,2))
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(7,1))
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(1,7))
+        @test muladd(A23, v3, fill(0)) == A23 * v3
+    end
+    @testset "adjoint-matrix" begin
+        @test muladd(v3', B34, 0) isa Adjoint
+        @test muladd(v3', B34, 2im) == v3' * B34 .+ 2im
+        @test muladd(v3', B34, w4') == v3' * B34 .+ w4'
+
+        # via fallback
+        @test muladd(v3', B34, ones(1,4)) == (B34' * v3 + ones(4,1))'
+        @test_throws DimensionMismatch muladd(v3', B34, ones(7,4))
+        @test_throws DimensionMismatch muladd(v3', B34, ones(1,4,7))
+        @test muladd(v3', B34, fill(0)) == v3' * B34 # does not make an Adjoint
+    end
+    @testset "vector-adjoint" begin
+        @test muladd(u2, v3', 0) isa Matrix
+        @test muladd(u2, v3', 99) == u2 * v3' .+ 99
+        @test muladd(u2, v3', A23) == u2 * v3' .+ A23
+
+        @test muladd(u2, v3', ones(2,3,1)) == u2 * v3' + ones(2,3,1)
+        @test_throws DimensionMismatch muladd(u2, v3', ones(2,3,4))
+        @test_throws DimensionMismatch muladd([1], v3', ones(7,3))
+        @test muladd(u2, v3', fill(0)) == u2 * v3'
+    end
+    @testset "dot" begin # all use muladd(::Any, ::Any, ::Any)
+        @test muladd(u2', u2, 0) isa Number
+        @test muladd(v3', v3, im) == dot(v3,v3) + im
+        @test muladd(u2', u2, [1]) == [dot(u2,u2) + 1]
+        @test_throws DimensionMismatch muladd(u2', u2, [1,1]) == [dot(u2,u2) + 1]
+        @test muladd(u2', u2, fill(0)) == dot(u2,u2)
+    end
+    @testset "arrays of arrays" begin
+        vofm = [rand(1:9,2,2) for _ in 1:3]
+        Mofm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
+
+        @test muladd(vofm', vofm, vofm[1]) == vofm' * vofm .+ vofm[1] # inner
+        @test muladd(vofm, vofm', Mofm) == vofm * vofm' .+ Mofm       # outer
+        @test muladd(vofm', Mofm, vofm') == vofm' * Mofm .+ vofm'     # bra-mat
+        @test muladd(Mofm, Mofm, vofm) == Mofm * Mofm .+ vofm         # mat-mat
+        @test muladd(Mofm, vofm, vofm) == Mofm * vofm .+ vofm         # mat-vec
+    end
+end
+
+@testset "muladd & structured matrices" begin
+    A33 = reshape(1:9, 3,3) .+ im
+    v3 = [3,5,7im]
+
+    # no special treatment
+    @test muladd(Symmetric(A33), Symmetric(A33), 1) == Symmetric(A33) * Symmetric(A33) .+ 1
+    @test muladd(Hermitian(A33), Hermitian(A33), v3) == Hermitian(A33) * Hermitian(A33) .+ v3
+    @test muladd(adjoint(A33), transpose(A33), A33) == A33' * transpose(A33) .+ A33
+
+    u1 = muladd(UpperTriangular(A33), UpperTriangular(A33), Diagonal(v3))
+    @test u1 isa UpperTriangular
+    @test u1 == UpperTriangular(A33) * UpperTriangular(A33) + Diagonal(v3)
+
+    # diagonal
+    @test muladd(Diagonal(v3), Diagonal(A33), Diagonal(v3)).diag == ([1,5,9] .+ im .+ 1) .* v3
+
+    # uniformscaling
+    @test muladd(Diagonal(v3), I, I).diag == v3 .+ 1
+    @test muladd(2*I, 3*I, I).λ == 7
+    @test muladd(A33, A33', I) == A33 * A33' + I
+
+    # https://github.com/JuliaLang/julia/issues/38426
+    @test @evalpoly(A33, 1.0*I, 1.0*I) == I + A33
+    @test @evalpoly(A33, 1.0*I, 1.0*I, 1.0*I) == I + A33 + A33^2
+end
+
 # issue #6450
 @test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
 

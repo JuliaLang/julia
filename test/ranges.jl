@@ -1002,14 +1002,25 @@ end
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
 end
 
+@testset "Ranges with <:Integer eltype but non-integer step (issue #32419)" begin
+    @test eltype(StepRange(1, 1//1, 2)) === Int
+    @test_throws ArgumentError StepRange(1, 1//2, 2)
+    @test eltype(StepRangeLen{Int}(1, 1//1, 2)) === Int
+    @test_throws ArgumentError StepRangeLen{Int}(1, 1//2, 2)
+    @test eltype(LinRange{Int}(1, 5, 3)) === Int
+    @test_throws ArgumentError LinRange{Int}(1, 5, 4)
+end
+
 @testset "LinRange ops" begin
     @test 2*LinRange(0,3,4) == LinRange(0,6,4)
     @test LinRange(0,3,4)*2 == LinRange(0,6,4)
     @test LinRange(0,3,4)/3 == LinRange(0,1,4)
     @test broadcast(-, 2, LinRange(0,3,4)) == LinRange(2,-1,4)
     @test broadcast(+, 2, LinRange(0,3,4)) == LinRange(2,5,4)
-    @test -LinRange(0,3,4) == LinRange(0,-3,4)
-    @test reverse(LinRange(0,3,4)) == LinRange(3,0,4)
+    @test -LinRange{Int}(0,3,4) === LinRange{Int}(0,-3,4)
+    @test -LinRange{Float64}(0.,3.,4) === LinRange{Float64}(-0.,-3.,4)
+    @test reverse(LinRange{Int}(0,3,4)) === LinRange{Int}(3,0,4)
+    @test reverse(LinRange{Float64}(0.,3.,4)) === LinRange{Float64}(3.,0.,4)
 end
 @testset "Issue #11245" begin
     io = IOBuffer()
@@ -1210,6 +1221,31 @@ end
     @test convert(Array{Float64,1}, r) == a
 end
 
+@testset "extrema" begin
+    @test_throws ArgumentError minimum(1:2:-1)
+    @test_throws ArgumentError argmin(Base.OneTo(-1))
+    @test_throws ArgumentError maximum(Base.OneTo(-1))
+    @test_throws ArgumentError argmax(1:-1)
+
+    for (r, imin, imax) in [
+            (Base.OneTo(5), 1, 5),
+            (1:10, 1, 10),
+            (10:-1:0, 11, 1),
+            (range(10, stop=20, length=5), 1, 5),
+            (range(10.3, step=-2, length=7), 7, 1),
+           ]
+        @test minimum(r) === r[imin]
+        @test maximum(r) === r[imax]
+        @test imin === argmin(r)
+        @test imax === argmax(r)
+        @test extrema(r) === (r[imin], r[imax])
+    end
+
+    r = 1f8-10:1f8
+    @test_broken argmin(f) == argmin(collect(r))
+    @test_broken argmax(f) == argmax(collect(r))
+end
+
 @testset "OneTo" begin
     let r = Base.OneTo(-5)
         @test isempty(r)
@@ -1225,6 +1261,8 @@ end
         @test last(r) == 3
         @test minimum(r) == 1
         @test maximum(r) == 3
+        @test argmin(r) == 1
+        @test argmax(r) == 3
         @test r[2] == 2
         @test r[2:3] === 2:3
         @test_throws BoundsError r[4]
@@ -1604,6 +1642,20 @@ end
     @test_throws DivideError mod(3, 1:0)
 end
 
+@testset "clamp with unitrange" begin
+    for n in -10:10
+        @test clamp(n, 0:4) == clamp(n, 0, 4)
+        @test clamp(n, Base.OneTo(5)) == clamp(n, 1, 5)
+    end
+    @test clamp(Int32(3), 1:5) === Int(3)
+    @test clamp(big(typemax(Int))+99, 0:4) == 4
+    @test_throws MethodError clamp(3.141, 1:5)
+    @test_throws MethodError clamp(3, UnitRange(1.0,5.0))
+    @test_throws MethodError clamp(3, 1:2:7)
+    @test clamp(3, 1:0) == clamp(3, 1, 0) == 0
+    @test clamp(-3, 1:0) == clamp(-3, 1, 0) == 1
+end
+
 @testset "issue #33882" begin
     r = StepRangeLen('a',2,4)
     @test step(r) === 2
@@ -1624,4 +1676,19 @@ end
     for T = (Base.OneTo{Int}, UnitRange{Int}, StepRange{Int,Int}, StepRangeLen{Int}, LinRange{Int})
         @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
     end
+end
+
+@testset "Type-stable intersect (#32410)" begin
+    for T = (StepRange{Int,Int}, StepRange{BigInt,Int}, StepRange{BigInt,BigInt})
+        @test @inferred(intersect(T(1:2:5), 1:5)) == 1:2:5
+        @test @inferred(intersect(1:5, T(1:2:5))) == 1:2:5
+        @test @inferred(intersect(T(5:-2:1), 1:5)) == 5:-2:1
+        @test @inferred(intersect(1:5, T(5:-2:1))) == 1:2:5
+        @test isempty(@inferred(intersect(T(5:2:3), 1:5)))
+        @test isempty(@inferred(intersect(1:5, T(5:2:3))))
+    end
+    @test @inferred(intersect(1:2:5, 1//1:1:5//1)) == 1:2:5
+    @test @inferred(intersect(1//1:1:5//1, 1:2:5)) == 1:2:5
+    @test @inferred(intersect(big(1):big(5), 3)) == 3:3
+    @test @inferred(intersect(3, big(1):big(5))) == 3:3
 end

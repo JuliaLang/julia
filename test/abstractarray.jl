@@ -93,6 +93,11 @@ end
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 2)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(5, 4), trues(2)) == false
+    @test checkbounds(Bool, A, trues(6, 4), trues(3)) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(4)) == false
 end
 
 @testset "array of CartesianIndex" begin
@@ -222,6 +227,58 @@ end
             end
             @test pr9256() == (3,2)
         end
+    end
+end
+
+@testset "LinearIndices" begin
+    @testset "constructors" begin
+        for oinds in [
+            (2, 3),
+            (UInt8(2), 3),
+            (2, UInt8(3)),
+            (2, 1:3),
+            (Base.OneTo(2), 1:3)
+        ]
+            R = LinearIndices(oinds)
+            @test size(R) == (2, 3)
+            @test axes(R) == (Base.OneTo(2), Base.OneTo(3))
+            @test R[begin] == 1
+            @test R[end] == 6
+        end
+
+        for oinds in [(2, ), (2, 3), (2, 3, 4)]
+            R = CartesianIndices(oinds)
+            @test size(R) == oinds
+        end
+    end
+
+    @testset "IdentityUnitRange" begin
+        function _collect(A)
+            rst = eltype(A)[]
+            for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+        function _simd_collect(A)
+            rst = eltype(A)[]
+            @simd for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+
+        for oinds in [
+            (Base.IdentityUnitRange(0:1),),
+            (Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(0:2)),
+            (Base.IdentityUnitRange(0:1), Base.OneTo(3)),
+        ]
+            R = LinearIndices(oinds)
+            @test axes(R) === oinds
+            @test _collect(R) == _simd_collect(R) == vec(collect(R))
+        end
+        R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
+        @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
     end
 end
 
@@ -401,6 +458,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] ==
                 B[LinearIndices(mask1)[findall(mask1)], LinearIndices(mask2)[findall(mask2)], trailing2]
             @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
+
+            if ndims(B) > 1
+                maskfront = bitrand(shape[1:end-1])
+                Bslice = B[ntuple(i->(:), ndims(B)-1)..., 1]
+                @test B[maskfront,1] == Bslice[maskfront]
+                @test size(B[maskfront, 1:1]) == (sum(maskfront), 1)
+            end
         end
     end
 end
@@ -610,6 +674,10 @@ function test_cat(::Type{TestAbstractArray})
     # 29172
     @test_throws ArgumentError cat([1], [2], dims=0)
     @test_throws ArgumentError cat([1], [2], dims=[5, -3])
+
+    # 36041
+    @test_throws MethodError cat(["a"], ["b"], dims=[1, 2])
+    @test cat([1], [1], dims=[1, 2]) == I(2)
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -780,6 +848,13 @@ end
     @test ndims((1:3)[:,:,1:1,:]) == 4
     @test ndims((1:3)[:,:,1:1]) == 3
     @test ndims((1:3)[:,:,1:1,:,:,[1]]) == 6
+end
+
+@testset "issue #38192" begin
+    img = cat([1 2; 3 4], [1 5; 6 7]; dims=3)
+    mask = img[:,:,1] .== img[:,:,2]
+    img[mask,2] .= 0
+    @test img == cat([1 2; 3 4], [0 5; 6 7]; dims=3)
 end
 
 @testset "dispatch loop introduced in #19305" begin
@@ -973,4 +1048,174 @@ end
         @test f35884(arrayOfUInt48) == 24
         @test Core.sizeof(arrayOfUInt48) == 24
     end
+end
+
+struct Strider{T,N} <: AbstractArray{T,N}
+    data::Vector{T}
+    offset::Int
+    strides::NTuple{N,Int}
+    size::NTuple{N,Int}
+end
+function Strider{T}(strides::NTuple{N}, size::NTuple{N}) where {T,N}
+    offset = 1-sum(strides .* (strides .< 0) .* (size .- 1))
+    data = Array{T}(undef, sum(abs.(strides) .* (size .- 1)) + 1)
+    return Strider{T, N, Vector{T}}(data, offset, strides, size)
+end
+function Strider(vec::AbstractArray{T}, strides::NTuple{N}, size::NTuple{N}) where {T,N}
+    offset = 1-sum(strides .* (strides .< 0) .* (size .- 1))
+    @assert length(vec) >= sum(abs.(strides) .* (size .- 1)) + 1
+    return Strider{T, N}(vec, offset, strides, size)
+end
+Base.size(S::Strider) = S.size
+function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
+    return S.data[sum(S.strides .* (I .- 1)) + S.offset]
+end
+Base.strides(S::Strider) = S.strides
+Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
+Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S.offset)
+
+@testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
+    A = collect(reshape(1:prod(sz), sz))
+    S = Strider(vec(A), strides(A), sz)
+    @test pointer(A) == pointer(S)
+    for i in 1:prod(sz)
+        @test pointer(A, i) == pointer(S, i)
+        @test A[i] == S[i]
+    end
+    for idxs in ((1:sz[1], 1:sz[2], 1:sz[3]),
+                 (1:sz[1], 2:2:sz[2], sz[3]:-1:1),
+                 (2:2:sz[1]-1, sz[2]:-1:1, sz[3]:-2:2),
+                 (sz[1]:-1:1, sz[2]:-1:1, sz[3]:-1:1),
+                 (sz[1]-1:-3:1, sz[2]:-2:3, 1:sz[3]),)
+        Ai = A[idxs...]
+        Av = view(A, idxs...)
+        Sv = view(S, idxs...)
+        Ss = Strider{Int, 3}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Av), length.(idxs))
+        @test pointer(Av) == pointer(Sv) == pointer(Ss)
+        for i in 1:length(Av)
+            @test pointer(Av, i) == pointer(Sv, i) == pointer(Ss, i)
+            @test Ai[i] == Av[i] == Sv[i] == Ss[i]
+        end
+        for perm in ((3, 2, 1), (2, 1, 3), (3, 1, 2))
+            P = permutedims(A, perm)
+            Ap = Base.PermutedDimsArray(A, perm)
+            Sp = Base.PermutedDimsArray(S, perm)
+            Ps = Strider{Int, 3}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
+            @test pointer(Ap) == pointer(Sp) == pointer(Ps)
+            for i in 1:length(Ap)
+                # This is intentionally disabled due to ambiguity
+                @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i)
+                @test P[i] == Ap[i] == Sp[i] == Ps[i]
+            end
+            Pv = view(P, idxs[collect(perm)]...)
+            Pi = P[idxs[collect(perm)]...]
+            Apv = view(Ap, idxs[collect(perm)]...)
+            Spv = view(Sp, idxs[collect(perm)]...)
+            Pvs = Strider{Int, 3}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Apv), size(Apv))
+            @test pointer(Apv) == pointer(Spv) == pointer(Pvs)
+            for i in 1:length(Apv)
+                @test pointer(Apv, i) == pointer(Spv, i) == pointer(Pvs, i)
+                @test Pi[i] == Pv[i] == Apv[i] == Spv[i] == Pvs[i]
+            end
+            Vp = permutedims(Av, perm)
+            Ip = permutedims(Ai, perm)
+            Avp = Base.PermutedDimsArray(Av, perm)
+            Svp = Base.PermutedDimsArray(Sv, perm)
+            @test pointer(Avp) == pointer(Svp)
+            for i in 1:length(Avp)
+                # This is intentionally disabled due to ambiguity
+                @test_broken pointer(Avp, i) == pointer(Svp, i)
+                @test Ip[i] == Vp[i] == Avp[i] == Svp[i]
+            end
+        end
+    end
+end
+
+@testset "simple 2d strided views, permutes, transposes" for sz in ((5, 3), (7, 11))
+    A = collect(reshape(1:prod(sz), sz))
+    S = Strider(vec(A), strides(A), sz)
+    @test pointer(A) == pointer(S)
+    for i in 1:prod(sz)
+        @test pointer(A, i) == pointer(S, i)
+        @test A[i] == S[i]
+    end
+    for idxs in ((1:sz[1], 1:sz[2]),
+                 (1:sz[1], 2:2:sz[2]),
+                 (2:2:sz[1]-1, sz[2]:-1:1),
+                 (sz[1]:-1:1, sz[2]:-1:1),
+                 (sz[1]-1:-3:1, sz[2]:-2:3),)
+        Av = view(A, idxs...)
+        Sv = view(S, idxs...)
+        Ss = Strider{Int, 2}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Av), length.(idxs))
+        @test pointer(Av) == pointer(Sv) == pointer(Ss)
+        for i in 1:length(Av)
+            @test pointer(Av, i) == pointer(Sv, i) == pointer(Ss, i)
+            @test Av[i] == Sv[i] == Ss[i]
+        end
+        perm = (2, 1)
+        P = permutedims(A, perm)
+        Ap = Base.PermutedDimsArray(A, perm)
+        At = transpose(A)
+        Aa = adjoint(A)
+        St = transpose(A)
+        Sa = adjoint(A)
+        Sp = Base.PermutedDimsArray(S, perm)
+        Ps = Strider{Int, 2}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
+        @test pointer(Ap) == pointer(Sp) == pointer(Ps) == pointer(At) == pointer(Aa)
+        for i in 1:length(Ap)
+            # This is intentionally disabled due to ambiguity
+            @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
+            @test pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
+            @test P[i] == Ap[i] == Sp[i] == Ps[i] == At[i] == Aa[i] == St[i] == Sa[i]
+        end
+        Pv = view(P, idxs[collect(perm)]...)
+        Apv = view(Ap, idxs[collect(perm)]...)
+        Atv = view(At, idxs[collect(perm)]...)
+        Ata = view(Aa, idxs[collect(perm)]...)
+        Stv = view(St, idxs[collect(perm)]...)
+        Sta = view(Sa, idxs[collect(perm)]...)
+        Spv = view(Sp, idxs[collect(perm)]...)
+        Pvs = Strider{Int, 2}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Apv), size(Apv))
+        @test pointer(Apv) == pointer(Spv) == pointer(Pvs) == pointer(Atv) == pointer(Ata)
+        for i in 1:length(Apv)
+            @test pointer(Apv, i) == pointer(Spv, i) == pointer(Pvs, i) == pointer(Atv, i) == pointer(Ata, i) == pointer(Stv, i) == pointer(Sta, i)
+            @test Pv[i] == Apv[i] == Spv[i] == Pvs[i] == Atv[i] == Ata[i] == Stv[i] == Sta[i]
+        end
+        Vp = permutedims(Av, perm)
+        Avp = Base.PermutedDimsArray(Av, perm)
+        Avt = transpose(Av)
+        Ava = adjoint(Av)
+        Svt = transpose(Sv)
+        Sva = adjoint(Sv)
+        Svp = Base.PermutedDimsArray(Sv, perm)
+        @test pointer(Avp) == pointer(Svp) == pointer(Avt) == pointer(Ava)
+        for i in 1:length(Avp)
+            # This is intentionally disabled due to ambiguity
+            @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
+            @test pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
+            @test Vp[i] == Avp[i] == Svp[i] == Avt[i] == Ava[i] == Svt[i] == Sva[i]
+        end
+    end
+end
+
+@testset "first/last n elements of $(typeof(itr))" for itr in (collect(1:9),
+                                                               [1 4 7; 2 5 8; 3 6 9],
+                                                               ntuple(identity, 9))
+    @test first(itr, 6) == [itr[1:6]...]
+    @test first(itr, 25) == [itr[:]...]
+    @test first(itr, 25) !== itr
+    @test first(itr, 1) == [itr[1]]
+    @test_throws ArgumentError first(itr, -6)
+    @test last(itr, 6) == [itr[end-5:end]...]
+    @test last(itr, 25) == [itr[:]...]
+    @test last(itr, 25) !== itr
+    @test last(itr, 1) == [itr[end]]
+    @test_throws ArgumentError last(itr, -6)
+end
+
+@testset "Base.rest" begin
+    a = reshape(1:4, 2, 2)'
+    @test Base.rest(a) == a[:]
+    _, st = iterate(a)
+    @test Base.rest(a, st) == [3, 2, 4]
 end

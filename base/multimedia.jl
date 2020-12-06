@@ -141,7 +141,7 @@ the value of `x` would be entered in Julia.
 julia> A = [1 2; 3 4];
 
 julia> repr("text/plain", A)
-"2×2 Array{Int64,2}:\\n 1  2\\n 3  4"
+"2×2 Matrix{Int64}:\\n 1  2\\n 3  4"
 ```
 """
 repr(m::MIME, x; context=nothing) = istextmime(m) ? _textrepr(m, x, context) : _binrepr(m, x, context)
@@ -327,7 +327,7 @@ function display(@nospecialize x)
             try
                 return display(displays[i], x)
             catch e
-                isa(e, MethodError) && e.f in (display, show) ||
+                isa(e, MethodError) && (e.f === display || e.f === show) ||
                     rethrow()
             end
         end

@@ -71,8 +71,6 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel);
 
-int jl_is_toplevel_only_expr(jl_value_t *e);
-
 // method definition form
 
 static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
@@ -126,7 +124,7 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     JL_GC_PUSHARGS(argv, nargs - 1);
     size_t i;
     for (i = 1; i < nargs; i++)
-        argv[i - 1] = eval_value(args[i], s);
+        argv[i] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
     jl_value_t *result = jl_invoke(argv[1], &argv[2], nargs - 2, meth);
@@ -168,7 +166,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         else
             return s->locals[jl_source_nslots(src) + id];
     }
-    if (jl_is_slot(e)) {
+    if (jl_is_slot(e) || jl_is_argument(e)) {
         ssize_t n = jl_slot_number(e);
         if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
@@ -211,7 +209,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
-        if (jl_is_slot(sym)) {
+        if (jl_is_slot(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
                 jl_error("access to invalid slot number");
@@ -335,7 +333,7 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
             //   %3 = phi (1)[1 => %a], (2)[2 => %b]
             // from = 1, to = closest = 2, i = 1 --> edge = 2, edge_from = 2, from = 2
             for (unsigned j = 0; j < jl_array_len(edges); ++j) {
-                size_t edge_from = jl_unbox_long(jl_arrayref(edges, j)); // 1-indexed
+                size_t edge_from = ((int32_t*)jl_array_data(edges))[j]; // 1-indexed
                 if (edge_from == from + 1) {
                     if (edge == -1)
                         edge = j;
@@ -407,6 +405,18 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         if (jl_is_gotonode(stmt)) {
             next_ip = jl_gotonode_label(stmt) - 1;
         }
+        else if (jl_is_gotoifnot(stmt)) {
+            jl_value_t *cond = eval_value(jl_gotoifnot_cond(stmt), s);
+            if (cond == jl_false) {
+                next_ip = jl_gotoifnot_label(stmt) - 1;
+            }
+            else if (cond != jl_true) {
+                jl_type_error("if", (jl_value_t*)jl_bool_type, cond);
+            }
+        }
+        else if (jl_is_returnnode(stmt)) {
+            return eval_value(jl_returnnode_value(stmt), s);
+        }
         else if (jl_is_upsilonnode(stmt)) {
             jl_value_t *val = jl_fieldref_noalloc(stmt, 0);
             if (val)
@@ -419,11 +429,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         else if (jl_is_expr(stmt)) {
             // Most exprs are allowed to end a BB by fall through
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
-            assert(head != unreachable_sym);
-            if (head == return_sym) {
-                return eval_value(jl_exprarg(stmt, 0), s);
-            }
-            else if (head == assign_sym) {
+            if (head == assign_sym) {
                 jl_value_t *lhs = jl_exprarg(stmt, 0);
                 jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
                 if (jl_is_slot(lhs)) {
@@ -447,15 +453,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
                     jl_checked_assignment(b, rhs);
                     JL_GC_POP();
-                }
-            }
-            else if (head == goto_ifnot_sym) {
-                jl_value_t *cond = eval_value(jl_exprarg(stmt, 0), s);
-                if (cond == jl_false) {
-                    next_ip = jl_unbox_long(jl_exprarg(stmt, 1)) - 1;
-                }
-                else if (cond != jl_true) {
-                    jl_type_error("if", (jl_value_t*)jl_bool_type, cond);
                 }
             }
             else if (head == enter_sym) {
@@ -537,10 +534,22 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)specialize_sym) {
                         jl_set_module_nospecialize(s->module, 0);
                     }
-                    if (jl_expr_nargs(stmt) == 2 && jl_exprarg(stmt, 0) == (jl_value_t*)optlevel_sym) {
-                        if (jl_is_long(jl_exprarg(stmt, 1))) {
-                            int n = jl_unbox_long(jl_exprarg(stmt, 1));
-                            jl_set_module_optlevel(s->module, n);
+                    if (jl_expr_nargs(stmt) == 2) {
+                        if (jl_exprarg(stmt, 0) == (jl_value_t*)optlevel_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                int n = jl_unbox_long(jl_exprarg(stmt, 1));
+                                jl_set_module_optlevel(s->module, n);
+                            }
+                        }
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)compile_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                jl_set_module_compile(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            }
+                        }
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)infer_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                jl_set_module_infer(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            }
                         }
                     }
                 }

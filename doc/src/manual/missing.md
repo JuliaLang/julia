@@ -237,7 +237,7 @@ false
 Arrays containing missing values can be created like other arrays
 ```jldoctest
 julia> [1, missing]
-2-element Array{Union{Missing, Int64},1}:
+2-element Vector{Union{Missing, Int64}}:
  1
   missing
 ```
@@ -254,10 +254,15 @@ Use `Array{Union{Missing, T}}(missing, dims)` to create arrays filled with
 missing values:
 ```jldoctest
 julia> Array{Union{Missing, String}}(missing, 2, 3)
-2×3 Array{Union{Missing, String},2}:
+2×3 Matrix{Union{Missing, String}}:
  missing  missing  missing
  missing  missing  missing
 ```
+
+!!! note
+    Using `undef` or `similar` may currently give an array filled with
+    `missing`, but this is not the correct way to obtain such an array.
+    Use a `missing` constructor as shown above instead.
 
 An array allowing for `missing` values but which does not contain any such value
 can be converted back to an array which does not allow for missing values using
@@ -265,17 +270,17 @@ can be converted back to an array which does not allow for missing values using
 during conversion
 ```jldoctest
 julia> x = Union{Missing, String}["a", "b"]
-2-element Array{Union{Missing, String},1}:
+2-element Vector{Union{Missing, String}}:
  "a"
  "b"
 
 julia> convert(Array{String}, x)
-2-element Array{String,1}:
+2-element Vector{String}:
  "a"
  "b"
 
 julia> y = Union{Missing, String}[missing, "b"]
-2-element Array{Union{Missing, String},1}:
+2-element Vector{Union{Missing, String}}:
  missing
  "b"
 
@@ -332,7 +337,7 @@ valid for the object returned by `skipmissing` which are also the indices of the
 matching entries *in the parent array*
 ```jldoctest skipmissing
 julia> findall(==(1), x)
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  4
 
 julia> findfirst(!iszero, x)
@@ -345,7 +350,7 @@ julia> argmax(x)
 Use [`collect`](@ref) to extract non-`missing` values and store them in an array
 ```jldoctest skipmissing
 julia> collect(x)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  2
  1

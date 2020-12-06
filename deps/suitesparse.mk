@@ -41,6 +41,9 @@ $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted: $(SRCCACHE)/SuiteSp
 	$(TAR) -C $(dir $@) --strip-components 1 -zxf $<
 	echo 1 > $@
 
+checksum-suitesparse: $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
 	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/SuiteSparse-winclang.patch
 	echo 1 > $@
@@ -138,10 +141,8 @@ install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EX
 
 else # USE_BINARYBUILDER_SUITESPARSE
 
-SUITESPARSE_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl/releases/download/SuiteSparse-v$(SUITESPARSE_VER)+$(SUITESPARSE_BB_REL)
-SUITESPARSE_BB_NAME := SuiteSparse.v$(SUITESPARSE_VER)
-
 $(eval $(call bb-install,suitesparse,SUITESPARSE,false))
+
 get-suitesparse-wrapper: get-suitesparse
 extract-suitesparse-wrapper: extract-suitesparse
 configure-suitesparse-wrapper: configure-suitesparse
