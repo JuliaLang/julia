@@ -289,7 +289,7 @@ wincmd(c::String) =
            windows_verbatim=true))
 wincmd_echo(s::String) =
    wincmd("echo " * Base.shell_escape_wincmd(s))
-wincmd_echo("hello \$(ENV["USER"]) & the \"whole\" world! (=^I^=)")
+wincmd_echo("hello \$(ENV["USERNAME"]) & the \"whole\" world! (=^I^=)")
 ```
 
 But take head that if the input string `s` contains a `%`, the argument list
