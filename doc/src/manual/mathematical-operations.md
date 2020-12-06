@@ -9,24 +9,26 @@ collection of standard mathematical functions.
 The following [arithmetic operators](https://en.wikipedia.org/wiki/Arithmetic#Arithmetic_operations)
 are supported on all primitive numeric types:
 
-| Expression | Name           | Description                                              |
-|:---------- |:-------------- |:---------------------------------------------------------|
-| `+x`       | unary plus     | the identity operation                                   |
-| `-x`       | unary minus    | maps values to their additive inverses                   |
-| `x + y`    | binary plus    | performs addition                                        |
-| `x - y`    | binary minus   | performs subtraction                                     |
-| `x * y`    | times          | performs multiplication                                  |
-| `x / y`    | divide         | performs division                                        |
-| `x ÷ y`    | integer divide | x / y, truncated to an integer, ÷ is typed by `\div<tab>`|
-| `x \ y`    | inverse divide | equivalent to `y / x`                                    |
-| `x ^ y`    | power          | raises `x` to the `y`th power                            |
-| `x % y`    | remainder      | equivalent to `rem(x,y)`                                 |
+| Expression | Name           | Description                             |
+|:---------- |:-------------- |:----------------------------------------|
+| `+x`       | unary plus     | the identity operation                  |
+| `-x`       | unary minus    | maps values to their additive inverses  |
+| `x + y`    | binary plus    | performs addition                       |
+| `x - y`    | binary minus   | performs subtraction                    |
+| `x * y`    | times          | performs multiplication                 |
+| `x / y`    | divide         | performs division                       |
+| `x ÷ y`    | integer divide | x / y, truncated to an integer          |
+| `x \ y`    | inverse divide | equivalent to `y / x`                   |
+| `x ^ y`    | power          | raises `x` to the `y`th power           |
+| `x % y`    | remainder      | equivalent to `rem(x,y)`                |
 
 A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x+y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
 naturally and automatically. See [Conversion and Promotion](@ref conversion-and-promotion) for details of the promotion
 system.
+
+The ÷ sign can be conveniently typed by writing `\div<tab>` to the REPL or Julia IDE. See the [manual section on Unicode input](@ref man-unicode-input) for more information.
 
 Here are some simple examples using arithmetic operators:
 
