@@ -87,7 +87,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
@@ -106,7 +106,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
