@@ -193,7 +193,9 @@ julia> Squares(23)[end]
 529
 ```
 
-For multi-dimensional `begin`/`end` indexing as in `a[3,begin,7]`, for example, you should define `firstindex(a,dim)` and `lastindex(a,dim)` (which default to calling `first` and `last` on `axes(a,dim)`, respectively).
+For multi-dimensional `begin`/`end` indexing as in `a[3, begin, 7]`, for example,
+you should define `firstindex(a, dim)` and `lastindex(a, dim)`
+(which default to calling `first` and `last` on `axes(a, dim)`, respectively).
 
 Note, though, that the above *only* defines [`getindex`](@ref) with one integer index. Indexing with
 anything other than an `Int` will throw a [`MethodError`](@ref) saying that there was no matching method.
