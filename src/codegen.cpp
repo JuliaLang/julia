@@ -5579,6 +5579,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     jl_returninfo_t props = {};
     SmallVector<Type*, 8> fsig;
     Type *rt;
+    Type *srt;
     if (jl_is_structtype(jlrettype) && jl_is_datatype_singleton((jl_datatype_t*)jlrettype)) {
         rt = T_void;
         props.cc = jl_returninfo_t::Register;
@@ -5612,6 +5613,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
                 props.return_roots = tracked.count;
             props.cc = jl_returninfo_t::SRet;
             fsig.push_back(rt->getPointerTo());
+            srt = rt;
             rt = T_void;
         }
         else {
@@ -5624,8 +5626,14 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
 
     AttributeList attributes; // function declaration attributes
     if (props.cc == jl_returninfo_t::SRet) {
+        assert(srt);
         unsigned argno = 1;
+#if JL_LLVM_VERSION < 120000
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::StructRet);
+#else
+        Attribute sret = Attribute::getWithStructRetType(jl_LLVMContext, srt);
+        attributes = attributes.addAttribute(jl_LLVMContext, argno, sret);
+#endif
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoAlias);
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoCapture);
     }
