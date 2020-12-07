@@ -44,7 +44,7 @@ Language changes
   a function like other operators. The dotted version `.-->` is now parsed as well.
   For backwards compatibility, `-->` still parses using its own expression head
   instead of `:call`.
-* The `a[begin,k]` syntax now calls `firstindex(a,1)` rather than `first(axes(a,1))` ([#35779]), but the former now defaults to the latter for any `a` ([#38742]).
+* The `a[begin, k]` syntax now calls `firstindex(a, 1)` rather than `first(axes(a, 1))` ([#35779]), but the former now defaults to the latter for any `a` ([#38742]).
 * `⌿` (U+233F) and `¦` (U+00A6) are now infix operators with times-like and plus-like precedence,
   respectively. Previously they were parsed as identifier characters ([#37973]).
 
