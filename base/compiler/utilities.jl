@@ -72,11 +72,24 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
-function is_inlineable_constant(@nospecialize(x))
-    if x isa Type || x isa Symbol
-        return true
+function count_const_size(@nospecialize(x))
+    (x isa Type || x isa Symbol) && return 0
+    ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
+    isbits(x) && return Core.sizeof(x)
+    dt = typeof(x)
+    sz = sizeof(dt)
+    sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
+    dtfd = DataTypeFieldDesc(dt)
+    for i = 1:nfields(x)
+        dtfd[i].isptr || continue
+        sz += count_const_size(getfield(x, i))
+        sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     end
-    return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
+    return sz
+end
+
+function is_inlineable_constant(@nospecialize(x))
+    return count_const_size(x) <= MAX_INLINE_CONST_SIZE
 end
 
 ###########################

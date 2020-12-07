@@ -363,7 +363,6 @@ function datatype_nfields(dt::DataType)
     return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
 end
 
-
 """
     Base.datatype_pointerfree(dt::DataType) -> Bool
 
@@ -391,6 +390,49 @@ function datatype_fielddesc_type(dt::DataType)
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return (flags >> 1) & 3
+end
+
+# For type stability, we only expose a single struct that describes everything
+struct FieldDesc
+    isforeign::Bool
+    isptr::Bool
+    size::UInt32
+    offset::UInt32
+end
+
+struct FieldDescStorage{T}
+    ptrsize::T
+    offset::T
+end
+FieldDesc(fd::FieldDescStorage{T}) where {T} =
+    FieldDesc(false, fd.ptrsize & 1 != 0,
+              fd.ptrsize >> 1, fd.offset)
+
+struct DataTypeFieldDesc
+    dt::DataType
+    function DataTypeFieldDesc(dt::DataType)
+        dt.layout == C_NULL && throw(UndefRefError())
+        new(dt)
+    end
+end
+
+function getindex(dtfd::DataTypeFieldDesc, i::Int)
+    layout_ptr = convert(Ptr{DataTypeLayout}, dtfd.dt.layout)
+    fd_ptr = layout_ptr + sizeof(DataTypeLayout)
+    layout = unsafe_load(layout_ptr)
+    fielddesc_type = (layout.flags >> 1) & 3
+    nfields = layout.nfields
+    @boundscheck ((1 <= i <= nfields) || throw(BoundsError(dtfd, i)))
+    if fielddesc_type == 0
+        return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt8}}(fd_ptr), i))
+    elseif fielddesc_type == 1
+        return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt16}}(fd_ptr), i))
+    elseif fielddesc_type == 2
+        return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt32}}(fd_ptr), i))
+    else
+        # fielddesc_type == 3
+        return FieldDesc(true, true, 0, 0)
+    end
 end
 
 """
