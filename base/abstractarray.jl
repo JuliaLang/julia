@@ -345,7 +345,7 @@ julia> lastindex(rand(3,4,5), 2)
 ```
 """
 lastindex(a::AbstractArray) = (@_inline_meta; last(eachindex(IndexLinear(), a)))
-lastindex(a::AbstractArray, d) = (@_inline_meta; last(axes(a, d)))
+lastindex(a, d) = (@_inline_meta; last(axes(a, d)))
 
 """
     firstindex(collection) -> Integer
@@ -363,7 +363,7 @@ julia> firstindex(rand(3,4,5), 2)
 ```
 """
 firstindex(a::AbstractArray) = (@_inline_meta; first(eachindex(IndexLinear(), a)))
-firstindex(a::AbstractArray, d) = (@_inline_meta; first(axes(a, d)))
+firstindex(a, d) = (@_inline_meta; first(axes(a, d)))
 
 first(a::AbstractArray) = a[first(eachindex(a))]
 
