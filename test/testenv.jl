@@ -36,4 +36,12 @@ if !@isdefined(testenv_defined)
     # platforms that support cfunction with closures
     # (requires LLVM back-end support for trampoline intrinsics)
     const cfunction_closure = Sys.ARCH === :x86_64 || Sys.ARCH === :i686
+
+    macro async_logerr(expr)
+        :(@async try
+            $(esc(expr))
+        catch err
+            @error("An async task failed", exception=(err, catch_backtrace()))
+        end)
+    end
 end
