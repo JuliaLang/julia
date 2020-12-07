@@ -1694,6 +1694,23 @@ end
 end
 
 @testset "eltype of range(::Integer; step::Rational, length) (#37295)" begin
-    @test range(1, step=1//2, length=3) == range(1//1, step=1//2, length=3)
+    @test range(1, step=1//2, length=3) == [1//1, 3//2, 2//1]
     @test eltype(range(1, step=1//2, length=3)) === Rational{Int}
+    @test typeof(step(range(1, step=1//2, length=3))) === Rational{Int}
+
+    @test range(1//1, step=2, length=3) == [1, 3, 5]
+    @test eltype(range(1//1, step=2, length=3)) === Rational{Int}
+    @test typeof(step(range(1//1, step=2, length=3))) === Int
+
+    @test range(Int16(1), step=Rational{Int8}(1,2), length=3) == [1//1, 3//2, 2//1]
+    @test eltype(range(Int16(1), step=Rational{Int8}(1,2), length=3)) === Rational{Int16}
+    @test typeof(step(range(Int16(1), step=Rational{Int8}(1,2), length=3))) === Rational{Int8}
+
+    @test range(Rational{Int8}(1), step=Int16(2), length=3) == [1, 3, 5]
+    @test eltype(range(Rational{Int8}(1), step=Int16(2), length=3)) === Rational{Int16}
+    @test typeof(step(range(Rational{Int8}(1), step=Int16(2), length=3))) === Int16
+
+    @test range('a', step=2, length=3) == ['a', 'c', 'e']
+    @test eltype(range('a', step=2, length=3)) === Char
+    @test typeof(step(range('a', step=2, length=3))) === Int
 end
