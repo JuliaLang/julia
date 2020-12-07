@@ -113,6 +113,10 @@ New library features
 * `keys(io::IO)` has been added, which returns all keys of `io` if `io` is an `IOContext` and an empty
   `Base.KeySet` otherwise ([#37753]).
 * `count` now accepts an optional `init` argument to control the accumulation type ([#37461]).
+* New method `occursin(haystack)` that returns a function that checks whether its argument occurs in
+  `haystack` ([#38475]).
+* New methods `∉(collection)`, `∋(item)`, and `∌(item)` returning corresponding containment-testing
+  functions ([#38475]).
 
 Standard library changes
 ------------------------
