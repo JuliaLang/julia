@@ -116,7 +116,7 @@ _range(a::T, step::T, ::Nothing, len::Integer) where {T <: AbstractFloat} =
 _range(a::T, step, ::Nothing, len::Integer) where {T} =
     _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
 _rangestyle(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
-    StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
+    StepRange{typeof(a+0*step),S}(a, step, a+step*(len-1))
 _rangestyle(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
     StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
 

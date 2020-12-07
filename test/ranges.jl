@@ -1692,3 +1692,8 @@ end
     @test @inferred(intersect(big(1):big(5), 3)) == 3:3
     @test @inferred(intersect(3, big(1):big(5))) == 3:3
 end
+
+@testset "eltype of range(::Integer; step::Rational, length) (#37295)" begin
+    @test range(1, step=1//2, length=3) == range(1//1, step=1//2, length=3)
+    @test eltype(range(1, step=1//2, length=3)) === Rational{Int}
+end
