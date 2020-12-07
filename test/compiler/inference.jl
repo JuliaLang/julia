@@ -2965,3 +2965,8 @@ f37943(x::Any, i::Int) = getfield((x::Pair{false, Int}), i)
 g37943(i::Int) = fieldtype(Pair{false, T} where T, i)
 @test only(Base.return_types(f37943, Tuple{Any, Int})) === Union{}
 @test only(Base.return_types(g37943, Tuple{Int})) === Union{Type{Union{}}, Type{Any}}
+
+# Don't let PartialStruct prevent const prop
+f_partial_struct_constprop(a, b) = (a[1]+b[1], nothing)
+g_partial_struct_constprop() = Val{f_partial_struct_constprop((1,), (1,))[1]}()
+@test only(Base.return_types(g_partial_struct_constprop, Tuple{})) === Val{2}
