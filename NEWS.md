@@ -44,7 +44,8 @@ Language changes
   a function like other operators. The dotted version `.-->` is now parsed as well.
   For backwards compatibility, `-->` still parses using its own expression head
   instead of `:call`.
-* The `a[begin, k]` syntax now calls `firstindex(a, 1)` rather than `first(axes(a, 1))` ([#35779]), but the former now defaults to the latter for any `a` ([#38742]).
+* The `a[begin, k]` syntax now calls `firstindex(a, 1)` rather than `first(axes(a, 1))` ([#35779]),
+  but the former now defaults to the latter for any `a` ([#38742]).
 * `⌿` (U+233F) and `¦` (U+00A6) are now infix operators with times-like and plus-like precedence,
   respectively. Previously they were parsed as identifier characters ([#37973]).
 
@@ -86,7 +87,8 @@ Build system changes
 New library functions
 ---------------------
 
-* New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker product in-place ([#31069]).
+* New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker
+  product in-place ([#31069]).
 * New function `Base.readeach(io, T)` for iteratively performing `read(io, T)` ([#36150]).
 * `Iterators.map` is added. It provides another syntax `Iterators.map(f, iterators...)`
   for writing `(f(args...) for args in zip(iterators...))`, i.e. a lazy `map` ([#34352]).
@@ -101,9 +103,11 @@ New library functions
 New library features
 --------------------
 
-* The `redirect_*` functions now accept `devnull` to discard all output redirected to it, and as an empty input. ([#36146]).
-* The `redirect_*` functions can now be called on `IOContext` objects. ([#36688]).
-* `findfirst`, `findnext`, `findlast`, and `findall` now support `AbstractVector{<:Union{Int8,UInt8}}` (pattern, array) arguments ([#37283]).
+* The `redirect_*` functions now accept `devnull` to discard all output redirected to it, and as an empty
+  input ([#36146]).
+* The `redirect_*` functions can now be called on `IOContext` objects ([#36688]).
+* `findfirst`, `findnext`, `findlast`, and `findall` now support `AbstractVector{<:Union{Int8,UInt8}}`
+  (pattern, array) arguments ([#37283]).
 * New constructor `NamedTuple(iterator)` that constructs a named tuple from a key-value pair iterator.
 * A new `reinterpret(reshape, T, a::AbstractArray{S})` reinterprets `a` to have eltype `T` while potentially
   inserting or consuming the first dimension depending on the ratio of `sizeof(T)` and `sizeof(S)`.
@@ -117,59 +121,68 @@ New library features
   `haystack` ([#38475]).
 * New methods `∉(collection)`, `∋(item)`, and `∌(item)` returning corresponding containment-testing
   functions ([#38475]).
-
-Standard library changes
-------------------------
-
-* It is no longer possible to create a `LinRange`, `StepRange`, or `StepRangeLen` with a `<: Integer` eltype but non-integer step ([#32439]).
-* `pkg> precompile` is now parallelized through depth-first precompilation of dependencies. Errors will only throw for
-  direct dependencies listed in the `Project.toml`.
-* `pkg> precompile` is now automatically triggered whenever Pkg changes the active manifest. Auto-precompilation will
-  remember if a package has errored within the given environment and will not retry until it changes.
-  Auto-precompilation can be gracefully interrupted with a `ctrl-c` and disabled by setting the environment variable
-  `JULIA_PKG_PRECOMPILE_AUTO=0`.
 * The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
 * The `reverse(A; dims)` function for multidimensional `A` can now reverse multiple dimensions at once
   by passing a tuple for `dims`, and defaults to reversing all dimensions; there is also a multidimensional
   in-place `reverse!(A; dims)` ([#37367]).
-* The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array) arguments `x` and `y` ([#35883]).
+* The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array)
+  arguments `x` and `y` ([#35883]).
 * `ispow2(x)` now supports non-`Integer` arguments `x` ([#37635]).
 * `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
 * All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
 * `sum`, `prod`, `maximum`, and `minimum` now support `init` keyword argument ([#36188], [#35839]).
 * `unique(f, itr; seen=Set{T}())` now allows you to declare the container type used for
   keeping track of values returned by `f` on elements of `itr` ([#36280]).
-* `Libdl` has been moved to `Base.Libc.Libdl`, however it is still accessible as an stdlib ([#35628]).
 * `first` and `last` functions now accept an integer as second argument to get that many
   leading or trailing elements of any iterable ([#34868]).
-* `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
 * `CartesianIndices` now supports step different from `1`. It can also be constructed from three
   `CartesianIndex`es `I`, `S`, `J` using `I:S:J`. `step` for `CartesianIndices` now returns a
   `CartesianIndex` ([#37829]).
-* `push!(c::Channel, v)` now returns channel `c`. Previously, it returned the pushed value `v` ([#34202]).
 * `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
-* For consistency `haskey(r::RegexMatch, i::Integer)` has also been added and returns if the capture group for `i` exists ([#37300]).
+* For consistency `haskey(r::RegexMatch, i::Integer)` has also been added and returns if the capture group
+  for `i` exists ([#37300]).
+
+Standard library changes
+------------------------
+
 * A new standard library `TOML` has been added for parsing and printing [TOML files](https://toml.io) ([#37034]).
-* The composition operator `∘` now returns a `Base.ComposedFunction` instead of an anonymous function ([#37517]).
-* A new standard library `Downloads` has been added, which replaces the old `Base.download` function with `Downloads.download`, providing cross-platform, multi-protocol, in-process download functionality implemented with [libcurl](https://curl.haxx.se/libcurl/) ([#37340]).
-* The `Pkg.BinaryPlatforms` module has been moved into `Base` as `Base.BinaryPlatforms` and heavily reworked.
-  Applications that want to be compatible with the old API should continue to import `Pkg.BinaryPlatforms`,
-  however new users should use `Base.BinaryPlatforms` directly ([#37320]).
-* Logging (such as `@warn`) no longer catches exceptions in the logger itself ([#36600]).
-* The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
-  `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
-  all of `Pkg` alongside ([#37320]).
+* A new standard library `Downloads` has been added, which replaces the old `Base.download` function with
+  `Downloads.download`, providing cross-platform, multi-protocol, in-process download functionality implemented
+  with [libcurl](https://curl.haxx.se/libcurl/) ([#37340]).
+* `Libdl` has been moved to `Base.Libc.Libdl`, however it is still accessible as an stdlib ([#35628]).
 * To download artifacts lazily, `LazyArtifacts` now must be explicitly listed as a dependency, to avoid needing the
   support machinery to be available when it is not commonly needed ([#37844]).
+* It is no longer possible to create a `LinRange`, `StepRange`, or `StepRangeLen` with a `<: Integer` eltype but
+  non-integer step ([#32439]).
+* `intersect` on `CartesianIndices` now returns `CartesianIndices` instead of `Vector{<:CartesianIndex}` ([#36643]).
+* `push!(c::Channel, v)` now returns channel `c`. Previously, it returned the pushed value `v` ([#34202]).
+* The composition operator `∘` now returns a `Base.ComposedFunction` instead of an anonymous function ([#37517]).
+* Logging (such as `@warn`) no longer catches exceptions in the logger itself ([#36600]).
 * `@time` now reports if the time presented included any compilation time, which is shown as a percentage ([#37678]).
 * `@varinfo` can now report non-exported objects within modules, look recursively into submodules, and return a sorted
   results table ([#38042]).
 * `@testset` now supports the option `verbose` to show the test result summary
   of the children even if they all pass ([#33755]).
 
+#### Package Manager
+
+* `pkg> precompile` is now parallelized through depth-first precompilation of dependencies. Errors will only throw for
+  direct dependencies listed in the `Project.toml`.
+* `pkg> precompile` is now automatically triggered whenever Pkg changes the active manifest. Auto-precompilation will
+  remember if a package has errored within the given environment and will not retry until it changes.
+  Auto-precompilation can be gracefully interrupted with a `ctrl-c` and disabled by setting the environment variable
+  `JULIA_PKG_PRECOMPILE_AUTO=0`.
+* The `Pkg.BinaryPlatforms` module has been moved into `Base` as `Base.BinaryPlatforms` and heavily reworked.
+  Applications that want to be compatible with the old API should continue to import `Pkg.BinaryPlatforms`,
+  however new users should use `Base.BinaryPlatforms` directly ([#37320]).
+* The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
+  `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
+  all of `Pkg` alongside ([#37320]).
+
 #### LinearAlgebra
 
-* New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
+* New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was
+  successful ([#36002]).
 * `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
 * New function `LinearAlgebra.BLAS.get_num_threads()` for getting the number of BLAS threads ([#36360]).
 * `(+)(::UniformScaling)` is now defined, making `+I` a valid unary operation ([#36784]).
@@ -182,12 +195,17 @@ Standard library changes
 
 #### Markdown
 
+
 #### Printf
 
-* Complete overhaul of internal code to use the ryu float printing algorithms (from Julia 1.4); leads to consistent 2-5x performance improvements.
-* New `Printf.tofloat` function allowing custom float types to more easily integrate with Printf formatting by converting their type to `Float16`, `Float32`, `Float64`, or `BigFloat`.
-* New `Printf.format"..."` and `Printf.Format(...)` functions that allow creating `Printf.Format` objects that can be passed to `Printf.format` for easier dynamic printf formatting.
-* `Printf.format(f::Printf.Format, args...)` as a non-macro function that applies a printf format `f` to provided `args`.
+* Complete overhaul of internal code to use the ryu float printing algorithms (from Julia 1.4); leads to
+  consistent 2-5x performance improvements.
+* New `Printf.tofloat` function allowing custom float types to more easily integrate with Printf formatting
+  by converting their type to `Float16`, `Float32`, `Float64`, or `BigFloat`.
+* New `Printf.format"..."` and `Printf.Format(...)` functions that allow creating `Printf.Format` objects
+  that can be passed to `Printf.format` for easier dynamic printf formatting.
+* `Printf.format(f::Printf.Format, args...)` as a non-macro function that applies a printf format `f` to
+  provided `args`.
 
 #### Random
 
@@ -214,10 +232,8 @@ Standard library changes
   + `numoptions`, returning the number of items in the menu, has been added as an alternative to implementing `options`.
   + `suppress_output` (primarily a testing option) has been added as a keyword argument to `request`,
     rather than a configuration option.
-
 * Tab completion now supports runs of consecutive sub/superscript characters,
   e.g. `\^(3)` tab-completes to `⁽³⁾` ([#38649]).
-
 * Windows REPL now supports 24-bit colors, by correctly interpreting virtual terminal escapes.
 
 #### SparseArrays
@@ -242,9 +258,10 @@ Standard library changes
 
 #### Distributed
 
-* Now supports invoking Windows workers via ssh (via new keyword argument `shell=:wincmd` in `addprocs`) ([#30614])
-
-* Other new keyword arguments in `addprocs`: `ssh` to specify the ssh client path, `env` to pass environment variables to workers, and `cmdline_cookie` to work around an ssh problem with Windows workers that run older (pre-ConPTY) versions of Windows, Julia or OpenSSH. ([#30614])
+* Now supports invoking Windows workers via ssh (via new keyword argument `shell=:wincmd` in `addprocs`) ([#30614]).
+* Other new keyword arguments in `addprocs`: `ssh` to specify the ssh client path, `env` to pass environment
+  variables to workers, and `cmdline_cookie` to work around an ssh problem with Windows workers that run older
+  (pre-ConPTY) versions of Windows, Julia or OpenSSH ([#30614]).
 
 #### UUIDs
 
@@ -259,7 +276,8 @@ Standard library changes
 Deprecated or removed
 ---------------------
 
-* The `Base.download` function has been deprecated (silently, by default) in favor of the new `Downloads.download` standard library function ([#37340]).
+* The `Base.download` function has been deprecated (silently, by default) in favor of the new `Downloads.download`
+  standard library function ([#37340]).
 * The `Base.Grisu` code has been officially removed (float printing was switched to the ryu algorithm code in 1.4).
   The code is available from [JuliaAttic](https://github.com/JuliaAttic/Grisu.jl) if needed.
 
@@ -275,7 +293,11 @@ Tooling Improvements
 [#1255]: https://github.com/JuliaLang/julia/issues/1255
 [#23546]: https://github.com/JuliaLang/julia/issues/23546
 [#24359]: https://github.com/JuliaLang/julia/issues/24359
+[#30614]: https://github.com/JuliaLang/julia/issues/30614
 [#31069]: https://github.com/JuliaLang/julia/issues/31069
+[#32439]: https://github.com/JuliaLang/julia/issues/32439
+[#33755]: https://github.com/JuliaLang/julia/issues/33755
+[#33821]: https://github.com/JuliaLang/julia/issues/33821
 [#34202]: https://github.com/JuliaLang/julia/issues/34202
 [#34352]: https://github.com/JuliaLang/julia/issues/34352
 [#34543]: https://github.com/JuliaLang/julia/issues/34543
@@ -283,6 +305,7 @@ Tooling Improvements
 [#35519]: https://github.com/JuliaLang/julia/issues/35519
 [#35627]: https://github.com/JuliaLang/julia/issues/35627
 [#35628]: https://github.com/JuliaLang/julia/issues/35628
+[#35779]: https://github.com/JuliaLang/julia/issues/35779
 [#35791]: https://github.com/JuliaLang/julia/issues/35791
 [#35816]: https://github.com/JuliaLang/julia/issues/35816
 [#35839]: https://github.com/JuliaLang/julia/issues/35839
@@ -291,6 +314,7 @@ Tooling Improvements
 [#35883]: https://github.com/JuliaLang/julia/issues/35883
 [#35976]: https://github.com/JuliaLang/julia/issues/35976
 [#36002]: https://github.com/JuliaLang/julia/issues/36002
+[#36146]: https://github.com/JuliaLang/julia/issues/36146
 [#36150]: https://github.com/JuliaLang/julia/issues/36150
 [#36188]: https://github.com/JuliaLang/julia/issues/36188
 [#36227]: https://github.com/JuliaLang/julia/issues/36227
@@ -302,6 +326,7 @@ Tooling Improvements
 [#36600]: https://github.com/JuliaLang/julia/issues/36600
 [#36643]: https://github.com/JuliaLang/julia/issues/36643
 [#36666]: https://github.com/JuliaLang/julia/issues/36666
+[#36688]: https://github.com/JuliaLang/julia/issues/36688
 [#36717]: https://github.com/JuliaLang/julia/issues/36717
 [#36784]: https://github.com/JuliaLang/julia/issues/36784
 [#37034]: https://github.com/JuliaLang/julia/issues/37034
@@ -327,6 +352,13 @@ Tooling Improvements
 [#37684]: https://github.com/JuliaLang/julia/issues/37684
 [#37753]: https://github.com/JuliaLang/julia/issues/37753
 [#37829]: https://github.com/JuliaLang/julia/issues/37829
+[#37844]: https://github.com/JuliaLang/julia/issues/37844
 [#37973]: https://github.com/JuliaLang/julia/issues/37973
 [#38042]: https://github.com/JuliaLang/julia/issues/38042
 [#38062]: https://github.com/JuliaLang/julia/issues/38062
+[#38168]: https://github.com/JuliaLang/julia/issues/38168
+[#38449]: https://github.com/JuliaLang/julia/issues/38449
+[#38475]: https://github.com/JuliaLang/julia/issues/38475
+[#38487]: https://github.com/JuliaLang/julia/issues/38487
+[#38649]: https://github.com/JuliaLang/julia/issues/38649
+[#38742]: https://github.com/JuliaLang/julia/issues/38742
