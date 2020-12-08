@@ -1,4 +1,6 @@
 #!/usr/bin/env julia
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using TOML
 
 function check_flag(flag)
