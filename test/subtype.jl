@@ -1813,4 +1813,4 @@ end
                Union{})
 
 # issue #24333
-@test !(Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)
+@test_broken (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)
