@@ -974,10 +974,10 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
                     DebugInfo(errorCodeToError(std::make_error_code(std::errc::no_such_file_or_directory)));
                 // Can't find a way to construct an empty Expected object
                 // that can be ignored.
-                ignoreError(DebugInfo);
                 if (fname.substr(sep + 1) != info.filename) {
                     debuginfopath = fname.substr(0, sep + 1).str();
                     debuginfopath += info.filename;
+                    ignoreError(DebugInfo);
                     DebugInfo = openDebugInfo(debuginfopath, info);
                 }
                 if (!DebugInfo) {

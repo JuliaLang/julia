@@ -632,7 +632,7 @@ endif
 else # USE_BINARYBUILDER_LLVM
 
 # We provide a way to subversively swap out which LLVM JLL we pull artifacts from
-ifeq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
+ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_JLL_DOWNLOAD_NAME := libLLVM_assert
 LLVM_JLL_VER := $(LLVM_ASSERT_JLL_VER)
 endif
