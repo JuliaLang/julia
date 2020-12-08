@@ -2860,3 +2860,8 @@ end
     @test String(take!(b)) ==
         "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
 end
+            
+@testset "inference of Union{T,Nothing} arrays 26771" begin
+    f(a) = v = [1, nothing]; [v[x] for x in a]
+    @test eltype(f([1])) == Int
+end
