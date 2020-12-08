@@ -205,4 +205,8 @@ end
     @test typeof(tmp) <: Tridiagonal
 
 end
+
+# structured broadcast with function returning non-number type
+@test tuple.(Diagonal([1, 2])) == [(1,) (0,); (0,) (2,)]
+
 end
