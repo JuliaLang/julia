@@ -56,10 +56,12 @@ using Random
     temps = map(1:100) do _
         path, io = mktemp(cleanup=false)
         close(io)
-        rm(path, force=true)
         return path
     end
     @test allunique(temps)
+    foreach(temps) do path
+        rm(path, force=true)
+    end
 end
 
 @testset "tempname with parent" begin
