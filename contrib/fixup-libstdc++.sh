@@ -3,15 +3,16 @@
 
 # Run as: fixup-libstdc++.sh <libdir> <private_libdir>
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <private_libdir>"
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <libdir> <private_libdir>"
     exit 1
 fi
 
-private_libdir="$1"
+libdir="$1"
+private_libdir="$2"
 
 if [ ! -f "$private_libdir/libjulia-internal.so" ]; then
-    echo "ERROR: Could not open $libdir/libjulia-internal.so" >&2
+    echo "ERROR: Could not open $private_libdir/libjulia-internal.so" >&2
     exit 2
 fi
 
