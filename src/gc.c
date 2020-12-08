@@ -868,6 +868,20 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
     return wr;
 }
 
+static void clear_weak_refs(void)
+{
+    for (int i = 0; i < jl_n_threads; i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        size_t n, l = ptls2->heap.weak_refs.len;
+        void **lst = ptls2->heap.weak_refs.items;
+        for (n = 0; n < l; n++) {
+            jl_weakref_t *wr = (jl_weakref_t*)lst[n];
+            if (!gc_marked(jl_astaggedvalue(wr->value)->bits.gc))
+                wr->value = (jl_value_t*)jl_nothing;
+        }
+    }
+}
+
 static void sweep_weak_refs(void)
 {
     for (int i = 0; i < jl_n_threads; i++) {
@@ -880,16 +894,10 @@ static void sweep_weak_refs(void)
             continue;
         while (1) {
             jl_weakref_t *wr = (jl_weakref_t*)lst[n];
-            if (gc_marked(jl_astaggedvalue(wr)->bits.gc)) {
-                // weakref itself is alive,
-                // so the user could still re-set it to a new value
-                if (!gc_marked(jl_astaggedvalue(wr->value)->bits.gc))
-                    wr->value = (jl_value_t*)jl_nothing;
+            if (gc_marked(jl_astaggedvalue(wr)->bits.gc))
                 n++;
-            }
-            else {
+            else
                 ndel++;
-            }
             if (n >= l - ndel)
                 break;
             void *tmp = lst[n];
@@ -899,6 +907,7 @@ static void sweep_weak_refs(void)
         ptls2->heap.weak_refs.len -= ndel;
     }
 }
+
 
 // big value list
 
@@ -3003,6 +3012,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // marking is over
 
     // 4. check for objects to finalize
+    clear_weak_refs();
     // Record the length of the marked list since we need to
     // mark the object moved to the marked list from the
     // `finalizer_list` by `sweep_finalizer_list`
