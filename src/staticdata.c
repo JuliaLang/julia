@@ -1401,7 +1401,8 @@ static void jl_reinit_item(jl_value_t *v, int how) JL_GC_DISABLED
         }
         case 3: { // install ccallable entry point in JIT
             jl_svec_t *sv = ((jl_method_t*)v)->ccallable;
-            jl_compile_extern_c(NULL, NULL, jl_sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
+            int success = jl_compile_extern_c(NULL, NULL, jl_sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
+            assert(success); (void)success;
             break;
         }
         default:
