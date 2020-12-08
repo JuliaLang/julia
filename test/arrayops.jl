@@ -2862,6 +2862,6 @@ end
 end
             
 @testset "inference of Union{T,Nothing} arrays 26771" begin
-    f(a) = v = [1, nothing]; [v[x] for x in a]
+    f(a) = (v = [1, nothing]; [v[x] for x in a])
     @test eltype(f([1])) == Int
 end
