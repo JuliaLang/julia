@@ -893,15 +893,40 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # issue #26939
     d26939 = WeakKeyDict()
-    d26939[big"1.0" + 1.1] = 1
-    GC.gc() # make sure this doesn't segfault
+    (@noinline d -> d[big"1.0" + 1.1] = 1)(d26939)
+    GC.gc() # primarily to make sure this doesn't segfault
+    @test count(d26939) == 0
+    @test length(d26939.ht) == 1
+    @test length(d26939) == 0
+    @test isempty(d26939)
+    empty!(d26939)
+    for i in 1:8
+        (@noinline (d, i) -> d[big(i + 12345)] = 1)(d26939, i)
+    end
+    lock(GC.gc, d26939)
+    @test length(d26939.ht) == 8
+    @test count(d26939) == 0
+    @test !haskey(d26939, nothing)
+    @test_throws KeyError(nothing) d26939[nothing]
+    @test_throws KeyError(nothing) get(d26939, nothing, 1)
+    @test_throws KeyError(nothing) get(() -> 1, d26939, nothing)
+    @test_throws KeyError(nothing) pop!(d26939, nothing)
+    @test getkey(d26939, nothing, 321) === 321
+    @test pop!(d26939, nothing, 321) === 321
+    @test delete!(d26939, nothing) === d26939
+    @test length(d26939.ht) == 8
+    @test_throws ArgumentError d26939[nothing] = 1
+    @test_throws ArgumentError get!(d26939, nothing, 1)
+    @test_throws ArgumentError get!(() -> 1, d26939, nothing)
+    @test isempty(d26939)
+    @test length(d26939.ht) == 0
+    @test length(d26939) == 0
 
     # WeakKeyDict does not convert keys on setting
     @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
     wkd = WeakKeyDict(A=>2)
     @test_throws ArgumentError get!(wkd, [2.0], 2)
-    @test_throws ArgumentError get!(wkd, [1.0], 2) # get! fails even if the key is only
-                                                   # used for getting and not setting
+    @test get!(wkd, [1.0], 2) === 2
 
     # WeakKeyDict does convert on getting
     wkd = WeakKeyDict(A=>2)
@@ -913,16 +938,18 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # map! on values of WKD
     wkd = WeakKeyDict(A=>2, B=>3)
-    map!(v->v-1, values(wkd))
+    map!(v -> v-1, values(wkd))
     @test wkd == WeakKeyDict(A=>1, B=>2)
 
     # get!
     wkd = WeakKeyDict(A=>2)
-    get!(wkd, B, 3)
+    @test get!(wkd, B, 3) == 3
     @test wkd == WeakKeyDict(A=>2, B=>3)
-    get!(()->4, wkd, C)
+    @test get!(()->4, wkd, C) == 4
     @test wkd == WeakKeyDict(A=>2, B=>3, C=>4)
-    @test_throws ArgumentError get!(()->5, wkd, [1.0])
+    @test get!(()->5, wkd, [1.0]) == 2
+
+    GC.@preserve A B C D nothing
 end
 
 @testset "issue #19995, hash of dicts" begin
