@@ -2863,5 +2863,6 @@ end
 
 @testset "inference of Union{T,Nothing} arrays 26771" begin
     f(a) = (v = [1, nothing]; [v[x] for x in a])
-    @test eltype(f([1])) == Int
+    @test only(Base.return_types(f, (Int,))) === Union{Array{Int,0}, Array{Nothing,0}}
+    @test only(Base.return_types(f, (UnitRange{Int},))) <: Vector
 end
