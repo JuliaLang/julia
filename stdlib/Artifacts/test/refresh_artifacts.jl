@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Artifacts: with_artifacts_directory
 # using Pkg.Artifacts: ensure_all_artifacts_installed
 using Pkg.Artifacts: load_artifacts_toml, ensure_artifact_installed
