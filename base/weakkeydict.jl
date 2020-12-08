@@ -91,7 +91,7 @@ function setindex!(wkh::WeakKeyDict{K}, v, key) where K
     !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     # 'nothing' is not valid both because 'finalizer' will reject it,
     # and because we therefore use it as a sentinel value
-    key === nothing && throw(ArgumentError("`nothing` is not a valid key for type WeakKeyDict"))
+    key === nothing && throw(ArgumentError("`nothing` is not a valid WeakKeyDict key"))
     lock(wkh) do
         _cleanup_locked(wkh)
         k = getkey(wkh.ht, key, nothing)
@@ -186,8 +186,13 @@ function getindex(wkh::WeakKeyDict{K}, key) where {K}
         return getindex(wkh.ht, key)
     end
 end
-isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
-length(t::WeakKeyDict) = length(t.ht)
+isempty(wkh::WeakKeyDict) = length(wkh) == 0
+function length(t::WeakKeyDict)
+    lock(t) do
+        _cleanup_locked(t)
+        return length(t.ht)
+    end
+end
 
 function iterate(t::WeakKeyDict{K,V}, state...) where {K, V}
     return lock(t) do

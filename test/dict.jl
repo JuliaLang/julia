@@ -895,18 +895,16 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     d26939 = WeakKeyDict()
     (@noinline d -> d[big"1.0" + 1.1] = 1)(d26939)
     GC.gc() # primarily to make sure this doesn't segfault
-    @test length(d26939.ht) == 1
-    @test length(d26939) == 1
-    @test !isempty(d26939)
     @test count(d26939) == 0
+    @test length(d26939.ht) == 1
+    @test length(d26939) == 0
+    @test isempty(d26939)
     empty!(d26939)
     for i in 1:8
         (@noinline (d, i) -> d[big(i + 12345)] = 1)(d26939, i)
     end
     lock(GC.gc, d26939)
     @test length(d26939.ht) == 8
-    @test length(d26939) == 8
-    @test !isempty(d26939)
     @test count(d26939) == 0
     @test !haskey(d26939, nothing)
     @test_throws KeyError(nothing) d26939[nothing]
@@ -920,8 +918,9 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test_throws ArgumentError d26939[nothing] = 1
     @test_throws ArgumentError get!(d26939, nothing, 1)
     @test_throws ArgumentError get!(() -> 1, d26939, nothing)
-    Base._cleanup_locked(d26939)
+    @test isempty(d26939)
     @test length(d26939.ht) == 0
+    @test length(d26939) == 0
 
     # WeakKeyDict does not convert keys on setting
     @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
