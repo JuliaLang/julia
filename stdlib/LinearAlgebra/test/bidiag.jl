@@ -26,17 +26,19 @@ Random.seed!(1)
             ev += im*convert(Vector{elty}, rand(1:10, n-1))
         end
     end
+    dv0 = zeros(elty, 0)
+    ev0 = zeros(elty, 0)
 
     @testset "Constructors" begin
-        for (x, y) in ((dv, ev), (GenericArray(dv), GenericArray(ev)))
+        for (x, y) in ((dv0, ev0), (dv, ev), (GenericArray(dv), GenericArray(ev)))
             # from vectors
             ubd = Bidiagonal(x, y, :U)
             lbd = Bidiagonal(x, y, :L)
-            @test ubd != lbd
+            @test ubd != lbd || x === dv0
             @test ubd.dv === x
             @test lbd.ev === y
             @test_throws ArgumentError Bidiagonal(x, y, :R)
-            @test_throws DimensionMismatch Bidiagonal(x, x, :U)
+            x == dv0 || @test_throws DimensionMismatch Bidiagonal(x, x, :U)
             @test_throws MethodError Bidiagonal(x, y)
             # from matrix
             @test Bidiagonal(ubd, :U) == Bidiagonal(Matrix(ubd), :U) == ubd
@@ -591,6 +593,46 @@ Base.transpose(n::MyNotANumberType) = n
     tB = transpose(B)
     @test tB == Bidiagonal(a, b, :L)
     @test transpose(copy(tB)) == B
+end
+
+@testset "empty bidiagonal matrices" begin
+    dv0 = zeros(0)
+    ev0 = zeros(0)
+    zm = zeros(0, 0)
+    ubd = Bidiagonal(dv0, ev0, :U)
+    lbd = Bidiagonal(dv0, ev0, :L)
+    @test size(ubd) == (0, 0)
+    @test_throws BoundsError getindex(ubd, 1, 1)
+    @test_throws BoundsError setindex!(ubd, 0.0, 1, 1)
+    @test similar(ubd) == ubd
+    @test similar(lbd, Int) == zeros(Int, 0, 0)
+    @test ubd == zm
+    @test lbd == zm
+    @test ubd == lbd
+    @test ubd * ubd == ubd
+    @test lbd + lbd == lbd
+    @test lbd' == ubd
+    @test ubd' == lbd
+    @test triu(ubd, 1) == ubd
+    @test triu(lbd, 1) == ubd
+    @test tril(ubd, -1) == ubd
+    @test tril(lbd, -1) == ubd
+    @test_throws ArgumentError triu(ubd)
+    @test_throws ArgumentError tril(ubd)
+    @test sum(ubd) == 0.0
+    @test reduce(+, ubd) == 0.0
+    @test reduce(+, ubd, dims=1) == zeros(1, 0)
+    @test reduce(+, ubd, dims=2) == zeros(0, 1)
+    @test hcat(ubd, ubd) == zm
+    @test vcat(ubd, lbd) == zm
+    @test hcat(lbd, ones(0, 3)) == ones(0, 3)
+    @test fill!(copy(ubd), 1.0) == ubd
+    @test map(abs, ubd) == zm
+    @test lbd .+ 1 == zm
+    @test lbd + ubd isa Bidiagonal
+    @test lbd .+ ubd isa Bidiagonal
+    @test ubd * 5 == ubd
+    @test ubd .* 3 == ubd
 end
 
 end # module TestBidiagonal
