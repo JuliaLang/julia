@@ -496,14 +496,6 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                          const RuntimeDyld::LoadedObjectInfo &L,
                                          RTDyldMemoryManager *memmgr);
 
-#if JL_LLVM_VERSION >= 120000
-template <typename ObjT, typename LoadResult>
-void JuliaOJIT::registerObject(const ObjT &Obj, const LoadResult &LO)
-{
-    const ObjT* Object = &Obj;
-    ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
-}
-#else
 template <typename ObjT, typename LoadResult>
 void JuliaOJIT::registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO)
 {
@@ -511,7 +503,6 @@ void JuliaOJIT::registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadRe
     NotifyFinalizer(H, *Object, *LO);
     ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
 }
-#endif
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 {
@@ -654,21 +645,12 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
         ),
     CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT>(this))
 {
-#if JL_LLVM_VERSION >= 120000
-    ObjectLayer.setNotifyLoaded(
-        [this](orc::MaterializationResponsibility &MR,
-               const object::ObjectFile &Object,
-               const RuntimeDyld::LoadedObjectInfo &LOS) {
-            registerObject(Object, &LOS);
-        });
-#else
     ObjectLayer.setNotifyLoaded(
         [this](RTDyldObjHandleT H,
                const object::ObjectFile &Object,
                const RuntimeDyld::LoadedObjectInfo &LOS) {
             registerObject(H, Object, &LOS);
         });
-#endif
     for (int i = 0; i < 4; i++) {
         TMs[i] = TM.getTarget().createTargetMachine(TM.getTargetTriple().getTriple(), TM.getTargetCPU(),
                 TM.getTargetFeatureString(), TM.Options, Reloc::Static, TM.getCodeModel(),
@@ -767,12 +749,10 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 
 }
 
-#if JL_LLVM_VERSION < 120000
 void JuliaOJIT::removeModule(ModuleHandleT H)
 {
     //(void)CompileLayer.remove(H);
 }
-#endif
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
@@ -837,14 +817,9 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 {
     if (!L)
         return;
-#if JL_LLVM_VERSION >= 120000
-    this->ObjectLayer.registerJITEventListener(*L);
-#else
     EventListeners.push_back(L);
-#endif
 }
 
-#if JL_LLVM_VERSION < 120000
 void JuliaOJIT::NotifyFinalizer(RTDyldObjHandleT Key,
                                 const object::ObjectFile &Obj,
                                 const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
@@ -852,7 +827,6 @@ void JuliaOJIT::NotifyFinalizer(RTDyldObjHandleT Key,
     for (auto &Listener : EventListeners)
         Listener->notifyObjectLoaded(Key, Obj, LoadedObjectInfo);
 }
-#endif
 
 const DataLayout& JuliaOJIT::getDataLayout() const
 {
