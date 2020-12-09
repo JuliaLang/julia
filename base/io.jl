@@ -401,6 +401,7 @@ julia> bytesavailable(io)
 ```
 """
 bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io)::IO)
+bytesavailable(io::DevNull) = 0
 
 """
     eof(stream) -> Bool
