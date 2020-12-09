@@ -167,6 +167,15 @@ function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:AbstractChar}
     (c < 0xd800) ? T(c) : T(c+0x800)
 end
 
+### random tuples
+
+@generated function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:Tuple}
+    all(isa.(T.parameters, Type)) ||
+        throw(ArgumentError("tuple sampling requires types as parameters, got {$(join(T.parameters, ", "))}"))
+    a = (:( rand(r, $S) ) for S in T.parameters)
+    return :( ($(a...),) )
+end
+
 
 ## Generate random integer within a range
 
