@@ -217,7 +217,7 @@ static jl_value_t *nth_union_component(jl_value_t *v, int *pi) JL_NOTSAFEPOINT
     return nth_union_component(u->b, pi);
 }
 
-jl_value_t *jl_nth_union_component(jl_value_t *v, int i) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_value_t *jl_nth_union_component(jl_value_t *v, int i) JL_NOTSAFEPOINT
 {
     return nth_union_component(v, &i);
 }
@@ -904,7 +904,7 @@ jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val)
     return inst_type_w_(t, &env, NULL, 1);
 }
 
-jl_value_t *jl_unwrap_unionall(jl_value_t *v)
+JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v)
 {
     while (jl_is_unionall(v))
         v = ((jl_unionall_t*)v)->body;
@@ -912,7 +912,7 @@ jl_value_t *jl_unwrap_unionall(jl_value_t *v)
 }
 
 // wrap `t` in the same unionalls that surround `u`
-jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
+JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
 {
     if (!jl_is_unionall(u))
         return t;
@@ -1628,7 +1628,7 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_
     return typ;
 }
 
-jl_datatype_t *jl_wrap_Type(jl_value_t *t)
+JL_DLLEXPORT jl_datatype_t *jl_wrap_Type(jl_value_t *t)
 {
     return (jl_datatype_t*)jl_instantiate_unionall(jl_type_type, t);
 }

@@ -198,7 +198,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
 // A non-zero result *must* match the LLVM rules for a vector type <nfields x t>.
 // For sake of Ahead-Of-Time (AOT) compilation, this routine has to work
 // without LLVM being available.
-unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
+JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
 {
     if (!jl_is_vecelement_type(t))
         return 0;
@@ -280,7 +280,7 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype) JL_NOTSAFEPOINT
 }
 
 // whether instances of this type can use pointer comparison for `===`
-int jl_pointer_egal(jl_value_t *t)
+JL_DLLEXPORT int jl_pointer_egal(jl_value_t *t)
 {
     if (t == (jl_value_t*)jl_any_type)
         return 0; // when setting up the initial types, jl_is_type_type gets confused about this

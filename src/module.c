@@ -682,7 +682,7 @@ static jl_binding_t *jl_get_dep_message_binding(jl_module_t *m, jl_binding_t *de
     return jl_get_binding(m, jl_symbol(dep_binding_name));
 }
 
-void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
+JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
 {
     // Only print a warning for deprecated == 1 (renamed).
     // For deprecated == 2 (moved to a package) the binding is to a function
@@ -835,7 +835,7 @@ JL_DLLEXPORT jl_uuid_t jl_module_uuid(jl_module_t* m) { return m->uuid; }
 // TODO: make this part of the module constructor and read-only?
 JL_DLLEXPORT void jl_set_module_uuid(jl_module_t *m, jl_uuid_t uuid) { m->uuid = uuid; }
 
-int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
 {
     while (1) {
         if (parent == child)

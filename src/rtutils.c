@@ -87,7 +87,7 @@ JL_DLLEXPORT void JL_NORETURN jl_exceptionf(jl_datatype_t *exception_type,
     jl_throw(e);
 }
 
-jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type,
+JL_DLLEXPORT jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type,
                               const char *fmt, ...)
 {
     va_list args;

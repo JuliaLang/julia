@@ -27,44 +27,44 @@ extern "C" {
 
 
 // head symbols for each expression type
-jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
-jl_sym_t *empty_sym;   jl_sym_t *top_sym;
-jl_sym_t *module_sym;  jl_sym_t *slot_sym;
-jl_sym_t *export_sym;  jl_sym_t *import_sym;
-jl_sym_t *toplevel_sym; jl_sym_t *quote_sym;
-jl_sym_t *line_sym;    jl_sym_t *incomplete_sym;
-jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
-jl_sym_t *return_sym;  jl_sym_t *lineinfo_sym;
-jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
-jl_sym_t *globalref_sym; jl_sym_t *do_sym;
-jl_sym_t *method_sym;  jl_sym_t *core_sym;
-jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
-jl_sym_t *pop_exception_sym;
-jl_sym_t *exc_sym;     jl_sym_t *error_sym;
-jl_sym_t *new_sym;     jl_sym_t *using_sym;
-jl_sym_t *splatnew_sym;
-jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
-jl_sym_t *foreigncall_sym; jl_sym_t *as_sym;
-jl_sym_t *global_sym; jl_sym_t *list_sym;
-jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
-jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
-jl_sym_t *copyast_sym; jl_sym_t *cfunction_sym;
-jl_sym_t *pure_sym; jl_sym_t *loopinfo_sym;
-jl_sym_t *meta_sym; jl_sym_t *inert_sym;
-jl_sym_t *polly_sym; jl_sym_t *unused_sym;
-jl_sym_t *static_parameter_sym; jl_sym_t *inline_sym;
-jl_sym_t *noinline_sym; jl_sym_t *generated_sym;
-jl_sym_t *generated_only_sym; jl_sym_t *isdefined_sym;
-jl_sym_t *propagate_inbounds_sym; jl_sym_t *specialize_sym;
-jl_sym_t *nospecialize_sym; jl_sym_t *macrocall_sym;
-jl_sym_t *colon_sym; jl_sym_t *hygienicscope_sym;
-jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
-jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
-jl_sym_t *coverageeffect_sym; jl_sym_t *escape_sym;
-jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
-jl_sym_t *optlevel_sym; jl_sym_t *thismodule_sym;
-jl_sym_t *atom_sym; jl_sym_t *statement_sym; jl_sym_t *all_sym;
-jl_sym_t *compile_sym; jl_sym_t *infer_sym;
+JL_DLLEXPORT jl_sym_t *call_sym;    JL_DLLEXPORT jl_sym_t *invoke_sym;
+JL_DLLEXPORT jl_sym_t *empty_sym;   JL_DLLEXPORT jl_sym_t *top_sym;
+JL_DLLEXPORT jl_sym_t *module_sym;  JL_DLLEXPORT jl_sym_t *slot_sym;
+JL_DLLEXPORT jl_sym_t *export_sym;  JL_DLLEXPORT jl_sym_t *import_sym;
+JL_DLLEXPORT jl_sym_t *toplevel_sym; JL_DLLEXPORT jl_sym_t *quote_sym;
+JL_DLLEXPORT jl_sym_t *line_sym;    JL_DLLEXPORT jl_sym_t *incomplete_sym;
+JL_DLLEXPORT jl_sym_t *goto_sym;    JL_DLLEXPORT jl_sym_t *goto_ifnot_sym;
+JL_DLLEXPORT jl_sym_t *return_sym;  JL_DLLEXPORT jl_sym_t *lineinfo_sym;
+JL_DLLEXPORT jl_sym_t *lambda_sym;  JL_DLLEXPORT jl_sym_t *assign_sym;
+JL_DLLEXPORT jl_sym_t *globalref_sym; JL_DLLEXPORT jl_sym_t *do_sym;
+JL_DLLEXPORT jl_sym_t *method_sym;  JL_DLLEXPORT jl_sym_t *core_sym;
+JL_DLLEXPORT jl_sym_t *enter_sym;   JL_DLLEXPORT jl_sym_t *leave_sym;
+JL_DLLEXPORT jl_sym_t *pop_exception_sym;
+JL_DLLEXPORT jl_sym_t *exc_sym;     JL_DLLEXPORT jl_sym_t *error_sym;
+JL_DLLEXPORT jl_sym_t *new_sym;     JL_DLLEXPORT jl_sym_t *using_sym;
+JL_DLLEXPORT jl_sym_t *splatnew_sym;
+JL_DLLEXPORT jl_sym_t *const_sym;   JL_DLLEXPORT jl_sym_t *thunk_sym;
+JL_DLLEXPORT jl_sym_t *foreigncall_sym; JL_DLLEXPORT jl_sym_t *as_sym;
+JL_DLLEXPORT jl_sym_t *global_sym; JL_DLLEXPORT jl_sym_t *list_sym;
+JL_DLLEXPORT jl_sym_t *dot_sym;    JL_DLLEXPORT jl_sym_t *newvar_sym;
+JL_DLLEXPORT jl_sym_t *boundscheck_sym; JL_DLLEXPORT jl_sym_t *inbounds_sym;
+JL_DLLEXPORT jl_sym_t *copyast_sym; JL_DLLEXPORT jl_sym_t *cfunction_sym;
+JL_DLLEXPORT jl_sym_t *pure_sym; JL_DLLEXPORT jl_sym_t *loopinfo_sym;
+JL_DLLEXPORT jl_sym_t *meta_sym; JL_DLLEXPORT jl_sym_t *inert_sym;
+JL_DLLEXPORT jl_sym_t *polly_sym; JL_DLLEXPORT jl_sym_t *unused_sym;
+JL_DLLEXPORT jl_sym_t *static_parameter_sym; JL_DLLEXPORT jl_sym_t *inline_sym;
+JL_DLLEXPORT jl_sym_t *noinline_sym; JL_DLLEXPORT jl_sym_t *generated_sym;
+JL_DLLEXPORT jl_sym_t *generated_only_sym; JL_DLLEXPORT jl_sym_t *isdefined_sym;
+JL_DLLEXPORT jl_sym_t *propagate_inbounds_sym; JL_DLLEXPORT jl_sym_t *specialize_sym;
+JL_DLLEXPORT jl_sym_t *nospecialize_sym; JL_DLLEXPORT jl_sym_t *macrocall_sym;
+JL_DLLEXPORT jl_sym_t *colon_sym; JL_DLLEXPORT jl_sym_t *hygienicscope_sym;
+JL_DLLEXPORT jl_sym_t *throw_undef_if_not_sym; JL_DLLEXPORT jl_sym_t *getfield_undefref_sym;
+JL_DLLEXPORT jl_sym_t *gc_preserve_begin_sym; JL_DLLEXPORT jl_sym_t *gc_preserve_end_sym;
+JL_DLLEXPORT jl_sym_t *coverageeffect_sym; JL_DLLEXPORT jl_sym_t *escape_sym;
+JL_DLLEXPORT jl_sym_t *aliasscope_sym; JL_DLLEXPORT jl_sym_t *popaliasscope_sym;
+JL_DLLEXPORT jl_sym_t *optlevel_sym; JL_DLLEXPORT jl_sym_t *thismodule_sym;
+JL_DLLEXPORT jl_sym_t *atom_sym; JL_DLLEXPORT jl_sym_t *statement_sym; JL_DLLEXPORT jl_sym_t *all_sym;
+JL_DLLEXPORT jl_sym_t *compile_sym; JL_DLLEXPORT jl_sym_t *infer_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -953,7 +953,7 @@ JL_DLLEXPORT int jl_operator_precedence(char *sym)
     return res;
 }
 
-int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
 {
     size_t i, l = jl_array_len(body);
     for (i = 0; i < l; i++) {

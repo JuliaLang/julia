@@ -27,7 +27,7 @@ using namespace llvm;
 static std::map<std::string, void*> libMap;
 static jl_mutex_t libmap_lock;
 extern "C"
-void *jl_get_library_(const char *f_lib, int throw_err) JL_NOTSAFEPOINT
+JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err) JL_NOTSAFEPOINT
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
@@ -202,7 +202,7 @@ std::string jl_format_filename(StringRef output_pattern)
     return outfile.str();
 }
 
-extern "C" JL_DLLEXPORT char *jl_format_filename(const char *output_pattern)
+JL_DLLEXPORT char *jl_format_filename(const char *output_pattern)
 {
     return strdup(jl_format_filename(StringRef(output_pattern)).c_str());
 }

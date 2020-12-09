@@ -1527,10 +1527,18 @@ $$($(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(1) $
 endef
 
 LIBJULIAINTERNAL_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIARUNTIMEINTERNAL_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-runtime-internal.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIASTUBINTERNAL_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-stub-internal.$(JL_MAJOR_MINOR_SHLIB_EXT))
 LIBJULIAINTERNAL_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIARUNTIMEINTERNAL_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-runtime-internal.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIASTUBINTERNAL_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-stub-internal.$(JL_MAJOR_MINOR_SHLIB_EXT))
 
 LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIARUNTIMEINTERNAL_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-runtime-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIASTUBINTERNAL_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-stub-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
 LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIARUNTIMEINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-runtime-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIASTUBINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-stub-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
 
 ifeq ($(OS),WINNT)
 ifeq ($(BINARY),32)
@@ -1565,16 +1573,16 @@ LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMN
 # We list:
 #  * libgcc_s, because FreeBSD needs to load ours, not the system one.
 #  * libopenlibm, because Windows has an untrustworthy libm, and we want to use ours more than theirs
-#  * libjulia, which must always come last.
+#  * libjulia-internal, which must always come last.
 #
 # We need these four separate variables because:
 #  * debug builds must link against libjuliadebug, not libjulia
 #  * install time relative paths are not equal to build time relative paths (../lib vs. ../lib/julia)
 # That second point will no longer be true for most deps once they are placed within Artifacts directories.
-LOADER_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIAINTERNAL_BUILD_DEPLIB)
-LOADER_DEBUG_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB)
-LOADER_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIAINTERNAL_INSTALL_DEPLIB)
-LOADER_DEBUG_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB)
+LOADER_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIARUNTIMEINTERNAL_BUILD_DEPLIB):$(LIBJULIAINTERNAL_BUILD_DEPLIB)
+LOADER_DEBUG_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIARUNTIMEINTERNAL_DEBUG_BUILD_DEPLIB):$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB)
+LOADER_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIARUNTIMEINTERNAL_INSTALL_DEPLIB):$(LIBJULIAINTERNAL_INSTALL_DEPLIB)
+LOADER_DEBUG_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIARUNTIMEINTERNAL_DEBUG_INSTALL_DEPLIB):$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB)
 
 # Colors for make
 ifndef VERBOSE

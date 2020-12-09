@@ -292,7 +292,7 @@ void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
 
 // this compiles li and emits fptr
 extern "C"
-jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
+JL_DLLEXPORT jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     uint64_t compiler_start_time = jl_hrtime();
@@ -340,7 +340,7 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
 }
 
 extern "C"
-void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
+JL_DLLEXPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
 {
     if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
         return;

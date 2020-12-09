@@ -51,7 +51,7 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
 
-size_t jl_page_size;
+JL_DLLEXPORT size_t jl_page_size;
 
 void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 {
@@ -430,20 +430,20 @@ static void init_stdio(void)
 }
 
 #ifdef JL_USE_INTEL_JITEVENTS
-char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
+JL_DLLEXPORT char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
 #endif
 
 #ifdef JL_USE_OPROFILE_JITEVENTS
-char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
+JL_DLLEXPORT char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 #endif
 
 #ifdef JL_USE_PERF_JITEVENTS
-char jl_using_perf_jitevents = 0;
+JL_DLLEXPORT char jl_using_perf_jitevents = 0;
 #endif
 
-char jl_using_gdb_jitevents = 0;
+JL_DLLEXPORT char jl_using_gdb_jitevents = 0;
 
-int isabspath(const char *in) JL_NOTSAFEPOINT
+JL_DLLEXPORT int isabspath(const char *in) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];

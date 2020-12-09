@@ -700,7 +700,7 @@ static inline const CPUSpec<CPU,feature_sz> *find_cpu(uint32_t cpu)
     return ::find_cpu(cpu, cpus, ncpu_names);
 }
 
-static inline const CPUSpec<CPU,feature_sz> *find_cpu(llvm::StringRef name)
+static inline const CPUSpec<CPU,feature_sz> *find_cpu(std::string name)
 {
     return ::find_cpu(name, cpus, ncpu_names);
 }
@@ -719,7 +719,7 @@ static inline const std::string &host_cpu_name()
     return name;
 }
 
-static inline const char *normalize_cpu_name(llvm::StringRef name)
+static inline const char *normalize_cpu_name(std::string name)
 {
     if (name == "atom")
         return "bonnell";
@@ -1011,21 +1011,21 @@ jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
     return parse_sysimg(hdl, sysimg_init_cb);
 }
 
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
     return get_llvm_target_vec(jit_targets[0]);
 }
 
-const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
+JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 {
     static const auto res = get_llvm_target_str(TargetData<feature_sz>{"generic", "",
             {feature_masks, 0}, {{}, 0}, 0});
     return res;
 }
 
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");

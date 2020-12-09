@@ -495,7 +495,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PR
     return m;
 }
 
-int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
 {
     return jl_is_expr(e) &&
         (((jl_expr_t*)e)->head == module_sym ||

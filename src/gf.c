@@ -253,7 +253,7 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 // returns the inferred source, and may cache the result in mi
 // if successful, also updates the mi argument to describe the validity of this src
 // if inference doesn't occur (or can't finish), returns NULL instead
-jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
+JL_DLLEXPORT jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
 {
     JL_TIMING(INFERENCE);
     if (jl_typeinf_func == NULL)
@@ -494,7 +494,7 @@ static void reset_mt_caches(jl_methtable_t *mt, void *env)
 
 
 jl_function_t *jl_typeinf_func = NULL;
-size_t jl_typeinf_world = 0;
+JL_DLLEXPORT size_t jl_typeinf_world = 0;
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
@@ -522,7 +522,7 @@ static int very_general_type(jl_value_t *t)
     return (t == (jl_value_t*)jl_any_type || jl_types_equal(t, (jl_value_t*)jl_type_type));
 }
 
-jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i) JL_NOTSAFEPOINT
 {
     sig = jl_unwrap_unionall(sig);
     size_t len = jl_nparams(sig);
@@ -1892,7 +1892,7 @@ jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPA
 }
 
 
-jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
+JL_DLLEXPORT jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 {
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
@@ -1905,7 +1905,7 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
     return NULL;
 }
 
-jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
+JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
 {
     jl_code_instance_t *codeinst = jl_method_compiled(mi, world);
     if (codeinst)
@@ -2037,7 +2037,7 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
 }
 
 // compile-time method lookup
-jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache)
+JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache)
 {
     if (jl_has_free_typevars((jl_value_t*)types))
         return NULL; // don't poison the cache due to a malformed query
@@ -3139,7 +3139,7 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 //static jl_mutex_t typeinf_lock;
 #define typeinf_lock codegen_lock
 
-uint64_t jl_cumulative_compile_time = 0;
+JL_DLLEXPORT uint64_t jl_cumulative_compile_time = 0;
 static uint64_t inference_start_time = 0;
 
 JL_DLLEXPORT void jl_typeinf_begin(void)

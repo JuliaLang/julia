@@ -407,8 +407,8 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
-jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
-void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec);
+JL_DLLEXPORT jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
+JL_DLLEXPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec);
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world);
@@ -620,7 +620,7 @@ void jl_init_flisp(void);
 void jl_init_common_symbols(void);
 void jl_init_primitives(void) JL_GC_DISABLED;
 void jl_init_llvm(void);
-void jl_init_codegen(void);
+JL_DLLEXPORT void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
 void jl_init_tasks(void) JL_GC_DISABLED;
@@ -633,7 +633,7 @@ void jl_init_debuginfo(void);
 void jl_init_thread_heap(jl_ptls_t ptls);
 void jl_init_int32_int64_cache(void);
 
-void jl_teardown_codegen(void);
+JL_DLLEXPORT void jl_teardown_codegen(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 
@@ -711,10 +711,10 @@ JL_DLLEXPORT jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, cons
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo);
 
 void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int policy);
-void jl_dump_native(void *native_code,
+JL_DLLEXPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len);
-int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p) JL_NOTSAFEPOINT;
 void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
 
@@ -902,7 +902,7 @@ size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_cont
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
-int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
 void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT;
 void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
@@ -1123,7 +1123,7 @@ JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 // -- synchronization utilities -- //
 
 extern jl_mutex_t typecache_lock;
-extern jl_mutex_t codegen_lock;
+JL_DLLEXPORT extern jl_mutex_t codegen_lock;
 extern jl_mutex_t safepoint_lock;
 
 #if defined(__APPLE__)
@@ -1280,11 +1280,11 @@ extern jl_sym_t *atom_sym; extern jl_sym_t *statement_sym; extern jl_sym_t *all_
 
 struct _jl_sysimg_fptrs_t;
 
-void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
+JL_DLLEXPORT void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n);
-void jl_write_coverage_data(const char*);
-void jl_write_malloc_log(void);
-void jl_write_compiler_output(void);
+JL_DLLEXPORT void jl_write_coverage_data(const char*);
+JL_DLLEXPORT void jl_write_malloc_log(void);
+JL_DLLEXPORT void jl_write_compiler_output(void);
 
 #if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
 #  define jl_unreachable() __builtin_unreachable()

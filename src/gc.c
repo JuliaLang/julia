@@ -1207,7 +1207,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     return jl_valueof(v);
 }
 
-int jl_gc_classify_pools(size_t sz, int *osize)
+JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize)
 {
     if (sz > GC_MAX_SZCLASS)
         return -1;

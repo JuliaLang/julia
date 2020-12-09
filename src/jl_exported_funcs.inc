@@ -146,6 +146,7 @@
     XX(jl_dump_host_cpu) \
     XX(jl_dump_llvm_asm) \
     XX(jl_dump_method_asm) \
+    XX(jl_dump_native) \
     XX(jl_egal) \
     XX(jl_eh_restore_state) \
     XX(jl_enqueue_task) \
@@ -307,6 +308,8 @@
     XX(jl_gc_unsafe_enter) \
     XX(jl_gc_unsafe_leave) \
     XX(jl_gdblookup) \
+    XX(jl_generate_fptr) \
+    XX(jl_generate_fptr_for_unspecialized) \
     XX(jl_generating_output) \
     XX(jl_generic_function_def) \
     XX(jl_gensym) \
@@ -328,6 +331,7 @@
     XX(jl_get_field_offset) \
     XX(jl_get_fieldtypes) \
     XX(jl_get_function_id) \
+    XX(jl_getFunctionInfo) \
     XX(jl_get_global) \
     XX(jl_get_image_file) \
     XX(jl_get_JIT) \
@@ -336,6 +340,7 @@
     XX(jl_get_keyword_sorter) \
     XX(jl_get_kwsorter) \
     XX(jl_get_llvm_context) \
+    XX(jl_get_llvm_gv) \
     XX(jl_get_llvmf_defn) \
     XX(jl_get_llvm_function) \
     XX(jl_get_llvm_module) \
@@ -378,6 +383,7 @@
     XX(jl_id_start_char) \
     XX(jl_idtable_rehash) \
     XX(jl_infer_thunk) \
+    XX(jl_init_codegen) \
     XX(jl_init_restored_modules) \
     XX(jl_init__threading) \
     XX(jl_init_with_image__threading) \
@@ -429,6 +435,7 @@
     XX(jl_load_and_lookup) \
     XX(jl_load_dynamic_library) \
     XX(jl_load_file_string) \
+    XX(jl_lock_profile) \
     XX(jl_lookup_code_address) \
     XX(jl_lseek) \
     XX(jl_lshr_int) \
@@ -532,6 +539,7 @@
     XX(jl_readuntil) \
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
+    XX(jl_register_fptrs) \
     XX(jl_register_newmeth_tracer) \
     XX(jl_rem_float) \
     XX(jl_repl_raise_sigtstp) \
@@ -658,6 +666,7 @@
     XX(jl_tcp_getsockname) \
     XX(jl_tcp_quickack) \
     XX(jl_tcp_reuseport) \
+    XX(jl_teardown_codegen) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
     XX(jl_threading_enabled) \
@@ -715,6 +724,7 @@
     XX(jl_uncompress_argnames) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
+    XX(jl_unlock_profile) \
     XX(jl_urem_int) \
     XX(jl_uv_associate_julia_struct) \
     XX(jl_uv_buf_base) \
@@ -755,6 +765,9 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
+    XX(jl_write_compiler_output) \
+    XX(jl_write_coverage_data) \
+    XX(jl_write_malloc_log) \
     XX(jl_xor_int) \
     XX(jl_yield) \
     XX(jl_zext_int)

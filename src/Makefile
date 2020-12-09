@@ -42,17 +42,16 @@ endif
 RUNTIME_SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
-	simplevector runtime_intrinsics precompile \
+	simplevector precompile processor \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint timing subtype \
-	crc32c APInt-C processor ircode
-SRCS := jloptions runtime_ccall rtutils
+	crc32c ircode runtime_intrinsics APInt-C half-float
+RUNTIME_NOHDR_SRCS := jloptions runtime_ccall rtutils
 
 LLVMLINK :=
 
-ifeq ($(JULIACODEGEN),LLVM)
-SRCS += codegen llvm-ptls
-RUNTIME_SRCS += jitlayers aotcompile debuginfo disasm llvm-simdloop llvm-muladd \
+CODEGEN_NOHDR_SRCS += codegen llvm-ptls
+CODEGEN_SRCS += jitlayers aotcompile debuginfo disasm llvm-simdloop llvm-muladd \
 	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-api llvm-remove-addrspaces \
@@ -66,23 +65,24 @@ FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --obj-root)/tools/polly/include
 FLAGS += -DUSE_POLLY
 ifeq ($(USE_POLLY_OPENMP),1)
 FLAGS += -fopenmp
-endif
+endif # USE_POLLY_OPENMP
 ifeq ($(USE_POLLY_ACC),1)
 LLVMLINK += -lPollyPPCG -lGPURuntime
 FLAGS += -DUSE_POLLY_ACC
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools # Required to find GPURuntime/GPUJIT.h
-endif
-endif
-else
-RUNTIME_SRCS += anticodegen
-LLVM_LIBS := support
-endif
+endif # USE_POLLY_ACC
+endif # USE_POLLY
+
+STUB_SRCS := anticodegen
 
 ifeq ($(USEMSVC), 1)
-SRCS += getopt
+RUNTIME_NOHDR_SRCS += getopt
 endif
 
-SRCS += $(RUNTIME_SRCS)
+RUNTIME_ALL_SRCS := $(RUNTIME_NOHDR_SRCS)
+RUNTIME_ALL_SRCS += $(RUNTIME_SRCS)
+CODEGEN_ALL_SRCS := $(CODEGEN_NOHDR_SRCS)
+CODEGEN_ALL_SRCS += $(CODEGEN_SRCS)
 
 
 # headers are used for dependency tracking, while public headers will be part of the dist
@@ -98,7 +98,6 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
 
-ifeq ($(JULIACODEGEN),LLVM)
 ifneq ($(USE_SYSTEM_LLVM),0)
 LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms
@@ -113,7 +112,6 @@ endif
 ifeq ($(USE_LLVM_SHLIB),1)
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
-endif
 
 CLANG_LDFLAGS := $(LLVM_LDFLAGS)
 ifeq ($(OS), Darwin)
@@ -125,8 +123,12 @@ COMMON_LIBS := $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(LLVMLI
 DEBUG_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a -ljulia-debug $(COMMON_LIBS)
 RELEASE_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a -ljulia $(COMMON_LIBS)
 
-OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
-DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
+RUNTIME_OBJS  := $(RUNTIME_ALL_SRCS:%=$(BUILDDIR)/%.o)
+CODEGEN_OBJS  := $(CODEGEN_ALL_SRCS:%=$(BUILDDIR)/%.o)
+STUB_OBJS     := $(STUB_SRCS:%=$(BUILDDIR)/%.o)
+RUNTIME_DOBJS := $(RUNTIME_ALL_SRCS:%=$(BUILDDIR)/%.dbg.obj)
+CODEGEN_DOBJS := $(CODEGEN_ALL_SRCS:%=$(BUILDDIR)/%.dbg.obj)
+STUB_DOBJS    := $(STUB_SRCS:%=$(BUILDDIR)/%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
@@ -290,8 +292,28 @@ else
 CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
 
-$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_LIB) -o $@ $(JLDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS) $(call SONAME_FLAGS,$(notdir $@)))
+### Debug
+
+$(build_shlibdir)/libjulia-runtime-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(RUNTIME_DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(RUNTIME_DOBJS) $(RPATH_LIB) -o $@ $(JLDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS) $(call SONAME_FLAGS,$(notdir $@)))
+	$(INSTALL_NAME_CMD)libjulia-runtime-internal-debug.$(SHLIB_EXT) $@
+ifneq ($(OS), WINNT)
+	@ln -sf libjulia-runtime-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-runtime-internal-debug.$(JL_MAJOR_SHLIB_EXT)
+	@ln -sf libjulia-runtime-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-runtime-internal-debug.$(SHLIB_EXT)
+endif
+	$(DSYMUTIL) $@
+
+$(build_shlibdir)/libjulia-stub-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(STUB_DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(STUB_DOBJS) $(RPATH_LIB) -o $@ $(JLDFLAGS) $(JLIBLDFLAGS) $(call SONAME_FLAGS,$(notdir $@)))
+	$(INSTALL_NAME_CMD)libjulia-stub-internal-debug.$(SHLIB_EXT) $@
+ifneq ($(OS), WINNT)
+	@ln -sf libjulia-stub-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-stub-internal-debug.$(JL_MAJOR_SHLIB_EXT)
+	@ln -sf libjulia-stub-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-stub-internal-debug.$(SHLIB_EXT)
+endif
+	$(DSYMUTIL) $@
+
+$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(CODEGEN_DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(build_shlibdir)/libjulia-runtime-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(CODEGEN_DOBJS) $(RPATH_LIB) -o $@ -ljulia-runtime-internal-debug $(JLDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS) $(call SONAME_FLAGS,$(notdir $@)))
 	$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
 ifneq ($(OS), WINNT)
 	@ln -sf libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT)
@@ -299,14 +321,42 @@ ifneq ($(OS), WINNT)
 endif
 	$(DSYMUTIL) $@
 
-$(BUILDDIR)/libjulia-internal-debug.a: $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a
+$(BUILDDIR)/libjulia-runtime-internal-debug.a: $(SRCDIR)/julia.expmap $(RUNTIME_DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a
 	rm -f $@
-	@$(call PRINT_LINK, ar -rcs $@ $(DOBJS))
+	@$(call PRINT_LINK, ar -rcs $@ $(RUNTIME_DOBJS))
 
-libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(PUBLIC_HEADER_TARGETS)
+$(BUILDDIR)/libjulia-stub-internal-debug.a: $(SRCDIR)/julia.expmap $(RUNTIME_DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a
+	rm -f $@
+	@$(call PRINT_LINK, ar -rcs $@ $(STUB_DOBJS))
 
-$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_LIB) -o $@ $(JLDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(call SONAME_FLAGS,$(notdir $@)))
+$(BUILDDIR)/libjulia-internal-debug.a: $(SRCDIR)/julia.expmap $(CODEGEN_DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a
+	rm -f $@
+	@$(call PRINT_LINK, ar -rcs $@ $(CODEGEN_DOBJS))
+
+libjulia-internal-debug: $(build_shlibdir)/libjulia-runtime-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-stub-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(PUBLIC_HEADER_TARGETS)
+
+### Release
+
+$(build_shlibdir)/libjulia-runtime-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(RUNTIME_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(RUNTIME_OBJS) $(RPATH_LIB) -o $@ $(JLDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(call SONAME_FLAGS,$(notdir $@)))
+	$(INSTALL_NAME_CMD)libjulia-runtime-internal.$(SHLIB_EXT) $@
+ifneq ($(OS), WINNT)
+	@ln -sf libjulia-runtime-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-runtime-internal.$(JL_MAJOR_SHLIB_EXT)
+	@ln -sf libjulia-runtime-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-runtime-internal.$(SHLIB_EXT)
+endif
+	$(DSYMUTIL) $@
+
+$(build_shlibdir)/libjulia-stub-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(STUB_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(STUB_OBJS) $(RPATH_LIB) -o $@ $(JLDFLAGS) $(JLIBLDFLAGS) $(call SONAME_FLAGS,$(notdir $@)))
+	$(INSTALL_NAME_CMD)libjulia-stub-internal.$(SHLIB_EXT) $@
+ifneq ($(OS), WINNT)
+	@ln -sf libjulia-stub-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-stub-internal.$(JL_MAJOR_SHLIB_EXT)
+	@ln -sf libjulia-stub-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-stub-internal.$(SHLIB_EXT)
+endif
+	$(DSYMUTIL) $@
+
+$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(CODEGEN_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(build_shlibdir)/libjulia-runtime-internal.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(CODEGEN_OBJS) $(RPATH_LIB) -o $@ $(JLDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(call SONAME_FLAGS,$(notdir $@)) -ljulia-runtime-internal)
 	$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
 ifneq ($(OS), WINNT)
 	@ln -sf libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT)
@@ -314,13 +364,22 @@ ifneq ($(OS), WINNT)
 endif
 	$(DSYMUTIL) $@
 
-$(BUILDDIR)/libjulia-internal.a: $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a
+$(BUILDDIR)/libjulia-runtime-internal.a: $(SRCDIR)/julia.expmap $(RUNTIME_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a
 	rm -f $@
-	@$(call PRINT_LINK, ar -rcs $@ $(OBJS))
-libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(PUBLIC_HEADER_TARGETS)
+	@$(call PRINT_LINK, ar -rcs $@ $(RUNTIME_OBJS))
+
+$(BUILDDIR)/libjulia-stub-internal.a: $(SRCDIR)/julia.expmap $(STUB_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a
+	rm -f $@
+	@$(call PRINT_LINK, ar -rcs $@ $(STUB_OBJS))
+
+$(BUILDDIR)/libjulia-internal.a: $(SRCDIR)/julia.expmap $(CODEGEN_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a
+	rm -f $@
+	@$(call PRINT_LINK, ar -rcs $@ $(CODEGEN_OBJS))
+
+libjulia-internal-release: $(build_shlibdir)/libjulia-runtime-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-stub-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT) $(PUBLIC_HEADER_TARGETS)
 
 clean:
-	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
+	-rm -fr $(build_shlibdir)/libjulia-*-internal* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a
 	-rm -f $(BUILDDIR)/julia_version.h

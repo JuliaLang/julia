@@ -2,11 +2,6 @@
 
 // Processor feature detection
 
-#include "llvm-version.h"
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/MathExtras.h>
-#include <llvm/Support/raw_ostream.h>
-
 #include "processor.h"
 
 #include "julia.h"
@@ -73,7 +68,7 @@
 //
 //     Optimize only for size. Clang's `-Oz`.
 
-bool jl_processor_print_help = false;
+JL_DLLEXPORT bool jl_processor_print_help = false;
 
 namespace {
 
@@ -147,8 +142,13 @@ struct FeatureList {
     inline int nbits() const
     {
         int cnt = 0;
-        for (size_t i = 0; i < n; i++)
-            cnt += llvm::countPopulation(eles[i]);
+        for (size_t i = 0; i < n; i++) {
+            uint32_t el = eles[i];
+            while (el) {
+                cnt += el % 2;
+                el = el >> 1;
+            }
+        }
         return cnt;
     }
     inline bool empty() const
@@ -357,7 +357,7 @@ static const CPUSpec<CPU,n> *find_cpu(uint32_t cpu, const CPUSpec<CPU,n> *cpus, 
 }
 
 template<typename CPU, size_t n>
-static const CPUSpec<CPU,n> *find_cpu(llvm::StringRef name, const CPUSpec<CPU,n> *cpus,
+static const CPUSpec<CPU,n> *find_cpu(std::string name, const CPUSpec<CPU,n> *cpus,
                                       uint32_t ncpus)
 {
     for (uint32_t i = 0; i < ncpus; i++) {
@@ -393,11 +393,11 @@ JL_UNUSED static uint32_t find_feature_bit(const FeatureName *features, size_t n
 // 1. CPU ID is less stable (they are not bound to hardware/OS API)
 // 2. We need to support CPU names that are not recognized by us and therefore doesn't have an ID
 // 3. CPU name is trivial to parse
-static inline std::vector<uint8_t> serialize_target_data(llvm::StringRef name,
+static inline std::vector<uint8_t> serialize_target_data(std::string name,
                                                          uint32_t nfeature,
                                                          const uint32_t *features_en,
                                                          const uint32_t *features_dis,
-                                                         llvm::StringRef ext_features)
+                                                         std::string ext_features)
 {
     std::vector<uint8_t> res;
     auto add_data = [&] (const void *data, size_t sz) {
@@ -418,10 +418,10 @@ static inline std::vector<uint8_t> serialize_target_data(llvm::StringRef name,
 }
 
 template<size_t n>
-static inline std::vector<uint8_t> serialize_target_data(llvm::StringRef name,
+static inline std::vector<uint8_t> serialize_target_data(std::string name,
                                                          const FeatureList<n> &features_en,
                                                          const FeatureList<n> &features_dis,
-                                                         llvm::StringRef ext_features)
+                                                         std::string ext_features)
 {
     return serialize_target_data(name, n, &features_en[0], &features_dis[0], ext_features);
 }
@@ -547,7 +547,7 @@ parse_cmdline(const char *option, F &&feature_cb)
             else if (*full == '+') {
                 fname++;
             }
-            if (llvm::StringRef(fname, p - fname) == "clone_all") {
+            if (std::string(fname, p - fname) == "clone_all") {
                 if (!disable) {
                     arg.en.flags |= JL_TARGET_CLONE_ALL;
                     arg.dis.flags &= ~JL_TARGET_CLONE_ALL;
@@ -557,14 +557,14 @@ parse_cmdline(const char *option, F &&feature_cb)
                     arg.en.flags &= ~JL_TARGET_CLONE_ALL;
                 }
             }
-            else if (llvm::StringRef(fname, p - fname) == "opt_size") {
+            else if (std::string(fname, p - fname) == "opt_size") {
                 if (disable)
                     jl_error("Invalid target option: disabled opt_size.");
                 if (arg.en.flags & JL_TARGET_MINSIZE)
                     jl_error("Conflicting target option: both opt_size and min_size are specified.");
                 arg.en.flags |= JL_TARGET_OPTSIZE;
             }
-            else if (llvm::StringRef(fname, p - fname) == "min_size") {
+            else if (std::string(fname, p - fname) == "min_size") {
                 if (disable)
                     jl_error("Invalid target option: disabled min_size.");
                 if (arg.en.flags & JL_TARGET_OPTSIZE)
@@ -582,7 +582,7 @@ parse_cmdline(const char *option, F &&feature_cb)
                     jl_error("Invalid target option: base target must be clone_all.");
                 arg.base = base;
             }
-            else if (llvm::StringRef(fname, p - fname) == "help") {
+            else if (std::string(fname, p - fname) == "help") {
                 jl_processor_print_help = true;
             }
             else {

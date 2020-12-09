@@ -7,6 +7,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// FIXME: Generate in build system
+#ifndef JL_LLVM_VERSION
+#define JL_LLVM_VERSION 120000
+#endif // JL_LLVM_VERSION
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -209,8 +214,8 @@ struct jl_target_spec_t {
 /**
  * Return the list of targets to clone
  */
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
+extern std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
 std::string jl_get_cpu_name_llvm(void);
 std::string jl_get_cpu_features_llvm(void);
-std::string jl_format_filename(llvm::StringRef output_pattern);
+std::string jl_format_filename(std::string output_pattern);
 #endif

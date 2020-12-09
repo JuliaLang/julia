@@ -2053,7 +2053,7 @@ int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt)
 
 // returns true if the intersection of `t` and `Type` is non-empty and not a kind
 // this is sufficient to determine if `isa(x, T)` can instead simply check for `typeof(x) <: T`
-int jl_has_intersect_type_not_kind(jl_value_t *t)
+JL_DLLEXPORT int jl_has_intersect_type_not_kind(jl_value_t *t)
 {
     t = jl_unwrap_unionall(t);
     if (t == (jl_value_t*)jl_any_type)

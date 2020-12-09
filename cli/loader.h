@@ -85,6 +85,10 @@
 #define DEP_LIBS "../lib/example.so:../lib/libjulia.so"
 #endif
 
+#if !defined(STUB_LIB)
+#define STUB_LIB "../lib/libjulia-stub-internal.so"
+#endif
+
 // We need to dlopen() ourselves in order to introspect the libdir.
 #if defined(JL_DEBUG_BUILD)
 #define LIBJULIA_NAME "libjulia-debug"

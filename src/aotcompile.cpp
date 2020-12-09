@@ -125,7 +125,7 @@ void jl_get_function_id(void *native_code, jl_code_instance_t *codeinst,
 }
 
 extern "C"
-int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p)
+JL_DLLEXPORT int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p)
 {
     // map a jl_value_t memory location to a GlobalVariable
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -448,7 +448,7 @@ static void reportWriterError(const ErrorInfoBase &E)
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 extern "C"
-void jl_dump_native(void *native_code,
+JL_DLLEXPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len)

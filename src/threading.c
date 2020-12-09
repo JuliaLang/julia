@@ -212,7 +212,7 @@ JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOT
 #endif
 }
 
-jl_get_ptls_states_func jl_get_ptls_states_getter(void)
+JL_DLLEXPORT jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 {
     if (jl_tls_states_cb == jl_get_ptls_states_init)
         jl_get_ptls_states_init();
@@ -281,13 +281,13 @@ void jl_init_threadtls(int16_t tid)
 }
 
 // lock for code generation
-jl_mutex_t codegen_lock;
+JL_DLLEXPORT jl_mutex_t codegen_lock;
 jl_mutex_t typecache_lock;
 
-ssize_t jl_tls_offset = -1;
+JL_DLLEXPORT ssize_t jl_tls_offset = -1;
 
 #ifdef JL_ELF_TLS_VARIANT
-const int jl_tls_elf_support = 1;
+JL_DLLEXPORT const int jl_tls_elf_support = 1;
 // Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
 // To detect such case, we find the size of the TLS segment in the main
 // executable and the thread pointer (TP) and then see if the TLS pointer on the

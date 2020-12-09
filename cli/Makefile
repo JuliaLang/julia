@@ -28,7 +28,9 @@ endif
 
 # Build list of dependent libraries that must be opened
 SHIPFLAGS  += -DDEP_LIBS="\"$(LOADER_BUILD_DEP_LIBS)\""
+SHIPFLAGS  += -DSTUB_LIB="\"$(LIBJULIASTUBINTERNAL_BUILD_DEPLIB)\""
 DEBUGFLAGS += -DDEP_LIBS="\"$(LOADER_DEBUG_BUILD_DEP_LIBS)\""
+DEBUGFLAGS += -DSTUB_LIB="\"$(LIBJULIASTUBINTERNAL_DEBUG_BUILD_DEPLIB)\""
 
 EXE_OBJS := $(BUILDDIR)/loader_exe.o
 EXE_DOBJS := $(BUILDDIR)/loader_exe.dbg.obj

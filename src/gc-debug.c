@@ -511,7 +511,7 @@ void gc_debug_print_status(void)
                    pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
-void gc_debug_critical_error(void)
+JL_DLLEXPORT void gc_debug_critical_error(void)
 {
     gc_debug_print_status();
     if (!jl_gc_debug_env.wait_for_debugger)
@@ -608,7 +608,7 @@ void gc_scrub(void)
     jl_gc_debug_tasks.len = 0;
 }
 #else
-void gc_debug_critical_error(void)
+JL_DLLEXPORT void gc_debug_critical_error(void)
 {
 }
 
