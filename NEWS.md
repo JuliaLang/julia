@@ -1,4 +1,4 @@
-Julia v1.6 Release Notes
+Julia v1.7 Release Notes
 ========================
 
 New language features
