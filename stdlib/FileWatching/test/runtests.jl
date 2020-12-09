@@ -12,7 +12,7 @@ using Base: uv_error, Experimental
 # Writable ends are always tested for write-ability before a write
 
 n = 20
-intvls = [2, .2, .1, .005]
+intvls = [2, .2, .1, .005, .00001]
 
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
 for i in 1:n
