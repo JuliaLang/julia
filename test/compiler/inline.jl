@@ -324,3 +324,9 @@ let ci = code_typed(NonIsBitsDims, Tuple{})[1].first
     @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode) &&
         ci.code[1].val.value == NonIsBitsDims()
 end
+
+struct NonIsBitsDimsUndef
+    dims::NTuple{N, Int} where N
+    NonIsBitsDimsUndef() = new()
+end
+@test Core.Compiler.is_inlineable_constant(NonIsBitsDimsUndef())

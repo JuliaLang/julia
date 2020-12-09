@@ -82,6 +82,7 @@ function count_const_size(@nospecialize(x))
     dtfd = DataTypeFieldDesc(dt)
     for i = 1:nfields(x)
         dtfd[i].isptr || continue
+        isdefined(x, i) || continue
         sz += count_const_size(getfield(x, i))
         sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     end
