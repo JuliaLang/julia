@@ -150,7 +150,7 @@ function should_print_ssa_type(@nospecialize node)
 end
 
 function default_expr_type_printer(io::IO, @nospecialize(typ), used::Bool)
-    printstyled(io, "::", typ, color=(used ? :cyan : :light_black))
+    printstyled(io, "::", typ, color=(used ? :cyan : :alt_light_black))
     nothing
 end
 
@@ -561,16 +561,16 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             for (i, x) in enumerate(stack)
                 if i > length(last_stack) || last_stack[i] != x
                     entry = code.linetable[x]
-                    printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :light_black)
+                    printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :alt_light_black)
                     print(io, bb_guard_rail)
                     ssa_guard = " "^(maxlength_idx + 4 + (i - 1))
                     entry_label = "$(ssa_guard)$(method_name(entry)) at $(entry.file):$(entry[:line]) "
                     hline = string("─"^(start_column-length(entry_label)-length(bb_guard_rail)+max_depth-i), "┐")
-                    printstyled(io, string(entry_label, hline), "\n"; color=:light_black)
+                    printstyled(io, string(entry_label, hline), "\n"; color=:alt_light_black)
                     bb_guard_rail = bb_guard_rail_cont
                 end
             end
-            printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :light_black)
+            printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :alt_light_black)
             last_stack = stack
         else
             if idx <= length(loc_annotations)
@@ -589,9 +589,9 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
             if get(io, :color, false)
                 method_start_column = cols - max_method_width - max_loc_width - 2
                 filler = " "^(max_loc_width-length(annotation))
-                printstyled(io, "\e[$(method_start_column)G$(annotation)$(filler)$(loc_method)\e[1G", color = :light_black)
+                printstyled(io, "\e[$(method_start_column)G$(annotation)$(filler)$(loc_method)\e[1G", color = :alt_light_black)
             end
-            printstyled(io, lineno, " "^(max_lineno_width - length(lineno) + 1); color = :light_black)
+            printstyled(io, lineno, " "^(max_lineno_width - length(lineno) + 1); color = :alt_light_black)
         end
         idx != last(bbrange) && print(io, bb_guard_rail)
         print_sep = false
@@ -688,23 +688,23 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
         # If invariants are violated, print a special leader
         linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
         inlining_indent = line_info_preprinter(io, linestart, idx)
-        printstyled(io, "!!! ", "─"^max_bb_idx_size, color=:light_black)
+        printstyled(io, "!!! ", "─"^max_bb_idx_size, color=:alt_light_black)
     else
         bbrange = cfg.blocks[bb_idx].stmts
         bbrange = bbrange.start:bbrange.stop
         # Print line info update
-        linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:light_black), context=io)
+        linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:alt_light_black), context=io)
         linestart *= " "^max_bb_idx_size
         inlining_indent = line_info_preprinter(io, linestart, idx)
         if idx == first(bbrange)
             bb_idx_str = string(bb_idx)
             bb_pad = max_bb_idx_size - length(bb_idx_str)
             bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
-            printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=:light_black)
+            printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=:alt_light_black)
         elseif idx == last(bbrange) # print separator
-            printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=:light_black)
+            printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=:alt_light_black)
         else
-            printstyled(io, "│ ", " "^max_bb_idx_size, color=:light_black)
+            printstyled(io, "│ ", " "^max_bb_idx_size, color=:alt_light_black)
         end
         if idx == last(bbrange)
             bb_idx += 1

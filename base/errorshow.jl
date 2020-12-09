@@ -563,7 +563,7 @@ function replaceuserpath(str)
 end
 
 const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
-const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+const STACKTRACE_FIXEDCOLORS = IdDict(Base => :alt_light_black, Core => :alt_light_black)
 
 stacktrace_expand_basepaths()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
@@ -663,7 +663,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
             popfirst!(repeated_cycle)
             printstyled(io,
                 "--- the last ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
+                  repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :alt_light_black)
             if i < length(displayed_stackframes)
                 println(io)
                 stacktrace_linebreaks() && println(io)
@@ -718,12 +718,12 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
     if n > 1
-        printstyled(io, " (repeats $n times)"; color=:light_black)
+        printstyled(io, " (repeats $n times)"; color=:alt_light_black)
     end
     println(io)
 
     # @
-    printstyled(io, " " ^ (digit_align_width + 2) * "@ ", color = :light_black)
+    printstyled(io, " " ^ (digit_align_width + 2) * "@ ", color = :alt_light_black)
 
     # module
     if modul !== nothing
@@ -735,22 +735,13 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     pathparts = splitpath(file)
     folderparts = pathparts[1:end-1]
     if !isempty(folderparts)
-        printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :light_black)
+        printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :alt_light_black)
     end
 
-    # filename, separator, line
-    # use escape codes for formatting, printstyled can't do underlined and color
-    # codes are bright black (90) and underlined (4)
-    function print_underlined(io::IO, s...)
-        colored = get(io, :color, false)::Bool
-        start_s = colored ? "\033[90;4m" : ""
-        end_s   = colored ? "\033[0m"    : ""
-        print(io, start_s, s..., end_s)
-    end
-    print_underlined(io, pathparts[end], ":", line)
+    printstyled(io, pathparts[end], ":", line; color = :alt_light_black, underline = true)
 
     # inlined
-    printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+    printstyled(io, inlined ? " [inlined]" : "", color = :alt_light_black)
 end
 
 

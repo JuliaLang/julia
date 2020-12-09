@@ -465,6 +465,13 @@ ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
 
+Some colorschemes define light black color to be the same color as background, so some messages
+become invisible. You can override it by adding the following to your `~/.julia/config/startup.jl` file:
+
+```julia
+ENV["JULIA_ALT_LIGHT_BLACK_COLOR"] = 10
+```
+
 ## TerminalMenus
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
