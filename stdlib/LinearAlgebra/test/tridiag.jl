@@ -576,4 +576,12 @@ end
     @test_throws ArgumentError SymTridiagonal{Float32}(T)
 end
 
+# Issue #38765
+@testset "Eigendecomposition with different lengths" begin
+    # length(A.ev) can be either length(A.dv) or length(A.dv) - 1
+    A = SymTridiagonal(fill(1.0, 3), fill(-1.0, 3))
+    @test eigen(A) == eigen(Matrix(A))
+    @test_throws DimensionMismatch LAPACK.stegr!('V', A.dv, [A.ev; 1.0])
+end
+
 end # module TestTridiagonal
