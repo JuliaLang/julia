@@ -206,6 +206,31 @@ end
 
 end
 
+struct Zero end
+Base.iszero(::Zero) = true
+LinearAlgebra.iszerodefined(::Type{Zero}) = true
+@testset "PR #36193" begin
+    f(::Union{Int, Zero}) = Zero()
+    function test(el)
+        M = [el el
+             el el]
+        v = [el, el]
+        U = UpperTriangular(M)
+        L = LowerTriangular(M)
+        D = Diagonal(v)
+        for (T, A) in [(UpperTriangular, U), (LowerTriangular, L), (Diagonal, D)]
+            @test identity.(A) isa typeof(A)
+            @test map(identity, A) isa typeof(A)
+            @test f.(A) isa T{Zero}
+            @test map(f, A) isa T{Zero}
+        end
+    end
+    # This should not need `zero(::Type{Zero})` to be defined
+    test(1)
+    Base.zero(::Type{Zero}) = Zero()
+    test(Zero())
+end
+
 # structured broadcast with function returning non-number type
 @test tuple.(Diagonal([1, 2])) == [(1,) (0,); (0,) (2,)]
 
