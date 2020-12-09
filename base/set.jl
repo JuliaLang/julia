@@ -728,3 +728,30 @@ function _replace!(new::Callable, t::Set{T}, ::AbstractSet, count::Int) where {T
     end
     t
 end
+
+### replace for tuples
+
+function _replace(f::Callable, t::Tuple, count::Int)
+    if count == 0 || isempty(t)
+        t
+    else
+        x = f(t[1])
+        (x, _replace(f, tail(t), count - !==(x, t[1]))...)
+    end
+end
+
+replace(f::Callable, t::Tuple; count::Integer=typemax(Int)) =
+    _replace(f, t, check_count(count))
+
+function _replace(t::Tuple, count::Int, old_new::Tuple{Vararg{Pair}})
+    _replace(t, count) do x
+        @_inline_meta
+        for o_n in old_new
+            isequal(first(o_n), x) && return last(o_n)
+        end
+        return x
+    end
+end
+
+replace(t::Tuple, old_new::Pair...; count::Integer=typemax(Int)) =
+    _replace(t, check_count(count), old_new)
