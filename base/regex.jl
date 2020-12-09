@@ -432,7 +432,7 @@ original string, otherwise they must be from disjoint character ranges.
 !!! compat "Julia 1.3"
      This method requires at least Julia 1.3.
 
-!!! compat "Julia 1.6"
+!!! compat "Julia 1.7"
       Using a character as the pattern requires at least Julia 1.7.
 """
 function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
