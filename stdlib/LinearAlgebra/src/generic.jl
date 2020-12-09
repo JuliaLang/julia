@@ -1487,6 +1487,7 @@ end
 @inline function reflector!(x::AbstractVector)
     require_one_based_indexing(x)
     n = length(x)
+    n == 0 && return zero(eltype(x))
     @inbounds begin
         ξ1 = x[1]
         normu = abs2(ξ1)
@@ -1514,6 +1515,7 @@ end
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
+    m == 0 && return A
     @inbounds begin
         for j = 1:n
             # dot

@@ -282,6 +282,17 @@ end
     @test c0 == c
 end
 
+@testset "Issue reflector of zero-length vector" begin
+    a = [2.0]
+    x = view(a,1:0)
+    τ = LinearAlgebra.reflector!(view(x,1:0))
+    @test τ == 0.0
+
+    b = reshape([3.0],1,1)
+    @test isempty(LinearAlgebra.reflectorApply!(x, τ, view(b,1:0,:)))
+    @test b[1] == 3.0
+end
+
 @testset "det(Q::Union{QRCompactWYQ, QRPackedQ})" begin
     # 40 is the number larger than the default block size 36 of QRCompactWY
     @testset for n in [1:3; 40], m in [1:3; 40], pivot in [false, true]
