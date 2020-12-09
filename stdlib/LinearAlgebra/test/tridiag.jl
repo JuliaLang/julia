@@ -580,8 +580,11 @@ end
 @testset "Eigendecomposition with different lengths" begin
     # length(A.ev) can be either length(A.dv) or length(A.dv) - 1
     A = SymTridiagonal(fill(1.0, 3), fill(-1.0, 3))
-    @test eigen(A) == eigen(Matrix(A))
-    @test_throws DimensionMismatch LAPACK.stegr!('V', A.dv, [A.ev; 1.0])
+    F = eigen(A)
+    A2 = SymTridiagonal(fill(1.0, 3), fill(-1.0, 2))
+    F2 = eigen(A2)
+    test_approx_eq_modphase(F.vectors, F2.vectors)
+    @test F.values ≈ F2.values
 end
 
 end # module TestTridiagonal
