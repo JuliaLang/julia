@@ -411,7 +411,7 @@ julia> findall('a', "batman")
 ```
 
 !!! compat "Julia 1.7"
-     This method requires at least Julia 1.6.
+     This method requires at least Julia 1.7.
 """
 findall(c::AbstractChar, s::AbstractString) = findall(isequal(c),s)
 
