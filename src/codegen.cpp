@@ -44,6 +44,7 @@
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/AsmParser/Parser.h>
 #include <llvm/DebugInfo/DIContext.h>
+#include "llvm/IR/DebugInfoMetadata.h"
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Attributes.h>
@@ -5396,7 +5397,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
 // do codegen to create a C-callable alias/wrapper, or if sysimg_handle is set,
 // restore one from a loaded system image.
-void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
+const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
 {
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
     jl_value_t *ff = ft->instance;
@@ -5438,7 +5439,7 @@ void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declr
                 gen_cfun_wrapper((Module*)llvmmod, params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
             }
             JL_GC_POP();
-            return;
+            return name;
         }
         err = jl_get_exceptionf(jl_errorexception_type, "%s", sig.err_msg.c_str());
     }
@@ -6009,7 +6010,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                                      ,nullptr          // Template Declaration
                                      ,nullptr          // ThrownTypes
                                      );
-        topdebugloc = DebugLoc::get(toplineno, 0, SP, NULL);
+        topdebugloc = DILocation::get(jl_LLVMContext, toplineno, 0, SP, NULL);
         f->setSubprogram(SP);
         if (jl_options.debug_level >= 2) {
             const bool AlwaysPreserve = true;
@@ -6427,7 +6428,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 if (fname.empty())
                     fname = "macro expansion";
                 if (info.inlined_at == 0 && info.file == ctx.file) { // if everything matches, emit a toplevel line number
-                    info.loc = DebugLoc::get(info.line, 0, SP, NULL);
+                    info.loc = DILocation::get(jl_LLVMContext, info.line, 0, SP, NULL);
                 }
                 else { // otherwise, describe this as an inlining frame
                     DISubprogram *&inl_SP = subprograms[std::make_tuple(fname, info.file)];
@@ -6447,8 +6448,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                                                      ,nullptr          // ThrownTypes
                                                      );
                     }
-                    DebugLoc inl_loc = (info.inlined_at == 0) ? DebugLoc::get(0, 0, SP, NULL) : linetable.at(info.inlined_at).loc;
-                    info.loc = DebugLoc::get(info.line, 0, inl_SP, inl_loc);
+                    DebugLoc inl_loc = (info.inlined_at == 0) ? DebugLoc(DILocation::get(jl_LLVMContext, 0, 0, SP, NULL)) : linetable.at(info.inlined_at).loc;
+                    info.loc = DILocation::get(jl_LLVMContext, info.line, 0, inl_SP, inl_loc);
                 }
             }
         }
@@ -7595,7 +7596,6 @@ static void init_jit_functions(void)
     add_named_global(except_enter_func, (void*)NULL);
 
 #ifdef _OS_WINDOWS_
-#ifndef FORCE_ELF
 #if defined(_CPU_X86_64_)
 #if defined(_COMPILER_GCC_)
     add_named_global("___chkstk_ms", &___chkstk_ms);
@@ -7607,7 +7607,6 @@ static void init_jit_functions(void)
     add_named_global("_alloca", &_alloca);
 #else
     add_named_global("_chkstk", &_chkstk);
-#endif
 #endif
 #endif
 #endif
@@ -7759,7 +7758,7 @@ extern "C" void jl_init_llvm(void)
     #endif
 
     init_julia_llvm_meta();
-    jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine);
+    jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine, &jl_LLVMContext);
 
     // Mark our address spaces as non-integral
     jl_data_layout = jl_ExecutionEngine->getDataLayout();
