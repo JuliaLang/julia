@@ -241,7 +241,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
                 Base.show_tuple_as_call(io, def.name, sig, true, nothing, argnames)
             end
         else
-            Base.show(io, linfo)
+            Base.show_mi(io, linfo, true)
         end
     elseif linfo isa CodeInfo
         print(io, "top-level scope")
