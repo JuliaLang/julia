@@ -3,7 +3,7 @@ Julia v1.7 Release Notes
 
 New language features
 ---------------------
-* count and findall now accept AbstractChars as first argument to search for characaters in strings ((https://github.com/JuliaLang/julia/pull/38675)[#38675]).
+* count and findall now accept AbstractChars as first argument to search for characaters in strings ([#38675](https://github.com/JuliaLang/julia/pull/38675)).
 
 Language changes
 ----------------
