@@ -738,6 +738,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
         printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :alt_light_black)
     end
 
+    # filename, separator, line
     printstyled(io, pathparts[end], ":", line; color = :alt_light_black, underline = true)
 
     # inlined
