@@ -578,6 +578,13 @@ end
     @test length(d.ht) >= 10^4
     @test d === Base.rehash!(d, 123452) # number needs to be even
 
+    # filter!
+    d = IdDict(1=>1, 2=>3, 3=>2)
+    filter!(x->isodd(x[2]), d)
+    @test d[1] == 1
+    @test d[2] == 3
+    @test !haskey(d, 3)
+
     # not an iterator of tuples or pairs
     @test_throws ArgumentError IdDict([1, 2, 3, 4])
     # test rethrow of error in ctor
