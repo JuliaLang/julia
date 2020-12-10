@@ -73,7 +73,12 @@ const modules = Module[]
 const META    = gensym(:meta)
 const METAType = IdDict{Any,Any}
 
-meta(m::Module) = isdefined(m, META) ? getfield(m, META)::METAType : METAType()
+function meta(m::Module)
+    if !isdefined(m, META)
+        initmeta(m)
+    end
+    return getfield(m, META)::METAType
+end
 
 function initmeta(m::Module)
     if !isdefined(m, META)
