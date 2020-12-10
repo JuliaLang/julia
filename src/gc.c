@@ -392,12 +392,36 @@ static void run_finalizers(jl_ptls_t ptls)
     arraylist_free(&copied_list);
 }
 
+JL_DLLEXPORT int jl_gc_get_finalizers_inhibited(jl_ptls_t ptls)
+{
+    if (ptls == NULL)
+        ptls = jl_get_ptls_states();
+    return ptls->finalizers_inhibited;
+}
+
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on)
 {
+    if (ptls == NULL)
+        ptls = jl_get_ptls_states();
     int old_val = ptls->finalizers_inhibited;
     int new_val = old_val + (on ? -1 : 1);
+    if (new_val < 0) {
+        JL_TRY {
+            jl_error(""); // get a backtrace
+        }
+        JL_CATCH {
+            jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: GC finalizers already enabled on this thread.\n");
+            // Only print the backtrace once, to avoid spamming the logs
+            static int backtrace_printed = 0;
+            if (backtrace_printed == 0) {
+                backtrace_printed = 1;
+                jlbacktrace(); // written to STDERR_FILENO
+            }
+        }
+        return;
+    }
     ptls->finalizers_inhibited = new_val;
-    if (!new_val && old_val && !ptls->in_finalizer) {
+    if (!new_val && old_val && !ptls->in_finalizer && ptls->current_task->locks.len == 0) {
         ptls->in_finalizer = 1;
         run_finalizers(ptls);
         ptls->in_finalizer = 0;
@@ -1580,7 +1604,7 @@ STATIC_INLINE uintptr_t gc_read_stack(void *_addr, uintptr_t offset,
 JL_NORETURN NOINLINE void gc_assert_datatype_fail(jl_ptls_t ptls, jl_datatype_t *vt,
                                                   jl_gc_mark_sp_t sp)
 {
-    jl_printf(JL_STDOUT, "GC error (probable corruption) :\n");
+    jl_safe_printf("GC error (probable corruption) :\n");
     gc_debug_print_status();
     jl_(vt);
     gc_debug_critical_error();
@@ -3121,7 +3145,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check
     // or wait for finalizers on other threads without dead lock).
-    if (!ptls->finalizers_inhibited) {
+    if (!ptls->finalizers_inhibited && ptls->current_task && ptls->current_task->locks.len == 0) {
         int8_t was_in_finalizer = ptls->in_finalizer;
         ptls->in_finalizer = 1;
         run_finalizers(ptls);

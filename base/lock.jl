@@ -4,9 +4,24 @@
 """
     ReentrantLock()
 
-Creates a re-entrant lock for synchronizing [`Task`](@ref)s.
-The same task can acquire the lock as many times as required.
-Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
+Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
+acquire the lock as many times as required. Each [`lock`](@ref) must be matched
+with an [`unlock`](@ref).
+
+Calling 'lock' will also inhibit running of finalizers on that thread until the
+corresponding 'unlock'. Use of the standard lock pattern illustrated below
+should naturally be supported, but beware of inverting the try/lock order or
+missing the try block entirely (e.g. attempting to return with the lock still
+held):
+
+```
+lock(l)
+try
+    <atomic work>
+finally
+    unlock(l)
+end
+```
 """
 mutable struct ReentrantLock <: AbstractLock
     locked_by::Union{Task, Nothing}
@@ -44,6 +59,7 @@ function trylock(rl::ReentrantLock)
     if rl.reentrancy_cnt == 0
         rl.locked_by = t
         rl.reentrancy_cnt = 1
+        GC.enable_finalizers(false)
         got = true
     elseif t === notnothing(rl.locked_by)
         rl.reentrancy_cnt += 1
@@ -71,6 +87,7 @@ function lock(rl::ReentrantLock)
         if rl.reentrancy_cnt == 0
             rl.locked_by = t
             rl.reentrancy_cnt = 1
+            GC.enable_finalizers(false)
             break
         elseif t === notnothing(rl.locked_by)
             rl.reentrancy_cnt += 1
@@ -111,6 +128,7 @@ function unlock(rl::ReentrantLock)
                 rethrow()
             end
         end
+        GC.enable_finalizers(true)
     end
     unlock(rl.cond_wait)
     return
@@ -132,6 +150,7 @@ function unlockall(rl::ReentrantLock)
             rethrow()
         end
     end
+    GC.enable_finalizers(true)
     unlock(rl.cond_wait)
     return n
 end
