@@ -65,6 +65,7 @@ Base.tan(::Number)
 Base.Math.sind
 Base.Math.cosd
 Base.Math.tand
+Base.Math.sincosd
 Base.Math.sinpi
 Base.Math.cospi
 Base.Math.sincospi

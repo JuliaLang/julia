@@ -30,7 +30,10 @@ Base.MainInclude.include
 Base.include_string
 Base.include_dependency
 Base.which(::Any, ::Any)
+Base.@which
 Base.methods
+Base.@less
+Base.@edit
 Base.@show
 ans
 Base.active_project
@@ -156,6 +159,7 @@ Base.typejoin
 Base.typeintersect
 Base.promote_type
 Base.promote_rule
+Base.promote_typejoin
 Base.isdispatchtuple
 ```
 
@@ -211,6 +215,7 @@ Core.Union
 Union{}
 Core.UnionAll
 Core.Tuple
+Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
 Base.Val
