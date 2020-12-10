@@ -907,7 +907,7 @@ using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be 
 if the sorting algorithm is unstable, meaning that indices of equal elements appear in
 ascending order.
 
-See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref).
+See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref), [`indexin`](@ref).
 
 # Examples
 ```jldoctest

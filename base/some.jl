@@ -74,7 +74,7 @@ Return the first value in the arguments which is not equal to [`nothing`](@ref),
 if any. Otherwise throw an error.
 Arguments of type [`Some`](@ref) are unwrapped.
 
-See also [`coalesce`](@ref).
+See also [`coalesce`](@ref), [`skipmissing`](@ref).
 
 # Examples
 ```jldoctest

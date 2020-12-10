@@ -138,7 +138,7 @@ Circularly shift, i.e. rotate, the data in an array. The second argument is a tu
 vector giving the amount to shift in each dimension, or an integer to shift only in the
 first dimension.
 
-See also: [`circshift!`](@ref), [`circcopy!`](@ref).
+See also: [`circshift!`](@ref), [`circcopy!`](@ref), [`bitrotate`](@ref), [`<<`](@ref).
 
 # Examples
 ```jldoctest
@@ -392,7 +392,7 @@ end#module
 Create a generator that iterates over the first dimension of vector or matrix `A`,
 returning the rows as `AbstractVector` views.
 
-See also [`eachcol`](@ref) and [`eachslice`](@ref).
+See also [`eachcol`](@ref), [`eachslice`](@ref), [`mapslices`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.

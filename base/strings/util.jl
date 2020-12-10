@@ -10,7 +10,7 @@ const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:Ab
 Return `true` if `s` starts with `prefix`. If `prefix` is a vector or set
 of characters, test whether the first character of `s` belongs to that set.
 
-See also [`endswith`](@ref).
+See also [`endswith`](@ref), [`contains`](@ref).
 
 # Examples
 ```jldoctest
@@ -30,7 +30,7 @@ startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::Abs
 Return `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
 characters, test whether the last character of `s` belongs to that set.
 
-See also [`startswith`](@ref).
+See also [`startswith`](@ref), [`contains`](@ref).
 
 # Examples
 ```jldoctest

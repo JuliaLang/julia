@@ -497,7 +497,7 @@ abs(x::Float64) = abs_float(x)
 Test whether a number value is a NaN, an indeterminate value which is neither an infinity
 nor a finite number ("not a number").
 
-See also: [`iszero`](@ref), [`isone`](@ref), [`isinf`](@ref).
+See also: [`iszero`](@ref), [`isone`](@ref), [`isinf`](@ref), [`ismissing`](@ref).
 """
 isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Number) = false
@@ -511,7 +511,7 @@ isfinite(x::Integer) = true
 
 Test whether a number is infinite.
 
-See also: [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+See also: [`Inf`](@ref), [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 """
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 

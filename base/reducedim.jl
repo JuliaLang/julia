@@ -590,6 +590,8 @@ Compute the maximum value of an array over the given dimensions. See also the
 [`max(a,b)`](@ref) function to take the maximum of two or more arguments,
 which can be applied elementwise to arrays via `max.(a,b)`.
 
+See also: [`maximum!`](@ref), [`extrema`](@ref), [`findmax`](@ref), [`argmax`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -614,8 +616,6 @@ maximum(A::AbstractArray; dims)
 
 Compute the maximum value from of calling the function `f` on each element of an array over the given
 dimensions.
-
-See also: [`maximum!`](@ref), [`extrema`](@ref).
 
 # Examples
 ```jldoctest

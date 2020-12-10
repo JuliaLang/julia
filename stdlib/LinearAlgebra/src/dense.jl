@@ -230,7 +230,7 @@ end
 
 The `k`th diagonal of a matrix, as a vector.
 
-See also: [`diagm`](@ref), [`diagind`](@ref), [`Diagonal`](@ref).
+See also: [`diagm`](@ref), [`diagind`](@ref), [`Diagonal`](@ref), [`isdiag`](@ref).
 
 # Examples
 ```jldoctest

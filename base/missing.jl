@@ -394,7 +394,7 @@ end
 Return the first value in the arguments which is not equal to [`missing`](@ref),
 if any. Otherwise return `missing`.
 
-See also [`something`](@ref).
+See also [`skipmissing`](@ref), [`something`](@ref).
 
 # Examples
 

@@ -13,7 +13,7 @@ copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
 
 Construct the union of sets. Maintain order with arrays.
 
-See also: [`vcat`](@ref), [`intersect`](@ref), [`isdisjoint`](@ref).
+See also: [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
 ```jldoctest
@@ -254,7 +254,7 @@ function ⊇ end
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
 
-See also [`⊈`](@ref) and [`⊉`](@ref), [`∩`](@ref), [`∪`](@ref).
+See also [`⊈`](@ref), [`∩`](@ref intersect), [`∪`](@ref union), [`contains`](@ref).
 
 # Examples
 ```jldoctest

@@ -540,7 +540,7 @@ of the result will not include singleton types which are replaced with values of
 a different type: for example, `Union{T,Missing}` will become `T` if `missing` is
 replaced.
 
-See also [`replace!`](@ref).
+See also [`replace!`](@ref), [`splice!`](@ref), [`delete!`](@ref), [`insert!`](@ref).
 
 # Examples
 ```jldoctest

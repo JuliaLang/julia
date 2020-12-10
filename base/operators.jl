@@ -657,7 +657,7 @@ julia> bitstring(Int8(3))
 julia> bitstring(Int8(12))
 "00001100"
 ```
-See also [`>>`](@ref), [`>>>`](@ref).
+See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 """
 function <<(x::Integer, c::Integer)
     @_inline_meta

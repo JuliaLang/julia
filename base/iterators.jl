@@ -932,7 +932,7 @@ julia> collect(Iterators.product(1:2, 3:5))
  (1, 3)  (1, 4)  (1, 5)
  (2, 3)  (2, 4)  (2, 5)
 
-julia> ans == [(x,y) for x in 1:2, y in 3:5]  # lowers to the same code
+julia> ans == [(x,y) for x in 1:2, y in 3:5]  # collects a generator involving Iterators.product
 true
 ```
 """

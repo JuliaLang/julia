@@ -136,7 +136,7 @@ signbit(x::Real) = x < 0
 
 Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).
 
-See also [`signbit`](@ref), [`zero`](@ref).
+See also [`signbit`](@ref), [`zero`](@ref), [`copysign`](@ref), [`flipsign`](@ref).
 
 # Examples
 ```jldoctest
