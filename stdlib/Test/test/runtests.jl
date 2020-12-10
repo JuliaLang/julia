@@ -125,6 +125,8 @@ let fails = @testset NoThrowTestSet begin
         @test startswith(str1, str2)
         # 20 - Fail - endswith
         @test endswith(str1, str2)
+        # 21 - Fail - contains
+        @test contains(str1, str2)
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -228,6 +230,11 @@ let fails = @testset NoThrowTestSet begin
     let str = sprint(show, fails[20])
         @test occursin("Expression: endswith(str1, str2)", str)
         @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[21])
+        @test occursin("Expression: contains(str1, str2)", str)
+        @test occursin("Evaluated: contains(\"Hello\", \"World\")", str)
     end
 end
 
