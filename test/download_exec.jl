@@ -4,21 +4,6 @@ module TestDownload
 
 using Test
 
-# Test that `Base.download_url()` is altered by `Base.DOWNLOAD_HOOKS`.
-let urls = ["http://httpbin.julialang.org/ip", "https://httpbin.julialang.org/ip"]
-    for url in urls
-        @test Base.download_url(url) == url
-    end
-    push!(Base.DOWNLOAD_HOOKS, url->replace(url, r"^http://" => "https://"))
-    for url in urls
-        @test Base.download_url(url) == urls[end]
-    end
-    pop!(Base.DOWNLOAD_HOOKS)
-    for url in urls
-        @test Base.download_url(url) == url
-    end
-end
-
 mktempdir() do temp_dir
     # Download a file
     file = joinpath(temp_dir, "ip")
@@ -27,20 +12,11 @@ mktempdir() do temp_dir
     @test !isempty(read(file))
     ip = read(file, String)
 
-    # Test download rewrite hook
-    push!(Base.DOWNLOAD_HOOKS, url->replace(url, r"/status/404$" => "/ip"))
-    @test download("https://httpbin.julialang.org/status/404", file) == file
-    @test isfile(file)
-    @test !isempty(read(file))
-    @test ip == read(file, String)
-    pop!(Base.DOWNLOAD_HOOKS)
-
     # Download an empty file
     empty_file = joinpath(temp_dir, "empty")
     @test download("https://httpbin.julialang.org/status/200", empty_file) == empty_file
-
-    # Windows and older versions of curl do not create the empty file (https://github.com/curl/curl/issues/183)
-    @test !isfile(empty_file) || isempty(read(empty_file))
+    @test isfile(empty_file)
+    @test isempty(read(empty_file))
 
     # Make sure that failed downloads do not leave files around
     missing_file = joinpath(temp_dir, "missing")
