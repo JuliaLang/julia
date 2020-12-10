@@ -47,6 +47,8 @@ end
 Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
 are promoted to a common type.
 
+See also [`clamp!`](@ref), [`trunc`](@ref).
+
 # Examples
 ```jldoctest
 julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
@@ -205,6 +207,8 @@ end
     @horner(x, p...)
 
 Evaluate `p[1] + x * (p[2] + x * (....))`, i.e. a polynomial via Horner's rule.
+
+See also [`@evalpoly`](@ref), [`evalpoly`](@ref).
 """
 macro horner(x, p...)
      xesc, pesc = esc(x), esc.(p)
@@ -223,6 +227,8 @@ Evaluate the polynomial ``\\sum_k z^{k-1} c[k]`` for the coefficients `c[1]`, `c
 that is, the coefficients are given in ascending order by power of `z`.  This macro expands
 to efficient inline code that uses either Horner's method or, for complex `z`, a more
 efficient Goertzel-like algorithm.
+
+See also [`evalpoly`](@ref).
 
 # Examples
 ```jldoctest
@@ -258,6 +264,8 @@ rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
     deg2rad(x)
 
 Convert `x` from degrees to radians.
+
+See also: [`rad2deg`](@ref), [`sind`](@ref).
 
 # Examples
 ```jldoctest
@@ -388,6 +396,8 @@ expm1(x::Float32) = ccall((:expm1f,libm), Float32, (Float32,), x)
 
 Compute the base 2 exponential of `x`, in other words ``2^x``.
 
+See also [`ldexp`](@ref), [`<<`](@ref).
+
 # Examples
 ```jldoctest
 julia> exp2(5)
@@ -442,6 +452,8 @@ end
     sin(x)
 
 Compute sine of `x`, where `x` is in radians.
+
+See also [`sind`], [`sinpi`], [`sincos`], [`cis`].
 """
 sin(x::Number)
 
@@ -449,6 +461,8 @@ sin(x::Number)
     cos(x)
 
 Compute cosine of `x`, where `x` is in radians.
+
+See also [`cosd`], [`cospi`], [`sincos`], [`cis`].
 """
 cos(x::Number)
 
@@ -493,6 +507,8 @@ atanh(x::Number)
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
+See also [`log1p`], [`log2`], [`log10`].
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log(2)
@@ -513,6 +529,8 @@ log(x::Number)
 
 Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
+
+See also: [`exp2`](@ref), [`ldexp`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -597,6 +615,8 @@ end
 
 Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
+
+See also: [`hypot`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"

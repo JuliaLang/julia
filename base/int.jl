@@ -152,6 +152,8 @@ when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
 not `-x` as might be expected.
 
+See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref).
+
 # Examples
 ```jldoctest
 julia> abs(-3)
@@ -176,12 +178,17 @@ abs(x::Signed) = flipsign(x,x)
 
 Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
 unsigned without checking for negative values.
+
+See also: [`signed`](@ref), [`sign`](@ref), [`signbit`](@ref).
+
 # Examples
 ```jldoctest
 julia> unsigned(-2)
 0xfffffffffffffffe
+
 julia> unsigned(2)
 0x0000000000000002
+
 julia> signed(unsigned(-2))
 -2
 ```
@@ -194,6 +201,8 @@ unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
 signed without checking for overflow.
+
+See also: [`unsigned`](@ref), [`sign`](@ref), [`signbit`](@ref).
 """
 signed(x) = x % typeof(convert(Signed, zero(x)))
 signed(x::BitUnsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
@@ -230,6 +239,8 @@ exceptions, see note below).
     When used with floating point values, the exact result may not be representable by the
     type, and so rounding error may occur. In particular, if the exact result is very
     close to `y`, then it may be rounded to `y`.
+
+See also: [`rem`](@ref), [`div`](@ref), [`fld`](@ref), [`mod1`](@ref), [`invmod`](@ref).
 
 ```jldoctest
 julia> mod(8, 3)
@@ -274,6 +285,8 @@ rem(x::T, y::T) where {T<:BitUnsigned64} = checked_urem_int(x, y)
 
 Bitwise not.
 
+See also: [`!`](@ref), [`&`](@ref), [`|`](@ref).
+
 # Examples
 ```jldoctest
 julia> ~4
@@ -294,6 +307,8 @@ false
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `true`. Add parentheses for
 function application form: `(&)(x, y)`.
+
+See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
 # Examples
 ```jldoctest
@@ -317,6 +332,8 @@ false
 
 Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
+
+See also: [`&`](@ref), [`xor`](@ref), [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -500,6 +517,8 @@ A negative value of `k` will rotate to the right instead.
 !!! compat "Julia 1.5"
     This function requires Julia 1.5 or later.
 
+See also: [`<<`](@ref), [`circshift`](@ref), [`BitArray`](@ref).
+
 ```jldoctest
 julia> bitrotate(UInt8(114), 2)
 0xc9
@@ -561,7 +580,9 @@ is less than or equal to `x`.
 `trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits`, `sigdigits` and `base` work as for [`round`](@ref).
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
+
+See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref).
 """
 function trunc end
 
@@ -576,7 +597,7 @@ equal to `x`.
 `floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
-`digits`, `sigdigits` and `base` work as for [`round`](@ref).
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function floor end
 
@@ -591,7 +612,7 @@ equal to `x`.
 `ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
 representable.
 
-`digits`, `sigdigits` and `base` work as for [`round`](@ref).
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 """
 function ceil end
 

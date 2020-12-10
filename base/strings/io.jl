@@ -57,6 +57,8 @@ end
 Print (using [`print`](@ref)) `xs` followed by a newline.
 If `io` is not supplied, prints to [`stdout`](@ref).
 
+See also: [`show`](@ref), [`@show`](@ref), [`@info`](@ref Logging.@logmsg), [`sprint`](@ref), [`Printf.@printf`](@ref).
+
 # Examples
 ```jldoctest
 julia> println("Hello, world")
@@ -164,6 +166,8 @@ Create a string from any values using the [`print`](@ref) function.
 highly efficient, then it may make sense to add a method to `string` and
 define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
 functions are consistent.
+
+See also: [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
 
 # Examples
 ```jldoctest

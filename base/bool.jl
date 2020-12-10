@@ -14,6 +14,8 @@ typemax(::Type{Bool}) = true
 Boolean not. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if `x` is `missing`.
 
+See also [`~`](@ref) for bitwise not.
+
 # Examples
 ```jldoctest
 julia> !true

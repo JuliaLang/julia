@@ -243,6 +243,8 @@ inv(x::Number) = one(x)/x
 
 Multiply `x` and `y`, giving the result as a larger type.
 
+See also [`promote`](@ref), [`Base.add_sum`](@ref).
+
 # Examples
 ```jldoctest
 julia> widemul(Float32(3.0), 4.0) isa BigFloat
@@ -308,6 +310,8 @@ should return an identity value of the same precision
 
 If you want a quantity that is of the same type as `x`, or of type `T`,
 even if `x` is dimensionful, use [`oneunit`](@ref) instead.
+
+See also [`identity`](@ref), [`LinearAlgebra.I`](@ref).
 
 # Examples
 ```jldoctest

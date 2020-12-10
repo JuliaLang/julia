@@ -111,7 +111,7 @@ end
 
 Tests whether variable `s` is defined in the current scope.
 
-See also [`isdefined`](@ref).
+See also [`isdefined`](@ref), [`isassigned`](@ref).
 
 # Examples
 ```jldoctest
@@ -197,6 +197,8 @@ julia> y = convert(Vector{Int}, x);
 julia> y === x
 true
 ```
+
+See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@ref).
 """
 function convert end
 
@@ -228,6 +230,8 @@ argtail(x, rest...) = rest
     tail(x::Tuple)::Tuple
 
 Return a `Tuple` consisting of all but the first component of `x`.
+
+See also: [`front`](@ref Base.front), [`rest`](@ref Base.rest), [`first`](@ref), [`Iterators.peel`](@ref).
 
 # Examples
 ```jldoctest
@@ -798,6 +802,8 @@ values(itr) = itr
 
 A type with no fields whose singleton instance [`missing`](@ref) is used
 to represent missing values.
+
+See also: [`skipmissing`](@ref), [`nonmissingtype`](@ref), [`Nothing`](@ref).
 """
 struct Missing end
 
@@ -805,6 +811,8 @@ struct Missing end
     missing
 
 The singleton instance of type [`Missing`](@ref) representing a missing value.
+
+See also: [`NaN`](@ref), [`skipmissing`](@ref), [`nonmissingtype`](@ref).
 """
 const missing = Missing()
 
@@ -812,6 +820,8 @@ const missing = Missing()
     ismissing(x)
 
 Indicate whether `x` is [`missing`](@ref).
+
+See also: [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
 """
 ismissing(::Any) = false
 ismissing(::Missing) = true

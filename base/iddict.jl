@@ -3,7 +3,7 @@
 """
     IdDict([itr])
 
-`IdDict{K,V}()` constructs a hash table using object-id as hash and
+`IdDict{K,V}()` constructs a hash table using [`objectid`](@ref) as hash and
 `===` as equality with keys of type `K` and values of type `V`.
 
 See [`Dict`](@ref) for further help. In the example below, The `Dict`

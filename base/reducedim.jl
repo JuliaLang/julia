@@ -667,6 +667,8 @@ Compute the minimum value of an array over the given dimensions. See also the
 [`min(a,b)`](@ref) function to take the minimum of two or more arguments,
 which can be applied elementwise to arrays via `min.(a,b)`.
 
+See also: [`minimum!`](@ref), [`extrema`](@ref), [`findmin`](@ref), [`argmin`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]

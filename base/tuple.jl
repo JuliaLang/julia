@@ -110,6 +110,8 @@ in assignments, like `a, b... = collection`.
 !!! compat "Julia 1.6"
     `Base.rest` requires at least Julia 1.6.
 
+See also: [`first`](@ref first), [`tail`](@ref Base.tail), [`Iterators.rest`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
@@ -185,6 +187,8 @@ safe_tail(t::Tuple{}) = ()
     front(x::Tuple)::Tuple
 
 Return a `Tuple` consisting of all but the last component of `x`.
+
+See also: [`first`](@ref), [`tail`](@ref Base.tail).
 
 # Examples
 ```jldoctest

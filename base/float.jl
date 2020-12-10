@@ -37,6 +37,8 @@ const Inf = Inf64
 
 Positive infinity of type [`Float64`](@ref).
 
+See also: [`isfinite`](@ref), [`NaN`](@ref), [`Inf32`](@ref).
+
 # Examples
 ```jldoctest
 julia> π/0
@@ -53,6 +55,8 @@ const NaN = NaN64
     NaN, NaN64
 
 A not-a-number value of type [`Float64`](@ref).
+
+See also: [`isnan`](@ref), [`missing`](@ref), [`NaN32`](@ref), [`Inf`](@ref).
 
 # Examples
 ```jldoctest
@@ -244,6 +248,8 @@ Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, 
     float(x)
 
 Convert a number or array to a floating point data type.
+
+See also: [`complex`](@ref), [`oftype`](@ref), [`convert`](@ref).
 
 # Examples
 ```jldoctest

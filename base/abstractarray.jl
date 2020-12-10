@@ -8,6 +8,8 @@
 Supertype for `N`-dimensional arrays (or array-like types) with elements of type `T`.
 [`Array`](@ref) and other types are subtypes of this. See the manual section on the
 [`AbstractArray` interface](@ref man-interface-array).
+
+See also: [`AbstractVector`](@ref), [`AbstractMatrix`](@ref), [`eltype`](@ref), [`ndims`](@ref).
 """
 AbstractArray
 
@@ -23,6 +25,8 @@ dimension to just get the length of that dimension.
 
 Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
+
+See also: [`length`](@ref), [`ndims`](@ref), [`eachindex`](@ref), [`sizeof`](@ref).
 
 # Examples
 ```jldoctest
@@ -74,6 +78,8 @@ end
     axes(A)
 
 Return the tuple of valid indices for array `A`.
+
+See also: [`size`](@ref), [`keys`](@ref), [`eachindex`](@ref).
 
 # Examples
 
@@ -173,6 +179,8 @@ For dictionary types, this will be a `Pair{KeyType,ValType}`. The definition
 instead of types. However the form that accepts a type argument should be defined for new
 types.
 
+See also: [`keytype`](@ref), [`typeof`](@ref).
+
 # Examples
 ```jldoctest
 julia> eltype(fill(1f0, (2,2)))
@@ -201,6 +209,8 @@ elsize(A::AbstractArray) = elsize(typeof(A))
 
 Return the number of dimensions of `A`.
 
+See also: [`size`](@ref), [`axes`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = fill(1, (3,4,5));
@@ -218,6 +228,8 @@ ndims(::Type{<:AbstractArray{T,N}}) where {T,N} = N
 Return the number of elements in the collection.
 
 Use [`lastindex`](@ref) to get the last valid index of an indexable collection.
+
+See also: [`size`](@ref), [`ndims`](@ref), [`eachindex`](@ref).
 
 # Examples
 ```jldoctest
@@ -335,6 +347,8 @@ Return the last index of `collection`. If `d` is given, return the last index of
 The syntaxes `A[end]` and `A[end, end]` lower to `A[lastindex(A)]` and
 `A[lastindex(A, 1), lastindex(A, 2)]`, respectively.
 
+See also: [`axes`](@ref), [`firstindex`](@ref), [`eachindex`](@ref), [`prevind`](@ref).
+
 # Examples
 ```jldoctest
 julia> lastindex([1,2,4])
@@ -356,6 +370,8 @@ Return the first index of `collection`. If `d` is given, return the first index 
 The syntaxes `A[begin]` and `A[1, begin]` lower to `A[firstindex(A)]` and
 `A[1, firstindex(A, 2)]`, respectively.
 
+See also: [`first`](@ref), [`axes`](@ref), [`lastindex`](@ref), [`nextind`](@ref).
+
 # Examples
 ```jldoctest
 julia> firstindex([1,2,4])
@@ -376,7 +392,7 @@ first(a::AbstractArray) = a[first(eachindex(a))]
 Get the first element of an iterable collection. Return the start point of an
 [`AbstractRange`](@ref) even if it is empty.
 
-See also: [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
+See also: [`only`](@ref), [`firstindex`](@ref), [`last`](@ref), [`tail`](@ref Base.tail).
 
 # Examples
 ```jldoctest
@@ -398,6 +414,8 @@ end
 
 Get the first `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
 long enough.
+
+See also: [`startswith`](@ref), [`Iterators.take`](@ref).
 
 # Examples
 ```jldoctest
@@ -427,7 +445,7 @@ Get the last element of an ordered collection, if it can be computed in O(1) tim
 accomplished by calling [`lastindex`](@ref) to get the last index. Return the end
 point of an [`AbstractRange`](@ref) even if it is empty.
 
-See also [`first`](@ref).
+See also [`first`](@ref), [`endswith`](@ref).
 
 # Examples
 ```jldoctest
@@ -741,7 +759,7 @@ julia> similar(falses(10), Float64, 2, 4)
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 ```
 
-See also: [`undef`](@ref).
+See also: [`undef`](@ref), [`isassigned`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
 similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(axes(a)))
@@ -797,7 +815,7 @@ similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
 Create an empty vector similar to `v`, optionally changing the `eltype`.
 
-See also: [`empty!`](@ref), [`isempty`](@ref).
+See also: [`empty!`](@ref), [`isempty`](@ref), [`isassigned`](@ref).
 
 # Examples
 
@@ -931,12 +949,11 @@ end
 """
     copyto!(dest::AbstractArray, src) -> dest
 
-
 Copy all elements from collection `src` to array `dest`, whose length must be greater than
 or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
 the other elements are left untouched.
 
-See also [`copy!`](@ref), [`copy`](@ref).
+See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
 
 # Examples
 ```jldoctest
@@ -2322,7 +2339,7 @@ mapany(f, itr) = Any[f(x) for x in itr]
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise, and stop when when any of them is exhausted.
 
-See also: [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref).
+See also: [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
 # Examples
 ```jldoctest
@@ -2378,6 +2395,8 @@ end
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
+
+See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 
 # Examples
 ```jldoctest

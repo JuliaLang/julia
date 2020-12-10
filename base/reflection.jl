@@ -20,6 +20,8 @@ nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
+See also: [`names`](@ref), [`nameof`](@ref), [`fullname`](@ref), [`@__MODULE__`](@ref).
+
 # Examples
 ```jldoctest
 julia> parentmodule(Main)
@@ -94,6 +96,8 @@ are also included.
 
 As a special case, all names defined in `Main` are considered \"exported\",
 since it is not idiomatic to explicitly export names from `Main`.
+
+See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
     sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
@@ -166,6 +170,8 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
     fieldnames(x::DataType)
 
 Get a tuple with the names of the fields of a `DataType`.
+
+See also [`propertynames`](@ref), [`hasfield`](@ref).
 
 # Examples
 ```jldoctest
@@ -290,6 +296,8 @@ end
     objectid(x)
 
 Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
+
+See also [`hash`](@ref), [`IdDict`](@ref).
 """
 objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
@@ -507,6 +515,8 @@ This category of types is significant since they are valid as type parameters,
 may not track [`isdefined`](@ref) / [`isassigned`](@ref) status,
 and have a defined layout that is compatible with C.
 
+See also [`isbits`](@ref), [`isprimitivetype`](@ref), [`ismutable`](@ref).
+
 # Examples
 ```jldoctest
 julia> isbitstype(Complex{Float64})
@@ -551,6 +561,8 @@ end
 
 Determine whether type `T` is a concrete type, meaning it could have direct instances
 (values `x` such that `typeof(x) === T`).
+
+See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
 # Examples
 ```jldoctest
@@ -907,6 +919,8 @@ A list of modules can also be specified as an array.
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
+
+See also: [`which`](@ref), [`@which`](@ref).
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
@@ -1236,6 +1250,8 @@ print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args..
 Returns the method of `f` (a `Method` object) that would be called for arguments of the given `types`.
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
+
+See also: [`@which`](@ref), [`@edit`](@ref), [`parentmodule`](@ref).
 """
 function which(@nospecialize(f), @nospecialize(t))
     if isa(f, Core.Builtin)
@@ -1583,6 +1599,8 @@ as well to get the properties of an instance of the type.
 of the documented interface of `x`.   If you want it to also return "private"
 fieldnames intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
+
+See also: [`hasproperty`](@ref), [`hasfield`](@ref).
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
@@ -1595,5 +1613,7 @@ Return a boolean indicating whether the object `x` has `s` as one of its own pro
 
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
+
+See also: [`propertynames`](@ref), [`hasfield`](@ref).
 """
 hasproperty(x, s::Symbol) = s in propertynames(x)

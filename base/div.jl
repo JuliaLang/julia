@@ -75,7 +75,7 @@ rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
 
 Largest integer less than or equal to `x/y`. Equivalent to `div(x, y, RoundDown)`.
 
-See also: [`div`](@ref)
+See also: [`div`](@ref), [`cld`](@ref), [`fld1`](@ref).
 
 # Examples
 ```jldoctest
@@ -109,7 +109,7 @@ fld(a, b) = div(a, b, RoundDown)
 
 Smallest integer larger than or equal to `x/y`. Equivalent to `div(x, y, RoundUp)`.
 
-See also: [`div`](@ref)
+See also: [`div`](@ref), [`fld`](@ref).
 
 # Examples
 ```jldoctest
@@ -130,6 +130,8 @@ cld(a, b) = div(a, b, RoundUp)
 The quotient and remainder from Euclidean division.
 Equivalent to `(div(x,y,r), rem(x,y,r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x÷y, x%y)`.
+
+See also: [`fldmod`](@ref), [`cld`](@ref).
 
 # Examples
 ```jldoctest
@@ -206,6 +208,8 @@ end
 
 The floored quotient and modulus after division. A convenience wrapper for
 `divrem(x, y, RoundDown)`. Equivalent to `(fld(x,y), mod(x,y))`.
+
+See also: [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
 """
 fldmod(x,y) = divrem(x, y, RoundDown)
 

@@ -516,6 +516,8 @@ for non-empty collections.
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
 
+See also: [`reduce`](@ref), [`mapreduce`](@ref), [`count`](@ref), [`union`](@ref).
+
 # Examples
 ```jldoctest
 julia> sum(1:20)
@@ -569,6 +571,8 @@ for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
+
+See also: [`reduce`](@ref), [`cumprod`](@ref), [`any`](@ref).
 
 # Examples
 ```jldoctest
@@ -989,6 +993,8 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
+See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), , [`||`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = [true,false,false,true]
@@ -1023,6 +1029,8 @@ soon as the first `false` value in `itr` is encountered (short-circuiting).
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
+
+See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), , [`&&`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest
@@ -1162,6 +1170,8 @@ to start counting from and therefore also determines the output type.
 
 !!! compat "Julia 1.6"
     `init` keyword was added in Julia 1.6.
+
+See also: [`any`](@ref), [`sum`](@ref).
 
 # Examples
 ```jldoctest

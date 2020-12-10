@@ -337,6 +337,8 @@ according to the order specified by the `by`, `lt` and `rev` keywords, assuming 
 is already sorted in that order. Return an empty range located at the insertion point
 if `a` does not contain values equal to `x`.
 
+See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
+
 # Examples
 ```jldoctest
 julia> searchsorted([1, 2, 4, 5, 5, 7], 4) # single match
@@ -362,6 +364,8 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 Return the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
+
+See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest

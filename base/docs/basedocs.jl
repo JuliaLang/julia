@@ -931,6 +931,8 @@ kw";"
 
 Short-circuiting boolean AND.
 
+See also [`&`](@ref), and the [ternary operator `? :`](@ref kw"?").
+
 # Examples
 ```jldoctest
 julia> x = 3;
@@ -948,6 +950,8 @@ kw"&&"
     x || y
 
 Short-circuiting boolean OR.
+
+See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
 # Examples
 ```jldoctest
@@ -1164,6 +1168,8 @@ devnull
     Nothing
 
 A type with no fields that is the type of [`nothing`](@ref).
+
+See also: [`isnothing`](@ref), [`Some`](@ref), [`Missing`](@ref).
 """
 Nothing
 
@@ -1172,6 +1178,8 @@ Nothing
 
 The singleton instance of type [`Nothing`](@ref), used by convention when there is no value to return
 (as in a C `void` function) or when a variable or field holds no value.
+
+See also: [`isnothing`](@ref), [`something`](@ref), [`missing`](@ref).
 """
 nothing
 
@@ -1714,6 +1722,8 @@ NaN
 julia> false * NaN
 0.0
 ```
+
+See also: [`digits`](@ref), [`iszero`](@ref), [`NaN`](@ref).
 """
 Bool
 
@@ -1799,6 +1809,8 @@ Symbol(x...)
     tuple(xs...)
 
 Construct a tuple of the given objects.
+
+See also [`Tuple`](@ref), [`NamedTuple`](@ref).
 
 # Examples
 ```jldoctest
@@ -1930,7 +1942,9 @@ isdefined
 """
     Vector{T}(undef, n)
 
-Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`undef`](@ref).
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
+
+See also [`undef`](@ref), [`similar`](@ref).
 
 # Examples
 ```julia-repl
@@ -1980,7 +1994,9 @@ Vector{T}(::Missing, n)
 """
     Matrix{T}(undef, m, n)
 
-Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`undef`](@ref).
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
+
+See also [`undef`](@ref), [`similar`](@ref).
 
 # Examples
 ```julia-repl
@@ -2179,6 +2195,8 @@ julia> +(1, 20, 4)
     -(x)
 
 Unary minus operator.
+
+See also: [`abs`](@ref), [`flipsign`](@ref).
 
 # Examples
 ```jldoctest
@@ -2388,6 +2406,8 @@ number of trailing elements. The type `Vararg{T,N}` corresponds to exactly `N` e
 `Vararg{T}` corresponds to zero or more elements of type `T`. `Vararg` tuple types are used to represent the
 arguments accepted by varargs methods (see the section on [Varargs Functions](@ref) in the manual.)
 
+See also [`NTuple`](@ref).
+
 # Examples
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString, Vararg{Int}}
@@ -2420,6 +2440,8 @@ is considered an abstract type, and tuple types are only concrete if their param
 field names; fields are only accessed by index.
 
 See the manual section on [Tuple Types](@ref).
+
+See also [`Vararg`](@ref), [`NTuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
 """
 Tuple
 

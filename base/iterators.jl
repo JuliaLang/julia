@@ -288,6 +288,8 @@ the `zip` iterator is a tuple of values of its subiterators.
     `zip` orders the calls to its subiterators in such a way that stateful iterators will
     not advance when another iterator finishes in the current iteration.
 
+See also: [`enumerate`](@ref), [`splat`](@ref Base.splat).
+
 # Examples
 ```jldoctest
 julia> a = 1:5
@@ -544,6 +546,8 @@ end
 
 An iterator that yields the same elements as `iter`, but starting at the given `state`.
 
+See also: [`Iterators.drop`](@ref), [`Iterators.peel`](@ref), [`Base.rest`](@ref).
+
 # Examples
 ```jldoctest
 julia> collect(Iterators.rest([1,2,3,4], 2))
@@ -561,6 +565,8 @@ rest(itr) = itr
     peel(iter)
 
 Returns the first element and an iterator over the remaining elements.
+
+See also: [`Iterators.drop`](@ref), [`Iterators.take`](@ref), [`Base.tail`](@ref).
 
 # Examples
 ```jldoctest
@@ -639,6 +645,8 @@ end
     take(iter, n)
 
 An iterator that generates at most the first `n` elements of `iter`.
+
+See also: [`drop`](@ref Iterators.drop), [`peel`](@ref Iterators.peel), [`first`](@ref), [`take!`](@ref).
 
 # Examples
 ```jldoctest
@@ -851,6 +859,8 @@ end
 An iterator that cycles through `iter` forever.
 If `iter` is empty, so is `cycle(iter)`.
 
+See also: [`Iterators.repeated`](@ref), [`repeat`](@ref).
+
 # Examples
 ```jldoctest
 julia> for (i, v) in enumerate(Iterators.cycle("hello"))
@@ -890,6 +900,8 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
+See also: [`Iterators.cycle`](@ref), [`repeat`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = Iterators.repeated([1 2], 4);
@@ -924,6 +936,8 @@ end
 Return an iterator over the product of several iterators. Each generated element is
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
 changes the fastest.
+
+See also: [`zip`](@ref), [`splat`](@ref Base.splat), [`Iterators.flatten`](@ref).
 
 # Examples
 ```jldoctest

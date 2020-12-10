@@ -36,7 +36,7 @@ julia> vec(1:3)
 1:3
 ```
 
-See also [`reshape`](@ref).
+See also [`reshape`](@ref), [`dropdims`](@ref).
 """
 vec(a::AbstractArray) = reshape(a,length(a))
 vec(a::AbstractVector) = a
@@ -51,6 +51,8 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
 `size(A,i)` must equal 1 for all `i` in `dims`.
+
+See also: [`reshape`](@ref), [`vec`](@ref).
 
 # Examples
 ```jldoctest
@@ -105,6 +107,8 @@ imag(x::AbstractArray{<:Real}) = zero(x)
 Return a view of all the data of `A` where the index for dimension `d` equals `i`.
 
 Equivalent to `view(A,:,:,...,i,:,:,...)` where `i` is in position `d`.
+
+See also: [`eachslice`](@ref).
 
 # Examples
 ```jldoctest
@@ -198,6 +202,8 @@ end
     repeat(A::AbstractArray, counts::Integer...)
 
 Construct an array by repeating array `A` a given number of times in each dimension, specified by `counts`.
+
+See also: [`fill`](@ref), [`Iterators.repeated`](@ref), [`Iterators.cycle`](@ref).
 
 # Examples
 ```jldoctest

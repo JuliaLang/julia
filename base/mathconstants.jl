@@ -25,6 +25,8 @@ The constant pi.
 
 Unicode `π` can be typed by tab-completing `\\pi` in the Julia REPL.
 
+See also: [`sinpi`](@ref), [`sincospi`](@ref), [`deg2rad`](@ref).
+
 # Examples
 ```jldoctest
 julia> pi
@@ -43,6 +45,8 @@ julia> 1/2pi
 The constant ℯ.
 
 Unicode `ℯ` can be typed by tab-completing `\\euler` in the Julia REPL.
+
+See also: [`exp`](@ref), [`cis`](@ref), [`cispi`](@ref).
 
 # Examples
 ```jldoctest

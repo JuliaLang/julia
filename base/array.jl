@@ -1147,6 +1147,8 @@ Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned; for unordered containers,
 an arbitrary element is returned.
 
+See also: [`popat!`](@ref), [`delete!`](@ref), [`splice!`](@ref), [`push!`](@ref).
+
 # Examples
 ```jldoctest
 julia> A=[1, 2, 3]
@@ -1269,6 +1271,8 @@ Remove the first `item` from `collection`.
 
 This function is called `shift` in many other programming languages.
 
+See also: [`pop!`](@ref), [`popat!`](@ref), [`delete!`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5, 6]
@@ -1307,6 +1311,8 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
+See also: [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+
 # Examples
 ```jldoctest
 julia> insert!([6, 5, 4, 2, 1], 4, 3)
@@ -1333,6 +1339,8 @@ end
 
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
+
+See also: [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1444,6 +1452,8 @@ Remove the item at the given index, and return the removed item.
 Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
+
+See also: [`replace`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`pop!`](@ref), [`popat!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1594,7 +1604,7 @@ end
     reverse(v [, start=1 [, stop=length(v) ]] )
 
 Return a copy of `v` reversed from start to stop.  See also [`Iterators.reverse`](@ref)
-for reverse-order iteration without making a copy.
+for reverse-order iteration without making a copy, and in-place [`reverse!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1797,6 +1807,8 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+See also: [`findall`](@ref), [`findnext`](@ref), [`findlast`](@ref), [`searchsortedfirst`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [false, false, true, false]
@@ -1938,6 +1950,8 @@ or `nothing` if not found.
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+See also: [`findnext`](@ref), [`findfirst`](@ref), [`findall`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [false, false, true, true]
@@ -1982,6 +1996,8 @@ Return `nothing` if there is no `true` value in `A`.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
+
+See also: [`findfirst`](@ref), [`findprev`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -2175,6 +2191,8 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+See also: [`findfirst`](@ref), [`searchsorted`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [true, false, false, true]
@@ -2224,6 +2242,148 @@ findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
 findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 
+"""
+    findmax(itr) -> (x, index)
+
+Return the maximum element of the collection `itr` and its index or key.
+If there are multiple maximal elements, then the first one will be returned.
+If any data element is `NaN`, this element is returned.
+The result is in line with `max`.
+
+The collection must not be empty.
+
+See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
+
+# Examples
+```jldoctest
+julia> findmax([8,0.1,-9,pi])
+(8.0, 1)
+
+julia> findmax([1,7,7,6])
+(7, 2)
+
+julia> findmax([1,7,7,NaN])
+(NaN, 4)
+```
+"""
+findmax(a) = _findmax(a, :)
+
+function _findmax(a, ::Colon)
+    p = pairs(a)
+    y = iterate(p)
+    if y === nothing
+        throw(ArgumentError("collection must be non-empty"))
+    end
+    (mi, m), s = y
+    i = mi
+    while true
+        y = iterate(p, s)
+        y === nothing && break
+        m != m && break
+        (i, ai), s = y
+        if ai != ai || isless(m, ai)
+            m = ai
+            mi = i
+        end
+    end
+    return (m, mi)
+end
+
+"""
+    findmin(itr) -> (x, index)
+
+Return the minimum element of the collection `itr` and its index or key.
+If there are multiple minimal elements, then the first one will be returned.
+If any data element is `NaN`, this element is returned.
+The result is in line with `min`.
+
+The collection must not be empty.
+
+See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
+
+# Examples
+```jldoctest
+julia> findmin([8,0.1,-9,pi])
+(-9.0, 3)
+
+julia> findmin([7,1,1,6])
+(1, 2)
+
+julia> findmin([7,1,1,NaN])
+(NaN, 4)
+```
+"""
+findmin(a) = _findmin(a, :)
+
+function _findmin(a, ::Colon)
+    p = pairs(a)
+    y = iterate(p)
+    if y === nothing
+        throw(ArgumentError("collection must be non-empty"))
+    end
+    (mi, m), s = y
+    i = mi
+    while true
+        y = iterate(p, s)
+        y === nothing && break
+        m != m && break
+        (i, ai), s = y
+        if ai != ai || isless(ai, m)
+            m = ai
+            mi = i
+        end
+    end
+    return (m, mi)
+end
+
+"""
+    argmax(itr)
+
+Return the index or key of the maximum element in a collection.
+If there are multiple maximal elements, then the first one will be returned.
+
+The collection must not be empty.
+
+See also: [`argmin`](@ref), [`findmax`](@ref).
+
+# Examples
+```jldoctest
+julia> argmax([8,0.1,-9,pi])
+1
+
+julia> argmax([1,7,7,6])
+2
+
+julia> argmax([1,7,7,NaN])
+4
+```
+"""
+argmax(a) = findmax(a)[2]
+
+"""
+    argmin(itr)
+
+Return the index or key of the minimum element in a collection.
+If there are multiple minimal elements, then the first one will be returned.
+
+The collection must not be empty.
+
+See also: [`argmax`](@ref), [`findmin`](@ref).
+
+# Examples
+```jldoctest
+julia> argmin([8,0.1,-9,pi])
+3
+
+julia> argmin([7,1,1,6])
+2
+
+julia> argmin([7,1,1,NaN])
+4
+```
+"""
+argmin(a) = findmin(a)[2]
+
 # similar to Matlab's ismember
 """
     indexin(a, b)
@@ -2231,6 +2391,8 @@ findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 Return an array containing the first index in `b` for
 each value in `a` that is a member of `b`. The output
 array contains `nothing` wherever `a` is not a member of `b`.
+
+See also: [`sortperm`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -2364,6 +2526,8 @@ The function `f` is passed one argument.
 
 !!! compat "Julia 1.4"
     Support for `a` as a tuple requires at least Julia 1.4.
+
+See also: [`filter!`](@ref), [`Iterators.filter`](@ref).
 
 # Examples
 ```jldoctest

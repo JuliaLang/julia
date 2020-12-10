@@ -77,6 +77,8 @@ Return `true` if `haystack` contains `needle`.
 This is the same as `occursin(needle, haystack)`, but is provided for consistency with
 `startswith(haystack, needle)` and `endswith(haystack, needle)`.
 
+See also [`occursin`](@ref), [`in`](@ref), [`issubset`](@ref).
+
 # Examples
 ```jldoctest
 julia> contains("JuliaLang is pretty cool!", "Julia")
@@ -166,6 +168,8 @@ The call `chop(s)` removes the last character from `s`.
 If it is requested to remove more characters than `length(s)`
 then an empty string is returned.
 
+See also [`chomp`](@ref), [`startswith`](@ref), [`first`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = "March"
@@ -195,6 +199,8 @@ end
     chomp(s::AbstractString) -> SubString
 
 Remove a single trailing newline from a string.
+
+See also [`chop`](@ref).
 
 # Examples
 ```jldoctest

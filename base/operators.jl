@@ -561,6 +561,8 @@ extrema(f, x::Real) = (y = f(x); (y, y))
 
 The identity function. Returns its argument.
 
+See also: [`one`](@ref), [`oneunit`](@ref), [`I`](@ref LinearAlgebra.I).
+
 # Examples
 ```jldoctest
 julia> identity("Well, what did you expect?")
@@ -764,6 +766,8 @@ end
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
+See also: [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
+
 # Examples
 ```jldoctest
 julia> x = 15; y = 4;
@@ -787,6 +791,8 @@ const % = rem
     ÷(x, y)
 
 The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
+
+See also: [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -939,7 +945,7 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 ```
-See also [`ComposedFunction`](@ref).
+See also [`ComposedFunction`](@ref), [`!`](@ref).
 """
 function ∘ end
 
@@ -999,6 +1005,8 @@ end
 Predicate function negation: when the argument of `!` is a function, it returns a
 function which computes the boolean negation of `f`.
 
+See also [`∘`](@ref).
+
 # Examples
 ```jldoctest
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
@@ -1019,6 +1027,8 @@ julia> filter(!isletter, str)
 A type representing a partially-applied version of the two-argument function
 `f`, with the first argument fixed to the value "x". In other words,
 `Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+
+See also [`Fix2`](@ref Base.Fix2).
 """
 struct Fix1{F,T} <: Function
     f::F
@@ -1276,6 +1286,8 @@ julia> [1, 2] .∈ ([2, 3],)
  0
  1
 ```
+
+See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [issubset](@ref).
 """
 in
 
