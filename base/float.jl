@@ -34,11 +34,11 @@ const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 const Inf = Inf64
 const ∞ = Inf64
 """
-    Inf, Inf64
+    Inf, ∞, Inf64
 
 Positive infinity of type [`Float64`](@ref).
 """
-Inf, Inf64
+Inf, ∞, Inf64
 
 const NaN = NaN64
 """
