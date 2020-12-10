@@ -32,6 +32,7 @@ const Inf64 = bitcast(Float64, 0x7ff0000000000000)
 const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 
 const Inf = Inf64
+const ∞ = Inf64
 """
     Inf, Inf64
 
