@@ -3823,10 +3823,16 @@ for (stev, stebz, stegr, stein, elty) in
             require_one_based_indexing(dv, ev)
             chkstride1(dv, ev)
             n = length(dv)
-            if length(ev) != n - 1
-                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
+            ne = length(ev)
+            if ne == n - 1
+                eev = [ev; zero($elty)]
+            elseif ne == n
+                eev = copy(ev)
+                eev[n] = zero($elty)
+            else
+                throw(DimensionMismatch("ev has length $(length(ev)) but should be either $(length(dv) - 1) or $(length(dv))"))
             end
-            eev = [ev; zero($elty)]
+
             abstol = Vector{$elty}(undef, 1)
             m = Ref{BlasInt}()
             w = similar(dv, $elty, n)
