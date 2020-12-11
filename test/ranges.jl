@@ -1713,4 +1713,12 @@ end
     @test range('a', step=2, length=3) == ['a', 'c', 'e']
     @test eltype(range('a', step=2, length=3)) === Char
     @test typeof(step(range('a', step=2, length=3))) === Int
+
+    @test isempty(range(typemax(Int)//1, step=1, length=0))
+    @test eltype(range(typemax(Int)//1, step=1, length=0)) === Rational{Int}
+    @test typeof(step(range(typemax(Int)//1, step=1, length=0))) === Int
+
+    @test isempty(range(typemin(Int), step=-1//1, length=0))
+    @test eltype(range(typemin(Int), step=-1//1, length=0)) === Rational{Int}
+    @test typeof(step(range(typemin(Int), step=-1//1, length=0))) === Rational{Int}
 end
