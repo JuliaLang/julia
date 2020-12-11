@@ -1445,7 +1445,7 @@ end
 # Print `sym` as it would appear as an identifier name in code
 # * Print valid identifiers & operators literally; also macros names if allow_macroname=true
 # * Escape invalid identifiers with var"" syntax
-function show_sym(io::IO, sym; allow_macroname=false)
+function show_sym(io::IO, sym::Symbol; allow_macroname=false)
     if is_valid_identifier(sym)
         print(io, sym)
     elseif allow_macroname && (sym_str = string(sym); startswith(sym_str, '@'))
