@@ -1136,7 +1136,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
                     if !accept_n(l, n, isvalid_hex)
                         return ParserError(ErrInvalidUnicodeScalar)
                     end
-                    codepoint = parse_int(l, false, 16)::Int
+                    codepoint = parse_int(l, false, 16)::Int64
                     #=
                     Unicode Scalar Value
                     ---------------------
