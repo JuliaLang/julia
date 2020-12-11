@@ -1089,14 +1089,14 @@ const RealOrComplex = Union{Real,Complex}
     *(A, B::AbstractMatrix, C)
 
 Most 3- and 4-argument `*` calls containing matrices or vectors are done in an
-efficient way, rather than the left-to-right default of `*(x,y,z,...)`.
+efficient way, rather than the left-to-right default of `*(x,y,z...)`.
 
 This can mean performing `B*C` first if `C::AbstractVector`, using five-argument
 `mul!` to fuse the scalar `A::Number` with the matrix multiplication `B*C`,
 or examining `size.((A,B,C,D))` to choose which to multiply first.
 
 !!! compat "Julia 1.6"
-    These optimisations require least Julia 1.6.
+    These optimisations require at least Julia 1.6.
 """
 *(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = A * (B*x)
 
@@ -1150,11 +1150,11 @@ function _mat_mat_scalar(A, B, γ)
 end
 
 mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
-mat_mat_scalar(A::AdjointAbsVec, B::StridedMaybeAdjOrTransMat, γ::Union{Real,Complex}) =
+mat_mat_scalar(A::AdjointAbsVec, B::StridedMaybeAdjOrTransMat, γ::RealOrComplex) =
     mat_vec_scalar(B', A', γ')'
 
 mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
-mat_mat_scalar(A::TransposeAbsVec, B::StridedMaybeAdjOrTransMat, γ::Union{Real,Complex}) =
+mat_mat_scalar(A::TransposeAbsVec, B::StridedMaybeAdjOrTransMat, γ::RealOrComplex) =
     transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
 
 
