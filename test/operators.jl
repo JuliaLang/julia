@@ -243,3 +243,15 @@ end
     @test gt5(6) && !gt5(5)
     @test lt5(4) && !lt5(5)
 end
+
+@testset "ni" begin
+    @test ∋([1,5,10,11], 5)
+    @test !∋([1,10,11], 5)
+    @test ∋(5)([5,1])
+    @test !∋(42)([0,1,100])
+    @test ∌(0)(1:10)
+    @test ∋(0)(-2:2)
+end
+
+a = rand(3, 3)
+@test transpose(a) === a'ᵀ

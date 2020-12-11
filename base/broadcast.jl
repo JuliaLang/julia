@@ -8,10 +8,10 @@ Module containing the broadcasting implementation.
 module Broadcast
 
 using .Base.Cartesian
-using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin,
+using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, @pure,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
-export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d, BroadcastFunction
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
@@ -227,7 +227,7 @@ Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
 Base.IndexStyle(::Type{<:Broadcasted{<:Any,<:Tuple{Any}}}) = IndexLinear()
 Base.IndexStyle(::Type{<:Broadcasted{<:Any}}) = IndexCartesian()
 
-Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = axes(bc)[1]
+Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = LinearIndices(axes(bc))::LinearIndices{1}
 
 Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
@@ -663,7 +663,7 @@ Further, if `x` defines its own [`BroadcastStyle`](@ref), then it must define it
 # Examples
 ```jldoctest
 julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already support axes and indexing
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -675,7 +675,7 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,Regex,Pair}) = Ref(x)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
@@ -691,8 +691,54 @@ eltypes(t::Tuple{Any}) = Tuple{_broadcast_getindex_eltype(t[1])}
 eltypes(t::Tuple{Any,Any}) = Tuple{_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2])}
 eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).types...}
 
+function promote_typejoin_union(::Type{T}) where T
+    if T === Union{}
+        return Union{}
+    elseif T isa UnionAll
+        return Any # TODO: compute more precise bounds
+    elseif T isa Union
+        return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
+    elseif T <: Tuple
+        return typejoin_union_tuple(T)
+    else
+        return T
+    end
+end
+
+@pure function typejoin_union_tuple(T::Type)
+    u = Base.unwrap_unionall(T)
+    u isa Union && return typejoin(
+            typejoin_union_tuple(Base.rewrap_unionall(u.a, T)),
+            typejoin_union_tuple(Base.rewrap_unionall(u.b, T)))
+    p = (u::DataType).parameters
+    lr = length(p)::Int
+    if lr == 0
+        return Tuple{}
+    end
+    c = Vector{Any}(undef, lr)
+    for i = 1:lr
+        pi = p[i]
+        U = Core.Compiler.unwrapva(pi)
+        if U === Union{}
+            ci = Union{}
+        elseif U isa Union
+            ci = typejoin(U.a, U.b)
+        else
+            ci = U
+        end
+        if i == lr && Core.Compiler.isvarargtype(pi)
+            N = (Base.unwrap_unionall(pi)::DataType).parameters[2]
+            c[i] = Base.rewrap_unionall(Vararg{ci, N}, pi)
+        else
+            c[i] = ci
+        end
+    end
+    return Base.rewrap_unionall(Tuple{c...}, T)
+end
+
 # Inferred eltype of result of broadcast(f, args...)
-combine_eltypes(f, args::Tuple) = Base._return_type(f, eltypes(args))
+combine_eltypes(f, args::Tuple) =
+    promote_typejoin_union(Base._return_type(f, eltypes(args)))
 
 ## Broadcasting core
 
@@ -724,7 +770,7 @@ single broadcast loop.
 # Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  3
@@ -732,7 +778,7 @@ julia> A = [1, 2, 3, 4, 5]
  5
 
 julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
  1   2
  3   4
  5   6
@@ -740,7 +786,7 @@ julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
  9  10
 
 julia> broadcast(+, A, B)
-5×2 Array{Int64,2}:
+5×2 Matrix{Int64}:
   2   3
   5   6
   8   9
@@ -748,7 +794,7 @@ julia> broadcast(+, A, B)
  14  15
 
 julia> parse.(Int, ["1", "2"])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -759,12 +805,12 @@ julia> broadcast(+, 1.0, (0, -2.0))
 (1.0, -1.0)
 
 julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
-2-element Array{Array{Int64,1},1}:
+2-element Vector{Vector{Int64}}:
  [1, 1]
  [2, 2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
-4-element Array{String,1}:
+4-element Vector{String}:
  "one: 1"
  "two: 2"
  "three: 3"
@@ -794,19 +840,19 @@ julia> A = [1.0; 0.0]; B = [0.0; 0.0];
 julia> broadcast!(+, B, A, (0, -2.0));
 
 julia> B
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   1.0
  -2.0
 
 julia> A
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  1.0
  0.0
 
 julia> broadcast!(+, A, A, (0, -2.0));
 
 julia> A
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
   1.0
  -2.0
 ```
@@ -877,7 +923,11 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     dest = similar(bc′, typeof(val))
     @inbounds dest[I] = val
     # Now handle the remaining values
-    return copyto_nonleaf!(dest, bc′, iter, state, 1)
+    # The typeassert gives inference a helping hand on the element type and dimensionality
+    # (work-around for #28382)
+    ElType′ = ElType <: Type ? Type : ElType
+    RT = dest isa AbstractArray ? AbstractArray{<:ElType′, ndims(dest)} : Any
+    return copyto_nonleaf!(dest, bc′, iter, state, 1)::RT
 end
 
 ## general `copyto!` methods
@@ -1029,7 +1079,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
         else
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
-            newdest = Base.similar(dest, promote_typejoin(T, typeof(val)))
+            newdest = Base.similar(bc, promote_typejoin(T, typeof(val)))
             return restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
         end
         count += 1
@@ -1112,7 +1162,7 @@ broadcasted(::typeof(+), j::CartesianIndex{N}, I::CartesianIndices{N}) where N =
 broadcasted(::typeof(-), I::CartesianIndices{N}, j::CartesianIndex{N}) where N =
     CartesianIndices(map((rng, offset)->rng .- offset, I.indices, Tuple(j)))
 function broadcasted(::typeof(-), j::CartesianIndex{N}, I::CartesianIndices{N}) where N
-    diffrange(offset, rng) = range(offset-last(rng), length=length(rng))
+    diffrange(offset, rng) = range(offset-last(rng), length=length(rng), step=step(rng))
     Iterators.reverse(CartesianIndices(map(diffrange, Tuple(j), I.indices)))
 end
 
@@ -1173,14 +1223,14 @@ function undot(x::Expr)
     if x.head === :.=
         Expr(:(=), x.args...)
     elseif x.head === :block # occurs in for x=..., y=...
-        Expr(:block, map(undot, x.args)...)
+        Expr(:block, Base.mapany(undot, x.args)...)
     else
         x
     end
 end
 __dot__(x) = x
 function __dot__(x::Expr)
-    dotargs = map(__dot__, x.args)
+    dotargs = Base.mapany(__dot__, x.args)
     if x.head === :call && dottable(x.args[1])
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
     elseif x.head === :comparison
@@ -1196,7 +1246,7 @@ function __dot__(x::Expr)
            Meta.isexpr(x.args[1], :call) # function or macro definition
         Expr(x.head, x.args[1], dotargs[2])
     elseif x.head === :(<:) || x.head === :(>:)
-        tmp = x.head === :(<:) ? :(.<:) : :(.>:)
+        tmp = x.head === :(<:) ? :.<: : :.>:
         Expr(:call, tmp, dotargs...)
     else
         if x.head === :&& || x.head === :||
@@ -1232,7 +1282,7 @@ If you want to *avoid* adding dots for selected function calls in
 julia> x = 1.0:3.0; y = similar(x);
 
 julia> @. y = x + 3 * sin(x)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  3.5244129544236893
  4.727892280477045
  3.4233600241796016
@@ -1263,5 +1313,45 @@ end
     broadcasted(combine_styles(arg1′, arg2′, args′...), f, arg1′, arg2′, args′...)
 end
 @inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
+
+"""
+    BroadcastFunction{F} <: Function
+
+Represents the "dotted" version of an operator, which broadcasts the operator over its
+arguments, so `BroadcastFunction(op)` is functionally equivalent to `(x...) -> (op).(x...)`.
+
+Can be created by just passing an operator preceded by a dot to a higher-order function.
+
+# Examples
+```jldoctest
+julia> a = [[1 3; 2 4], [5 7; 6 8]];
+
+julia> b = [[9 11; 10 12], [13 15; 14 16]];
+
+julia> map(.*, a, b)
+2-element Vector{Matrix{Int64}}:
+ [9 33; 20 48]
+ [65 105; 84 128]
+
+julia> Base.BroadcastFunction(+)(a, b) == a .+ b
+true
+```
+
+!!! compat "Julia 1.6"
+    `BroadcastFunction` and the standalone `.op` syntax are available as of Julia 1.6.
+"""
+struct BroadcastFunction{F} <: Function
+    f::F
+end
+
+@inline (op::BroadcastFunction)(x...; kwargs...) = op.f.(x...; kwargs...)
+
+function Base.show(io::IO, op::BroadcastFunction)
+    print(io, BroadcastFunction, '(')
+    show(io, op.f)
+    print(io, ')')
+    nothing
+end
+Base.show(io::IO, ::MIME"text/plain", op::BroadcastFunction) = show(io, op)
 
 end # module

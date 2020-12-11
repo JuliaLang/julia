@@ -73,6 +73,11 @@ end
 @test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
+# issue #38819
+
+module NoDocStrings end
+@test meta(NoDocStrings) === getfield(NoDocStrings, Base.Docs.META)
+
 # General tests for docstrings.
 
 const LINE_NUMBER = @__LINE__() + 1
@@ -433,6 +438,7 @@ macro example_1(f)
     end |> esc
 end
 
+const LINE_NUMBER_F = @__LINE__() + 1
 "f"
 @example_1 f
 
@@ -446,16 +452,23 @@ macro example_2(f)
     end |> esc
 end
 
+const LINE_NUMBER_G = @__LINE__() + 1
 "g"
 @example_2 g
 
 @example_2 _g
+
+const LINE_NUMBER_T = @__LINE__() + 1
+"T"
+Base.@kwdef struct T end
 
 end
 
 let md = meta(MacroGenerated)[@var(MacroGenerated.f)]
     @test md.order == [Tuple{Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"f")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_F
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_f)
@@ -464,9 +477,18 @@ let md = meta(MacroGenerated)[@var(MacroGenerated.g)]
     @test md.order == [Tuple{Any}, Tuple{Any, Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"g")
     @test docstrings_equal(md.docs[Tuple{Any, Any}], doc"g")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_G
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_g)
+
+let md = meta(MacroGenerated)[@var(MacroGenerated.T)]
+    @test md.order == Type[Union{}]
+    @test docstrings_equal(md.docs[Union{}], doc"T")
+    @test md.docs[Union{}].data[:linenumber] == MacroGenerated.LINE_NUMBER_T
+    @test md.docs[Union{}].data[:path] == @__FILE__()
+end
 
 module DocVars
 
@@ -985,6 +1007,9 @@ end
 @test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
 @test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
 
+# issue #36378 (\u1e8b and x\u307 are the fully composed and decomposed forms of ẋ, respectively)
+@test sprint(repl_latex, "\u1e8b") == "\"x\u307\" can be typed by x\\dot<tab>\n\n"
+
 # issue #15684
 begin
     """
@@ -1204,3 +1229,10 @@ end
 end
 @test M27832.xs == ":(\$(Expr(:\$, :fn)))"
 Core.atdoc!(_last_atdoc)
+
+# issue #29432
+"First docstring" module Module29432 end
+Test.collect_test_logs() do                          # suppress printing of any warning
+    eval(quote "Second docstring" Module29432 end)   # requires toplevel
+end
+@test docstrings_equal(@doc(Module29432), doc"Second docstring")

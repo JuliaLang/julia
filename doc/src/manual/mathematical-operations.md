@@ -164,7 +164,7 @@ applies the operator elementwise.
 
 ```jldoctest
 julia> [1,2,3] .^ 3
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   1
   8
  27
@@ -398,9 +398,8 @@ Julia applies the following order and associativity of operations, from highest 
     c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
-[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
-
-[Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, and also have higher precedence than `^`.
+[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm). Note that some of the operators there are not defined
+in the `Base` module but may be given definitions by standard libraries, packages or user code.
 
 You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
 
@@ -424,6 +423,18 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 
 Note that symbols such as `:sin` return precedence `0`. This value represents invalid operators and not
 operators of lowest precedence. Similarly, such operators are assigned associativity `:none`.
+
+[Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, with the exception of `^` where they have higher precedence only as the exponent.
+
+```jldoctest
+julia> x = 3; 2x^2
+18
+
+julia> x = 3; 2^2x
+64
+```
+
+Juxtaposition parses like a unary operator, which has the same natural asymmetry around exponents: `-x^y` and `2x^y` parse as `-(x^y)` and `2(x^y)` whereas `x^-y` and `x^2y` parse as `x^(-y)` and `x^(2y)`.
 
 ## Numerical Conversions
 
@@ -505,7 +516,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`rem(x,y)`](@ref)        | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
 | [`mod(x,y)`](@ref)        | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
 | [`mod1(x,y)`](@ref)       | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)`   |
-| [`mod2pi(x)`](@ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
+| [`mod2pi(x)`](@ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x) < 2pi`                                                      |
 | [`divrem(x,y)`](@ref)     | returns `(div(x,y),rem(x,y))`                                                                             |
 | [`fldmod(x,y)`](@ref)     | returns `(fld(x,y),mod(x,y))`                                                                             |
 | [`gcd(x,y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |

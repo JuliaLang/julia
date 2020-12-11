@@ -4,8 +4,12 @@ ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/libssh2
 endif
 
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/mbedtls
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/zlib
+endif
+
+ifeq ($(USE_SYSTEM_NGHTTP2), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp2
 endif
 
 ifneq ($(USE_BINARYBUILDER_CURL),1)
@@ -26,16 +30,31 @@ $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.
 	touch -c $(SRCCACHE)/curl-$(CURL_VER)/configure # old target
 	echo 1 > $@
 
+checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
+# We use different TLS libraries on different platforms.
+#   On Windows, we use schannel
+#   On MacOS, we use SecureTransport
+#   On Linux, we use mbedTLS
+ifeq ($(OS), WINNT)
+CURL_TLS_CONFIGURE_FLAGS := --with-schannel
+else ifeq ($(OS), Darwin)
+CURL_TLS_CONFIGURE_FLAGS := --with-secure-transport
+else
+CURL_TLS_CONFIGURE_FLAGS := --with-mbedtls=$(build_prefix)
+endif
+
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --includedir=$(build_includedir) \
-		--without-ssl --without-gnutls --without-gssapi --without-zlib \
+		--without-ssl --without-gnutls --without-gssapi --disable-ares \
 		--without-libidn --without-libidn2 --without-libmetalink --without-librtmp \
-		--without-nghttp2 --without-nss --without-polarssl \
-		--without-spnego --without-libpsl --disable-ares \
-		--disable-ldap --disable-ldaps --without-zsh-functions-dir \
-		--with-libssh2=$(build_prefix) --with-mbedtls=$(build_prefix) \
+		--without-nss --without-polarssl --without-spnego --without-libpsl \
+		--disable-ldap --disable-ldaps --without-zsh-functions-dir --disable-static \
+		--with-libssh2=$(build_prefix) --with-zlib=$(build_prefix) --with-nghttp2=$(build_prefix) \
+		$(CURL_TLS_CONFIGURE_FLAGS) \
 		CFLAGS="$(CFLAGS) $(CURL_CFLAGS)" LDFLAGS="$(LDFLAGS) $(CURL_LDFLAGS)"
 	echo 1 > $@
 
@@ -69,9 +88,5 @@ fastcheck-curl: #none
 check-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-checked
 
 else # USE_BINARYBUILDER_CURL
-
-CURL_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibCURL_jll.jl/releases/download/LibCURL-v$(CURL_VER)+$(CURL_BB_REL)
-CURL_BB_NAME := LibCURL.v$(CURL_VER)
-
 $(eval $(call bb-install,curl,CURL,false))
 endif

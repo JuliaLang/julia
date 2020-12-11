@@ -21,17 +21,17 @@ UniformScaling{Float64}
 2.0*I
 
 julia> A = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> J*A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  4.0
  6.0  8.0
 
 julia> J[1:2, 1:2]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  0.0
  0.0  2.0
 ```
@@ -51,7 +51,7 @@ julia> fill(1, (5,6)) * I == fill(1, (5,6))
 true
 
 julia> [1 2im 3; 1im 2 3] * I
-2×3 Array{Complex{Int64},2}:
+2×3 Matrix{Complex{Int64}}:
  1+0im  0+2im  3+0im
  0+1im  2+0im  3+0im
 ```
@@ -69,13 +69,13 @@ Construct a `Diagonal` matrix from a `UniformScaling`.
 # Examples
 ```jldoctest
 julia> I(3)
-3×3 Diagonal{Bool,Array{Bool,1}}:
+3×3 Diagonal{Bool, Vector{Bool}}:
  1  ⋅  ⋅
  ⋅  1  ⋅
  ⋅  ⋅  1
 
 julia> (0.7*I)(3)
-3×3 Diagonal{Float64,Array{Float64,1}}:
+3×3 Diagonal{Float64, Vector{Float64}}:
  0.7   ⋅    ⋅
   ⋅   0.7   ⋅
   ⋅    ⋅   0.7
@@ -147,6 +147,7 @@ isposdef(J::UniformScaling) = isposdef(J.λ)
 (-)(J::UniformScaling, x::Number) = J.λ - x
 (-)(x::Number, J::UniformScaling) = x - J.λ
 
+(+)(J::UniformScaling)                      = UniformScaling(+J.λ)
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+)(B::BitArray{2}, J::UniformScaling)      = Array(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + Array(B)
@@ -323,6 +324,9 @@ function ==(A::StridedMatrix, J::UniformScaling)
     return true
 end
 
+isequal(A::AbstractMatrix, J::UniformScaling) = false
+isequal(J::UniformScaling, A::AbstractMatrix) = false
+
 function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
             atol::Real=0, rtol::Real=Base.rtoldefault(T,S,atol), nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
@@ -479,3 +483,12 @@ Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
 dot(x::AbstractVector, J::UniformScaling, y::AbstractVector) = dot(x, J.λ, y)
 dot(x::AbstractVector, a::Number, y::AbstractVector) = sum(t -> dot(t[1], a, t[2]), zip(x, y))
 dot(x::AbstractVector, a::Union{Real,Complex}, y::AbstractVector) = a*dot(x, y)
+
+# muladd
+Base.muladd(A::UniformScaling, B::UniformScaling, z::UniformScaling) =
+    UniformScaling(A.λ * B.λ + z.λ)
+Base.muladd(A::Union{Diagonal, UniformScaling}, B::Union{Diagonal, UniformScaling}, z::Union{Diagonal, UniformScaling}) =
+    Diagonal(_diag_or_value(A) .* _diag_or_value(B) .+ _diag_or_value(z))
+
+_diag_or_value(A::Diagonal) = A.diag
+_diag_or_value(A::UniformScaling) = A.λ

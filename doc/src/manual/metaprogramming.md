@@ -47,7 +47,7 @@ julia> ex1.head
 
 ```jldoctest prog
 julia> ex1.args
-3-element Array{Any,1}:
+3-element Vector{Any}:
   :+
  1
  1
@@ -1076,6 +1076,21 @@ Of course, a large amount of complexity is hidden in the functions used in this 
 but they are just functions, written entirely in Julia. You can read their source and see precisely
 what they do -- and all they do is construct expression objects to be inserted into your program's
 syntax tree.
+
+Another way to define a macro would be like this:
+
+```julia
+macro foo_str(str, flag)
+    # do stuff
+end
+```
+This macro can then be called with the following syntax:
+
+```julia
+foo"str"flag
+```
+
+The type of flag in the above mentioned syntax would be a `String` with contents of whatever trails after the string literal.
 
 ## Generated functions
 

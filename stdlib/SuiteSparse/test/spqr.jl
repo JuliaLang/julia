@@ -10,7 +10,7 @@ nn = 100
 
 @test size(qr(sprandn(m, n, 0.1)).Q) == (m, m)
 
-@testset "element type of A: $eltyA" for eltyA in (Float64, Complex{Float64})
+@testset "element type of A: $eltyA" for eltyA in (Float64, ComplexF64)
     if eltyA <: Real
         A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], randn(nn), m, n)
     else
@@ -49,7 +49,7 @@ nn = 100
         @test_throws DimensionMismatch rmul!(offsizeA, adjoint(Q))
     end
 
-    @testset "element type of B: $eltyB" for eltyB in (Int, Float64, Complex{Float64})
+    @testset "element type of B: $eltyB" for eltyB in (Int, Float64, ComplexF64)
         if eltyB == Int
             B = rand(1:10, m, 2)
         elseif eltyB <: Real

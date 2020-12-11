@@ -41,7 +41,7 @@ end
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]))
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
@@ -63,19 +63,40 @@ end
 
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
-function typesubtract(@nospecialize(a), @nospecialize(b))
+function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::Int)
     if a <: b && isnotbrokensubtype(a, b)
         return Bottom
     end
-    if isa(a, Union)
-        return Union{typesubtract(a.a, b),
-                     typesubtract(a.b, b)}
+    ua = unwrap_unionall(a)
+    if isa(ua, Union)
+        return Union{typesubtract(rewrap_unionall(ua.a, a), b, MAX_UNION_SPLITTING),
+                     typesubtract(rewrap_unionall(ua.b, a), b, MAX_UNION_SPLITTING)}
     elseif a isa DataType
-        if b isa DataType
-            if a.name === b.name === Tuple.name && length(a.types) == length(b.types)
-                ta = switchtupleunion(a)
-                if length(ta) > 1
-                    return typesubtract(Union{ta...}, b)
+        ub = unwrap_unionall(b)
+        if ub isa DataType
+            if a.name === ub.name === Tuple.name &&
+                    length(a.parameters) == length(ub.parameters)
+                if 1 < unionsplitcost(a.parameters) <= MAX_UNION_SPLITTING
+                    ta = switchtupleunion(a)
+                    return typesubtract(Union{ta...}, b, 0)
+                elseif b isa DataType
+                    # if exactly one element is not bottom after calling typesubtract
+                    # then the result is all of the elements as normal except that one
+                    notbottom = fill(false, length(a.parameters))
+                    for i = 1:length(notbottom)
+                        ap = a.parameters[i]
+                        bp = b.parameters[i]
+                        notbottom[i] = !(ap <: bp && isnotbrokensubtype(ap, bp))
+                    end
+                    let i = findfirst(notbottom)
+                        if i !== nothing && findnext(notbottom, i + 1) === nothing
+                            ta = collect(a.parameters)
+                            ap = a.parameters[i]
+                            bp = b.parameters[i]
+                            ta[i] = typesubtract(ap, bp, min(2, MAX_UNION_SPLITTING))
+                            return Tuple{ta...}
+                        end
+                    end
                 end
             end
         end
@@ -112,14 +133,23 @@ function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
     return Vararg{widenconst(t)}
 end
 
-function countunionsplit(atypes::Union{SimpleVector,Vector{Any}})
+# Gives a cost function over the effort to switch a tuple-union representation
+# as a cartesian product, relative to the size of the original representation.
+# Thus, we count the longest element as being roughly invariant to being inside
+# or outside of the Tuple/Union nesting, though somewhat more expensive to be
+# outside than inside because the representation is larger (because and it
+# informs the callee whether any splitting is possible).
+function unionsplitcost(atypes::Union{SimpleVector,Vector{Any}})
     nu = 1
+    max = 2
     for ti in atypes
         if isa(ti, Union)
-            nu, ovf = Core.Intrinsics.checked_smul_int(nu, unionlen(ti::Union))
-            if ovf
-                return typemax(Int)
+            nti = unionlen(ti)
+            if nti > max
+                max, nti = nti, max
             end
+            nu, ovf = Core.Intrinsics.checked_smul_int(nu, nti)
+            ovf && return typemax(Int)
         end
     end
     return nu

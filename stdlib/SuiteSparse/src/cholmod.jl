@@ -289,7 +289,7 @@ function Sparse(p::Ptr{C_Sparse{Cvoid}})
                             "unknown reasons. Please submit a bug report."))
     end
     s = unsafe_load(p)
-    Tv = s.xtype == REAL ? Float64 : Complex{Float64}
+    Tv = s.xtype == REAL ? Float64 : ComplexF64
     Sparse(convert(Ptr{C_Sparse{Tv}}, p))
 end
 
@@ -1060,12 +1060,12 @@ function sparse(A::Sparse{Float64}) # Notice! Cannot be type stable because of s
     end
     return Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A)
 end
-function sparse(A::Sparse{Complex{Float64}}) # Notice! Cannot be type stable because of stype
+function sparse(A::Sparse{ComplexF64}) # Notice! Cannot be type stable because of stype
     s = unsafe_load(pointer(A))
     if s.stype == 0
-        return SparseMatrixCSC{Complex{Float64},SuiteSparse_long}(A)
+        return SparseMatrixCSC{ComplexF64,SuiteSparse_long}(A)
     end
-    return Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}(A)
+    return Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long}}(A)
 end
 function sparse(F::Factor)
     s = unsafe_load(pointer(F))
@@ -1383,7 +1383,7 @@ If `perm` is set to `1:3` to enforce no permutation, the number of nonzero
 elements in the factor is 6.
 ```jldoctest
 julia> A = [2 1 1; 1 2 0; 1 0 2]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  2  1  1
  1  2  0
  1  0  2
@@ -1397,7 +1397,7 @@ nnz:     5
 success: true
 
 julia> C.p
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  3
  2
  1
@@ -1405,7 +1405,7 @@ julia> C.p
 julia> L = sparse(C.L);
 
 julia> Matrix(L)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.41421   0.0       0.0
  0.0       1.41421   0.0
  0.707107  0.707107  1.0
@@ -1414,7 +1414,7 @@ julia> L * L' ≈ A[C.p, C.p]
 true
 
 julia> P = sparse(1:3, C.p, ones(3))
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+3×3 SparseMatrixCSC{Float64, Int64} with 3 stored entries:
   ⋅    ⋅   1.0
   ⋅   1.0   ⋅
  1.0   ⋅    ⋅
@@ -1433,7 +1433,7 @@ success: true
 julia> L = sparse(C.L);
 
 julia> Matrix(L)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.41421    0.0       0.0
  0.707107   1.22474   0.0
  0.707107  -0.408248  1.1547
@@ -1695,6 +1695,8 @@ end
 function (\)(L::FactorComponent, B::SparseVecOrMat)
     sparse(L\Sparse(B,0))
 end
+(\)(L::FactorComponent, B::Adjoint{<:Any,<:SparseMatrixCSC}) = L \ copy(B)
+(\)(L::FactorComponent, B::Transpose{<:Any,<:SparseMatrixCSC}) = L \ copy(B)
 
 \(adjL::Adjoint{<:Any,<:FactorComponent}, B::Union{VecOrMat,SparseVecOrMat}) = (L = adjL.parent; adjoint(L)\B)
 
@@ -1714,6 +1716,8 @@ end
 (\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
 (\)(L::Factor, B::SparseMatrixCSC) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
+(\)(L::Factor, B::Adjoint{<:Any,<:SparseMatrixCSC}) = L \ copy(B)
+(\)(L::Factor, B::Transpose{<:Any,<:SparseMatrixCSC}) = L \ copy(B)
 (\)(L::Factor, B::SparseVector) = sparse(spsolve(CHOLMOD_A, L, Sparse(B)))
 
 \(adjL::Adjoint{<:Any,<:Factor}, B::Dense) = (L = adjL.parent; solve(CHOLMOD_A, L, B))
@@ -1732,7 +1736,7 @@ end
 const RealHermSymComplexHermF64SSL = Union{
     Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
     Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-    Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}
+    Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long}}}
 const StridedVecOrMatInclAdjAndTrans = Union{StridedVecOrMat, Adjoint{<:Any, <:StridedVecOrMat}, Transpose{<:Any, <:StridedVecOrMat}}
 function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMatInclAdjAndTrans)
     F = cholesky(A; check = false)
@@ -1840,7 +1844,7 @@ function ishermitian(A::Sparse{Float64})
         return i == MM_SYMMETRIC || i == MM_SYMMETRIC_POSDIAG
     end
 end
-function ishermitian(A::Sparse{Complex{Float64}})
+function ishermitian(A::Sparse{ComplexF64})
     s = unsafe_load(pointer(A))
     if s.stype != 0
         return true
@@ -1856,15 +1860,15 @@ end
 
 (*)(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}},
     B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}},
-    B::SparseVecOrMat{Complex{Float64},Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+(*)(A::Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,Ti}},
+    B::SparseVecOrMat{ComplexF64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}},
     B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 
 (*)(A::SparseVecOrMat{Float64,Ti},
     B::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::SparseVecOrMat{Complex{Float64},Ti},
-    B::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+(*)(A::SparseVecOrMat{ComplexF64,Ti},
+    B::Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{Float64,Ti},
     B::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 

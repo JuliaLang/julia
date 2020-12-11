@@ -6,10 +6,6 @@
 # Check to make sure types are imported properly
 @test MultiSelectMenu{TerminalMenus.MultiSelectConfig} <: TerminalMenus.ConfiguredMenu  # TODO Julia 2.0: delete parameter
 
-# Invalid Menu Params
-@test_throws ErrorException MultiSelectMenu(["one"], charset=:ascii)
-@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1, charset=:ascii)
-
 # Constructor
 @test MultiSelectMenu(["one", "two", "three"], charset=:ascii).pagesize == 3
 @test MultiSelectMenu(string.(1:30), pagesize=-1, charset=:ascii).pagesize == 30
@@ -34,10 +30,10 @@ for kws in ((charset=:ascii,),
     TerminalMenus.writeline(buf, multi_menu, 1, true)
     @test String(take!(buf)) == "$uck 1"
     TerminalMenus.printmenu(buf, multi_menu, 1; init=true)
-    @test startswith(String(take!(buf)), string("\e[2K $cur $uck 1"))
+    @test startswith(String(take!(buf)), string("\e[2K[press: d=done, a=all, n=none]\r\n\e[2K $cur $uck 1"))
     push!(multi_menu.selected, 1)
     TerminalMenus.printmenu(buf, multi_menu, 2; init=true)
-    @test startswith(String(take!(buf)), string("\e[2K   $chk 1\r\n\e[2K $cur $uck 2"))
+    @test startswith(String(take!(buf)), string("\e[2K[press: d=done, a=all, n=none]\r\n\e[2K   $chk 1\r\n\e[2K $cur $uck 2"))
 end
 
 # Preselection
@@ -57,3 +53,5 @@ end
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10), charset=:ascii)
 @test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
+multi_menu = MultiSelectMenu(["single option"], charset=:ascii)
+@test simulate_input(Set([1]), multi_menu, :up, :up, :down, :enter, 'd')

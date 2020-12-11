@@ -34,9 +34,9 @@ Any
 ```
 
 !!! compat "Julia 1.3"
-  This function is exported as of Julia 1.3.
+    This function is exported as of Julia 1.3.
 """
-nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
+nonmissingtype(::Type{T}) where {T} = typesplit(T, Missing)
 
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
@@ -91,7 +91,8 @@ isapprox(::Missing, ::Any; kwargs...) = missing
 isapprox(::Any, ::Missing; kwargs...) = missing
 
 # Unary operators/functions
-for f in (:(!), :(~), :(+), :(-), :(zero), :(one), :(oneunit),
+for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
+          :(zero), :(one), :(oneunit),
           :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan),
           :(iszero), :(transpose), :(adjoint), :(float), :(conj),
@@ -212,17 +213,17 @@ julia> argmax(x)
 3
 
 julia> collect(keys(x))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  3
 
 julia> collect(skipmissing([1, missing, 2]))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
 julia> collect(skipmissing([1 missing; 2 missing]))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 ```
@@ -368,12 +369,12 @@ but with all missing elements and those for which `f` returns `false` removed.
 # Examples
 ```jldoctest
 julia> x = [1 2; missing 4]
-2×2 Array{Union{Missing, Int64},2}:
+2×2 Matrix{Union{Missing, Int64}}:
  1         2
   missing  4
 
 julia> filter(isodd, skipmissing(x))
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 ```
 """

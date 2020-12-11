@@ -165,6 +165,10 @@ function test_diagonal()
                        Tuple{Ref{Tuple{N1,N1}}, Ref{N2}} where {N1, N2})
     @test !issub(Tuple{Type{Tuple{Vararg{T}} where T <: Integer}, Tuple{Float64, Int}},
                  Tuple{Type{Tuple{Vararg{T}}}, Tuple{Vararg{T}}} where T)
+
+    # non-types
+    @test issub_strict(Tuple{3,3}, NTuple)
+    @test !issub(Tuple{3,4}, NTuple)
 end
 
 # level 3: UnionAll
@@ -1108,7 +1112,7 @@ f18348(::Type{T}, x::T) where {T<:Any} = 2
 # Issue #13165
 @test Symmetric{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
 @test Hermitian{Float64,Matrix{Float64}} <: LinearAlgebra.RealHermSymComplexHerm
-@test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinearAlgebra.RealHermSymComplexHerm
+@test Hermitian{ComplexF64,Matrix{ComplexF64}} <: LinearAlgebra.RealHermSymComplexHerm
 
 # Issue #12721
 f12721(::T) where {T<:Type{Int}} = true
@@ -1247,7 +1251,6 @@ let ints = (Int, Int32, UInt, UInt32)
     T = Type{Tuple{V, I}} where V <: Vecs where I <: Ints
     @testintersect(T, T, T)
     test(a::Type{Tuple{V, I}}) where {V <: Vecs, I <: Ints} = I
-    test(a::Type{Tuple{V, I}}) where {V <: Vecs, I <: Ints} = I
 end
 
 # issue #21191
@@ -1357,6 +1360,18 @@ end
 let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
     @test e[1] isa TypeVar
 end
+
+# issue #25430
+@test Vector{Tuple{Any}}() isa Vector{Tuple{>:Int}}
+@test Vector{Tuple{>:Int}}() isa Vector{Tuple{Any}}
+@test Vector{Tuple{Any}} == Vector{Tuple{>:Int}}
+@test Vector{Vector{Tuple{Any}}} == Vector{Vector{Tuple{>:Int}}}
+f25430(t::Vector{Tuple{Any}}) = true
+g25430(t::Vector{Tuple{>:Int}}) = true
+@test f25430(Vector{Tuple{>:Int}}())
+@test g25430(Vector{Tuple{Any}}())
+@testintersect(Vector{Tuple{>:Int}}, Vector{Tuple{Any}}, Vector{Tuple{Any}})
+@testintersect(Vector{Vector{Tuple{>:Int}}}, Vector{Vector{Tuple{Any}}}, Vector{Vector{Tuple{Any}}})
 
 # issue #24521
 g24521(::T, ::T) where {T} = T
@@ -1627,18 +1642,9 @@ end
 @testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
                Tuple{Type{Vector}, Any},
                Union{})
-#@testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
-#               Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
-#               Tuple{Type{Vector{Int}}, Int})
-@test_broken isequal(_type_intersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
-                                     Tuple{Type{Vector{T} where Int<:T<:Int}, Any}),
-                     Tuple{Type{Vector{Int}}, Int})
-@test isequal_type(_type_intersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
-                                   Tuple{Type{Vector{T} where Int<:T<:Int}, Any}),
-                   Tuple{Type{Vector{Int}}, Int})
-@test isequal_type(_type_intersect(Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
-                                   Tuple{Type{<:AbstractVector{T}}, Int} where T),
-                   Tuple{Type{Vector{Int}}, Int})
+@testintersect(Tuple{Type{<:AbstractVector{T}}, Int} where T,
+               Tuple{Type{Vector{T} where Int<:T<:Int}, Any},
+               Tuple{Type{Vector{Int}}, Int})
 let X = LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T,
     Y = Union{LinearAlgebra.Hermitian{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T,
               LinearAlgebra.Symmetric{T, S} where S<:(AbstractArray{U, 2} where U<:T) where T}
@@ -1757,3 +1763,54 @@ s26065 = Ref{Tuple{T,Ref{Union{Ref{Tuple{Ref{Union{Ref{Ref{Tuple{Ref{Tuple{Union
 # issue 36100
 @test NamedTuple{(:a, :b), Tuple{Missing, Union{}}} == NamedTuple{(:a, :b), Tuple{Missing, Union{}}}
 @test Val{Tuple{Missing, Union{}}} === Val{Tuple{Missing, Union{}}}
+
+# issue #36869
+struct F36869{T, V} <: AbstractArray{Union{T, V}, 1}
+end
+@testintersect(Tuple{Type{T}, AbstractVector{T}} where T,
+               Tuple{Union, F36869{Int64, Missing}},
+               Tuple{Union, F36869{Int64, Missing}})
+
+# issue #37180
+@test !(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any}).body.parameters[1] isa Union)
+
+# issue #37255
+@test Type{Union{}} == Type{T} where {Union{}<:T<:Union{}}
+
+# issue #38081
+struct AlmostLU{T, S<:AbstractMatrix{T}}
+end
+let X1 = Tuple{AlmostLU, Vector{T}} where T,
+    X2 = Tuple{AlmostLU{S, X} where X<:Matrix, Vector{S}} where S<:Union{Float32, Float64},
+    I = typeintersect(X1, X2)
+    # TODO: the quality of this intersection is not great; for now just test that it
+    # doesn't stack overflow
+    @test I<:X1 || I<:X2
+    actual = Tuple{AlmostLU{S, X} where X<:Matrix{S}, Vector{S}} where S<:Union{Float32, Float64}
+    @test I >: actual
+    @test_broken I == actual
+end
+
+let
+    # issue #22787
+    # for now check that these don't stack overflow
+    t = typeintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
+                      Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S)
+    @test_broken t != Union{}
+    t = typeintersect(Tuple{Type{T}, T, Ref{T}} where T,
+                      Tuple{Type{S}, Ref{S}, S} where S)
+    @test_broken t != Union{}
+
+    # issue #38279
+    t = typeintersect(Tuple{<:Array{T, N}, Val{T}} where {T<:Real, N},
+                      Tuple{<:Array{T, N}, Val{<:AbstractString}}  where {T<:Real, N})
+    @test t == Tuple{<:Array{Union{}, N}, Val{Union{}}} where N
+end
+
+# issue #36951
+@testintersect(Type{T} where T>:Missing,
+               Type{Some{T}} where T,
+               Union{})
+
+# issue #24333
+@test_broken (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)

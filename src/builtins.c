@@ -102,6 +102,16 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
                     return 0;
                 ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
             }
+            else if (ft->layout->first_ptr >= 0) {
+                // If the field is a inline immutable that can be can be undef
+                // we need to check to check for undef first since undef struct
+                // may have fields that are different but should still be treated as equal.
+                jl_value_t *ptra = ((jl_value_t**)ao)[ft->layout->first_ptr];
+                jl_value_t *ptrb = ((jl_value_t**)bo)[ft->layout->first_ptr];
+                if (ptra == NULL && ptrb == NULL) {
+                    return 1;
+                }
+            }
             if (!ft->layout->haspadding) {
                 if (!bits_equal(ao, bo, ft->size))
                     return 0;
@@ -240,8 +250,6 @@ typedef struct _varidx {
     struct _varidx *prev;
 } jl_varidx_t;
 
-JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
-
 static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOINT
 {
     if (v == NULL)
@@ -316,7 +324,16 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
             }
             assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
-            u = immut_id_(fieldtype, (jl_value_t*)vo, 0);
+            int32_t first_ptr = fieldtype->layout->first_ptr;
+            if (first_ptr >= 0 && ((jl_value_t**)vo)[first_ptr] == NULL) {
+                // If the field is a inline immutable that can be can be undef
+                // we need to check to check for undef first since undef struct
+                // may have fields that are different but should still be treated as equal.
+                u = 0;
+            }
+            else {
+                u = immut_id_(fieldtype, (jl_value_t*)vo, 0);
+            }
         }
         h = bitmix(h, u);
     }
@@ -382,8 +399,8 @@ JL_CALLABLE(jl_f_sizeof)
     jl_value_t *x = args[0];
     if (jl_is_unionall(x) || jl_is_uniontype(x)) {
         x = jl_unwrap_unionall(x);
-        size_t elsize = 0, al = 0;
-        int isinline = jl_islayout_inline(x, &elsize, &al);
+        size_t elsize = 0;
+        int isinline = jl_uniontype_size(x, &elsize);
         if (isinline)
             return jl_box_long(elsize);
         if (!jl_is_datatype(x))
@@ -471,7 +488,7 @@ static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_
     return newheap;
 }
 
-void STATIC_INLINE _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
+STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
 {
     size_t oldalloc = *n_alloc;
     if (oldalloc >= newalloc)
@@ -707,6 +724,24 @@ JL_CALLABLE(jl_f__apply_latest)
     return ret;
 }
 
+// Like `_apply`, but runs in the specified world.
+// If world > jl_world_counter, run in the latest world.
+JL_CALLABLE(jl_f__apply_in_world)
+{
+    JL_NARGSV(_apply_in_world, 2);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    JL_TYPECHK(_apply_in_world, ulong, args[0]);
+    size_t world = jl_unbox_ulong(args[0]);
+    world = world <= jl_world_counter ? world : jl_world_counter;
+    if (!ptls->in_pure_callback) {
+        ptls->world_age = world;
+    }
+    jl_value_t *ret = do_apply(NULL, args+1, nargs-1, NULL);
+    ptls->world_age = last_age;
+    return ret;
+}
+
 // tuples ---------------------------------------------------------------------
 
 JL_CALLABLE(jl_f_tuple)
@@ -773,12 +808,10 @@ JL_CALLABLE(jl_f_setfield)
 {
     JL_NARGS(setfield!, 3, 3);
     jl_value_t *v = args[0];
-    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
-    if (vt == (jl_value_t*)jl_module_type)
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    assert(jl_is_datatype(st));
+    if (st == jl_module_type)
         jl_error("cannot assign variables in other modules");
-    if (!jl_is_datatype(vt))
-        jl_type_error("setfield!", (jl_value_t*)jl_datatype_type, v);
-    jl_datatype_t *st = (jl_datatype_t*)vt;
     if (!st->mutabl)
         jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
     size_t idx;
@@ -791,7 +824,7 @@ JL_CALLABLE(jl_f_setfield)
         JL_TYPECHK(setfield!, symbol, args[1]);
         idx = jl_field_index(st, (jl_sym_t*)args[1], 1);
     }
-    jl_value_t *ft = jl_field_type(st, idx);
+    jl_value_t *ft = jl_field_type_concrete(st, idx);
     if (!jl_isa(args[2], ft)) {
         jl_type_error("setfield!", ft, args[2]);
     }
@@ -990,8 +1023,7 @@ JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
     size_t world = jl_get_ptls_states()->world_age;
-    return jl_method_lookup(args, nargs, 1, world) != NULL ?
-        jl_true : jl_false;
+    return jl_method_lookup(args, nargs, world) != NULL ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_invoke)
@@ -1007,8 +1039,6 @@ JL_CALLABLE(jl_f_invoke)
     JL_GC_POP();
     return res;
 }
-
-JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f);
 
 JL_CALLABLE(jl_f_invoke_kwsorter)
 {
@@ -1222,7 +1252,7 @@ JL_CALLABLE(jl_f__primitivetype)
     return dt->name->wrapper;
 }
 
-void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
+static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
         tt->super != NULL ||
@@ -1247,8 +1277,6 @@ JL_CALLABLE(jl_f__setsuper)
     jl_set_datatype_super(dt, args[1]);
     return jl_nothing;
 }
-
-void jl_reinstantiate_inner_types(jl_datatype_t *t);
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {
@@ -1528,6 +1556,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_apply_latest", jl_f__apply_latest);
+    add_builtin_func("_apply_in_world", jl_f__apply_in_world);
     add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("_structtype", jl_f__structtype);
     add_builtin_func("_abstracttype", jl_f__abstracttype);
@@ -1562,6 +1591,10 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Slot", (jl_value_t*)jl_abstractslot_type);
     add_builtin("SlotNumber", (jl_value_t*)jl_slotnumber_type);
     add_builtin("TypedSlot", (jl_value_t*)jl_typedslot_type);
+    add_builtin("Argument", (jl_value_t*)jl_argument_type);
+    add_builtin("Const", (jl_value_t*)jl_const_type);
+    add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);
+    add_builtin("MethodMatch", (jl_value_t*)jl_method_match_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
@@ -1580,6 +1613,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
     add_builtin("LineInfoNode", (jl_value_t*)jl_lineinfonode_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
+    add_builtin("GotoIfNot", (jl_value_t*)jl_gotoifnot_type);
+    add_builtin("ReturnNode", (jl_value_t*)jl_returnnode_type);
     add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
     add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);
     add_builtin("PhiCNode", (jl_value_t*)jl_phicnode_type);

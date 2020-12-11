@@ -28,6 +28,23 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             return expr;
         return jl_module_globalref(module, (jl_sym_t*)expr);
     }
+    else if (jl_is_returnnode(expr)) {
+        jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
+        JL_GC_PUSH1(&val);
+        expr = jl_new_struct(jl_returnnode_type, val);
+        JL_GC_POP();
+        return expr;
+    }
+    else if (jl_is_gotoifnot(expr)) {
+        jl_value_t *cond = resolve_globals(jl_gotoifnot_cond(expr), module, sparam_vals, binding_effects, eager_resolve);
+        intptr_t label = jl_gotoifnot_label(expr);
+        JL_GC_PUSH1(&cond);
+        expr = jl_new_struct_uninit(jl_gotoifnot_type);
+        set_nth_field(jl_gotoifnot_type, expr, 0, cond);
+        jl_gotoifnot_label(expr) = label;
+        JL_GC_POP();
+        return expr;
+    }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         if (e->head == global_sym && binding_effects) {
@@ -245,6 +262,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             else
                 jl_array_del_end(meta, na - ins);
         }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == return_sym) {
+            jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
+        }
     }
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ir, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
@@ -294,6 +314,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->sparam_vals = jl_emptysvec;
     li->uninferred = NULL;
     li->backedges = NULL;
+    li->callbacks = NULL;
     li->cache = NULL;
     li->inInference = 0;
     return li;
@@ -306,7 +327,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
         (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     src->code = NULL;
-    src->codelocs = jl_nothing;
+    src->codelocs = NULL;
     src->ssavaluetypes = NULL;
     src->ssaflags = NULL;
     src->method_for_inference_limit_heuristics = jl_nothing;
@@ -336,24 +357,22 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     return src;
 }
 
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
+void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
 {
     jl_array_t *li = (jl_array_t*)ci->linetable;
     size_t i, n = jl_array_len(li);
-    jl_value_t *rt = NULL;
-    JL_GC_PUSH1(&rt);
+    jl_value_t *rt = NULL, *lno = NULL, *inl = NULL;
+    JL_GC_PUSH3(&rt, &lno, &inl);
     for (i = 0; i < n; i++) {
         jl_value_t *ln = jl_array_ptr_ref(li, i);
-        if (jl_is_linenode(ln)) {
-            rt = jl_box_long(jl_linenode_line(ln));
-            rt = jl_new_struct(jl_lineinfonode_type, name, jl_linenode_file(ln), rt, jl_box_long(0));
-            jl_array_ptr_set(li, i, rt);
-        }
-        else if (jl_is_expr(ln) && ((jl_expr_t*)ln)->head == line_sym && jl_expr_nargs(ln) == 3) {
-            rt = jl_new_struct(jl_lineinfonode_type, jl_symbol("macro expansion"),
-                               jl_exprarg(ln, 1), jl_exprarg(ln, 0), jl_exprarg(ln, 2));
-            jl_array_ptr_set(li, i, rt);
-        }
+        assert(jl_typeis(ln, jl_lineinfonode_type));
+        jl_value_t *mod = jl_fieldref_noalloc(ln, 0);
+        jl_value_t *file = jl_fieldref_noalloc(ln, 2);
+        lno = jl_fieldref(ln, 3);
+        inl = jl_fieldref(ln, 4);
+        jl_value_t *ln_name = (jl_is_long(inl) && jl_unbox_long(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
+        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
+        jl_array_ptr_set(li, i, rt);
     }
     JL_GC_POP();
 }
@@ -441,7 +460,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ptls->world_age = last_age;
-        jl_linenumber_to_lineinfo(func, (jl_value_t*)def->name);
+        jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
     }
     JL_CATCH {
         ptls->in_pure_callback = last_in;
@@ -494,7 +513,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     }
     m->called = called;
     m->pure = src->pure;
-    jl_linenumber_to_lineinfo(src, (jl_value_t*)m->name);
+    jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
@@ -513,7 +532,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 size_t j;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj))
+                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @nospecialize on self is valid but currently ignored
@@ -589,8 +608,6 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->speckeyset = (jl_array_t*)jl_an_empty_vec_any;
     m->sig = NULL;
     m->slot_syms = NULL;
-    m->ambig = jl_nothing;
-    m->resorted = jl_nothing;
     m->roots = NULL;
     m->ccallable = NULL;
     m->module = module;
@@ -613,8 +630,6 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 }
 
 // method definition ----------------------------------------------------------
-
-void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
 // empty generic function def
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
@@ -685,7 +700,6 @@ JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAG
     return first_methtable(argt, 1);
 }
 
-extern tracer_cb jl_newmeth_tracer;
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,

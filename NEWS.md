@@ -1,11 +1,9 @@
-Julia v1.6 Release Notes
+Julia v1.7 Release Notes
 ========================
 
 New language features
 ---------------------
 
-* Types written with `where` syntax can now be used to define constructors, e.g.
-  `(Foo{T} where T)(x) = ...`.
 
 Language changes
 ----------------
@@ -14,9 +12,6 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
-* All platforms can now use `@executable_path` within `jl_load_dynamic_library()`.
-  This allows executable-relative paths to be embedded within executables on all
-  platforms, not just MacOS, which the syntax is borrowed from. ([#35627])
 
 Command-line option changes
 ---------------------------
@@ -33,8 +28,6 @@ Build system changes
 New library functions
 ---------------------
 
-* New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker product in-place. ([#31069]).
-* New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption. ([#34543]).
 
 New library features
 --------------------
@@ -43,16 +36,17 @@ New library features
 Standard library changes
 ------------------------
 
-* The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
-* The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array) arguments `x` and `y` ([#35883]).
-* `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
-* All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
+
+#### Package Manager
+
 
 #### LinearAlgebra
-* New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
-* `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
+
 
 #### Markdown
+
+
+#### Printf
 
 
 #### Random
@@ -60,15 +54,9 @@ Standard library changes
 
 #### REPL
 
-* The `AbstractMenu` extension interface of `REPL.TerminalMenus` has been extensively
-  overhauled. The new interface does not rely on global configuration variables, is more
-  consistent in delegating printing of the navigation/selection markers, and provides
-  improved support for dynamic menus.  These changes are compatible with the previous
-  (deprecated) interface, so are non-breaking.
 
 #### SparseArrays
 
-* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns, and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
 
 #### Dates
 
@@ -83,11 +71,14 @@ Standard library changes
 
 
 #### UUIDs
-* Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
-* Added `parse(::Type{UUID}, ::AbstractString)` method
+
+
+#### Mmap
+
 
 Deprecated or removed
 ---------------------
+
 
 External dependencies
 ---------------------

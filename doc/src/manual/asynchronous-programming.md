@@ -28,7 +28,7 @@ It has a create-start-run-finish lifecycle.
 Tasks are created by calling the `Task` constructor on a 0-argument function to run,
 or using the [`@task`](@ref) macro:
 
-```
+```julia-repl
 julia> t = @task begin; sleep(5); println("done"); end
 Task (runnable) @0x00007f13a40c0eb0
 ```
@@ -38,7 +38,7 @@ Task (runnable) @0x00007f13a40c0eb0
 This task will wait for five seconds, and then print `done`. However, it has not
 started running yet. We can run it whenever we're ready by calling [`schedule`](@ref):
 
-```
+```julia-repl
 julia> schedule(t);
 ```
 
@@ -55,7 +55,7 @@ printed. `t` is then finished.
 The [`wait`](@ref) function blocks the calling task until some other task finishes.
 So for example if you type
 
-```
+```julia-repl
 julia> schedule(t); wait(t)
 ```
 

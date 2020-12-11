@@ -162,7 +162,7 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         N = 10
         p = 0.5
         A = N*I + sprand(N, N, p)
-        X = zeros(Complex{Float64}, N, N)
+        X = zeros(ComplexF64, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lu(A), lu(Array(A))
         @test LinearAlgebra.ldiv!(copy(X), luA, B) ≈ LinearAlgebra.ldiv!(copy(X), lufA, B)

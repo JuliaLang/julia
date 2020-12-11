@@ -297,6 +297,9 @@ end
     @test replace("a", in("a") => typeof) == "Char"
     @test replace("a", ['a'] => typeof) == "Char"
 
+    # Issue 36953
+    @test replace("abc", "" => "_", count=1) == "_abc"
+
 end
 
 @testset "chomp/chop" begin
@@ -382,4 +385,21 @@ let testb() = b"0123"
     @test b isa AbstractVector
     @test_throws ErrorException b[4] = '4'
     @test testb() == UInt8['0','1','2','3']
+end
+
+@testset "Base.rest" begin
+    s = "aβcd"
+    @test Base.rest(s) === SubString(s)
+    a, b, c... = s
+    @test c === SubString(s, 4)
+
+    s = SubString("aβcd", 2)
+    @test Base.rest(s) === SubString(s)
+    b, c... = s
+    @test c === SubString(s, 3)
+
+    s = GenericString("aβcd")
+    @test Base.rest(s) === "aβcd"
+    a, b, c... = s
+    @test c === "cd"
 end

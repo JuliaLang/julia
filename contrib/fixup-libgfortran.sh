@@ -14,7 +14,7 @@ debug() { :; }
 fi
 
 if [ -z "$1" ]; then
-    echo "Usage: $0 <private_libdir>"
+    echo "Usage: $0 [--verbose] <private_libdir>"
     exit 1
 fi
 

@@ -45,7 +45,7 @@ julia> ans
 
 In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting
 text that starts with `julia> ` into the REPL. In that case, only expressions starting with
-`julia> ` are parsed, others are removed. This makes it is possible to paste a chunk of code
+`julia> ` are parsed, others are removed. This makes it possible to paste a chunk of code
 that has been copied from a REPL session without having to scrub away prompts and outputs. This
 feature is enabled by default but can be disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`.
 If it is enabled, you can try it out by pasting the code block above this paragraph straight into
@@ -118,6 +118,21 @@ search: Int32 UInt32
   Int32 <: Signed
 
   32-bit signed integer type.
+```
+
+A string or regex literal searches all docstrings using [`apropos`](@ref):
+
+```
+help?> "aprop"
+REPL.stripmd
+Base.Docs.apropos
+
+help?> r"ap..p"
+Base.:∘
+Base.shell_escape_posixly
+Distributed.CachingPool
+REPL.stripmd
+Base.Docs.apropos
 ```
 
 Help mode can be exited by pressing backspace at the beginning of the line.
@@ -595,6 +610,7 @@ Aside from the overall `charset` option, for `RadioMenu` the configurable option
  - `cursor::Char='>'|'→'`: character to use for cursor
  - `up_arrow::Char='^'|'↑'`: character to use for up arrow
  - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `updown_arrow::Char='I'|'↕'`: character to use for up/down arrow in one-line page
  - `scroll_wrap::Bool=false`: optionally wrap-around at the beginning/end of a menu
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
 

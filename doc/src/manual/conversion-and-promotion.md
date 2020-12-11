@@ -73,12 +73,12 @@ julia> typeof(xf)
 Float64
 
 julia> a = Any[1 2 3; 4 5 6]
-2×3 Array{Any,2}:
+2×3 Matrix{Any}:
  1  2  3
  4  5  6
 
 julia> convert(Array{Float64}, a)
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
 ```
@@ -168,13 +168,12 @@ Such a definition might look like this:
 convert(::Type{MyType}, x) = MyType(x)
 ```
 
-The type of the first argument of this method is a [singleton type](@ref man-singleton-types),
-`Type{MyType}`, the only instance of which is `MyType`. Thus, this method is only invoked
+The type of the first argument of this method is [`Type{MyType}`](@ref man-typet-type),
+the only instance of which is `MyType`. Thus, this method is only invoked
 when the first argument is the type value `MyType`. Notice the syntax used for the first
 argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
 This is the syntax in Julia for a function argument whose type is specified but whose value
-does not need to be referenced by name. In this example, since the type is a singleton, we
-already know its value without referring to an argument name.
+does not need to be referenced by name.
 
 All instances of some abstract types are by default considered "sufficiently similar"
 that a universal `convert` definition is provided in Julia Base.
