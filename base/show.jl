@@ -1450,7 +1450,7 @@ function show_sym(io::IO, sym; allow_macroname=false)
         print(io, sym)
     elseif allow_macroname && (sym_str = string(sym); startswith(sym_str, '@'))
         print(io, '@')
-        show_sym(io, sym_str[2:end])
+        show_sym(io, Symbol(sym_str[2:end]))
     else
         print(io, "var", repr(string(sym)))
     end
