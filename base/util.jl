@@ -306,7 +306,13 @@ if Sys.iswindows()
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
              CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
-        @assert succeeded
+        if !succeeded
+            credbuf = resize!(credbuf, credbufsize[])
+            succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
+                (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
+                 CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
+            @assert succeeded
+        end
 
         # Step 2: Create the actual dialog
         #      2.1: Set up the window
