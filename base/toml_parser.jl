@@ -925,25 +925,22 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
 function parse_datetime(l)
     # Year has already been eaten when we reach here
-    year = parse_int(l, false)
-    isa(year, ParserError) && return ParserError(ErrParsingDateTime)
+    year = @try parse_int(l, false)
     year in 0:9999 || return ParserError(ErrParsingDateTime)
 
     # Month
     accept(l, '-') || return ParserError(ErrParsingDateTime)
     set_marker!(l)
     @try accept_two(l, isdigit)
-    month = parse_int(l, false)
-    isa(month, ParserError) && return ParserError(ErrParsingDateTime)
+    month = @try parse_int(l, false)
     month in 1:12 || return ParserError(ErrParsingDateTime)
     accept(l, '-') || return ParserError(ErrParsingDateTime)
 
     # Day
     set_marker!(l)
     @try accept_two(l, isdigit)
-    day = parse_int(l, false)
+    day = @try parse_int(l, false)
     # Verify the real range in the constructor below
-    isa(day, ParserError) && return ParserError(ErrParsingDateTime)
     day in 1:31 || return ParserError(ErrParsingDateTime)
 
     # We might have a local date now
@@ -1005,8 +1002,7 @@ function try_return_date(p, year, month, day)
 end
 
 function parse_local_time(l::Parser)
-    h = parse_int(l, false)
-    isa(h, ParserError) && return ParserError(ErrParsingDateTime)
+    h = @try parse_int(l, false)
     h in 0:23 || return ParserError(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)
     # TODO: Could potentially parse greater accuracy for the
