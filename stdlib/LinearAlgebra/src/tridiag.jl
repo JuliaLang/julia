@@ -290,7 +290,18 @@ eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
 eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
     eigen!(copy_oftype(A, eigtype(T)), vl, vu)
 
-eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
+function eigvals!(A::SymTridiagonal{<:BlasReal})
+    n = length(A.dv)
+    ne = length(A.ev)
+    if ne == n-1
+        ev = A.ev
+    elseif ne == n
+        ev = view(A.ev, 1:n)
+    else
+        throw(DimensionMismatch("ev has length $ne but should be either $(n - 1) or $n"))
+    end
+    LAPACK.stev!('N', A.dv, ev)[1]
+end
 eigvals(A::SymTridiagonal{T}) where T = eigvals!(copy_oftype(A, eigtype(T)))
 
 eigvals!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
