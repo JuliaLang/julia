@@ -308,10 +308,12 @@ function _groupedunique!(A::AbstractVector)
     idxs = eachindex(A)
     y = first(A)
     # We always keep the first element
-    it = iterate(idxs, iterate(idxs)[2])
+    T = NTuple{2,Any} # just to eliminate `iterate(idxs)::Nothing` candidate
+    it = iterate(idxs, (iterate(idxs)::T)[2])
     count = 1
     for x in Iterators.drop(A, 1)
         if !isequal(x, y)
+            it = it::T
             y = A[it[1]] = x
             count += 1
             it = iterate(idxs, it[2])
