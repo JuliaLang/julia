@@ -7,7 +7,7 @@ pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
 using Pkg
 Pkg.instantiate()
 
-using Documenter, DocumenterLaTeX
+using Documenter
 
 baremodule GenStdLib end
 
@@ -196,7 +196,7 @@ let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
 end
 
 const format = if render_pdf
-    LaTeX(
+    Documenter.LaTeX(
         platform = "texplatform=docker" in ARGS ? "docker" : "native"
     )
 else
