@@ -226,8 +226,8 @@ for (gebal, gebak, elty, relty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($gebal), liblapack), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                  job, n, A, max(1,stride(A,2)), ilo, ihi, scale, info)
+                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}, Clong),
+                  job, n, A, max(1,stride(A,2)), ilo, ihi, scale, info, 1)
             chklapackerror(info[])
             ilo[], ihi[], scale
         end
