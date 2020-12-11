@@ -925,7 +925,8 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
 function parse_datetime(l)
     # Year has already been eaten when we reach here
-    year = parse_int(l, false)::Int64
+    year = parse_int(l, false)
+    isa(year, ParserError) && return ParserError(ErrParsingDateTime)
     year in 0:9999 || return ParserError(ErrParsingDateTime)
 
     # Month
@@ -933,6 +934,7 @@ function parse_datetime(l)
     set_marker!(l)
     @try accept_two(l, isdigit)
     month = parse_int(l, false)
+    isa(month, ParserError) && return ParserError(ErrParsingDateTime)
     month in 1:12 || return ParserError(ErrParsingDateTime)
     accept(l, '-') || return ParserError(ErrParsingDateTime)
 
@@ -941,6 +943,7 @@ function parse_datetime(l)
     @try accept_two(l, isdigit)
     day = parse_int(l, false)
     # Verify the real range in the constructor below
+    isa(day, ParserError) && return ParserError(ErrParsingDateTime)
     day in 1:31 || return ParserError(ErrParsingDateTime)
 
     # We might have a local date now
@@ -976,9 +979,10 @@ function parse_datetime(l)
 end
 
 function try_return_datetime(p, year, month, day, h, m, s, ms)
-    if p.Dates !== nothing
+    Dates = p.Dates
+    if Dates !== nothing
         try
-            return p.Dates.DateTime(year, month, day, h, m, s, ms)
+            return Dates.DateTime(year, month, day, h, m, s, ms)
         catch
             return ParserError(ErrParsingDateTime)
         end
@@ -988,9 +992,10 @@ function try_return_datetime(p, year, month, day, h, m, s, ms)
 end
 
 function try_return_date(p, year, month, day)
-    if p.Dates !== nothing
+    Dates = p.Dates
+    if Dates !== nothing
         try
-            return p.Dates.Date(year, month, day)
+            return Dates.Date(year, month, day)
         catch
             return ParserError(ErrParsingDateTime)
         end
@@ -1001,6 +1006,7 @@ end
 
 function parse_local_time(l::Parser)
     h = parse_int(l, false)
+    isa(h, ParserError) && return ParserError(ErrParsingDateTime)
     h in 0:23 || return ParserError(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)
     # TODO: Could potentially parse greater accuracy for the
@@ -1009,9 +1015,10 @@ function parse_local_time(l::Parser)
 end
 
 function try_return_time(p, h, m, s, ms)
-    if p.Dates !== nothing
+    Dates = p.Dates
+    if Dates !== nothing
         try
-            return p.Dates.Time(h, m, s, ms)
+            return Dates.Time(h, m, s, ms)
         catch
             return ParserError(ErrParsingDateTime)
         end
@@ -1133,7 +1140,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
                     if !accept_n(l, n, isvalid_hex)
                         return ParserError(ErrInvalidUnicodeScalar)
                     end
-                    codepoint = parse_int(l, false, 16)
+                    codepoint = parse_int(l, false, 16)::Int
                     #=
                     Unicode Scalar Value
                     ---------------------
