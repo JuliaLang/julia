@@ -1222,6 +1222,8 @@ end
 
 Insert one or more `items` at the beginning of `collection`.
 
+This function is called `unshift` in many other programming languages.
+
 # Examples
 ```jldoctest
 julia> pushfirst!([1, 2, 3, 4], 5, 6)
@@ -1245,6 +1247,8 @@ end
     popfirst!(collection) -> item
 
 Remove the first `item` from `collection`.
+
+This function is called `shift` in many other programming languages.
 
 # Examples
 ```jldoctest
