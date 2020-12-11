@@ -1150,11 +1150,11 @@ function _mat_mat_scalar(A, B, γ)
 end
 
 mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
-mat_mat_scalar(A::AdjointAbsVec, B::StridedMaybeAdjOrTransMat, γ::RealOrComplex) =
+mat_mat_scalar(A::AdjointAbsVec{<:RealOrComplex}, B::StridedMaybeAdjOrTransMat{<:RealOrComplex}, γ::RealOrComplex) =
     mat_vec_scalar(B', A', γ')'
 
 mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
-mat_mat_scalar(A::TransposeAbsVec, B::StridedMaybeAdjOrTransMat, γ::RealOrComplex) =
+mat_mat_scalar(A::TransposeAbsVec{<:RealOrComplex}, B::StridedMaybeAdjOrTransMat{<:RealOrComplex}, γ::RealOrComplex) =
     transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
 
 
