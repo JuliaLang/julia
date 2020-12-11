@@ -2,9 +2,9 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibUnwind_jll.jl
 
-module LibUnwind_jll
-
-using Libdl
+baremodule LibUnwind_jll
+using Base, Libdl
+Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -30,6 +30,13 @@ function __init__()
     end
 end
 
+# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
+# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
+# there isn't one.  It instead returns the overall Julia prefix.
 is_available() = @static (Sys.islinux() || Sys.isfreebsd()) ? true : false
+find_artifact_dir() = artifact_dir
+dev_jll() = error("stdlib JLLs cannot be dev'ed")
+best_wrapper = nothing
+get_libunwind_path() = libunwind_path
 
 end  # module LibUnwind_jll
