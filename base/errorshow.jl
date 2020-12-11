@@ -499,7 +499,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 print(iob, ")")
                 show_method_params(iob0, tv)
                 file, line = updated_methodloc(method)
-                print(iob, " at ", file, ":", line)          
+                print(iob, " at ", file, ":", line)
                 if !isempty(kwargs)::Bool
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
