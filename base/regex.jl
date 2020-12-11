@@ -397,8 +397,28 @@ function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; ov
 end
 
 """
+    findall(c::AbstractChar, s::AbstractString)
+
+Return a vector `I` of the indices of `s` where `s[i] == c`. If there are no such
+elements in `s`, return an empty array.
+
+# Examples
+```jldoctest
+julia> findall('a', "batman")
+2-element Vector{Int64}:
+ 2
+ 5
+```
+
+!!! compat "Julia 1.7"
+     This method requires at least Julia 1.7.
+"""
+findall(c::AbstractChar, s::AbstractString) = findall(isequal(c),s)
+
+
+"""
     count(
-        pattern::Union{AbstractString,AbstractPattern},
+        pattern::Union{AbstractChar,AbstractString,AbstractPattern},
         string::AbstractString;
         overlap::Bool = false,
     )
@@ -411,8 +431,11 @@ original string, otherwise they must be from disjoint character ranges.
 
 !!! compat "Julia 1.3"
      This method requires at least Julia 1.3.
+
+!!! compat "Julia 1.7"
+      Using a character as the pattern requires at least Julia 1.7.
 """
-function count(t::Union{AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
+function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
     i, e = firstindex(s), lastindex(s)
     while true
