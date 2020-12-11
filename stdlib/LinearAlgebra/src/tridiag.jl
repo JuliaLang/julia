@@ -295,10 +295,8 @@ function eigvals!(A::SymTridiagonal{<:BlasReal})
     ne = length(A.ev)
     if ne == n-1
         ev = A.ev
-    elseif ne == n
-        ev = view(A.ev, 1:n)
     else
-        throw(DimensionMismatch("ev has length $ne but should be either $(n - 1) or $n"))
+        ev = view(A.ev, 1:n-1)
     end
     LAPACK.stev!('N', A.dv, ev)[1]
 end
