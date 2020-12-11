@@ -606,6 +606,7 @@ JL_DLLEXPORT int jl_dllist(jl_array_t *list)
             continue;
         jl_array_grow_end((jl_array_t*)list, 1);
         jl_value_t *v = jl_cstr_to_string(path);
+        free(path);
         jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
     }
     free(hMods);
