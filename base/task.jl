@@ -49,7 +49,7 @@ function showerror(io::IO, ex::CompositeException)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
-            print(io, string("\n\n...and ", remaining, " more exception(s).\n"))
+            print(io, "\n\n...and ", remaining, " more exception", remaining > 1 ? "s" : "", ".\n")
         end
     else
         print(io, "CompositeException()\n")
@@ -66,21 +66,25 @@ struct TaskFailedException <: Exception
     task::Task
 end
 
-function showerror(io::IO, ex::TaskFailedException)
-    println(io, "TaskFailedException:")
+function showerror(io::IO, ex::TaskFailedException, bt = nothing; backtrace=true)
+    print(io, "TaskFailedException")
+    if bt !== nothing && backtrace
+        show_backtrace(io, bt)
+    end
+    println(io)
+    printstyled(io, "\n    nested task error: ", color=error_color())
     show_task_exception(io, ex.task)
 end
 
-function show_task_exception(io::IO, t::Task)
-    stacks = []
-    while isa(t.exception, TaskFailedException)
-        pushfirst!(stacks, t.backtrace)
-        t = t.exception.task
+function show_task_exception(io::IO, t::Task; indent = true)
+    stack = catch_stack(t)
+    b = IOBuffer()
+    show_exception_stack(IOContext(b, io), stack)
+    str = String(take!(b))
+    if indent
+        str = replace(str, "\n" => "\n    ")
     end
-    showerror(io, t.exception, t.backtrace)
-    for bt in stacks
-        show_backtrace(io, bt)
-    end
+    print(io, str)
 end
 
 function show(io::IO, t::Task)
@@ -127,10 +131,21 @@ const task_state_runnable = UInt8(0)
 const task_state_done     = UInt8(1)
 const task_state_failed   = UInt8(2)
 
+const _state_index = findfirst(==(:_state), fieldnames(Task))
+@eval function load_state_acquire(t)
+    # TODO: Replace this by proper atomic operations when available
+    @GC.preserve t llvmcall($("""
+        %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i8*
+        %rv = load atomic i8, i8* %ptr acquire, align 8
+        ret i8 %rv
+        """), UInt8, Tuple{Ptr{UInt8}},
+        Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
+end
+
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
         # TODO: this field name should be deprecated in 2.0
-        st = getfield(t, :_state)
+        st = load_state_acquire(t)
         if st === task_state_runnable
             return :runnable
         elseif st === task_state_done
@@ -140,6 +155,12 @@ const task_state_failed   = UInt8(2)
         else
             @assert false
         end
+    elseif field === :backtrace
+        # TODO: this field name should be deprecated in 2.0
+        return catch_stack(t)[end][2]
+    elseif field === :exception
+        # TODO: this field name should be deprecated in 2.0
+        return t._isexception ? t.result : nothing
     else
         return getfield(t, field)
     end
@@ -167,7 +188,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = t._state !== task_state_runnable
+istaskdone(t::Task) = load_state_acquire(t) !== task_state_runnable
 
 """
     istaskstarted(t::Task) -> Bool
@@ -207,8 +228,11 @@ julia> yield();
 julia> istaskfailed(b)
 true
 ```
+
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = (t._state === task_state_failed)
+istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 
@@ -371,7 +395,7 @@ Wrap an expression in a [`Task`](@ref) and add it to the local machine's schedul
 
 Values can be interpolated into `@async` via `\$`, which copies the value directly into the
 constructed underlying closure. This allows you to insert the _value_ of a variable,
-isolating the aysnchronous code from changes to the variable's value in the current task.
+isolating the asynchronous code from changes to the variable's value in the current task.
 
 !!! compat "Julia 1.4"
     Interpolating values via `\$` is available as of Julia 1.4.
@@ -438,9 +462,6 @@ function task_done_hook(t::Task)
     err = istaskfailed(t)
     result = task_result(t)
     handled = false
-    if err
-        t.backtrace = catch_backtrace()
-    end
 
     donenotify = t.donenotify
     if isa(donenotify, ThreadSynchronizer)
@@ -612,7 +633,8 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
         t.queue === nothing || Base.list_deletefirst!(t.queue, t)
-        setfield!(t, :exception, arg)
+        setfield!(t, :result, arg)
+        setfield!(t, :_isexception, true)
     else
         t.queue === nothing || Base.error("schedule: Task not runnable")
         setfield!(t, :result, arg)
@@ -676,9 +698,10 @@ function try_yieldto(undo)
         rethrow()
     end
     ct = current_task()
-    exc = ct.exception
-    if exc !== nothing
-        ct.exception = nothing
+    if ct._isexception
+        exc = ct.result
+        ct.result = nothing
+        ct._isexception = false
         throw(exc)
     end
     result = ct.result
@@ -688,8 +711,10 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
-    t.exception = exc
-    return yieldto(t)
+    t.result = exc
+    t._isexception = true
+    set_next_task(t)
+    return try_yieldto(identity)
 end
 
 function ensure_rescheduled(othertask::Task)

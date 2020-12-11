@@ -269,7 +269,7 @@ function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
                     push!(stmts, i)
                 end
             elseif s.head === :return
-            elseif is_throw_call(s) || s.head === :unreachable
+            elseif is_throw_call(s)
                 if try_depth == 0
                     push!(stmts, i)
                 end
@@ -277,9 +277,9 @@ function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
                 push!(stmts, i)
             end
         elseif isa(s, ReturnNode)
-            if try_depth == 0 && !isdefined(s, :val)
-                push!(stmts, i)
-            end
+            # NOTE: it potentially makes sense to treat unreachable nodes
+            # (where !isdefined(s, :val)) as `throw` points, but that can cause
+            # worse codegen around the call site (issue #37558)
         elseif isa(s, GotoNode)
             tgt = s.label
             if isassigned(ir)

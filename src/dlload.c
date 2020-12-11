@@ -31,7 +31,7 @@ static char const *const extensions[] = { "", ".so" };
 #endif
 #define N_EXTENSIONS (sizeof(extensions) / sizeof(char*))
 
-static int endswith_extension(const char *path)
+static int endswith_extension(const char *path) JL_NOTSAFEPOINT
 {
     if (!path)
         return 0;
@@ -62,7 +62,7 @@ static int endswith_extension(const char *path)
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
 #ifdef _OS_WINDOWS_
-static void win32_formatmessage(DWORD code, char *reason, int len)
+static void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
 {
     DWORD res;
     LPWSTR errmsg;
@@ -89,7 +89,7 @@ static void win32_formatmessage(DWORD code, char *reason, int len)
 }
 #endif
 
-JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
+JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT
 {
 #if defined(_OS_WINDOWS_)
     size_t len = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
@@ -122,7 +122,7 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
 #endif
 }
 
-JL_DLLEXPORT int jl_dlclose(void *handle)
+JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     if (!handle) return -1;
@@ -134,7 +134,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle)
 #endif
 }
 
-JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err) JL_NOTSAFEPOINT // (or throw)
 {
     char path[PATHBUF], relocated[PATHBUF];
     int i;
@@ -156,12 +156,21 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                 (LPCWSTR)(uintptr_t)(&jl_load_dynamic_library),
                                 (HMODULE*)&handle)) {
+#ifndef __clang_analyzer__
+            // Hide the error throwing from the analyser since there isn't a way to express
+            // "safepoint only when throwing error" currently.
             jl_error("could not load base module");
+#endif
         }
 #else
         Dl_info info;
-        if (!dladdr((void*)(uintptr_t)&jl_load_dynamic_library, &info) || !info.dli_fname)
+        if (!dladdr((void*)(uintptr_t)&jl_load_dynamic_library, &info) || !info.dli_fname) {
+#ifndef __clang_analyzer__
+            // Hide the error throwing from the analyser since there isn't a way to express
+            // "safepoint only when throwing error" currently.
             jl_error("could not load base module");
+#endif
+        }
         handle = dlopen(info.dli_fname, RTLD_NOW);
 #endif
         goto done;
@@ -178,7 +187,8 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
       such as Windows, so we emulate them here.
     */
     if (!abspath && jl_base_module != NULL) {
-        jl_array_t *DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
+        jl_binding_t *b = jl_get_module_binding(jl_base_module, jl_symbol("DL_LOAD_PATH"));
+        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? b->value : NULL);
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
@@ -242,7 +252,11 @@ notfound:
 #else
         const char *reason = dlerror();
 #endif
+#ifndef __clang_analyzer__
+        // Hide the error throwing from the analyser since there isn't a way to express
+        // "safepoint only when throwing error" currently.
         jl_errorf("could not load library \"%s\"\n%s", modname, reason);
+#endif
     }
     handle = NULL;
 
@@ -250,7 +264,7 @@ done:
     return handle;
 }
 
-JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int throw_err)
+JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT
 {
     int symbol_found = 0;
 
@@ -278,7 +292,11 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
         char err[256];
         win32_formatmessage(GetLastError(), err, sizeof(err));
 #endif
+#ifndef __clang_analyzer__
+        // Hide the error throwing from the analyser since there isn't a way to express
+        // "safepoint only when throwing error" currently.
         jl_errorf("could not load symbol \"%s\":\n%s", symbol, err);
+#endif
     }
     return symbol_found;
 }

@@ -1325,6 +1325,29 @@ for i in 1:3
     ccall((:test_echo_p, libccalltest), Ptr{Cvoid}, (Any,), f17413())
 end
 
+let r = Ref{Any}(10)
+    @GC.preserve r begin
+        pa = Base.unsafe_convert(Ptr{Any}, r) # pointer to value
+        pv = Base.unsafe_convert(Ptr{Cvoid}, r) # pointer to data
+        @test Ptr{Cvoid}(pa) != pv
+        @test unsafe_load(pa) === 10
+        @test unsafe_load(Ptr{Ptr{Cvoid}}(pa)) === pv
+        @test unsafe_load(Ptr{Int}(pv)) === 10
+    end
+end
+
+let r = Ref{Any}("123456789")
+    @GC.preserve r begin
+        pa = Base.unsafe_convert(Ptr{Any}, r) # pointer to value
+        pv = Base.unsafe_convert(Ptr{Cvoid}, r) # pointer to data
+        @test Ptr{Cvoid}(pa) != pv
+        @test unsafe_load(pa) === r[]
+        @test unsafe_load(Ptr{Ptr{Cvoid}}(pa)) === pv
+        @test unsafe_load(Ptr{Int}(pv)) === length(r[])
+    end
+end
+
+
 struct SpillPint
     a::Ptr{Cint}
     b::Ptr{Cint}
@@ -1554,15 +1577,15 @@ let
 end
 
 # issue #34061
-o_file = tempname()
-output = read(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
-    f() = ccall((:dne, :does_not_exist), Cvoid, ());
-    f()'`; ignorestatus=true), String)
-@test occursin(output, """
-ERROR: could not load library "does_not_exist"
-does_not_exist.so: cannot open shared object file: No such file or directory
-""")
-@test !isfile(o_file)
+let o_file = tempname(), err = Base.PipeEndpoint()
+    run(pipeline(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
+        f() = ccall((:dne, :does_not_exist), Cvoid, ());
+        f()'`; ignorestatus=true), stderr=err), wait=false)
+    output = read(err, String)
+    @test occursin("""ERROR: could not load library "does_not_exist"
+    """, output)
+    @test !isfile(o_file)
+end
 
 # pass NTuple{N,T} as Ptr{T}/Ref{T}
 let
@@ -1605,12 +1628,12 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        arg1root = Base.cconvert($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
-        arg1 = Base.unsafe_convert($(Expr(:escape, :Cstring)), arg1root)
-        arg2root = Base.cconvert($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
-        arg2 = Base.unsafe_convert($(Expr(:escape, :Cint)), arg2root)
-        arg3root = Base.cconvert($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
-        arg3 = Base.unsafe_convert($(Expr(:escape, :Cint)), arg3root)
+        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
+        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
+        local arg2root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
+        local arg2 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg2root)
+        local arg3root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
+        local arg3 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg3root)
         $(Expr(:foreigncall,
                :($(Expr(:escape, :((:func, libstring))))),
                :($(Expr(:escape, :Cstring))),
@@ -1631,8 +1654,8 @@ end
                 throw(ArgumentError("interpolated function `$(name)` was not a Ptr{Cvoid}, but $(typeof(func))"))
             end
         end
-        arg1root = Base.cconvert($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
-        arg1 = Base.unsafe_convert($(Expr(:escape, :Cstring)), arg1root)
+        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
+        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
         $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
     end)
 
@@ -1687,17 +1710,25 @@ end
     @test str == "hi+1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-1.1-2.2-3.3-4.4-5.5-6.6-7.7-8.8-9.9\n"
 end
 
+
 @testset "Cwstring" begin
-    n = 100
-    buffer = Array{Cwchar_t}(undef, n)
-    if Sys.iswindows()
-        # sprintf throws an error on Windows, see https://github.com/JuliaLang/julia/pull/36040#issuecomment-634774055
-        len = @ccall swprintf_s(buffer::Ptr{Cwchar_t}, n::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
-    else
-        len = @ccall swprintf(buffer::Ptr{Cwchar_t}, n::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
-    end
+    buffer = Array{Cwchar_t}(undef, 100)
+    len = @static if Sys.iswindows()
+            @ccall swprintf_s(buffer::Ptr{Cwchar_t}, length(buffer)::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
+        else
+            @ccall swprintf(buffer::Ptr{Cwchar_t}, length(buffer)::Csize_t, "α+%ls=%hhd"::Cwstring; "β"::Cwstring, 0xf::UInt8)::Cint
+        end
+    Libc.systemerror("swprintf", len < 0)
     str = GC.@preserve buffer unsafe_string(pointer(buffer), len)
     @test str == "α+β=15"
     str = GC.@preserve buffer unsafe_string(Cwstring(pointer(buffer)))
     @test str == "α+β=15"
 end
+
+# issue #36458
+compute_lib_name() = "libcc" * "alltest"
+ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,), x % UInt8)
+@test ccall_lazy_lib_name(0) == 0
+@test ccall_lazy_lib_name(3) == 1
+ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid},), C_NULL)
+@test_throws UndefVarError(:xx_nOt_DeFiNeD_xx) ccall_with_undefined_lib()

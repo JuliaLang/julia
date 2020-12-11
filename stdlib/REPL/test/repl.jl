@@ -139,6 +139,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", tmpdir)
+            write(stdin_write, "\b")
 
             # Test using `cd` to move to the home directory
             write(stdin_write, ";")
@@ -148,6 +149,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", homedir_pwd)
+            write(stdin_write, "\b")
 
             # Test using `-` to jump backward to tmpdir
             write(stdin_write, ";")
@@ -157,6 +159,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", tmpdir)
+            write(stdin_write, "\b")
 
             # Test using `~` (Base.expanduser) in `cd` commands
             if !Sys.iswindows()
@@ -167,6 +170,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
                 readuntil(stdout_read, "\n")
                 readuntil(stdout_read, "\n")
                 @test samefile(".", homedir_pwd)
+                write(stdin_write, "\b")
             end
         finally
             cd(origpwd)
@@ -196,6 +200,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         s = readuntil(stdout_read, "\n\n")
         @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
               startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] ")
+        write(stdin_write, "\b")
     end
 
     # issue #27293
@@ -219,6 +224,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             close(proc_stdout)
             # check for the correct, expanded response
             @test occursin(expanduser("~"), fetch(get_stdout))
+            write(stdin_write, "\b")
         end
     end
 
@@ -270,6 +276,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         end
         close(proc_stdout)
         @test fetch(get_stdout) == "HI\n"
+        write(stdin_write, "\b")
     end
 
     # Issue #7001
@@ -445,8 +452,12 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
                                                        :help  => help_mode))
-
-        REPL.hist_from_file(hp, IOBuffer(fakehistory), "fakehistorypath")
+        hist_path = tempname()
+        write(hist_path, fakehistory)
+        REPL.hist_from_file(hp, hist_path)
+        f = open(hist_path, read=true, write=true, create=true)
+        hp.history_file = f
+        seekend(f)
         REPL.history_reset_state(hp)
 
         histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
@@ -790,7 +801,7 @@ let exename = Base.julia_cmd()
 
         output = readuntil(ptm, ' ', keep=true)
         if Sys.iswindows()
-	    # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
+        # Our fake pty is actually a pipe, and thus lacks the input echo feature of posix
             @test output == "1\n\njulia> "
         else
             @test output == "1\r\nexit()\r\n1\r\n\r\njulia> "
@@ -1052,7 +1063,7 @@ for (line, expr) in Pair[
 end
 
 # PR 30754, Issues #22013, #24871, #26933, #29282, #29361, #30348
-for line in ["′", "abstract", "type"]
+for line in ["′", "type"]
     @test occursin("No documentation found.",
         sprint(show, help_result(line)::Union{Markdown.MD,Nothing}))
 end
@@ -1215,12 +1226,12 @@ end
     @async REPL.start_repl_backend(backend)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == (2, false)
+    @test reply == Pair{Any, Bool}(2, false)
     twice(ex) = Expr(:tuple, ex, ex)
     push!(backend.ast_transforms, twice)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == ((2, 2), false)
+    @test reply == Pair{Any, Bool}((2, 2), false)
     put!(backend.repl_channel, (nothing, -1))
     Base.wait(backend.backend_task)
 end
@@ -1232,12 +1243,12 @@ frontend_task = @async begin
         @testset "AST Transformations Async" begin
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == (2, false)
+            @test reply == Pair{Any, Bool}(2, false)
             twice(ex) = Expr(:tuple, ex, ex)
             push!(backend.ast_transforms, twice)
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == ((2, 2), false)
+            @test reply == Pair{Any, Bool}((2, 2), false)
         end
     catch e
         Base.rethrow(e)
@@ -1250,42 +1261,4 @@ Base.wait(frontend_task)
 
 macro throw_with_linenumbernode(err)
     Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
-end
-
-@testset "last shown line infos" begin
-    out_stream = IOBuffer()
-    term = REPL.TTYTerminal("dumb", IOBuffer(), out_stream, IOBuffer())
-    repl = REPL.LineEditREPL(term, false)
-    repl.specialdisplay = REPL.REPLDisplay(repl)
-
-    REPL.print_response(repl, (methods(+), false), true, false)
-    seekstart(out_stream)
-    @test count(
-        contains(
-            "To edit a specific method, type the corresponding number into the REPL and " *
-            "press Ctrl+Q"
-        ),
-        eachline(out_stream),
-    ) == 1
-    take!(out_stream)
-
-    err = ErrorException("Foo")
-    bt = try
-        @throw_with_linenumbernode(err)()
-    catch
-        Base.catch_stack()
-    end
-
-    repl.backendref = REPL.REPLBackendRef(Channel(1), Channel(1))
-    put!(repl.backendref.response_channel, (bt, true))
-
-    REPL.print_response(repl, (bt, true), true, false)
-    seekstart(out_stream)
-    @test count(
-        contains(
-            "To edit a specific method, type the corresponding number into the REPL and " *
-            "press Ctrl+Q"
-        ),
-        eachline(out_stream),
-    ) == 1
 end

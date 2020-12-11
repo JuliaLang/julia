@@ -271,9 +271,9 @@ julia> a = [1. 2.; 3. 4.]
  3.0  4.0
 
 julia> qr!(a)
-LinearAlgebra.QRCompactWY{Float64,Matrix{Float64}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64,Matrix{Float64}}:
+2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.316228  -0.948683
  -0.948683   0.316228
 R factor:
@@ -355,9 +355,9 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
  0.0   1.0
 
 julia> F = qr(A)
-LinearAlgebra.QRCompactWY{Float64,Matrix{Float64}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64,Matrix{Float64}}:
+3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.6   0.0   0.8
  -0.8   0.0  -0.6
   0.0  -1.0   0.0
@@ -751,7 +751,19 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ### mul!
-mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T} = lmul!(Q, copyto!(C, B))
+function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T}
+    require_one_based_indexing(C, B)
+    mB = size(B, 1)
+    mC = size(C, 1)
+    if mB < mC
+        inds = CartesianIndices(B)
+        copyto!(C, inds, B, inds)
+        C[CartesianIndices((mB+1:mC, axes(C, 2)))] .= zero(T)
+        return lmul!(Q, C)
+    else
+        return lmul!(Q, copyto!(C, B))
+    end
+end
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, Q::AbstractQ{T}) where {T} = rmul!(copyto!(C, A), Q)
 mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::StridedVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T} = rmul!(copyto!(C, A), adjQ)

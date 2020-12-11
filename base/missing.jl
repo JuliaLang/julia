@@ -36,7 +36,7 @@ Any
 !!! compat "Julia 1.3"
     This function is exported as of Julia 1.3.
 """
-nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
+nonmissingtype(::Type{T}) where {T} = typesplit(T, Missing)
 
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
@@ -91,7 +91,8 @@ isapprox(::Missing, ::Any; kwargs...) = missing
 isapprox(::Any, ::Missing; kwargs...) = missing
 
 # Unary operators/functions
-for f in (:(!), :(~), :(+), :(-), :(zero), :(one), :(oneunit),
+for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
+          :(zero), :(one), :(oneunit),
           :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan),
           :(iszero), :(transpose), :(adjoint), :(float), :(conj),

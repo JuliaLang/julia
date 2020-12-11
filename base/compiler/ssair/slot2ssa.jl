@@ -57,21 +57,19 @@ function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     result
 end
 
-function renumber_ssa(stmt::SSAValue, ssanums::Vector{Any}, new_ssa::Bool=false, used_ssa::Union{Nothing, Vector{Int}}=nothing)
+function renumber_ssa(stmt::SSAValue, ssanums::Vector{SSAValue}, new_ssa::Bool=false)
     id = stmt.id
     if id > length(ssanums)
         return stmt
     end
     val = ssanums[id]
-    if isa(val, SSAValue) && used_ssa !== nothing
-        used_ssa[val.id] += 1
-    end
+    @assert val.id > 0
     return val
 end
 
-function renumber_ssa!(@nospecialize(stmt), ssanums::Vector{Any}, new_ssa::Bool=false, used_ssa::Union{Nothing, Vector{Int}}=nothing)
-    isa(stmt, SSAValue) && return renumber_ssa(stmt, ssanums, new_ssa, used_ssa)
-    return ssamap(val->renumber_ssa(val, ssanums, new_ssa, used_ssa), stmt)
+function renumber_ssa!(@nospecialize(stmt), ssanums::Vector{SSAValue}, new_ssa::Bool=false)
+    isa(stmt, SSAValue) && return renumber_ssa(stmt, ssanums, new_ssa)
+    return ssamap(val->renumber_ssa(val, ssanums, new_ssa), stmt)
 end
 
 function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ))
@@ -129,7 +127,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
             val = stmt.values[i]
             isa(val, Union{SlotNumber, TypedSlot}) || continue
             cond(val) || continue
-            bb_idx = block_for_inst(ir.cfg, stmt.edges[i])
+            bb_idx = block_for_inst(ir.cfg, Int(stmt.edges[i]))
             from_bb_terminator = last(ir.cfg.blocks[bb_idx].stmts)
             stmt.values[i] = fixup_slot!(ir, ci, from_bb_terminator, slot_id(val), val, rename(val))
         end
@@ -353,8 +351,9 @@ end
 
 function rename_phinode_edges(node, bb, result_order, bb_rename)
     new_values = Any[]
-    new_edges = Any[]
+    new_edges = Int32[]
     for (idx, edge) in pairs(node.edges)
+        edge = Int(edge)
         (edge == 0 || haskey(bb_rename, edge)) || continue
         new_edge_from = edge == 0 ? 0 : rename_incoming_edge(edge, bb, result_order, bb_rename)
         push!(new_edges, new_edge_from)
@@ -427,8 +426,11 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
     end
     result = InstructionStream(nstmts + ncritbreaks + nnewfallthroughs)
-    inst_rename = Vector{Any}(undef, length(ir.stmts) + length(ir.new_nodes))
-    for i = 1:length(ir.new_nodes)
+    inst_rename = Vector{SSAValue}(undef, length(ir.stmts) + length(ir.new_nodes))
+    @inbounds for i = 1:length(ir.stmts)
+        inst_rename[i] = SSAValue(-1)
+    end
+    @inbounds for i = 1:length(ir.new_nodes)
         inst_rename[i + length(ir.stmts)] = SSAValue(i + length(result))
     end
     bb_start_off = 0
@@ -683,10 +685,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             end
             isa(stmt, PhiNode) || continue
             for (edgeidx, edge) in pairs(stmt.edges)
-                from_bb = edge == 0 ? 0 : block_for_inst(cfg, edge)
+                from_bb = edge == 0 ? 0 : block_for_inst(cfg, Int(edge))
                 from_bb == pred || continue
                 isassigned(stmt.values, edgeidx) || break
-                stmt.values[edgeidx] = rename_uses!(ir, ci, edge, stmt.values[edgeidx], incoming_vals)
+                stmt.values[edgeidx] = rename_uses!(ir, ci, Int(edge), stmt.values[edgeidx], incoming_vals)
                 break
             end
         end
@@ -801,7 +803,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
     # Convert into IRCode form
     nstmts = length(ir.stmts)
     new_code = Vector{Any}(undef, nstmts)
-    ssavalmap = Any[SSAValue(-1) for _ in 0:length(ci.ssavaluetypes)]
+    ssavalmap = fill(SSAValue(-1), length(ci.ssavaluetypes) + 1)
     result_types = Any[Any for _ in 1:nstmts]
     # Detect statement positions for assignments and construct array
     for (bb, idx) in bbidxiter(ir)
@@ -827,7 +829,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             ssavalmap[idx] = SSAValue(idx)
             result_types[idx] = ci.ssavaluetypes[idx]
             if isa(stmt, PhiNode)
-                edges = Any[edge == 0 ? 0 : block_for_inst(cfg, edge) for edge in stmt.edges]
+                edges = Int32[edge == 0 ? 0 : block_for_inst(cfg, Int(edge)) for edge in stmt.edges]
                 new_code[idx] = PhiNode(edges, stmt.values)
             else
                 new_code[idx] = stmt

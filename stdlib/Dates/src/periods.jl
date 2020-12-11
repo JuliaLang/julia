@@ -54,6 +54,7 @@ Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)
 Base.one(::Union{Type{P},P}) where {P<:Period} = 1  # see #16116
 Base.typemin(::Type{P}) where {P<:Period} = P(typemin(Int64))
 Base.typemax(::Type{P}) where {P<:Period} = P(typemax(Int64))
+Base.isfinite(::Union{Type{P}, P}) where {P<:Period} = true
 
 # Default values (as used by TimeTypes)
 """
@@ -249,6 +250,7 @@ julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Minute(50000)))
 4 weeks, 6 days, 17 hours, 20 minutes
 ```
 """
+canonicalize(x::Period) = canonicalize(CompoundPeriod(x))
 function canonicalize(x::CompoundPeriod)
     # canonicalize Periods by pushing "overflow" into a coarser period.
     p = x.periods
@@ -456,23 +458,35 @@ Base.convert(::Type{Quarter}, x::Month) = Quarter(divexact(value(x), 3))
 Base.promote_rule(::Type{Quarter}, ::Type{Month}) = Month
 
 
-# fixed is not comparable to other periods, as per discussion in issue #21378
-(==)(x::FixedPeriod, y::OtherPeriod) = false
-(==)(x::OtherPeriod, y::FixedPeriod) = false
+# fixed is not comparable to other periods, except when both are zero (#37459)
+(==)(x::FixedPeriod, y::OtherPeriod) = iszero(x) & iszero(y)
+(==)(x::OtherPeriod, y::FixedPeriod) = y == x
 
-const fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
-const otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
+const zero_or_fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
+const nonzero_otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
+otherperiod_seed(x::OtherPeriod) = iszero(value(x)) ? zero_or_fixedperiod_seed : nonzero_otherperiod_seed
 # tons() will overflow for periods longer than ~300,000 years, implying a hash collision
 # which is relatively harmless given how infrequent such periods should appear
-Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + fixedperiod_seed)
+Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + zero_or_fixedperiod_seed)
 # Overflow can also happen here for really long periods (~8e17 years)
-Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed)
-Base.hash(x::Quarter, h::UInt) = hash(3 * value(x), h + otherperiod_seed)
-Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed)
+Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed(x))
+Base.hash(x::Quarter, h::UInt) = hash(3 * value(x), h + otherperiod_seed(x))
+Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed(x))
+
+function Base.hash(x::CompoundPeriod, h::UInt)
+    isempty(x.periods) && return hash(0, h + zero_or_fixedperiod_seed)
+    for p in x.periods
+        h = hash(p, h)
+    end
+    return h
+end
 
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
 Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
 
+Base.isless(x::Period, y::CompoundPeriod) = CompoundPeriod(x) < y
+Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
+Base.isless(x::CompoundPeriod, y::CompoundPeriod) = tons(x) < tons(y)
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
 toms(c::Nanosecond)  = div(value(c), 1000000)

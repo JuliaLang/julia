@@ -42,7 +42,7 @@ julia> collect(x)
  2
 
 julia> collect(pairs(x))
-2-element Vector{Pair{Symbol,Int64}}:
+2-element Vector{Pair{Symbol, Int64}}:
  :a => 1
  :b => 2
 ```
@@ -104,10 +104,14 @@ end
 NamedTuple{names, T}(itr) where {names, T <: Tuple} = NamedTuple{names, T}(T(itr))
 NamedTuple{names}(itr) where {names} = NamedTuple{names}(Tuple(itr))
 
+NamedTuple(itr) = (; itr...)
+
 end # if Base
 
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
+rest(t::NamedTuple) = t
+@inline rest(t::NamedTuple{names}, i::Int) where {names} = NamedTuple{rest(names,i)}(t)
 firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
@@ -116,6 +120,9 @@ indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
 empty(::NamedTuple) = NamedTuple()
+
+prevind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)-1
+nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
 convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
@@ -251,6 +258,8 @@ merge(a::NamedTuple{()}, b::NamedTuple)     = b
 
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
 
+merge(a::NamedTuple, b::Iterators.Zip{<:Tuple{Any,Any}}) = merge(a, NamedTuple{Tuple(b.is[1])}(b.is[2]))
+
 merge(a::NamedTuple, b::NamedTuple, cs::NamedTuple...) = merge(merge(a, b), cs...)
 
 merge(a::NamedTuple) = a
@@ -362,13 +371,13 @@ can also be declared via `@NamedTuple` as:
 
 ```jldoctest
 julia> @NamedTuple{a::Float64, b::String}
-NamedTuple{(:a, :b),Tuple{Float64,String}}
+NamedTuple{(:a, :b), Tuple{Float64, String}}
 
 julia> @NamedTuple begin
            a::Float64
            b::String
        end
-NamedTuple{(:a, :b),Tuple{Float64,String}}
+NamedTuple{(:a, :b), Tuple{Float64, String}}
 ```
 
 !!! compat "Julia 1.5"

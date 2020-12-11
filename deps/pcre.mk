@@ -12,8 +12,16 @@ $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).ta
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
 	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/pcre2-$(PCRE_VER)/config.sub
-	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/configure # old target
+	cd $(SRCCACHE)/pcre2-$(PCRE_VER) && patch -p1 -f < $(SRCDIR)/patches/pcre2-cet-flags.patch
+	# Fix some old targets modified by the patching
+	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/Makefile.am
+	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/Makefile.in
+	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/aclocal.m4
+	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/configure
 	echo $1 > $@
+
+checksum-pcre2: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
+	$(JLCHECKSUM) $<
 
 $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
 	mkdir -p $(dir $@)
@@ -55,8 +63,6 @@ fastcheck-pcre: check-pcre
 check-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-checked
 
 else # USE_BINARYBUILDER_PCRE
-PCRE_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/PCRE2-v$(PCRE_VER)-$(PCRE_BB_REL)
-PCRE_BB_NAME := PCRE2.v$(PCRE_VER).0
 
 $(eval $(call bb-install,pcre,PCRE,false))
 

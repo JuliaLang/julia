@@ -364,6 +364,8 @@ end
 
 unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
 
+_crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
+    unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
 _crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
     unsafe_crc32c(a, length(a) % Csize_t, crc)
 
@@ -385,6 +387,8 @@ _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+_crc32c(x::UInt64, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt64}, Csize_t), crc, x, 8)
 
 """
     @kwdef typedef
@@ -505,6 +509,32 @@ function _kwdef!(blk, params_args, call_args)
     blk
 end
 
+"""
+    @invokelatest f(args...; kwargs...)
+
+Provides a convenient way to call [`Base.invokelatest`](@ref).
+`@invokelatest f(args...; kwargs...)` will simply be expanded into
+`Base.invokelatest(f, args...; kwargs...)`.
+"""
+macro invokelatest(ex)
+    is_expr(ex, :call) || throw(ArgumentError("a call expression f(args...; kwargs...) should be given"))
+
+    f = first(ex.args)
+    args = []
+    kwargs = []
+    for x in ex.args[2:end]
+        if is_expr(x, :parameters)
+            append!(kwargs, x.args)
+        elseif is_expr(x, :kw)
+            push!(kwargs, x)
+        else
+            push!(args, x)
+        end
+    end
+
+    esc(:($(GlobalRef(Base, :invokelatest))($(f), $(args...); $(kwargs...))))
+end
+
 # testing
 
 """
@@ -520,7 +550,7 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)

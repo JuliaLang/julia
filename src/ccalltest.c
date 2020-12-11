@@ -856,7 +856,9 @@ typedef struct {
 
 JL_DLLEXPORT struct_aa64_3 test_aa64_vec_2(struct_aa64_3 v1, struct_aa64_4 v2)
 {
-    struct_aa64_3 x = {v1.v1 + vmovn_s16(v2.v1), v1.v2 - v2.v2};
+    // The cast below is to workaround GCC issue.
+    // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=96990
+    struct_aa64_3 x = {(int8x8_t)(v1.v1 + vmovn_s16(v2.v1)), (float32x2_t)(v1.v2 - v2.v2)};
     return x;
 }
 

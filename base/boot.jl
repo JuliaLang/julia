@@ -8,7 +8,7 @@
 #abstract type Vararg{T} end
 
 #mutable struct Symbol
-#    #opaque
+## opaque
 #end
 
 #mutable struct TypeName
@@ -53,28 +53,43 @@
 #abstract type DenseArray{T,N} <: AbstractArray{T,N} end
 
 #mutable struct Array{T,N} <: DenseArray{T,N}
+## opaque
 #end
 
 #mutable struct Module
-#    name::Symbol
+## opaque
+#end
+
+#mutable struct SimpleVector
+## opaque
+#end
+
+#mutable struct String
+## opaque
 #end
 
 #mutable struct Method
+#...
 #end
 
 #mutable struct MethodInstance
+#...
 #end
 
 #mutable struct CodeInstance
+#...
 #end
 
 #mutable struct CodeInfo
+#...
 #end
 
 #mutable struct TypeMapLevel
+#...
 #end
 
 #mutable struct TypeMapEntry
+#...
 #end
 
 #abstract type Ref{T} end
@@ -93,7 +108,8 @@
 #end
 
 #struct LineInfoNode
-#    method::Any
+#    module::Module
+#    method::Symbol
 #    file::Symbol
 #    line::Int
 #    inlined_at::Int
@@ -118,7 +134,7 @@
 #end
 
 #struct PhiNode
-#    edges::Vector{Any}
+#    edges::Vector{Int32}
 #    values::Vector{Any}
 #end
 
@@ -391,20 +407,19 @@ LineNumberNode(l::Int, f::String) = LineNumberNode(l, Symbol(f))
 eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
-eval(Core, :(PhiNode(edges::Array{Any, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
+eval(Core, :(PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
 eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
 eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
-eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
-             $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
+eval(Core, :(LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
+             $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
 eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
                           @nospecialize(inferred), const_flags::Int32,
                           min_world::UInt, max_world::UInt) =
                 ccall(:jl_new_codeinst, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
                     mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
-eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v, false))))
-eval(Core, :(Const(@nospecialize(v), actual::Bool) = $(Expr(:new, :Const, :v, :actual))))
+eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))))
 eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
 eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
     $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
@@ -764,11 +779,11 @@ Unsigned(x::Int64)  = UInt64(x)
 Signed(x::UInt128)  = Int128(x)
 Unsigned(x::Int128) = UInt128(x)
 
-Signed(x::Union{Float32, Float64, Bool})   = Int(x)
-Unsigned(x::Union{Float32, Float64, Bool}) = UInt(x)
+Signed(x::Union{Float16, Float32, Float64, Bool})   = Int(x)
+Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
-Integer(x::Union{Float32, Float64}) = Int(x)
+Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
 # Binding for the julia parser, called as
 #

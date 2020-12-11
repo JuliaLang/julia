@@ -266,9 +266,11 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         }
         else {
             *src_out = jl_type_infer(mi, world, 0);
-            codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
-            if ((*src_out)->inferred && !codeinst->inferred)
-                codeinst->inferred = jl_nothing;
+            if (*src_out) {
+                codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
+                if ((*src_out)->inferred && !codeinst->inferred)
+                    codeinst->inferred = jl_nothing;
+            }
         }
     }
     *ci_out = codeinst;
@@ -290,6 +292,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     JL_LOCK(&codegen_lock);
+    uint64_t compiler_start_time = jl_hrtime();
 
     CompilationPolicy policy = (CompilationPolicy) _policy;
     std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
@@ -413,6 +416,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
 
     data->M = std::move(clone);
 
+    jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock); // Might GC
     return (void*)data;
 }
@@ -504,8 +508,10 @@ void jl_dump_native(void *native_code,
 
     if (unopt_bc_fname)
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
-    if (bc_fname || obj_fname || asm_fname)
+    if (bc_fname || obj_fname || asm_fname) {
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
+        addMachinePasses(&PM, TM.get());
+    }
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
     if (obj_fname)
@@ -599,6 +605,15 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
     PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
     PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
 }
+
+
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+{
+    // TODO: don't do this on CPUs that natively support Float16
+    PM->add(createDemoteFloat16Pass());
+    PM->add(createGVNPass());
+}
+
 
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
@@ -805,6 +820,7 @@ public:
         TPMAdapter Adapter(TPM);
         addTargetPasses(&Adapter, jl_TargetMachine);
         addOptimizationPasses(&Adapter, OptLevel);
+        addMachinePasses(&Adapter, jl_TargetMachine);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -842,6 +858,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         PM = new legacy::PassManager();
         addTargetPasses(PM, jl_TargetMachine);
         addOptimizationPasses(PM, jl_options.opt_level);
+        addMachinePasses(PM, jl_TargetMachine);
     }
 
     // get the source code for this function
@@ -876,6 +893,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         std::unique_ptr<Module> m;
         jl_llvm_functions_t decls;
         JL_LOCK(&codegen_lock);
+        uint64_t compiler_start_time = jl_hrtime();
         std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output);
 
         Function *F = NULL;
@@ -899,6 +917,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
             m.release(); // the return object `llvmf` will be the owning pointer
         }
         JL_GC_POP();
+        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
         JL_UNLOCK(&codegen_lock); // Might GC
         if (F)
             return F;

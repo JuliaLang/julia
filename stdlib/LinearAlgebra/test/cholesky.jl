@@ -429,4 +429,22 @@ end
     @test cholstring == "$(summary(C))\n$rankstring\n$factorstring\npermutation:\n$permstring"
 end
 
+@testset "destructuring for Cholesky[Pivoted]" begin
+    for val in (true, false)
+        A = rand(8, 8)
+        B = A'A
+        C = cholesky(B, Val(val), check=false)
+        l, u = C
+        @test l == C.L
+        @test u == C.U
+    end
+end
+
+@testset "issue #37356, diagonal elements of hermitian generic matrix" begin
+    B = Hermitian(hcat([one(BigFloat) + im]))
+    @test Matrix(cholesky(B)) ≈ B
+    C = Hermitian(hcat([one(BigFloat) + im]), :L)
+    @test Matrix(cholesky(C)) ≈ C
+end
+
 end # module TestCholesky

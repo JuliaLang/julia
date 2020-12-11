@@ -225,7 +225,7 @@ function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
     is_arg_types = isa(ex.args, DataType)
-    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
     if length(meth) > 1
@@ -287,7 +287,8 @@ function showerror(io::IO, ex::MethodError)
             )
             varnames = ("scalar", "array")
             first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
-            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$f $second")
+            fstring = f === Base.:+ ? "+" : "-"  # avoid depending on show_default for functions (invalidation)
+            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$fstring $second")
         end
     end
     if ft <: AbstractArray
@@ -315,7 +316,7 @@ function showerror(io::IO, ex::MethodError)
             hasrows |= isrow
             push!(vec_args, isrow ? vec(arg) : arg)
         end
-        if hasrows && applicable(f, vec_args...)
+        if hasrows && applicable(f, vec_args...) && isempty(kwargs)
             print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.",
                       "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
                       "\nYou can convert to a column vector with the vec() function.")
@@ -561,9 +562,9 @@ function replaceuserpath(str)
     return str
 end
 
-const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow,
-        :light_magenta, :light_green, :light_cyan, :light_red,
-        :blue, :yellow, :magenta, :green, :cyan, :red]
+const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
+const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+
 stacktrace_expand_basepaths()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
 stacktrace_contract_userdir()::Bool =
@@ -575,7 +576,7 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     n = length(trace)
     ndigits_max = ndigits(n)
 
-    modulecolordict = Dict{Module, Symbol}()
+    modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     println(io, "\nStacktrace:")
@@ -677,7 +678,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
     if m !== nothing
         while parentmodule(m) !== m
@@ -697,7 +698,7 @@ end
 
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = replaceuserpath(file))
@@ -781,7 +782,7 @@ function show_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    frames = (first.(filtered))::Vector{StackFrame}
+    frames = map(x->first(x)::StackFrame, filtered)
     show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
     return
 end
@@ -878,11 +879,11 @@ function show_exception_stack(io::IO, stack::Vector)
     nexc = length(stack)
     for i = nexc:-1:1
         if nexc != i
-            printstyled(io, "\ncaused by:\n", color=error_color())
+            printstyled(io, "\ncaused by: ", color=error_color())
         end
         exc, bt = stack[i]
         showerror(io, exc, bt, backtrace = bt!==nothing)
-        println(io)
+        i == 1 || println(io)
     end
 end
 

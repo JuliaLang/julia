@@ -117,16 +117,16 @@ static int statestack_get(jl_unionstate_t *st, int i) JL_NOTSAFEPOINT
 {
     assert(i >= 0 && i < sizeof(st->stack) * 8);
     // get the `i`th bit in an array of 32-bit words
-    return (st->stack[i>>5] & (1<<(i&31))) != 0;
+    return (st->stack[i>>5] & (1u<<(i&31))) != 0;
 }
 
 static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
 {
     assert(i >= 0 && i < sizeof(st->stack) * 8);
     if (val)
-        st->stack[i>>5] |= (1<<(i&31));
+        st->stack[i>>5] |= (1u<<(i&31));
     else
-        st->stack[i>>5] &= ~(1<<(i&31));
+        st->stack[i>>5] &= ~(1u<<(i&31));
 }
 
 typedef struct {
@@ -244,6 +244,10 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
         if (jl_is_datatype(b)) {
             jl_datatype_t *ad = (jl_datatype_t*)a;
             jl_datatype_t *bd = (jl_datatype_t*)b;
+            if (a == (jl_value_t*)jl_typeofbottom_type && bd->name == jl_type_typename)
+                return obviously_unequal(jl_bottom_type, jl_tparam(bd, 0));
+            if (ad->name == jl_type_typename && b == (jl_value_t*)jl_typeofbottom_type)
+                return obviously_unequal(jl_tparam(ad, 0), jl_bottom_type);
             if (ad->name != bd->name)
                 return 1;
             int istuple = (ad->name == jl_tuple_typename);
@@ -663,8 +667,6 @@ static jl_value_t *widen_Type(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
     }
     return t;
 }
-
-JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v);
 
 // convert a type with free variables to a typevar bounded by a UnionAll-wrapped
 // version of that type.
@@ -1516,7 +1518,8 @@ static int concrete_min(jl_value_t *t)
             return count;
         return count + concrete_min(((jl_uniontype_t*)t)->b);
     }
-    return 2; // up to infinite
+    assert(!jl_is_kind(t));
+    return 1; // a non-Type is also considered concrete
 }
 
 static jl_value_t *find_var_body(jl_value_t *t, jl_tvar_t *v)
@@ -2273,7 +2276,14 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         }
         else {
             ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
-            // TODO: we should probably check `bb->lb <: ub` here; find a test case for that
+            save_env(e, &root, &se);
+            int issub = subtype_in_env_existential(bb->lb, ub, e, 0, d);
+            restore_env(e, root, &se);
+            free_env(&se);
+            if (!issub) {
+                JL_GC_POP();
+                return jl_bottom_type;
+            }
         }
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {
@@ -2863,6 +2873,25 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     */
 }
 
+// cmp <= 0: is x already <= y in this environment
+// cmp >= 0: is x already >= y in this environment
+static int compareto_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, int cmp)
+{
+    if (x == (jl_value_t*)y)
+        return 1;
+    if (!jl_is_typevar(x))
+        return 0;
+    jl_varbinding_t *xv = lookup(e, (jl_tvar_t*)x);
+    if (xv == NULL)
+        return 0;
+    int ans = 1;
+    if (cmp <= 0)
+        ans &= compareto_var(xv->ub, y, e, cmp);
+    if (cmp >= 0)
+        ans &= compareto_var(xv->lb, y, e, cmp);
+    return ans;
+}
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -2929,18 +2958,23 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 jl_value_t *ub=NULL, *lb=NULL;
                 JL_GC_PUSH2(&lb, &ub);
                 ub = intersect_aside(xub, yub, e, 0, xx ? xx->depth0 : 0);
-                lb = simple_join(xlb, ylb);
+                if (xlb == y)
+                    lb = ylb;
+                else
+                    lb = simple_join(xlb, ylb);
                 if (yy) {
-                    if (lb != y)
+                    if (!compareto_var(lb, (jl_tvar_t*)y, e, -1))
                         yy->lb = lb;
-                    if (ub != y)
+                    if (!compareto_var(ub, (jl_tvar_t*)y, e,  1))
                         yy->ub = ub;
                     assert(yy->ub != y);
                     assert(yy->lb != y);
                 }
                 if (xx) {
-                    xx->lb = y;
-                    xx->ub = y;
+                    if (!compareto_var(y, (jl_tvar_t*)x, e, -1))
+                        xx->lb = y;
+                    if (!compareto_var(y, (jl_tvar_t*)x, e,  1))
+                        xx->ub = y;
                     assert(xx->ub != x);
                 }
                 JL_GC_POP();
@@ -3209,7 +3243,7 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 // pointwise unions. Note that this may in general be wider than `Union{a,b}`.
 // If `a` and `b` are not (non va-)tuples of equal length (or unions or unionalls
 // of such), return NULL.
-jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
+static jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
 {
     if (jl_is_unionall(a)) {
         jl_value_t *ans = switch_union_tuple(((jl_unionall_t*)a)->body, b);
@@ -3269,7 +3303,7 @@ jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
 
 // `a` might have a non-empty intersection with some concrete type b even if !(a<:b) and !(b<:a)
 // For example a=`Tuple{Type{<:Vector}}` and b=`Tuple{DataType}`
-int might_intersect_concrete(jl_value_t *a)
+static int might_intersect_concrete(jl_value_t *a)
 {
     if (jl_is_unionall(a))
         a = jl_unwrap_unionall(a);

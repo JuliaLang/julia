@@ -52,6 +52,13 @@
     subst = s"FROM: \g<name>\n MESSAGE: \1"
     @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
 
+    # Issue #36550
+    @test repr(s"\x") == "s\"\\x\""
+    @test repr(s"\\x") == "s\"\\\\x\""
+    @test repr(s"\\\x") == "s\"\\\\\\x\""
+    @test repr(s"x\\") == "s\"x\\\""
+    @test repr(s"a\1b") == "s\"a\\1b\""
+
     # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
@@ -63,6 +70,16 @@
     @test count(r"\w+", "foo bar", overlap=true) == 6
     @test count(r"\w*", "foo bar") == 4
     @test count(r"\b", "foo bar") == 4
+
+    # Unnamed subpatterns
+    let m = match(r"(.)(.)(.)", "xyz")
+        @test haskey(m, 1)
+        @test haskey(m, 2)
+        @test haskey(m, 3)
+        @test !haskey(m, 44)
+        @test (m[1], m[2], m[3]) == ("x", "y", "z")
+        @test sprint(show, m) == "RegexMatch(\"xyz\", 1=\"x\", 2=\"y\", 3=\"z\")"
+    end
 
     # Named subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")

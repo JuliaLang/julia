@@ -65,6 +65,7 @@ let ex = quote
         test7() = rand(Bool) ? 1 : 1.0
         test8() = Any[1][1]
         kwtest(; x=1, y=2, w...) = pass
+        kwtest2(a; x=1, y=2, w...) = pass
 
         array = [1, 1]
         varfloat = 0.1
@@ -96,10 +97,10 @@ function map_completion_text(completions)
     return map(completion_text, c), r, res
 end
 
-test_complete(s) = map_completion_text(completions(s,lastindex(s)))
-test_scomplete(s) =  map_completion_text(shell_completions(s,lastindex(s)))
-test_bslashcomplete(s) =  map_completion_text(bslash_completions(s,lastindex(s))[2])
-test_complete_context(s) =  map_completion_text(completions(s,lastindex(s),Main.CompletionFoo))
+test_complete(s) = map_completion_text(@inferred(completions(s,lastindex(s))))
+test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s,lastindex(s))))
+test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s,lastindex(s)))[2])
+test_complete_context(s) =  map_completion_text(@inferred(completions(s,lastindex(s),Main.CompletionFoo)))
 
 module M32377 end
 test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
@@ -135,7 +136,7 @@ end
 let s = "Main.CompletionFoo."
     c, r = test_complete(s)
     @test "bar" in c
-    @test r === UnitRange{Int64}(20:19)
+    @test r === 20:19
     @test s[r] == ""
 end
 
@@ -483,11 +484,31 @@ let s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
 end
 #################################################################
 
+# method completions with kwargs
 let s = "CompletionFoo.kwtest( "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
     @test occursin("x, y, w...", c[1])
+end
+
+for s in ("CompletionFoo.kwtest(;",
+          "CompletionFoo.kwtest(; x=1, ",
+          "CompletionFoo.kwtest(; kw=1, ",
+          )
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("x, y, w...", c[1])
+end
+
+for s in ("CompletionFoo.kwtest2(1; x=1,",
+          "CompletionFoo.kwtest2(1; kw=1, ",
+          )
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("a; x, y, w...", c[1])
 end
 
 # Test of inference based getfield completion
@@ -596,7 +617,7 @@ end
 let c, r, res
     c, r, res = test_scomplete("\$a")
     @test c == String[]
-    @test r === UnitRange{Int64}(0:-1)
+    @test r === 0:-1
     @test res === false
 end
 
@@ -646,7 +667,7 @@ let s, c, r
         s = "/tmp/"
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r === UnitRange{Int64}(6:5)
+        @test r === 6:5
         @test s[r] == ""
     end
 
@@ -663,7 +684,7 @@ let s, c, r
         file = joinpath(path, "repl completions")
         s = "/tmp "
         c,r = test_scomplete(s)
-        @test r === UnitRange{Int64}(6:5)
+        @test r === 6:5
     end
 
     # Test completing paths with an escaped trailing space
@@ -860,6 +881,17 @@ let s = "CompletionFoo.tuple."
     @test isempty(c)
 end
 
+@testset "sub/superscripts" begin
+    @test "⁽¹²³⁾ⁿ" in test_complete("\\^(123)n")[1]
+    @test "ⁿ" in test_complete("\\^n")[1]
+    @test "ᵞ" in test_complete("\\^gamma")[1]
+    @test isempty(test_complete("\\^(123)nq")[1])
+    @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
+    @test "ₙ" in test_complete("\\_n")[1]
+    @test "ᵧ" in test_complete("\\_gamma")[1]
+    @test isempty(test_complete("\\_(123)nq")[1])
+end
+
 # test Dicts
 function test_dict_completion(dict_name)
     s = "$dict_name[\"ab"
@@ -977,7 +1009,7 @@ end
 let s = ""
     c, r = test_complete_context(s)
     @test "bar" in c
-    @test r === UnitRange{Int64}(1:0)
+    @test r === 1:0
     @test s[r] == ""
 end
 

@@ -216,10 +216,10 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    :(Core.eval($__module__, $(Expr(:quote,ex))))
+    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))
 end
 macro eval(mod, ex)
-    :(Core.eval($(esc(mod)), $(Expr(:quote,ex))))
+    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
 end
 
 argtail(x, rest...) = rest
@@ -420,8 +420,6 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 ```
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
-reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
-reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
 """
     sizeof(T::DataType)
@@ -590,19 +588,11 @@ function getindex(v::SimpleVector, i::Int)
     @boundscheck if !(1 <= i <= length(v))
         throw(BoundsError(v,i))
     end
-    t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
-    x == C_NULL && throw(UndefRefError())
-    o = unsafe_pointer_to_objref(x)
-    @_gc_preserve_end t
-    return o
+    return ccall(:jl_svec_ref, Any, (Any, Int), v, i - 1)
 end
 
 function length(v::SimpleVector)
-    t = @_gc_preserve_begin v
-    l = unsafe_load(convert(Ptr{Int},pointer_from_objref(v)))
-    @_gc_preserve_end t
-    return l
+    return ccall(:jl_svec_len, Int, (Any,), v)
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
@@ -624,6 +614,8 @@ end
 map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
 
 getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]...)
+
+unsafe_convert(::Type{Ptr{Any}}, sv::SimpleVector) = convert(Ptr{Any},pointer_from_objref(sv)) + sizeof(Ptr)
 
 """
     isassigned(array, i) -> Bool
@@ -655,10 +647,7 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
-    t = @_gc_preserve_begin v
-    x = unsafe_load(convert(Ptr{Ptr{Cvoid}},pointer_from_objref(v)) + i*sizeof(Ptr))
-    @_gc_preserve_end t
-    return x != C_NULL
+    return ccall(:jl_svec_isassigned, Bool, (Any, Int), v, i - 1)
 end
 
 
@@ -792,7 +781,7 @@ of a general iterator are normally considered its "values".
 julia> d = Dict("a"=>1, "b"=>2);
 
 julia> values(d)
-ValueIterator for a Dict{String,Int64} with 2 entries. Values:
+ValueIterator for a Dict{String, Int64} with 2 entries. Values:
   2
   1
 

@@ -327,7 +327,7 @@ end
 Base.show(io::IO, code::IRCode) = show_ir(io, code)
 
 
-lineinfo_disabled(io::IO, linestart::String, lineidx::Int32) = ""
+lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
 
 function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
     context = LineInfoNode[]
@@ -371,18 +371,31 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                 nctx = i
             end
             update_line_only::Bool = false
-            if collapse && 0 < nctx
-                # check if we're adding more frames with the same method name,
-                # if so, drop all existing calls to it from the top of the context
-                # AND check if instead the context was previously printed that way
-                # but now has removed the recursive frames
-                let method = method_name(context[nctx])
-                    if (nctx < nframes && method_name(DI[nframes - nctx]) === method) ||
-                       (nctx < length(context) && method_name(context[nctx + 1]) === method)
-                        update_line_only = true
-                        while nctx > 0 && method_name(context[nctx]) === method
-                            nctx -= 1
+            if collapse
+                if nctx > 0
+                    # check if we're adding more frames with the same method name,
+                    # if so, drop all existing calls to it from the top of the context
+                    # AND check if instead the context was previously printed that way
+                    # but now has removed the recursive frames
+                    let method = method_name(context[nctx])
+                        if (nctx < nframes && method_name(DI[nframes - nctx]) === method) ||
+                           (nctx < length(context) && method_name(context[nctx + 1]) === method)
+                            update_line_only = true
+                            while nctx > 0 && method_name(context[nctx]) === method
+                                nctx -= 1
+                            end
                         end
+                    end
+                elseif length(context) > 0
+                    update_line_only = true
+                end
+            elseif nctx < length(context) && nctx < nframes
+                # look at the first non-matching element to see if we are only changing the line number
+                let CtxLine = context[nctx + 1],
+                    FrameLine = DI[nframes - nctx]
+                    if CtxLine.file === FrameLine.file &&
+                            method_name(CtxLine) === method_name(FrameLine)
+                        update_line_only = true
                     end
                 end
             end
@@ -400,16 +413,6 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     end
                 else
                     npops = length(context) - nctx
-                    # look at the first non-matching element to see if we are only changing the line number
-                    if !update_line_only && nctx < nframes
-                        let CtxLine = context[nctx + 1],
-                            FrameLine = DI[nframes - nctx]
-                            if CtxLine.file === FrameLine.file &&
-                                    method_name(CtxLine) === method_name(FrameLine)
-                                update_line_only = true
-                            end
-                        end
-                    end
                 end
                 resize!(context, nctx)
                 update_line_only && (npops -= 1)
@@ -656,9 +659,12 @@ end
 
 # Show a single statement, code.code[idx], in the context of the whole CodeInfo.
 # Returns the updated value of bb_idx.
+# line_info_preprinter(io::IO, indent::String, idx::Int) may print relevant info
+#   at the beginning of the line, and should at least print `indent`. It returns a
+#   string that will be printed after the final basic-block annotation.
+# line_info_postprinter(io::IO, typ, used::Bool) prints the type-annotation at the end
+#   of the statement
 function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, line_info_postprinter, used::BitSet, cfg::CFG, bb_idx::Int)
-    ds = get(io, :displaysize, (24, 80))::Tuple{Int,Int}
-    cols = ds[2]
     stmts = code.code
     types = code.ssavaluetypes
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -681,7 +687,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
     if bb_idx > length(cfg.blocks)
         # If invariants are violated, print a special leader
         linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
-        inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+        inlining_indent = line_info_preprinter(io, linestart, idx)
         printstyled(io, "!!! ", "─"^max_bb_idx_size, color=:light_black)
     else
         bbrange = cfg.blocks[bb_idx].stmts
@@ -689,7 +695,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
         # Print line info update
         linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=:light_black), context=io)
         linestart *= " "^max_bb_idx_size
-        inlining_indent = line_info_preprinter(io, linestart, code.codelocs[idx])
+        inlining_indent = line_info_preprinter(io, linestart, idx)
         if idx == first(bbrange)
             bb_idx_str = string(bb_idx)
             bb_pad = max_bb_idx_size - length(bb_idx_str)
@@ -716,7 +722,7 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
         stmt = GotoNode(block_for_inst(cfg, stmt.label))
     elseif stmt isa PhiNode
         e = stmt.edges
-        stmt = PhiNode(Any[block_for_inst(cfg, e[i]) for i in 1:length(e)], stmt.values)
+        stmt = PhiNode(Int32[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)
     end
     show_type = types isa Vector{Any} && should_print_ssa_type(stmt)
     print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
@@ -733,8 +739,13 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
     return bb_idx
 end
 
-function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(code.linetable), line_info_postprinter=default_expr_type_printer)
-    ioctx = IOContext(io, :displaysize => displaysize(io)::Tuple{Int,Int})
+function statementidx_lineinfo_printer(f, code::CodeInfo)
+    printer = f(code.linetable)
+    return (io::IO, indent::String, idx::Int) -> printer(io, indent, idx > 0 ? code.codelocs[idx] : typemin(Int32))
+end
+statementidx_lineinfo_printer(code::CodeInfo) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
+
+function show_ir(io::IO, code::CodeInfo, line_info_preprinter=statementidx_lineinfo_printer(code), line_info_postprinter=default_expr_type_printer)
     stmts = code.code
     used = BitSet()
     cfg = compute_basic_blocks(stmts)
@@ -744,11 +755,11 @@ function show_ir(io::IO, code::CodeInfo, line_info_preprinter=DILineInfoPrinter(
     bb_idx = 1
 
     for idx in 1:length(stmts)
-        bb_idx = show_ir_stmt(ioctx, code, idx, line_info_preprinter, line_info_postprinter, used, cfg, bb_idx)
+        bb_idx = show_ir_stmt(io, code, idx, line_info_preprinter, line_info_postprinter, used, cfg, bb_idx)
     end
 
     max_bb_idx_size = length(string(length(cfg.blocks)))
-    line_info_preprinter(io, " "^(max_bb_idx_size + 2), typemin(Int32))
+    line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
     nothing
 end
 

@@ -67,6 +67,9 @@ $5/$$($2_SRC_DIR)/source-extracted: $$($2_SRC_FILE)
 	mkdir -p $$(dir $$@)
 	$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<
 	echo 1 > $$@
+
+checksum-$(1): $$($2_SRC_FILE)
+	$$(JLCHECKSUM) $$<
 endif # DEPS_GIT
 
 $$(build_prefix)/manifest/$1: $$(SRCDIR)/$1.version # make the manifest stale if the version file is touched (causing re-install for compliant targets)

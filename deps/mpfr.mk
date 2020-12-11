@@ -35,6 +35,9 @@ $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.
 	touch -c $(SRCCACHE)/mpfr-$(MPFR_VER)/configure # old target
 	echo 1 > $@
 
+checksum-mpfr: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
@@ -74,8 +77,6 @@ check-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-checked
 
 else # USE_BINARYBUILDER_MPFR
 
-MPFR_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/MPFR_jll.jl/releases/download/MPFR-v$(MPFR_VER)+$(MPFR_BB_REL)
-MPFR_BB_NAME := MPFR.v$(MPFR_VER)
-
 $(eval $(call bb-install,mpfr,MPFR,false))
+
 endif

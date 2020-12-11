@@ -73,8 +73,8 @@ data has already been buffered. The result is a `Vector{UInt8}`.
 
 !!! warning
     The amount of data returned is implementation-dependent; for example it can
-depend on the internal choice of buffer size. Other functions such as [`read`](@ref)
-should generally be used instead.
+    depend on the internal choice of buffer size. Other functions such as [`read`](@ref)
+    should generally be used instead.
 """
 function readavailable end
 
@@ -136,7 +136,7 @@ Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or
 
     read(io::IO, String)
 
-Read the entirety of `io`, as a `String`.
+Read the entirety of `io`, as a `String` (see also [`readchomp`](@ref)).
 
 # Examples
 ```jldoctest
@@ -358,7 +358,7 @@ function pipe_reader end
 function pipe_writer end
 
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
-unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)
+unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)::Union{Int,UInt}
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
 flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
 
@@ -707,7 +707,7 @@ end
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    return unsafe_write(io, pname, Int(ccall(:strlen, Csize_t, (Cstring,), pname)))
+    return unsafe_write(io, pname, ccall(:strlen, Csize_t, (Cstring,), pname))
 end
 
 function write(to::IO, from::IO)

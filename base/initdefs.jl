@@ -68,18 +68,31 @@ registries, packages, etc. installed and managed by system administrators.
 `DEPOT_PATH` is populated based on the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH)
 environment variable if set.
 
+## DEPOT_PATH contents
+
+Each entry in `DEPOT_PATH` is a path to a directory which contains subdirectories used by Julia for various purposes.
+Here is an overview of some of the subdirectories that may exist in a depot:
+
+* `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
+* `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
+* `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
+* `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
+* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
+* `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
+* `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
+
 See also:
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
-[Code Loading](@ref Code-Loading).
+[Code Loading](@ref code-loading).
 """
 const DEPOT_PATH = String[]
 
 function append_default_depot_path!(DEPOT_PATH)
     path = joinpath(homedir(), ".julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
+    path = abspath(Sys.BINDIR::String, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path = abspath(Sys.BINDIR::String, "..", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
 end
 
@@ -152,7 +165,7 @@ See also:
 [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
 [`JULIA_PROJECT`](@ref JULIA_PROJECT),
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
-[Code Loading](@ref Code-Loading).
+[Code Loading](@ref code-loading).
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
 # HOME_PROJECT is no longer used, here just to avoid breaking things
@@ -234,7 +247,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
-        env == "@stdlib" && return Sys.STDLIB
+        env == "@stdlib" && return Sys.STDLIB::String
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)
@@ -265,6 +278,11 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
 end
 load_path_expand(::Nothing) = nothing
 
+"""
+    active_project()
+
+Return the path of the active `Project.toml` file.
+"""
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[],)
         project == "@" && continue

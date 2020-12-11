@@ -93,6 +93,11 @@ end
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 2)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(5, 4), trues(2)) == false
+    @test checkbounds(Bool, A, trues(6, 4), trues(3)) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(4)) == false
 end
 
 @testset "array of CartesianIndex" begin
@@ -222,6 +227,58 @@ end
             end
             @test pr9256() == (3,2)
         end
+    end
+end
+
+@testset "LinearIndices" begin
+    @testset "constructors" begin
+        for oinds in [
+            (2, 3),
+            (UInt8(2), 3),
+            (2, UInt8(3)),
+            (2, 1:3),
+            (Base.OneTo(2), 1:3)
+        ]
+            R = LinearIndices(oinds)
+            @test size(R) == (2, 3)
+            @test axes(R) == (Base.OneTo(2), Base.OneTo(3))
+            @test R[begin] == 1
+            @test R[end] == 6
+        end
+
+        for oinds in [(2, ), (2, 3), (2, 3, 4)]
+            R = CartesianIndices(oinds)
+            @test size(R) == oinds
+        end
+    end
+
+    @testset "IdentityUnitRange" begin
+        function _collect(A)
+            rst = eltype(A)[]
+            for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+        function _simd_collect(A)
+            rst = eltype(A)[]
+            @simd for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+
+        for oinds in [
+            (Base.IdentityUnitRange(0:1),),
+            (Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(0:2)),
+            (Base.IdentityUnitRange(0:1), Base.OneTo(3)),
+        ]
+            R = LinearIndices(oinds)
+            @test axes(R) === oinds
+            @test _collect(R) == _simd_collect(R) == vec(collect(R))
+        end
+        R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
+        @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
     end
 end
 
@@ -401,6 +458,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] ==
                 B[LinearIndices(mask1)[findall(mask1)], LinearIndices(mask2)[findall(mask2)], trailing2]
             @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
+
+            if ndims(B) > 1
+                maskfront = bitrand(shape[1:end-1])
+                Bslice = B[ntuple(i->(:), ndims(B)-1)..., 1]
+                @test B[maskfront,1] == Bslice[maskfront]
+                @test size(B[maskfront, 1:1]) == (sum(maskfront), 1)
+            end
         end
     end
 end
@@ -786,6 +850,13 @@ end
     @test ndims((1:3)[:,:,1:1,:,:,[1]]) == 6
 end
 
+@testset "issue #38192" begin
+    img = cat([1 2; 3 4], [1 5; 6 7]; dims=3)
+    mask = img[:,:,1] .== img[:,:,2]
+    img[mask,2] .= 0
+    @test img == cat([1 2; 3 4], [0 5; 6 7]; dims=3)
+end
+
 @testset "dispatch loop introduced in #19305" begin
     Z22, O33 = fill(0, 2, 2), fill(1, 3, 3)
     @test [(1:2) Z22; O33] == [[1,2] Z22; O33] == [[1 2]' Z22; O33]
@@ -1140,4 +1211,11 @@ end
     @test last(itr, 25) !== itr
     @test last(itr, 1) == [itr[end]]
     @test_throws ArgumentError last(itr, -6)
+end
+
+@testset "Base.rest" begin
+    a = reshape(1:4, 2, 2)'
+    @test Base.rest(a) == a[:]
+    _, st = iterate(a)
+    @test Base.rest(a, st) == [3, 2, 4]
 end

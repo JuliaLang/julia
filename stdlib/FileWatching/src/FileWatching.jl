@@ -688,7 +688,7 @@ giving the result of watching the file.
 This behavior of this function varies slightly across platforms. See
 <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
 """
-function watch_file(s::AbstractString, timeout_s::Real=-1)
+function watch_file(s::String, timeout_s::Float64=-1.0)
     fm = FileMonitor(s)
     local timer
     try
@@ -703,6 +703,7 @@ function watch_file(s::AbstractString, timeout_s::Real=-1)
         @isdefined(timer) && close(timer)
     end
 end
+watch_file(s::AbstractString, timeout_s::Real=-1) = watch_file(String(s), Float64(timeout_s))
 
 """
     watch_folder(path::AbstractString, timeout_s::Real=-1)

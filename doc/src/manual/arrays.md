@@ -293,7 +293,7 @@ us add a third argument to [`map`](@ref):
 
 ```jldoctest
 julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
-2×2 Matrix{Tuple{Float64,Int64}}:
+2×2 Matrix{Tuple{Float64, Int64}}:
  (0.5, 1)       (0.333333, 3)
  (0.333333, 2)  (0.25, 4)
 ```
@@ -311,7 +311,7 @@ keywords:
 
 ```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i]
-6-element Vector{Tuple{Int64,Int64}}:
+6-element Vector{Tuple{Int64, Int64}}:
  (1, 1)
  (2, 1)
  (2, 2)
@@ -326,7 +326,7 @@ Generated values can be filtered using the `if` keyword:
 
 ```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
-2-element Vector{Tuple{Int64,Int64}}:
+2-element Vector{Tuple{Int64, Int64}}:
  (2, 2)
  (3, 1)
 ```
@@ -356,7 +356,7 @@ Example:
 
 ```jldoctest
 julia> A = reshape(collect(1:16), (2, 2, 2, 2))
-2×2×2×2 Array{Int64,4}:
+2×2×2×2 Array{Int64, 4}:
 [:, :, 1, 1] =
  1  3
  2  4
@@ -377,7 +377,7 @@ julia> A[1, 2, 1, 1] # all scalar indices
 3
 
 julia> A[[1, 2], [1], [1, 2], [1]] # all vector indices
-2×1×2×1 Array{Int64,4}:
+2×1×2×1 Array{Int64, 4}:
 [:, :, 1, 1] =
  1
  2
@@ -387,7 +387,7 @@ julia> A[[1, 2], [1], [1, 2], [1]] # all vector indices
  6
 
 julia> A[[1, 2], [1], [1, 2], 1] # a mix of index types
-2×1×2 Array{Int64,3}:
+2×1×2 Array{Int64, 3}:
 [:, :, 1] =
  1
  2

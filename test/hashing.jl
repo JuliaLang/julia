@@ -32,28 +32,29 @@ function coerce(T::Type, x)
     end
 end
 
-for T = types[2:end],
-    x = vals,
+for T = types[2:end], x = vals
     a = coerce(T, x)
-    @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
-    @test hash(a,one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
+    @test hash(a, zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
+    @test hash(a, one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
 end
 
-for T = types,
-    S = types,
-    x = vals,
-    a = coerce(T, x),
-    b = coerce(S, x)
-    #println("$(typeof(a)) $a")
-    #println("$(typeof(b)) $b")
-    @test isequal(a,b) == (hash(a)==hash(b))
-    # for y=vals
-    #     println("T=$T; S=$S; x=$x; y=$y")
-    #     c = convert(T,x//y)
-    #     d = convert(S,x//y)
-    #     @test !isequal(a,b) || hash(a)==hash(b)
-    # end
+let collides = 0
+    for T = types, S = types, x = vals
+        a = coerce(T, x)
+        b = coerce(S, x)
+        eq = hash(a) == hash(b)
+        #println("$(typeof(a)) $a")
+        #println("$(typeof(b)) $b")
+        if isequal(a, b)
+            @test eq
+        else
+            collides += eq
+        end
+    end
+    # each pair of types has one collision for these values
+    @test collides <= (length(types) - 1)^2
 end
+@test hash(0.0) != hash(-0.0)
 
 # issue #8619
 @test hash(nextfloat(2.0^63)) == hash(UInt64(nextfloat(2.0^63)))

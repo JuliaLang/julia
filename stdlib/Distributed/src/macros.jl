@@ -202,7 +202,7 @@ macro everywhere(procs, ex)
     imps = extract_imports(ex)
     return quote
         $(isempty(imps) ? nothing : Expr(:toplevel, imps...)) # run imports locally first
-        let ex = Expr(:toplevel, :(task_local_storage()[:SOURCE_PATH] = $(get(task_local_storage(), :SOURCE_PATH, nothing))), $(Expr(:quote, ex))),
+        let ex = Expr(:toplevel, :(task_local_storage()[:SOURCE_PATH] = $(get(task_local_storage(), :SOURCE_PATH, nothing))), $(esc(Expr(:quote, ex)))),
             procs = $(esc(procs))
             remotecall_eval(Main, procs, ex)
         end
@@ -275,7 +275,7 @@ function preduce(reducer, f, R)
         schedule(t)
         push!(w_exec, t)
     end
-    reduce(reducer, [fetch(t) for t in w_exec])
+    reduce(reducer, Any[fetch(t) for t in w_exec])
 end
 
 function pfor(f, R)

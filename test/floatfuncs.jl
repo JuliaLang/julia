@@ -40,6 +40,17 @@ end
     end
 end
 
+@testset "ispow2" begin
+    for T in (Float16,Float32,Float64,BigFloat)
+        for x in (0.25, 1.0, 4.0, exp2(T(exponent(floatmax(T)))), exp2(T(exponent(floatmin(T)))))
+            @test ispow2(T(x))
+        end
+        for x in (1.5, 0.0, 7.0, NaN, Inf)
+            @test !ispow2(T(x))
+        end
+    end
+end
+
 @testset "round" begin
     for elty in (Float32, Float64)
         x = rand(elty)
@@ -166,4 +177,9 @@ end
 
     @test ≈(1.0; atol=1).(1.0:3.0) == [true, true, false]
 
+end
+
+@testset "isnan for Number" begin
+    struct CustomNumber <: Number end
+    @test !isnan(CustomNumber())
 end

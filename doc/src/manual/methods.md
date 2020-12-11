@@ -40,6 +40,11 @@ for structuring and organizing programs.
     an explicit method argument. When the current `this` object is the receiver of a method call,
     it can be omitted altogether, writing just `meth(arg1,arg2)`, with `this` implied as the receiving
     object.
+!!! note
+    All the examples in this chapter assume that you are defining modules for a function in the *same*
+    module. If you want to add methods to a function in *another* module, you have to `import` it or
+    use the name qualified with module names. See the section on [namespace management](@ref
+    namespace-management).
 
 ## Defining Methods
 
@@ -252,8 +257,8 @@ julia> g(2, 3.0)
 
 julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x, y::Float64) in Main at none:1
   g(x::Float64, y) in Main at none:1
+  g(x, y::Float64) in Main at none:1
 Possible fix, define
   g(::Float64, ::Float64)
 ```

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
     IdDict([itr])
 
@@ -160,7 +162,7 @@ function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V
     if val === secret_table_token
         val = default()
         if !isa(val, V)
-            val = convert(V, val)
+            val = convert(V, val)::V
         end
         setindex!(d, val, key)
         return val

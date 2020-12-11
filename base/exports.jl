@@ -22,6 +22,8 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
+    AbstractMatch,
+    AbstractPattern,
     AbstractDict,
     BigFloat,
     BigInt,
@@ -38,6 +40,7 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
+    ComposedFunction,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -226,6 +229,7 @@ export
     cbrt,
     ceil,
     cis,
+    cispi,
     clamp,
     cld,
     cmp,
@@ -457,11 +461,13 @@ export
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     startswith,
 
 # linear algebra
     var"'", # to enable syntax a' for adjoint
     adjoint,
+    var"'ᵀ",
     transpose,
     kron,
     kron!,
@@ -914,6 +920,7 @@ export
     process_running,
     run,
     setenv,
+    addenv,
     success,
     withenv,
 

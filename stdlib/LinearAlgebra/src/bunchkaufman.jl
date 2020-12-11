@@ -28,13 +28,13 @@ julia> A = [1 2; 2 3]
  2  3
 
 julia> S = bunchkaufman(A) # A gets wrapped internally by Symmetric(A)
-BunchKaufman{Float64,Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}}
 D factor:
-2×2 Tridiagonal{Float64,Vector{Float64}}:
+2×2 Tridiagonal{Float64, Vector{Float64}}:
  -0.333333  0.0
   0.0       3.0
 U factor:
-2×2 UnitUpperTriangular{Float64,Matrix{Float64}}:
+2×2 UnitUpperTriangular{Float64, Matrix{Float64}}:
  1.0  0.666667
   ⋅   1.0
 permutation:
@@ -48,13 +48,13 @@ julia> d == S.D && u == S.U && p == S.p
 true
 
 julia> S = bunchkaufman(Symmetric(A, :L))
-BunchKaufman{Float64,Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}}
 D factor:
-2×2 Tridiagonal{Float64,Vector{Float64}}:
+2×2 Tridiagonal{Float64, Vector{Float64}}:
  3.0   0.0
  0.0  -0.333333
 L factor:
-2×2 UnitLowerTriangular{Float64,Matrix{Float64}}:
+2×2 UnitLowerTriangular{Float64, Matrix{Float64}}:
  1.0        ⋅
  0.666667  1.0
 permutation:
@@ -148,13 +148,13 @@ julia> A = [1 2; 2 3]
  2  3
 
 julia> S = bunchkaufman(A) # A gets wrapped internally by Symmetric(A)
-BunchKaufman{Float64,Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}}
 D factor:
-2×2 Tridiagonal{Float64,Vector{Float64}}:
+2×2 Tridiagonal{Float64, Vector{Float64}}:
  -0.333333  0.0
   0.0       3.0
 U factor:
-2×2 UnitUpperTriangular{Float64,Matrix{Float64}}:
+2×2 UnitUpperTriangular{Float64, Matrix{Float64}}:
  1.0  0.666667
   ⋅   1.0
 permutation:
@@ -168,13 +168,13 @@ julia> d == S.D && u == S.U && p == S.p
 true
 
 julia> S = bunchkaufman(Symmetric(A, :L))
-BunchKaufman{Float64,Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}}
 D factor:
-2×2 Tridiagonal{Float64,Vector{Float64}}:
+2×2 Tridiagonal{Float64, Vector{Float64}}:
  3.0   0.0
  0.0  -0.333333
 L factor:
-2×2 UnitLowerTriangular{Float64,Matrix{Float64}}:
+2×2 UnitLowerTriangular{Float64, Matrix{Float64}}:
  1.0        ⋅
  0.666667  1.0
 permutation:
@@ -250,14 +250,14 @@ julia> A = [1 2 3; 2 1 2; 3 2 1]
  3  2  1
 
 julia> F = bunchkaufman(Symmetric(A, :L))
-BunchKaufman{Float64,Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}}
 D factor:
-3×3 Tridiagonal{Float64,Vector{Float64}}:
+3×3 Tridiagonal{Float64, Vector{Float64}}:
  1.0  3.0    ⋅
  3.0  1.0   0.0
   ⋅   0.0  -1.0
 L factor:
-3×3 UnitLowerTriangular{Float64,Matrix{Float64}}:
+3×3 UnitLowerTriangular{Float64, Matrix{Float64}}:
  1.0   ⋅    ⋅
  0.0  1.0   ⋅
  0.5  0.5  1.0

@@ -62,7 +62,7 @@ function String(s::SubString{String})
 end
 
 ncodeunits(s::SubString) = s.ncodeunits
-codeunit(s::SubString) = codeunit(s.string)::Type{<:Union{UInt8, UInt16, UInt32}}
+codeunit(s::SubString) = codeunit(s.string)::CodeunitType
 length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
@@ -176,6 +176,10 @@ end
 
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
+
+function Symbol(s::SubString{String})
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int), s, sizeof(s))
+end
 
 @inline function __unsafe_string!(out, c::Char, offs::Integer) # out is a (new) String (or StringVector)
     x = bswap(reinterpret(UInt32, c))

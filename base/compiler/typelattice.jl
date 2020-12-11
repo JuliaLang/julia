@@ -10,9 +10,6 @@
 # # The type of a value might be constant
 # struct Const
 #     val
-#     actual::Bool  # if true, we obtained `val` by actually calling a @pure function
-#     Const(@nospecialize(v)) = new(v, false)
-#     Const(@nospecialize(v), a::Bool) = new(v, a)
 # end
 #
 # struct PartialStruct

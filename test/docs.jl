@@ -1224,3 +1224,10 @@ end
 end
 @test M27832.xs == ":(\$(Expr(:\$, :fn)))"
 Core.atdoc!(_last_atdoc)
+
+# issue #29432
+"First docstring" module Module29432 end
+Test.collect_test_logs() do                          # suppress printing of any warning
+    eval(quote "Second docstring" Module29432 end)   # requires toplevel
+end
+@test docstrings_equal(@doc(Module29432), doc"Second docstring")

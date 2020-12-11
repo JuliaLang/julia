@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
 
 static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintptr_t sp) JL_NOTSAFEPOINT
 {
@@ -54,7 +54,7 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 // the call instruction. The first `skip` frames are not included in `bt_data`.
 //
 // `maxsize` is the size of the buffer `bt_data` (and `sp` if non-NULL). It
-// must be at least JL_BT_MAX_ENTRY_SIZE to accommodate extended backtrace
+// must be at least `JL_BT_MAX_ENTRY_SIZE + 1` to accommodate extended backtrace
 // entries.  If `sp != NULL`, the stack pointer corresponding `bt_data[i]` is
 // stored in `sp[i]`.
 //
@@ -66,9 +66,9 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 //
 // jl_unw_stepn will return 1 if there are more frames to come. The number of
 // elements written to bt_data (and sp if non-NULL) are returned in bt_size.
-int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
-                 uintptr_t *sp, size_t maxsize, int skip, jl_gcframe_t **ppgcstack,
-                 int from_signal_handler) JL_NOTSAFEPOINT
+static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
+                        uintptr_t *sp, size_t maxsize, int skip, jl_gcframe_t **ppgcstack,
+                        int from_signal_handler) JL_NOTSAFEPOINT
 {
     volatile size_t n = 0;
     volatile int need_more_space = 0;
@@ -96,9 +96,16 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
                 need_more_space = 1;
                 break;
             }
-            have_more_frames = jl_unw_step(cursor, &return_ip, &thesp);
+            uintptr_t oldsp = thesp;
+            have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
+            if (oldsp >= thesp) {
+                // The stack pointer is clearly bad, as it must grow downwards.
+                // But sometimes the external unwinder doesn't check that.
+                have_more_frames = 0;
+            }
             if (skip > 0) {
                 skip--;
+                from_signal_handler = 0;
                 continue;
             }
             if (sp)
@@ -132,10 +139,9 @@ int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *bt_size,
             //   which we can get from the return address via `call_ip = return_ip - 1`.
             // * Code which was interrupted asynchronously (eg, via a signal)
             //   is expected to have `call_ip == return_ip`.
-            if (n != 0 || !from_signal_handler) {
-                // normal frame
-                call_ip -= 1;
-            }
+            if (!from_signal_handler)
+                call_ip -= 1; // normal frame
+            from_signal_handler = 0;
             if (call_ip == JL_BT_NON_PTR_ENTRY) {
                 // Never leave special marker in the bt data as it can corrupt the GC.
                 call_ip = 0;
@@ -277,9 +283,9 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     return bt;
 }
 
-void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
-                      jl_array_t **btout JL_REQUIRE_ROOTED_SLOT,
-                      jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
+static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
+                             jl_array_t **btout JL_REQUIRE_ROOTED_SLOT,
+                             jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
 {
     jl_array_t *bt, *bt2;
     if (array_ptr_void_type == NULL) {
@@ -358,6 +364,7 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 }
 
 #if defined(_OS_WINDOWS_)
+// XXX: these caches should be per-thread
 #ifdef _CPU_X86_64_
 static UNWIND_HISTORY_TABLE HistoryTable;
 #else
@@ -461,7 +468,7 @@ static int readable_pointer(LPCVOID pointer)
     return 1;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
     // Might be called from unmanaged thread.
 #ifndef _CPU_X86_64_
@@ -481,7 +488,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 #else
     *ip = (uintptr_t)cursor->Rip;
     *sp = (uintptr_t)cursor->Rsp;
-    if (*ip == 0) {
+    if (*ip == 0 && from_signal_handler) {
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
         cursor->Rip = *(DWORD64*)*sp;      // POP RIP (aka RET)
@@ -489,20 +496,15 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
         return cursor->Rip != 0;
     }
 
-    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip);
+    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
     if (!ImageBase)
         return 0;
 
     PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
-        GetCurrentProcess(), cursor->Rip);
-    if (!FunctionEntry) { // assume this is a NO_FPO RBP-based function
-        cursor->Rsp = cursor->Rbp;                 // MOV RSP, RBP
-        if (!readable_pointer((LPCVOID)cursor->Rsp))
-            return 0;
-        cursor->Rbp = *(DWORD64*)cursor->Rsp;      // POP RBP
-        cursor->Rsp += sizeof(void*);
-        cursor->Rip = *(DWORD64*)cursor->Rsp;      // POP RIP (aka RET)
-        cursor->Rsp += sizeof(void*);
+        GetCurrentProcess(), cursor->Rip - !from_signal_handler);
+    if (!FunctionEntry) {
+        // Not code or bad unwind?
+        return 0;
     }
     else {
         PVOID HandlerData;
@@ -529,8 +531,9 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return unw_init_local(cursor, context) == 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
+    (void)from_signal_handler; // libunwind also tracks this
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
         return 0;
@@ -561,7 +564,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
     return 0;
 }
@@ -600,8 +603,8 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     return rs;
 }
 
-void jl_safe_print_codeloc(const char* func_name, const char* file_name,
-                           int line, int inlined) JL_NOTSAFEPOINT
+static void jl_safe_print_codeloc(const char* func_name, const char* file_name,
+                                  int line, int inlined) JL_NOTSAFEPOINT
 {
     const char *inlined_str = inlined ? " [inlined]" : "";
     if (line != -1) {
@@ -660,14 +663,14 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
                 jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
                     jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
                 assert(jl_typeis(locinfo, jl_lineinfonode_type));
+                const char *func_name = "Unknown";
                 jl_value_t *method = locinfo->method;
-                if (jl_is_method_instance(method)) {
+                if (jl_is_method_instance(method))
                     method = ((jl_method_instance_t*)method)->def.value;
-                    if (jl_is_method(method))
-                        method = (jl_value_t*)((jl_method_t*)method)->name;
-                }
-                const char *func_name = jl_is_symbol(method) ?
-                                        jl_symbol_name((jl_sym_t*)method) : "Unknown";
+                if (jl_is_method(method))
+                    method = (jl_value_t*)((jl_method_t*)method)->name;
+                if (jl_is_symbol(method))
+                    func_name = jl_symbol_name((jl_sym_t*)method);
                 jl_safe_print_codeloc(func_name, jl_symbol_name(locinfo->file),
                                       locinfo->line, locinfo->inlined_at);
                 debuginfoloc = locinfo->inlined_at;

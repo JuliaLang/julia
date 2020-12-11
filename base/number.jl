@@ -59,6 +59,22 @@ true
 """
 isone(x) = x == one(x) # fallback method
 
+"""
+    isfinite(f) -> Bool
+
+Test whether a number is finite.
+
+# Examples
+```jldoctest
+julia> isfinite(5)
+true
+
+julia> isfinite(NaN32)
+false
+```
+"""
+isfinite(x::Number) = iszero(x - x)
+
 size(x::Number) = ()
 size(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 axes(x::Number) = ()
@@ -223,6 +239,7 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
 
 """
     zero(x)
+    zero(::Type)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
 
