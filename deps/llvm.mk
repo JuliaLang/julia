@@ -517,10 +517,10 @@ endif # LLVM_VER 10.0
 
 ifeq ($(LLVM_VER_SHORT),11.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # replaced by D90969 for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS)) # Needs upstreaming
-$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
+$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm7-revert-D44485)) # Needs upstreaming
 $(eval $(call LLVM_PATCH,llvm-11-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
@@ -534,6 +534,8 @@ endif
 $(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D90722-rtdyld-absolute-relocs)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-invalid-addrspacecast-sink)) # upstreamed as D92210
+$(eval $(call LLVM_PATCH,llvm-11-D92906-ppc-setjmp))
+$(eval $(call LLVM_PATCH,llvm-11-PR48458-X86ISelDAGToDAG)) # remove for LLVM 12
 endif # LLVM_VER 11.0
 
 
