@@ -125,7 +125,7 @@ end
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
     LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
-                         (Cint, Cint, Ptr{LibGit2.Buffer}),
+                         (Cint, Cint, Ptr{LibGit2.Buffer}...),
                          LibGit2.Consts.GET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, buf)
     path = unsafe_string(buf[].ptr)
     LibGit2.free(buf)
@@ -134,7 +134,7 @@ end
 
 function set_global_dir(dir)
     LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
-                         (Cint, Cint, Cstring),
+                         (Cint, Cint, Cstring...),
                          LibGit2.Consts.SET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, dir)
     return
 end
