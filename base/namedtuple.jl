@@ -9,9 +9,9 @@ tuple-like collection of values, where each entry has a unique name, represented
 can be modified in place after construction.
 
 Accessing the value associated with a name in a named tuple can be done using field
-access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]`. A tuple of the
-names can be obtained using [`keys`](@ref), and a tuple of the values can be obtained
-using [`values`](@ref).
+access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]` or `x[(:a, :b)]`.
+A tuple of the names can be obtained using [`keys`](@ref), and a tuple of the values
+can be obtained using [`values`](@ref).
 
 !!! note
     Iteration over `NamedTuple`s produces the *values* without the names. (See example
@@ -29,6 +29,9 @@ julia> x.a
 
 julia> x[:a]
 1
+
+julia> nt[(:a,)]
+(a = 1,)
 
 julia> keys(x)
 (:a, :b)
@@ -116,6 +119,8 @@ firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
+@inline getindex(t::NamedTuple, i::Tuple{Vararg{Symbol}}) = NamedTuple{s}(nt)
+#? Is this ok too ?# @inline getindex(t::NamedTuple, i::AbstractVector{Symbol}) = NamedTuple{Tuple(s)}(nt)
 indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
