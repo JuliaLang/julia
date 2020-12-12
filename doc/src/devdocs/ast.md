@@ -254,7 +254,7 @@ types exist in lowered form:
     Identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
     with subtypes `SlotNumber` and `TypedSlot`. Both types have an integer-valued `id` field giving
     the slot index. Most slots have the same type at all uses, and so are represented with `SlotNumber`.
-    The types of these slots are found in the `slottypes` field of their `MethodInstance` object.
+    The types of these slots are found in the `slottypes` field of their `CodeInfo` object.
     Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
     field.
 
