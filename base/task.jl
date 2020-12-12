@@ -2,7 +2,22 @@
 
 ## basic task functions and TLS
 
-Core.Task(@nospecialize(f), reserved_stack::Int=0) = Core._Task(f, reserved_stack, ThreadSynchronizer())
+function Core.Task(@nospecialize(f), reserved_stack::Int=0)
+    ct = current_task()
+    fwrap = () -> begin
+        local result, ex
+        ex::Union{Exception, Nothing} = nothing
+        try
+            result = f()
+        catch e
+            ex = e
+        end
+        isnothing(ct.queue) && schedule(ct)    # Guarantee reschedule of parent thread,
+        isnothing(ex) || throw(ex)             #  even if exception was thrown
+        return result
+    end
+    Core._Task(fwrap, reserved_stack, Base.ThreadSynchronizer())
+end
 
 # Container for a captured exception and its backtrace. Can be serialized.
 struct CapturedException <: Exception
@@ -286,32 +301,33 @@ end
 
 ## lexically-scoped waiting for multiple items
 
-function sync_end(c::Channel{Any})
-    local c_ex
-    while isready(c)
-        r = take!(c)
-        if isa(r, Task)
-            _wait(r)
-            if istaskfailed(r)
-                if !@isdefined(c_ex)
-                    c_ex = CompositeException()
+function sync_end(c::Channel{Any})                 # Core asumption: all Tasks reschedule the 
+    ts = Task[]                                    #   originating Task (wrapper added to Task
+    try                                            #   function)
+        while isready(c) || !all(istaskdone, ts)   # Pull all queued tasks, wait for them,
+            while isready(c)                       #   then pull the next batch.  This is
+                t = take!(c)                       #   needed, as it is possible for sub-Tasks
+                if isa(t, Task)                    #   to generate new sub-Tasks (eg println)
+                    push!(ts, t)
+                else
+                    push!(ts, schedule(Task(()->t)))
                 end
-                push!(c_ex, TaskFailedException(r))
             end
-        else
-            try
-                wait(r)
-            catch e
-                if !@isdefined(c_ex)
+            while true
+                wait()                             # Will return on reschedule from sub-Task
+                if any(istaskfailed, ts)           # Throw exception on first occurence
                     c_ex = CompositeException()
+                    for r in ts
+                        istaskfailed(r) && push!(c_ex, TaskFailedException(r))
+                    end
+                    throw(c_ex)
+                elseif all(istaskdone, ts)         # Exit when all tasks complete
+                    break
                 end
-                push!(c_ex, e)
             end
         end
-    end
-    close(c)
-    if @isdefined(c_ex)
-        throw(c_ex)
+    finally
+        close(c)
     end
     nothing
 end
