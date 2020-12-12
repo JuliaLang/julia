@@ -456,8 +456,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             println(ARGS)
             """)
         close(io)
-        mkpath(joinpath(dir, ".julia", "config"))
-        cp(testfile, joinpath(dir, ".julia", "config", "startup.jl"))
+        mkpath(joinpath(dir, "config"))
+        cp(testfile, joinpath(dir, "config", "startup.jl"))
 
         withenv("JULIA_DEPOT_PATH" => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
@@ -485,7 +485,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
         a = joinpath(dir, "a.jl")
         b = joinpath(dir, "b.jl")
-        c = joinpath(dir, ".julia", "config", "startup.jl")
+        c = joinpath(dir, "config", "startup.jl")
 
         write(a, """
             println(@__FILE__)
