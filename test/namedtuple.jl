@@ -21,6 +21,13 @@
 @test (a=3,)[:a] == 3
 @test (x=4, y=5, z=6).y == 5
 @test (x=4, y=5, z=6).z == 6
+@test (x=4, y=5, z=6)[(:x, :y)] == (x=4, y=5)
+@test (x=4, y=5, z=6)[(:x,)] == (x=4,)
+# If the following are included, is it worth putting in 1 line with above, eg:
+# @test (x=4, y=5, z=6)[(:x, :y)] == (x=4, y=5, z=6)[[:x, :y]] == (x=4, y=5)
+# or keep separate, eg:
+# @test (x=4, y=5, z=6)[[:x, :y]] == (x=4, y=5)
+# @test (x=4, y=5, z=6)[[:x]] == (x=4,)
 @test_throws ErrorException (x=4, y=5, z=6).a
 @test_throws BoundsError (a=2,)[0]
 @test_throws BoundsError (a=2,)[2]
