@@ -2453,11 +2453,7 @@
                                    (cdr x)
                                    (list x)))
                              a)))
-              (if (any (lambda (x)
-                         (and (pair? x) (any (lambda (y)
-                                               (and (pair? y) (eq? (car y) '...)))
-                                             x)))
-                       rows)
+              (if (any (lambda (x) (any vararg? x)) rows)
                 (error (string "Splatting ... in an hvcat is not supported")))
               `(call (top typed_hvcat) ,t
                      (tuple ,.(map length rows))
