@@ -2455,6 +2455,10 @@
                                    (cdr x)
                                    (list x)))
                              a)))
+              (if (any (lambda (x)
+                         (and (pair? x) (pair? (car x)) (eq? (caar x) '...)))
+                       rows)
+                (error (string "Splatting ... in an hvcat is not supported")))
               `(call (top typed_hvcat) ,t
                      (tuple ,.(map length rows))
                      ,.(apply append rows)))
