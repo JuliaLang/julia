@@ -103,7 +103,7 @@ end
 Construct the intersection of sets.
 Maintain order with arrays.
 
-See also: [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref), [`issetequal`](@ref).
+See also: [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref Base.issubset), [`issetequal`](@ref).
 
 # Examples
 ```jldoctest

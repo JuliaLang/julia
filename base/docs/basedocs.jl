@@ -931,7 +931,7 @@ kw";"
 
 Short-circuiting boolean AND.
 
-See also [`&`](@ref), and the [ternary operator `? :`](@ref kw"?").
+See also [`&`](@ref), the ternary operator `? :`, and the manual section on [control flow](@ref man-conditional-evaluation).
 
 # Examples
 ```jldoctest

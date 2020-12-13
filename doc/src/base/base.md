@@ -222,6 +222,7 @@ Base.Val
 Core.Vararg
 Core.Nothing
 Base.isnothing
+Base.notnothing
 Base.Some
 Base.something
 Base.Enums.Enum
@@ -405,6 +406,7 @@ Base.isconst
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
+Base.@locals
 ```
 
 ## Internals

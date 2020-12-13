@@ -937,7 +937,7 @@ Return an iterator over the product of several iterators. Each generated element
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
 changes the fastest.
 
-See also: [`zip`](@ref), [`splat`](@ref Base.splat), [`Iterators.flatten`](@ref).
+See also: [`zip`](@ref), [`Iterators.flatten`](@ref), `Base.splat`.
 
 # Examples
 ```jldoctest

@@ -561,7 +561,7 @@ extrema(f, x::Real) = (y = f(x); (y, y))
 
 The identity function. Returns its argument.
 
-See also: [`one`](@ref), [`oneunit`](@ref), [`I`](@ref LinearAlgebra.I).
+See also: [`one`](@ref), [`oneunit`](@ref), `LinearAlgebra.I`.
 
 # Examples
 ```jldoctest
