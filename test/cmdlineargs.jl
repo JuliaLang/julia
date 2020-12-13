@@ -456,10 +456,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             println(ARGS)
             """)
         close(io)
-        mkpath(joinpath(dir, ".julia", "config"))
-        cp(testfile, joinpath(dir, ".julia", "config", "startup.jl"))
+        mkpath(joinpath(dir, "config"))
+        cp(testfile, joinpath(dir, "config", "startup.jl"))
 
-        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
+        withenv("JULIA_DEPOT_PATH" => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile foo -bar --baz`) == output
             @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
@@ -485,7 +485,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
         a = joinpath(dir, "a.jl")
         b = joinpath(dir, "b.jl")
-        c = joinpath(dir, ".julia", "config", "startup.jl")
+        c = joinpath(dir, "config", "startup.jl")
 
         write(a, """
             println(@__FILE__)
@@ -501,7 +501,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
         readsplit(cmd) = split(readchomp(cmd), '\n')
 
-        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
+        withenv("JULIA_DEPOT_PATH" => dir) do
             @test readsplit(`$exename $a`) ==
                 [a, a,
                  b, a]
@@ -610,9 +610,9 @@ let exename = Base.julia_cmd()
     # --startup-file
     let JL_OPTIONS_STARTUPFILE_ON = 1,
         JL_OPTIONS_STARTUPFILE_OFF = 2
-        # `HOME=$tmpdir` to avoid errors in the user startup.jl, which hangs the tests. Issue #17642
+        # `JULIA_DEPOT_PATH=$tmpdir` to avoid errors in the user startup.jl, which hangs the tests. Issue #17642
         mktempdir() do tmpdir
-            withenv("HOME"=>tmpdir) do
+            withenv("JULIA_DEPOT_PATH"=>tmpdir) do
                 @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`)) == JL_OPTIONS_STARTUPFILE_ON
             end
         end
