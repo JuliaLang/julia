@@ -2645,3 +2645,15 @@ end
 
 # issue #38501
 @test :"a $b $("str") c" == Expr(:string, "a ", :b, " ", Expr(:string, "str"), " c")
+
+# issue #38844
+let
+    b = [1, 2, 3]
+    a = [[i * b] for i in 1:8]
+    @test Meta.isexpr(Meta.lower(Main, :([a[1:2]... a[3:4]... ; a[5:6]... a[7:8]...])), :error)
+    @test Meta.isexpr(Meta.lower(Main, :([a[1:2] a[3:4]... ; a[5:6] a[7:8]])), :error)
+    @test Meta.isexpr(Meta.lower(Main, :([a[1:2] a[3:4] ; a[5:6] a[7:8]...])), :error)
+    @test Meta.isexpr(Meta.lower(Main, :(Int[a[1:2]... a[3:4]... ; a[5:6]... a[7:8]...])), :error)
+    @test Meta.isexpr(Meta.lower(Main, :(Int[a[1:2] a[3:4]... ; a[5:6] a[7:8]])), :error)
+    @test Meta.isexpr(Meta.lower(Main, :(Int[a[1:2] a[3:4] ; a[5:6] a[7:8]...])), :error)
+end
