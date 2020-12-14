@@ -2892,6 +2892,29 @@ static int compareto_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, int cmp)
     return ans;
 }
 
+// Check whether the environment already asserts x <: y via recorded bounds.
+// This is used to avoid adding redundant constraints that lead to cycles.
+// Note this is a semi-predicate: 1 => is a subtype, 0 => unknown
+static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+{
+    if (!jl_is_typevar(x) || !jl_is_typevar(y))
+        return 0;
+    return compareto_var(x, (jl_tvar_t*)y, e, -1) || compareto_var(y, (jl_tvar_t*)x, e, 1);
+}
+
+// See if var y is reachable from x via bounds; used to avoid cycles.
+static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e)
+{
+    if (x == (jl_value_t*)y)
+        return 1;
+    if (!jl_is_typevar(x))
+        return 0;
+    jl_varbinding_t *xv = lookup(e, (jl_tvar_t*)x);
+    if (xv == NULL)
+        return 0;
+    return reachable_var(xv->ub, y, e) || reachable_var(xv->lb, y, e);
+}
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -2945,9 +2968,16 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                         return xlb;
                     return jl_bottom_type;
                 }
-                if (R) flip_vars(e);
-                int ccheck = subtype_in_env(xlb, yub, e) && subtype_in_env(ylb, xub, e);
-                if (R) flip_vars(e);
+                int ccheck;
+                if (yub == xub ||
+                    (subtype_by_bounds(xlb, yub, e) && subtype_by_bounds(ylb, xub, e))) {
+                    ccheck = 1;
+                }
+                else {
+                    if (R) flip_vars(e);
+                    ccheck = subtype_in_env(xlb, yub, e) && subtype_in_env(ylb, xub, e);
+                    if (R) flip_vars(e);
+                }
                 if (!ccheck)
                     return jl_bottom_type;
                 if (var_occurs_inside(xub, (jl_tvar_t*)y, 0, 0) && var_occurs_inside(yub, (jl_tvar_t*)x, 0, 0)) {
@@ -2963,18 +2993,16 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 else
                     lb = simple_join(xlb, ylb);
                 if (yy) {
-                    if (!compareto_var(lb, (jl_tvar_t*)y, e, -1))
+                    if (!subtype_by_bounds(lb, y, e))
                         yy->lb = lb;
-                    if (!compareto_var(ub, (jl_tvar_t*)y, e,  1))
+                    if (!subtype_by_bounds(y, ub, e))
                         yy->ub = ub;
                     assert(yy->ub != y);
                     assert(yy->lb != y);
                 }
-                if (xx) {
-                    if (!compareto_var(y, (jl_tvar_t*)x, e, -1))
-                        xx->lb = y;
-                    if (!compareto_var(y, (jl_tvar_t*)x, e,  1))
-                        xx->ub = y;
+                if (xx && !reachable_var(y, (jl_tvar_t*)x, e)) {
+                    xx->lb = y;
+                    xx->ub = y;
                     assert(xx->ub != x);
                 }
                 JL_GC_POP();

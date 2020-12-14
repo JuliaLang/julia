@@ -1787,8 +1787,7 @@ let X1 = Tuple{AlmostLU, Vector{T}} where T,
     # doesn't stack overflow
     @test I<:X1 || I<:X2
     actual = Tuple{AlmostLU{S, X} where X<:Matrix{S}, Vector{S}} where S<:Union{Float32, Float64}
-    @test I >: actual
-    @test_broken I == actual
+    @test I == actual
 end
 
 let
@@ -1814,3 +1813,31 @@ end
 
 # issue #24333
 @test_broken (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)
+
+# issue #38423
+let
+    Either{L, R} = Union{Ref{L}, Val{R}}
+    A = Tuple{Type{Ref{L}}, Type{Either{L, <:Any}}} where L
+    B = Tuple{Type{Ref{L2}}, Type{Either{L1, R}}} where {L1, R, L2 <: L1}
+    I = typeintersect(A, B)
+    @test I != Union{}
+    @test_broken I <: A
+    @test_broken I <: B
+end
+
+# issue #36804
+let
+    Either{L, R} = Union{Some{L}, Ref{R}}
+    f(::Type{Either{L2, R}}, ::Type{Either{L1, R}}) where {L1, R, L2 <: L1} = Either{L1, R}
+    f(::Type{Either{L, R1}}, ::Type{Either{L, R2}}) where {L, R1, R2 <: R1} = Either{L, R1}
+    @test f(Either{Int,Real}, Either{Int,Float32}) == Either{Int,Real}
+end
+
+# issue #36544
+let A = Tuple{T, Ref{T}, T} where {T},
+    B = Tuple{T, T, Ref{T}} where {T}
+    I = typeintersect(A, B)
+    @test I != Union{}
+    @test_broken I <: A
+    @test_broken I <: B
+end
