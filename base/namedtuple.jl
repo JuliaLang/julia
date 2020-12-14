@@ -119,8 +119,8 @@ firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
-@inline getindex(t::NamedTuple, i::Tuple{Vararg{Symbol}}) = NamedTuple{s}(nt)
-#? Is this ok too ?# @inline getindex(t::NamedTuple, i::AbstractVector{Symbol}) = NamedTuple{Tuple(s)}(nt)
+@inline getindex(t::NamedTuple, idxs::Tuple{Vararg{Symbol}}) = NamedTuple{idxs}(t)
+@inline getindex(t::NamedTuple, idxs::AbstractVector{Symbol}) = NamedTuple{Tuple(idxs)}(t)
 indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
