@@ -317,15 +317,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test popfirst!(got) == "       80     []"
         if Sys.WORD_SIZE == 64
             # P64 pools with 64 bit tags
-            @test popfirst!(got) == "       32     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         elseif 12 == (() -> @allocated ccall(:jl_gc_allocobj, Ptr{Cvoid}, (Csize_t,), 8))()
             # See if we have a 12-byte pool with 32 bit tags (MAX_ALIGN = 4)
-            @test popfirst!(got) == "       24     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       36     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "       12     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       24     Base.invokelatest(g, x)"
         else # MAX_ALIGN >= 8
-            @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "        8     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         end
         @test popfirst!(got) == "       80     []"
         @test popfirst!(got) == "        - end"
