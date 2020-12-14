@@ -417,7 +417,7 @@ function _split(str::AbstractString, splitter::F, limit::Integer, keepempty::Boo
     i = 1 # firstindex(str)
     n = lastindex(str)::Int
     r = findfirst(splitter,str)::Union{Nothing,Int,UnitRange{Int}}
-    if !isnothing(r)
+    if r !== nothing
         j, k = first(r), nextind(str,last(r))::Int
         while 0 < j <= n && length(strs) != limit-1
             if i < k
@@ -428,7 +428,7 @@ function _split(str::AbstractString, splitter::F, limit::Integer, keepempty::Boo
             end
             (k <= j) && (k = nextind(str,j)::Int)
             r = findnext(splitter,str,k)::Union{Nothing,Int,UnitRange{Int}}
-            isnothing(r) && break
+            r === nothing && break
             j, k = first(r), nextind(str,last(r))::Int
         end
     end

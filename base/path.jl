@@ -137,8 +137,11 @@ _splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
 function _splitdir_nodrive(a::String, b::String)
     m = match(path_dir_splitter,b)
     m === nothing && return (a,b)
-    a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
-    a, String(m.captures[3])
+    cs = m.captures
+    getcapture(cs, i) = cs[i]::AbstractString
+    c1, c2, c3 = getcapture(cs, 1), getcapture(cs, 2), getcapture(cs, 3)
+    a = string(a, isempty(c1) ? c2[1] : c1)
+    a, String(c3)
 end
 
 """
