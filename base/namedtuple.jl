@@ -30,7 +30,7 @@ julia> x.a
 julia> x[:a]
 1
 
-julia> nt[(:a,)]
+julia> x[(:a,)]
 (a = 1,)
 
 julia> keys(x)
