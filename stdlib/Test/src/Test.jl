@@ -37,6 +37,7 @@ const DISPLAY_FAILED = (
     :startswith,
     :endswith,
     :isempty,
+    :contains
 )
 
 #-----------------------------------------------------------------------
