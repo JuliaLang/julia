@@ -19,21 +19,21 @@ CLANG_TRIPLETS=$(filter %-darwin %-freebsd,$(TRIPLETS))
 NON_CLANG_TRIPLETS=$(filter-out %-darwin %-freebsd,$(TRIPLETS))
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
-BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind dsfmt objconv p7zip zlib suitesparse openlibm
+BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind osxunwind dsfmt objconv p7zip zlib suitesparse openlibm
 BB_GCC_EXPANDED_PROJECTS=openblas csl
-BB_CXX_EXPANDED_PROJECTS=gmp llvm
+BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools
 # These are non-BB source-only deps
-NON_BB_PROJECTS=patchelf mozillacert lapack
+NON_BB_PROJECTS=patchelf mozillacert lapack libwhich utf8proc
 
-# Convert `openblas` to `OPENBLAS`
-define upper
-$(shell echo $(1) | tr 'a-z' 'A-Z')
+# Convert `llvm-tools` to `LLVM_TOOLS`
+define makevar
+$(shell echo $(1) | tr 'a-z' 'A-Z' | tr '-' '_')
 endef
 
 # If $(2) == `src`, this will generate a `USE_BINARYBUILDER_FOO=0` make flag
 # It will also generate a `FOO_BB_TRIPLET=$(2)` make flag.
 define make_flags
-USE_BINARYBUILDER=$(if $(filter src,$(2)),0,1) $(call upper,$(1))_BB_TRIPLET=$(if $(filter src,$(2)),,$(2)) BINARYBUILDER_LLVM_ASSERTS=$(if $(filter assert,$(3)),1,0) DEPS_GIT=0
+USE_BINARYBUILDER=$(if $(filter src,$(2)),0,1) $(call makevar,$(1))_BB_TRIPLET=$(if $(filter src,$(2)),,$(2)) LLVM_ASSERTIONS=$(if $(filter assert,$(3)),1,0) DEPS_GIT=0
 endef
 
 # checksum_bb_dep takes in (name, triplet), and generates a `checksum-$(1)-$(2)` target.
@@ -41,6 +41,9 @@ endef
 # if $(3) is "assert", we set BINARYBUILDER_LLVM_ASSERTS=1
 define checksum_dep
 checksum-$(1)-$(2)-$(3):
+ifeq ($$(VERBOSE),1)
+	echo "make $(call make_flags,$(1),$(2),$(3)) checksum-$(1)"
+endif
 	@-$(MAKE) -C "$(JULIAHOME)/deps" $(call make_flags,$(1),$(2),$(3)) checksum-$(1)
 
 # Add this guy to his project target (e.g. `make -f contrib/refresh_checksums.mk openblas`)

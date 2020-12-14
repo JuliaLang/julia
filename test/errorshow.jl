@@ -297,6 +297,8 @@ let undefvar
     @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [-2, 1]"
     err_str = @except_str [5, 4, 3][1:5] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [1:5]"
+    err_str = @except_str [5, 4, 3][trues(6,7)] BoundsError
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [6×7 BitMatrix]"
 
     err_str = @except_str Bounded(2)[3] BoundsError
     @test err_str == "BoundsError: attempt to access 2-size Bounded at index [3]"

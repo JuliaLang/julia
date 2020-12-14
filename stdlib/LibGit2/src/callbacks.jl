@@ -413,7 +413,7 @@ function certificate_callback(
             valid = true
         elseif check == Consts.SSH_HOST_UNKNOWN
             if Sys.which("ssh-keyscan") !== nothing
-                msg = "Please run `ssh-keyscan $host >> $(files[1])` in order to add the server to your known hosts file and the try again."
+                msg = "Please run `ssh-keyscan $host >> $(files[1])` in order to add the server to your known hosts file and then try again."
             else
                 msg = "Please connect once using `ssh $host` in order to add the server to your known hosts file and then try again. You may not be allowed to log in (wrong user and/or no login allowed), but ssh will prompt you to add a host key for the server which will allow libgit2 to verify the server."
             end

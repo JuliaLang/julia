@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl
-module SuiteSparse_jll
-
-using Libdl, OpenBLAS_jll
+baremodule SuiteSparse_jll
+using Base, Libdl, OpenBLAS_jll
+Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -117,6 +117,25 @@ function __init__()
     global libumfpack_path = dlpath(libumfpack_handle)
 end
 
+# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
+# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
+# there isn't one.  It instead returns the overall Julia prefix.
 is_available() = true
+find_artifact_dir() = artifact_dir
+dev_jll() = error("stdlib JLLs cannot be dev'ed")
+best_wrapper = nothing
+get_libamd_path() = libamd_path
+get_libbtf_path() = libbtf_path
+get_libcamd_path() = libcamd_path
+get_libccolamd_path() = libccolamd_path
+get_libcholmod_path() = libcholmod_path
+get_libcolamd_path() = libcolamd_path
+get_libklu_path() = libklu_path
+get_libldl_path() = libldl_path
+get_librbio_path() = librbio_path
+get_libspqr_path() = libspqr_path
+get_libsuitesparse_wrapper_path() = libsuitesparse_wrapper_path
+get_libsuitesparseconfig_path() = libsuitesparseconfig_path
+get_libumfpack_path() = libumfpack_path
 
 end  # module SuiteSparse_jll

@@ -315,3 +315,19 @@ function f37555(x::Int; kwargs...)
 end
 @test f37555(1) == 1
 
+# Test that we can inline small constants even if they are not isbits
+struct NonIsBitsDims
+    dims::NTuple{N, Int} where N
+end
+NonIsBitsDims() = NonIsBitsDims(())
+let ci = code_typed(NonIsBitsDims, Tuple{})[1].first
+    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode) &&
+        ci.code[1].val.value == NonIsBitsDims()
+end
+
+struct NonIsBitsDimsUndef
+    dims::NTuple{N, Int} where N
+    NonIsBitsDimsUndef() = new()
+end
+@test Core.Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
+@test !Core.Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
