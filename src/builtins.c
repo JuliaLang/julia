@@ -712,21 +712,21 @@ JL_CALLABLE(jl_f__apply_pure)
     return ret;
 }
 
-// this is like `_apply`, but always runs in the newest world
-JL_CALLABLE(jl_f__apply_latest)
+// this is like a regular call, but always runs in the newest world
+JL_CALLABLE(jl_f__call_latest)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     size_t last_age = ptls->world_age;
     if (!ptls->in_pure_callback)
         ptls->world_age = jl_world_counter;
-    jl_value_t *ret = jl_f__apply(NULL, args, nargs);
+    jl_value_t *ret = jl_apply(args, nargs);
     ptls->world_age = last_age;
     return ret;
 }
 
-// Like `_apply`, but runs in the specified world.
+// Like call_in_world, but runs in the specified world.
 // If world > jl_world_counter, run in the latest world.
-JL_CALLABLE(jl_f__apply_in_world)
+JL_CALLABLE(jl_f__call_in_world)
 {
     JL_NARGSV(_apply_in_world, 2);
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -734,10 +734,9 @@ JL_CALLABLE(jl_f__apply_in_world)
     JL_TYPECHK(_apply_in_world, ulong, args[0]);
     size_t world = jl_unbox_ulong(args[0]);
     world = world <= jl_world_counter ? world : jl_world_counter;
-    if (!ptls->in_pure_callback) {
+    if (!ptls->in_pure_callback)
         ptls->world_age = world;
-    }
-    jl_value_t *ret = do_apply(NULL, args+1, nargs-1, NULL);
+    jl_value_t *ret = jl_apply(&args[1], nargs - 1);
     ptls->world_age = last_age;
     return ret;
 }
@@ -1555,8 +1554,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
-    add_builtin_func("_apply_latest", jl_f__apply_latest);
-    add_builtin_func("_apply_in_world", jl_f__apply_in_world);
+    add_builtin_func("_call_latest", jl_f__call_latest);
+    add_builtin_func("_call_in_world", jl_f__call_in_world);
     add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("_structtype", jl_f__structtype);
     add_builtin_func("_abstracttype", jl_f__abstracttype);
