@@ -17,7 +17,7 @@ artifact_dir = ""
 libopenblas_handle = C_NULL
 libopenblas_path = ""
 
-if arch(HostPlatform()) in ("x86_64", "ppc64le")
+if arch(HostPlatform()) in ("x86_64", "powerpc64le")
     const libsuffix = "64_"
 else
     const libsuffix = ""
