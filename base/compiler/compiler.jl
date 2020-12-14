@@ -103,11 +103,10 @@ using .Sort
 # compiler #
 ############
 
+include("compiler/cicache.jl")
 include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
-
-include("compiler/cicache.jl")
 include("compiler/methodtable.jl")
 
 include("compiler/inferenceresult.jl")
