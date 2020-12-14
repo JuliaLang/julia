@@ -28,9 +28,10 @@ mutable struct InferenceResult
     overridden_by_const::BitVector
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
+    valid_worlds::WorldRange # if inference and optimization is finished
     function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing)
+        return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
     end
 end
 

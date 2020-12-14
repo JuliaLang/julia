@@ -44,20 +44,15 @@ mutable struct OptimizationState
     const_api::Bool
     inlining::InliningState
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
-        s_edges = frame.stmt_edges[1]
-        if s_edges === nothing
-            s_edges = []
-            frame.stmt_edges[1] = s_edges
-        end
-        src = frame.src
+        s_edges = frame.stmt_edges[1]::Vector{Any}
         inlining = InliningState(params,
-            EdgeTracker(s_edges::Vector{Any}, frame.valid_worlds),
+            EdgeTracker(s_edges, frame.valid_worlds),
             InferenceCaches(
                 get_inference_cache(interp),
                 WorldView(code_cache(interp), frame.world)),
             method_table(interp))
         return new(frame.linfo,
-                   src, frame.stmt_info, frame.mod, frame.nargs,
+                   frame.src, frame.stmt_info, frame.mod, frame.nargs,
                    frame.sptypes, frame.slottypes, false,
                    inlining)
     end
