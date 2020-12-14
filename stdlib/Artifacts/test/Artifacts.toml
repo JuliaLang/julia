@@ -26,16 +26,15 @@ os = "macos"
     sha256 = "e88816a1492eecb4569bb24b3e52b757e59c87419dba962e99148b338369f326"
     url = "https://github.com/JuliaBinaryWrappers/c_simple_jll.jl/releases/download/c_simple+v1.2.3-pkgtest/c_simple.v1.2.3.x86_64-apple-darwin14.tar.gz"
 
-# NOTE: We explicitly comment this out, to test porous platform support.  Don't un-comment this!
-#[[c_simple]]
-#arch = "powerpc64le"
-#git-tree-sha1 = "dc9f84891c8215f90095b619533e141179b6cc06"
-#libc = "glibc"
-#os = "linux"
-#
-#    [[c_simple.download]]
-#    sha256 = "715af8f0405cff35feef5ad5e93836bb1bb0f93c77218bfdad411c8a4368ab4b"
-#    url = "https://github.com/JuliaBinaryWrappers/c_simple_jll.jl/releases/download/c_simple+v1.2.3-pkgtest/c_simple.v1.2.3.powerpc64le-linux-gnu.tar.gz"
+[[c_simple]]
+arch = "powerpc64le"
+git-tree-sha1 = "dc9f84891c8215f90095b619533e141179b6cc06"
+libc = "glibc"
+os = "linux"
+
+    [[c_simple.download]]
+    sha256 = "715af8f0405cff35feef5ad5e93836bb1bb0f93c77218bfdad411c8a4368ab4b"
+    url = "https://github.com/JuliaBinaryWrappers/c_simple_jll.jl/releases/download/c_simple+v1.2.3-pkgtest/c_simple.v1.2.3.powerpc64le-linux-gnu.tar.gz"
 
 [[c_simple]]
 arch = "i686"
