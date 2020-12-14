@@ -103,11 +103,11 @@ function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end
 
-function appendmacro!(syms, macros, needle, endchar)
+function appendmacro!(syms, macros, sub, endchar)
     for s in macros
-        if endswith(s, needle)
+        if endswith(s, sub)
             from = nextind(s, firstindex(s))
-            to = prevind(s, sizeof(s)-sizeof(needle)+1)
+            to = prevind(s, sizeof(s)-sizeof(sub)+1)
             push!(syms, s[from:to]*endchar)
         end
     end

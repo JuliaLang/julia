@@ -186,13 +186,13 @@ char * loader_dirname(char * x) {
     return x;
 }
 
-char * loader_strchr(const char * haystack, int needle) {
+char * loader_strchr(const char * space, int sub) {
     int idx=0;
-    while (haystack[idx] != needle) {
-        if (haystack[idx] == 0) {
+    while (space[idx] != sub) {
+        if (space[idx] == 0) {
             return NULL;
         }
         idx++;
     }
-    return (char *)haystack + idx;
+    return (char *)space + idx;
 }

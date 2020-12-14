@@ -606,7 +606,7 @@ function Base.Docs.catdoc(hs::LazyHelp...)
     end
 end
 
-REPL.docsearch(haystack::LazyHelp, needle) = REPL.docsearch(haystack.text, needle)
+REPL.docsearch(space::LazyHelp, sub) = REPL.docsearch(space.text, sub)
 
 @doc LazyHelp("LazyHelp\n") LazyHelp
 @doc LazyHelp("LazyHelp(text)\n") LazyHelp(text)

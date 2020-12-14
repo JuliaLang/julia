@@ -2118,9 +2118,9 @@ argmin(A::AbstractSparseMatrixCSC) = findmin(A)[2]
 argmax(A::AbstractSparseMatrixCSC) = findmax(A)[2]
 
 ## getindex
-function rangesearch(haystack::AbstractRange, needle)
-    (i,rem) = divrem(needle - first(haystack), step(haystack))
-    (rem==0 && 1<=i+1<=length(haystack)) ? i+1 : 0
+function rangesearch(space::AbstractRange, sub)
+    (i,rem) = divrem(sub - first(space), step(space))
+    (rem==0 && 1<=i+1<=length(space)) ? i+1 : 0
 end
 
 getindex(A::AbstractSparseMatrixCSC, I::Tuple{Integer,Integer}) = getindex(A, I[1], I[2])

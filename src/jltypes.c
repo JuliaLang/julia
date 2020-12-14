@@ -223,16 +223,16 @@ jl_value_t *jl_nth_union_component(jl_value_t *v, int i) JL_NOTSAFEPOINT
 }
 
 // inverse of jl_nth_union_component
-int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth) JL_NOTSAFEPOINT
+int jl_find_union_component(jl_value_t *space, jl_value_t *sub, unsigned *nth) JL_NOTSAFEPOINT
 {
-    if (jl_is_uniontype(haystack)) {
-        if (jl_find_union_component(((jl_uniontype_t*)haystack)->a, needle, nth))
+    if (jl_is_uniontype(space)) {
+        if (jl_find_union_component(((jl_uniontype_t*)space)->a, sub, nth))
             return 1;
-        if (jl_find_union_component(((jl_uniontype_t*)haystack)->b, needle, nth))
+        if (jl_find_union_component(((jl_uniontype_t*)space)->b, sub, nth))
             return 1;
         return 0;
     }
-    if (needle == haystack)
+    if (sub == space)
         return 1;
     (*nth)++;
     return 0;

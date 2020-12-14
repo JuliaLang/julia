@@ -510,11 +510,11 @@ fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), fiel
 
 # Fuzzy Search Algorithm
 
-function matchinds(needle, haystack; acronym::Bool = false)
-    chars = collect(needle)
+function matchinds(sub, space; acronym::Bool = false)
+    chars = collect(sub)
     is = Int[]
     lastc = '\0'
-    for (i, char) in enumerate(haystack)
+    for (i, char) in enumerate(space)
         isempty(chars) && break
         while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if lowercase(char) == lowercase(chars[1]) &&
@@ -529,19 +529,19 @@ end
 
 longer(x, y) = length(x) ≥ length(y) ? (x, true) : (y, false)
 
-bestmatch(needle, haystack) =
-    longer(matchinds(needle, haystack, acronym = true),
-           matchinds(needle, haystack))
+bestmatch(sub, space) =
+    longer(matchinds(sub, space, acronym = true),
+           matchinds(sub, space))
 
 avgdistance(xs) =
     isempty(xs) ? 0 :
     (xs[end] - xs[1] - length(xs)+1)/length(xs)
 
-function fuzzyscore(needle, haystack)
+function fuzzyscore(sub, space)
     score = 0.
-    is, acro = bestmatch(needle, haystack)
+    is, acro = bestmatch(sub, space)
     score += (acro ? 2 : 1)*length(is) # Matched characters
-    score -= 2(length(needle)-length(is)) # Missing characters
+    score -= 2(length(sub)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
     !isempty(is) && (score -= sum(is)/length(is)/100) # Closer to beginning
     return score
@@ -649,34 +649,34 @@ doc_completions(name::Symbol) = doc_completions(string(name))
 
 # Searching and apropos
 
-# Docsearch simply returns true or false if an object contains the given needle
-docsearch(haystack::AbstractString, needle) = findfirst(needle, haystack) !== nothing
-docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
-docsearch(::Nothing, needle) = false
-function docsearch(haystack::Array, needle)
-    for elt in haystack
-        docsearch(elt, needle) && return true
+# Docsearch simply returns true or false if an object contains the given sub
+docsearch(space::AbstractString, sub) = findfirst(sub, space) !== nothing
+docsearch(space::Symbol, sub) = docsearch(string(space), sub)
+docsearch(::Nothing, sub) = false
+function docsearch(space::Array, sub)
+    for elt in space
+        docsearch(elt, sub) && return true
     end
     false
 end
-function docsearch(haystack, needle)
-    @warn "Unable to search documentation of type $(typeof(haystack))" maxlog=1
+function docsearch(space, sub)
+    @warn "Unable to search documentation of type $(typeof(sub))" maxlog=1
     false
 end
 
 ## Searching specific documentation objects
-function docsearch(haystack::MultiDoc, needle)
-    for v in values(haystack.docs)
-        docsearch(v, needle) && return true
+function docsearch(space::MultiDoc, sub)
+    for v in values(space.docs)
+        docsearch(v, sub) && return true
     end
     false
 end
 
-function docsearch(haystack::DocStr, needle)
-    docsearch(parsedoc(haystack), needle) && return true
-    if haskey(haystack.data, :fields)
-        for doc in values(haystack.data[:fields])
-            docsearch(doc, needle) && return true
+function docsearch(space::DocStr, sub)
+    docsearch(parsedoc(space), sub) && return true
+    if haskey(space.data, :fields)
+        for doc in values(space.data[:fields])
+            docsearch(doc, sub) && return true
         end
     end
     false
@@ -685,7 +685,7 @@ end
 ## doc search
 
 ## Markdown search simply strips all markup and searches plain text version
-docsearch(haystack::Markdown.MD, needle) = docsearch(stripmd(haystack.content), needle)
+docsearch(space::Markdown.MD, sub) = docsearch(stripmd(space.content), sub)
 
 """
     stripmd(x)
@@ -727,12 +727,12 @@ When `pattern` is a string, case is ignored. Results are printed to `io`.
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
 
-function apropos(io::IO, needle::Regex)
+function apropos(io::IO, sub::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict
-        docsearch(doc(mod), needle) && println(io, mod)
+        docsearch(doc(mod), sub) && println(io, mod)
         for (k, v) in meta(mod)
-            docsearch(v, needle) && println(io, k)
+            docsearch(v, sub) && println(io, k)
         end
     end
 end

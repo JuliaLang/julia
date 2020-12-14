@@ -141,7 +141,7 @@ value_t fl_string_find(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     size_t len = cv_len((cvalue_t*)ptr(args[0]));
     if (start > len)
         bounds_error(fl_ctx, "string.find", args[0], args[2]);
-    char *needle; size_t needlesz;
+    char *sub; size_t subsz;
 
     value_t v = args[1];
     cprim_t *cp = (cprim_t*)ptr(v);
@@ -149,30 +149,30 @@ value_t fl_string_find(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
         uint32_t c = *(uint32_t*)cp_data(cp);
         if (c <= 0x7f)
             return mem_find_byte(fl_ctx, s, (char)c, start, len);
-        needlesz = u8_toutf8(cbuf, sizeof(cbuf), &c, 1);
-        needle = cbuf;
+        subsz = u8_toutf8(cbuf, sizeof(cbuf), &c, 1);
+        sub = cbuf;
     }
     else if (iscprim(v) && cp_class(cp) == fl_ctx->bytetype) {
         return mem_find_byte(fl_ctx, s, *(char*)cp_data(cp), start, len);
     }
     else if (fl_isstring(fl_ctx, v)) {
         cvalue_t *cv = (cvalue_t*)ptr(v);
-        needlesz = cv_len(cv);
-        needle = (char*)cv_data(cv);
+        subsz = cv_len(cv);
+        sub = (char*)cv_data(cv);
     }
     else {
         type_error(fl_ctx, "string.find", "string", args[1]);
     }
-    if (needlesz > len-start)
+    if (subsz > len-start)
         return fl_ctx->F;
-    else if (needlesz == 1)
-        return mem_find_byte(fl_ctx, s, needle[0], start, len);
-    else if (needlesz == 0)
+    else if (subsz == 1)
+        return mem_find_byte(fl_ctx, s, sub[0], start, len);
+    else if (subsz == 0)
         return size_wrap(fl_ctx, start);
     size_t i;
-    for(i=start; i < len-needlesz+1; i++) {
-        if (s[i] == needle[0]) {
-            if (!memcmp(&s[i+1], needle+1, needlesz-1))
+    for(i=start; i < len-subsz+1; i++) {
+        if (s[i] == sub[0]) {
+            if (!memcmp(&s[i+1], sub+1, subsz-1))
                 return size_wrap(fl_ctx, i);
         }
     }

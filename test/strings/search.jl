@@ -352,7 +352,7 @@ end
 @test findfirst(r"az", "foo,bar,baz") == 10:11
 @test findnext(r"az", "foo,bar,baz", 12) == nothing
 
-# occursin with a String and Char needle
+# occursin with a String and Char sub
 @test occursin("o", "foo")
 @test occursin('o', "foo")
 # occursin in curried form

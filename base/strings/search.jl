@@ -596,10 +596,10 @@ findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
          start::Integer) =
     _rsearch(A, pattern, start)
 """
-    occursin(needle::Union{AbstractString,AbstractPattern,AbstractChar}, haystack::AbstractString)
+    occursin(sub::Union{AbstractString,AbstractPattern,AbstractChar}, space::AbstractString)
 
-Determine whether the first argument is a substring of the second. If `needle`
-is a regular expression, checks whether `haystack` contains a match.
+Determine whether the first argument is a substring of the second. If `sub`
+is a regular expression, checks whether `space` contains a match.
 
 # Examples
 ```jldoctest
@@ -618,17 +618,17 @@ false
 
 See also: [`contains`](@ref).
 """
-occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
-    _searchindex(haystack, needle, firstindex(haystack)) != 0
+occursin(sub::Union{AbstractString,AbstractChar}, space::AbstractString) =
+    _searchindex(space, sub, firstindex(space)) != 0
 
 """
-    occursin(haystack)
+    occursin(space)
 
-Create a function that checks whether its argument occurs in `haystack`, i.e.
-a function equivalent to `needle -> occursin(needle, haystack)`.
+Create a function that checks whether its argument occurs in `space`, i.e.
+a function equivalent to `sub -> occursin(sub, space)`.
 
 The returned function is of type `Base.Fix2{typeof(occursin)}`.
 """
-occursin(haystack) = Base.Fix2(occursin, haystack)
+occursin(space) = Base.Fix2(occursin, space)
 
 in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
