@@ -228,6 +228,8 @@ LinearAlgebra.iszerodefined(::Type{Zero}) = true
     # This should not need `zero(::Type{Zero})` to be defined
     test(1)
     Base.zero(::Type{Zero}) = Zero()
+    # This should not need `==(::Zero, ::Int)` to be defined as `iszerodefined`
+    # returns true.
     test(Zero())
 end
 
