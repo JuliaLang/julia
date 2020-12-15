@@ -504,6 +504,7 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+@test Base.tuple_type_tail(Tuple{Vararg{Int}}) == Tuple{Vararg{Int}}
 
 @testset "setindex" begin
     @test Base.setindex((1, ), 2, 1) === (2, )

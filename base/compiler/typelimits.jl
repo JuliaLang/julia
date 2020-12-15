@@ -46,6 +46,8 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         # see if it is derived from the body
         # also handle the var here, since this construct bounds the mindepth to the smallest possible value
         return is_derived_type(t, c.var.ub, mindepth) || is_derived_type(t, c.body, mindepth)
+    elseif isa(c, Core.TypeofVararg)
+        return is_derived_type(t, unwrapva(c), mindepth)
     elseif isa(c, DataType)
         if mindepth > 0
             mindepth -= 1
@@ -85,7 +87,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         return t # fast path: unparameterized are always simple
     else
         ut = unwrap_unionall(t)
-        if isa(ut, DataType) && ut.name !== _va_typename && isa(c, Type) && c !== Union{} && c <: t
+        if isa(ut, DataType) && isa(c, Type) && c !== Union{} && c <: t
             # TODO: need to check that the UnionAll bounds on t are limited enough too
             return t # t is already wider than the comparison in the type lattice
         elseif is_derived_type_from_any(ut, sources, depth)
@@ -118,19 +120,19 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             b = _limit_type_size(t.b, c.b, sources, depth, allowed_tuplelen)
             return Union{a, b}
         end
+    elseif isa(t, Core.TypeofVararg)
+        isa(c, Core.TypeofVararg) || return Vararg
+        VaT = _limit_type_size(unwrapva(t), unwrapva(c), sources, depth + 1, 0)
+        if isdefined(t, :N) && (isa(t.N, TypeVar) || (isdefined(c, :N) && t.N === c.N))
+            return Vararg{VaT, t.N}
+        end
+        return Vararg{VaT}
     elseif isa(t, DataType)
         if isa(c, DataType)
             tP = t.parameters
             cP = c.parameters
             if t.name === c.name && !isempty(cP)
-                if isvarargtype(t)
-                    VaT = _limit_type_size(tP[1], cP[1], sources, depth + 1, 0)
-                    N = tP[2]
-                    if isa(N, TypeVar) || N === cP[2]
-                        return Vararg{VaT, N}
-                    end
-                    return Vararg{VaT}
-                elseif t.name === Tuple.name
+                if t.name === Tuple.name
                     # for covariant datatypes (Tuple),
                     # apply type-size limit element-wise
                     ltP = length(tP)
@@ -155,20 +157,16 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                     end
                     return Tuple{Q...}
                 end
-            elseif isvarargtype(c)
-                # Tuple{Vararg{T}} --> Tuple{T} is OK
-                return _limit_type_size(t, cP[1], sources, depth, 0)
             end
+        elseif isa(c, Core.TypeofVararg)
+            # Tuple{Vararg{T}} --> Tuple{T} is OK
+            return _limit_type_size(t, c.T, sources, depth, 0)
         end
         if isType(t) # allow taking typeof as Type{...}, but ensure it doesn't start nesting
             tt = unwrap_unionall(t.parameters[1])
             if isa(tt, DataType) && !isType(tt)
                 is_derived_type_from_any(tt, sources, depth) && return t
             end
-        end
-        if isvarargtype(t)
-            # never replace Vararg with non-Vararg
-            return Vararg
         end
         if allowed_tuplelen < 1 && t.name === Tuple.name
             return Any

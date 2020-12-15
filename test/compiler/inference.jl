@@ -284,7 +284,7 @@ code_llvm(devnull, invoke_g10878, ())
 @test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
 find_tvar10930(sig::Type{T}) where {T<:Tuple} = 1
 function find_tvar10930(arg)
-    if arg<:Tuple
+    if isa(arg, Type) && arg<:Tuple
         find_tvar10930(arg[random_var_name])
     end
     return 1
@@ -627,7 +627,7 @@ function maybe_vararg_tuple_1()
 end
 @test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_1, ())[1]
 function maybe_vararg_tuple_2()
-    x = Type[Vararg{Int}][1]
+    x = [Vararg{Int}][1]
     Tuple{x}
 end
 @test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_2, ())[1]
@@ -1829,8 +1829,8 @@ end
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Any}) == Type
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Int}) == Union{}
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) == Union{}
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Type
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Any
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Any
 
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
 
@@ -2653,7 +2653,10 @@ end
 @test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, NTuple{3, Char}, 10) ==
         Union{Tuple{Char, Char, Int}, Tuple{Char, Int, Char}, Tuple{Char, Int, Int}, Tuple{Int, Char, Char},
               Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
-
+# Test that these don't throw
+@test Core.Compiler.typesubtract(Tuple{Vararg{Int}}, Tuple{Vararg{Char}}, 0) == Tuple{Vararg{Int}}
+@test Core.Compiler.typesubtract(NTuple{3, Real}, NTuple{3, Char}, 0) == NTuple{3, Real}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Real, Char}}, NTuple{2, Char}, 0) == NTuple{3, Union{Real, Char}}
 
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
 
@@ -2834,9 +2837,9 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Union{Type, TypeVar}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Union{Type, TypeVar}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Type
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Type
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Any, Vararg}) == Any
 f_apply_cglobal(args...) = cglobal(args...)
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Vararg{Type{Int}}}) == Ptr
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}}) == Ptr
@@ -2958,7 +2961,7 @@ end
 end
 
 # issue #37638
-@test !(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}) <: Vararg)
+@test isa(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}), Type)
 
 # Issue #37943
 f37943(x::Any, i::Int) = getfield((x::Pair{false, Int}), i)
@@ -2970,3 +2973,9 @@ g37943(i::Int) = fieldtype(Pair{false, T} where T, i)
 f_partial_struct_constprop(a, b) = (a[1]+b[1], nothing)
 g_partial_struct_constprop() = Val{f_partial_struct_constprop((1,), (1,))[1]}()
 @test only(Base.return_types(g_partial_struct_constprop, Tuple{})) === Val{2}
+
+# N parameter of Vararg is known to be Int
+gVarargInt(x::Int) = 1
+gVarargInt(x) = 2
+fVarargInt(::Tuple{Vararg{Int, N}}) where {N} = Val{gVarargInt(N)}()
+@test only(Base.return_types(fVarargInt, Tuple{Tuple{Vararg{Int}}})) == Val{1}

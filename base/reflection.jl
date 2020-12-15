@@ -775,6 +775,9 @@ function to_tuple_type(@nospecialize(t))
     end
     if isa(t, Type) && t <: Tuple
         for p in unwrap_unionall(t).parameters
+            if isa(p, Core.TypeofVararg)
+                p = p.T
+            end
             if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end

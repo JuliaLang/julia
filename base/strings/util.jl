@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const Chars = Union{AbstractChar,Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}
+const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}
 
 # starts with and ends with predicates
 
@@ -402,7 +402,7 @@ function split(str::T, splitter;
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
-function split(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+function split(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
@@ -478,7 +478,7 @@ function rsplit(str::T, splitter;
                 limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
-function rsplit(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+function rsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
                 limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
@@ -513,7 +513,7 @@ _replace(io, repl::Function, str, r, pattern::Function) =
 replace(str::String, pat_repl::Pair{<:AbstractChar}; count::Integer=typemax(Int)) =
     replace(str, isequal(first(pat_repl)) => last(pat_repl); count=count)
 
-replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{<:AbstractChar}},
+replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{AbstractChar}},
                                             AbstractVector{<:AbstractChar},Set{<:AbstractChar}}};
         count::Integer=typemax(Int)) =
     replace(str, in(first(pat_repl)) => last(pat_repl), count=count)
@@ -689,7 +689,7 @@ julia> bytes2hex(b)
 """
 function bytes2hex end
 
-function bytes2hex(a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
+function bytes2hex(a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
     b = Base.StringVector(2*length(a))
     @inbounds for (i, x) in enumerate(a)
         b[2i - 1] = hex_chars[1 + x >> 4]
@@ -698,7 +698,7 @@ function bytes2hex(a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
     return String(b)
 end
 
-function bytes2hex(io::IO, a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
+function bytes2hex(io::IO, a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
     for x in a
         print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
     end

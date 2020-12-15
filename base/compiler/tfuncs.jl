@@ -447,9 +447,7 @@ function typebound_nothrow(b)
     b = widenconst(b)
     (b ⊑ TypeVar) && return true
     if isType(b)
-        b = unwrap_unionall(b.parameters[1])
-        b === Union{} && return true
-        return !isa(b, DataType) || b.name != _va_typename
+        return true
     end
     return false
 end
@@ -489,9 +487,8 @@ function typeof_concrete_vararg(t::DataType)
     for i = 1:np
         p = t.parameters[i]
         if i == np && isvarargtype(p)
-            pp = unwrap_unionall(p)
-            if isconcretetype(pp.parameters[1]) && pp.parameters[2] isa TypeVar
-                return rewrap_unionall(Type{Tuple{t.parameters[1:np-1]..., pp}}, p)
+            if isdefined(p, :T) && !isdefined(p, :N) && isconcretetype(p.T)
+                return Type{Tuple{t.parameters[1:np-1]..., Vararg{p.T, N}}} where N
             end
         elseif !isconcretetype(p)
             break
@@ -555,15 +552,21 @@ function typeassert_type_instance(@nospecialize(v), @nospecialize(t))
         widev = widenconst(v)
         if widev <: t
             return v
-        elseif typeintersect(widev, t) === Bottom
+        end
+        ti = typeintersect(widev, t)
+        if ti === Bottom
             return Bottom
         end
         @assert widev <: Tuple
         new_fields = Vector{Any}(undef, length(v.fields))
         for i = 1:length(new_fields)
-            new_fields[i] = typeassert_type_instance(v.fields[i], getfield_tfunc(t, Const(i)))
-            if new_fields[i] === Bottom
-                return Bottom
+            if isa(v.fields[i], Core.TypeofVararg)
+                new_fields[i] = v.fields[i]
+            else
+                new_fields[i] = typeassert_type_instance(v.fields[i], getfield_tfunc(t, Const(i)))
+                if new_fields[i] === Bottom
+                    return Bottom
+                end
             end
         end
         return tuple_tfunc(new_fields)
@@ -1130,10 +1133,10 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     elseif isconstType(headtypetype)
         headtype = headtypetype.parameters[1]
     else
-        return Type
+        return Any
     end
     if !isempty(args) && isvarargtype(args[end])
-        return Type
+        return isvarargtype(headtype) ? Core.TypeofVararg : Type
     end
     largs = length(args)
     if headtype === Union
@@ -1175,8 +1178,8 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
         end
         return allconst ? Const(ty) : Type{ty}
     end
-    istuple = (headtype == Tuple)
-    if !istuple && !isa(headtype, UnionAll)
+    istuple = isa(headtype, Type) && (headtype == Tuple)
+    if !istuple && !isa(headtype, UnionAll) && !isvarargtype(headtype)
         return Union{}
     end
     uw = unwrap_unionall(headtype)
@@ -1193,7 +1196,8 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             aip1 = ai.parameters[1]
             canconst &= !has_free_typevars(aip1)
             push!(tparams, aip1)
-        elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) || valid_tparam(ai.val))
+        elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
+                                  valid_tparam(ai.val) || (istuple && isa(ai.val, Core.TypeofVararg)))
             push!(tparams, ai.val)
         elseif isa(ai, PartialTypeVar)
             canconst = false
@@ -1259,11 +1263,11 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     catch ex
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
-        return Type{<:headtype}
+        return isvarargtype(headtype) ? Core.TypeofVararg : Type{<:headtype}
     end
     !uncertain && canconst && return Const(appl)
-    if isvarargtype(headtype)
-        return Type
+    if isvarargtype(appl)
+        return Core.TypeofVararg
     end
     if istuple
         return Type{<:appl}
@@ -1315,7 +1319,7 @@ function tuple_tfunc(atypes::Vector{Any})
         x = atypes[i]
         # TODO ignore singleton Const (don't forget to update cache logic if you implement this)
         if !anyinfo
-            anyinfo = !isa(x, Type) || isType(x)
+            anyinfo = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
         end
         if isa(x, Const)
             params[i] = typeof(x.val)
