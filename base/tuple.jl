@@ -210,9 +210,9 @@ end
 
 # 1 argument function
 map(f, t::Tuple{})              = ()
-map(f, t::Tuple{Any,})          = (f(t[1]),)
-map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
-map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
+map(f, t::Tuple{Any,})          = (@_inline_meta; (f(t[1]),))
+map(f, t::Tuple{Any, Any})      = (@_inline_meta; (f(t[1]), f(t[2])))
+map(f, t::Tuple{Any, Any, Any}) = (@_inline_meta; (f(t[1]), f(t[2]), f(t[3])))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
 const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
@@ -229,8 +229,8 @@ function map(f, t::Any16)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
-map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (f(t[1],s[1]),)
-map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (f(t[1],s[1]), f(t[2],s[2]))
+map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (@_inline_meta; (f(t[1],s[1]),))
+map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (@_inline_meta; (f(t[1],s[1]), f(t[2],s[2])))
 function map(f, t::Tuple, s::Tuple)
     @_inline_meta
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
