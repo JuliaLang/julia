@@ -7,9 +7,8 @@
 `===` as equality with keys of type `K` and values of type `V`.
 
 See [`Dict`](@ref) for further help. In the example below, The `Dict`
-keys all hash to the same value as they are inserted and type-promoted,
-so they get overwritten. The `IdDict` hashes by object-id, and thus preserves the 
-3 different keys.
+keys are all `isequal` and therefore get hashed the same, so they get overwritten.
+The `IdDict` hashes by object-id, and thus preserves the 3 different keys.
 
 # Examples
 ```julia-repl
