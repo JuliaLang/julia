@@ -7712,7 +7712,7 @@ extern "C" void jl_init_llvm(void)
         std::unique_ptr<MCSubtargetInfo> MSTI(
             TheTarget->createMCSubtargetInfo(TheTriple.str(), "", ""));
         if (!MSTI->isCPUStringValid(TheCPU))
-            jl_errorf("Invalid CPU name %s.", TheCPU.c_str());
+            jl_errorf("Invalid CPU name \"%s\".", TheCPU.c_str());
         if (jl_processor_print_help) {
             // This is the only way I can find to print the help message once.
             // It'll be nice if we can iterate through the features and print our own help
