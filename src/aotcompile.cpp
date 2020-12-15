@@ -292,7 +292,9 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     JL_LOCK(&codegen_lock);
-    uint64_t compiler_start_time = jl_hrtime();
+    uint64_t compiler_start_time = 0;
+    if (jl_measure_compile_time)
+        compiler_start_time = jl_hrtime();
 
     CompilationPolicy policy = (CompilationPolicy) _policy;
     std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
@@ -415,8 +417,8 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     }
 
     data->M = std::move(clone);
-
-    jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
+    if (jl_measure_compile_time)
+        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock); // Might GC
     return (void*)data;
 }
@@ -893,7 +895,9 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         std::unique_ptr<Module> m;
         jl_llvm_functions_t decls;
         JL_LOCK(&codegen_lock);
-        uint64_t compiler_start_time = jl_hrtime();
+        uint64_t compiler_start_time = 0;
+        if (jl_measure_compile_time)
+            compiler_start_time = jl_hrtime();
         std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output);
 
         Function *F = NULL;
@@ -917,7 +921,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
             m.release(); // the return object `llvmf` will be the owning pointer
         }
         JL_GC_POP();
-        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
+        if (jl_measure_compile_time)
+            jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
         JL_UNLOCK(&codegen_lock); // Might GC
         if (F)
             return F;
