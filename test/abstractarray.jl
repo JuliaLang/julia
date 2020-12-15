@@ -1233,3 +1233,11 @@ end
     _, st = iterate(a)
     @test Base.rest(a, st) == [3, 2, 4]
 end
+
+@testset "Base.isstored" begin
+    a = rand(3, 4, 5)
+    @test Base.isstored(a, 1, 2, 3)
+    @test_throws BoundsError Base.isstored(a, 4, 4, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 5, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 4, 6)
+end
