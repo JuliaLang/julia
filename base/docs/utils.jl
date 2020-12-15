@@ -33,6 +33,8 @@ end
 
 show(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
 show(io::IO, ::MIME"text/html", h::HTML{<:Function}) = h.content(io)
+print(io::IO, h::HTML) = print(io, h.content)
+print(io::IO, h::HTML{<:Function}) = h.content(io)
 
 """
     @html_str -> Docs.HTML

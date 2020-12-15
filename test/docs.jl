@@ -1089,6 +1089,12 @@ end
 # issue #25172
 @test repr(MIME"text/html"(), HTML("a","b")) == "ab"
 
+# issue #38889 -- permit nesting
+@test repr(MIME"text/html"(), HTML(HTML("a"))) == "a"
+@test repr(MIME"text/html"(), HTML(HTML("a"), HTML("b"))) == "ab"
+@test repr(MIME"text/html"(), HTML(HTML("a", "b"))) == "ab"
+@test repr(MIME"text/html"(), HTML(HTML("a", "b"),"c")) == "abc"
+
 # issue 21016
 module I21016
 
