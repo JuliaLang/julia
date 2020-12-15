@@ -47,7 +47,6 @@ static uint32_t sysimg_init_cb(const void *id)
             best_idx = i;
         }
     }
-    target = sysimg[best_idx];
     jit_targets.push_back(std::move(target));
     return best_idx;
 }
