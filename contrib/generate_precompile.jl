@@ -9,6 +9,7 @@ if !isdefined(Base, :uv_eventloop)
 end
 Base.include(@__MODULE__, joinpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
+using Base.Meta
 
 CTRL_C = '\x03'
 UP_ARROW = "\e[A"
@@ -275,14 +276,23 @@ function generate_precompile_statements()
         # println(statement)
         # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
         # N with a large number seems to work around it.
-        statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
+        ps = Meta.parse(statement)
+        if isexpr(ps, :call)
+            if isexpr(ps.args[end], :curly)
+                l = ps.args[end]
+                if length(l.args) == 2 && l.args[1] == :Vararg
+                    push!(l.args, 100)
+                end
+            end
+        end
         try
-            Base.include_string(PrecompileStagingArea, statement)
+            # println(ps)
+            Core.eval(PrecompileStagingArea, ps)
             n_succeeded += 1
             print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
         catch
             # See #28808
-            # @error "Failed to precompile $statement"
+            @error "Failed to precompile $statement"
         end
     end
     println()

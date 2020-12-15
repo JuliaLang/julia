@@ -752,6 +752,7 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_task_t") ||
                    Name.endswith_lower("jl_uniontype_t") ||
                    Name.endswith_lower("jl_method_match_t") ||
+                   Name.endswith_lower("jl_vararg_t") ||
                    // Probably not technically true for these, but let's allow
                    // it
                    Name.endswith_lower("typemap_intersection_env") ||

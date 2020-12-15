@@ -111,7 +111,6 @@
     XX(jl_uniontype_type) \
     XX(jl_upsilonnode_type) \
     XX(jl_vararg_type) \
-    XX(jl_vararg_typename) \
     XX(jl_vecelement_typename) \
     XX(jl_void_type) \
     XX(jl_voidpointer_type) \

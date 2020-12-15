@@ -2290,6 +2290,19 @@ function show(io::IO, tv::TypeVar)
     nothing
 end
 
+function show(io::IO, vm::Core.TypeofVararg)
+    print(io, "Vararg")
+    if isdefined(vm, :T)
+        print(io, "{")
+        show(io, vm.T)
+        if isdefined(vm, :N)
+            print(io, ", ")
+            show(io, vm.N)
+        end
+        print(io, "}")
+    end
+end
+
 module IRShow
     const Compiler = Core.Compiler
     using Core.IR

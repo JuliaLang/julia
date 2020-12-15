@@ -307,7 +307,7 @@ julia> 2^2 * 3^3
 !!! compat "Julia 1.6"
     The method that accepts a tuple requires Julia 1.6 or later.
 """
-function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractVector{<:Integer}}, x::Real)
+function nextprod(a::Union{Tuple{Vararg{Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end

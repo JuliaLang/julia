@@ -727,8 +727,7 @@ end
             ci = U
         end
         if i == lr && Core.Compiler.isvarargtype(pi)
-            N = (Base.unwrap_unionall(pi)::DataType).parameters[2]
-            c[i] = Base.rewrap_unionall(Vararg{ci, N}, pi)
+            c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
         else
             c[i] = ci
         end

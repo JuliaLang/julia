@@ -1971,8 +1971,12 @@ let a(; b) = b
 end
 
 # issue #33987
-f33987(args::(Vararg{Any, N} where N); kwargs...) = args
-@test f33987(1,2,3) === (1,2,3)
+@test_deprecated eval(quote
+    # This syntax is deprecated. This test should be removed when the
+    # deprecation is.
+    f33987(args::(Vararg{Any, N} where N); kwargs...) = args
+    @test f33987(1,2,3) === (1,2,3)
+end)
 
 macro id_for_kwarg(x); x; end
 Xo65KdlD = @id_for_kwarg let x = 1
