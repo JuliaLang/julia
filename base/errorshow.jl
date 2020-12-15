@@ -91,17 +91,9 @@ function showerror(io::IO, ex, bt; backtrace=true)
     end
 end
 
-function showerror(io::IO, ex::LoadError, bt; backtrace=true, depth = 1)
-    if ex.error isa LoadError
-        showerror(io, ex.error, bt, backtrace=backtrace, depth = depth + 1)
-    else
-        if depth == 1
-            print(io, "LoadError: ")
-        else
-            print(io, "LoadError (x$depth): ")
-        end
-        showerror(io, ex.error, bt, backtrace=backtrace)
-    end
+function showerror(io::IO, ex::LoadError, bt; backtrace=true)
+    !isa(ex.error, LoadError) && print(io, "LoadError: ")
+    showerror(io, ex.error, bt, backtrace=backtrace)
     print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
