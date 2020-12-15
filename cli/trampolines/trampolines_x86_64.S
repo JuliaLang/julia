@@ -40,8 +40,8 @@ SEH_START1(name); \
 name##:; \
 SEH_START2(); \
     CET_START(); \
-    mov CNAME(name##_addr)(%rip),%rax; \
-    jmpq *%rax; \
+    mov CNAME(name##_addr)(%rip),%r11; \
+    jmpq *%r11; \
     ud2; \
 SEH_END(); \
 .cfi_endproc; \
