@@ -218,9 +218,12 @@ end
 const TOML_CACHE = TOMLCache(TOML.Parser(), Dict{String, Dict{String, Any}}())
 
 const TOML_LOCK = ReentrantLock()
-parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, TOML_LOCK)
-function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
+const FROZEN_TOMLS = [false]
+default_assume_unchanged() = FROZEN_TOMLS[] || ccall(:jl_generating_output, Cint, ()) != 0
+parsed_toml(project_file::AbstractString; assume_unchanged::Bool=default_assume_unchanged()) = parsed_toml(project_file, TOML_CACHE, TOML_LOCK; assume_unchanged)
+function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock; assume_unchanged::Bool=default_assume_unchanged())
     lock(toml_lock) do
+        @show assume_unchanged
         if !haskey(toml_cache.d, project_file)
             @debug "Creating new cache for $(repr(project_file))"
             d = CachedTOMLDict(toml_cache.p, project_file)
@@ -228,7 +231,11 @@ function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_l
             return d.d
         else
             d = toml_cache.d[project_file]
-            return get_updated_dict(toml_cache.p, d)
+            if assume_unchanged
+                return d.d
+            else
+                return get_updated_dict(toml_cache.p, d)
+            end
         end
     end
 end
@@ -976,6 +983,7 @@ function _require(pkg::PkgId)
     package_locks[pkg] = Condition()
 
     last = toplevel_load[]
+    FROZEN_TOMLS[] = true
     try
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
@@ -1052,6 +1060,7 @@ function _require(pkg::PkgId)
     finally
         toplevel_load[] = last
         loading = pop!(package_locks, pkg)
+        FROZEN_TOMLS[] = false
         notify(loading, all=true)
     end
     nothing
