@@ -34,12 +34,10 @@ function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVe
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
-    @inbounds for k in 1:size(C, 2)
-        for col in 1:size(A, 2)
-            αxj = B[col,k] * α
-            @simd for j in nzrange(A, col)
-                C[rv[j], k] = muladd(nzv[j], αxj, C[rv[j], k])
-            end
+    @inbounds for k in 1:size(C, 2), col in 1:size(A, 2)
+        αxj = B[col,k] * α
+        @simd for j in nzrange(A, col)
+            C[rv[j], k] += nzv[j] * αxj
         end
     end
     C
@@ -60,14 +58,12 @@ for (T, t) in ((Adjoint, adjoint), (Transpose, transpose))
         if β != 1
             β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
         end
-        @inbounds for k in 1:size(C, 2)
-            for col = 1:size(A, 2)
-                tmp = zero(eltype(C))
-                for j in nzrange(A, col)
-                    tmp += $t(nzv[j])*B[rv[j],k]
-                end
-                C[col,k] += tmp * α
+        @inbounds for k in 1:size(C, 2), col in 1:size(A, 2)
+            tmp = zero(eltype(C))
+            @simd for j in nzrange(A, col)
+                tmp += $t(nzv[j])*B[rv[j],k]
             end
+            C[col,k] += tmp * α
         end
         C
     end
@@ -80,15 +76,6 @@ end
     (T = promote_op(matprod, eltype(transA), Tx); mul!(similar(x, T, size(transA, 1)), transA, x, true, false))
 *(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::AdjOrTransStridedOrTriangularMatrix) =
     (T = promote_op(matprod, eltype(transA), eltype(B)); mul!(similar(B, T, (size(transA, 1), size(B, 2))), transA, B, true, false))
-
-# For compatibility with dense multiplication API. Should be deleted when dense multiplication
-# API is updated to follow BLAS API.
-# mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}) =
-#     mul!(C, A, B, true, false)
-# mul!(C::StridedVecOrMat, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}) =
-#     mul!(C, adjA, B, true, false)
-# mul!(C::StridedVecOrMat, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, B::Union{StridedVector,AdjOrTransStridedOrTriangularMatrix}) =
-#     mul!(C, transA, B, true, false)
 
 function mul!(C::StridedVecOrMat, X::AdjOrTransStridedOrTriangularMatrix, A::AbstractSparseMatrixCSC, α::Number, β::Number)
     mX, nX = size(X)
@@ -105,14 +92,12 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedOrTriangularMatrix, A::Abs
             Aiα = nzv[k] * α
             rvk = rv[k]
             @simd for multivec_row in 1:mX
-                C[multivec_row, col] = muladd(X[multivec_row, rvk], Aiα, C[multivec_row, col])
+                C[multivec_row, col] += X[multivec_row, rvk] * Aiα
             end
         end
     else # X isa Adjoint or Transpose
-        @inbounds for multivec_row in 1:mX, col in 1:size(A, 2)
-            @simd for k in nzrange(A, col)
-                C[multivec_row, col] += X[multivec_row, rv[k]] * nzv[k] * α
-            end
+        @inbounds for multivec_row in 1:mX, col in 1:size(A, 2), k in nzrange(A, col)
+            C[multivec_row, col] += X[multivec_row, rv[k]] * nzv[k] * α
         end
     end
     C
@@ -137,7 +122,7 @@ for (T, t) in ((Adjoint, adjoint), (Transpose, transpose))
                 Aiα = $t(nzv[k]) * α
                 rvk = rv[k]
                 @simd for multivec_col in 1:mX
-                    C[multivec_col, rvk] = muladd(X[multivec_col, col], Aiα, C[multivec_col, rvk])
+                    C[multivec_col, rvk] += X[multivec_col, col] * Aiα
                 end
             end
         else # X isa Adjoint or Transpose
