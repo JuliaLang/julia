@@ -219,12 +219,14 @@ function lookup_doc(ex)
     end
     if isa(ex, Symbol) && Base.isoperator(ex)
         str = string(ex)
+        isdotted = startswith(str, ".")
         if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment
             op = str[1:end-1]
-            return Markdown.parse("`x $op= y` is a synonym for `x = x $op y`")
-        elseif startswith(str, ".")
+            eq = isdotted ? ".=" : "="
+            return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
+        elseif isdotted
             op = str[2:end]
-            return Markdown.parse("`x $ex y` is equivalent to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+            return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
         end
     end
     binding = esc(bindingexpr(namify(ex)))
