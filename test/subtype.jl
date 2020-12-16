@@ -1811,3 +1811,12 @@ end
 @testintersect(Type{T} where T>:Missing,
                Type{Some{T}} where T,
                Union{})
+
+# issue #34170
+let A = Tuple{Type{T} where T<:Ref, Ref, Union{T, Union{Ref{T}, T}} where T<:Ref},
+    B = Tuple{Type{T}, Ref{T}, Union{Int, Ref{T}, T}} where T
+    I = typeintersect(A,B)
+    # this was a case where <: disagreed with === (due to a badly-normalized type)
+    @test I == typeintersect(A,B)
+    @test I == Tuple{Type{T}, Ref{T}, Union{Ref{T}, T}} where T<:Ref
+end
