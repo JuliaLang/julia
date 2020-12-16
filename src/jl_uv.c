@@ -861,7 +861,7 @@ JL_DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
 
 JL_DLLEXPORT int jl_has_so_reuseport(void)
 {
-#if defined(SO_REUSEPORT)
+#if defined(SO_REUSEPORT) && !defined(_OS_DARWIN_)
     return 1;
 #else
     return 0;
