@@ -477,6 +477,7 @@ end
     @test a == [2, 3, 4]
     @test popat!(a, 2) == 3
     @test a == [2, 4]
+    @test popat!(a, 1, "default") == 2
     badpop() = @inbounds popat!([1], 2)
     @test_throws BoundsError badpop()
 end
