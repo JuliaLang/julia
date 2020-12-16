@@ -981,16 +981,16 @@ let (p, p2) = filter!(p -> p != myid(), procs())
             error("test failed to throw")
         catch excpt
             if procs isa Int
-                ex = Any[excpt]
+                exs = Any[excpt]
             else
-                ex = (excpt::CompositeException).exceptions
+                exs = (excpt::CompositeException).exceptions
             end
-            for (p, ex) in zip(procs, ex)
-                local p
-                if procs isa Int || p != myid()
-                    @test (ex::RemoteException).pid == p
-                    ex = ((ex::RemoteException).captured::CapturedException).ex
+            for ex in exs  # Can no longer guarantee Exceptions show in proc order
+                if ex isa RemoteException
+                    @test procs isa Int || ex.pid != myid()
+                    ex = ex.captured.ex
                 else
+                    @test !(procs isa Int)
                     ex = (ex::TaskFailedException).task.exception
                 end
                 @test (ex::ErrorException).msg == msg
@@ -1704,6 +1704,28 @@ end
 @everywhere include("includefile.jl")
 for p in procs()
     @test @fetchfrom(p, i27429) == 27429
+end
+
+# issue #32677, ensuring no side-effects for Distributed
+let
+    (p, p2) = filter!(p -> p != myid(), procs())
+    t = Timer(t -> killjob("KILLING BY QUICK KILL WATCHDOG\n"), 60) # this test should take <10 seconds
+    c = Channel(0)
+    try
+        @sync begin
+            @spawnat p begin
+                put!(c,0)
+            end
+            @spawnat p2 begin
+                undefined()
+                take!(c)
+            end
+        end
+    catch e
+        @test e.exceptions[1].captured.ex isa UndefVarError
+    end
+    close(c)
+    close(t) # stop the fast watchdog
 end
 
 include("splitrange.jl")

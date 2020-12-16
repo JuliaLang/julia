@@ -880,3 +880,46 @@ end
     end
     @test sort!(collect(ys)) == 1:3
 end
+
+# issue #32677
+@testset "@sync exception handling" begin
+    let
+        t = Timer(t -> killjob("KILLING BY QUICK KILL WATCHDOG\n"), 10) # this test should take <1 seconds
+        c = Channel(0)
+        try
+            @sync begin
+                @async begin
+                    put!(c,0)
+                end
+                @async begin
+                    undefined()
+                    take!(c)
+                end
+            end
+        catch e
+            @test e.exceptions[1].task.exception isa UndefVarError
+        end
+        close(c)
+        close(t) # stop the fast watchdog
+    end
+
+    let
+        t = Timer(t -> killjob("KILLING BY QUICK KILL WATCHDOG\n"), 10) # this test should take <1 seconds
+        c = Channel(0)
+        try
+            @sync begin
+                Threads.@spawn begin
+                    put!(c,0)
+                end
+                Threads.@spawn begin
+                    undefined()
+                    take!(c)
+                end
+            end
+        catch e
+            @test e.exceptions[1].task.exception isa UndefVarError
+        end
+        close(c)
+        close(t) # stop the fast watchdog
+    end
+end

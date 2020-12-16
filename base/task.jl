@@ -336,32 +336,42 @@ end
 
 ## lexically-scoped waiting for multiple items
 
+_istaskdone(x::Tuple{Task, Bool}) = istaskdone(x[1])
+_istaskfailed(x::Tuple{Task, Bool}) = istaskfailed(x[1])
+
 function sync_end(c::Channel{Any})
-    local c_ex
-    while isready(c)
-        r = take!(c)
-        if isa(r, Task)
-            _wait(r)
-            if istaskfailed(r)
-                if !@isdefined(c_ex)
-                    c_ex = CompositeException()
+    ts = Tuple{Task, Bool}[]
+    try
+        while isready(c)                           # Pull all queued tasks, wait for them,
+            while isready(c)                       #   then add more if they arrive.  This
+                t = take!(c)                       #   is needed as it is possible for
+                if isa(t, Task)                    #   Tasks to generate new subTasks
+                    push!(ts, (t, true))
+                else
+                    push!(ts, (schedule(Task(()->wait(t))), false))
                 end
-                push!(c_ex, TaskFailedException(r))
             end
-        else
-            try
-                wait(r)
-            catch e
-                if !@isdefined(c_ex)
+            while true
+                yield()
+                if any(_istaskfailed, ts)          # Throw exception on first occurence
                     c_ex = CompositeException()
+                    for (t, istask) in ts
+                        if istaskfailed(t)
+                            if istask
+                                push!(c_ex, TaskFailedException(t))
+                            else
+                                push!(c_ex, t.exception)   # Required to match handling
+                            end                            #  of Future exceptions
+                        end
+                    end
+                    throw(c_ex)
+                elseif all(_istaskdone, ts) || isready(c)  # Check for new tasks
+                    break
                 end
-                push!(c_ex, e)
             end
         end
-    end
-    close(c)
-    if @isdefined(c_ex)
-        throw(c_ex)
+    finally
+        close(c)
     end
     nothing
 end
