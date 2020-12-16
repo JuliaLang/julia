@@ -274,14 +274,14 @@ JL_DLLEXPORT int jl_enqueue_task(jl_task_t *task)
 }
 
 
-static int running_under_rr(void)
+int jl_running_under_rr(int recheck)
 {
 #ifdef _OS_LINUX_
 #define RR_CALL_BASE 1000
 #define SYS_rrcall_check_presence (RR_CALL_BASE + 8)
     static int checked_running_under_rr = 0;
     static int is_running_under_rr = 0;
-    if (!checked_running_under_rr) {
+    if (!checked_running_under_rr || recheck) {
         int ret = syscall(SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0);
         if (ret == -1) {
             // Should always be ENOSYS, but who knows what people do for
@@ -311,7 +311,7 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
      * scheduling logic from switching to other threads. Just don't bother
      * trying to wait here
      */
-    if (running_under_rr())
+    if (jl_running_under_rr(0))
         return 1;
     if (!(*start_cycles)) {
         *start_cycles = jl_hrtime();

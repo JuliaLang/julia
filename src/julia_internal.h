@@ -83,6 +83,8 @@ void JL_UV_LOCK(void);
 extern "C" {
 #endif
 
+int jl_running_under_rr(int recheck);
+
 //--------------------------------------------------
 // timers
 // Returns time in nanosec
