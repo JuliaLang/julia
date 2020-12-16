@@ -41,7 +41,8 @@ up front are:
     type when the program is running. This is called a "run-time type" in object-oriented languages
     where the combination of static compilation with polymorphism makes this distinction significant.
   * Only values, not variables, have types -- variables are simply names bound to values.
-  * Both abstract and concrete types can be parameterized by types, symbols, numbers and a [few other objects](@ref man-parametric-types). Type parameters may be omitted when they do not need to be referenced or 
+  * Both abstract and concrete types can be parameterized by types, symbols, numbers and a
+    [few other objects](@ref man-parametric-types). Type parameters may be omitted when they do not need to be referenced or 
     restricted.
 
 Julia's type system is designed to be powerful and expressive, yet clear, intuitive and unobtrusive.
