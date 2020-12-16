@@ -221,11 +221,12 @@ static jl_callptr_t _jl_compile_codeinst(
     return fptr;
 }
 
-void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+Function *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt,
+                                jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
-extern "C" JL_DLLEXPORT
-void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+extern "C" JL_DLLEXPORT void *jl_compile_extern_c(void *llvmmod, void *p, void *sysimg,
+                                                  jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&codegen_lock);
     uint64_t compiler_start_time = 0;
@@ -238,7 +239,7 @@ void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declr
     Module *into = (Module*)llvmmod;
     if (into == NULL)
         into = jl_create_llvm_module("cextern");
-    jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams);
+    Function *F = jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams);
     if (!sysimg) {
         if (p == NULL) {
             jl_jit_globals(params.globals);
@@ -252,6 +253,7 @@ void jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declr
     if (codegen_lock.count == 1 && jl_measure_compile_time)
         jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock);
+    return F;
 }
 
 bool jl_type_mappable_to_c(jl_value_t *ty);

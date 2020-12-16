@@ -5396,7 +5396,8 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
 // do codegen to create a C-callable alias/wrapper, or if sysimg_handle is set,
 // restore one from a loaded system image.
-void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
+Function *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt,
+                                jl_value_t *sigt, jl_codegen_params_t &params)
 {
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
     jl_value_t *ff = ft->instance;
@@ -5420,6 +5421,7 @@ void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declr
     }
     jl_value_t *err;
     { // scope block for sig
+        Function *F = NULL;
         function_sig_t sig("cfunction", lcrt, crt, toboxed,
                            argtypes, NULL, false, CallingConv::C, false, &params);
         if (sig.err_msg.empty()) {
@@ -5435,10 +5437,11 @@ void jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declr
             }
             else {
                 jl_method_instance_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt, world, &min_valid, &max_valid, 0);
-                gen_cfun_wrapper((Module*)llvmmod, params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
+                F = gen_cfun_wrapper((Module *)llvmmod, params, sig, ff, name, declrt, lam,
+                                     NULL, NULL, NULL);
             }
             JL_GC_POP();
-            return;
+            return F;
         }
         err = jl_get_exceptionf(jl_errorexception_type, "%s", sig.err_msg.c_str());
     }

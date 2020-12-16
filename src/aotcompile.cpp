@@ -314,8 +314,13 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
             // to compile, or an svec(rettype, sig) describing a C-callable alias to create.
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
-                if (worlds == 1)
-                    jl_compile_extern_c(clone.get(), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                if (worlds == 1) {
+                    Function *F = (Function *)jl_compile_extern_c(clone.get(), &params,
+                                                                  NULL, jl_svecref(item, 0),
+                                                                  jl_svecref(item, 1));
+                    assert(F);
+                    data->jl_sysimg_fvars.push_back(F);
+                }
                 continue;
             }
             mi = (jl_method_instance_t*)item;
