@@ -55,34 +55,38 @@ cd("complet_path\t\t$CTRL_C
 """
 
 precompile_script = """
-# Used by Revise & its dependencies
-delete!(push!(Set{Module}(), Base), Main)
-m = first(methods(+))
-delete!(push!(Set{Method}(), m), m)
-empty!(Set())
-push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
-(setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
-(setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
-(setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
-(setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
-(setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
-Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
-Dict(Base => [:(1+1)])[Base]
-Dict(:one => [1])[:one]
-Dict("abc" => Set())["abc"]
-pushfirst!([], sum)
-get(Base.pkgorigins, Base.PkgId(Base), nothing)
-sort!([1,2,3])
-unique!([1,2,3])
-cumsum([1,2,3])
-append!(Int[], BitSet())
-isempty(BitSet())
-delete!(BitSet([1,2]), 3)
-deleteat!(Int32[1,2,3], [1,3])
-deleteat!(Any[1,2,3], [1,3])
-Core.svec(1, 2) == Core.svec(3, 4)
-copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(which(+, (Int, Int)), [Int, Int], Core.svec())))
-any(t->t[1].line > 1, [(LineNumberNode(2,:none),:(1+1))])
+# NOTE: these were moved to the end of Base.jl. TODO: move back here.
+# # Used by Revise & its dependencies
+# while true  # force inference
+# delete!(push!(Set{Module}(), Base), Main)
+# m = first(methods(+))
+# delete!(push!(Set{Method}(), m), m)
+# empty!(Set())
+# push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
+# (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
+# (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
+# (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
+# (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
+# (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
+# Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
+# Dict(Base => [:(1+1)])[Base]
+# Dict(:one => [1])[:one]
+# Dict("abc" => Set())["abc"]
+# pushfirst!([], sum)
+# get(Base.pkgorigins, Base.PkgId(Base), nothing)
+# sort!([1,2,3])
+# unique!([1,2,3])
+# cumsum([1,2,3])
+# append!(Int[], BitSet())
+# isempty(BitSet())
+# delete!(BitSet([1,2]), 3)
+# deleteat!(Int32[1,2,3], [1,3])
+# deleteat!(Any[1,2,3], [1,3])
+# Core.svec(1, 2) == Core.svec(3, 4)
+# # copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(which(+, (Int, Int)), [Int, Int], Core.svec())))
+# any(t->t[1].line > 1, [(LineNumberNode(2,:none),:(1+1))])
+# break   # end force inference
+# end
 """
 
 julia_exepath() = joinpath(Sys.BINDIR::String, Base.julia_exename())
