@@ -2549,7 +2549,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 res = jl_substitute_var(res, vb->var, (jl_value_t*)newvar);
             varval = (jl_value_t*)newvar;
             if (wrap)
-                res = jl_new_struct(jl_unionall_type, (jl_tvar_t*)newvar, res);
+                res = jl_type_unionall((jl_tvar_t*)newvar, res);
         }
     }
 
@@ -2558,7 +2558,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         for(i=0; i < jl_array_len(vb->innervars); i++) {
             jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
             if (jl_has_typevar(res, var))
-                res = jl_new_struct(jl_unionall_type, (jl_tvar_t*)var, res);
+                res = jl_type_unionall((jl_tvar_t*)var, res);
         }
     }
 
