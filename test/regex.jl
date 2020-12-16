@@ -64,12 +64,22 @@
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
     @test all(findall(r"\w*", "foo bar") .=== [1:3, 4:3, 5:7, 8:7]) # use === to compare empty ranges
     @test all(findall(r"\b", "foo bar") .=== [1:0, 4:3, 5:4, 8:7])  # use === to compare empty ranges
+    # with Char as argument
+    @test findall('a', "batman") == [2, 5]
+    @test findall('→', "OH⁻ + H₃CBr →  HOH₃CBr⁻ → HOCH₃ + Br⁻") == [17, 35]
+    @test findall('a', "") == Int[]
+    @test findall('c', "batman") == Int[]
 
     # count
     @test count(r"\w+", "foo bar") == 2
     @test count(r"\w+", "foo bar", overlap=true) == 6
     @test count(r"\w*", "foo bar") == 4
     @test count(r"\b", "foo bar") == 4
+    # count with char as argument
+    @test count('a', "batman") == 2
+    @test count('a', "aaa", overlap=true) == 3
+    @test count('a', "") == 0
+    @test count('→', "OH⁻ + H₃CBr →  (HOH₃CBr⁻)† → HOCH₃ + Br⁻") == 2
 
     # Unnamed subpatterns
     let m = match(r"(.)(.)(.)", "xyz")

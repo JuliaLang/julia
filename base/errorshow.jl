@@ -31,7 +31,7 @@ showerror(io::IO, ex) = show(io, ex)
 
 show_index(io::IO, x::Any) = show(io, x)
 show_index(io::IO, x::Slice) = show_index(io, x.indices)
-show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
+show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
@@ -316,7 +316,7 @@ function showerror(io::IO, ex::MethodError)
             hasrows |= isrow
             push!(vec_args, isrow ? vec(arg) : arg)
         end
-        if hasrows && applicable(f, vec_args...)
+        if hasrows && applicable(f, vec_args...) && isempty(kwargs)
             print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.",
                       "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
                       "\nYou can convert to a column vector with the vec() function.")
@@ -423,7 +423,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = (unwrap_unionall(sig[i]).parameters[1], "...")
+                    sigstr = (unwrap_unionall(sig[i]).T, "...")
                     j = length(t_i)
                 else
                     sigstr = (sig[i],)
@@ -460,7 +460,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
                 for t in arg_types_param[length(sig):end]
-                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).parameters[1], method.sig)
+                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).T, method.sig)
                         right_matches += 1
                     end
                 end
@@ -473,7 +473,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                         sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
-                            sigstr = ((sigtype::DataType).parameters[1], "...")
+                            sigstr = ((sigtype::Core.TypeofVararg).T, "...")
                         else
                             sigstr = (sigtype,)
                         end

@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia%shlibext -LowerSIMDLoop -S %s | FileCheck %s
+; RUN: opt -load libjulia-internal%shlibext -LowerSIMDLoop -S %s | FileCheck %s
 
 declare void @julia.loopinfo_marker()
 

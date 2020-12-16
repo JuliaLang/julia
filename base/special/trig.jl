@@ -166,7 +166,8 @@ end
 """
     sincos(x)
 
-Simultaneously compute the sine and cosine of `x`, where the `x` is in radians.
+Simultaneously compute the sine and cosine of `x`, where `x` is in radians, returning
+a tuple `(sine, cosine)`.
 """
 function sincos(x::T) where T<:Union{Float32, Float64}
     if abs(x) < T(pi)/4
@@ -857,7 +858,8 @@ end
 """
     sincospi(x)
 
-Simultaneously compute `sinpi(x)` and `cospi(x)`, where the `x` is in radians.
+Simultaneously compute [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) (the sine and cosine of `π*x`,
+where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.

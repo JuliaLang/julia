@@ -37,10 +37,8 @@ H_SMALL_X(::Type{Float32}) = 2f-12
 H_MEDIUM_X(::Type{Float32}) = 9f0
 
 H_LARGE_X(::Type{Float64}) = 709.7822265633563 # nextfloat(709.7822265633562)
-H_OVERFLOW_X(::Type{Float64}) = 710.475860073944 # nextfloat(710.4758600739439)
 
 H_LARGE_X(::Type{Float32}) = 88.72283f0
-H_OVERFLOW_X(::Type{Float32}) = 89.415985f0
 
 SINH_SMALL_X(::Type{Float64}) = 2.1
 SINH_SMALL_X(::Type{Float32}) = 3.0f0
@@ -75,7 +73,7 @@ function sinh(x::T) where T<:Union{Float32,Float64}
     #               approximate sinh(x) with a  minimax polynomial
     #      b)   SINH_SMALL_X <= x < H_LARGE_X
     #               return sinh(x) = (exp(x) - exp(-x))/2
-    #      d)   H_LARGE_X  <= x < H_OVERFLOW_X
+    #      d)   H_LARGE_X  <= x
     #               return sinh(x) = exp(x/2)/2 * exp(x/2)
     #               Note that this branch automatically deals with Infs and NaNs
 
@@ -112,7 +110,7 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     #               approximate sinh(x) with a minimax polynomial
     #      b)   COSH_SMALL_X <= x < H_LARGE_X
     #               return cosh(x) = = (exp(x) + exp(-x))/2
-    #      e)   H_LARGE_X  <= x < H_OVERFLOW_X
+    #      e)   H_LARGE_X  <= x
     #               return cosh(x) = exp(x/2)/2 * exp(x/2)
     #      			Note that this branch automatically deals with Infs and NaNs
 

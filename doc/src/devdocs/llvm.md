@@ -79,7 +79,7 @@ environment. In addition, it exposes the `-julia` meta-pass, which runs the
 entire Julia pass-pipeline over the IR. As an example, to generate a system
 image, one could do:
 ```
-opt -load libjulia.so -julia -o opt.bc unopt.bc
+opt -load libjulia-internal.so -julia -o opt.bc unopt.bc
 llc -o sys.o opt.bc
 cc -shared -o sys.so sys.o
 ```

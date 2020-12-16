@@ -605,16 +605,24 @@ function test_cat(::Type{TestAbstractArray})
     b_int = reshape([1:27...], 3, 3, 3)
     b_float = reshape(Float64[1:27...], 3, 3, 3)
     b2hcat = Array{Float64}(undef, 3, 6, 3)
+    b2vcat = Array{Float64}(undef, 6, 3, 3)
     b1 = reshape([1:9...], 3, 3)
     b2 = reshape([10:18...], 3, 3)
     b3 = reshape([19:27...], 3, 3)
     b2hcat[:, :, 1] = hcat(b1, b1)
     b2hcat[:, :, 2] = hcat(b2, b2)
     b2hcat[:, :, 3] = hcat(b3, b3)
+    b2vcat[:, :, 1] = vcat(b1, b1)
+    b2vcat[:, :, 2] = vcat(b2, b2)
+    b2vcat[:, :, 3] = vcat(b3, b3)
     b3hcat = Array{Float64}(undef, 3, 9, 3)
     b3hcat[:, :, 1] = hcat(b1, b1, b1)
     b3hcat[:, :, 2] = hcat(b2, b2, b2)
     b3hcat[:, :, 3] = hcat(b3, b3, b3)
+    b3vcat = Array{Float64}(undef, 9, 3, 3)
+    b3vcat[:, :, 1] = vcat(b1, b1, b1)
+    b3vcat[:, :, 2] = vcat(b2, b2, b2)
+    b3vcat[:, :, 3] = vcat(b3, b3, b3)
     B = TSlow(b_int)
     B1 = TSlow([1:24...])
     B2 = TSlow([1:25...])
@@ -625,14 +633,20 @@ function test_cat(::Type{TestAbstractArray})
     i = rand(1:10)
 
     @test cat(;dims=i) == Any[]
+    @test Base.typed_hcat(Float64) == Vector{Float64}()
+    @test Base.typed_vcat(Float64) == Vector{Float64}()
     @test vcat() == Any[]
     @test hcat() == Any[]
+    @test vcat(1, 1.0, 3, 3.0) == [1.0, 1.0, 3.0, 3.0]
     @test hcat(1, 1.0, 3, 3.0) == [1.0 1.0 3.0 3.0]
     @test_throws ArgumentError hcat(B1, B2)
     @test_throws ArgumentError vcat(C1, C2)
 
     @test vcat(B) == B
     @test hcat(B) == B
+    @test Base.typed_vcat(Float64, B) == TSlow(b_float)
+    @test Base.typed_vcat(Float64, B, B) == TSlow(b2vcat)
+    @test Base.typed_vcat(Float64, B, B, B) == TSlow(b3vcat)
     @test Base.typed_hcat(Float64, B) == TSlow(b_float)
     @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
     @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
@@ -1223,4 +1237,12 @@ end
 @testset "issue #37741, non-int cat" begin
     @test [1; 1:BigInt(5)] == [1; 1:5]
     @test [1:BigInt(5); 1] == [1:5; 1]
+end
+
+@testset "Base.isstored" begin
+    a = rand(3, 4, 5)
+    @test Base.isstored(a, 1, 2, 3)
+    @test_throws BoundsError Base.isstored(a, 4, 4, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 5, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 4, 6)
 end

@@ -207,6 +207,7 @@ struct _jl_tls_states_t {
     struct _jl_task_t *previous_task;
 #endif
     struct _jl_task_t *root_task;
+    struct _jl_timing_block_t *timing_stack;
     void *stackbase;
     size_t stacksize;
     jl_ucontext_t base_ctx; // base context of stack

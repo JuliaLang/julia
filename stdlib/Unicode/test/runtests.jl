@@ -260,6 +260,9 @@ end
             end
         end
     end
+
+    @test Base.Unicode.isgraphemebreak('α', 'β')
+    @test !Base.Unicode.isgraphemebreak('α', '\u0302')
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
@@ -385,6 +388,7 @@ end
         @test titlecase("abc-def")                     == "Abc-Def"
         @test titlecase("abc-def", wordsep = !Base.Unicode.iscased) == "Abc-Def"
         @test titlecase("abc-def", wordsep = isspace)  == "Abc-def"
+        @test titlecase("bôrked") == "Bôrked"
     end
 end
 
