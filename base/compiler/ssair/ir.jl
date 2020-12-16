@@ -1265,6 +1265,8 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     stmt === nothing && return false
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
         effect_free = false
+    elseif isa(compact.result[idx][:info], MethodResultPure)
+        effect_free = true
     else
         effect_free = stmt_effect_free(stmt, compact.result[idx][:type], compact, compact.ir.sptypes)
     end
