@@ -260,6 +260,9 @@ end
             end
         end
     end
+
+    @test Base.Unicode.isgraphemebreak('α', 'β')
+    @test !Base.Unicode.isgraphemebreak('α', '\u0302')
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
