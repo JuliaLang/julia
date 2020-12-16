@@ -147,13 +147,9 @@ for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
             T = _realtype(f, promote_union(eltype(A)))
 
             # but NaNs and missing need to be avoided as initial values
-            if (v0 != v0) === true
-                v0 = typeof(v0)($initval)
-            elseif ismissing(v0)
-                # If it's a union type, pick the initval from the other type.
-                if typeof(T) == Union
-                    v0 = (T.a == Missing ? T.b : T.a)($initval)
-                end
+            if is_poisoning(v0)
+                # Convert handles unions containing Missing nicely.
+                v0 = convert(T, $initval)
             end
 
             Tr = v0 isa T ? T : typeof(v0)
