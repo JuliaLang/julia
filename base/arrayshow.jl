@@ -166,6 +166,10 @@ function print_matrix(io::IO, @nospecialize(X::AbstractVecOrMat),
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
+    _print_matrix(io, X, pre, sep, post, hdots, vdots, ddots, hmod, vmod, unitrange(axes(X,1)), unitrange(axes(X,2)))
+end
+
+function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, hdots, vdots, ddots, hmod, vmod, rowsA, colsA)
     hmod, vmod = Int(hmod)::Int, Int(vmod)::Int
     if !(get(io, :limit, false)::Bool)
         screenheight = screenwidth = typemax(Int)
@@ -178,7 +182,6 @@ function print_matrix(io::IO, @nospecialize(X::AbstractVecOrMat),
     postsp = ""
     @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)::Int
-    rowsA, colsA = unitrange(axes(X,1)), unitrange(axes(X,2))
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
