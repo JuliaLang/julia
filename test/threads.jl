@@ -2,7 +2,7 @@
 
 using Test
 
-let cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no threads_exec.jl`
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`
     for test_nthreads in (1, 2, 4, 4) # run once to try single-threaded mode, then try a couple times to trigger bad races
         new_env = copy(ENV)
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads)
@@ -11,12 +11,12 @@ let cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no threads_exec.jl
 end
 
 # issue #34415 - make sure external affinity settings work
+const SYS_rrcall_check_presence = 1008
+running_under_rr() = 0 == ccall(:syscall, Int,
+    (Int, Int, Int, Int, Int, Int, Int),
+    SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
 
 if Sys.islinux()
-    const SYS_rrcall_check_presence = 1008
-    running_under_rr() = 0 == ccall(:syscall, Int,
-        (Int, Int, Int, Int, Int, Int, Int),
-        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
     if Sys.CPU_THREADS > 1 && Sys.which("taskset") !== nothing && !running_under_rr()
         run_with_affinity(spec) = readchomp(`taskset -c $spec $(Base.julia_cmd()) -e "run(\`taskset -p \$(getpid())\`)"`)
         @test endswith(run_with_affinity("1"), "2")
