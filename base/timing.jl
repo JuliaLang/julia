@@ -200,14 +200,16 @@ macro time(ex)
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
-        local diff = GC_Diff(gc_num(), stats)
-        time_print(elapsedtime, diff.allocd, diff.total_time,
-                   gc_alloc_count(diff), compile_elapsedtime)
-        println()
-        val
+        try
+            $(esc(ex))
+        finally
+            elapsedtime = time_ns() - elapsedtime
+            compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+            local diff = GC_Diff(gc_num(), stats)
+            time_print(elapsedtime, diff.allocd, diff.total_time,
+                    gc_alloc_count(diff), compile_elapsedtime)
+            println()
+        end
     end
 end
 
@@ -248,11 +250,13 @@ macro timev(ex)
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
-        timev_print(elapsedtime, GC_Diff(gc_num(), stats), compile_elapsedtime)
-        val
+        try
+            $(esc(ex))
+        finally
+            elapsedtime = time_ns() - elapsedtime
+            compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+            timev_print(elapsedtime, GC_Diff(gc_num(), stats), compile_elapsedtime)
+        end
     end
 end
 
