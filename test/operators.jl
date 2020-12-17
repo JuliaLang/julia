@@ -96,6 +96,15 @@ import Base.<
     end
 end
 
+@testset "isunordered" begin
+    @test  isunordered(NaN)
+    @test  isunordered(NaN32)
+    @test  isunordered(missing)
+    @test !isunordered(1)
+    @test !isunordered([NaN, 1])
+    @test !isunordered([1.0, missing])
+end
+
 @testset "vectorized comparisons between numbers" begin
     @test 1 .!= 2
     @test 1 .== 1
