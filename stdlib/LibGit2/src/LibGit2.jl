@@ -1003,8 +1003,10 @@ function set_ssl_cert_locations(cert_loc)
     else # files, /dev/null, non-existent paths, etc.
         cert_file = cert_loc
     end
-    ret = ccall((:git_libgit2_opts, :libgit2), Cint, (Cint, Cstring...),
-        Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+    ret = @ccall "libgit2".git_libgit2_opts(
+        Consts.SET_SSL_CERT_LOCATIONS::Cint;
+        cert_file::Cstring,
+        cert_dir::Cstring)::Cint
     ret >= 0 && return ret
     err = Error.GitError(ret)
     err.class == Error.SSL &&
