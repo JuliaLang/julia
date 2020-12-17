@@ -3,7 +3,7 @@
 ifneq ($(USE_BINARYBUILDER_OBJCONV),1)
 
 $(SRCCACHE)/objconv.zip: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
+	$(JLDOWNLOAD) $@ https://www.agner.org/optimize/objconv.zip
 
 $(BUILDDIR)/objconv/source-extracted: $(SRCCACHE)/objconv.zip
 	-rm -r $(dir $@)
