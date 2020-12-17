@@ -220,7 +220,7 @@ isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
 Return true if `x` is a value that is not normally orderable, such as `NaN` or `missing`.
 
 !!! compat "Julia 1.7"
-    This method requires Julia 1.7 or later.
+    This function requires Julia 1.7 or later.
 """
 isunordered(x) = false
 isunordered(x::AbstractFloat) = isnan(x)
