@@ -766,18 +766,12 @@ minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 
 """
     findmax(f, domain) -> (f(x), x)
-    findmax(f)
 
 Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
 value in the `domain` (inputs to `f`) such that `f(x)` is maximised. If there
 are multiple maximal points, then the first one will be returned.
 
-When `domain` is provided it may be any iterable and must not be empty.
-
-When `domain` is omitted, `f` must have an implicit domain. In particular, if
-`f` is an indexable collection, it is interpreted as a function mapping keys
-(domain) to values (codomain), i.e. `findmax(itr)` returns the maximal element
-of the collection `itr` and its index.
+`domain` must be a non-empty iterable.
 
 Values are compared with `isless`.
 
@@ -795,7 +789,21 @@ julia> findmax(first, [(1, :a), (2, :b), (2, :c)])
 
 julia> findmax(cos, 0:π/2:2π)
 (1.0, 0.0)
+```
+"""
+findmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)
+_rf_findmax((fm, m), (fx, x)) = isless(fm, fx) ? (fx, x) : (fm, m)
 
+"""
+    findmax(itr) -> (x, index)
+
+Return the maximal element of the collection `itr` and its index or key.
+If there are multiple maximal elements, then the first one will be returned.
+Values are compared with `isless`.
+
+# Examples
+
+```jldoctest
 julia> findmax([8, 0.1, -9, pi])
 (8.0, 1)
 
@@ -805,28 +813,18 @@ julia> findmax([1, 7, 7, 6])
 julia> findmax([1, 7, 7, NaN])
 (NaN, 4)
 ```
-
 """
-findmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)
-_rf_findmax((fm, m), (fx, x)) = isless(fm, fx) ? (fx, x) : (fm, m)
-
-findmax(a) = _findmax(a, :)
+findmax(itr) = _findmax(itr, :)
 _findmax(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmax, pairs(a) )
 
 """
     findmin(f, domain) -> (f(x), x)
-    findmin(f)
 
 Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
 value in the `domain` (inputs to `f`) such that `f(x)` is minimised. If there
 are multiple minimal points, then the first one will be returned.
 
-When `domain` is provided it may be any iterable and must not be empty.
-
-When `domain` is omitted, `f` must have an implicit domain. In particular, if
-`f` is an indexable collection, it is interpreted as a function mapping keys
-(domain) to values (codomain), i.e. `findmin(itr)` returns the minimal element
-of the collection `itr` and its index.
+`domain` must be a non-empty iterable.
 
 `NaN` is treated as less than all other values except `missing`.
 
@@ -844,7 +842,22 @@ julia> findmin(first, [(1, :a), (1, :b), (2, :c)])
 
 julia> findmin(cos, 0:π/2:2π)
 (-1.0, 3.141592653589793)
+```
 
+"""
+findmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)
+_rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
+
+"""
+    findmin(itr) -> (x, index)
+
+Return the minimal element of the collection `itr` and its index or key.
+If there are multiple minimal elements, then the first one will be returned.
+`NaN` is treated as less than all other values except `missing`.
+
+# Examples
+
+```jldoctest
 julia> findmin([8, 0.1, -9, pi])
 (-9.0, 3)
 
@@ -854,27 +867,17 @@ julia> findmin([1, 7, 7, 6])
 julia> findmin([1, 7, 7, NaN])
 (NaN, 4)
 ```
-
 """
-findmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)
-_rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
-
-findmin(a) = _findmin(a, :)
+findmin(itr) = _findmin(itr, :)
 _findmin(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmin, pairs(a) )
 
 """
     argmax(f, domain)
-    argmax(f)
 
 Return a value `x` in the domain of `f` for which `f(x)` is maximised.
 If there are multiple maximal values for `f(x)` then the first one will be found.
 
-When `domain` is provided it may be any iterable and must not be empty.
-
-When `domain` is omitted, `f` must have an implicit domain. In particular, if
-`f` is an indexable collection, it is interpreted as a function mapping keys
-(domain) to values (codomain), i.e. `argmax(itr)` returns the index of the
-maximal element in `itr`.
+`domain` must be a non-empty iterable.
 
 Values are compared with `isless`.
 
@@ -885,7 +888,22 @@ julia> argmax(abs, -10:5)
 
 julia> argmax(cos, 0:π/2:2π)
 0.0
+```
+"""
+argmax(f, domain) = findmax(f, domain)[2]
 
+"""
+    argmax(itr)
+
+Return the index or key of the maximal element in a collection.
+If there are multiple maximal elements, then the first one will be returned.
+
+The collection must not be empty.
+
+Values are compared with `isless`.
+
+# Examples
+```jldoctest
 julia> argmax([8, 0.1, -9, pi])
 1
 
@@ -896,22 +914,15 @@ julia> argmax([1, 7, 7, NaN])
 4
 ```
 """
-argmax(f, domain) = findmax(f, domain)[2]
-argmax(f) = findmax(f)[2]
+argmax(itr) = findmax(itr)[2]
 
 """
     argmin(f, domain)
-    argmin(f)
 
 Return a value `x` in the domain of `f` for which `f(x)` is minimised.
 If there are multiple minimal values for `f(x)` then the first one will be found.
 
-When `domain` is provided it may be any iterable and must not be empty.
-
-When `domain` is omitted, `f` must have an implicit domain. In particular, if
-`f` is an indexable collection, it is interpreted as a function mapping keys
-(domain) to values (codomain), i.e. `argmin(itr)` returns the index of the
-minimal element in `itr`.
+`domain` must be a non-empty iterable.
 
 `NaN` is treated as less than all other values except `missing`.
 
@@ -926,6 +937,22 @@ julia> argmin(x -> -x^3 + x^2 - 10, -5:5)
 julia> argmin(acos, 0:0.1:1)
 1.0
 
+```
+"""
+argmin(f, domain) = findmin(f, domain)[2]
+
+"""
+    argmin(itr)
+
+Return the index or key of the minimal element in a collection.
+If there are multiple minimal elements, then the first one will be returned.
+
+The collection must not be empty.
+
+`NaN` is treated as less than all other values except `missing`.
+
+# Examples
+```jldoctest
 julia> argmin([8, 0.1, -9, pi])
 3
 
@@ -936,8 +963,7 @@ julia> argmin([7, 1, 1, NaN])
 4
 ```
 """
-argmin(f, domain) = findmin(f, domain)[2]
-argmin(f) = findmin(f)[2]
+argmin(itr) = findmin(itr)[2]
 
 ## all & any
 
