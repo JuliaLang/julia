@@ -1296,6 +1296,9 @@ end
     @test cmp([1, 2], [1, 1]) == 1
     @test cmp([1], [1, 1]) == -1
     @test cmp([1, 1], [1]) == 1
+    @test cmp([UInt8(1), UInt8(0)], [UInt8(0), UInt8(0)]) == 1
+    @test cmp([UInt8(1), UInt8(0)], [UInt8(1), UInt8(0)]) == 0
+    @test cmp([UInt8(0), UInt8(0)], [UInt8(1), UInt8(1)]) == -1
 end
 
 @testset "sort on arrays" begin
