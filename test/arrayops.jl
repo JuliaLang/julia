@@ -554,6 +554,7 @@ end
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
     @test findfirst(Dict(1=>false, 2=>true)) == 2
+    @test findfirst(Dict(1=>false)) == nothing
     @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
@@ -1536,6 +1537,7 @@ end
     @test reverse!([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
     @test reverse!([1:10;], 11) == [1:10;]
     @test_throws BoundsError reverse!([1:10;], 1, 11)
+    @test_throws BoundsError reverse!([1:10;], 0, 10)
     @test reverse!(Any[]) == Any[]
 end
 
@@ -2869,4 +2871,10 @@ end
     f(a) = (v = [1, nothing]; [v[x] for x in a])
     @test only(Base.return_types(f, (Int,))) === Union{Array{Int,0}, Array{Nothing,0}}
     @test only(Base.return_types(f, (UnitRange{Int},))) <: Vector
+end
+
+@testset "hcat error checking" begin
+    a = [2 for i in 1:4]
+    b = [2 for i in 1:5]
+    @test_throws DimensionMismatch hcat(a, b)
 end
