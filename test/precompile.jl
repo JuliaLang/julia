@@ -262,9 +262,11 @@ precompile_test_harness(false) do dir
     cachefile = joinpath(cachedir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_logs (:warn, "Replacing module `$Foo_module`") begin
-        ms = Base._require_from_serialized(cachefile)
-        @test isa(ms, Array{Any,1})
+    @test_warn "@ccallable was already defined for this method name" begin
+        @test_logs (:warn, "Replacing module `$Foo_module`") begin
+            ms = Base._require_from_serialized(cachefile)
+            @test isa(ms, Array{Any,1})
+        end
     end
 
     @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
