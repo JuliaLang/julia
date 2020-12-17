@@ -85,8 +85,8 @@ end
 
 """
     exponent_max(T)
-s
-Maximum exponent a real floating point number of type `T` can have.
+
+Maximum [`exponent`](@ref) value for a floating point number of type `T`.
 
 # Examples
 ```jldoctest
@@ -102,8 +102,8 @@ function exponent_max end
 """
     exponent_raw_max(T)
 
-The maximum value of the exponent field of floating point type `T` without bias,
-i.e. the maximum integer value representable by `exponent_bits(T)` bits.
+Maximum value of the [`exponent`](@ref) field for a floating point number of type `T` without bias,
+i.e. the maximum integer value representable by [`exponent_bits(T)`](@ref) bits.
 """
 function exponent_raw_max end
 
