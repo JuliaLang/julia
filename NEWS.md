@@ -29,6 +29,7 @@ New library functions
 ---------------------
 
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
+* `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
 
 New library features
 --------------------
