@@ -17,8 +17,8 @@ variables.
 When compiled the first time, the build will automatically download
 pre-built [external
 dependencies](#required-build-tools-and-external-libraries). If you
-prefer to build all the dependencies on your own, add the following in
-`Make.user`
+prefer to build all the dependencies on your own, or are building on a system that cannot
+access the network during the build process add the following in `Make.user`:
 
 ```
 USE_BINARYBUILDER=0
