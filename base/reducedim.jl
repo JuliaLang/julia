@@ -125,7 +125,7 @@ function _reducedim_init(f, op, fv, fop, A, region)
 end
 
 # initialization when computing minima and maxima requires a little care
-for (f1, f2, typeextreme) in ((:min, :max, :typemax), (:max, :min, :typemin))
+for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min, :(-Inf), :typemin))
     @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
         # First compute the reduce indices. This will throw an ArgumentError
         # if any region is invalid
@@ -148,7 +148,11 @@ for (f1, f2, typeextreme) in ((:min, :max, :typemax), (:max, :min, :typemin))
             Tr = v0 isa T ? T : typeof(v0)
 
             # but NaNs and missing need to be avoided as initial values
-            if isunordered(v0)
+            if (v0 == v0) === false
+                # v0 is NaN
+                v0 = $initval
+            elseif isunordered(v0)
+                # v0 is missing or a third-party unordered value
                 Tnm = nonmissingtype(Tr)
                 # TODO: Some types, like BigInt, don't support typemin/typemax.
                 # So a Matrix{Union{BigInt, Missing}} can still error here.

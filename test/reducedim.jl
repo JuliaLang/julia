@@ -195,6 +195,7 @@ end
     end
 
 end
+
 ## findmin/findmax/minimum/maximum
 
 A = [1.0 5.0 6.0;
@@ -236,6 +237,19 @@ end
         @test all(rval′ .=== rval)
         @test all(rind′ .== rind)
         @test all(minimum(B, dims=tup) .=== rval)
+    end
+end
+
+@testset "reducedim_init min/max unorderable handling" begin
+    x = Any[1.0, NaN]
+    y = [1, missing]
+    for (v, rval1, rval2) in [(x, [NaN], x),
+                              (y, [missing], y),
+                              (Any[1. NaN; 1. 1.], Any[1. NaN], Any[NaN, 1.])]
+        for f in (minimum, maximum)
+            @test all(f(v, dims=1) .=== rval1)
+            @test all(f(v, dims=2) .=== rval2)
+        end
     end
 end
 
