@@ -125,7 +125,7 @@ function _reducedim_init(f, op, fv, fop, A, region)
 end
 
 # initialization when computing minima and maxima requires a little care
-for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
+for (f1, f2, typeextreme) in ((:min, :max, :typemax), (:max, :min, :typemin))
     @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
         # First compute the reduce indices. This will throw an ArgumentError
         # if any region is invalid
@@ -145,14 +145,18 @@ for (f1, f2, initval) in ((:min, :max, :Inf), (:max, :min, :(-Inf)))
             v0 = mapreduce(f, $f2, A1)
 
             T = _realtype(f, promote_union(eltype(A)))
+            Tr = v0 isa T ? T : typeof(v0)
 
             # but NaNs and missing need to be avoided as initial values
             if is_poisoning(v0)
-                # Convert handles unions containing Missing nicely.
-                v0 = convert(T, $initval)
+                Tnm = nonmissingtype(Tr)
+                # TODO: Some types, like BigInt, don't support typemin/typemax.
+                # So a Matrix{Union{BigInt, Missing}} can still error here.
+                v0 = $typeextreme(Tnm)
             end
-
+            # v0 may have changed type.
             Tr = v0 isa T ? T : typeof(v0)
+
             return reducedim_initarray(A, region, v0, Tr)
         end
     end
