@@ -90,7 +90,7 @@ Maximum [`exponent`](@ref) value for a floating point number of type `T`.
 
 # Examples
 ```jldoctest
-julia> exponent_max(Float64)
+julia> Base.exponent_max(Float64)
 1023
 ```
 
