@@ -27,7 +27,7 @@ MPFR_OPTS += --host=none-unknown-linux
 endif
 
 $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ https://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)
 $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -jxf $<
