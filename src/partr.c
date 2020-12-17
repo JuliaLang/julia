@@ -40,7 +40,7 @@ uint64_t io_wakeup_leave;
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
 {
     // Try to acquire the lock on this task.
-    int16_t was = task->tid;
+    int16_t was = jl_atomic_load_relaxed(&task->tid);
     if (was == tid)
         return 1;
     if (was == -1)
