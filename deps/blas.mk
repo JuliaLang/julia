@@ -154,7 +154,7 @@ LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS) -O0" \
     LOADER="$(FC)" BLASLIB="$(RPATH_ESCAPED_ORIGIN) $(LIBBLAS)"
 
 $(SRCCACHE)/lapack-$(LAPACK_VER).tgz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$(notdir $@)
+	$(JLDOWNLOAD) $@ https://www.netlib.org/lapack/$(notdir $@)
 
 $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 	$(JLCHECKSUM) $<
