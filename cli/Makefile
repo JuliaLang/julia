@@ -114,7 +114,7 @@ endef
 endif
 
 $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT))
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT))
 	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
 ifneq ($(OS), WINNT)
 	@ln -sf $(notdir $@) $(build_shlibdir)/libjulia.$(JL_MAJOR_SHLIB_EXT)
@@ -124,7 +124,7 @@ else
 endif
 
 $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,$(notdir $@))
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,$(notdir $@))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 ifneq ($(OS), WINNT)
 	@ln -sf $(notdir $@) $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_SHLIB_EXT)
