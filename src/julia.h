@@ -1762,7 +1762,17 @@ typedef struct _jl_task_t {
     // current exception handler
     jl_handler_t *eh;
 
-    jl_ucontext_t ctx; // saved thread state
+    union {
+        jl_ucontext_t ctx; // saved thread state
+#ifdef _OS_WINDOWS_
+        jl_ucontext_t copy_stack_ctx;
+#else
+        struct jl_stack_context_t copy_stack_ctx;
+#endif
+    };
+#if defined(JL_TSAN_ENABLED)
+    void *tsan_state;
+#endif
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf
