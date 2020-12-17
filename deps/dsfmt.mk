@@ -14,7 +14,7 @@ DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
 $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://github.com/MersenneTwister-Lab/dSFMT/archive/v$(DSFMT_VER).tar.gz
 	touch -c $@
 
 $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
@@ -22,8 +22,6 @@ $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted: $(SRCCACHE)/dsfmt-$(DSFMT_VER).
 	-rm -r $(dir $@)
 	mkdir -p $(dir $@)
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
-	cd $(dir $@) && patch < $(SRCDIR)/patches/dSFMT.h.patch
-	cd $(dir $@) && patch < $(SRCDIR)/patches/dSFMT.c.patch
 	echo 1 > $@
 
 checksum-dsfmt: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
