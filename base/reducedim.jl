@@ -148,7 +148,7 @@ for (f1, f2, typeextreme) in ((:min, :max, :typemax), (:max, :min, :typemin))
             Tr = v0 isa T ? T : typeof(v0)
 
             # but NaNs and missing need to be avoided as initial values
-            if is_poisoning(v0)
+            if isunordered(v0)
                 Tnm = nonmissingtype(Tr)
                 # TODO: Some types, like BigInt, don't support typemin/typemax.
                 # So a Matrix{Union{BigInt, Missing}} can still error here.

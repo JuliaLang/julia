@@ -212,10 +212,10 @@ largest values and `isgreater` defines a descending total order with `NaN` and
 # Implementation
 This is unexported. Types should not usually implement this function. Instead, implement `isless`.
 """
-isgreater(x, y) = is_poisoning(x) || is_poisoning(y) ? isless(x, y) : isless(y, x)
-is_poisoning(x) = false
-is_poisoning(x::AbstractFloat) = isnan(x)
-is_poisoning(x::Missing) = true
+isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
+isunordered(x) = false
+isunordered(x::AbstractFloat) = isnan(x)
+isunordered(x::Missing) = true
 
 function ==(T::Type, S::Type)
     @_pure_meta
