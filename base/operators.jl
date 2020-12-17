@@ -213,6 +213,15 @@ largest values and `isgreater` defines a descending total order with `NaN` and
 This is unexported. Types should not usually implement this function. Instead, implement `isless`.
 """
 isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
+
+"""
+    isunordered(x)
+
+Return true if `x` is a value that is not normally orderable, such as `NaN` or `missing`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+"""
 isunordered(x) = false
 isunordered(x::AbstractFloat) = isnan(x)
 isunordered(x::Missing) = true

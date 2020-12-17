@@ -775,6 +775,9 @@ are multiple maximal points, then the first one will be returned.
 
 Values are compared with `isless`.
 
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
 # Examples
 
 ```jldoctest
@@ -827,6 +830,9 @@ are multiple minimal points, then the first one will be returned.
 `domain` must be a non-empty iterable.
 
 `NaN` is treated as less than all other values except `missing`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
 
 # Examples
 
@@ -881,6 +887,9 @@ If there are multiple maximal values for `f(x)` then the first one will be found
 
 Values are compared with `isless`.
 
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
 # Examples
 ```jldoctest
 julia> argmax(abs, -10:5)
@@ -925,6 +934,9 @@ If there are multiple minimal values for `f(x)` then the first one will be found
 `domain` must be a non-empty iterable.
 
 `NaN` is treated as less than all other values except `missing`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
 
 # Examples
 ```jldoctest
