@@ -1,5 +1,7 @@
 # Interactive Utilities
 
+This module is intended for interactive work. It is loaded automaticaly in [interactive mode](@ref command-line-options).
+
 ```@docs
 InteractiveUtils.apropos
 InteractiveUtils.varinfo
