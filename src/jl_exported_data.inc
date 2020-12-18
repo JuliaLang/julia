@@ -62,6 +62,7 @@
     XX(jl_methoderror_type) \
     XX(jl_methtable_type) \
     XX(jl_module_type) \
+    XX(jl_n_threads) \
     XX(jl_namedtuple_type) \
     XX(jl_namedtuple_typename) \
     XX(jl_newvarnode_type) \
