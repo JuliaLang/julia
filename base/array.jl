@@ -1107,11 +1107,11 @@ Suggest that collection `s` reserve capacity for at least `n` elements. This can
 For types that support `sizehint!`,
 
 1. `push!` and `append!` methods generally may (but are not required to) preallocate extra
-storage. For types implemented in `Base`, they typically do, using a heuristic optimized for
-a general use case.
+   storage. For types implemented in `Base`, they typically do, using a heuristic optimized for
+   a general use case.
 
 2. `sizehint!` may control this preallocation. Again, it typically does this for types in
-`Base`.
+   `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
 """
