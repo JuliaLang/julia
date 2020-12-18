@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Windows
+// Note that this file is `#include`d by "signal-handling.c"
 
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
 
@@ -324,72 +325,70 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
-volatile HANDLE hBtThread = 0;
+static volatile HANDLE hBtThread = 0;
+
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
-    // Note: illegal to use jl_* functions from this thread
-
-    TIMECAPS tc;
-    if (MMSYSERR_NOERROR != timeGetDevCaps(&tc, sizeof(tc))) {
-        fputs("failed to get timer resolution", stderr);
-        hBtThread = 0;
-        return 0;
-    }
-    timeBeginPeriod(tc.wPeriodMin);
+    // Note: illegal to use jl_* functions from this thread except for profiling-specific functions
     while (1) {
-        DWORD timeout = nsecprof / GIGA;
-        timeout += tc.wPeriodMin;
-        Sleep(timeout);
-        if (bt_size_cur < bt_size_max && running) {
-            JL_LOCK_NOGC(&jl_in_stackwalk);
-            jl_lock_profile();
-            if ((DWORD)-1 == SuspendThread(hMainThread)) {
-                fputs("failed to suspend main thread. aborting profiling.", stderr);
-                break;
+        DWORD timeout_ms = nsecprof / (GIGA / 1000);
+        Sleep(timeout_ms > 0 ? timeout_ms : 1);
+        if (running) {
+            if (jl_profile_is_buffer_full()) {
+                jl_profile_stop_timer(); // does not change the thread state
+                SuspendThread(GetCurrentThread());
+                continue;
             }
-            if (running) {
+            else {
+                JL_LOCK_NOGC(&jl_in_stackwalk);
+                jl_lock_profile();
+                if ((DWORD)-1 == SuspendThread(hMainThread)) {
+                    fputs("failed to suspend main thread. aborting profiling.", stderr);
+                    break;
+                }
                 CONTEXT ctxThread;
                 memset(&ctxThread, 0, sizeof(CONTEXT));
                 ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
                 if (!GetThreadContext(hMainThread, &ctxThread)) {
                     fputs("failed to get context from main thread. aborting profiling.", stderr);
-                    running = 0;
+                    jl_profile_stop_timer();
                 }
                 else {
                     // Get backtrace data
                     bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
                             bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
                     // Mark the end of this block with 0
-                    if (bt_size_cur < bt_size_max)
-                        bt_data_prof[bt_size_cur++].uintptr = 0;
+                    bt_data_prof[bt_size_cur++].uintptr = 0;
+                }
+                jl_unlock_profile();
+                JL_UNLOCK_NOGC(&jl_in_stackwalk);
+                if ((DWORD)-1 == ResumeThread(hMainThread)) {
+                    jl_profile_stop_timer();
+                    fputs("failed to resume main thread! aborting.", stderr);
+                    gc_debug_critical_error();
+                    abort();
                 }
             }
-            jl_unlock_profile();
-            JL_UNLOCK_NOGC(&jl_in_stackwalk);
-            if ((DWORD)-1 == ResumeThread(hMainThread)) {
-                timeEndPeriod(tc.wPeriodMin);
-                fputs("failed to resume main thread! aborting.", stderr);
-                gc_debug_critical_error();
-                abort();
-            }
-        }
-        else {
-            timeEndPeriod(tc.wPeriodMin);
-            SuspendThread(GetCurrentThread());
-            timeBeginPeriod(tc.wPeriodMin);
         }
     }
     jl_unlock_profile();
     JL_UNLOCK_NOGC(&jl_in_stackwalk);
-    timeEndPeriod(tc.wPeriodMin);
+    jl_profile_stop_timer();
     hBtThread = 0;
     return 0;
 }
 
+static volatile TIMECAPS timecaps;
+
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
-    running = 1;
-    if (hBtThread == 0) {
+    if (hBtThread == NULL) {
+
+        if (MMSYSERR_NOERROR != timeGetDevCaps(&timecaps, sizeof(timecaps))) {
+            fputs("failed to get timer resolution", stderr);
+            return -2;
+        }
+
         hBtThread = CreateThread(
             NULL,                   // default security attributes
             0,                      // use default stack size
@@ -397,6 +396,8 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
             0,                      // argument to thread function
             0,                      // use default creation flags
             0);                     // returns the thread identifier
+        if (hBtThread == NULL)
+            return -1;
         (void)SetThreadPriority(hBtThread, THREAD_PRIORITY_ABOVE_NORMAL);
     }
     else {
@@ -405,10 +406,19 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
             return -2;
         }
     }
-    return (hBtThread != NULL ? 0 : -1);
+    if (running == 0) {
+        // Failure to change the timer resolution is not fatal. However, it is important to
+        // ensure that the timeBeginPeriod/timeEndPeriod is paired.
+        if (TIMERR_NOERROR != timeBeginPeriod(timecaps.wPeriodMin))
+            timecaps.wPeriodMin = 0;
+    }
+    running = 1; // set `running` finally
+    return 0;
 }
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
+    if (running && timecaps.wPeriodMin)
+        timeEndPeriod(timecaps.wPeriodMin);
     running = 0;
 }
 

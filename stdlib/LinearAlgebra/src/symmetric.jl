@@ -236,6 +236,9 @@ function setindex!(A::Hermitian, v, i::Integer, j::Integer)
     end
 end
 
+diag(A::Symmetric) = symmetric.(diag(parent(A)), sym_uplo(A.uplo))
+diag(A::Hermitian) = hermitian.(diag(parent(A)), sym_uplo(A.uplo))
+
 # For A<:Union{Symmetric,Hermitian}, similar(A[, neweltype]) should yield a matrix with the same
 # symmetry type, uplo flag, and underlying storage type as A. The following methods cover these cases.
 similar(A::Symmetric, ::Type{T}) where {T} = Symmetric(similar(parent(A), T), ifelse(A.uplo == 'U', :U, :L))

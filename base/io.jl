@@ -73,8 +73,8 @@ data has already been buffered. The result is a `Vector{UInt8}`.
 
 !!! warning
     The amount of data returned is implementation-dependent; for example it can
-depend on the internal choice of buffer size. Other functions such as [`read`](@ref)
-should generally be used instead.
+    depend on the internal choice of buffer size. Other functions such as [`read`](@ref)
+    should generally be used instead.
 """
 function readavailable end
 
@@ -136,7 +136,7 @@ Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or
 
     read(io::IO, String)
 
-Read the entirety of `io`, as a `String`.
+Read the entirety of `io`, as a `String` (see also [`readchomp`](@ref)).
 
 # Examples
 ```jldoctest
@@ -401,6 +401,7 @@ julia> bytesavailable(io)
 ```
 """
 bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io)::IO)
+bytesavailable(io::DevNull) = 0
 
 """
     eof(stream) -> Bool

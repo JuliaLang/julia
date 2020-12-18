@@ -167,7 +167,7 @@ namedtuple_get_a(x) = x.a
 @test Base.return_types(namedtuple_get_a, (typeof((b=1,a="")),)) == Any[String]
 
 namedtuple_fieldtype_a(x) = fieldtype(typeof(x), :a)
-@test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Type]
+@test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Union{Type, TypeVar}]
 @test Base.return_types(namedtuple_fieldtype_a, (typeof((b=1,a="")),)) == Any[Type{String}]
 namedtuple_fieldtype__(x, y) = fieldtype(typeof(x), y)
 @test Base.return_types(namedtuple_fieldtype__, (typeof((b=1,a="")),Symbol))[1] >: Union{Type{Int}, Type{String}}

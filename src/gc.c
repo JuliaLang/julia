@@ -277,9 +277,10 @@ static void run_finalizer(jl_ptls_t ptls, jl_value_t *o, jl_value_t *ff)
         jl_get_ptls_states()->world_age = last_age;
     }
     JL_CATCH {
-        jl_printf(JL_STDERR, "error in running finalizer: ");
-        jl_static_show(JL_STDERR, jl_current_exception());
-        jl_printf(JL_STDERR, "\n");
+        jl_printf((JL_STREAM*)STDERR_FILENO, "error in running finalizer: ");
+        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+        jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+        jlbacktrace(); // written to STDERR_FILENO
     }
 }
 
@@ -391,12 +392,36 @@ static void run_finalizers(jl_ptls_t ptls)
     arraylist_free(&copied_list);
 }
 
+JL_DLLEXPORT int jl_gc_get_finalizers_inhibited(jl_ptls_t ptls)
+{
+    if (ptls == NULL)
+        ptls = jl_get_ptls_states();
+    return ptls->finalizers_inhibited;
+}
+
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on)
 {
+    if (ptls == NULL)
+        ptls = jl_get_ptls_states();
     int old_val = ptls->finalizers_inhibited;
     int new_val = old_val + (on ? -1 : 1);
+    if (new_val < 0) {
+        JL_TRY {
+            jl_error(""); // get a backtrace
+        }
+        JL_CATCH {
+            jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: GC finalizers already enabled on this thread.\n");
+            // Only print the backtrace once, to avoid spamming the logs
+            static int backtrace_printed = 0;
+            if (backtrace_printed == 0) {
+                backtrace_printed = 1;
+                jlbacktrace(); // written to STDERR_FILENO
+            }
+        }
+        return;
+    }
     ptls->finalizers_inhibited = new_val;
-    if (!new_val && old_val && !ptls->in_finalizer) {
+    if (!new_val && old_val && !ptls->in_finalizer && ptls->locks.len == 0) {
         ptls->in_finalizer = 1;
         run_finalizers(ptls);
         ptls->in_finalizer = 0;
@@ -843,6 +868,20 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
     return wr;
 }
 
+static void clear_weak_refs(void)
+{
+    for (int i = 0; i < jl_n_threads; i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        size_t n, l = ptls2->heap.weak_refs.len;
+        void **lst = ptls2->heap.weak_refs.items;
+        for (n = 0; n < l; n++) {
+            jl_weakref_t *wr = (jl_weakref_t*)lst[n];
+            if (!gc_marked(jl_astaggedvalue(wr->value)->bits.gc))
+                wr->value = (jl_value_t*)jl_nothing;
+        }
+    }
+}
+
 static void sweep_weak_refs(void)
 {
     for (int i = 0; i < jl_n_threads; i++) {
@@ -855,16 +894,10 @@ static void sweep_weak_refs(void)
             continue;
         while (1) {
             jl_weakref_t *wr = (jl_weakref_t*)lst[n];
-            if (gc_marked(jl_astaggedvalue(wr)->bits.gc)) {
-                // weakref itself is alive,
-                // so the user could still re-set it to a new value
-                if (!gc_marked(jl_astaggedvalue(wr->value)->bits.gc))
-                    wr->value = (jl_value_t*)jl_nothing;
+            if (gc_marked(jl_astaggedvalue(wr)->bits.gc))
                 n++;
-            }
-            else {
+            else
                 ndel++;
-            }
             if (n >= l - ndel)
                 break;
             void *tmp = lst[n];
@@ -874,6 +907,7 @@ static void sweep_weak_refs(void)
         ptls2->heap.weak_refs.len -= ndel;
     }
 }
+
 
 // big value list
 
@@ -1580,7 +1614,7 @@ STATIC_INLINE uintptr_t gc_read_stack(void *_addr, uintptr_t offset,
 JL_NORETURN NOINLINE void gc_assert_datatype_fail(jl_ptls_t ptls, jl_datatype_t *vt,
                                                   jl_gc_mark_sp_t sp)
 {
-    jl_printf(JL_STDOUT, "GC error (probable corruption) :\n");
+    jl_safe_printf("GC error (probable corruption) :\n");
     gc_debug_print_status();
     jl_(vt);
     gc_debug_critical_error();
@@ -2661,7 +2695,7 @@ mark: {
             if (npointers == 0)
                 goto pop;
             uintptr_t nptr = npointers << 2 | (bits & GC_OLD);
-            assert(layout->nfields > 0 && layout->fielddesc_type != 3 && "opaque types should have been handled specially");
+            assert((layout->nfields > 0 || layout->fielddesc_type == 3) && "opaque types should have been handled specially");
             if (layout->fielddesc_type == 0) {
                 obj8_parent = (char*)new_obj;
                 obj8_begin = (uint8_t*)jl_dt_layout_ptrs(layout);
@@ -2978,6 +3012,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // marking is over
 
     // 4. check for objects to finalize
+    clear_weak_refs();
     // Record the length of the marked list since we need to
     // mark the object moved to the marked list from the
     // `finalizer_list` by `sweep_finalizer_list`
@@ -3191,7 +3226,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check
     // or wait for finalizers on other threads without dead lock).
-    if (!ptls->finalizers_inhibited) {
+    if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
         int8_t was_in_finalizer = ptls->in_finalizer;
         ptls->in_finalizer = 1;
         run_finalizers(ptls);

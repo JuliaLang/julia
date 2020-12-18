@@ -37,6 +37,7 @@ const DISPLAY_FAILED = (
     :startswith,
     :endswith,
     :isempty,
+    :contains
 )
 
 #-----------------------------------------------------------------------
@@ -784,8 +785,9 @@ mutable struct DefaultTestSet <: AbstractTestSet
     results::Vector
     n_passed::Int
     anynonpass::Bool
+    verbose::Bool
 end
-DefaultTestSet(desc) = DefaultTestSet(desc, [], 0, false)
+DefaultTestSet(desc; verbose = false) = DefaultTestSet(desc, [], 0, false, verbose)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -1016,8 +1018,9 @@ function print_counts(ts::DefaultTestSet, depth, align,
     end
     println()
 
-    # Only print results at lower levels if we had failures
-    if np + nb != subtotal
+    # Only print results at lower levels if we had failures or if the user
+    # wants.
+    if (np + nb != subtotal) || (ts.verbose)
         for t in ts.results
             if isa(t, DefaultTestSet)
                 print_counts(t, depth + 1, align,
@@ -1059,8 +1062,9 @@ along with a summary of the test results.
 
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
 also be used for any nested `@testset` invocations. The given options are only
-applied to the test set where they are given. The default test set type does
-not take any options.
+applied to the test set where they are given. The default test set type
+accepts the `verbose` boolean option: if `true`, the result summary of the
+nested testsets is shown even when they all pass (the default is `false`).
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
@@ -1577,9 +1581,8 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
                 end
                 lastp = typ.parameters[fc]
                 vararg = Base.unwrap_unionall(lastp)
-                if vararg isa DataType && vararg.name === Base._va_typename
-                    N = vararg.parameters[2]
-                    constrains_param(var, N, covariant) && return true
+                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
+                    constrains_param(var, vararg.N, covariant) && return true
                     # T = vararg.parameters[1] doesn't constrain var
                 else
                     constrains_param(var, lastp, covariant) && return true

@@ -15,14 +15,14 @@ subdir = joinpath(dir, "adir")
 mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
-@test_throws Base._UVError("mkdir", Base.UV_EEXIST) mkdir(file)
+@test_throws Base._UVError("mkdir($(repr(file)); mode=0o777)", Base.UV_EEXIST) mkdir(file)
 let err = nothing
     try
         mkdir(file)
     catch err
         io = IOBuffer()
         showerror(io, err)
-        @test startswith(String(take!(io)), "IOError: mkdir: file already exists (EEXIST)")
+        @test startswith(String(take!(io)), "IOError: mkdir") && err.code == Base.UV_EEXIST
     end
 end
 
@@ -56,10 +56,12 @@ using Random
     temps = map(1:100) do _
         path, io = mktemp(cleanup=false)
         close(io)
-        rm(path, force=true)
         return path
     end
     @test allunique(temps)
+    foreach(temps) do path
+        rm(path, force=true)
+    end
 end
 
 @testset "tempname with parent" begin
@@ -362,9 +364,8 @@ function test_stat_error(stat::Function, pth)
     end
     ex = try; stat(pth); false; catch ex; ex; end::Base.IOError
     @test ex.code == (pth isa AbstractString ? Base.UV_EACCES : Base.UV_EBADF)
-    @test startswith(ex.msg, "stat: ")
     pth isa AbstractString || (pth = Base.INVALID_OS_HANDLE)
-    @test endswith(ex.msg, repr(pth))
+    @test startswith(ex.msg, "stat($(repr(pth)))")
     nothing
 end
 @testset "stat errors" begin # PR 32031
@@ -459,9 +460,9 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
-@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir)
+@test_throws Base._UVError("unlink($(repr(c_tmpdir)))", Base.UV_ENOENT) rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
-@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
+@test_throws Base._UVError("unlink($(repr(c_tmpdir)))", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 if !Sys.iswindows()
@@ -476,8 +477,8 @@ if !Sys.iswindows()
         @test stat(file).gid == 0
         @test stat(file).uid == 0
     else
-        @test_throws Base._UVError("chown", Base.UV_EPERM) chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base._UVError("chown", Base.UV_EPERM) chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test_throws Base._UVError("chown($(repr(file)), -2, -1)", Base.UV_EPERM) chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        @test_throws Base._UVError("chown($(repr(file)), -1, -2)", Base.UV_EPERM) chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
     end
 else
     # test that chown doesn't cause any errors for Windows
@@ -926,10 +927,10 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
                      Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=true))
         # cp
-        @test_throws Base._UVError("open", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
-        @test_throws Base._UVError("open", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
+        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
+        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base._UVError("open", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
+        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
 end
 
@@ -1194,7 +1195,7 @@ else
 end
 using Downloads: download
 @test_throws ArgumentError download("good", "ba\0d")
-@test_throws ArgumentError download("ba\0d", "good")
+@test_throws ArgumentError download("ba\0d", tempname())
 
 ###################
 #     walkdir     #
@@ -1302,7 +1303,7 @@ cd(dirwalk) do
     @test files == ["file1", "file2"]
 
     rm(joinpath("sub_dir1"), recursive=true)
-    @test_throws(Base._UVError("readdir", Base.UV_ENOENT, "with ", repr(joinpath(".", "sub_dir1"))),
+    @test_throws(Base._UVError("readdir($(repr(joinpath(".", "sub_dir1"))))", Base.UV_ENOENT),
                  take!(chnl_error)) # throws an error because sub_dir1 do not exist
 
     root, dirs, files = take!(chnl_noerror)
@@ -1322,7 +1323,7 @@ cd(dirwalk) do
         symlink("foo", foo)
 
         let files = walkdir(joinpath(".", "sub_dir3"); follow_symlinks=true)
-            @test_throws Base._UVError("stat", Base.UV_ELOOP, "for file ", repr(foo)) take!(files)
+            @test_throws Base._UVError("stat($(repr(foo)))", Base.UV_ELOOP)  take!(files)
         end
         root, dirs, files = take!(walkdir(joinpath(".", "sub_dir3"); follow_symlinks=false))
         @test root == joinpath(".", "sub_dir3")
@@ -1512,8 +1513,8 @@ end
                 rm(d, recursive=true)
                 @test !ispath(d)
                 @test isempty(readdir())
-                @test_throws Base._UVError("readdir", Base.UV_ENOENT, "with ", repr(d)) readdir(d)
-                @test_throws Base._UVError("cwd", Base.UV_ENOENT) readdir(join=true)
+                @test_throws Base._UVError("readdir($(repr(d)))", Base.UV_ENOENT) readdir(d)
+                @test_throws Base._UVError("pwd()", Base.UV_ENOENT) readdir(join=true)
             end
         end
     end

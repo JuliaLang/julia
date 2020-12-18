@@ -190,8 +190,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
     # -t, --threads
     code = "print(Threads.nthreads())"
-    cpu_threads = string(ccall(:jl_cpu_threads, Int32, ()))
-    @test cpu_threads ==
+    cpu_threads = ccall(:jl_cpu_threads, Int32, ())
+    @test string(cpu_threads) ==
           read(`$exename --threads auto -e $code`, String) ==
           read(`$exename --threads=auto -e $code`, String) ==
           read(`$exename -tauto -e $code`, String) ==
@@ -202,10 +202,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
                   read(`$exename -t 2 -e $code`, String) == "2"
         end
     end
-    cpu_threads *= "0"
-    @test read(`$exename -t $cpu_threads -e $code`, String) == cpu_threads
-    withenv("JULIA_NUM_THREADS" => cpu_threads) do
-        @test read(`$exename -e $code`, String) == cpu_threads
+    # We want to test oversubscription, but on manycore machines, this can
+    # actually exhaust limited PID spaces
+    cpu_threads = max(2*cpu_threads, min(200, 10*cpu_threads))
+    @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
+    withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
+        @test read(`$exename -e $code`, String) == string(cpu_threads)
     end
     @test !success(`$exename -t 0`)
     @test !success(`$exename -t -1`)
@@ -303,7 +305,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
     mktempdir() do dir
         helperdir = joinpath(@__DIR__, "testhelpers")
-        inputfile = joinpath(helperdir, "allocation_file.jl")
+        inputfile = joinpath(dir, "allocation_file.jl")
+        cp(joinpath(helperdir,"allocation_file.jl"), inputfile)
         pid = readchomp(`$exename -E "getpid()" -L $inputfile --track-allocation=user`)
         memfile = "$inputfile.$pid.mem"
         got = readlines(memfile)
@@ -313,15 +316,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test popfirst!(got) == "       80     []"
         if Sys.WORD_SIZE == 64
             # P64 pools with 64 bit tags
-            @test popfirst!(got) == "       32     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         elseif 12 == (() -> @allocated ccall(:jl_gc_allocobj, Ptr{Cvoid}, (Csize_t,), 8))()
             # See if we have a 12-byte pool with 32 bit tags (MAX_ALIGN = 4)
-            @test popfirst!(got) == "       24     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       36     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "       12     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       24     Base.invokelatest(g, x)"
         else # MAX_ALIGN >= 8
-            @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "        8     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         end
         @test popfirst!(got) == "       80     []"
         @test popfirst!(got) == "        - end"
@@ -453,10 +456,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
             println(ARGS)
             """)
         close(io)
-        mkpath(joinpath(dir, ".julia", "config"))
-        cp(testfile, joinpath(dir, ".julia", "config", "startup.jl"))
+        mkpath(joinpath(dir, "config"))
+        cp(testfile, joinpath(dir, "config", "startup.jl"))
 
-        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
+        withenv("JULIA_DEPOT_PATH" => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile foo -bar --baz`) == output
             @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
@@ -482,7 +485,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
         a = joinpath(dir, "a.jl")
         b = joinpath(dir, "b.jl")
-        c = joinpath(dir, ".julia", "config", "startup.jl")
+        c = joinpath(dir, "config", "startup.jl")
 
         write(a, """
             println(@__FILE__)
@@ -498,7 +501,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
         readsplit(cmd) = split(readchomp(cmd), '\n')
 
-        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
+        withenv("JULIA_DEPOT_PATH" => dir) do
             @test readsplit(`$exename $a`) ==
                 [a, a,
                  b, a]
@@ -607,9 +610,9 @@ let exename = Base.julia_cmd()
     # --startup-file
     let JL_OPTIONS_STARTUPFILE_ON = 1,
         JL_OPTIONS_STARTUPFILE_OFF = 2
-        # `HOME=$tmpdir` to avoid errors in the user startup.jl, which hangs the tests. Issue #17642
+        # `JULIA_DEPOT_PATH=$tmpdir` to avoid errors in the user startup.jl, which hangs the tests. Issue #17642
         mktempdir() do tmpdir
-            withenv("HOME"=>tmpdir) do
+            withenv("JULIA_DEPOT_PATH"=>tmpdir) do
                 @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`)) == JL_OPTIONS_STARTUPFILE_ON
             end
         end

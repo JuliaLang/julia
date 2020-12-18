@@ -139,6 +139,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", tmpdir)
+            write(stdin_write, "\b")
 
             # Test using `cd` to move to the home directory
             write(stdin_write, ";")
@@ -148,6 +149,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", homedir_pwd)
+            write(stdin_write, "\b")
 
             # Test using `-` to jump backward to tmpdir
             write(stdin_write, ";")
@@ -157,6 +159,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", tmpdir)
+            write(stdin_write, "\b")
 
             # Test using `~` (Base.expanduser) in `cd` commands
             if !Sys.iswindows()
@@ -167,6 +170,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
                 readuntil(stdout_read, "\n")
                 readuntil(stdout_read, "\n")
                 @test samefile(".", homedir_pwd)
+                write(stdin_write, "\b")
             end
         finally
             cd(origpwd)
@@ -196,6 +200,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         s = readuntil(stdout_read, "\n\n")
         @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
               startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] ")
+        write(stdin_write, "\b")
     end
 
     # issue #27293
@@ -219,6 +224,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             close(proc_stdout)
             # check for the correct, expanded response
             @test occursin(expanduser("~"), fetch(get_stdout))
+            write(stdin_write, "\b")
         end
     end
 
@@ -270,6 +276,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         end
         close(proc_stdout)
         @test fetch(get_stdout) == "HI\n"
+        write(stdin_write, "\b")
     end
 
     # Issue #7001
@@ -1219,12 +1226,12 @@ end
     @async REPL.start_repl_backend(backend)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == (2, false)
+    @test reply == Pair{Any, Bool}(2, false)
     twice(ex) = Expr(:tuple, ex, ex)
     push!(backend.ast_transforms, twice)
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
-    @test reply == ((2, 2), false)
+    @test reply == Pair{Any, Bool}((2, 2), false)
     put!(backend.repl_channel, (nothing, -1))
     Base.wait(backend.backend_task)
 end
@@ -1236,12 +1243,12 @@ frontend_task = @async begin
         @testset "AST Transformations Async" begin
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == (2, false)
+            @test reply == Pair{Any, Bool}(2, false)
             twice(ex) = Expr(:tuple, ex, ex)
             push!(backend.ast_transforms, twice)
             put!(backend.repl_channel, (:(1+1), false))
             reply = take!(backend.response_channel)
-            @test reply == ((2, 2), false)
+            @test reply == Pair{Any, Bool}((2, 2), false)
         end
     catch e
         Base.rethrow(e)

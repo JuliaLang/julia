@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+// Note that this file is `#include`d by "signals-unix.c"
+
 #include <mach/clock.h>
 #include <mach/clock_types.h>
 #include <mach/clock_reply.h>
@@ -42,7 +44,7 @@ void jl_mach_gc_end(void)
         int8_t gc_state = (int8_t)(item >> 8);
         jl_ptls_t ptls2 = jl_all_tls_states[tid];
         jl_atomic_store_release(&ptls2->gc_state, gc_state);
-        thread_resume(pthread_mach_thread_np((pthread_t)ptls2->system_id));
+        thread_resume(pthread_mach_thread_np(ptls2->system_id));
     }
     suspended_threads.len = 0;
 }
@@ -121,7 +123,7 @@ static void allocate_segv_handler()
     }
     pthread_attr_destroy(&attr);
     for (int16_t tid = 0;tid < jl_n_threads;tid++) {
-        attach_exception_port(pthread_mach_thread_np((pthread_t)jl_all_tls_states[tid]->system_id), 0);
+        attach_exception_port(pthread_mach_thread_np(jl_all_tls_states[tid]->system_id), 0);
     }
 }
 
@@ -219,7 +221,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     jl_ptls_t ptls2 = NULL;
     for (tid = 0;tid < jl_n_threads;tid++) {
         jl_ptls_t _ptls2 = jl_all_tls_states[tid];
-        if (pthread_mach_thread_np((pthread_t)_ptls2->system_id) == thread) {
+        if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
             ptls2 = _ptls2;
             break;
         }
@@ -308,7 +310,7 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
 static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 {
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
-    mach_port_t tid_port = pthread_mach_thread_np((pthread_t)ptls2->system_id);
+    mach_port_t tid_port = pthread_mach_thread_np(ptls2->system_id);
 
     kern_return_t ret = thread_suspend(tid_port);
     HANDLE_MACH_ERROR("thread_suspend", ret);
@@ -328,7 +330,7 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 static void jl_thread_resume(int tid, int sig)
 {
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
-    mach_port_t thread = pthread_mach_thread_np((pthread_t)ptls2->system_id);
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
     kern_return_t ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
@@ -338,7 +340,7 @@ static void jl_thread_resume(int tid, int sig)
 static void jl_try_deliver_sigint(void)
 {
     jl_ptls_t ptls2 = jl_all_tls_states[0];
-    mach_port_t thread = pthread_mach_thread_np((pthread_t)ptls2->system_id);
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
 
     kern_return_t ret = thread_suspend(thread);
     HANDLE_MACH_ERROR("thread_suspend", ret);
@@ -367,7 +369,7 @@ static void jl_try_deliver_sigint(void)
 static void jl_exit_thread0(int exitstate)
 {
     jl_ptls_t ptls2 = jl_all_tls_states[0];
-    mach_port_t thread = pthread_mach_thread_np((pthread_t)ptls2->system_id);
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
     kern_return_t ret = thread_suspend(thread);
     HANDLE_MACH_ERROR("thread_suspend", ret);
 
@@ -491,8 +493,10 @@ void *mach_profile_listener(void *arg)
         int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
         for (i = jl_n_threads; i-- > 0; ) {
             // if there is no space left, break early
-            if (bt_size_cur >= bt_size_max - 1)
+            if (jl_profile_is_buffer_full()) {
+                jl_profile_stop_timer();
                 break;
+            }
 
             unw_context_t *uc;
             jl_thread_suspend_and_get_state(i, &uc);

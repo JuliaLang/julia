@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # This test stuff in the TOML README at https://github.com/toml-lang/toml
 @testset "README" begin
 
@@ -669,7 +671,7 @@ str = """
 [ g .  h  . i ]    # same as [g.h.i]
 [ j . "ʞ" . 'l' ]  # same as [j."ʞ".'l']
 """
-@test_broken roundtrip(str) # Printer removes empty tables right now
+@test roundtrip(str)
 d = parse(str)
 @test d == Dict(
   "a" => Dict("b" => Dict("c" => Dict())),
@@ -687,7 +689,7 @@ str = """
 
 [x] # defining a super-table afterward is ok
 """
-@test_broken roundtrip(str) # Printer removes empty tables right now
+@test roundtrip(str)
 d = parse(str)
 @test d == Dict("x" => Dict("y" => Dict("z" => Dict("w" => Dict()))))
 
@@ -745,7 +747,7 @@ str = """
 [animal]
 [fruit.orange]
 """
-@test_broken roundtrip(str) # Printer removes empty tables right now
+@test roundtrip(str)
 d = parse(str)
 @test d == Dict(
   "fruit" => Dict("apple" => Dict(), "orange" => Dict()),
@@ -758,7 +760,7 @@ str = """
 [fruit.orange]
 [animal]
 """
-@test_broken roundtrip(str) # Printer removes empty tables right now
+@test roundtrip(str)
 @test d == Dict(
   "fruit" => Dict("apple" => Dict(), "orange" => Dict()),
   "animal" => Dict()

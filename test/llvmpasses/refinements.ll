@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia%shlibext -LateLowerGCFrame -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -load libjulia-internal%shlibext -LateLowerGCFrame -FinalLowerGC -S %s | FileCheck %s
 
 
 declare {}*** @julia.ptls_states()

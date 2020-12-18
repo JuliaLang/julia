@@ -311,14 +311,6 @@ function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
     return rmul!(A, transpose(B))
 end
 
-# Elements of `out` may not be defined (e.g., for `BigFloat`). To make
-# `mul!(out, A, B)` work for such cases, `out .*ₛ beta` short-circuits
-# `out * beta`.  Using `broadcasted` to avoid the multiplication
-# inside this function.
-function *ₛ end
-Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false : broadcasted(*, out, beta)
-
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
 @inline mul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
              alpha::Number, beta::Number) =
@@ -759,4 +751,8 @@ end
 function logabsdet(A::Diagonal)
      mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),
                A.diag)
+end
+
+function Base.muladd(A::Diagonal, B::Diagonal, z::Diagonal)
+    Diagonal(A.diag .* B.diag .+ z.diag)
 end

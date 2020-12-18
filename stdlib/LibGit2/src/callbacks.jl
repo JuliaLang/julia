@@ -359,9 +359,186 @@ function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
     return Cint(0)
 end
 
+struct CertHostKey
+    parent :: Cint
+    mask   :: Cint
+    md5    :: NTuple{16,UInt8}
+    sha1   :: NTuple{20,UInt8}
+    sha256 :: NTuple{32,UInt8}
+end
+
+struct KeyHashes
+    sha1   :: Union{NTuple{20,UInt8}, Nothing}
+    sha256 :: Union{NTuple{32,UInt8}, Nothing}
+end
+
+function KeyHashes(cert_p::Ptr{CertHostKey})
+    cert = unsafe_load(cert_p)
+    return KeyHashes(
+        cert.mask & Consts.CERT_SSH_SHA1   != 0 ? cert.sha1   : nothing,
+        cert.mask & Consts.CERT_SSH_SHA256 != 0 ? cert.sha256 : nothing,
+    )
+end
+
+function verify_host_error(message::AbstractString)
+    printstyled(stderr, "$message\n", color = :cyan, bold = true)
+end
+
+function certificate_callback(
+    cert_p :: Ptr{CertHostKey},
+    valid  :: Cint,
+    host_p :: Ptr{Cchar},
+    data_p :: Ptr{Cvoid},
+)::Cint
+    valid != 0 && return Consts.CERT_ACCEPT
+    host = unsafe_string(host_p)
+    cert_type = unsafe_load(convert(Ptr{Cint}, cert_p))
+    transport = cert_type == Consts.CERT_TYPE_TLS ? "TLS" :
+                cert_type == Consts.CERT_TYPE_SSH ? "SSH" : nothing
+    if !NetworkOptions.verify_host(host, transport)
+        # user has opted out of host verification
+        return Consts.CERT_ACCEPT
+    end
+    if transport == "TLS"
+        # TLS verification is done before the callback and indicated with the
+        # incoming `valid` flag, so if we get here then host verification failed
+        verify_host_error("TLS host verification: the identity of the server `$host` could not be verified. Someone could be trying to man-in-the-middle your connection. It is also possible that the correct server is using an invalid certificate or that your system's certificate authority root store is misconfigured.")
+        return Consts.CERT_REJECT
+    elseif transport == "SSH"
+        # SSH verification has to be done here
+        files = [joinpath(homedir(), ".ssh", "known_hosts")]
+        check = ssh_knownhost_check(files, host, KeyHashes(cert_p))
+        valid = false
+        if check == Consts.SSH_HOST_KNOWN
+            valid = true
+        elseif check == Consts.SSH_HOST_UNKNOWN
+            if Sys.which("ssh-keyscan") !== nothing
+                msg = "Please run `ssh-keyscan $host >> $(files[1])` in order to add the server to your known hosts file and then try again."
+            else
+                msg = "Please connect once using `ssh $host` in order to add the server to your known hosts file and then try again. You may not be allowed to log in (wrong user and/or no login allowed), but ssh will prompt you to add a host key for the server which will allow libgit2 to verify the server."
+            end
+            verify_host_error("SSH host verification: the server `$host` is not a known host. $msg")
+        elseif check == Consts.SSH_HOST_MISMATCH
+            verify_host_error("SSH host verification: the identity of the server `$host` does not match its known hosts record. Someone could be trying to man-in-the-middle your connection. It is also possible that the server has changed its key, in which case you should check with the server administrator and if they confirm that the key has been changed, update your known hosts file.")
+        elseif check == Consts.SSH_HOST_BAD_HASH
+            verify_host_error("SSH host verification: no secure certificate hash available for `$host`, cannot verify server identity.")
+        else
+            @error("unexpected SSH known host check result", check)
+        end
+        return valid ? Consts.CERT_ACCEPT : Consts.CERT_REJECT
+    end
+    @error("unexpected transport encountered, refusing to validate", cert_type)
+    return Consts.CERT_REJECT
+end
+
+## SSH known host checking
+#
+# We can't use libssh2_knownhost_check because libgit2, for no good reason,
+# doesn't give us a host fingerprint that we can use for that and instead gives
+# us multiple hashes of that fingerprint instead. Moreover, since a host can
+# have multiple fingerprints in the known hosts file with different encryption
+# types (gitlab.com does this, for example), we need to iterate through all the
+# known hosts entries and manually check if any of them is a match.
+#
+# The fact that libgit2 won't give us a fingerprint also means that we cannot,
+# even if we wanted to, prompt the user for whether to add the fingerprint to
+# the known hosts file, since we don't have the fingerprint that should be
+# added. The only option is to instruct the user how to add it themselves.
+#
+# Check logic: if a host appears in a known hosts file at all then one of the
+# keys in that file must match or we declare a mismatch; if the host name
+# doesn't appear in the file at all, however, we will continue searching files.
+#
+# This allows adding a host to the system known hosts file to fully override
+# that host appearing in a bundled known hosts file. It is necessary to allow
+# any of multiple entries in a single file to match, however, to allow for the
+# possiblity that the file contains multiple fingerprints for the same host. If
+# libgit2 gave us the fucking fingerprint then we could search for only an entry
+# with the correct type, but we can't do that without the actual fingerprint.
+
+struct KnownHost
+    magic :: Cuint
+    node  :: Ptr{Cvoid}
+    name  :: Ptr{Cchar}
+    key   :: Ptr{Cchar}
+    type  :: Cint
+end
+
+function ssh_knownhost_check(
+    files  :: AbstractVector{<:AbstractString},
+    host   :: AbstractString,
+    hashes :: KeyHashes,
+)
+    hashes.sha1 === hashes.sha256 === nothing &&
+        return Consts.SSH_HOST_BAD_HASH
+    session = @ccall "libssh2".libssh2_session_init_ex(
+        C_NULL :: Ptr{Cvoid},
+        C_NULL :: Ptr{Cvoid},
+        C_NULL :: Ptr{Cvoid},
+        C_NULL :: Ptr{Cvoid},
+    ) :: Ptr{Cvoid}
+    for file in files
+        ispath(file) || continue
+        hosts = @ccall "libssh2".libssh2_knownhost_init(
+            session :: Ptr{Cvoid},
+        ) :: Ptr{Cvoid}
+        count = @ccall "libssh2".libssh2_knownhost_readfile(
+            hosts :: Ptr{Cvoid},
+            file  :: Cstring,
+            1     :: Cint, # standard OpenSSH format
+        ) :: Cint
+        if count < 0
+            @warn("Error parsing SSH known hosts file `$file`")
+            @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
+            continue
+        end
+        name_match = false
+        prev = Ptr{KnownHost}(0)
+        store = Ref{Ptr{KnownHost}}()
+        while true
+            get = @ccall "libssh2".libssh2_knownhost_get(
+                hosts :: Ptr{Cvoid},
+                store :: Ptr{Ptr{KnownHost}},
+                prev  :: Ptr{KnownHost},
+            ) :: Cint
+            get < 0 && @warn("Error searching SSH known hosts file `$file`")
+            get == 0 || break # end of file or error
+            # got a known hosts record for host, now check its key hash
+            prev = store[]
+            known_host = unsafe_load(prev)
+            known_host.name == C_NULL && continue
+            host == unsafe_string(known_host.name) || continue
+            name_match = true # we've found some entry in this file
+            key_match = true # all available hashes must match
+            key = base64decode(unsafe_string(known_host.key))
+            if hashes.sha1 !== nothing
+                key_match &= sha1(key) == collect(hashes.sha1)
+            end
+            if hashes.sha256 !== nothing
+                key_match &= sha256(key) == collect(hashes.sha256)
+            end
+            key_match || continue
+            # name and key match found
+            @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
+            @assert 0 == @ccall "libssh2".libssh2_session_free(session::Ptr{Cvoid})::Cint
+            return Consts.SSH_HOST_KNOWN
+        end
+        @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
+        name_match || continue # no name match, search more files
+        # name match but no key match => host mismatch
+        @assert 0 == @ccall "libssh2".libssh2_session_free(session::Ptr{Cvoid})::Cint
+        return Consts.SSH_HOST_MISMATCH
+    end
+    # name not found in any known hosts files
+    @assert 0 == @ccall "libssh2".libssh2_session_free(session::Ptr{Cvoid})::Cint
+    return Consts.SSH_HOST_UNKNOWN
+end
+
 "C function pointer for `mirror_callback`"
 mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}))
 "C function pointer for `credentials_callback`"
 credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any))
 "C function pointer for `fetchhead_foreach_callback`"
 fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Any))
+"C function pointer for `certificate_callback`"
+certificate_cb() = @cfunction(certificate_callback, Cint, (Ptr{CertHostKey}, Cint, Ptr{Cchar}, Ptr{Cvoid}))

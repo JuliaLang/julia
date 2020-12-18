@@ -1219,6 +1219,8 @@ timesofar("datamove")
         @check_bit_operation findall(falses(t)) ret_type
         @check_bit_operation findall(bitrand(t)) ret_type
     end
+
+    @test count(trues(2, 2), init=0x03) === 0x07
 end
 
 timesofar("find")

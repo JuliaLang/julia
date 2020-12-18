@@ -32,7 +32,7 @@ jl_sym_t *empty_sym;   jl_sym_t *top_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *toplevel_sym; jl_sym_t *quote_sym;
-jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
+jl_sym_t *line_sym;    jl_sym_t *incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *return_sym;  jl_sym_t *lineinfo_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
@@ -341,7 +341,7 @@ void jl_init_common_symbols(void)
     globalref_sym = jl_symbol("globalref");
     line_sym = jl_symbol("line");
     lineinfo_sym = jl_symbol("lineinfo");
-    jl_incomplete_sym = jl_symbol("incomplete");
+    incomplete_sym = jl_symbol("incomplete");
     error_sym = jl_symbol("error");
     goto_sym = jl_symbol("goto");
     goto_ifnot_sym = jl_symbol("gotoifnot");
@@ -935,6 +935,15 @@ JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym)
     return res;
 }
 
+JL_DLLEXPORT int jl_is_syntactic_operator(char *sym)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    int res = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "syntactic-op?")), symbol(fl_ctx, sym)) == fl_ctx->T;
+    jl_ast_ctx_leave(ctx);
+    return res;
+}
+
 JL_DLLEXPORT int jl_operator_precedence(char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
@@ -1028,12 +1037,6 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     if (e->head == quote_sym && jl_expr_nargs(e) == 1) {
         expr = jl_call_scm_on_ast("julia-bq-macro", jl_exprarg(e, 0), inmodule);
         JL_GC_PUSH1(&expr);
-        if (macroctx) {
-            // in a macro, `quote` also implies `escape`
-            jl_expr_t *e2 = jl_exprn(escape_sym, 1);
-            jl_array_ptr_set(e2->args, 0, expr);
-            expr = (jl_value_t*)e2;
-        }
         expr = jl_expand_macros(expr, inmodule, macroctx, onelevel, world);
         JL_GC_POP();
         return expr;

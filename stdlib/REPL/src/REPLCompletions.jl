@@ -40,6 +40,7 @@ struct MethodCompletion <: Completion
     func
     input_types::Type
     method::Method
+    orig_method::Union{Nothing,Method} # if `method` is a keyword method, keep the original method for sensible printing
 end
 
 struct BslashCompletion <: Completion
@@ -89,7 +90,7 @@ _completion_text(c::ModuleCompletion) = c.mod
 _completion_text(c::PackageCompletion) = c.package
 _completion_text(c::PropertyCompletion) = string(c.property)
 _completion_text(c::FieldCompletion) = string(c.field)
-_completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method))
+_completion_text(c::MethodCompletion) = sprint(io -> show(io, isnothing(c.orig_method) ? c.method : c.orig_method::Method))
 _completion_text(c::BslashCompletion) = c.bslash
 _completion_text(c::ShellCompletion) = c.text
 _completion_text(c::DictCompletion) = c.key
@@ -314,7 +315,7 @@ end
 function should_method_complete(s::AbstractString)
     method_complete = false
     for c in reverse(s)
-        if c in [',', '(']
+        if c in [',', '(', ';']
             method_complete = true
             break
         elseif !(c in whitespace_chars)
@@ -465,34 +466,58 @@ end
 
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr, context_module::Module=Main)
-    args_ex = Any[]
     func, found = get_value(ex_org.args[1], context_module)::Tuple{Any,Bool}
     !found && return Completion[]
 
     funargs = ex_org.args[2:end]
     # handle broadcasting, but only handle number of arguments instead of
     # argument types
+    args_ex = Any[]
+    kwargs_ex = Pair{Symbol,Any}[]
     if ex_org.head === :. && ex_org.args[2] isa Expr
         for _ in (ex_org.args[2]::Expr).args
             push!(args_ex, Any)
         end
     else
         for ex in funargs
-            val, found = get_type(ex, context_module)
-            push!(args_ex, val)
+            if isexpr(ex, :parameters)
+                for x in ex.args
+                    n, v = isexpr(x, :kw) ? (x.args...,) : (x, x)
+                    push!(kwargs_ex, n => first(get_type(v, context_module)))
+                end
+            elseif isexpr(ex, :kw)
+                n, v = (ex.args...,)
+                push!(kwargs_ex, n => first(get_type(v, context_module)))
+            else
+                push!(args_ex, first(get_type(ex, context_module)))
+            end
         end
     end
 
     out = Completion[]
-    t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
-    na = length(args_ex)+1
     ml = methods(func)
-    for method in ml
+    # Input types and number of arguments
+    if isempty(kwargs_ex)
+        t_in = Tuple{Core.Typeof(func), args_ex...}
+        na = length(t_in.parameters)::Int
+        orig_ml = fill(nothing, length(ml))
+    else
+        isdefined(ml.mt, :kwsorter) || return out
+        kwfunc = ml.mt.kwsorter
+        kwargt = NamedTuple{(first.(kwargs_ex)...,), Tuple{last.(kwargs_ex)...}}
+        t_in = Tuple{Core.Typeof(kwfunc), kwargt, Core.Typeof(func), args_ex...}
+        na = length(t_in.parameters)::Int
+        orig_ml = ml # this method is supposed to be used for printing
+        ml = methods(kwfunc)
+        func = kwfunc
+    end
+
+    for (method::Method, orig_method) in zip(ml, orig_ml)
         ms = method.sig
 
         # Check if the method's type signature intersects the input types
-        if typeintersect(Base.rewrap_unionall(Tuple{(Base.unwrap_unionall(ms)::DataType).parameters[1 : min(na, end)]...}, ms), t_in) !== Union{}
-            push!(out, MethodCompletion(func, t_in, method))
+        if typeintersect(Base.rewrap_unionall(Tuple{(Base.unwrap_unionall(ms)::DataType).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
+            push!(out, MethodCompletion(func, t_in, method, orig_method))
         end
     end
     return out
@@ -507,6 +532,11 @@ const whitespace_chars = [" \t\n\r"...]
 # characters contain any of these characters. It prohibits the
 # bslash_completions function to try and complete on escaped characters in strings
 const bslash_separators = [whitespace_chars..., "\"'`"...]
+
+const subscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k, "\\_") && length(k)==3)
+const subscript_regex = Regex("^\\\\_[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(subscripts)) * "]+\\z")
+const superscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k, "\\^") && length(k)==3)
+const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(superscripts)) * "]+\\z")
 
 # Aux function to detect whether we're right after a
 # using or import keyword
@@ -530,6 +560,12 @@ function bslash_completions(string::String, pos::Int)
         latex = get(latex_symbols, s, "")
         if !isempty(latex) # complete an exact match
             return (true, (Completion[BslashCompletion(latex)], slashpos:pos, true))
+        elseif occursin(subscript_regex, s)
+            sub = map(c -> subscripts[c], s[3:end])
+            return (true, (Completion[BslashCompletion(sub)], slashpos:pos, true))
+        elseif occursin(superscript_regex, s)
+            sup = map(c -> superscripts[c], s[3:end])
+            return (true, (Completion[BslashCompletion(sup)], slashpos:pos, true))
         end
         emoji = get(emoji_symbols, s, "")
         if !isempty(emoji)

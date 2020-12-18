@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const Chars = Union{AbstractChar,Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}
+const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}
 
 # starts with and ends with predicates
 
@@ -22,7 +22,7 @@ function startswith(a::AbstractString, b::AbstractString)
     a, b = Iterators.Stateful(a), Iterators.Stateful(b)
     all(splat(==), zip(a, b)) && isempty(b)
 end
-startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
+startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::AbstractChar in chars
 
 """
     endswith(s::AbstractString, suffix::AbstractString)
@@ -109,6 +109,16 @@ used to implement specialized methods.
 !!! compat "Julia 1.5"
     The single argument `endswith(suffix)` requires at least Julia 1.5.
 
+# Examples
+```jldoctest
+julia> endswith_julia = endswith("Julia");
+
+julia> endswith_julia("Julia")
+true
+
+julia> endswith_julia("JuliaLang")
+false
+```
 """
 endswith(s) = Base.Fix2(endswith, s)
 
@@ -124,6 +134,16 @@ used to implement specialized methods.
 !!! compat "Julia 1.5"
     The single argument `startswith(prefix)` requires at least Julia 1.5.
 
+# Examples
+```jldoctest
+julia> startswith_julia = startswith("Julia");
+
+julia> startswith_julia("Julia")
+true
+
+julia> startswith_julia("NotJulia")
+false
+```
 """
 startswith(s) = Base.Fix2(startswith, s)
 
@@ -382,7 +402,7 @@ function split(str::T, splitter;
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
-function split(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+function split(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
@@ -397,7 +417,7 @@ function _split(str::AbstractString, splitter::F, limit::Integer, keepempty::Boo
     i = 1 # firstindex(str)
     n = lastindex(str)::Int
     r = findfirst(splitter,str)::Union{Nothing,Int,UnitRange{Int}}
-    if !isnothing(r)
+    if r !== nothing
         j, k = first(r), nextind(str,last(r))::Int
         while 0 < j <= n && length(strs) != limit-1
             if i < k
@@ -408,7 +428,7 @@ function _split(str::AbstractString, splitter::F, limit::Integer, keepempty::Boo
             end
             (k <= j) && (k = nextind(str,j)::Int)
             r = findnext(splitter,str,k)::Union{Nothing,Int,UnitRange{Int}}
-            isnothing(r) && break
+            r === nothing && break
             j, k = first(r), nextind(str,last(r))::Int
         end
     end
@@ -458,7 +478,7 @@ function rsplit(str::T, splitter;
                 limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
-function rsplit(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+function rsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
                 limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
@@ -493,7 +513,7 @@ _replace(io, repl::Function, str, r, pattern::Function) =
 replace(str::String, pat_repl::Pair{<:AbstractChar}; count::Integer=typemax(Int)) =
     replace(str, isequal(first(pat_repl)) => last(pat_repl); count=count)
 
-replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{<:AbstractChar}},
+replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{AbstractChar}},
                                             AbstractVector{<:AbstractChar},Set{<:AbstractChar}}};
         count::Integer=typemax(Int)) =
     replace(str, in(first(pat_repl)) => last(pat_repl), count=count)
@@ -546,7 +566,7 @@ If `count` is provided, replace at most `count` occurrences.
 `pat` may be a single character, a vector or a set of characters, a string,
 or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
-where `s` is the matched substring (when `pat` is a `Regex` or `AbstractString`) or
+where `s` is the matched substring (when `pat` is a `AbstractPattern` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
@@ -669,7 +689,7 @@ julia> bytes2hex(b)
 """
 function bytes2hex end
 
-function bytes2hex(a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
+function bytes2hex(a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
     b = Base.StringVector(2*length(a))
     @inbounds for (i, x) in enumerate(a)
         b[2i - 1] = hex_chars[1 + x >> 4]
@@ -678,7 +698,7 @@ function bytes2hex(a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
     return String(b)
 end
 
-function bytes2hex(io::IO, a::Union{NTuple{<:Any, UInt8}, AbstractArray{UInt8}})
+function bytes2hex(io::IO, a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
     for x in a
         print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
     end
@@ -711,3 +731,12 @@ julia> ascii("abcdefgh")
 ```
 """
 ascii(x::AbstractString) = ascii(String(x))
+
+Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
+function Base.rest(s::AbstractString, st...)
+    io = IOBuffer()
+    for c in Iterators.rest(s, st...)
+        print(io, c)
+    end
+    return String(take!(io))
+end

@@ -393,9 +393,8 @@ static void ctx_switch(jl_ptls_t ptls)
     }
 
     // set up global state for new task
-    lastt->world_age = ptls->world_age;
     ptls->pgcstack = t->gcstack;
-    ptls->world_age = t->world_age;
+    ptls->world_age = 0;
     t->gcstack = NULL;
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
@@ -510,13 +509,20 @@ JL_DLLEXPORT void jl_switch(void)
     else if (t->tid != ptls->tid) {
         jl_error("cannot switch to task running on another thread");
     }
+
+    // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
+    size_t world_age = ptls->world_age;
+    int finalizers_inhibited = ptls->finalizers_inhibited;
+    ptls->world_age = 0;
+    ptls->finalizers_inhibited = 0;
 
 #ifdef ENABLE_TIMINGS
-    jl_timing_block_t *blk = ct->timing_stack;
+    jl_timing_block_t *blk = ptls->timing_stack;
     if (blk)
         jl_timing_block_stop(blk);
+    ptls->timing_stack = NULL;
 #endif
 
     ctx_switch(ptls);
@@ -533,10 +539,16 @@ JL_DLLEXPORT void jl_switch(void)
     assert(ptls == refetch_ptls());
 #endif
 
-    ct = ptls->current_task;
+    // Pop old values back off the stack
+    assert(ct == ptls->current_task &&
+           0 == ptls->world_age &&
+           0 == ptls->finalizers_inhibited);
+    ptls->world_age = world_age;
+    ptls->finalizers_inhibited = finalizers_inhibited;
 
 #ifdef ENABLE_TIMINGS
-    assert(blk == ct->timing_stack);
+    assert(ptls->timing_stack == NULL);
+    ptls->timing_stack = blk;
     if (blk)
         jl_timing_block_start(blk);
 #else
@@ -558,10 +570,15 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
 
 JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
 {
-    jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
-    jl_static_show(JL_STDERR, e);
-    jl_printf(JL_STDERR, "\n");
-    jlbacktrace();
+    // NULL exception objects are used when rethrowing. we don't have a handler to process
+    // the exception stack, so at least report the exception at the top of the stack.
+    if (!e)
+        e = jl_current_exception();
+
+    jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
+    jl_static_show((JL_STREAM*)STDERR_FILENO, e);
+    jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+    jlbacktrace(); // written to STDERR_FILENO
     jl_exit(1);
 }
 
@@ -590,7 +607,7 @@ static void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
     jl_handler_t *eh = ptls->current_task->eh;
     if (eh != NULL) {
 #ifdef ENABLE_TIMINGS
-        jl_timing_block_t *cur_block = ptls->current_task->timing_stack;
+        jl_timing_block_t *cur_block = ptls->timing_stack;
         while (cur_block && eh->timing_stack != cur_block) {
             cur_block = jl_pop_timing_block(cur_block);
         }
@@ -691,9 +708,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->started = 0;
     t->prio = -1;
     t->tid = -1;
-#ifdef ENABLE_TIMINGS
-    t->timing_stack = jl_root_timing;
-#endif
 
 #if defined(JL_DEBUG_BUILD)
     if (!t->copy_stack)
@@ -796,6 +810,7 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *t = ptls->current_task;
     jl_value_t *res;
+    assert(ptls->finalizers_inhibited == 0);
 
 #ifdef MIGRATE_TASKS
     jl_task_t *pt = ptls->previous_task;

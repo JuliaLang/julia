@@ -204,14 +204,38 @@ end
 end
 
 @testset "invmod" begin
-    @test invmod(6, 31) == 26
-    @test invmod(-1, 3) == 2
-    @test invmod(1, -3) == -2
-    @test invmod(-1, -3) == -1
-    @test invmod(0x2, 0x3) == 2
-    @test invmod(2, 0x3) == 2
-    @test invmod(0x8, -3) == -1
+    @test invmod(6, 31) === 26
+    @test invmod(-1, 3) === 2
+    @test invmod(1, -3) === -2
+    @test invmod(-1, -3) === -1
+    @test invmod(0x2, 0x3) === 0x2
+    @test invmod(2, 0x3) === UInt(2)
+    @test invmod(0x8, -3) === -1
     @test_throws DomainError invmod(0, 3)
+
+    # For issue 29971
+    @test invmod(UInt8(1), typemax(UInt8))  === 0x01
+    @test invmod(UInt16(1), typemax(UInt16)) === 0x0001
+    @test invmod(UInt32(1), typemax(UInt32)) === 0x0000_0001
+    @test invmod(UInt64(1), typemax(UInt64)) === 0x0000_0000_0000_0001
+
+    for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128, BigInt)
+        @test invmod(T(3), T(124))::T == 83
+    end
+
+    for T in (Int8, UInt8)
+        for x in typemin(T):typemax(T)
+            for m in typemin(T):typemax(T)
+                if m != 0 && try gcdx(x, m)[1] == 1 catch _ true end
+                    y = invmod(x, m)
+                    @test mod(widemul(y, x), m) == mod(1, m)
+                    @test div(y, m) == 0
+                else
+                    @test_throws DomainError invmod(x, m)
+                end
+            end
+        end
+    end
 end
 
 @testset "powermod" begin

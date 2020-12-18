@@ -284,7 +284,7 @@ code_llvm(devnull, invoke_g10878, ())
 @test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
 find_tvar10930(sig::Type{T}) where {T<:Tuple} = 1
 function find_tvar10930(arg)
-    if arg<:Tuple
+    if isa(arg, Type) && arg<:Tuple
         find_tvar10930(arg[random_var_name])
     end
     return 1
@@ -627,7 +627,7 @@ function maybe_vararg_tuple_1()
 end
 @test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_1, ())[1]
 function maybe_vararg_tuple_2()
-    x = Type[Vararg{Int}][1]
+    x = [Vararg{Int}][1]
     Tuple{x}
 end
 @test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_2, ())[1]
@@ -653,8 +653,8 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Real}, Const(:x)) == Type{<:Real}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Array}}, Type{Int32}}, Const(:x)) == Type{Array}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Const(Real)
-    @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Type
-    @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type
+    @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Const(Real)
+    @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
     @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Type
     @test fieldtype_tfunc(Type{<:Tuple}, Any) == Type
     @test fieldtype_nothrow(Type{Base.RefValue{<:Real}}, Const(:x))
@@ -673,6 +673,7 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(2))
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
+    @test TypeVar <: fieldtype_tfunc(Any, Any)
 end
 
 # issue #11480
@@ -1828,8 +1829,8 @@ end
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Any}) == Type
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Int}) == Union{}
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) == Union{}
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Type
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Type
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Any
+@test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Any
 
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
 
@@ -2652,7 +2653,10 @@ end
 @test Core.Compiler.typesubtract(NTuple{3, Union{Int, Char}}, NTuple{3, Char}, 10) ==
         Union{Tuple{Char, Char, Int}, Tuple{Char, Int, Char}, Tuple{Char, Int, Int}, Tuple{Int, Char, Char},
               Tuple{Int, Char, Int}, Tuple{Int, Int, Char}, Tuple{Int, Int, Int}}
-
+# Test that these don't throw
+@test Core.Compiler.typesubtract(Tuple{Vararg{Int}}, Tuple{Vararg{Char}}, 0) == Tuple{Vararg{Int}}
+@test Core.Compiler.typesubtract(NTuple{3, Real}, NTuple{3, Char}, 0) == NTuple{3, Real}
+@test Core.Compiler.typesubtract(NTuple{3, Union{Real, Char}}, NTuple{2, Char}, 0) == NTuple{3, Union{Real, Char}}
 
 @test Base.return_types(Issue35566.f) == [Val{:expected}]
 
@@ -2828,14 +2832,14 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Type
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Type
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Type
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Union{Type, TypeVar}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Union{Type, TypeVar}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Union{Type, TypeVar}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Union{Type, TypeVar}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Type
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Type
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Any, Vararg}) == Type
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Any, Vararg}) == Any
 f_apply_cglobal(args...) = cglobal(args...)
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Vararg{Type{Int}}}) == Ptr
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}}) == Ptr
@@ -2878,14 +2882,36 @@ end
     timing1 = time_inference() do
         @eval M.g(2, 3.0)
     end
+    @test occursin(r"Core.Compiler.Timings.Timing\(InferenceFrameInfo for Core.Compiler.Timings.ROOT\(\)\) with \d+ children", sprint(show, timing1))
     # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
     # their concrete types.
     @test sort([mi_info.mi.def.name for (time,mi_info) in flatten_times(timing1)[end-1:end]]) == [:i, :i2]
+    @test all(child->isa(child.bt, Vector), timing1.children)
+    @test all(child->child.bt===nothing, timing1.children[1].children)
+    # Test the stacktrace
+    @test isa(stacktrace(timing1.children[1].bt), Vector{Base.StackTraces.StackFrame})
     # Test that inference has cached some of the Method Instances
     timing2 = time_inference() do
         @eval M.g(2, 3.0)
     end
     @test length(flatten_times(timing2)) < length(flatten_times(timing1))
+    # Printing of InferenceFrameInfo for mi.def isa Module
+    @eval module M
+        i(x) = x+5
+        i2(x) = x+2
+        h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
+        g(y::Integer, x) = h(Any[y]) + Int(x)
+    end
+    # BEGIN LINE NUMBER SENSITIVITY (adjust the line offset below as needed)
+    timingmod = time_inference() do
+        @eval @testset "Outer" begin
+            @testset "Inner" begin
+                for i = 1:2 M.g(2, 3.0) end
+            end
+        end
+    end
+    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 5)", string(timingmod.children))
+    # END LINE NUMBER SENSITIVITY
 
     # Recursive function
     @eval module _Recursive f(n::Integer) = n == 0 ? 0 : f(n-1) + 1 end
@@ -2900,13 +2926,56 @@ end
         i(x) = x === 0 ? 0 : 1 / x
         a(x) = i(0) * i(x)
         b() = i(0) * i(1) * i(0)
+        function loopc(n)
+            s = 0
+            for i = 1:n
+                s += i
+            end
+            return s
+        end
+        call_loopc() = loopc(5)
+        myfloor(::Type{T}, x) where T = floor(T, x)
+        d(x) = myfloor(Int16, x)
     end
     timing = time_inference() do
         @eval C.a(2)
         @eval C.b()
+        @eval C.call_loopc()
+        @eval C.d(3.2)
     end
-    @test !isempty(flatten_times(timing))
+    ft = flatten_times(timing)
+    @test !isempty(ft)
+    str = sprint(show, ft)
+    @test occursin("InferenceFrameInfo for /(1::$Int, ::$Int)", str)  # inference constants
+    @test occursin("InferenceFrameInfo for Core.Compiler.Timings.ROOT()", str) # qualified
+    # loopc has internal slots, check constant printing in this case
+    sel = filter(ti -> ti.second.mi.def.name === :loopc, ft)
+    ifi = sel[end].second
+    @test length(ifi.slottypes) > ifi.nargs
+    str = sprint(show, sel)
+    @test occursin("InferenceFrameInfo for $(@__MODULE__).C.loopc(5::$Int)", str)
+    # check that types aren't double-printed as `T::Type{T}`
+    sel = filter(ti -> ti.second.mi.def.name === :myfloor, ft)
+    str = sprint(show, sel)
+    @test occursin("InferenceFrameInfo for $(@__MODULE__).C.myfloor(::Type{Int16}, ::Float64)", str)
 end
 
 # issue #37638
-@test !(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}) <: Vararg)
+@test isa(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}), Type)
+
+# Issue #37943
+f37943(x::Any, i::Int) = getfield((x::Pair{false, Int}), i)
+g37943(i::Int) = fieldtype(Pair{false, T} where T, i)
+@test only(Base.return_types(f37943, Tuple{Any, Int})) === Union{}
+@test only(Base.return_types(g37943, Tuple{Int})) === Union{Type{Union{}}, Type{Any}}
+
+# Don't let PartialStruct prevent const prop
+f_partial_struct_constprop(a, b) = (a[1]+b[1], nothing)
+g_partial_struct_constprop() = Val{f_partial_struct_constprop((1,), (1,))[1]}()
+@test only(Base.return_types(g_partial_struct_constprop, Tuple{})) === Val{2}
+
+# N parameter of Vararg is known to be Int
+gVarargInt(x::Int) = 1
+gVarargInt(x) = 2
+fVarargInt(::Tuple{Vararg{Int, N}}) where {N} = Val{gVarargInt(N)}()
+@test only(Base.return_types(fVarargInt, Tuple{Tuple{Vararg{Int}}})) == Val{1}

@@ -182,7 +182,7 @@ On exotic variants of `BLAS` this function can fail, which is indicated by retur
 !!! compat "Julia 1.6"
     `get_num_threads` requires at least Julia 1.6.
 """
-get_num_threads(;_blas=guess_vendor())::Union{Int, Nothing} = _get_num_threads()
+get_num_threads()::Union{Int, Nothing} = _get_num_threads()
 
 function _get_num_threads(; _blas = guess_vendor())::Union{Int, Nothing}
     if _blas === :openblas || _blas === :openblas64
@@ -704,10 +704,10 @@ for (fname, elty) in ((:dgemv_,:Float64),
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
+                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Clong),
                  trans, size(A,1), size(A,2), alpha,
                  A, max(1,stride(A,2)), X, stride(X,1),
-                 beta, Y, stride(Y,1))
+                 beta, Y, stride(Y,1), 1)
             Y
         end
         function gemv(trans::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, X::AbstractVector{$elty})
@@ -785,10 +785,10 @@ for (fname, elty) in ((:dgbmv_,:Float64),
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
-                 Ref{BlasInt}),
+                 Ref{BlasInt}, Clong),
                  trans, m, size(A,2), kl,
                  ku, alpha, A, max(1,stride(A,2)),
-                 x, stride(x,1), beta, y, stride(y,1))
+                 x, stride(x,1), beta, y, stride(y,1), 1)
             y
         end
         function gbmv(trans::AbstractChar, m::Integer, kl::Integer, ku::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -844,10 +844,10 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
             ccall((@blasfunc($fname), $lib), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
-                 Ptr{$elty}, Ref{BlasInt}),
+                 Ptr{$elty}, Ref{BlasInt}, Clong),
                  uplo, n, alpha, A,
                  max(1,stride(A,2)), x, stride(x,1), beta,
-                 y, stride(y,1))
+                 y, stride(y,1), 1)
             y
         end
         function symv(uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -908,10 +908,10 @@ for (fname, elty) in ((:zhemv_,:ComplexF64),
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
-                 Ptr{$elty}, Ref{BlasInt}),
+                 Ptr{$elty}, Ref{BlasInt}, Clong),
                 uplo, n, α, A,
                 lda, x, incx, β,
-                y, incy)
+                y, incy, 1)
             y
         end
         function hemv(uplo::AbstractChar, α::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -971,7 +971,8 @@ for (fname, elty) in ((:zhpmv_, :ComplexF64),
                    Ref{BlasInt},   # incx,
                    Ref{$elty},     # β,
                    Ptr{$elty},     # y, output
-                   Ref{BlasInt}),  # incy
+                   Ref{BlasInt},   # incy
+                   Clong),         # length of uplo
                   uplo,
                   n,
                   α,
@@ -980,7 +981,8 @@ for (fname, elty) in ((:zhpmv_, :ComplexF64),
                   incx,
                   β,
                   y,
-                  incy)
+                  incy,
+                  1)
             return y
         end
     end
@@ -1041,10 +1043,10 @@ for (fname, elty) in ((:dsbmv_,:Float64),
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
+                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Clong),
                  uplo, size(A,2), k, alpha,
                  A, max(1,stride(A,2)), x, stride(x,1),
-                 beta, y, stride(y,1))
+                 beta, y, stride(y,1), 1)
             y
         end
         function sbmv(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -1119,7 +1121,8 @@ for (fname, elty) in ((:dspmv_, :Float64),
                    Ref{BlasInt},   # incx,
                    Ref{$elty},     # β,
                    Ptr{$elty},     # y, out
-                   Ref{BlasInt}),  # incy
+                   Ref{BlasInt},   # incy
+                   Clong),         # length of uplo
                   uplo,
                   n,
                   α,
@@ -1128,7 +1131,8 @@ for (fname, elty) in ((:dspmv_, :Float64),
                   incx,
                   β,
                   y,
-                  incy)
+                  incy,
+                  1)
             return y
         end
     end
@@ -1189,10 +1193,10 @@ for (fname, elty) in ((:zhbmv_,:ComplexF64),
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
+                 Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Clong),
                  uplo, size(A,2), k, alpha,
                  A, max(1,stride(A,2)), x, stride(x,1),
-                 beta, y, stride(y,1))
+                 beta, y, stride(y,1), 1)
             y
         end
         function hbmv(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -1248,9 +1252,10 @@ for (fname, elty) in ((:dtrmv_,:Float64),
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
-                 Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
+                 Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                 Clong, Clong, Clong),
                  uplo, trans, diag, n,
-                 A, max(1,stride(A,2)), x, max(1,stride(x, 1)))
+                 A, max(1,stride(A,2)), x, max(1,stride(x, 1)), 1, 1, 1)
             x
         end
         function trmv(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -1302,9 +1307,10 @@ for (fname, elty) in ((:dtrsv_,:Float64),
             chkstride1(A)
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
-                 Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
+                 Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                 Clong, Clong, Clong),
                  uplo, trans, diag, n,
-                 A, max(1,stride(A,2)), x, stride(x, 1))
+                 A, max(1,stride(A,2)), x, stride(x, 1), 1, 1, 1)
             x
         end
         function trsv(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -1398,9 +1404,9 @@ for (fname, elty, relty) in ((:zher_,:ComplexF64, :Float64),
             end
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$relty}, Ptr{$elty},
-                 Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
+                 Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
                  uplo, n, α, x,
-                 stride(x, 1), A, max(1,stride(A,2)))
+                 stride(x, 1), A, max(1,stride(A,2)), 1)
             A
         end
     end
@@ -1453,11 +1459,11 @@ for (gemm, elty) in
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
-                 Ref{BlasInt}),
+                 Ref{BlasInt}, Clong, Clong),
                  transA, transB, m, n,
                  ka, alpha, A, max(1,stride(A,2)),
                  B, max(1,stride(B,2)), beta, C,
-                 max(1,stride(C,2)))
+                 max(1,stride(C,2)), 1, 1)
             C
         end
         function gemm(transA::AbstractChar, transB::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
@@ -1515,10 +1521,12 @@ for (mfname, elty) in ((:dsymm_,:Float64),
             ccall((@blasfunc($mfname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                 Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
+                 Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt},
+                 Clong, Clong),
                  side, uplo, m, n,
                  alpha, A, max(1,stride(A,2)), B,
-                 max(1,stride(B,2)), beta, C, max(1,stride(C,2)))
+                 max(1,stride(B,2)), beta, C, max(1,stride(C,2)),
+                 1, 1)
             C
         end
         function symm(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
@@ -1586,10 +1594,12 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
             ccall((@blasfunc($mfname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                 Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
+                 Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt},
+                 Clong, Clong),
                  side, uplo, m, n,
                  alpha, A, max(1,stride(A,2)), B,
-                 max(1,stride(B,2)), beta, C, max(1,stride(C,2)))
+                 max(1,stride(B,2)), beta, C, max(1,stride(C,2)),
+                 1, 1)
             C
         end
         function hemm(side::AbstractChar, uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
@@ -1673,10 +1683,10 @@ for (fname, elty) in ((:dsyrk_,:Float64),
            ccall((@blasfunc($fname), libblas), Cvoid,
                  (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                   Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
-                  Ptr{$elty}, Ref{BlasInt}),
+                  Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
                  uplo, trans, n, k,
                  alpha, A, max(1,stride(A,2)), beta,
-                 C, max(1,stride(C,2)))
+                 C, max(1,stride(C,2)), 1, 1)
             C
         end
     end
@@ -1731,10 +1741,10 @@ for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
            ccall((@blasfunc($fname), libblas), Cvoid,
                  (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                   Ref{$relty}, Ptr{$elty}, Ref{BlasInt}, Ref{$relty},
-                  Ptr{$elty}, Ref{BlasInt}),
+                  Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
                  uplo, trans, n, k,
                  α, A, max(1,stride(A,2)), β,
-                 C, max(1,stride(C,2)))
+                 C, max(1,stride(C,2)), 1, 1)
            C
        end
        function herk(uplo::AbstractChar, trans::AbstractChar, α::$relty, A::AbstractVecOrMat{$elty})
@@ -1774,10 +1784,10 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
             ccall((@blasfunc($fname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
-                 Ptr{$elty}, Ref{BlasInt}),
+                 Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
                  uplo, trans, n, k,
                  alpha, A, max(1,stride(A,2)), B, max(1,stride(B,2)), beta,
-                 C, max(1,stride(C,2)))
+                 C, max(1,stride(C,2)), 1, 1)
             C
         end
     end
@@ -1841,10 +1851,10 @@ for (fname, elty1, elty2) in ((:zher2k_,:ComplexF64,:Float64), (:cher2k_,:Comple
            ccall((@blasfunc($fname), libblas), Cvoid,
                  (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                   Ref{$elty1}, Ptr{$elty1}, Ref{BlasInt}, Ptr{$elty1}, Ref{BlasInt},
-                  Ref{$elty2},  Ptr{$elty1}, Ref{BlasInt}),
+                  Ref{$elty2},  Ptr{$elty1}, Ref{BlasInt}, Clong, Clong),
                  uplo, trans, n, k,
                  alpha, A, max(1,stride(A,2)), B, max(1,stride(B,2)),
-                 beta, C, max(1,stride(C,2)))
+                 beta, C, max(1,stride(C,2)), 1, 1)
            C
        end
        function her2k(uplo::AbstractChar, trans::AbstractChar, alpha::($elty1), A::AbstractVecOrMat{$elty1}, B::AbstractVecOrMat{$elty1})
@@ -1954,9 +1964,11 @@ for (mmname, smname, elty) in
             chkstride1(B)
             ccall((@blasfunc($mmname), libblas), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
-                   Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
+                   Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                   Clong, Clong, Clong, Clong),
                   side, uplo, transa, diag, m, n,
-                  alpha, A, max(1,stride(A,2)), B, max(1,stride(B,2)))
+                  alpha, A, max(1,stride(A,2)), B, max(1,stride(B,2)),
+                  1, 1, 1, 1)
             B
         end
         function trmm(side::AbstractChar, uplo::AbstractChar, transa::AbstractChar, diag::AbstractChar,
@@ -1983,10 +1995,12 @@ for (mmname, smname, elty) in
             ccall((@blasfunc($smname), libblas), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{UInt8},
                  Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
-                 Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
+                 Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                 Clong, Clong, Clong, Clong),
                  side, uplo, transa, diag,
                  m, n, alpha, A,
-                 max(1,stride(A,2)), B, max(1,stride(B,2)))
+                 max(1,stride(A,2)), B, max(1,stride(B,2)),
+                 1, 1, 1, 1)
             B
         end
         function trsm(side::AbstractChar, uplo::AbstractChar, transa::AbstractChar, diag::AbstractChar, alpha::$elty, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})

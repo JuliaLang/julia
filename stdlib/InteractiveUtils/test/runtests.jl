@@ -153,15 +153,50 @@ mktemp() do f, io
 end
 
 module _test_varinfo_
-export x
-x = 1.0
+module inner_mod
+inner_x = 1
 end
+import Test: @test
+export x_exported
+x_exported = 1.0
+y_not_exp = 1.0
+z_larger = Vector{Float64}(undef, 3)
+a_smaller = Vector{Float64}(undef, 2)
+end
+
+using Test
+
 @test repr(varinfo(Main, r"^$")) == """
 | name | size | summary |
 |:---- | ----:|:------- |
 """
 let v = repr(varinfo(_test_varinfo_))
-    @test occursin("| x              |   8 bytes | Float64 |", v)
+    @test occursin("| x_exported     |   8 bytes | Float64 |", v)
+    @test !occursin("y_not_exp", v)
+    @test !occursin("@test", v)
+    @test !occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, all = true))
+    @test occursin("x_exported", v)
+    @test occursin("y_not_exp", v)
+    @test !occursin("@test", v)
+    @test findfirst("a_smaller", v)[1] < findfirst("z_larger", v)[1] # check for alphabetical
+    @test !occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, imported = true))
+    @test occursin("x_exported", v)
+    @test !occursin("y_not_exp", v)
+    @test occursin("@test", v)
+    @test !occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, all = true, sortby = :size))
+    @test findfirst("z_larger", v)[1] < findfirst("a_smaller", v)[1] # check for size order
+end
+let v = repr(varinfo(_test_varinfo_, sortby = :summary))
+    @test findfirst("Float64", v)[1] < findfirst("Module", v)[1] # check for summary order
+end
+let v = repr(varinfo(_test_varinfo_, all = true, recursive = true))
+    @test occursin("inner_x", v)
 end
 
 # Issue 14173

@@ -228,12 +228,12 @@
 
 (define (op-or-sufchar? c) (or (op-suffix-char? c) (opchar? c)))
 
-(define (read-operator port c)
-  (if (and (eqv? c #\*) (eqv? (peek-char port) #\*))
+(define (read-operator port c0 (postfix? #f))
+  (if (and (eqv? c0 #\*) (eqv? (peek-char port) #\*))
       (error "use \"x^y\" instead of \"x**y\" for exponentiation, and \"x...\" instead of \"**x\" for splatting."))
   (if (or (eof-object? (peek-char port)) (not (op-or-sufchar? (peek-char port))))
-      (symbol (string c)) ; 1-char operator
-      (let ((str (let loop ((str (string c))
+      (symbol (string c0)) ; 1-char operator
+      (let ((str (let loop ((str (string c0))
                             (c   (peek-char port))
                             (in-suffix? #f))
                    (if (eof-object? c)
@@ -257,7 +257,10 @@
                                        (and (or (eq? opsym '<-) (eq? opsym '.<-))
                                             (read-char port)
                                             (begin0 (eqv? (peek-char port) #\-)
-                                                    (io.ungetc port #\-))))
+                                                    (io.ungetc port #\-)))
+                                       ;; consume suffixes after ', only if parsing a call chain
+                                       ;; otherwise 'ᵀ' would parse as (|'| |'ᵀ|)
+                                       (and postfix? (eqv? c0 #\') sufchar?))
                                    (begin (read-char port)
                                           (loop newop (peek-char port) sufchar?))
                                    str))
@@ -529,42 +532,44 @@
 (define (scolno port) (string " near column " (input-port-column port)))
 
 (define (next-token port s)
-  (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
-  (let ((c (peek-char port)))
-    (cond ((or (eof-object? c) (eqv? c #\newline))  (read-char port))
+  (let loop ((comment-induced-whitespace #f))
+    (aset! s 2 (or (eq? (skip-ws port whitespace-newline) #t)
+                   comment-induced-whitespace))
+    (let ((c (peek-char port)))
+      (cond ((or (eof-object? c) (eqv? c #\newline))  (read-char port))
 
-          ((identifier-start-char? c)     (accum-julia-symbol c port))
+            ((identifier-start-char? c)     (accum-julia-symbol c port))
 
-          ((string.find "()[]{},;\"`@" c) (read-char port))
+            ((string.find "()[]{},;\"`@" c) (read-char port))
 
-          ((string.find "0123456789" c)   (read-number port #f #f))
+            ((string.find "0123456789" c)   (read-number port #f #f))
 
-          ((eqv? c #\#)                   (skip-comment port) (next-token port s))
+            ((eqv? c #\#)                   (skip-comment port) (loop #t))
 
-          ;; . is difficult to handle; it could start a number or operator
-          ((and (eqv? c #\.)
-                (let ((c (read-char port))
-                      (nextc (peek-char port)))
-                  (cond ((eof-object? nextc)
-                         '|.|)
-                        ((char-numeric? nextc)
-                         (read-number port #t #f))
-                        ((opchar? nextc)
-                         (let* ((op (read-operator port c))
-                                (nx (peek-char port)))
-                           (if (and (eq? op '..) (opchar? nx) (not (memv nx '(#\' #\:))))
-                               (error (string "invalid operator \"" op nx "\"" (scolno port))))
-                           op))
-                        (else '|.|)))))
+            ;; . is difficult to handle; it could start a number or operator
+            ((and (eqv? c #\.)
+                  (let ((c (read-char port))
+                        (nextc (peek-char port)))
+                    (cond ((eof-object? nextc)
+                           '|.|)
+                          ((char-numeric? nextc)
+                           (read-number port #t #f))
+                          ((opchar? nextc)
+                           (let* ((op (read-operator port c))
+                                  (nx (peek-char port)))
+                             (if (and (eq? op '..) (opchar? nx) (not (memv nx '(#\' #\:))))
+                                 (error (string "invalid operator \"" op nx "\"" (scolno port))))
+                             op))
+                          (else '|.|)))))
 
-          ((opchar? c)  (read-operator port (read-char port)))
+            ((opchar? c)  (read-operator port (read-char port)))
 
-          (else
-           (let ((cn (input-port-column port)))
-             (read-char port)
-             (if (default-ignorable-char? c)
-                 (error (string "invisible character \\u" (number->string (fixnum c) 16) " near column " (+ 1 cn)))
-                 (error (string "invalid character \"" c "\" near column " (+ 1 cn)))))))))
+            (else
+              (let ((cn (input-port-column port)))
+                (read-char port)
+                (if (default-ignorable-char? c)
+                    (error (string "invisible character \\u" (number->string (fixnum c) 16) " near column " (+ 1 cn)))
+                    (error (string "invalid character \"" c "\" near column " (+ 1 cn))))))))))
 
 ;; --- token stream ---
 
@@ -1244,7 +1249,10 @@
              (if (not (ts:space? s))
                  (begin
                    (take-token s)
-                   (loop (list t ex)))
+                   (let ((t (read-operator (ts:port s) #\' #t)))
+                     (loop (if (eq? t '|'|)
+                               (list t ex)
+                               (list 'call t ex)))))
                  ex))
             ((|.'|) (error "the \".'\" operator is discontinued"))
             ((#\{ )
@@ -1264,11 +1272,13 @@
                                        (parse-raw-literal s t)))
                         (nxt (peek-token s))
                         (macname (macroify-name ex (macsuffix t))))
-                   (if (and (symbol? nxt) (not (operator? nxt))
+                   (if (and (or (symbol? nxt) (number? nxt) (large-number? nxt)) (not (operator? nxt))
                             (not (ts:space? s)))
                        ;; string literal suffix, "s"x
                        (loop `(macrocall ,macname ,startloc ,macstr
-                                         ,(string (take-token s))))
+                                         ,(if (symbol? nxt)
+                                              (string (take-token s))
+                                              (take-token s))))
                        (loop `(macrocall ,macname ,startloc ,macstr))))
                  ex))
             (else ex))))))
@@ -1684,33 +1694,27 @@
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
-  (let* ((outer? (if (eq? (peek-token s) 'outer)
-                     (begin
-                       (take-token s)
-                       (let ((nxt (peek-token s)))
-                         (if (or (memq nxt '(= in ∈))
-                                 (not (symbol? nxt))
-                                 (operator? nxt))
-                             (begin (ts:put-back! s 'outer #t)
-                                    #f)
-                             #t)))
-                     #f))
-         (lhs (parse-pipe< s))
-         (t   (peek-token s)))
-    (cond ((memq t '(= in ∈))
-           (take-token s)
-           (let* ((rhs (parse-pipe< s))
-                  (t   (peek-token s)))
-             #;(if (not (or (closing-token? t) (newline? t)))
-                 ;; should be: (error "invalid iteration specification")
-                 (parser-depwarn s (string "for " (deparse `(= ,lhs ,rhs)) " " t)
-                                 (string "for " (deparse `(= ,lhs ,rhs)) "; " t)))
-             (if outer?
-                 `(= (outer ,lhs) ,rhs)
-                 `(= ,lhs ,rhs))))
-          ((and (eq? lhs ':) (closing-token? t))
-           ':)
-          (else (error "invalid iteration specification")))))
+  ;; FIXME: this is just for backwards compatibility, allows newline before =/in/∈ in
+  ;; generator expressions
+  (define (peek-token- s)
+    (let ((t (peek-token s)))
+      (if (and for-generator (newline? t))
+          (begin (take-token s)
+                 (peek-token s))
+          t)))
+  (let* ((lhs (let ((lhs- (with-space-sensitive (parse-pipe< s))))
+                (if (eq? lhs- 'outer)
+                    (let ((nxt (peek-token- s)))
+                      (if (memq nxt '(= in ∈))
+                          lhs-
+                          `(outer ,(parse-pipe< s))))
+                    lhs-)))
+         (t (peek-token- s)))
+    (if (memq t '(= in ∈))
+        (begin
+          (take-token s)
+          `(= ,lhs ,(parse-pipe< s)))
+        (error "invalid iteration specification"))))
 
 (define (parse-comma-separated-iters s)
   (let loop ((ranges '()))
@@ -2259,7 +2263,10 @@
              (loop (read-char p) b e 0))))
 
       ((and (eqv? c #\$) (not raw))
-       (let ((ex (parse-interpolate s)))
+       (let* ((ex (parse-interpolate s))
+              ;; wrap interpolated literal strings in (string ) so we can
+              ;; distinguish them from the surrounding text (issue #38501)
+              (ex (if (string? ex) `(string ,ex) ex)))
          (loop (read-char p)
                (open-output-string)
                (list* ex (io.tostring! b) e)

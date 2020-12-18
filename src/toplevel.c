@@ -507,7 +507,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == const_sym ||
          ((jl_expr_t*)e)->head == toplevel_sym ||
          ((jl_expr_t*)e)->head == error_sym ||
-         ((jl_expr_t*)e)->head == jl_incomplete_sym);
+         ((jl_expr_t*)e)->head == incomplete_sym);
 }
 
 int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
@@ -518,7 +518,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     jl_sym_t *head = ex->head;
     if (head == module_sym || head == import_sym || head == using_sym ||
         head == export_sym || head == thunk_sym || head == toplevel_sym ||
-        head == error_sym || head == jl_incomplete_sym || head == method_sym) {
+        head == error_sym || head == incomplete_sym || head == method_sym) {
         return 0;
     }
     if (head == global_sym || head == const_sym) {
@@ -829,7 +829,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         JL_GC_POP();
         return res;
     }
-    else if (head == error_sym || head == jl_incomplete_sym) {
+    else if (head == error_sym || head == incomplete_sym) {
         if (jl_expr_nargs(ex) == 0)
             jl_eval_errorf(m, "malformed \"%s\" expression", jl_symbol_name(head));
         if (jl_is_string(jl_exprarg(ex, 0)))
@@ -895,6 +895,15 @@ static void jl_check_open_for(jl_module_t *m, const char* funcname)
         if (m != jl_main_module) { // TODO: this was grand-fathered in
             JL_LOCK(&jl_modules_mutex);
             int open = ptrhash_has(&jl_current_modules, (void*)m);
+            if (!open && jl_module_init_order != NULL) {
+                size_t i, l = jl_array_len(jl_module_init_order);
+                for (i = 0; i < l; i++) {
+                    if (m == (jl_module_t*)jl_array_ptr_ref(jl_module_init_order, i)) {
+                        open = 1;
+                        break;
+                    }
+                }
+            }
             JL_UNLOCK(&jl_modules_mutex);
             if (!open && !jl_is__toplevel__mod(m)) {
                 const char* name = jl_symbol_name(m->name);

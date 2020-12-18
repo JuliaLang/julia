@@ -751,15 +751,33 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ### mul!
-mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T} = lmul!(Q, copyto!(C, B))
+function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T}
+    require_one_based_indexing(C, B)
+    mB = size(B, 1)
+    mC = size(C, 1)
+    if mB < mC
+        inds = CartesianIndices(B)
+        copyto!(C, inds, B, inds)
+        C[CartesianIndices((mB+1:mC, axes(C, 2)))] .= zero(T)
+        return lmul!(Q, C)
+    else
+        return lmul!(Q, copyto!(C, B))
+    end
+end
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, Q::AbstractQ{T}) where {T} = rmul!(copyto!(C, A), Q)
 mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::StridedVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T} = rmul!(copyto!(C, A), adjQ)
 
-ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), b), 1:size(A, 2))); b)
-ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
+function ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat}
+    m,n = size(A)
+    ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), b), 1:size(A, 2)))
+    return b
+end
+function ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
+    m,n = size(A)
+    ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2)))
+    return B
+end
 
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
@@ -801,12 +819,12 @@ ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
     vec(ldiv!(A,reshape(B,length(B),1)))
 ldiv!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     ldiv!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
-function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
+function _wide_qr_ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
     lmul!(adjoint(A.Q), view(B, 1:m, :))
-    R = A.R
+    R = A.R # makes a copy, used as a buffer below
     @inbounds begin
         if n > m # minimum norm solution
             τ = zeros(T,m)
@@ -827,7 +845,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
                 end
             end
         end
-        LinearAlgebra.ldiv!(UpperTriangular(view(R, :, 1:minmn)), view(B, 1:minmn, :))
+        ldiv!(UpperTriangular(view(R, :, 1:minmn)), view(B, 1:minmn, :))
         if n > m # Apply elementary transformation to solution
             B[m + 1:mB,1:nB] .= zero(T)
             for j = 1:nB
@@ -847,10 +865,23 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     end
     return B
 end
+
+
+function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
+    m, n = size(A)
+    m < n && return _wide_qr_ldiv!(A, B)
+
+    mB, nB = size(B)
+    lmul!(adjoint(A.Q), view(B, 1:m, :))
+    R = A.factors
+    ldiv!(UpperTriangular(view(R,1:n,:)), view(B, 1:n, :))
+    return B
+end
 function ldiv!(A::QR, B::StridedVector)
     ldiv!(A, reshape(B, length(B), 1))
-    B
+    return B
 end
+
 function ldiv!(A::QRPivoted, b::StridedVector)
     ldiv!(QR(A.factors,A.τ), b)
     b[1:size(A.factors, 2)] = view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]

@@ -624,7 +624,12 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
                 // and always end with an Int8 (selector byte).
                 // We may need to insert padding first to get to the right offset
                 if (al > MAX_ALIGN) {
-                    Type *AlignmentType = ArrayType::get(VectorType::get(T_int8, al), 0);
+                    Type *AlignmentType;
+#if JL_LLVM_VERSION >= 110000
+                    AlignmentType = ArrayType::get(FixedVectorType::get(T_int8, al), 0);
+#else
+                    AlignmentType = ArrayType::get(VectorType::get(T_int8, al), 0);
+#endif
                     latypes.push_back(AlignmentType);
                     al = MAX_ALIGN;
                 }
@@ -664,7 +669,11 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
         }
         else if (isarray && !type_is_ghost(lasttype)) {
             if (isTuple && isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
+#if JL_LLVM_VERSION >= 110000
+                struct_decl = FixedVectorType::get(lasttype, ntypes);
+#else
                 struct_decl = VectorType::get(lasttype, ntypes);
+#endif
             else if (isTuple || !llvmcall)
                 struct_decl = ArrayType::get(lasttype, ntypes);
             else
@@ -728,13 +737,13 @@ static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
     if (l > 0) {
         jl_value_t *t0 = jl_svecref(t, 0);
         if (!jl_is_concrete_type(t0)) {
-            if (allow_va && jl_is_vararg_type(t0) &&
+            if (allow_va && jl_is_vararg(t0) &&
                   jl_is_concrete_type(jl_unwrap_vararg(t0)))
                 return true;
             return false;
         }
         for (i = 1; i < l; i++) {
-            if (allow_va && i == l - 1 && jl_is_vararg_type(jl_svecref(t, i))) {
+            if (allow_va && i == l - 1 && jl_is_vararg(jl_svecref(t, i))) {
                 if (t0 != jl_unwrap_vararg(jl_svecref(t, i)))
                     return false;
                 continue;
@@ -1364,8 +1373,15 @@ std::vector<unsigned> first_ptr(Type *T)
             uint64_t num_elements;
             if (auto *AT = dyn_cast<ArrayType>(T))
                 num_elements = AT->getNumElements();
-            else
-                num_elements = cast<VectorType>(T)->getNumElements();
+            else {
+                VectorType *VT = cast<VectorType>(T);
+#if JL_LLVM_VERSION >= 120000
+                ElementCount EC = VT->getElementCount();
+                num_elements = EC.getKnownMinValue();
+#else
+                num_elements = VT->getNumElements();
+#endif
+            }
             if (num_elements == 0)
                 return {};
         }

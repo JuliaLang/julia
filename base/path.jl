@@ -72,7 +72,7 @@ function homedir()
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
         else
-            uv_error(:homedir, rc)
+            uv_error("homedir()", rc)
         end
     end
 end
@@ -137,8 +137,11 @@ _splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
 function _splitdir_nodrive(a::String, b::String)
     m = match(path_dir_splitter,b)
     m === nothing && return (a,b)
-    a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
-    a, String(m.captures[3])
+    cs = m.captures
+    getcapture(cs, i) = cs[i]::AbstractString
+    c1, c2, c3 = getcapture(cs, 1), getcapture(cs, 2), getcapture(cs, 3)
+    a = string(a, isempty(c1) ? c2[1] : c1)
+    a, String(c3)
 end
 
 """
@@ -433,7 +436,7 @@ function realpath(path::AbstractString)
                     C_NULL, req, path, C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("realpath", ret)
+            uv_error("realpath($(repr(path)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)

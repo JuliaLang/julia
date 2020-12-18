@@ -57,6 +57,11 @@ bool DemoteFloat16Pass::runOnFunction(Function &F)
                 continue;
             }
 
+            // skip @fastmath operations
+            // TODO: more fine-grained check (afn?)
+            if (I.isFast())
+                continue;
+
             IRBuilder<> builder(&I);
 
             // extend Float16 operands to Float32

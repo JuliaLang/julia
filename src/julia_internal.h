@@ -86,7 +86,7 @@ extern "C" {
 //--------------------------------------------------
 // timers
 // Returns time in nanosec
-JL_DLLEXPORT uint64_t jl_hrtime(void);
+JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT;
 
 // number of cycles since power-on
 static inline uint64_t cycleclock(void)
@@ -107,6 +107,12 @@ static inline uint64_t cycleclock(void)
     int64_t virtual_timer_value;
     __asm__ volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
     return virtual_timer_value;
+#elif defined(_CPU_PPC64_)
+    // This returns a time-base, which is not always precisely a cycle-count.
+    // https://reviews.llvm.org/D78084
+    int64_t tb;
+    asm volatile("mfspr %0, 268" : "=r" (tb));
+    return tb;
 #else
     #warning No cycleclock() definition for your platform
     // copy from https://github.com/google/benchmark/blob/v1.5.0/src/cycleclock.h
@@ -116,6 +122,7 @@ static inline uint64_t cycleclock(void)
 
 #include "timing.h"
 
+extern uint8_t jl_measure_compile_time;
 extern uint64_t jl_cumulative_compile_time;
 
 #ifdef _COMPILER_MICROSOFT_
@@ -146,7 +153,7 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 // useful constants
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
 extern jl_methtable_t *jl_nonfunction_mt JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT extern size_t jl_world_counter;
+extern size_t jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
 extern tracer_cb jl_newmeth_tracer;
@@ -283,6 +290,13 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     jl_set_typeof(v, ty);
     return v;
 }
+
+/* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
+ * gc frame, until it has been fully initialized. An uninitialized value in a
+ * gc frame can crash upon encountering the first safepoint. By delaying use of
+ * the JL_GC_PUSH macro until the value has been initialized, any accidental
+ * safepoints will be caught by the GC analyzer.
+ */
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__
@@ -409,6 +423,8 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects);
 
+int jl_valid_type_param(jl_value_t *v);
+
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 
 void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na, size_t world);
@@ -469,7 +485,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
-jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
+jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
 void jl_cache_type_(jl_datatype_t *type);
@@ -528,51 +544,49 @@ typedef enum {
     JL_VARARG_UNBOUND = 3
 } jl_vararg_kind_t;
 
-STATIC_INLINE int jl_is_vararg_type(jl_value_t *v) JL_NOTSAFEPOINT
+STATIC_INLINE int jl_is_vararg(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    v = jl_unwrap_unionall(v);
-    return (jl_is_datatype(v) &&
-            ((jl_datatype_t*)(v))->name == jl_vararg_typename);
+    return jl_typeof(v) == (jl_value_t*)jl_vararg_type;
 }
 
-STATIC_INLINE jl_value_t *jl_unwrap_vararg(jl_value_t *v) JL_NOTSAFEPOINT
+STATIC_INLINE jl_value_t *jl_unwrap_vararg(jl_vararg_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return jl_tparam0(jl_unwrap_unionall(v));
+    assert(jl_is_vararg((jl_value_t*)v));
+    jl_value_t *T = ((jl_vararg_t*)v)->T;
+    return T ? T : (jl_value_t*)jl_any_type;
 }
+#define jl_unwrap_vararg(v) (jl_unwrap_vararg)((jl_vararg_t *)v)
+
+STATIC_INLINE jl_value_t *jl_unwrap_vararg_num(jl_vararg_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    assert(jl_is_vararg((jl_value_t*)v));
+    return ((jl_vararg_t*)v)->N;
+}
+#define jl_unwrap_vararg_num(v) (jl_unwrap_vararg_num)((jl_vararg_t *)v)
 
 STATIC_INLINE jl_vararg_kind_t jl_vararg_kind(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    if (!jl_is_vararg_type(v))
+    if (!jl_is_vararg(v))
         return JL_VARARG_NONE;
-    jl_tvar_t *v1=NULL, *v2=NULL;
-    if (jl_is_unionall(v)) {
-        v1 = ((jl_unionall_t*)v)->var;
-        v = ((jl_unionall_t*)v)->body;
-        if (jl_is_unionall(v)) {
-            v2 = ((jl_unionall_t*)v)->var;
-            v = ((jl_unionall_t*)v)->body;
-        }
-    }
-    assert(jl_is_datatype(v));
-    jl_value_t *lenv = jl_tparam1(v);
-    if (jl_is_long(lenv))
+    jl_vararg_t *vm = (jl_vararg_t *)v;
+    if (!vm->N)
+        return JL_VARARG_UNBOUND;
+    if (jl_is_long(vm->N))
         return JL_VARARG_INT;
-    if (jl_is_typevar(lenv) && lenv != (jl_value_t*)v1 && lenv != (jl_value_t*)v2)
-        return JL_VARARG_BOUND;
-    return JL_VARARG_UNBOUND;
+    return JL_VARARG_BOUND;
 }
 
 STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t) JL_NOTSAFEPOINT
 {
     assert(jl_is_tuple_type(t));
     size_t l = jl_svec_len(t->parameters);
-    return (l>0 && jl_is_vararg_type(jl_tparam(t,l-1)));
+    return (l>0 && jl_is_vararg(jl_tparam(t,l-1)));
 }
 
 STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    assert(jl_is_vararg_type(v));
-    jl_value_t *len = jl_tparam1(jl_unwrap_unionall(v));
+    assert(jl_is_vararg(v));
+    jl_value_t *len = jl_unwrap_vararg_num(v);
     assert(jl_is_long(len));
     return jl_unbox_long(len);
 }
@@ -1231,7 +1245,7 @@ extern jl_sym_t *empty_sym;   extern jl_sym_t *top_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
 extern jl_sym_t *toplevel_sym; extern jl_sym_t *quote_sym;
-extern jl_sym_t *line_sym;    extern jl_sym_t *jl_incomplete_sym;
+extern jl_sym_t *line_sym;     extern jl_sym_t *incomplete_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;

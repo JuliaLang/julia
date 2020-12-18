@@ -30,10 +30,10 @@ for kws in ((charset=:ascii,),
     TerminalMenus.writeline(buf, multi_menu, 1, true)
     @test String(take!(buf)) == "$uck 1"
     TerminalMenus.printmenu(buf, multi_menu, 1; init=true)
-    @test startswith(String(take!(buf)), string("\e[2K $cur $uck 1"))
+    @test startswith(String(take!(buf)), string("\e[2K[press: d=done, a=all, n=none]\r\n\e[2K $cur $uck 1"))
     push!(multi_menu.selected, 1)
     TerminalMenus.printmenu(buf, multi_menu, 2; init=true)
-    @test startswith(String(take!(buf)), string("\e[2K   $chk 1\r\n\e[2K $cur $uck 2"))
+    @test startswith(String(take!(buf)), string("\e[2K[press: d=done, a=all, n=none]\r\n\e[2K   $chk 1\r\n\e[2K $cur $uck 2"))
 end
 
 # Preselection

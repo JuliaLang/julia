@@ -1,2 +1,2 @@
-PKG_BRANCH = ib/precomp_tweaks
-PKG_SHA1 = 79eebf0c72bff81da8d329eca67a69c76661d0a8
+PKG_BRANCH = release-1.6
+PKG_SHA1 = 5c9d3a82e363d98db7f8e99c92203774878b3df0

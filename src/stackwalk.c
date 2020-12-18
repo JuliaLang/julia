@@ -54,7 +54,7 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 // the call instruction. The first `skip` frames are not included in `bt_data`.
 //
 // `maxsize` is the size of the buffer `bt_data` (and `sp` if non-NULL). It
-// must be at least JL_BT_MAX_ENTRY_SIZE to accommodate extended backtrace
+// must be at least `JL_BT_MAX_ENTRY_SIZE + 1` to accommodate extended backtrace
 // entries.  If `sp != NULL`, the stack pointer corresponding `bt_data[i]` is
 // stored in `sp[i]`.
 //
@@ -96,7 +96,13 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 need_more_space = 1;
                 break;
             }
+            uintptr_t oldsp = thesp;
             have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
+            if (oldsp >= thesp) {
+                // The stack pointer is clearly bad, as it must grow downwards.
+                // But sometimes the external unwinder doesn't check that.
+                have_more_frames = 0;
+            }
             if (skip > 0) {
                 skip--;
                 from_signal_handler = 0;

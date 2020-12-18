@@ -145,7 +145,7 @@ const UTF8PROC_STRIPMARK = (1<<13)
 
 utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (Cssize_t,), result)))
 
-function utf8proc_map(str::String, options::Integer)
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer)
     nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                    str, sizeof(str), C_NULL, 0, options)
     nwords < 0 && utf8proc_error(nwords)
@@ -550,7 +550,7 @@ lowercase(s::AbstractString) = map(lowercase, s)
 Capitalize the first character of each word in `s`;
 if `strict` is true, every other character is
 converted to lowercase, otherwise they are left unchanged.
-By default, all non-letters are considered as word separators;
+By default, all non-letters beginning a new grapheme are considered as word separators;
 a predicate can be passed as the `wordsep` keyword to determine
 which characters should be considered as word separators.
 See also [`uppercasefirst`](@ref) to capitalize only the first
@@ -570,17 +570,23 @@ julia> titlecase("a-a b-b", wordsep = c->c==' ')
 "A-a B-b"
 ```
 """
-function titlecase(s::AbstractString; wordsep::Function = !iscased, strict::Bool=true)
+function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Bool=true)
     startword = true
+    state = Ref{Int32}(0)
+    c0 = eltype(s)(0x00000000)
     b = IOBuffer()
     for c in s
-        if wordsep(c)
+        # Note: It would be better to have a word iterator following UAX#29,
+        # similar to our grapheme iterator, but utf8proc does not yet have
+        # this information.  At the very least we shouldn't break inside graphemes.
+        if isgraphemebreak!(state, c0, c) && wordsep(c)
             print(b, c)
             startword = true
         else
             print(b, startword ? titlecase(c) : strict ? lowercase(c) : c)
             startword = false
         end
+        c0 = c
     end
     return String(take!(b))
 end

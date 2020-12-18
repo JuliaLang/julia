@@ -308,10 +308,12 @@ function _groupedunique!(A::AbstractVector)
     idxs = eachindex(A)
     y = first(A)
     # We always keep the first element
-    it = iterate(idxs, iterate(idxs)[2])
+    T = NTuple{2,Any} # just to eliminate `iterate(idxs)::Nothing` candidate
+    it = iterate(idxs, (iterate(idxs)::T)[2])
     count = 1
     for x in Iterators.drop(A, 1)
         if !isequal(x, y)
+            it = it::T
             y = A[it[1]] = x
             count += 1
             it = iterate(idxs, it[2])
@@ -433,7 +435,7 @@ end
 # TODO: use copy!, which is currently unavailable from here since it is defined in Future
 _copy_oftype(x, ::Type{T}) where {T} = copyto!(similar(x, T), x)
 # TODO: use similar() once deprecation is removed and it preserves keys
-_copy_oftype(x::AbstractDict, ::Type{T}) where {T} = merge!(empty(x, T), x)
+_copy_oftype(x::AbstractDict, ::Type{Pair{K,V}}) where {K,V} = merge!(empty(x, K, V), x)
 _copy_oftype(x::AbstractSet, ::Type{T}) where {T} = union!(empty(x, T), x)
 
 _copy_oftype(x::AbstractArray{T}, ::Type{T}) where {T} = copy(x)
@@ -617,8 +619,10 @@ replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b,
 askey(k, ::AbstractDict) = k.first
 askey(k, ::AbstractSet) = k
 
-function _replace!(new::Callable, res::T, A::T,
-                   count::Int) where T<:Union{AbstractDict,AbstractSet}
+function _replace!(new::Callable, res::Union{AbstractDict,AbstractSet},
+                   A::Union{AbstractDict,AbstractSet}, count::Int)
+    @assert res isa AbstractDict && A isa AbstractDict ||
+        res isa AbstractSet && A isa AbstractSet
     count == 0 && return res
     c = 0
     if res === A # cannot replace elements while iterating over A
@@ -686,7 +690,7 @@ end
 
 ### specialization for Dict / Set
 
-function _replace!(new::Callable, t::Dict{K,V}, A::Dict{K,V}, count::Int) where {K,V}
+function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) where {K,V}
     # we ignore A, which is supposed to be equal to the destination t,
     # as it can generally be faster to just replace inline
     count == 0 && return t
@@ -718,7 +722,7 @@ function _replace!(new::Callable, t::Dict{K,V}, A::Dict{K,V}, count::Int) where 
     t
 end
 
-function _replace!(new::Callable, t::Set{T}, ::Set{T}, count::Int) where {T}
+function _replace!(new::Callable, t::Set{T}, ::AbstractSet, count::Int) where {T}
     _replace!(t.dict, t.dict, count) do kv
         k = first(kv)
         k2 = new(k)
@@ -726,3 +730,30 @@ function _replace!(new::Callable, t::Set{T}, ::Set{T}, count::Int) where {T}
     end
     t
 end
+
+### replace for tuples
+
+function _replace(f::Callable, t::Tuple, count::Int)
+    if count == 0 || isempty(t)
+        t
+    else
+        x = f(t[1])
+        (x, _replace(f, tail(t), count - !==(x, t[1]))...)
+    end
+end
+
+replace(f::Callable, t::Tuple; count::Integer=typemax(Int)) =
+    _replace(f, t, check_count(count))
+
+function _replace(t::Tuple, count::Int, old_new::Tuple{Vararg{Pair}})
+    _replace(t, count) do x
+        @_inline_meta
+        for o_n in old_new
+            isequal(first(o_n), x) && return last(o_n)
+        end
+        return x
+    end
+end
+
+replace(t::Tuple, old_new::Pair...; count::Integer=typemax(Int)) =
+    _replace(t, check_count(count), old_new)

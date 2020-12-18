@@ -24,7 +24,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             else
                 if op.id >= use_idx
                     @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"
-                    error()
+                    error("")
                 end
             end
         else
@@ -32,21 +32,21 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 # At the moment, we allow GC preserve tokens outside the standard domination notion
                 #@Base.show ir
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
-                error()
+                error("")
             end
         end
     elseif isa(op, GlobalRef)
         if !isdefined(op.mod, op.name)
             @verify_error "Unbound GlobalRef not allowed in value position"
-            error()
+            error("")
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         #@Base.show ir
         @verify_error "Left over SSA marker"
-        error()
+        error("")
     elseif isa(op, Union{SlotNumber, TypedSlot})
         @verify_error "Left over slot detected in converted IR"
-        error()
+        error("")
     end
 end
 
@@ -71,7 +71,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
         if first(block.stmts) != last_end + 1
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
             @verify_error "First statement of BB $idx ($(first(block.stmts))) does not match end of previous ($last_end)"
-            error()
+            error("")
         end
         last_end = last(block.stmts)
         terminator = ir.stmts[last_end][:inst]
@@ -82,38 +82,38 @@ function verify_ir(ir::IRCode, print::Bool=true)
             c = count_int(idx, ir.cfg.blocks[p].succs)
             if c == 0
                 @verify_error "Predecessor $p of block $idx not in successor list"
-                error()
+                error("")
             elseif c == 2
                 if count_int(p, block.preds) != 2
                     @verify_error "Double edge from $p to $idx not correctly accounted"
-                    error()
+                    error("")
                 end
             end
         end
         if isa(terminator, ReturnNode)
             if !isempty(block.succs)
                 @verify_error "Block $idx ends in return or unreachable, but has successors"
-                error()
+                error("")
             end
         elseif isa(terminator, GotoNode)
             if length(block.succs) != 1 || block.succs[1] != terminator.label
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoNode terminator"
-                error()
+                error("")
             end
         elseif isa(terminator, GotoIfNot)
             if terminator.dest == idx + 1
                 @verify_error "Block $idx terminator forms a double edge to block $(idx+1)"
-                error()
+                error("")
             end
             if length(block.succs) != 2 || (block.succs != [terminator.dest, idx+1] && block.succs != [idx+1, terminator.dest])
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
-                error()
+                error("")
             end
         elseif isexpr(terminator, :enter)
             @label enter_check
             if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
-                error()
+                error("")
             end
         else
             if length(block.succs) != 1 || block.succs[1] != idx + 1
@@ -128,7 +128,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     isa(stmt, PhiNode) || break
                 end
                 @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator ($terminator)"
-                error()
+                error("")
             end
         end
         for s in block.succs
@@ -137,7 +137,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                 #@Base.show ir
                 #@Base.show ir.argtypes
                 @verify_error "Successor $s of block $idx not in predecessor list"
-                error()
+                error("")
             end
         end
     end
@@ -155,7 +155,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     #@Base.show ir.argtypes
                     #@Base.show ir
                     @verify_error "Edge $edge of φ node $idx not in predecessor list"
-                    error()
+                    error("")
                 end
                 edge == 0 && continue
                 isassigned(stmt.values, i) || continue
@@ -168,11 +168,11 @@ function verify_ir(ir::IRCode, print::Bool=true)
                         #    PhiNode type was $phiT
                         #    Value type was $(ir.stmts[val.id][:type])
                         #"""
-                        #error()
+                        #error("")
                     end
                 elseif isa(val, GlobalRef) || isa(val, Expr)
                     @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
-                    error()
+                    error("")
                 end
                 check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print)
             end
@@ -181,11 +181,11 @@ function verify_ir(ir::IRCode, print::Bool=true)
                 val = stmt.values[i]
                 if !isa(val, SSAValue)
                     @verify_error "Operand $i of PhiC node $idx must be an SSA Value."
-                    error()
+                    error("")
                 end
                 if !isa(ir[val], UpsilonNode)
                     @verify_error "Operand $i of PhiC node $idx must reference an Upsilon node."
-                    error()
+                    error("")
                 end
             end
         else
@@ -200,7 +200,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                 if stmt.head === :(=)
                     if stmt.args[1] isa SSAValue
                         @verify_error "SSAValue as assignment LHS"
-                        error()
+                        error("")
                     end
                 elseif stmt.head === :gc_preserve_end
                     # We allow gc_preserve_end tokens to span across try/catch
@@ -225,7 +225,7 @@ function verify_linetable(linetable::Vector{LineInfoNode}, print::Bool=true)
         line = linetable[i]
         if i <= line.inlined_at
             @verify_error "Misordered linetable"
-            error()
+            error("")
         end
     end
 end

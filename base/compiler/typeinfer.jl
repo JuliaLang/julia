@@ -19,7 +19,7 @@ being used for this purpose alone.
 module Timings
 
 using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
-    @inbounds, copy
+    @inbounds, copy, backtrace
 
 # What we record for any given frame we infer during type inference.
 struct InferenceFrameInfo
@@ -27,6 +27,8 @@ struct InferenceFrameInfo
     world::UInt64
     sptypes::Vector{Any}
     slottypes::Vector{Any}
+    nargs::Int
+    limited::Bool
 end
 
 function _typeinf_identifier(frame::Core.Compiler.InferenceState)
@@ -34,7 +36,9 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
         frame.linfo,
         frame.world,
         copy(frame.sptypes),
-        frame.slottypes[2:end],  # Skip repeating the method instance
+        copy(frame.slottypes),
+        frame.nargs,
+        frame.limited,
     )
     return mi_info
 end
@@ -51,9 +55,10 @@ struct Timing
     cur_start_time::UInt64
     time::UInt64
     children::Core.Array{Timing,1}
-    Timing(mi_info, start_time, cur_start_time, time, children) = new(mi_info, start_time, cur_start_time, time, children)
-    Timing(mi_info, start_time) = new(mi_info, start_time, start_time, UInt64(0), Timing[])
+    bt         # backtrace collected upon initial entry to typeinf
 end
+Timing(mi_info, start_time, cur_start_time, time, children) = Timing(mi_info, start_time, cur_start_time, time, children, nothing)
+Timing(mi_info, start_time) = Timing(mi_info, start_time, start_time, UInt64(0), Timing[])
 
 _time_ns() = ccall(:jl_hrtime, UInt64, ())  # Re-implemented here because Base not yet available.
 
@@ -80,7 +85,7 @@ function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
         # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[]),
+        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1, false),
         _time_ns()))
     return nothing
 end
@@ -89,19 +94,22 @@ reset_timings()
 # (This is split into a function so that it can be called both in this module, at the top
 # of `enter_new_timer()`, and once at the Very End of the operation, by whoever started
 # the operation and called `reset_timings()`.)
+# NOTE: the @inline annotations here are not to make it faster, but to reduce the gap between
+# timer manipulations and the tasks we're timing.
 @inline function close_current_timer()
     stop_time = _time_ns()
     parent_timer = _timings[end]
-    accum_time = Core.Compiler.:(-)(stop_time, parent_timer.cur_start_time)
+    accum_time = stop_time - parent_timer.cur_start_time
 
     # Add in accum_time ("modify" the immutable struct)
     @inbounds begin
-        _timings[end] = Timings.Timing(
+        _timings[end] = Timing(
             parent_timer.mi_info,
             parent_timer.start_time,
             parent_timer.cur_start_time,
             parent_timer.time + accum_time,
             parent_timer.children,
+            parent_timer.bt,
         )
     end
     return nothing
@@ -115,15 +123,15 @@ end
     mi_info = _typeinf_identifier(frame)
 
     # Start the new timer right before returning
-    push!(_timings, Timings.Timing(mi_info, UInt64(0)))
+    push!(_timings, Timing(mi_info, UInt64(0)))
     len = length(_timings)
     new_timer = @inbounds _timings[len]
     # Set the current time _after_ appending the node, to try to exclude the
     # overhead from measurement.
-    start = Timings._time_ns()
+    start = _time_ns()
 
     @inbounds begin
-        _timings[len] = Timings.Timing(
+        _timings[len] = Timing(
             new_timer.mi_info,
             start,
             start,
@@ -140,39 +148,42 @@ end
 # children (that is, asserting that inference proceeds via depth-first-search).
 @inline function exit_current_timer(_expected_frame_)
     # Finish the new timer
-    stop_time = Timings._time_ns()
+    stop_time = _time_ns()
 
     expected_mi_info = _typeinf_identifier(_expected_frame_)
 
     # Grab the new timer again because it might have been modified in _timings
     # (since it's an immutable struct)
     # And remove it from the current timings stack
-    _timings = Timings._timings
     new_timer = pop!(_timings)
     Core.Compiler.@assert new_timer.mi_info.mi === expected_mi_info.mi
 
+    # Prepare to unwind one level of the stack and record in the parent
+    parent_timer = _timings[end]
+
     accum_time = stop_time - new_timer.cur_start_time
     # Add in accum_time ("modify" the immutable struct)
-    new_timer = Timings.Timing(
+    new_timer = Timing(
         new_timer.mi_info,
         new_timer.start_time,
         new_timer.cur_start_time,
         new_timer.time + accum_time,
-        new_timer.children
+        new_timer.children,
+        parent_timer.mi_info.mi === ROOTmi ? backtrace() : nothing,
     )
     # Record the final timing with the original parent timer
-    parent_timer = _timings[end]
     push!(parent_timer.children, new_timer)
 
     # And finally restart the parent timer:
     len = length(_timings)
     @inbounds begin
-        _timings[len] = Timings.Timing(
+        _timings[len] = Timing(
             parent_timer.mi_info,
             parent_timer.start_time,
-            Timings._time_ns(),
+            _time_ns(),
             parent_timer.time,
             parent_timer.children,
+            parent_timer.bt,
         )
     end
 
@@ -206,26 +217,34 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
     isempty(frames) && push!(frames, frame)
+    valid_worlds = WorldRange()
     for caller in frames
         @assert !(caller.dont_work_on_me)
         caller.dont_work_on_me = true
+        # might might not fully intersect these earlier, so do that now
+        valid_worlds = intersect(caller.valid_worlds, valid_worlds)
     end
     for caller in frames
+        caller.valid_worlds = valid_worlds
         finish(caller, interp)
+        # finalize and record the linfo result
+        caller.inferred = true
     end
     # collect results for the new expanded frame
-    results = Tuple{InferenceResult, Bool}[ ( frames[i].result,
-        frames[i].cached || frames[i].parent !== nothing ) for i in 1:length(frames) ]
-    # empty!(frames)
-    valid_worlds = frame.valid_worlds
+    results = Tuple{InferenceResult, Vector{Any}, Bool}[
+            ( frames[i].result,
+              frames[i].stmt_edges[1],
+              frames[i].cached || frames[i].parent !== nothing )
+        for i in 1:length(frames) ]
+    empty!(frames)
     cached = frame.cached
     if cached || frame.parent !== nothing
-        for (caller, doopt) in results
+        for (caller, _, doopt) in results
             opt = caller.src
             if opt isa OptimizationState
                 run_optimizer = doopt && may_optimize(interp)
                 if run_optimizer
-                    optimize(opt, OptimizationParams(interp), caller.result)
+                    optimize(interp, opt, OptimizationParams(interp), caller.result)
                     finish(opt.src, interp)
                     # finish updating the result struct
                     validate_code_in_debug_mode(opt.linfo, opt.src, "optimized")
@@ -242,31 +261,24 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
                         caller.src = nothing
                     end
                 end
-                # As a hack the et reuses frame_edges[1] to push any optimization
-                # edges into, so we don't need to handle them specially here
-                valid_worlds = intersect(valid_worlds, opt.inlining.et.valid_worlds[])
+                caller.valid_worlds = opt.inlining.et.valid_worlds[]
             end
         end
     end
-    if last(valid_worlds) == get_world_counter()
-        valid_worlds = WorldRange(first(valid_worlds), typemax(UInt))
-    end
-    for caller in frames
-        caller.valid_worlds = valid_worlds
-        caller.src.min_world = first(valid_worlds)
-        caller.src.max_world = last(valid_worlds)
-        if cached
-            cache_result!(interp, caller.result, valid_worlds)
+    for (caller, edges, doopt) in results
+        valid_worlds = caller.valid_worlds
+        if last(valid_worlds) == get_world_counter()
+            valid_worlds = WorldRange(first(valid_worlds), typemax(UInt))
         end
-        if last(valid_worlds) == typemax(UInt)
+        caller.valid_worlds = valid_worlds
+        if cached
+            cache_result!(interp, caller)
+        end
+        if doopt && last(valid_worlds) == typemax(UInt)
             # if we aren't cached, we don't need this edge
             # but our caller might, so let's just make it anyways
-            for caller in frames
-                store_backedges(caller)
-            end
+            store_backedges(caller, edges)
         end
-        # finalize and record the linfo result
-        caller.inferred = true
     end
     return true
 end
@@ -332,7 +344,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
-                                    @nospecialize(inferred_result))
+                                    valid_worlds::WorldRange, @nospecialize(inferred_result))
     local const_flags::Int32
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
@@ -340,6 +352,8 @@ function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodIn
         inferred_result = inferred_result.src
     end
     if inferred_result isa CodeInfo
+        inferred_result.min_world = first(valid_worlds)
+        inferred_result.max_world = last(valid_worlds)
         inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
     end
     # The global cache can only handle objects that codegen understands
@@ -349,7 +363,8 @@ function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodIn
     return inferred_result
 end
 
-function cache_result!(interp::AbstractInterpreter, result::InferenceResult, valid_worlds::WorldRange)
+function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
+    valid_worlds = result.valid_worlds
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
     already_inferred = already_inferred_quick_test(interp, result.linfo)
@@ -359,7 +374,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult, val
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, result.linfo, result.src)
+        inferred_result = transform_result_for_cache(interp, result.linfo, valid_worlds, result.src)
         code_cache(interp)[result.linfo] = CodeInstance(result, inferred_result, valid_worlds)
     end
     unlock_mi_inference(interp, result.linfo)
@@ -370,6 +385,21 @@ end
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
+    s_edges = me.stmt_edges[1]
+    if s_edges === nothing
+        s_edges = []
+        me.stmt_edges[1] = s_edges
+    end
+    for edges in me.stmt_edges
+        edges === nothing && continue
+        edges === s_edges && continue
+        append!(s_edges, edges)
+        empty!(edges)
+    end
+    if me.src.edges !== nothing
+        append!(s_edges, me.src.edges)
+        me.src.edges = nothing
+    end
     if me.limited && me.cached && me.parent !== nothing
         # a top parent will be cached still, but not this intermediate work
         # we can throw everything else away now
@@ -381,6 +411,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         type_annotate!(me)
         me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
     end
+    me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
     nothing
 end
@@ -393,20 +424,15 @@ function finish(src::CodeInfo, interp::AbstractInterpreter)
 end
 
 # record the backedges
-function store_backedges(frame::InferenceState)
+function store_backedges(frame::InferenceResult, edges::Vector{Any})
     toplevel = !isa(frame.linfo.def, Method)
-    if !toplevel && (frame.cached || frame.parent !== nothing)
-        caller = frame.result.linfo
-        for edges in frame.stmt_edges
-            store_backedges(caller, edges)
-        end
-        store_backedges(caller, frame.src.edges)
-        frame.src.edges = nothing
+    if !toplevel
+        store_backedges(frame.linfo, edges)
     end
+    nothing
 end
 
-store_backedges(caller, edges::Nothing) = nothing
-function store_backedges(caller, edges::Vector)
+function store_backedges(caller::MethodInstance, edges::Vector)
     i = 1
     while i <= length(edges)
         to = edges[i]
@@ -733,7 +759,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         end
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
-        return widenconst_bestguess(frame.bestguess), frame.inferred ? mi : nothing
+        return frame.bestguess, frame.inferred ? mi : nothing
     elseif frame === true
         # unresolvable cycle
         return Any, nothing
@@ -741,12 +767,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(frame, caller)
-    return widenconst_bestguess(frame.bestguess), nothing
-end
-
-function widenconst_bestguess(bestguess)
-    !isa(bestguess, Const) && !isa(bestguess, PartialStruct) && !isa(bestguess, Type) && return widenconst(bestguess)
-    return bestguess
+    return frame.bestguess, nothing
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
@@ -761,7 +782,7 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
         opt = OptimizationState(frame, opt_params, interp)
-        optimize(opt, opt_params, result.result)
+        optimize(interp, opt, opt_params, result.result)
         opt.src.inferred = true
     end
     ccall(:jl_typeinf_end, Cvoid, ())

@@ -16,6 +16,17 @@ const _REF_NAME = Ref.body.name
 call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
     isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
 
+# check if this return type is improvable (i.e. whether it's possible that with
+# more information, we might get a more precise type)
+function is_improvable(@nospecialize(rtype))
+    if isa(rtype, Type)
+        # Could always be improved to Const or PartialStruct, unless we're
+        # already at Bottom
+        return rtype !== Union{}
+    end
+    # Could be improved to `Const` or a more precise PartialStruct
+    return isa(rtype, PartialStruct)
+end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
                                   max_methods::Int = InferenceParams(interp).MAX_METHODS)
@@ -147,7 +158,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     # try constant propagation if only 1 method is inferred to non-Bottom
     # this is in preparation for inlining, or improving the return result
     is_unused = call_result_unused(sv)
-    if nonbot > 0 && seen == napplicable && (!edgecycle || !is_unused) && isa(rettype, Type) && InferenceParams(interp).ipo_constant_propagation
+    if nonbot > 0 && seen == napplicable && (!edgecycle || !is_unused) &&
+            is_improvable(rettype) && InferenceParams(interp).ipo_constant_propagation
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
@@ -926,7 +938,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if la == 2
             ft = widenconst(argtypes[2])
             if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
-                return CallMeta(Const(ft.name.mt.kwsorter), false)
+                return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
             end
         end
         return CallMeta(Any, false)
@@ -982,17 +994,17 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(abstract_call_known(interp, <:, fargs, argtypes, sv).rt, false)
     elseif la == 2 && isa(argtypes[2], Const) && isa(argtypes[2].val, SimpleVector) && istopfunction(f, :length)
         # mark length(::SimpleVector) as @pure
-        return CallMeta(Const(length(argtypes[2].val)), false)
+        return CallMeta(Const(length(argtypes[2].val)), MethodResultPure())
     elseif la == 3 && isa(argtypes[2], Const) && isa(argtypes[3], Const) &&
             isa(argtypes[2].val, SimpleVector) && isa(argtypes[3].val, Int) && istopfunction(f, :getindex)
         # mark getindex(::SimpleVector, i::Int) as @pure
         svecval = argtypes[2].val::SimpleVector
         idx = argtypes[3].val::Int
         if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
-            return CallMeta(Const(getindex(svecval, idx)), false)
+            return CallMeta(Const(getindex(svecval, idx)), MethodResultPure())
         end
     elseif la == 2 && istopfunction(f, :typename)
-        return CallMeta(typename_static(argtypes[2]), false)
+        return CallMeta(typename_static(argtypes[2]), MethodResultPure())
     elseif max_methods > 1 && istopfunction(f, :copyto!)
         max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)
@@ -1045,10 +1057,11 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
         spsig = linfo.def.sig
         if isa(spsig, UnionAll)
             if !isempty(linfo.sparam_vals)
-                env = pointer_from_objref(linfo.sparam_vals) + sizeof(Ptr{Cvoid})
-                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, env)
+                sparam_vals = Any[isa(v, Core.TypeofVararg) ? TypeVar(:N, Union{}, Any) :
+                                  v for v in  linfo.sparam_vals]
+                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
-                for v in linfo.sparam_vals
+                for v in sparam_vals
                     if isa(v, TypeVar)
                         T = UnionAll(v, T)
                     end

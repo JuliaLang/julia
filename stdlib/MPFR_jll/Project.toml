@@ -1,0 +1,11 @@
+name = "MPFR_jll"
+uuid = "3a97d323-0669-5f0c-9066-3539efd106a3"
+version = "4.1.1+0"
+
+[deps]
+GMP_jll = "781609d7-10c4-51f6-84f2-b8444358ff6d"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[compat]
+julia = "1.6"

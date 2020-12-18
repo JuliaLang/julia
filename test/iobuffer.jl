@@ -341,3 +341,7 @@ end
     @test peek(io, Int32) == -476872221
     close(io)
 end
+
+@testset "bytesavailable devnull" begin
+    @test bytesavailable(devnull) == 0
+end

@@ -56,7 +56,8 @@ function gc_alloc_count(diff::GC_Diff)
 end
 
 # cumulative total time spent on compilation
-cumulative_compile_time_ns() = ccall(:jl_cumulative_compile_time_ns, UInt64, ())
+cumulative_compile_time_ns_before() = ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
+cumulative_compile_time_ns_after() = ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
 
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
@@ -72,6 +73,16 @@ since then.
 function gc_live_bytes()
     num = gc_num()
     Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
+end
+
+"""
+    Base.jit_total_bytes()
+
+Return the total amount (in bytes) allocated by the just-in-time compiler
+for e.g. native code and data.
+"""
+function jit_total_bytes()
+    return Int(ccall(:jl_jit_total_bytes, Csize_t, ()))
 end
 
 # print elapsed time, return expression value
@@ -187,11 +198,11 @@ macro time(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
-        local compile_elapsedtime = cumulative_compile_time_ns()
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
-        compile_elapsedtime = cumulative_compile_time_ns() - compile_elapsedtime
+        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
         local diff = GC_Diff(gc_num(), stats)
         time_print(elapsedtime, diff.allocd, diff.total_time,
                    gc_alloc_count(diff), compile_elapsedtime)
@@ -235,11 +246,11 @@ macro timev(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
-        local compile_elapsedtime = cumulative_compile_time_ns()
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
-        compile_elapsedtime = cumulative_compile_time_ns() - compile_elapsedtime
+        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
         timev_print(elapsedtime, GC_Diff(gc_num(), stats), compile_elapsedtime)
         val
     end

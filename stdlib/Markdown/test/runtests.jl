@@ -272,6 +272,42 @@ end
     | L |
 """) == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
 
+# Issue #38275
+function test_list_wrap(str, lenmin, lenmax)
+    strs = split(str, '\n')
+    l = length.(strs)
+    for i = 1:length(l)-1
+        if l[i] != 0 && l[i+1] != 0    # the next line isn't blank, so this line should be "full"
+            lenmin <= l[i] <= lenmax || return false
+        else
+            l[i] <= lenmax || return false   # this line isn't too long (but there is no min)
+        end
+    end
+    # Check consistent indentation
+    rngs = findfirst.((". ",), strs)
+    k = last(rngs[1])
+    rex = Regex('^' * " "^k * "\\w")
+    for (i, rng) in enumerate(rngs)
+        isa(rng, AbstractRange) && last(rng) == k && continue  # every numbered line starts the text at the same position
+        rng === nothing && (isempty(strs[i]) || match(rex, strs[i]) !== nothing) && continue  # every unnumbered line is indented to text in numbered lines
+        return false
+    end
+    return true
+end
+
+let doc =
+    md"""
+    1. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+    2. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+    """
+    str = sprint(term, doc, 50)
+    @test test_list_wrap(str, 40, 50)
+    str = sprint(term, doc, 60)
+    @test test_list_wrap(str, 50, 60)
+    str = sprint(term, doc, 80)
+    @test test_list_wrap(str, 70, 80)
+end
+
 # HTML output
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
 @test md"something ***" |> html == "<p>something ***</p>\n"
@@ -340,7 +376,7 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n\n    •    list2"
+        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •  list1\n\n    •  list2"
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -493,6 +529,12 @@ foo()
                                                           ["hgh",Bold("jhj"),"ge"],
                                                           "f"]],
                                                   [:l, :r, :r]))
+@test md"""
+    |   | b |
+    |:--|--:|
+    | 1 |   |""" == MD(Table(Any[[Any[],"b"],
+                                 ["1",Any[]]], [:l, :r]))
+
 @test md"""
 no|table
 no error
@@ -1170,12 +1212,4 @@ end
         |------|
         |  $x  |
         """)
-end
-
-@testset "issue #37232: linebreaks" begin
-    s = @md_str """
-       Misc:\\
-       - line\\
-       """
-    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n  "
 end

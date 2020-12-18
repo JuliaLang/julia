@@ -314,6 +314,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->sparam_vals = jl_emptysvec;
     li->uninferred = NULL;
     li->backedges = NULL;
+    li->callbacks = NULL;
     li->cache = NULL;
     li->inInference = 0;
     return li;
@@ -710,7 +711,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata, 1);
     jl_value_t *functionloc = jl_svecref(argdata, 2);
     size_t nargs = jl_svec_len(atypes);
-    int isva = jl_is_vararg_type(jl_svecref(atypes, nargs - 1));
+    int isva = jl_is_vararg(jl_svecref(atypes, nargs - 1));
     assert(jl_is_svec(atypes));
     assert(nargs > 0);
     assert(jl_is_svec(tvars));
@@ -779,7 +780,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
 
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+        if (!jl_is_type(elt) && !jl_is_typevar(elt) && !jl_is_vararg(elt)) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == unused_sym)
                 jl_exceptionf(jl_argumenterror_type,
@@ -796,7 +797,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                               jl_symbol_name(m->file),
                               m->line);
         }
-        if (jl_is_vararg_type(elt) && i < na-1)
+        if (jl_is_vararg(elt) && i < na-1)
             jl_exceptionf(jl_argumenterror_type,
                           "Vararg on non-final argument in method definition for %s at %s:%d",
                           jl_symbol_name(name),

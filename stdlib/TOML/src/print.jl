@@ -94,7 +94,7 @@ function _print(f::MbyFunc, io::IO, a::AbstractDict,
         value = a[key]
         if is_table(value)
             push!(ks, String(key))
-            header = !all(is_tabular(v) for v in values(value))::Bool
+            header = isempty(value) || !all(is_tabular(v) for v in values(value))::Bool
             if header
                 # print table
                 first_block || println(io)

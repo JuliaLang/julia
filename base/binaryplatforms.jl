@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module BinaryPlatforms
 
 export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
@@ -51,7 +53,7 @@ struct Platform <: AbstractPlatform
             "os" => os,
         )
         for (tag, value) in kwargs
-            tag = lowercase(string(tag))
+            tag = lowercase(string(tag::Symbol))
             if tag ∈ ("arch", "os")
                 throw(ArgumentError("Cannot double-pass key $(tag)"))
             end
@@ -66,17 +68,14 @@ struct Platform <: AbstractPlatform
             # doesn't parse nicely into a VersionNumber to persist, but if `validate_strict` is
             # set to `true`, it will cause an error later on.
             if tag ∈ ("libgfortran_version", "libstdcxx_version", "os_version")
-                normver(x::VersionNumber) = string(x)
-                function normver(str::AbstractString)
-                    v = tryparse(VersionNumber, str)
-                    if v === nothing
-                        # If this couldn't be parsed as a VersionNumber, return the original.
-                        return str
+                if isa(value, VersionNumber)
+                    value = string(value)
+                elseif isa(value, AbstractString)
+                    v = tryparse(VersionNumber, value)
+                    if isa(v, VersionNumber)
+                        value = string(v)
                     end
-                    # Otherwise, return the `string(VersionNumber(str))` version.
-                    return normver(v)
                 end
-                value = normver(value)
             end
 
             # Use `add_tag!()` to add the tag to our collection of tags
@@ -233,14 +232,14 @@ function validate_tags(tags::Dict)
         throw_version_number("libgfortran_version")
     end
 
-    # Validate `libstdcxx_version` is a parsable `VersionNumber`
-    if "libstdcxx_version" in keys(tags) && tryparse(VersionNumber, tags["libstdcxx_version"]) === nothing
-        throw_version_number("libstdcxx_version")
-    end
-
     # Validate `cxxstring_abi` is one of the two valid options:
     if "cxxstring_abi" in keys(tags) && tags["cxxstring_abi"] ∉ ("cxx03", "cxx11")
         throw_invalid_key("cxxstring_abi")
+    end
+
+    # Validate `libstdcxx_version` is a parsable `VersionNumber`
+    if "libstdcxx_version" in keys(tags) && tryparse(VersionNumber, tags["libstdcxx_version"]) === nothing
+        throw_version_number("libstdcxx_version")
     end
 end
 
@@ -428,7 +427,7 @@ function VNorNothing(d::Dict, key)
     if v === nothing
         return nothing
     end
-    return VersionNumber(v)
+    return VersionNumber(v)::VersionNumber
 end
 
 """
@@ -509,11 +508,11 @@ function triplet(p::AbstractPlatform)
     if libgfortran_version(p) !== nothing
         str = string(str, "-libgfortran", libgfortran_version(p).major)
     end
-    if libstdcxx_version(p) !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
-    end
     if cxxstring_abi(p) !== nothing
         str = string(str, "-", cxxstring_abi(p))
+    end
+    if libstdcxx_version(p) !== nothing
+        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
     end
 
     # Tack on all extra tags
@@ -589,7 +588,7 @@ const arch_march_isa_mapping = let
     end
     Dict(
         "i686" => [
-            "i686" => get_set("i686", "i686"),
+            "pentium4" => get_set("i686", "pentium4"),
             "prescott" => get_set("i686", "prescott"),
         ],
         "x86_64" => [
@@ -638,14 +637,14 @@ const libgfortran_version_mapping = Dict(
     "libgfortran4" => "(-libgfortran4)|(-gcc7)",
     "libgfortran5" => "(-libgfortran5)|(-gcc8)",
 )
-const libstdcxx_version_mapping = Dict{String,String}(
-    "libstdcxx_nothing" => "",
-    "libstdcxx" => "-libstdcxx\\d+",
-)
 const cxxstring_abi_mapping = Dict(
     "cxxstring_nothing" => "",
     "cxx03" => "-cxx03",
     "cxx11" => "-cxx11",
+)
+const libstdcxx_version_mapping = Dict{String,String}(
+    "libstdcxx_nothing" => "",
+    "libstdcxx" => "-libstdcxx\\d+",
 )
 
 """
@@ -668,8 +667,8 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         c(call_abi_mapping),
         # Next, optional things, like libgfortran/libstdcxx/cxxstring abi
         c(libgfortran_version_mapping),
-        c(libstdcxx_version_mapping),
         c(cxxstring_abi_mapping),
+        c(libstdcxx_version_mapping),
         # Finally, the catch-all for extended tags
         "(?<tags>(?:-[^-]+\\+[^-]+)*)?",
         "\$",
@@ -737,8 +736,8 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
             libc,
             call_abi,
             libgfortran_version,
-            libstdcxx_version,
             cxxstring_abi,
+            libstdcxx_version,
             os_version,
             tags...,
         )
@@ -930,25 +929,33 @@ detect compiler ABI values such as `libgfortran_version`, `libstdcxx_version` an
 we have much of that built.
 """
 function host_triplet()
-    str = Sys.MACHINE
-    libgfortran_version = detect_libgfortran_version()
-    if libgfortran_version !== nothing
-        str = string(str, "-libgfortran", libgfortran_version.major)
+    str = Base.BUILD_TRIPLET
+
+    if !occursin("-libgfortran", str)
+        libgfortran_version = detect_libgfortran_version()
+        if libgfortran_version !== nothing
+            str = string(str, "-libgfortran", libgfortran_version.major)
+        end
     end
 
-    libstdcxx_version = detect_libstdcxx_version()
-    if libstdcxx_version !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version.patch)
+    if !occursin("-cxx", str)
+        cxxstring_abi = detect_cxxstring_abi()
+        if cxxstring_abi !== nothing
+            str = string(str, "-", cxxstring_abi)
+        end
     end
 
-    cxxstring_abi = detect_cxxstring_abi()
-    if cxxstring_abi !== nothing
-        str = string(str, "-", cxxstring_abi)
+    if !occursin("-libstdcxx", str)
+        libstdcxx_version = detect_libstdcxx_version()
+        if libstdcxx_version !== nothing
+            str = string(str, "-libstdcxx", libstdcxx_version.patch)
+        end
     end
 
     # Add on julia_version extended tag
-    str = string(str, "-julia_version+", VersionNumber(VERSION.major, VERSION.minor, VERSION.patch))
-
+    if !occursin("-julia_version+", str)
+        str = string(str, "-julia_version+", VersionNumber(VERSION.major, VERSION.minor, VERSION.patch))
+    end
     return str
 end
 

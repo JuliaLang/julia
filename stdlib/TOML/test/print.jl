@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 toml_str(a; kwargs...) = sprint(io -> TOML.print(io, a; kwargs...))
 toml_str(f, a; kwargs...) = sprint(io -> TOML.print(f, io, a; kwargs...))
 
@@ -26,3 +28,13 @@ end
         """
 
 @test toml_str(Dict("b" => SubString("foo"))) == "b = \"foo\"\n"
+
+@testset "empty dict print" begin
+    s = """
+    user = "me"
+    [julia]
+    [option]
+    """
+    d = TOML.parse(s)
+    @test toml_str(d) == "user = \"me\"\n\n[julia]\n\n[option]\n"
+end

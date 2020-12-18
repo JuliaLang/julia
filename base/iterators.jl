@@ -1148,7 +1148,7 @@ end
 
 function length(itr::PartitionIterator)
     l = length(itr.c)
-    return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
+    return cld(l, itr.n)
 end
 
 function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
@@ -1296,7 +1296,10 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
     end
 end
 
-@inline peek(s::Stateful, sentinel=nothing) = s.nextvalstate !== nothing ? s.nextvalstate[1] : sentinel
+@inline function peek(s::Stateful, sentinel=nothing)
+    ns = s.nextvalstate
+    return ns !== nothing ? ns[1] : sentinel
+end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
 IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
 eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)

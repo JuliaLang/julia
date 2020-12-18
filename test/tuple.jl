@@ -504,6 +504,7 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+@test Base.tuple_type_tail(Tuple{Vararg{Int}}) == Tuple{Vararg{Int}}
 
 @testset "setindex" begin
     @test Base.setindex((1, ), 2, 1) === (2, )
@@ -575,3 +576,25 @@ end
     @test_throws BoundsError (1,2.0)[0:1]
     @test_throws BoundsError (1,2.0)[0:0]
 end
+
+@testset "Base.rest" begin
+    t = (1, 2.0, 0x03, 4f0)
+    @test Base.rest(t) === t
+    @test Base.rest(t, 2) === (2.0, 0x03, 4f0)
+
+    a = [1 2; 3 4]
+    @test Base.rest(a) == a[:]
+    @test pointer(Base.rest(a)) != pointer(a)
+    @test Base.rest(a, 3) == [2, 4]
+
+    itr = (-i for i in a)
+    @test Base.rest(itr) == itr
+    _, st = iterate(itr)
+    r = Base.rest(itr, st)
+    @test r isa Iterators.Rest
+    @test collect(r) == -[3, 2, 4]
+end
+
+# issue #38837
+f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
+@test @inferred(f38837((1,2))) === (1.0f0, 2.0)

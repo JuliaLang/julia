@@ -44,20 +44,15 @@ mutable struct OptimizationState
     const_api::Bool
     inlining::InliningState
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
-        s_edges = frame.stmt_edges[1]
-        if s_edges === nothing
-            s_edges = []
-            frame.stmt_edges[1] = s_edges
-        end
-        src = frame.src
+        s_edges = frame.stmt_edges[1]::Vector{Any}
         inlining = InliningState(params,
-            EdgeTracker(s_edges::Vector{Any}, frame.valid_worlds),
+            EdgeTracker(s_edges, frame.valid_worlds),
             InferenceCaches(
                 get_inference_cache(interp),
                 WorldView(code_cache(interp), frame.world)),
             method_table(interp))
         return new(frame.linfo,
-                   src, frame.stmt_info, frame.mod, frame.nargs,
+                   frame.src, frame.stmt_info, frame.mod, frame.nargs,
                    frame.sptypes, frame.slottypes, false,
                    inlining)
     end
@@ -179,11 +174,11 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
     return true
 end
 
-# run the optimization work
-function optimize(opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
+# Convert IRCode back to CodeInfo and compute inlining cost and sideeffects
+function finish(opt::OptimizationState, params::OptimizationParams, ir, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
-    @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
+
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
@@ -269,6 +264,13 @@ function optimize(opt::OptimizationState, params::OptimizationParams, @nospecial
         end
     end
     nothing
+end
+
+# run the optimization work
+function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
+    nargs = Int(opt.nargs) - 1
+    @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
+    finish(opt, params, ir, result)
 end
 
 

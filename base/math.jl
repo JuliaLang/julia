@@ -97,6 +97,15 @@ function clamp!(x::AbstractArray, lo, hi)
     x
 end
 
+"""
+    clamp(x::Integer, r::AbstractUnitRange)
+
+Clamp `x` to lie within range `r`.
+
+!!! compat "Julia 1.6"
+     This method requires at least Julia 1.6.
+"""
+clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))
 
 """
     evalpoly(x, p)
@@ -359,16 +368,20 @@ asinh(x::Number)
 """
     expm1(x)
 
-Accurately compute ``e^x-1``.
+Accurately compute ``e^x-1``. It avoids the loss of precision involved in the direct
+evaluation of exp(x)-1 for small values of x.
+# Examples
+```jldoctest
+julia> expm1(1e-16)
+1.0e-16
+
+julia> exp(1e-16) - 1
+0.0
+```
 """
 expm1(x)
-for f in (:exp2, :expm1)
-    @eval begin
-        ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        ($f)(x::Real) = ($f)(float(x))
-    end
-end
+expm1(x::Float64) = ccall((:expm1,libm), Float64, (Float64,), x)
+expm1(x::Float32) = ccall((:expm1f,libm), Float32, (Float32,), x)
 
 """
     exp2(x)
@@ -396,8 +409,12 @@ julia> exp10(2)
 """
 exp10(x::AbstractFloat) = 10^x
 
-for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :expm1)
-    @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
+for f in (:sin, :cos, :tan,  :sinh, :cosh, :tanh, :atan, :acos, :asin, :asinh, :acosh, :atanh, :expm1, :log, :log1p)
+    @eval function ($f)(x::Real)
+        xf = float(x)
+        x === xf && throw(MethodError($f, (x,)))
+        return ($f)(xf)
+    end
 end
 
 # functions with special cases for integer arguments
@@ -610,6 +627,10 @@ by Carlos F. Borges
 The article is available online at ArXiv at the link
   https://arxiv.org/abs/1904.09481
 
+    hypot(x...)
+
+Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> a = Int64(10)^10;
@@ -625,77 +646,7 @@ Stacktrace:
 
 julia> hypot(3, 4im)
 5.0
-```
-"""
-hypot(x::Number, y::Number) = hypot(promote(x, y)...)
-hypot(x::Complex, y::Complex) = hypot(abs(x), abs(y))
-hypot(x::T, y::T) where {T<:Real} = hypot(float(x), float(y))
-function hypot(x::T, y::T) where {T<:Number}
-    if !iszero(x)
-        z = y/x
-        z2 = z*z
 
-        abs(x) * sqrt(oneunit(z2) + z2)
-    else
-        abs(y)
-    end
-end
-
-function hypot(x::T, y::T) where T<:AbstractFloat
-    # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
-    if isinf(x) || isinf(y)
-        return T(Inf)
-    end
-
-    # Order the operands
-    ax,ay = abs(x), abs(y)
-    if ay > ax
-        ax,ay = ay,ax
-    end
-
-    # Widely varying operands
-    if ay <= ax*sqrt(eps(T)/2)  #Note: This also gets ay == 0
-        return ax
-    end
-
-    # Operands do not vary widely
-    scale = eps(T)*sqrt(floatmin(T))  #Rescaling constant
-    if ax > sqrt(floatmax(T)/2)
-        ax = ax*scale
-        ay = ay*scale
-        scale = inv(scale)
-    elseif ay < sqrt(floatmin(T))
-        ax = ax/scale
-        ay = ay/scale
-    else
-        scale = one(scale)
-    end
-    h = sqrt(muladd(ax,ax,ay*ay))
-    # This branch is correctly rounded but requires a native hardware fma.
-    if Base.Math.FMA_NATIVE
-        hsquared = h*h
-        axsquared = ax*ax
-        h -= (fma(-ay,ay,hsquared-axsquared) + fma(h,h,-hsquared) - fma(ax,ax,-axsquared))/(2*h)
-    # This branch is within one ulp of correctly rounded.
-    else
-        if h <= 2*ay
-            delta = h-ay
-            h -= muladd(delta,delta-2*(ax-ay),ax*(2*delta - ax))/(2*h)
-        else
-            delta = h-ax
-            h -= muladd(delta,delta,muladd(ay,(4*delta-ay),2*delta*(ax-2*ay)))/(2*h)
-        end
-    end
-    return h*scale
-end
-
-"""
-    hypot(x...)
-
-Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
-
-# Examples
-```jldoctest
 julia> hypot(-5.7)
 5.7
 
@@ -703,7 +654,76 @@ julia> hypot(3, 4im, 12.0)
 13.0
 ```
 """
-hypot(x::Number...) = sqrt(sum(abs2(y) for y in x))
+hypot(x::Number) = abs(float(x))
+hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...))...)
+function _hypot(x, y)
+    # preserves unit
+    axu = abs(x)
+    ayu = abs(y)
+
+    # unitless
+    ax = axu / oneunit(axu)
+    ay = ayu / oneunit(ayu)
+
+    # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
+    if isinf(ax) || isinf(ay)
+        return oftype(axu, Inf)
+    end
+
+    # Order the operands
+    if ay > ax
+        axu, ayu = ayu, axu
+        ax, ay = ay, ax
+    end
+
+    # Widely varying operands
+    if ay <= ax*sqrt(eps(typeof(ax))/2)  #Note: This also gets ay == 0
+        return axu
+    end
+
+    # Operands do not vary widely
+    scale = eps(typeof(ax))*sqrt(floatmin(ax))  #Rescaling constant
+    if ax > sqrt(floatmax(ax)/2)
+        ax = ax*scale
+        ay = ay*scale
+        scale = inv(scale)
+    elseif ay < sqrt(floatmin(ax))
+        ax = ax/scale
+        ay = ay/scale
+    else
+        scale = oneunit(scale)
+    end
+    h = sqrt(muladd(ax, ax, ay*ay))
+    # This branch is correctly rounded but requires a native hardware fma.
+    if Base.Math.FMA_NATIVE
+        hsquared = h*h
+        axsquared = ax*ax
+        h -= (fma(-ay, ay, hsquared-axsquared) + fma(h, h,-hsquared) - fma(ax, ax, -axsquared))/(2*h)
+    # This branch is within one ulp of correctly rounded.
+    else
+        if h <= 2*ay
+            delta = h-ay
+            h -= muladd(delta, delta-2*(ax-ay), ax*(2*delta - ax))/(2*h)
+        else
+            delta = h-ax
+            h -= muladd(delta, delta, muladd(ay, (4*delta - ay), 2*delta*(ax - 2*ay)))/(2*h)
+        end
+    end
+    return h*scale*oneunit(axu)
+end
+_hypot(x::Float16, y::Float16) = Float16(_hypot(Float32(x), Float32(y)))
+_hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
+
+function _hypot(x...)
+    maxabs = maximum(abs, x)
+    if isnan(maxabs) && any(isinf, x)
+        return oftype(maxabs, Inf)
+    elseif (iszero(maxabs) || isinf(maxabs))
+        return maxabs
+    else
+        return maxabs * sqrt(sum(y -> abs2(y / maxabs), x))
+    end
+end
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
 atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
@@ -780,6 +800,15 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 Get the exponent of a normalized floating-point number.
 Returns the largest integer `y` such that `2^y ≤ abs(x)`.
+
+# Examples
+```jldoctest
+julia> exponent(6.5)
+2
+
+julia> exponent(16.0)
+4
+```
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
@@ -830,6 +859,11 @@ end
 
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
+# Examples
+```jldoctest
+julia> frexp(12.8)
+(0.8, 4)
+```
 """
 function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
@@ -1150,12 +1184,7 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
     end
 end
 
-for func in (:atan,:hypot)
-    @eval begin
-        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(b)))
-    end
-end
-
+atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
@@ -1186,7 +1215,6 @@ Return positive part of the high word of `x` as a `UInt32`.
 # More special functions
 include("special/cbrt.jl")
 include("special/exp.jl")
-include("special/exp10.jl")
 include("special/ldexp_exp.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")

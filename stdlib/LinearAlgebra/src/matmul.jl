@@ -183,6 +183,73 @@ for elty in (Float32,Float64)
 end
 
 """
+    muladd(A, y, z)
+
+Combined multiply-add, `A*y .+ z`, for matrix-matrix or matrix-vector multiplication.
+The result is always the same size as `A*y`, but `z` may be smaller, or a scalar.
+
+!!! compat "Julia 1.6"
+     These methods require Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; z=[0, 100];
+
+julia> muladd(A, B, z)
+2×2 Matrix{Float64}:
+   3.0    3.0
+ 107.0  107.0
+```
+"""
+function Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, AbstractArray})
+    Ay = A * y
+    for d in 1:ndims(Ay)
+        # Same error as Ay .+= z would give, to match StridedMatrix method:
+        size(z,d) > size(Ay,d) && throw(DimensionMismatch("array could not be broadcast to match destination"))
+    end
+    for d in ndims(Ay)+1:ndims(z)
+        # Similar error to what Ay + z would give, to match (Any,Any,Any) method:
+        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+            axes(z), ", must have singleton at dim ", d)))
+    end
+    Ay .+ z
+end
+
+function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, AbstractArray})
+    if size(z,1) > length(u) || size(z,2) > length(v)
+        # Same error as (u*v) .+= z:
+        throw(DimensionMismatch("array could not be broadcast to match destination"))
+    end
+    for d in 3:ndims(z)
+        # Similar error to (u*v) + z:
+        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+            axes(z), ", must have singleton at dim ", d)))
+    end
+    (u .* v) .+ z
+end
+
+Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+    muladd(A', x', z')'
+Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+    transpose(muladd(transpose(A), transpose(x), transpose(z)))
+
+StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+
+function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, y::AbstractVector{<:Number}, z::Union{Number, AbstractVector})
+    T = promote_type(eltype(A), eltype(y), eltype(z))
+    C = similar(A, T, axes(A,1))
+    C .= z
+    mul!(C, A, y, true, true)
+end
+
+function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, B::StridedMaybeAdjOrTransMat{<:Number}, z::Union{Number, AbstractVecOrMat})
+    T = promote_type(eltype(A), eltype(B), eltype(z))
+    C = similar(A, T, axes(A,1), axes(B,2))
+    C .= z
+    mul!(C, A, B, true, true)
+end
+
+"""
     mul!(Y, A, B) -> Y
 
 Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,

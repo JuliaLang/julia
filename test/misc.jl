@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
@@ -99,9 +100,12 @@ let
         """
 end
 
+# Debugging tool: return the current state of the enable_finalizers counter.
+get_finalizers_inhibited() = ccall(:jl_gc_get_finalizers_inhibited, Int32, (Ptr{Cvoid},), C_NULL)
+
 # lock / unlock
 let l = ReentrantLock()
-    lock(l)
+    @test lock(l) === nothing
     @test islocked(l)
     success = Ref(false)
     @test trylock(l) do
@@ -114,12 +118,41 @@ let l = ReentrantLock()
     @test success[]
     t = @async begin
         @test trylock(l) do
-            @test false
+            error("unreachable")
         end === false
     end
+    @test get_finalizers_inhibited() == 1
     Base.wait(t)
-    unlock(l)
+    @test get_finalizers_inhibited() == 1
+    @test unlock(l) === nothing
+    @test get_finalizers_inhibited() == 0
     @test_throws ErrorException unlock(l)
+end
+
+for l in (Threads.SpinLock(), ReentrantLock())
+    @test get_finalizers_inhibited() == 0
+    @test lock(get_finalizers_inhibited, l) == 1
+    @test get_finalizers_inhibited() == 0
+    try
+        GC.enable_finalizers(false)
+        GC.enable_finalizers(false)
+        @test get_finalizers_inhibited() == 2
+        GC.enable_finalizers(true)
+        @test get_finalizers_inhibited() == 1
+    finally
+        @test get_finalizers_inhibited() == 1
+        GC.enable_finalizers(false)
+        @test get_finalizers_inhibited() == 2
+    end
+    @test get_finalizers_inhibited() == 2
+    GC.enable_finalizers(true)
+    @test get_finalizers_inhibited() == 1
+    GC.enable_finalizers(true)
+    @test get_finalizers_inhibited() == 0
+    @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
+
+    @test lock(l) === nothing
+    @test try unlock(l) finally end === nothing
 end
 
 # task switching
@@ -646,6 +679,31 @@ let foo() = begin
     @test foo() == 1
 end
 
+module atinvokelatest
+f(x) = 1
+g(x, y; z=0) = x * y + z
+end
+
+let foo() = begin
+        @eval atinvokelatest.f(x::Int) = 3
+        return Base.@invokelatest atinvokelatest.f(0)
+    end
+    @test foo() == 3
+end
+
+let foo() = begin
+        @eval atinvokelatest.f(x::Int) = 3
+        return Base.@invokelatest atinvokelatest.f(0)
+    end
+    @test foo() == 3
+
+    bar() = begin
+        @eval atinvokelatest.g(x::Int, y::Int; z=3) = z
+        return Base.@invokelatest atinvokelatest.g(2, 3; z=1)
+    end
+    @test bar() == 1
+end
+
 # Endian tests
 # For now, we only support little endian.
 # Add an `Sys.ARCH` test for big endian when/if we add support for that.
@@ -697,36 +755,19 @@ end
 
 # issue #27239
 @testset "strftime tests issue #27239" begin
-
-    # save current locales
-    locales = Dict()
-    for cat in 0:9999
-        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, C_NULL)
-        if cstr != C_NULL
-            locales[cat] = unsafe_string(cstr)
-        end
-    end
-
     # change to non-Unicode Korean
-    for (cat, _) in locales
-        korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
-        for lc in korloc
-            cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
-        end
+    korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
+    timestrs = String[]
+    withlocales(korloc) do
+        # system dependent formats
+        push!(timestrs, Libc.strftime(0.0))
+        push!(timestrs, Libc.strftime("%a %A %b %B %p %Z", 0))
     end
-
-    # system dependent formats
-    timestr_c = Libc.strftime(0.0)
-    timestr_aAbBpZ = Libc.strftime("%a %A %b %B %p %Z", 0)
-
-    # recover locales
-    for (cat, lc) in locales
-        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
-    end
-
     # tests
-    @test isvalid(timestr_c)
-    @test isvalid(timestr_aAbBpZ)
+    isempty(timestrs) && @warn "skipping stftime tests: no locale found for testing"
+    for s in timestrs
+        @test isvalid(s)
+    end
 end
 
 

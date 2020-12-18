@@ -63,7 +63,7 @@ let
     count_condition = Condition()
 
     function remote_wait(c)
-        @async begin
+        @async_logerr begin
             count += 1
             remote(take!)(c)
             count -= 1
@@ -87,7 +87,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
@@ -106,7 +106,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
@@ -267,7 +267,7 @@ end
 
 # Tests for issue #23109 - should not hang.
 f = @spawnat :any rand(1, 1)
-@sync begin
+@Base.Experimental.sync begin
     for _ in 1:10
         @async fetch(f)
     end
@@ -275,7 +275,7 @@ end
 
 wid1, wid2 = workers()[1:2]
 f = @spawnat wid1 rand(1,1)
-@sync begin
+@Base.Experimental.sync begin
     @async fetch(f)
     @async remotecall_fetch(()->fetch(f), wid2)
 end
@@ -439,7 +439,7 @@ catch ex
     # test showerror
     err_str = sprint(showerror, ex)
     err_one_str = sprint(showerror, ex.exceptions[1])
-    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
+    @test err_str == err_one_str * "\n\n...and 4 more exceptions.\n"
 end
 @test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
@@ -1690,16 +1690,14 @@ let (h, t) = Distributed.head_and_tail(Int[], 0)
 end
 
 # issue #35937
-let e
-    try
-        pmap(1) do _
+let e = @test_throws RemoteException pmap(1) do _
             wait(@async error(42))
         end
-    catch ex
-        e = ex
-    end
     # check that the inner TaskFailedException is correctly formed & can be printed
-    @test sprint(showerror, e) isa String
+    es = sprint(showerror, e.value)
+    @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
+    @test contains(es, "\n\n    nested task error:")
+    @test_broken contains(es, "\n\n    nested task error: 42\n")
 end
 
 # issue #27429, propagate relative `include` path to workers

@@ -93,6 +93,11 @@ end
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 2)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(5, 4), trues(2)) == false
+    @test checkbounds(Bool, A, trues(6, 4), trues(3)) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(4)) == false
 end
 
 @testset "array of CartesianIndex" begin
@@ -453,6 +458,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] ==
                 B[LinearIndices(mask1)[findall(mask1)], LinearIndices(mask2)[findall(mask2)], trailing2]
             @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
+
+            if ndims(B) > 1
+                maskfront = bitrand(shape[1:end-1])
+                Bslice = B[ntuple(i->(:), ndims(B)-1)..., 1]
+                @test B[maskfront,1] == Bslice[maskfront]
+                @test size(B[maskfront, 1:1]) == (sum(maskfront), 1)
+            end
         end
     end
 end
@@ -593,16 +605,24 @@ function test_cat(::Type{TestAbstractArray})
     b_int = reshape([1:27...], 3, 3, 3)
     b_float = reshape(Float64[1:27...], 3, 3, 3)
     b2hcat = Array{Float64}(undef, 3, 6, 3)
+    b2vcat = Array{Float64}(undef, 6, 3, 3)
     b1 = reshape([1:9...], 3, 3)
     b2 = reshape([10:18...], 3, 3)
     b3 = reshape([19:27...], 3, 3)
     b2hcat[:, :, 1] = hcat(b1, b1)
     b2hcat[:, :, 2] = hcat(b2, b2)
     b2hcat[:, :, 3] = hcat(b3, b3)
+    b2vcat[:, :, 1] = vcat(b1, b1)
+    b2vcat[:, :, 2] = vcat(b2, b2)
+    b2vcat[:, :, 3] = vcat(b3, b3)
     b3hcat = Array{Float64}(undef, 3, 9, 3)
     b3hcat[:, :, 1] = hcat(b1, b1, b1)
     b3hcat[:, :, 2] = hcat(b2, b2, b2)
     b3hcat[:, :, 3] = hcat(b3, b3, b3)
+    b3vcat = Array{Float64}(undef, 9, 3, 3)
+    b3vcat[:, :, 1] = vcat(b1, b1, b1)
+    b3vcat[:, :, 2] = vcat(b2, b2, b2)
+    b3vcat[:, :, 3] = vcat(b3, b3, b3)
     B = TSlow(b_int)
     B1 = TSlow([1:24...])
     B2 = TSlow([1:25...])
@@ -613,14 +633,20 @@ function test_cat(::Type{TestAbstractArray})
     i = rand(1:10)
 
     @test cat(;dims=i) == Any[]
+    @test Base.typed_hcat(Float64) == Vector{Float64}()
+    @test Base.typed_vcat(Float64) == Vector{Float64}()
     @test vcat() == Any[]
     @test hcat() == Any[]
+    @test vcat(1, 1.0, 3, 3.0) == [1.0, 1.0, 3.0, 3.0]
     @test hcat(1, 1.0, 3, 3.0) == [1.0 1.0 3.0 3.0]
     @test_throws ArgumentError hcat(B1, B2)
     @test_throws ArgumentError vcat(C1, C2)
 
     @test vcat(B) == B
     @test hcat(B) == B
+    @test Base.typed_vcat(Float64, B) == TSlow(b_float)
+    @test Base.typed_vcat(Float64, B, B) == TSlow(b2vcat)
+    @test Base.typed_vcat(Float64, B, B, B) == TSlow(b3vcat)
     @test Base.typed_hcat(Float64, B) == TSlow(b_float)
     @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
     @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
@@ -836,6 +862,13 @@ end
     @test ndims((1:3)[:,:,1:1,:]) == 4
     @test ndims((1:3)[:,:,1:1]) == 3
     @test ndims((1:3)[:,:,1:1,:,:,[1]]) == 6
+end
+
+@testset "issue #38192" begin
+    img = cat([1 2; 3 4], [1 5; 6 7]; dims=3)
+    mask = img[:,:,1] .== img[:,:,2]
+    img[mask,2] .= 0
+    @test img == cat([1 2; 3 4], [0 5; 6 7]; dims=3)
 end
 
 @testset "dispatch loop introduced in #19305" begin
@@ -1192,4 +1225,19 @@ end
     @test last(itr, 25) !== itr
     @test last(itr, 1) == [itr[end]]
     @test_throws ArgumentError last(itr, -6)
+end
+
+@testset "Base.rest" begin
+    a = reshape(1:4, 2, 2)'
+    @test Base.rest(a) == a[:]
+    _, st = iterate(a)
+    @test Base.rest(a, st) == [3, 2, 4]
+end
+
+@testset "Base.isstored" begin
+    a = rand(3, 4, 5)
+    @test Base.isstored(a, 1, 2, 3)
+    @test_throws BoundsError Base.isstored(a, 4, 4, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 5, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 4, 6)
 end

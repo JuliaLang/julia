@@ -79,9 +79,9 @@ const JULIA_PROMPT = "julia> "
 
 mutable struct REPLBackend
     "channel for AST"
-    repl_channel::Channel
+    repl_channel::Channel{Any}
     "channel for results: (value, iserror)"
-    response_channel::Channel
+    response_channel::Channel{Any}
     "flag indicating the state of this backend"
     in_eval::Bool
     "transformation functions to apply before evaluating expressions"
@@ -130,7 +130,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
         try
             Base.sigatomic_end()
             if lasterr !== nothing
-                put!(backend.response_channel, (lasterr,true))
+                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
             else
                 backend.in_eval = true
                 for xf in backend.ast_transforms
@@ -140,7 +140,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 backend.in_eval = false
                 # note: use jl_set_global to make sure value isn't passed through `expand`
                 ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
-                put!(backend.response_channel, (value,false))
+                put!(backend.response_channel, Pair{Any, Bool}(value, false))
             end
             break
         catch err
@@ -156,14 +156,14 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
 end
 
 """
-    start_repl_backend(repl_channel::Channel,response_channel::Channel)
+    start_repl_backend(repl_channel::Channel, response_channel::Channel)
 
     Starts loop for REPL backend
     Returns a REPLBackend with backend_task assigned
 
     Deprecated since sync / async behavior cannot be selected
 """
-function start_repl_backend(repl_channel::Channel, response_channel::Channel)
+function start_repl_backend(repl_channel::Channel{Any}, response_channel::Channel{Any})
     # Maintain legacy behavior of asynchronous backend
     backend = REPLBackend(repl_channel, response_channel, false)
     # Assignment will be made twice, but will be immediately available
@@ -209,6 +209,7 @@ end
 ==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
+    x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
         io = IOContext(io, :limit => true, :module => Main::Module)
         get(io, :color, false) && write(io, answer_color(d.repl))
@@ -216,14 +217,14 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
-        show(io, mime, x)
+        show(io, mime, x[])
         println(io)
     end
     return nothing
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
-function print_response(repl::AbstractREPL, @nospecialize(response), show_value::Bool, have_color::Bool)
+function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
         io = IOContext(io, :module => Main::Module)
@@ -231,7 +232,7 @@ function print_response(repl::AbstractREPL, @nospecialize(response), show_value:
     end
     return nothing
 end
-function print_response(errio::IO, @nospecialize(response), show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
+function print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
     while true
@@ -279,8 +280,8 @@ end
 
 # A reference to a backend that is not mutable
 struct REPLBackendRef
-    repl_channel::Channel
-    response_channel::Channel
+    repl_channel::Channel{Any}
+    response_channel::Channel{Any}
 end
 REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
 function destroy(ref::REPLBackendRef, state::Task)
@@ -791,7 +792,7 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
                 ast = Base.invokelatest(f, line)
                 response = eval_with_backend(ast, backend(repl))
             catch
-                response = (catch_stack(), true)
+                response = Pair{Any, Bool}(catch_stack(), true)
             end
             hide_output = suppress_on_semicolon && ends_with_semicolon(line)
             print_response(repl, response, !hide_output, hascolor(repl))
@@ -919,7 +920,8 @@ function setup_interface(
             Expr(:call, :(Base.repl_cmd),
                 :(Base.cmd_gen($(Base.shell_parse(line::String)[1]))),
                 outstream(repl))
-        end)
+        end,
+        sticky = true)
 
 
     ################################# Stage II #############################
@@ -942,7 +944,7 @@ function setup_interface(
             hist_from_file(hp, hist_path)
         catch
             # use REPL.hascolor to avoid using the local variable with the same name
-            print_response(repl, (catch_stack(),true), true, REPL.hascolor(repl))
+            print_response(repl, Pair{Any, Bool}(catch_stack(), true), true, REPL.hascolor(repl))
             println(outstream(repl))
             @info "Disabling history file for this session"
             repl.history_file = false

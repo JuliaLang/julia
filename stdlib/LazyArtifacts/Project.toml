@@ -1,0 +1,12 @@
+name = "LazyArtifacts"
+uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
+
+[deps]
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

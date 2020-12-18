@@ -601,3 +601,7 @@ end
     @test !ispow2(3//8)
     @test !ispow2(0//1)
 end
+
+@testset "checked_den with different integer types" begin
+    @test Base.checked_den(Int8(4), Int32(8)) == Base.checked_den(Int32(4), Int32(8))
+end

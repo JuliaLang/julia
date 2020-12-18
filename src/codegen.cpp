@@ -69,6 +69,9 @@
 // for configuration options
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/CommandLine.h>
+#if JL_LLVM_VERSION >= 120000
+#include <llvm/Support/Process.h>
+#endif
 
 #include <llvm/IR/InlineAsm.h>
 #if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
@@ -262,7 +265,7 @@ static bool type_has_unique_rep(jl_value_t *t)
         return true;
     if (jl_is_datatype(t)) {
         jl_datatype_t *dt = (jl_datatype_t*)t;
-        if (dt->name != jl_tuple_typename && !jl_is_vararg_type(t)) {
+        if (dt->name != jl_tuple_typename) {
             for (size_t i = 0; i < jl_nparams(dt); i++)
                 if (!type_has_unique_rep(jl_tparam(dt, i)))
                     return false;
@@ -837,8 +840,8 @@ static const std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map = {
     { &jl_f__apply,             new JuliaFunction{"jl_f__apply", get_func_sig, get_func_attrs} },
     { &jl_f__apply_iterate,     new JuliaFunction{"jl_f__apply_iterate", get_func_sig, get_func_attrs} },
     { &jl_f__apply_pure,        new JuliaFunction{"jl_f__apply_pure", get_func_sig, get_func_attrs} },
-    { &jl_f__apply_latest,      new JuliaFunction{"jl_f__apply_latest", get_func_sig, get_func_attrs} },
-    { &jl_f__apply_in_world,    new JuliaFunction{"jl_f__apply_in_world", get_func_sig, get_func_attrs} },
+    { &jl_f__call_latest,       new JuliaFunction{"jl_f__call_latest", get_func_sig, get_func_attrs} },
+    { &jl_f__call_in_world,     new JuliaFunction{"jl_f__call_in_world", get_func_sig, get_func_attrs} },
     { &jl_f_throw,              new JuliaFunction{"jl_f_throw", get_func_sig, get_func_attrs} },
     { &jl_f_tuple,              jltuple_func },
     { &jl_f_svec,               new JuliaFunction{"jl_f_svec", get_func_sig, get_func_attrs} },
@@ -1211,8 +1214,13 @@ static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
 {
     // Almost all of our inttoptr are generated due to representing `Ptr` with `T_size`
     // in LLVM and most of these integers are generated from `ptrtoint` in the first place.
-    if (auto I = dyn_cast<PtrToIntInst>(v))
-        return ctx.builder.CreateBitCast(I->getOperand(0), ty);
+    if (auto I = dyn_cast<PtrToIntInst>(v)) {
+        auto ptr = I->getOperand(0);
+        if (ty->getPointerAddressSpace() == ptr->getType()->getPointerAddressSpace())
+            return ctx.builder.CreateBitCast(ptr, ty);
+        else if (ty->getPointerElementType() == ptr->getType()->getPointerElementType())
+            return ctx.builder.CreateAddrSpaceCast(ptr, ty);
+    }
     return ctx.builder.CreateIntToPtr(v, ty);
 }
 
@@ -1724,7 +1732,7 @@ static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t 
     if (jl_nparams(sig) == 0)
         return std::make_pair(false, false);
     if (va) {
-        if (jl_is_vararg_type(jl_tparam(sig, jl_nparams(sig) - 1)))
+        if (jl_is_vararg(jl_tparam(sig, jl_nparams(sig) - 1)))
             return std::make_pair(false, false);
     }
     // not invalid, consider if specialized signature is worthwhile
@@ -2574,7 +2582,9 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     // so a pointer comparison should be no worse than that even in imaging mode
     // when the constant pointer has to be loaded.
     if ((arg1.V || arg1.constant) && (arg2.V || arg2.constant) &&
-        (jl_pointer_egal(rt1) || jl_pointer_egal(rt2)))
+        (jl_pointer_egal(rt1) || jl_pointer_egal(rt2)) &&
+        // jl_pointer_egal returns true for Bool, which is not helpful here
+        (rt1 != (jl_value_t*)jl_bool_type || rt2 != (jl_value_t*)jl_bool_type))
         return ctx.builder.CreateICmpEQ(boxed(ctx, arg1), boxed(ctx, arg2));
 
     bool justbits1 = jl_is_concrete_immutable(rt1);
@@ -2986,7 +2996,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     if (obj.ispointer()) {
                         // Determine which was the type that was homogenous
                         jl_value_t *jt = jl_tparam0(utt);
-                        if (jl_is_vararg_type(jt))
+                        if (jl_is_vararg(jt))
                             jt = jl_unwrap_vararg(jt);
                         Value *vidx = emit_unbox(ctx, T_size, fld, (jl_value_t*)jl_long_type);
                         // This is not necessary for correctness, but allows to omit
@@ -5245,7 +5255,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
     // some sanity checking and check whether there's a vararg
     size_t nargt = jl_svec_len(argt);
-    bool isVa = (nargt > 0 && jl_is_vararg_type(jl_svecref(argt, nargt - 1)));
+    bool isVa = (nargt > 0 && jl_is_vararg(jl_svecref(argt, nargt - 1)));
     if (isVa) {
         emit_error(ctx, "cfunction: Vararg syntax not allowed for argument list");
         return jl_cgval_t();
@@ -5569,6 +5579,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     jl_returninfo_t props = {};
     SmallVector<Type*, 8> fsig;
     Type *rt;
+    Type *srt;
     if (jl_is_structtype(jlrettype) && jl_is_datatype_singleton((jl_datatype_t*)jlrettype)) {
         rt = T_void;
         props.cc = jl_returninfo_t::Register;
@@ -5602,6 +5613,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
                 props.return_roots = tracked.count;
             props.cc = jl_returninfo_t::SRet;
             fsig.push_back(rt->getPointerTo());
+            srt = rt;
             rt = T_void;
         }
         else {
@@ -5614,8 +5626,14 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
 
     AttributeList attributes; // function declaration attributes
     if (props.cc == jl_returninfo_t::SRet) {
+        assert(srt);
         unsigned argno = 1;
+#if JL_LLVM_VERSION < 120000
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::StructRet);
+#else
+        Attribute sret = Attribute::getWithStructRetType(jl_LLVMContext, srt);
+        attributes = attributes.addAttribute(jl_LLVMContext, argno, sret);
+#endif
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoAlias);
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoCapture);
     }
@@ -7643,7 +7661,24 @@ extern "C" void jl_init_llvm(void)
     const char *const argv_avoidsfb[] = {"", "-x86-disable-avoid-SFB"}; // llvm bug 41629, see https://gist.github.com/vtjnash/192cab72a6cfc00256ff118238163b55
     cl::ParseCommandLineOptions(sizeof(argv_avoidsfb)/sizeof(argv_avoidsfb[0]), argv_avoidsfb, "disable-avoidsfb\n");
 #endif
+#if JL_LLVM_VERSION >= 120000
+    // https://reviews.llvm.org/rGc068e9c8c123e7f8c8f3feb57245a012ccd09ccf
+    Optional<std::string> envValue = sys::Process::GetEnv("JULIA_LLVM_ARGS");
+    if (envValue) {
+        SmallVector<const char *, 20> newArgv;
+        BumpPtrAllocator A;
+        StringSaver Saver(A);
+        newArgv.push_back(Saver.save("Julia").data());
+
+        // Parse the value of the environment variable into a "command line"
+        // and hand it off to ParseCommandLineOptions().
+        cl::TokenizeGNUCommandLine(*envValue, Saver, newArgv);
+        int newArgc = static_cast<int>(newArgv.size());
+        cl::ParseCommandLineOptions(newArgc, &newArgv[0]);
+    }
+#else
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
+#endif
 
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
@@ -7677,12 +7712,16 @@ extern "C" void jl_init_llvm(void)
         std::unique_ptr<MCSubtargetInfo> MSTI(
             TheTarget->createMCSubtargetInfo(TheTriple.str(), "", ""));
         if (!MSTI->isCPUStringValid(TheCPU))
-            jl_errorf("Invalid CPU name %s.", TheCPU.c_str());
+            jl_errorf("Invalid CPU name \"%s\".", TheCPU.c_str());
         if (jl_processor_print_help) {
             // This is the only way I can find to print the help message once.
             // It'll be nice if we can iterate through the features and print our own help
             // message...
+#if JL_LLVM_VERSION >= 120000
+            MSTI->setDefaultFeatures("help", "", "");
+#else
             MSTI->setDefaultFeatures("help", "");
+#endif
         }
     }
     // Package up features to be passed to target/subtarget

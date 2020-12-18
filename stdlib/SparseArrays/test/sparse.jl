@@ -1057,6 +1057,12 @@ end
     @test a[1,:] == sparse([1; 1; 3:10])
     a[1:0,2] .= 1
     @test a[:,2] == sparse([1:10;])
+    a[3,2:3] .= 1 # one stored, one new value
+    @test a[3,2:3] == sparse([1; 1])
+    a[5:6,1] .= 1 # only new values
+    @test a[:,1] == sparse([1; 0; 0; 0; 1; 1; 0; 0; 0; 0;])
+    a[2:4,2:3] .= 3 # two ranges
+    @test nnz(a) == 24
 
     @test_throws BoundsError a[:,11] = spzeros(10,1)
     @test_throws BoundsError a[11,:] = spzeros(1,10)
@@ -2964,6 +2970,28 @@ end
     @test SparseArrays.getcolptr(vA) == SparseArrays.getcolptr(A[:, 1:5])
 end
 
+@testset "any/all predicates over dims = 1" begin
+    As = sparse([2, 3], [2, 3], [0.0, 1.0]) # empty, structural zero, non-zero
+    Ad = Matrix(As)
+    Bs = copy(As) # like As, but full column
+    Bs[:,3] .= 1.0
+    Bd = Matrix(Bs)
+    Cs = copy(Bs) # like Bs, but full column is all structural zeros
+    Cs[:,3] .= 0.0
+    Cd = Matrix(Cs)
+
+    @testset "any($(repr(pred)))" for pred in (iszero, !iszero, >(-1.0), !=(1.0))
+        @test any(pred, As, dims = 1) == any(pred, Ad, dims = 1)
+        @test any(pred, Bs, dims = 1) == any(pred, Bd, dims = 1)
+        @test any(pred, Cs, dims = 1) == any(pred, Cd, dims = 1)
+    end
+    @testset "all($(repr(pred)))" for pred in (iszero, !iszero, >(-1.0), !=(1.0))
+        @test all(pred, As, dims = 1) == all(pred, Ad, dims = 1)
+        @test all(pred, Bs, dims = 1) == all(pred, Bd, dims = 1)
+        @test all(pred, Cs, dims = 1) == all(pred, Cd, dims = 1)
+    end
+end
+
 @testset "mapreducecols" begin
     n = 20
     m = 10
@@ -3114,6 +3142,21 @@ end
         B[1, jj] = [4.0, 5.0, 6.0]
     end
     @test A == B
+end
+
+@testset "multiplication of triangular sparse and dense matrices" begin
+    n = 7
+    B = rand(n, 3)
+    _triangular_sparse_matrix(n, ULT, T) = T == Int ? ULT(sparse(rand(0:10, n, n))) : ULT(sprandn(T, n, n, 0.4))
+    for T in (Int, Float16, Float32, Float64, ComplexF16, ComplexF32, ComplexF64)
+        for AT in (adjoint, transpose)
+            for TR in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+                TS = AT(_triangular_sparse_matrix(n, TR, T))
+                @test isa(TS * B, DenseMatrix)
+                @test TS * B ≈ Matrix(TS)*B
+            end
+        end
+    end
 end
 
 end # module
