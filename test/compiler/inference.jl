@@ -2979,3 +2979,13 @@ gVarargInt(x::Int) = 1
 gVarargInt(x) = 2
 fVarargInt(::Tuple{Vararg{Int, N}}) where {N} = Val{gVarargInt(N)}()
 @test only(Base.return_types(fVarargInt, Tuple{Tuple{Vararg{Int}}})) == Val{1}
+
+# issue #38888
+struct S38888{T}
+    S38888(x::S) where {S<:Int} = new{S}()
+    S38888(x::S, y) where {S2<:Int,S<:S2} = new{S}()
+end
+f38888() = S38888(Base.inferencebarrier(3))
+@test f38888() isa S38888
+g38888() = S38888(Base.inferencebarrier(3), nothing)
+@test g38888() isa S38888
