@@ -9,33 +9,13 @@ or the [documentation](https://docs.julialang.org).
 
 ## General Information for Windows
 
-
-### Unicode font support
-
-The built-in Windows fonts have rather poor coverage of the Unicode character
-space.  The free [`DejaVu Sans Mono`](https://dejavu-fonts.github.io/) font can be used
-as a replacement font in the Windows console.  Since Windows 2000, simply
-downloading the font and installing it is insufficient, since Windows keeps a
-list of approved fonts in the registry.
-
-Instructions for adding fonts to the terminal are available at
-[this answer on superuser.com](https://superuser.com/a/5079)
-
-Additionally, rather than sticking with the default command prompt, you may want
-to use a different terminal emulator program, such as
-[Conemu](https://conemu.github.io/) or [Mintty](
-https://github.com/mintty/mintty) (note that running Julia on Mintty needs a
-copy of `stty.exe` in your `%PATH%` to work properly).  Alternatively, you may
-prefer the features of a more full-function IDE, such as [Juno](http://junolab.org),
-[Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia), or
-[IJulia](https://github.com/JuliaLang/IJulia.jl).
-
+We highly recommend running Julia using a modern terminal application, in particular Windows Terminal, which can be installed from the [Microsoft Store](https://aka.ms/terminal).
 
 ### Line endings
 
-Julia uses binary-mode files exclusively.  Unlike many other Windows programs,
+Julia uses binary-mode files exclusively. Unlike many other Windows programs,
 if you write `\n` to a file, you get a `\n` in the file, not some other bit
-pattern.  This matches the behavior exhibited by other operating systems.  If
+pattern. This matches the behavior exhibited by other operating systems. If
 you have installed Git for Windows, it is suggested, but not required, that you
 configure your system Git to use the same convention:
 ```sh
@@ -51,31 +31,10 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
 ## Binary distribution
 
-Julia runs on Windows 7 and later.
-Both the 32-bit and 64-bit versions are supported.
-The 32-bit (i686) binary will run on either a 32-bit and 64-bit operating system.
-The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise refuse to launch.
-
- 1. [Download](https://julialang.org/downloads) the latest version of Julia.
-    Extract the binary to a reasonable destination folder, e.g. `C:\julia`.
-    By default, Julia will be installed into
-    `C:\Users\YOURNAME\AppData\Local\Julia-1.0.0\bin`,
-    where `YOURNAME` is your Windows user name.
-
- 2. Double-click the `julia` shortcut to launch Julia.
-
- 3. Julia's home directory is the location pointed to by the Windows environment
-    variable `%HOME%`: this directory is for instance where the startup file
-    `.julia/config/startup.jl` resides. `%HOMEDRIVE%\%HOMEPATH%` is used as a fallback if
-    `%HOME%` is not defined.
+For the binary distribution installation notes on Windows please see the instructions at
+[https://julialang.org/downloads/platform/#windows](https://julialang.org/downloads/platform/#windows).
 
 ## Source distribution
-
-### Supported build platforms
-
- -  Windows 10: supported (32 and 64 bits)
- -  Windows 8: supported (32 and 64 bits)
- -  Windows 7: supported (32 and 64 bits)
 
 ### Cygwin-to-MinGW cross-compiling
 
@@ -171,57 +130,10 @@ for the former instructions for compiling using MSYS2.
 You can also use MinGW-w64 cross compilers to build a Windows version of Julia from
 Linux, Mac, or the Windows Subsystem for Linux (WSL).
 
-For maximum compatibility with packages that use [WinRPM.jl](
-https://github.com/JuliaLang/WinRPM.jl) for binary dependencies on Windows, it
-is recommended that you use OpenSUSE 42.2 for cross-compiling a Windows build
-of Julia.  If you use a different Linux distribution or OS X, install
-[Vagrant](https://www.vagrantup.com/downloads.html) and use the following `Vagrantfile`:
-
-```
-# Vagrantfile for MinGW-w64 cross-compilation of Julia
-
-$script = <<SCRIPT
-# Change the following to i686-w64-mingw32 for 32 bit Julia:
-export XC_HOST=x86_64-w64-mingw32
-# Change the following to 32 for 32 bit Julia:
-export BITS=64
-zypper addrepo https://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_Leap_42.2/windows:mingw:win$BITS.repo
-zypper --gpg-auto-import-keys refresh
-zypper -n install --no-recommends git make cmake tar wine which curl \
-    python python-xml patch gcc-c++ m4 p7zip.i586 libxml2-tools winbind
-zypper -n install mingw$BITS-cross-gcc-c++ mingw$BITS-cross-gcc-fortran \
-    mingw$BITS-libstdc++6 mingw$BITS-libgfortran3 mingw$BITS-libssp0
-# opensuse packages the mingw runtime dlls under sys-root/mingw/bin, not /usr/lib64/gcc
-cp /usr/$XC_HOST/sys-root/mingw/bin/*.dll /usr/lib*/gcc/$XC_HOST/*/
-git clone git://github.com/JuliaLang/julia.git julia
-cd julia
-make -j4 win-extras julia-cli-release
-export WINEDEBUG=-all # suppress wine fixme's
-# this last step may need to be run interactively
-make -j4 binary-dist
-make -j4 exe
-SCRIPT
-
-Vagrant.configure("2") do |config|
-  config.vm.box = "bento/opensuse-leap-42.2"
-  config.vm.provider :virtualbox do |vb|
-    # Use VBoxManage to customize the VM. For example to change memory:
-    vb.memory = 2048
-  end
-  config.vm.provision :shell, :inline => $script
-end
-```
-
-
-### Cross-building Julia without Vagrant
-
-Alternatively, if you want to build it on the local system,
-use the following steps to cross-compile julia:
-
-First, you will need to ensure your system has the required dependencies.  We
+First, you will need to ensure your system has the required dependencies. We
 need wine (>=1.7.5), a system compiler, and some downloaders.
 
-**On Ubuntu** (on other linux systems, the dependency names are likely to be similar):
+**On Ubuntu** (on other Linux systems the dependency names are likely to be similar):
 ```sh
 apt-get install wine-stable gcc wget p7zip-full winbind mingw-w64 gfortran-mingw-w64
 # switch all of the following to their "-posix" variants (interactively):
@@ -249,21 +161,13 @@ in 32-bit mode).
 
 ## Debugging a cross-compiled build under wine
 
-The most effective way to debug a cross-compiled version of julia on the
+The most effective way to debug a cross-compiled version of Julia on the
 cross-compilation host is to install a windows version of gdb and run it under wine
 as usual. The pre-built packages available [as part of the MSYS2 project](
 https://sourceforge.net/projects/msys2/files/REPOS/MINGW/) are known to work.
 Apart from the GDB package you may also need the python and termcap packages.
 Finally, GDB's prompt may not work when launch from the command line. This can
 be worked around by prepending `wineconsole` to the regular GDB invocation.
-
-
-## Using a Windows VM
-
-[Vagrant](https://www.vagrantup.com/downloads.html) can also be used with a Windows
-guest VM via the `Vagrantfile` in [contrib/windows](
-https://github.com/JuliaLang/julia/blob/master/contrib/windows/Vagrantfile),
-just run `vagrant up` from that folder.
 
 
 ## After compiling
