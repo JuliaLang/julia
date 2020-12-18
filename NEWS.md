@@ -36,6 +36,7 @@ New library features
 Standard library changes
 ------------------------
 
+* `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
 
 #### Package Manager
 
