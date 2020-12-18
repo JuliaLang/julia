@@ -94,7 +94,7 @@ julia> Base.exponent_max(Float64)
 1023
 ```
 
-The value `exponent_max(T) + 1` is a possible value of the exponent field
+Note, `exponent_max(T) + 1` is a possible value of the exponent field
 with bias, which might be used as sentinel value for `Inf` and `NaN`.
 """
 function exponent_max end
