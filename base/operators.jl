@@ -141,7 +141,7 @@ is defined, it is expected to satisfy the following:
   `isless(x, y) && isless(y, z)` implies `isless(x, z)`.
 
 Values that are normally unordered, such as `NaN`,
-are ordered in an arbitrary but consistent fashion.
+are ordered after regular values.
 [`missing`](@ref) values are ordered last.
 
 This is the default comparison used by [`sort`](@ref).
@@ -168,6 +168,63 @@ isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
+"""
+    isgreater(x, y)
+
+Not the inverse of `isless`! Test whether `x` is greater than `y`, according to
+a fixed total order compatible with `min`.
+
+Defined with `isless`, this function is usually `isless(y, x)`, but `NaN` and
+[`missing`](@ref) are ordered as smaller than any ordinary value with `missing`
+smaller than `NaN`.
+
+So `isless` defines an ascending total order with `NaN` and `missing` as the
+largest values and `isgreater` defines a descending total order with `NaN` and
+`missing` as the smallest values.
+
+!!! note
+
+    Like `min`, `isgreater` orders containers (tuples, vectors, etc)
+    lexigraphically with `isless(y, x)` rather than recursively with itself:
+
+    ```jldoctest
+    julia> Base.isgreater(1, NaN) # 1 is greater than NaN
+    true
+
+    julia> Base.isgreater((1,), (NaN,)) # But (1,) is not greater than (NaN,)
+    false
+
+    julia> sort([1, 2, 3, NaN]; lt=Base.isgreater)
+    4-element Vector{Float64}:
+       3.0
+       2.0
+       1.0
+     NaN
+
+    julia> sort(tuple.([1, 2, 3, NaN]); lt=Base.isgreater)
+    4-element Vector{Tuple{Float64}}:
+     (NaN,)
+     (3.0,)
+     (2.0,)
+     (1.0,)
+    ```
+
+# Implementation
+This is unexported. Types should not usually implement this function. Instead, implement `isless`.
+"""
+isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
+
+"""
+    isunordered(x)
+
+Return true if `x` is a value that is not normally orderable, such as `NaN` or `missing`.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+"""
+isunordered(x) = false
+isunordered(x::AbstractFloat) = isnan(x)
+isunordered(x::Missing) = true
 
 function ==(T::Type, S::Type)
     @_pure_meta
