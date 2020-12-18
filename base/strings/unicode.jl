@@ -280,9 +280,8 @@ isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 """
     islowercase(c::AbstractChar) -> Bool
 
-Tests whether a character is a lowercase letter.
-A character is classified as lowercase if it belongs to Unicode category Ll,
-Letter: Lowercase.
+Tests whether a character is a lowercase letter (according to the Unicode
+standard's `Lowercase` derived property).
 
 See also: [`isuppercase`](@ref).
 
@@ -298,16 +297,15 @@ julia> islowercase('❤')
 false
 ```
 """
-islowercase(c::AbstractChar) = category_code(c) == UTF8PROC_CATEGORY_LL
+islowercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_islower, Cint, (UInt32,), UInt32(c)))
 
 # true for Unicode upper and mixed case
 
 """
     isuppercase(c::AbstractChar) -> Bool
 
-Tests whether a character is an uppercase letter.
-A character is classified as uppercase if it belongs to Unicode category Lu,
-Letter: Uppercase, or Lt, Letter: Titlecase.
+Tests whether a character is an uppercase letter (according to the Unicode
+standard's `Uppercase` derived property).
 
 See also: [`islowercase`](@ref).
 
@@ -323,10 +321,7 @@ julia> isuppercase('❤')
 false
 ```
 """
-function isuppercase(c::AbstractChar)
-    cat = category_code(c)
-    cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT
-end
+isuppercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_isupper, Cint, (UInt32,), UInt32(c)))
 
 """
     iscased(c::AbstractChar) -> Bool
