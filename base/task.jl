@@ -336,40 +336,53 @@ end
 
 ## lexically-scoped waiting for multiple items
 
-_istaskdone(x::Tuple{Task, Bool}) = istaskdone(x[1])
-_istaskfailed(x::Tuple{Task, Bool}) = istaskfailed(x[1])
+_istaskdone(x::Tuple{Task, Any}) = istaskdone(x[1])
+_istaskfailed(x::Tuple{Task, Any}) = istaskfailed(x[1])
+
+function _schedule_parent(t)
+    ct = current_task()
+    schedule(Task(() -> begin
+        try
+            wait(t)
+        catch
+            rethrow()
+        finally
+            ct.queue === nothing && schedule(ct)
+        end
+    end))
+end
 
 function sync_end(c::Channel{Any})
-    ts = Tuple{Task, Bool}[]
+    ts = Tuple{Task, Any}[]
     try
-        while isready(c)                           # Pull all queued tasks, wait for them,
-            while isready(c)                       #   then add more if they arrive.  This
-                t = take!(c)                       #   is needed as it is possible for
-                if isa(t, Task)                    #   Tasks to generate new subTasks
-                    push!(ts, (t, true))
-                else
-                    push!(ts, (schedule(Task(()->wait(t))), false))
+        wait(schedule(Task(() -> begin                        # Move monitor off main Task
+            while isready(c)
+                while isready(c)                              # Process all pending tasks
+                    t = take!(c)
+                    push!(ts, (_schedule_parent(t), t))
                 end
-            end
-            while true
-                yield()
-                if any(_istaskfailed, ts)          # Throw exception on first occurence
-                    c_ex = CompositeException()
-                    for (t, istask) in ts
-                        if istaskfailed(t)
-                            if istask
-                                push!(c_ex, TaskFailedException(t))
-                            else
-                                push!(c_ex, t.exception)   # Required to match handling
-                            end                            #  of Future exceptions
+                while true
+                    wait()                                    # Returns on task completion
+                    if any(_istaskfailed, ts)                 # Throw exception on first
+                        c_ex = CompositeException()           #   occurence
+                        for (t, orig) in ts
+                            if istaskfailed(t)
+                                if orig isa Task
+                                    push!(c_ex, TaskFailedException(orig))
+                                else
+                                    push!(c_ex, t.exception)  # Req'd to match handling
+                                end                           #   of Future exceptions
+                            end
                         end
-                    end
-                    throw(c_ex)
-                elseif all(_istaskdone, ts) || isready(c)  # Check for new tasks
-                    break
+                        throw(c_ex)
+                    elseif all(_istaskdone, ts) || isready(c) # Only leave when all tasks
+                        break                                 #   finish or new tasks are
+                    end                                       #   available to be added
                 end
             end
-        end
+        end)))
+    catch e
+        throw(e.task.exception)
     finally
         close(c)
     end

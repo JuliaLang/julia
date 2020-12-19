@@ -989,7 +989,11 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         # wait for the last chunk to complete (or error)
         # assume that any errors would be sticky,
         # (so we don't need to monitor the error status of the intermediate writes)
-        wait()::Cint
+        r = wait()
+        while !(r isa Cint)
+            r = wait()
+        end
+        r
     finally
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()

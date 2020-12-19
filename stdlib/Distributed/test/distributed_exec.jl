@@ -1710,21 +1710,409 @@ end
 let
     (p, p2) = filter!(p -> p != myid(), procs())
     t = Timer(t -> killjob("KILLING BY QUICK KILL WATCHDOG\n"), 60) # this test should take <10 seconds
-    c = Channel(0)
-    try
+
+    # Distributed.@spawnat/Distributed.@spawnat
+    let
+        c = Distributed.RemoteChannel(p2)
+        c2 = Distributed.RemoteChannel()
         @sync begin
-            @spawnat p begin
-                put!(c,0)
+            Distributed.@spawnat p begin
+                put!(c,1)
             end
-            @spawnat p2 begin
-                undefined()
-                take!(c)
+            Distributed.@spawnat p2 begin
+                sleep(0.01)
+                put!(c2, take!(c))
             end
         end
-    catch e
-        @test e.exceptions[1].captured.ex isa UndefVarError
+        @test take!(c2) == 1
+        close(c)
+        close(c2)
     end
-    close(c)
+
+    let
+        c = Distributed.RemoteChannel(p)
+        c2 = Distributed.RemoteChannel()
+        @sync begin
+            Distributed.@spawnat p begin
+                sleep(0.01)
+                put!(c2, take!(c))
+            end
+            Distributed.@spawnat p2 begin
+                put!(c,1)
+            end
+        end
+        @test take!(c2) == 1
+        close(c)
+        close(c2)
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel(p2)
+        try
+            @sync begin
+                Distributed.@spawnat p begin
+                    put!(c,1)
+                end
+                Distributed.@spawnat p2 begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+            end
+        catch e
+            @test e.exceptions[1].captured.ex isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel(p)
+        try
+            @sync begin
+                Distributed.@spawnat p begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+                Distributed.@spawnat p2 begin
+                    put!(c,1)
+                end
+            end
+        catch e
+            @test e.exceptions[1].captured.ex isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
+    # async/Distributed.@spawnat
+    let
+        c = Distributed.RemoteChannel(p)
+        c2 = Distributed.RemoteChannel()
+        @sync begin
+            @async begin
+                put!(c,1)
+            end
+            Distributed.@spawnat p begin
+                sleep(0.01)
+                put!(c2, take!(c))
+            end
+        end
+        @test take!(c2) == 1
+        close(c)
+        close(c2)
+    end
+
+    let
+        r = 0
+        c = Distributed.RemoteChannel()
+        @sync begin
+            @async begin
+                sleep(0.01)
+                r = take!(c)
+            end
+            Distributed.@spawnat p2 begin
+                put!(c,1)
+            end
+        end
+        @test r == 1
+        close(c)
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel(p)
+        try
+            @sync begin
+                @async begin
+                    put!(c,1)
+                end
+                Distributed.@spawnat p begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+            end
+        catch e
+            @test e.exceptions[1].captured.ex isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel(p)
+        try
+            @sync begin
+                @async begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+                Distributed.@spawnat p begin
+                    put!(c,1)
+                end
+            end
+        catch e
+            @test e.exceptions[1].task.exception isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
+    # Distributed.@spawnat/async
+    let
+        r = 0
+        c = Distributed.RemoteChannel()
+        @sync begin
+            Distributed.@spawnat p begin
+                put!(c,1)
+            end
+            @async begin
+                sleep(0.01)
+                r = take!(c)
+            end
+        end
+        @test r == 1
+        close(c)
+    end
+
+    let
+        c = Distributed.RemoteChannel(p)
+        c2 = Distributed.RemoteChannel()
+        @sync begin
+            Distributed.@spawnat p begin
+                sleep(0.01)
+                put!(c2, take!(c))
+            end
+            @async begin
+                put!(c,1)
+            end
+        end
+        @test take!(c2) == 1
+        close(c)
+        close(c2)
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel()
+        try
+            @sync begin
+                Distributed.@spawnat p begin
+                    put!(c,1)
+                end
+                @async begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+            end
+        catch e
+            @test e.exceptions[1].task.exception isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel()
+        try
+            @sync begin
+                Distributed.@spawnat p begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+                @async begin
+                    put!(c,1)
+                end
+            end
+        catch e
+            @test e.exceptions[1].captured.ex isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
+    # Threads.@spawn/Distributed.@spawnat
+    let
+        c = Distributed.RemoteChannel(p)
+        c2 = Distributed.RemoteChannel()
+        @sync begin
+            Threads.@spawn begin
+                put!(c,1)
+            end
+            Distributed.@spawnat p begin
+                sleep(0.01)
+                put!(c2, take!(c))
+            end
+        end
+        @test take!(c2) == 1
+        close(c)
+        close(c2)
+    end
+
+    let
+        r = 0
+        c = Distributed.RemoteChannel()
+        @sync begin
+            Threads.@spawn begin
+                sleep(0.01)
+                r = take!(c)
+            end
+            Distributed.@spawnat p2 begin
+                put!(c,1)
+            end
+        end
+        @test r == 1
+        close(c)
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel(p)
+        try
+            @sync begin
+                Threads.@spawn begin
+                    put!(c,1)
+                end
+                Distributed.@spawnat p begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+            end
+        catch e
+            @test e.exceptions[1].captured.ex isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel(p)
+        try
+            @sync begin
+                Threads.@spawn begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+                Distributed.@spawnat p begin
+                    put!(c,1)
+                end
+            end
+        catch e
+            @test e.exceptions[1].task.exception isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
+
+    # Distributed.@spawnat/Threads.@spawn
+    let
+        r = 0
+        c = Distributed.RemoteChannel()
+        @sync begin
+            Distributed.@spawnat p begin
+                put!(c,1)
+            end
+            Threads.@spawn begin
+                sleep(0.01)
+                r = take!(c)
+            end
+        end
+        @test r == 1
+        close(c)
+    end
+
+    let
+        c = Distributed.RemoteChannel(p)
+        c2 = Distributed.RemoteChannel()
+        @sync begin
+            Distributed.@spawnat p begin
+                sleep(0.01)
+                put!(c2, take!(c))
+            end
+            Threads.@spawn begin
+                put!(c,1)
+            end
+        end
+        @test take!(c2) == 1
+        close(c)
+        close(c2)
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel()
+        try
+            @sync begin
+                Distributed.@spawnat p begin
+                    put!(c,1)
+                end
+                Threads.@spawn begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+            end
+        catch e
+            @test e.exceptions[1].task.exception isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
+    let
+        threw = false
+        c = Distributed.RemoteChannel()
+        try
+            @sync begin
+                Distributed.@spawnat p begin
+                    sleep(0.01)
+                    undefined()
+                    r = take!(c)
+                end
+                Threads.@spawn begin
+                    put!(c,1)
+                end
+            end
+        catch e
+            @test e.exceptions[1].captured.ex isa UndefVarError
+            threw = true
+        finally
+            close(c)
+        end
+        @test threw
+    end
+
     close(t) # stop the fast watchdog
 end
 
