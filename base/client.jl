@@ -253,7 +253,14 @@ function exec_options(opts)
     end
 
     # load ~/.julia/config/startup.jl file
-    startup && load_julia_startup()
+    if startup
+        try
+            load_julia_startup()
+        catch
+            invokelatest(display_error, catch_stack())
+            !(repl || is_interactive) && exit(1)
+        end
+    end
 
     # process cmds list
     for (cmd, arg) in cmds
