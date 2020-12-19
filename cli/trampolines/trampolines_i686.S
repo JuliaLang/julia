@@ -20,9 +20,9 @@
 
 #define XX(name) \
 DEBUGINFO(name); \
-.global name; \
+.global CNAME(name); \
 .cfi_startproc; \
-name##:; \
+CNAME(name)##:; \
     CET_START(); \
     jmpl *(CNAME(name##_addr)); \
     ud2; \
