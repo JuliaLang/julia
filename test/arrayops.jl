@@ -2538,6 +2538,14 @@ end
     arr = randn(4)
     @test accumulate(*, arr; init=1) ≈ accumulate(*, arr)
 
+    # bad kwarg
+    arr_B = similar(arr)
+    @test_throws ArgumentError accumulate(*, arr; bad_init=1)
+    @test_throws ArgumentError accumulate!(*, arr_B, arr; bad_init=1)
+    # must provide dims
+    md_arr = randn(4, 5)
+    @test_throws ArgumentError accumulate!(*, similar(md_arr), md_arr)
+
     N = 5
     for arr in [rand(Float64, N), rand(Bool, N), rand(-2:2, N)]
         for (op, cumop) in [(+, cumsum), (*, cumprod)]
