@@ -7,7 +7,7 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     uplo::Char # upper bidiagonal ('U') or lower ('L')
     function Bidiagonal{T,V}(dv, ev, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
-        if length(ev) != length(dv)-1
+        if length(ev) != max(length(dv)-1, 0)
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
         new{T,V}(dv, ev, uplo)
@@ -352,7 +352,7 @@ function diag(M::Bidiagonal, n::Integer=0)
 end
 
 function +(A::Bidiagonal, B::Bidiagonal)
-    if A.uplo == B.uplo
+    if A.uplo == B.uplo || length(A.dv) == 0
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.uplo)
     else
         newdv = A.dv+B.dv
@@ -361,7 +361,7 @@ function +(A::Bidiagonal, B::Bidiagonal)
 end
 
 function -(A::Bidiagonal, B::Bidiagonal)
-    if A.uplo == B.uplo
+    if A.uplo == B.uplo || length(A.dv) == 0
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.uplo)
     else
         newdv = A.dv-B.dv

@@ -593,3 +593,7 @@ end
     @test r isa Iterators.Rest
     @test collect(r) == -[3, 2, 4]
 end
+
+# issue #38837
+f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
+@test @inferred(f38837((1,2))) === (1.0f0, 2.0)

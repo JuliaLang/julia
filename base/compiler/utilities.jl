@@ -72,17 +72,21 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
-function count_const_size(@nospecialize(x))
+function count_const_size(@nospecialize(x), count_self::Bool = true)
     (x isa Type || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
     isbits(x) && return Core.sizeof(x)
     dt = typeof(x)
-    sz = sizeof(dt)
+    sz = count_self ? sizeof(dt) : 0
     sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     dtfd = DataTypeFieldDesc(dt)
     for i = 1:nfields(x)
-        dtfd[i].isptr || continue
-        sz += count_const_size(getfield(x, i))
+        isdefined(x, i) || continue
+        f = getfield(x, i)
+        if !dtfd[i].isptr && datatype_pointerfree(typeof(f))
+            continue
+        end
+        sz += count_const_size(f, dtfd[i].isptr)
         sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     end
     return sz

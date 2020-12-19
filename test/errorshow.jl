@@ -632,6 +632,8 @@ catch ex
 end
 pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
 
+# Execute backtrace once before checking formatting, see #38858
+backtrace()
 
 # issue #28442
 @testset "Long stacktrace printing" begin

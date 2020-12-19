@@ -2,10 +2,9 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl
 
-module LibGit2_jll
-
-using Libdl
-using MbedTLS_jll, LibSSH2_jll
+baremodule LibGit2_jll
+using Base, Libdl, MbedTLS_jll, LibSSH2_jll
+Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -34,6 +33,13 @@ function __init__()
     global libgit2_path = dlpath(libgit2_handle)
 end
 
+# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
+# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
+# there isn't one.  It instead returns the overall Julia prefix.
 is_available() = true
+find_artifact_dir() = artifact_dir
+dev_jll() = error("stdlib JLLs cannot be dev'ed")
+best_wrapper = nothing
+get_libgit2_path() = libgit2_path
 
 end  # module LibGit2_jll
