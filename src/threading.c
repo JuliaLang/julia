@@ -221,7 +221,6 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 }
 #endif
 
-JL_DLLEXPORT int jl_n_threads;
 jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
 
 // return calling thread's ID
