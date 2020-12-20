@@ -353,7 +353,7 @@ end
 """
 function pow5invsplit_lookup end
 for T in (Float64, Float32, Float16)
-    e2_max = exponent_max(T) - precision(T) - 2
+    e2_max = exponent_max(T) - precision(T) - 1
     i_max = log10pow2(e2_max)
     table_sym = Symbol("pow5invsplit_table_", string(T))
     @eval const $table_sym = Tuple(Any[pow5invsplit($T, i) for i = 0:$i_max])
