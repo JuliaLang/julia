@@ -1515,7 +1515,7 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
-extern JL_DLLIMPORT int jl_n_threads;
+extern JL_DLLEXPORT int jl_n_threads;
 
 // environment entries
 JL_DLLEXPORT jl_value_t *jl_environ(int i);
