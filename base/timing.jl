@@ -56,8 +56,17 @@ function gc_alloc_count(diff::GC_Diff)
 end
 
 # cumulative total time spent on compilation
-cumulative_compile_time_ns_before() = ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
-cumulative_compile_time_ns_after() = ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
+const comp_timer_lock = ReentrantLock()
+function cumulative_compile_time_ns_before()
+    lock(comp_timer_lock) do
+        ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
+    end
+end
+function cumulative_compile_time_ns_after()
+    lock(comp_timer_lock) do
+        ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
+    end
+end
 
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
