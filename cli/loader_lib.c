@@ -78,6 +78,7 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 #endif
 }
 
+// Find the location of libjulia.
 char lib_dir[PATH_MAX];
 JL_DLLEXPORT const char * jl_get_libdir()
 {
@@ -90,7 +91,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
     wchar_t libjulia_path[PATH_MAX];
     HMODULE libjulia = NULL;
 
-    // Get a handle to libjulia internal
+    // Get a handle to libjulia.
     if (!utf8_to_wchar(LIBJULIA_NAME, libjulia_path, PATH_MAX)) {
         jl_loader_print_stderr3("ERROR: Unable to convert path ", LIBJULIA_NAME, " to wide string!\n");
         exit(1);
@@ -100,7 +101,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
         jl_loader_print_stderr3("ERROR: Unable to load ", LIBJULIA_NAME, "!\n");
         exit(1);
     }
-    if (!GetModuleFileName(libjulia, libjulia_path, PATH_MAX)) {
+    if (!GetModuleFileNameW(libjulia, libjulia_path, PATH_MAX)) {
         jl_loader_print_stderr("ERROR: GetModuleFileName() failed\n");
         exit(1);
     }
