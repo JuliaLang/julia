@@ -124,35 +124,39 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0)
-    timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
-    length(timestr) < 10 && print(" "^(10 - length(timestr)))
-    print(timestr, " seconds")
-    parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
-    parens && print(" (")
-    if bytes != 0 || allocs != 0
-        allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
-        if ma == 1
-            print(Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
-        else
-            print(Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
-        end
-        print(format_bytes(bytes))
-    end
-    if gctime > 0
+const print_lock = ReentrantLock()
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
+    lock(print_lock) do
+        timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
+        length(timestr) < 10 && print(" "^(10 - length(timestr)))
+        print(timestr, " seconds")
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+        parens && print(" (")
         if bytes != 0 || allocs != 0
-            print(", ")
+            allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
+            if ma == 1
+                print(Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
+            else
+                print(Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
+            end
+            print(format_bytes(bytes))
         end
-        print(Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
-    end
-    if compile_time > 0
-        if bytes != 0 || allocs != 0 || gctime > 0
-            print(", ")
+        if gctime > 0
+            if bytes != 0 || allocs != 0
+                print(", ")
+            end
+            print(Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
-        print(Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        if compile_time > 0
+            if bytes != 0 || allocs != 0 || gctime > 0
+                print(", ")
+            end
+            print(Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        end
+        parens && print(")")
+        newline && println()
+        nothing
     end
-    parens && print(")")
-    nothing
 end
 
 function timev_print(elapsedtime, diff::GC_Diff, compile_time)
@@ -209,16 +213,15 @@ macro time(ex)
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
-        try
+        local val = try
             $(esc(ex))
         finally
             elapsedtime = time_ns() - elapsedtime
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
-            local diff = GC_Diff(gc_num(), stats)
-            time_print(elapsedtime, diff.allocd, diff.total_time,
-                    gc_alloc_count(diff), compile_elapsedtime)
-            println()
         end
+        local diff = GC_Diff(gc_num(), stats)
+        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
+        val
     end
 end
 
@@ -259,13 +262,15 @@ macro timev(ex)
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
-        try
+        local val = try
             $(esc(ex))
         finally
             elapsedtime = time_ns() - elapsedtime
             compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
-            timev_print(elapsedtime, GC_Diff(gc_num(), stats), compile_elapsedtime)
         end
+        local diff = GC_Diff(gc_num(), stats)
+        timev_print(elapsedtime, diff, compile_elapsedtime)
+        val
     end
 end
 
