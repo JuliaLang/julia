@@ -533,6 +533,11 @@ const whitespace_chars = [" \t\n\r"...]
 # bslash_completions function to try and complete on escaped characters in strings
 const bslash_separators = [whitespace_chars..., "\"'`"...]
 
+const subscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k, "\\_") && length(k)==3)
+const subscript_regex = Regex("^\\\\_[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(subscripts)) * "]+\\z")
+const superscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k, "\\^") && length(k)==3)
+const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(superscripts)) * "]+\\z")
+
 # Aux function to detect whether we're right after a
 # using or import keyword
 function afterusing(string::String, startpos::Int)
@@ -555,6 +560,12 @@ function bslash_completions(string::String, pos::Int)
         latex = get(latex_symbols, s, "")
         if !isempty(latex) # complete an exact match
             return (true, (Completion[BslashCompletion(latex)], slashpos:pos, true))
+        elseif occursin(subscript_regex, s)
+            sub = map(c -> subscripts[c], s[3:end])
+            return (true, (Completion[BslashCompletion(sub)], slashpos:pos, true))
+        elseif occursin(superscript_regex, s)
+            sup = map(c -> superscripts[c], s[3:end])
+            return (true, (Completion[BslashCompletion(sup)], slashpos:pos, true))
         end
         emoji = get(emoji_symbols, s, "")
         if !isempty(emoji)

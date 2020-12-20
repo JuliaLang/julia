@@ -72,11 +72,28 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
-function is_inlineable_constant(@nospecialize(x))
-    if x isa Type || x isa Symbol
-        return true
+function count_const_size(@nospecialize(x), count_self::Bool = true)
+    (x isa Type || x isa Symbol) && return 0
+    ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
+    isbits(x) && return Core.sizeof(x)
+    dt = typeof(x)
+    sz = count_self ? sizeof(dt) : 0
+    sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
+    dtfd = DataTypeFieldDesc(dt)
+    for i = 1:nfields(x)
+        isdefined(x, i) || continue
+        f = getfield(x, i)
+        if !dtfd[i].isptr && datatype_pointerfree(typeof(f))
+            continue
+        end
+        sz += count_const_size(f, dtfd[i].isptr)
+        sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     end
-    return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
+    return sz
+end
+
+function is_inlineable_constant(@nospecialize(x))
+    return count_const_size(x) <= MAX_INLINE_CONST_SIZE
 end
 
 ###########################
@@ -122,15 +139,45 @@ end
 const nonfunction_mt = typename(SimpleVector).mt
 
 function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::SimpleVector)
-    isa(atypes, DataType) || return Nothing
+    isa(atypes, DataType) || return nothing
     mt = ccall(:jl_method_table_for, Any, (Any,), atypes)
     mt === nothing && return nothing
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
         mt, atypes, sparams, method)
 end
 
+# eliminate UnionAll vars that might be degenerate due to having identical bounds,
+# or a concrete upper bound and appearing covariantly.
+function subst_trivial_bounds(@nospecialize(atypes))
+    if !isa(atypes, UnionAll)
+        return atypes
+    end
+    v = atypes.var
+    if isconcretetype(v.ub) || v.lb === v.ub
+        return subst_trivial_bounds(atypes{v.ub})
+    end
+    return UnionAll(v, subst_trivial_bounds(atypes.body))
+end
+
+# If removing trivial vars from atypes results in an equivalent type, use that
+# instead. Otherwise we can get a case like issue #38888, where a signature like
+#   f(x::S) where S<:Int
+# gets cached and matches a concrete dispatch case.
+function normalize_typevars(method::Method, @nospecialize(atypes), sparams::SimpleVector)
+    at2 = subst_trivial_bounds(atypes)
+    if at2 !== atypes && at2 == atypes
+        atypes = at2
+        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
+        sparams = sp_[2]::SimpleVector
+    end
+    return atypes, sparams
+end
+
 # get a handle to the unique specialization object representing a particular instantiation of a call
 function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false, compilesig::Bool=false)
+    if isa(atypes, UnionAll)
+        atypes, sparams = normalize_typevars(method, atypes, sparams)
+    end
     if compilesig
         new_atypes = get_compileable_sig(method, atypes, sparams)
         new_atypes === nothing && return nothing

@@ -1107,11 +1107,11 @@ Suggest that collection `s` reserve capacity for at least `n` elements. This can
 For types that support `sizehint!`,
 
 1. `push!` and `append!` methods generally may (but are not required to) preallocate extra
-storage. For types implemented in `Base`, they typically do, using a heuristic optimized for
-a general use case.
+   storage. For types implemented in `Base`, they typically do, using a heuristic optimized for
+   a general use case.
 
 2. `sizehint!` may control this preallocation. Again, it typically does this for types in
-`Base`.
+   `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
 """
@@ -1222,6 +1222,8 @@ end
 
 Insert one or more `items` at the beginning of `collection`.
 
+This function is called `unshift` in many other programming languages.
+
 # Examples
 ```jldoctest
 julia> pushfirst!([1, 2, 3, 4], 5, 6)
@@ -1245,6 +1247,8 @@ end
     popfirst!(collection) -> item
 
 Remove the first `item` from `collection`.
+
+This function is called `shift` in many other programming languages.
 
 # Examples
 ```jldoctest
@@ -2138,6 +2142,10 @@ julia> findall(x -> x >= 0, d)
 """
 findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p)))
 
+# Broadcasting is much faster for small testf, and computing
+# integer indices from logical index using findall has a negligible cost
+findall(testf::Function, A::AbstractArray) = findall(testf.(A))
+
 """
     findall(A)
 
@@ -2196,140 +2204,6 @@ end
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
 findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
-
-"""
-    findmax(itr) -> (x, index)
-
-Return the maximum element of the collection `itr` and its index or key.
-If there are multiple maximal elements, then the first one will be returned.
-If any data element is `NaN`, this element is returned.
-The result is in line with `max`.
-
-The collection must not be empty.
-
-# Examples
-```jldoctest
-julia> findmax([8,0.1,-9,pi])
-(8.0, 1)
-
-julia> findmax([1,7,7,6])
-(7, 2)
-
-julia> findmax([1,7,7,NaN])
-(NaN, 4)
-```
-"""
-findmax(a) = _findmax(a, :)
-
-function _findmax(a, ::Colon)
-    p = pairs(a)
-    y = iterate(p)
-    if y === nothing
-        throw(ArgumentError("collection must be non-empty"))
-    end
-    (mi, m), s = y
-    i = mi
-    while true
-        y = iterate(p, s)
-        y === nothing && break
-        m != m && break
-        (i, ai), s = y
-        if ai != ai || isless(m, ai)
-            m = ai
-            mi = i
-        end
-    end
-    return (m, mi)
-end
-
-"""
-    findmin(itr) -> (x, index)
-
-Return the minimum element of the collection `itr` and its index or key.
-If there are multiple minimal elements, then the first one will be returned.
-If any data element is `NaN`, this element is returned.
-The result is in line with `min`.
-
-The collection must not be empty.
-
-# Examples
-```jldoctest
-julia> findmin([8,0.1,-9,pi])
-(-9.0, 3)
-
-julia> findmin([7,1,1,6])
-(1, 2)
-
-julia> findmin([7,1,1,NaN])
-(NaN, 4)
-```
-"""
-findmin(a) = _findmin(a, :)
-
-function _findmin(a, ::Colon)
-    p = pairs(a)
-    y = iterate(p)
-    if y === nothing
-        throw(ArgumentError("collection must be non-empty"))
-    end
-    (mi, m), s = y
-    i = mi
-    while true
-        y = iterate(p, s)
-        y === nothing && break
-        m != m && break
-        (i, ai), s = y
-        if ai != ai || isless(ai, m)
-            m = ai
-            mi = i
-        end
-    end
-    return (m, mi)
-end
-
-"""
-    argmax(itr)
-
-Return the index or key of the maximum element in a collection.
-If there are multiple maximal elements, then the first one will be returned.
-
-The collection must not be empty.
-
-# Examples
-```jldoctest
-julia> argmax([8,0.1,-9,pi])
-1
-
-julia> argmax([1,7,7,6])
-2
-
-julia> argmax([1,7,7,NaN])
-4
-```
-"""
-argmax(a) = findmax(a)[2]
-
-"""
-    argmin(itr)
-
-Return the index or key of the minimum element in a collection.
-If there are multiple minimal elements, then the first one will be returned.
-
-The collection must not be empty.
-
-# Examples
-```jldoctest
-julia> argmin([8,0.1,-9,pi])
-3
-
-julia> argmin([7,1,1,6])
-2
-
-julia> argmin([7,1,1,NaN])
-4
-```
-"""
-argmin(a) = findmin(a)[2]
 
 # similar to Matlab's ismember
 """
@@ -2435,7 +2309,8 @@ function findall(pred::Fix2{typeof(in),<:Union{Array{<:Real},Real}}, x::Array{<:
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-findall(pred::Fix2{typeof(in)}, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
+findall(pred::Fix2{typeof(in)}, x::AbstractArray) = _findin(x, pred.x)
+findall(pred::Fix2{typeof(in)}, x::Tuple) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)

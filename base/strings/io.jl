@@ -436,7 +436,7 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
                 m = c == 'x' ? 2 :
                     c == 'u' ? 4 : 8
                 while (k += 1) <= m && !isempty(a)
-                    nc = peek(a)
+                    nc = peek(a)::AbstractChar
                     n = '0' <= nc <= '9' ? n<<4 + (nc-'0') :
                         'a' <= nc <= 'f' ? n<<4 + (nc-'a'+10) :
                         'A' <= nc <= 'F' ? n<<4 + (nc-'A'+10) : break
@@ -456,7 +456,7 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
                 k = 1
                 n = c-'0'
                 while (k += 1) <= 3 && !isempty(a)
-                    c = peek(a)
+                    c = peek(a)::AbstractChar
                     n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                     popfirst!(a)
                 end

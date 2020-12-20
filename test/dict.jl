@@ -578,6 +578,13 @@ end
     @test length(d.ht) >= 10^4
     @test d === Base.rehash!(d, 123452) # number needs to be even
 
+    # filter!
+    d = IdDict(1=>1, 2=>3, 3=>2)
+    filter!(x->isodd(x[2]), d)
+    @test d[1] == 1
+    @test d[2] == 3
+    @test !haskey(d, 3)
+
     # not an iterator of tuples or pairs
     @test_throws ArgumentError IdDict([1, 2, 3, 4])
     # test rethrow of error in ctor
@@ -893,15 +900,40 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # issue #26939
     d26939 = WeakKeyDict()
-    d26939[big"1.0" + 1.1] = 1
-    GC.gc() # make sure this doesn't segfault
+    (@noinline d -> d[big"1.0" + 1.1] = 1)(d26939)
+    GC.gc() # primarily to make sure this doesn't segfault
+    @test count(d26939) == 0
+    @test length(d26939.ht) == 1
+    @test length(d26939) == 0
+    @test isempty(d26939)
+    empty!(d26939)
+    for i in 1:8
+        (@noinline (d, i) -> d[big(i + 12345)] = 1)(d26939, i)
+    end
+    lock(GC.gc, d26939)
+    @test length(d26939.ht) == 8
+    @test count(d26939) == 0
+    @test !haskey(d26939, nothing)
+    @test_throws KeyError(nothing) d26939[nothing]
+    @test_throws KeyError(nothing) get(d26939, nothing, 1)
+    @test_throws KeyError(nothing) get(() -> 1, d26939, nothing)
+    @test_throws KeyError(nothing) pop!(d26939, nothing)
+    @test getkey(d26939, nothing, 321) === 321
+    @test pop!(d26939, nothing, 321) === 321
+    @test delete!(d26939, nothing) === d26939
+    @test length(d26939.ht) == 8
+    @test_throws ArgumentError d26939[nothing] = 1
+    @test_throws ArgumentError get!(d26939, nothing, 1)
+    @test_throws ArgumentError get!(() -> 1, d26939, nothing)
+    @test isempty(d26939)
+    @test length(d26939.ht) == 0
+    @test length(d26939) == 0
 
     # WeakKeyDict does not convert keys on setting
     @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
     wkd = WeakKeyDict(A=>2)
     @test_throws ArgumentError get!(wkd, [2.0], 2)
-    @test_throws ArgumentError get!(wkd, [1.0], 2) # get! fails even if the key is only
-                                                   # used for getting and not setting
+    @test get!(wkd, [1.0], 2) === 2
 
     # WeakKeyDict does convert on getting
     wkd = WeakKeyDict(A=>2)
@@ -913,16 +945,18 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # map! on values of WKD
     wkd = WeakKeyDict(A=>2, B=>3)
-    map!(v->v-1, values(wkd))
+    map!(v -> v-1, values(wkd))
     @test wkd == WeakKeyDict(A=>1, B=>2)
 
     # get!
     wkd = WeakKeyDict(A=>2)
-    get!(wkd, B, 3)
+    @test get!(wkd, B, 3) == 3
     @test wkd == WeakKeyDict(A=>2, B=>3)
-    get!(()->4, wkd, C)
+    @test get!(()->4, wkd, C) == 4
     @test wkd == WeakKeyDict(A=>2, B=>3, C=>4)
-    @test_throws ArgumentError get!(()->5, wkd, [1.0])
+    @test get!(()->5, wkd, [1.0]) == 2
+
+    GC.@preserve A B C D nothing
 end
 
 @testset "issue #19995, hash of dicts" begin
@@ -1134,4 +1168,43 @@ end
         @test testdict[:a] == 0
         @test testdict[:b] == 1
     end
+end
+
+# WeakKeyDict soundness (#38727)
+mutable struct ComparesWithGC38727
+	i::Int
+end
+const armed = Ref{Bool}(true)
+@noinline fwdab38727(a, b) = invoke(Base.isequal, Tuple{Any, WeakRef}, a, b)
+function Base.isequal(a::ComparesWithGC38727, b::WeakRef)
+	# This GC.gc() here simulates a GC during compilation in the original issue
+	armed[] && GC.gc()
+        armed[] = false
+        fwdab38727(a, b)
+end
+Base.isequal(a::WeakRef, b::ComparesWithGC38727) = isequal(b, a)
+Base.:(==)(a::ComparesWithGC38727, b::ComparesWithGC38727) = a.i == b.i
+Base.hash(a::ComparesWithGC38727, u::UInt) = Base.hash(a.i, u)
+function make_cwgc38727(wkd, i)
+	f = ComparesWithGC38727(i)
+	function fin(f)
+		f.i = -1
+	end
+	finalizer(fin, f)
+	f
+end
+@noinline mk38727(wkd) = wkd[make_cwgc38727(wkd, 1)] = nothing
+function bar()
+	wkd = WeakKeyDict{Any, Nothing}()
+	mk38727(wkd)
+	armed[] = true
+	z = getkey(wkd, ComparesWithGC38727(1), missing)
+end
+# Run this twice, in case compilation the first time around
+# masks something.
+let c = bar()
+    @test c === missing || c == ComparesWithGC38727(1)
+end
+let c = bar()
+    @test c === missing || c == ComparesWithGC38727(1)
 end

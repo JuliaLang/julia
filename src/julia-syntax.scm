@@ -105,7 +105,7 @@
   (if (null? tuples)
       (if (and last (= n 1))
           `(call (top firstindex) ,a)
-          `(call (top first) (call (top axes) ,a ,n)))
+          `(call (top firstindex) ,a ,n))
       (let ((dimno `(call (top +) ,(- n (length tuples))
                           ,.(map (lambda (t) `(call (top length) ,t))
                                  tuples))))
@@ -904,6 +904,7 @@
        (global ,name) (const ,name)
        (scope-block
         (block
+         (hardscope)
          (local-def ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
@@ -934,6 +935,7 @@
        ;; "inner" constructors
        (scope-block
         (block
+         (hardscope)
          (global ,name)
          ,@(map (lambda (c)
                   (rewrite-ctor c name params field-names field-types))
@@ -2306,7 +2308,13 @@
    'bracescat (lambda (e) (error "{ } matrix syntax is discontinued"))
 
    'string
-   (lambda (e) (expand-forms `(call (top string) ,@(cdr e))))
+   (lambda (e)
+     (expand-forms
+      `(call (top string) ,@(map (lambda (s)
+                                   (if (and (pair? s) (eq? (car s) 'string))
+                                       (cadr s)
+                                       s))
+                                 (cdr e)))))
 
    '|::|
    (lambda (e)

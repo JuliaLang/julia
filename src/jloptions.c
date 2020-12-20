@@ -75,6 +75,7 @@ jl_options_t jl_options = { 0,    // quiet
                             0, // image_file_specified
                             JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
                             0, // image-codegen
+                            0, // rr-detach
 };
 
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
@@ -203,6 +204,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_project,
            opt_bug_report,
            opt_image_codegen,
+           opt_rr_detach,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -254,6 +256,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       0, 1 },
         { "image-codegen",   no_argument,       0, opt_image_codegen },
+        { "rr-detach",       no_argument,       0, opt_rr_detach },
         { 0, 0, 0, 0 }
     };
 
@@ -654,6 +657,9 @@ restart_switch:
             break;
         case opt_image_codegen:
             jl_options.image_codegen = 1;
+            break;
+        case opt_rr_detach:
+            jl_options.rr_detach = 1;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

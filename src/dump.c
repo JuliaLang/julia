@@ -2576,7 +2576,9 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     for (int i = 0; i < ccallable_list.len; i++) {
         jl_svec_t *item = (jl_svec_t*)ccallable_list.items[i];
         JL_GC_PROMISE_ROOTED(item);
-        jl_compile_extern_c(NULL, NULL, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+        int success = jl_compile_extern_c(NULL, NULL, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+        if (!success)
+            jl_safe_printf("@ccallable was already defined for this method name\n");
     }
     arraylist_free(&ccallable_list);
     jl_value_t *ret = (jl_value_t*)jl_svec(2, restored, init_order);
@@ -2637,7 +2639,8 @@ void jl_init_serializer(void)
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
-                     jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_nothing_type,
+                     jl_pointer_type, jl_abstractarray_type, jl_nothing_type,
+                     jl_vararg_type,
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,

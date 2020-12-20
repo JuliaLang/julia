@@ -665,8 +665,6 @@ end
 # line_info_postprinter(io::IO, typ, used::Bool) prints the type-annotation at the end
 #   of the statement
 function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, line_info_postprinter, used::BitSet, cfg::CFG, bb_idx::Int)
-    ds = get(io, :displaysize, (24, 80))::Tuple{Int,Int}
-    cols = ds[2]
     stmts = code.code
     types = code.ssavaluetypes
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -748,7 +746,6 @@ end
 statementidx_lineinfo_printer(code::CodeInfo) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
 
 function show_ir(io::IO, code::CodeInfo, line_info_preprinter=statementidx_lineinfo_printer(code), line_info_postprinter=default_expr_type_printer)
-    ioctx = IOContext(io, :displaysize => displaysize(io)::Tuple{Int,Int})
     stmts = code.code
     used = BitSet()
     cfg = compute_basic_blocks(stmts)
@@ -758,7 +755,7 @@ function show_ir(io::IO, code::CodeInfo, line_info_preprinter=statementidx_linei
     bb_idx = 1
 
     for idx in 1:length(stmts)
-        bb_idx = show_ir_stmt(ioctx, code, idx, line_info_preprinter, line_info_postprinter, used, cfg, bb_idx)
+        bb_idx = show_ir_stmt(io, code, idx, line_info_preprinter, line_info_postprinter, used, cfg, bb_idx)
     end
 
     max_bb_idx_size = length(string(length(cfg.blocks)))

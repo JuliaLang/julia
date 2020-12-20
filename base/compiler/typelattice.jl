@@ -220,6 +220,7 @@ widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::Type) = t
 widenconst(t::TypeVar) = t
+widenconst(t::Core.TypeofVararg) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 

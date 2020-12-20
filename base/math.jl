@@ -368,7 +368,16 @@ asinh(x::Number)
 """
     expm1(x)
 
-Accurately compute ``e^x-1``.
+Accurately compute ``e^x-1``. It avoids the loss of precision involved in the direct
+evaluation of exp(x)-1 for small values of x.
+# Examples
+```jldoctest
+julia> expm1(1e-16)
+1.0e-16
+
+julia> exp(1e-16) - 1
+0.0
+```
 """
 expm1(x)
 expm1(x::Float64) = ccall((:expm1,libm), Float64, (Float64,), x)
@@ -702,6 +711,9 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
+_hypot(x::Float16, y::Float16) = Float16(_hypot(Float32(x), Float32(y)))
+_hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
+
 function _hypot(x...)
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
@@ -788,6 +800,15 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 Get the exponent of a normalized floating-point number.
 Returns the largest integer `y` such that `2^y ≤ abs(x)`.
+
+# Examples
+```jldoctest
+julia> exponent(6.5)
+2
+
+julia> exponent(16.0)
+4
+```
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
@@ -838,6 +859,11 @@ end
 
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
+# Examples
+```jldoctest
+julia> frexp(12.8)
+(0.8, 4)
+```
 """
 function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)

@@ -1971,8 +1971,12 @@ let a(; b) = b
 end
 
 # issue #33987
-f33987(args::(Vararg{Any, N} where N); kwargs...) = args
-@test f33987(1,2,3) === (1,2,3)
+@test_deprecated eval(quote
+    # This syntax is deprecated. This test should be removed when the
+    # deprecation is.
+    f33987(args::(Vararg{Any, N} where N); kwargs...) = args
+    @test f33987(1,2,3) === (1,2,3)
+end)
 
 macro id_for_kwarg(x); x; end
 Xo65KdlD = @id_for_kwarg let x = 1
@@ -2095,6 +2099,16 @@ end
     f28789()
 end
 @test z28789 == 42
+
+# issue #38650, `struct` should always be a hard scope
+f38650() = 0
+@eval begin
+    $(Expr(:softscope, true))
+    struct S38650
+        f38650() = 1
+    end
+end
+@test f38650() == 0
 
 # issue #37126
 @test isempty(Test.collect_test_logs() do
@@ -2632,3 +2646,6 @@ end
     @test ncalls_in_lowered(quote a, _... = b, c end, GlobalRef(Base, :rest)) == 0
     @test ncalls_in_lowered(quote a, _... = (b...,) end, GlobalRef(Base, :rest)) == 0
 end
+
+# issue #38501
+@test :"a $b $("str") c" == Expr(:string, "a ", :b, " ", Expr(:string, "str"), " c")

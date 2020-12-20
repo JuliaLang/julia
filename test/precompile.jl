@@ -262,9 +262,11 @@ precompile_test_harness(false) do dir
     cachefile = joinpath(cachedir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_logs (:warn, "Replacing module `$Foo_module`") begin
-        ms = Base._require_from_serialized(cachefile)
-        @test isa(ms, Array{Any,1})
+    @test_warn "@ccallable was already defined for this method name" begin
+        @test_logs (:warn, "Replacing module `$Foo_module`") begin
+            ms = Base._require_from_serialized(cachefile)
+            @test isa(ms, Array{Any,1})
+        end
     end
 
     @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
@@ -308,13 +310,15 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
-                 :Future, :LazyArtifacts, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
-                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,
-                 :ArgTools, :Tar, :NetworkOptions,]),
-           )
+                [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles,
+                 :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils,
+                 :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
+                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :Pkg, :Printf,
+                 :Profile, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
+                 :SparseArrays, :Statistics, :SuiteSparse, :TOML, :Tar, :Test, :UUIDs, :Unicode,
+                 :nghttp2_jll]
+            ),
+        )
         @test discard_module.(deps) == deps1
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
         @test map(x -> x.filename, deps) == [Foo_file]
@@ -478,7 +482,7 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_warn "LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn r"LoadError: break me\nStacktrace:\n \[1\] [\e01m\[]*error" try
             Base.require(Main, :FooBar2)
             error("the \"break me\" test failed")
         catch exc

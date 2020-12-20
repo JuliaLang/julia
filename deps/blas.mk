@@ -154,7 +154,7 @@ LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS) -O0" \
     LOADER="$(FC)" BLASLIB="$(RPATH_ESCAPED_ORIGIN) $(LIBBLAS)"
 
 $(SRCCACHE)/lapack-$(LAPACK_VER).tgz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$(notdir $@)
+	$(JLDOWNLOAD) $@ https://www.netlib.org/lapack/$(notdir $@)
 
 $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 	$(JLCHECKSUM) $<
@@ -209,10 +209,6 @@ fastcheck-lapack: check-lapack
 check-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-checked
 
 else # USE_BINARYBUILDER_OPENBLAS
-
-
-OPENBLAS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl/releases/download/OpenBLAS-v$(OPENBLAS_VER)+$(OPENBLAS_BB_REL)
-OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)
 
 $(eval $(call bb-install,openblas,OPENBLAS,true))
 get-lapack: get-openblas

@@ -9,18 +9,18 @@ if !isdefined(Base, :uv_eventloop)
 end
 Base.include(@__MODULE__, joinpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
+using Base.Meta
 
 CTRL_C = '\x03'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
-# used by JuliaInterpreter.jl and Revise.jl
+# used by Revise.jl
 @assert precompile(Tuple{typeof(Base.parse_cache_header), String})
-@assert precompile(Tuple{typeof(pushfirst!), Vector{Any}, Function})
-@assert precompile(Tuple{typeof(push!), Set{Module}, Module})
-@assert precompile(Tuple{typeof(push!), Set{Method}, Method})
-@assert precompile(Tuple{typeof(empty!), Set{Any}})
+@assert precompile(Base.read_dependency_src, (String, String))
+@assert precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
+
 # used by Requires.jl
 @assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
 @assert precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
@@ -41,6 +41,7 @@ display([1])
 display([1 2; 3 4])
 @time 1+1
 ; pwd
+$CTRL_C
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
@@ -55,10 +56,38 @@ cd("complet_path\t\t$CTRL_C
 """
 
 precompile_script = """
-# Used by Revise
-(setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
-(setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
-get(Base.pkgorigins, Base.PkgId(Base), nothing)
+# NOTE: these were moved to the end of Base.jl. TODO: move back here.
+# # Used by Revise & its dependencies
+# while true  # force inference
+# delete!(push!(Set{Module}(), Base), Main)
+# m = first(methods(+))
+# delete!(push!(Set{Method}(), m), m)
+# empty!(Set())
+# push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
+# (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
+# (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
+# (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
+# (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
+# (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
+# Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
+# Dict(Base => [:(1+1)])[Base]
+# Dict(:one => [1])[:one]
+# Dict("abc" => Set())["abc"]
+# pushfirst!([], sum)
+# get(Base.pkgorigins, Base.PkgId(Base), nothing)
+# sort!([1,2,3])
+# unique!([1,2,3])
+# cumsum([1,2,3])
+# append!(Int[], BitSet())
+# isempty(BitSet())
+# delete!(BitSet([1,2]), 3)
+# deleteat!(Int32[1,2,3], [1,3])
+# deleteat!(Any[1,2,3], [1,3])
+# Core.svec(1, 2) == Core.svec(3, 4)
+# # copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(which(+, (Int, Int)), [Int, Int], Core.svec())))
+# any(t->t[1].line > 1, [(LineNumberNode(2,:none),:(1+1))])
+# break   # end force inference
+# end
 """
 
 julia_exepath() = joinpath(Sys.BINDIR::String, Base.julia_exename())
@@ -71,21 +100,26 @@ if have_repl
     """
 end
 
-# This is disabled because it doesn't give much benefit
-# and the code in Distributed is poorly typed causing many invalidations
-#=
 Distributed = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
           nothing)
 if Distributed !== nothing
+    hardcoded_precompile_statements *= """
+    @assert precompile(Tuple{typeof(Distributed.remotecall),Function,Int,Module,Vararg{Any, 100}})
+    @assert precompile(Tuple{typeof(Distributed.procs)})
+    @assert precompile(Tuple{typeof(Distributed.finalize_ref), Distributed.Future})
+    """
+# This is disabled because it doesn't give much benefit
+# and the code in Distributed is poorly typed causing many invalidations
+#=
     precompile_script *= """
     using Distributed
     addprocs(2)
     pmap(x->iseven(x) ? 1 : 0, 1:4)
     @distributed (+) for i = 1:100 Int(rand(Bool)) end
     """
-end
 =#
+end
 
 
 Artifacts = get(Base.loaded_modules,
@@ -120,6 +154,7 @@ if FileWatching !== nothing
     hardcoded_precompile_statements *= """
     @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
     @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+    @assert precompile(Tuple{typeof(FileWatching._uv_hook_close), FileWatching.FileMonitor})
     """
 end
 
@@ -274,14 +309,23 @@ function generate_precompile_statements()
         # println(statement)
         # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
         # N with a large number seems to work around it.
-        statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
+        ps = Meta.parse(statement)
+        if isexpr(ps, :call)
+            if isexpr(ps.args[end], :curly)
+                l = ps.args[end]
+                if length(l.args) == 2 && l.args[1] == :Vararg
+                    push!(l.args, 100)
+                end
+            end
+        end
         try
-            Base.include_string(PrecompileStagingArea, statement)
+            # println(ps)
+            Core.eval(PrecompileStagingArea, ps)
             n_succeeded += 1
             print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
         catch
             # See #28808
-            # @error "Failed to precompile $statement"
+            @error "Failed to precompile $statement"
         end
     end
     println()

@@ -70,11 +70,12 @@ find_uplo(a) = nothing
 find_uplo(bc::Broadcasted) = mapreduce(find_uplo, merge_uplos, bc.args, init=nothing)
 
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
-    uplo = find_uplo(bc)
+    uplo = n > 0 ? find_uplo(bc) : 'U'
+    n1 = max(n - 1, 0)
     if uplo == 'T'
-        return Tridiagonal(Array{ElType}(undef, n-1), Array{ElType}(undef, n), Array{ElType}(undef, n-1))
+        return Tridiagonal(Array{ElType}(undef, n1), Array{ElType}(undef, n), Array{ElType}(undef, n1))
     end
-    return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1), uplo)
+    return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n1), uplo)
 end
 structured_broadcast_alloc(bc, ::Type{<:SymTridiagonal}, ::Type{ElType}, n) where {ElType} =
     SymTridiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1))
@@ -104,7 +105,9 @@ function isstructurepreserving(::typeof(Base.literal_pow), ::Ref{typeof(^)}, ::S
 end
 isstructurepreserving(f, args...) = false
 
-fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && iszero(v))
+_iszero(n::Number) = iszero(n)
+_iszero(x) = x == 0
+fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && _iszero(v))
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
 # expression is stable.  We can test the zero-preservability by applying the function
 # in cases where all other arguments are known scalars against a zero from the structured

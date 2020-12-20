@@ -297,6 +297,8 @@ let undefvar
     @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [-2, 1]"
     err_str = @except_str [5, 4, 3][1:5] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [1:5]"
+    err_str = @except_str [5, 4, 3][trues(6,7)] BoundsError
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [6×7 BitMatrix]"
 
     err_str = @except_str Bounded(2)[3] BoundsError
     @test err_str == "BoundsError: attempt to access 2-size Bounded at index [3]"
@@ -632,6 +634,8 @@ catch ex
 end
 pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
 
+# Execute backtrace once before checking formatting, see #38858
+backtrace()
 
 # issue #28442
 @testset "Long stacktrace printing" begin
@@ -749,4 +753,13 @@ end
     @test contains(bt_str, "f(x::Float64; y::Float64)")
     @test contains(bt_str, "@ $m.B.C")
     @test contains(bt_str, "@ $m.B.D")
+end
+# 1d/2d error shouldn't appear in unsupported keywords arg #36325
+let err = nothing
+    try
+        identity([1 1]; bad_kwards = :julia)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !occursin("2d", err_str)
+    end
 end

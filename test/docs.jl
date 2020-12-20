@@ -73,6 +73,11 @@ end
 @test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
+# issue #38819
+
+module NoDocStrings end
+@test meta(NoDocStrings) === getfield(NoDocStrings, Base.Docs.META)
+
 # General tests for docstrings.
 
 const LINE_NUMBER = @__LINE__() + 1

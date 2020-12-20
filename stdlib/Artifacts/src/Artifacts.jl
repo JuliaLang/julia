@@ -11,12 +11,11 @@ export artifact_exists, artifact_path, artifact_meta, artifact_hash,
 """
     parse_toml(path::String)
 
-Uses Base.TOML to parse a TOML file
+Uses Base.TOML to parse a TOML file. Do not mutate the returned dictionary.
 """
 function parse_toml(path::String)
-    p = Base.TOML.Parser()
-    Base.TOML.reinit!(p, read(path, String); filepath=path)
-    return Base.TOML.parse(p)
+    # Uses the caching mechanics for toml files in Base
+    Base.parsed_toml(path)
 end
 
 # keep in sync with Base.project_names and Base.manifest_names

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 /* Bring in definitions for `_OS_X_`, `PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
 #include "../src/support/platform.h"
 #include "../src/support/dirpath.h"
@@ -30,12 +32,13 @@
 #include <stddef.h>
 #include <sys/sysctl.h>
 #endif
+
+#define _GNU_SOURCE // Need this for `dladdr()`
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <libgen.h>
-
 #include <unistd.h>
 #include <dlfcn.h>
 #endif
@@ -49,12 +52,52 @@
 #  define JL_CONST_FUNC
 #endif
 
+// Borrow definition from `support/dtypes.h`
+#ifdef _OS_WINDOWS_
+# ifdef LIBRARY_EXPORTS
+#  define JL_DLLEXPORT __declspec(dllexport)
+# else
+#  define JL_DLLEXPORT __declspec(dllimport)
+# endif
+#define JL_HIDDEN
+#else
+# if defined(LIBRARY_EXPORTS) && defined(_OS_LINUX)
+#  define JL_DLLEXPORT __attribute__ ((visibility("protected")))
+# else
+#  define JL_DLLEXPORT __attribute__ ((visibility("default")))
+# endif
+#define JL_HIDDEN    __attribute__ ((visibility("hidden")))
+#endif
+#ifdef JL_DEBUG_BUILD
+#define JL_NAKED     __attribute__ ((naked,no_stack_protector))
+#else
+#define JL_NAKED     __attribute__ ((naked))
+#endif
+
+/*
+ * DEP_LIBS is our list of dependent libraries that must be loaded before `libjulia`.
+ * Note that order matters, as each entry will be opened in-order.  We define here a
+ * dummy value just so this file compiles on its own, and also so that developers can
+ * see what this value should look like.  Note that the last entry must always be
+ * `libjulia`, and that all paths should be relative to this loader library path.
+ */
+#if !defined(DEP_LIBS)
+#define DEP_LIBS "../lib/example.so:../lib/libjulia.so"
+#endif
+
+// We need to dlopen() ourselves in order to introspect the libdir.
+#if defined(JL_DEBUG_BUILD)
+#define LIBJULIA_NAME "libjulia-debug"
+#else
+#define LIBJULIA_NAME "libjulia"
+#endif
+
 
 // Declarations from `loader_lib.c` and `loader_win_utils.c`
-extern const char * get_exe_dir();
-extern int load_repl(const char *, int, char **);
-void print_stderr(const char * msg);
-void print_stderr3(const char * msg1, const char * msg2, const char * msg3);
+JL_DLLEXPORT extern int jl_load_repl(int, char **);
+JL_DLLEXPORT void jl_loader_print_stderr(const char * msg);
+void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * msg3);
+static void * lookup_symbol(const void * lib_handle, const char * symbol_name);
 
 #ifdef _OS_WINDOWS_
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs);

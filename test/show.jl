@@ -152,6 +152,8 @@ end
 @test_repr ":(:(:(x)))"
 @test_repr "-\"\""
 @test_repr "-(<=)"
+@test_repr "\$x"
+@test_repr "\$(\"x\")"
 
 # order of operations
 @test_repr "x + y * z"
@@ -1669,7 +1671,7 @@ end
     end
 
     # issue #25857
-    @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int, Vararg{$Int, N} where N}[(1,), (1, 2), (1, 2, 3)]"
+    @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int, Vararg{$Int}}[(1,), (1, 2), (1, 2, 3)]"
 
     # issues #25466 & #26256
     @test replstr([:A => [1]]) == "1-element Vector{Pair{Symbol, Vector{$Int}}}:\n :A => [1]"

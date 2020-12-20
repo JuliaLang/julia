@@ -881,6 +881,17 @@ let s = "CompletionFoo.tuple."
     @test isempty(c)
 end
 
+@testset "sub/superscripts" begin
+    @test "⁽¹²³⁾ⁿ" in test_complete("\\^(123)n")[1]
+    @test "ⁿ" in test_complete("\\^n")[1]
+    @test "ᵞ" in test_complete("\\^gamma")[1]
+    @test isempty(test_complete("\\^(123)nq")[1])
+    @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
+    @test "ₙ" in test_complete("\\_n")[1]
+    @test "ᵧ" in test_complete("\\_gamma")[1]
+    @test isempty(test_complete("\\_(123)nq")[1])
+end
+
 # test Dicts
 function test_dict_completion(dict_name)
     s = "$dict_name[\"ab"
