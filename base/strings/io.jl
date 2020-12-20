@@ -326,6 +326,9 @@ escaped by a prepending backslash (`\"` is also escaped by default in the first 
 The argument `keep` specifies a collection of characters which are to be kept as
 they are. Notice that `esc` has precedence here.
 
+!!! compat "Julia 1.7"
+    The `keep` argument is available as of Julia 1.7.
+
 # Examples
 ```jldoctest
 julia> escape_string("aaa\\nbbb")
