@@ -1,4 +1,5 @@
-#define JL_EXPORTED_DATA(XX) \
+// Pointers that are exposed through the public libjulia
+#define JL_EXPORTED_DATA_POINTERS(XX) \
     XX(jl_abstractarray_type) \
     XX(jl_abstractslot_type) \
     XX(jl_abstractstring_type) \
@@ -62,7 +63,6 @@
     XX(jl_methoderror_type) \
     XX(jl_methtable_type) \
     XX(jl_module_type) \
-    XX(jl_n_threads) \
     XX(jl_namedtuple_type) \
     XX(jl_namedtuple_typename) \
     XX(jl_newvarnode_type) \
@@ -117,3 +117,8 @@
     XX(jl_void_type) \
     XX(jl_voidpointer_type) \
     XX(jl_weakref_type)
+
+
+// Data symbols that are defined inside the public libjulia
+#define JL_EXPORTED_DATA_SYMBOLS(XX) \
+    XX(jl_n_threads, int)
