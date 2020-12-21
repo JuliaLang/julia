@@ -378,12 +378,19 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     tokens = AbstractDateToken[]
     prev = ()
     prev_offset = 1
+    used_letters = Set{Char}()
 
     for m in eachmatch(r"(?<!\\)([A-Za-z])\1*", f)
         tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
             letter, width = prev
+
+            if !(letter in used_letters)
+                push!(used_letters, letter)
+            else
+                throw(ArgumentError("Can only use character code '$letter' once"))
+            end
 
             if letter in keys(CONVERSION_SPECIFIERS)
                 push!(tokens, DatePart{letter}(width, isempty(tran)))
@@ -407,6 +414,12 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     if !isempty(prev)
         letter, width = prev
+
+        if !(letter in used_letters)
+            push!(used_letters, letter)
+        else
+            throw(ArgumentError("Can only use character code '$letter' once"))
+        end
 
         if letter in keys(CONVERSION_SPECIFIERS)
             push!(tokens, DatePart{letter}(width, false))
