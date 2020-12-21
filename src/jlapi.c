@@ -79,21 +79,9 @@ JL_DLLEXPORT void jl_init(void)
 {
     char *libbindir = NULL;
 #ifdef _OS_WINDOWS_
-    void *hdl = (void*)jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 0);
-    if (hdl) {
-        char *to_free = (char*)jl_pathname_for_handle(hdl);
-        if (to_free) {
-            libbindir = strdup(dirname(to_free));
-            free(to_free);
-        }
-    }
+    libbindir = strdup(jl_get_libdir());
 #else
-    Dl_info dlinfo;
-    if (dladdr((void*)jl_init, &dlinfo) != 0 && dlinfo.dli_fname) {
-        char *to_free = strdup(dlinfo.dli_fname);
-        (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", dirname(to_free), "bin");
-        free(to_free);
-    }
+    (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
 #endif
     if (!libbindir) {
         printf("jl_init unable to find libjulia!\n");
