@@ -419,23 +419,6 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 
-function ldiv!(D::Diagonal, V::AbstractVecOrMat)
-    require_one_based_indexing(V)
-    if size(V,1) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
-    end
-    for i = 1:length(D.diag)
-        d = D.diag[i]
-        if iszero(d)
-            throw(SingularException(i))
-        end
-        for j = 1:size(V,2)
-            @inbounds V[i,j] = d\V[i,j]
-        end
-    end
-    V
-end
-
 ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
 ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
@@ -603,6 +586,24 @@ end
 
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
+
+function ldiv!(D::Diagonal, B::AbstractVecOrMat)
+    m, n = size(B, 1), size(B, 2)
+    if m != length(D.diag)
+        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
+    end
+    (m == 0 || n == 0) && return B
+    for j = 1:n
+        for i = 1:m
+            di = D.diag[i]
+            if di == 0
+                throw(SingularException(i))
+            end
+            B[i,j] = di \ B[i,j]
+        end
+    end
+    return B
+end
 
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
