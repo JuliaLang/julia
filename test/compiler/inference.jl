@@ -1,4 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
+@test false
 
 # tests for Core.Compiler correctness and precision
 import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot

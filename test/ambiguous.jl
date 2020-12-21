@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+error("FAIL!")
+
 using Base: get_world_counter
 
 # DO NOT ALTER ORDER OR SPACING OF METHODS BELOW
