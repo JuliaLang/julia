@@ -380,9 +380,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     prev_offset = 1
     used_letters = Set{Char}()
 
-    for m in eachmatch(r"(?<!\\)([A-Za-z])\1*", f)
-        tran = replace(SubString(f, prev_offset, prevind(f, m.offset)), r"\\(.)" => s"\1")
-
+    function process_tokens(prev, tran::AbstractString, fixed::Bool)
         if !isempty(prev)
             letter, width = prev
 
@@ -393,7 +391,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
             end
 
             if letter in keys(CONVERSION_SPECIFIERS)
-                push!(tokens, DatePart{letter}(width, isempty(tran)))
+                push!(tokens, DatePart{letter}(width, fixed))
             else
                 throw(UndefDateFormatCode(letter))
             end
@@ -402,6 +400,11 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         if !isempty(tran)
             push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
         end
+    end
+
+    for m in eachmatch(r"(?<!\\)([A-Za-z])\1*", f)
+        tran = replace(SubString(f, prev_offset, prevind(f, m.offset)), r"\\(.)" => s"\1")
+        process_tokens(prev, tran, isempty(tran))
 
         letter = f[m.offset]
         width = length(m.match)
@@ -411,26 +414,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     end
 
     tran = replace(SubString(f, prev_offset, lastindex(f)), r"\\(.)" => s"\1")
-
-    if !isempty(prev)
-        letter, width = prev
-
-        if !(letter in used_letters)
-            push!(used_letters, letter)
-        else
-            throw(ArgumentError("Can only use character code '$letter' once"))
-        end
-
-        if letter in keys(CONVERSION_SPECIFIERS)
-            push!(tokens, DatePart{letter}(width, false))
-        else
-            throw(UndefDateFormatCode(letter))
-        end
-    end
-
-    if !isempty(tran)
-        push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
-    end
+    process_tokens(prev, tran, false)
 
     tokens_tuple = (tokens...,)
     return DateFormat{Symbol(f),typeof(tokens_tuple)}(tokens_tuple, locale)
