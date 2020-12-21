@@ -18,9 +18,9 @@
 .cfi_startproc SEP \
 .p2align    2 SEP \
 CNAME(name)##: SEP \
-    adrp x0, PAGE(CNAME(name##_addr)) SEP \
-    ldr x0, [x0, PAGEOFF(CNAME(name##_addr))] SEP \
-    br x0 SEP \
+    adrp x16, PAGE(CNAME(name##_addr)) SEP \
+    ldr x16, [x16, PAGEOFF(CNAME(name##_addr))] SEP \
+    br x16 SEP \
 .cfi_endproc SEP \
 
 JL_EXPORTED_FUNCS(XX)
