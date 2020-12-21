@@ -357,10 +357,11 @@ string:
 | `p`        | AM        | Matches AM/PM (case-insensitive)                             |
 | `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
 
-Characters not listed above are normally treated as delimiters between date and time slots.
+The characters `A-Z` and `a-z` have been reserved as characters codes for package extensions
+or future use. Non-reserved characters are treated as delimiters between date and time slots.
 For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
-"y-m-dTH:M:S.s". If you need to use a code character as a delimiter you can escape it using
-backslash. The date "1995y01m" would have the format "y\\ym\\m".
+"y-m-dTH:M:S.s". If you need to use a reserved code character as a delimiter you can escape
+it using backslash. The date "1995y01m" would have the format "y\\ym\\m".
 
 Note that 12:00AM corresponds 00:00 (midnight), and 12:00PM corresponds to 12:00 (noon).
 When parsing a time with a `p` specifier, any hour (either `H` or `I`) is interpreted as
@@ -378,15 +379,17 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     prev = ()
     prev_offset = 1
 
-    letters = String(collect(keys(CONVERSION_SPECIFIERS)))
-    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
+    for m in eachmatch(r"(?<!\\)([A-Za-z])\1*", f)
         tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
             letter, width = prev
-            typ = CONVERSION_SPECIFIERS[letter]
 
-            push!(tokens, DatePart{letter}(width, isempty(tran)))
+            if letter in keys(CONVERSION_SPECIFIERS)
+                push!(tokens, DatePart{letter}(width, isempty(tran)))
+            else
+                throw(UndefDateFormatCode(letter))
+            end
         end
 
         if !isempty(tran)
@@ -404,9 +407,12 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     if !isempty(prev)
         letter, width = prev
-        typ = CONVERSION_SPECIFIERS[letter]
 
-        push!(tokens, DatePart{letter}(width, false))
+        if letter in keys(CONVERSION_SPECIFIERS)
+            push!(tokens, DatePart{letter}(width, false))
+        else
+            throw(UndefDateFormatCode(letter))
+        end
     end
 
     if !isempty(tran)
