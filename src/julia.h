@@ -1582,6 +1582,7 @@ typedef enum {
 #define jl_init jl_init__threading
 #define jl_init_with_image jl_init_with_image__threading
 
+JL_DLLEXPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,

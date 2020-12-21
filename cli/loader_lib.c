@@ -78,25 +78,30 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 #endif
 }
 
+// Find the location of libjulia.
 char lib_dir[PATH_MAX];
-const char * get_libdir()
+JL_DLLEXPORT const char * jl_get_libdir()
 {
+    // Reuse the path if this is not the first call.
+    if (lib_dir[0] != 0) {
+        return lib_dir;
+    }
 #if defined(_OS_WINDOWS_)
     // On Windows, we use GetModuleFileNameW
     wchar_t libjulia_path[PATH_MAX];
-    HMODULE libjulia_internal = NULL;
+    HMODULE libjulia = NULL;
 
-    // Get a handle to libjulia internal
+    // Get a handle to libjulia.
     if (!utf8_to_wchar(LIBJULIA_NAME, libjulia_path, PATH_MAX)) {
         jl_loader_print_stderr3("ERROR: Unable to convert path ", LIBJULIA_NAME, " to wide string!\n");
         exit(1);
     }
-    libjulia_internal = LoadLibraryW(libjulia_path);
-    if (libjulia_internal == NULL) {
+    libjulia = LoadLibraryW(libjulia_path);
+    if (libjulia == NULL) {
         jl_loader_print_stderr3("ERROR: Unable to load ", LIBJULIA_NAME, "!\n");
         exit(1);
     }
-    if (!GetModuleFileName(libjulia_internal, libjulia_path, PATH_MAX)) {
+    if (!GetModuleFileNameW(libjulia, libjulia_path, PATH_MAX)) {
         jl_loader_print_stderr("ERROR: GetModuleFileName() failed\n");
         exit(1);
     }
@@ -107,8 +112,8 @@ const char * get_libdir()
 #else
     // On all other platforms, use dladdr()
     Dl_info info;
-    if (!dladdr(&get_libdir, &info)) {
-        jl_loader_print_stderr("ERROR: Unable to dladdr(&get_libdir)!\n");
+    if (!dladdr(&jl_get_libdir, &info)) {
+        jl_loader_print_stderr("ERROR: Unable to dladdr(&jl_get_libdir)!\n");
         jl_loader_print_stderr3("Message:", dlerror(), "\n");
         exit(1);
     }
@@ -126,7 +131,7 @@ const char * get_libdir()
 void * libjulia_internal = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     // Introspect to find our own path
-    const char * lib_dir = get_libdir();
+    const char * lib_dir = jl_get_libdir();
 
     // Pre-load libraries that libjulia-internal needs.
     int deps_len = strlen(dep_libs);
