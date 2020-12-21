@@ -360,7 +360,8 @@ function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
 end
 
 function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothing,PkgId}
-    @assert where.uuid !== nothing
+    uuid = where.uuid
+    @assert uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
         # first check if `where` names the Project itself
@@ -371,7 +372,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             return PkgId(pkg_uuid, name)
         end
         # look for manifest file and `where` stanza
-        return explicit_manifest_deps_get(project_file, where.uuid, name)
+        return explicit_manifest_deps_get(project_file, uuid, name)
     elseif project_file
         # if env names a directory, search it
         return implicit_manifest_deps_get(env, where, name)
