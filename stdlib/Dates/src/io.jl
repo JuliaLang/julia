@@ -381,7 +381,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     used_letters = Set{Char}()
 
     for m in eachmatch(r"(?<!\\)([A-Za-z])\1*", f)
-        tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
+        tran = replace(SubString(f, prev_offset, prevind(f, m.offset)), r"\\(.)" => s"\1")
 
         if !isempty(prev)
             letter, width = prev
@@ -410,7 +410,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         prev_offset = m.offset + width
     end
 
-    tran = replace(f[prev_offset:lastindex(f)], r"\\(.)" => s"\1")
+    tran = replace(SubString(f, prev_offset, lastindex(f)), r"\\(.)" => s"\1")
 
     if !isempty(prev)
         letter, width = prev
