@@ -311,7 +311,8 @@ should return an identity value of the same precision
 If you want a quantity that is of the same type as `x`, or of type `T`,
 even if `x` is dimensionful, use [`oneunit`](@ref) instead.
 
-See also [`identity`](@ref), `LinearAlgebra.I`.
+See also the [`identity`](@ref) function,
+and `I` in [`LinearAlgebra`](@ref man-linalg) for the identity matrix.
 
 # Examples
 ```jldoctest

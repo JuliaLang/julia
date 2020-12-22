@@ -561,7 +561,7 @@ extrema(f, x::Real) = (y = f(x); (y, y))
 
 The identity function. Returns its argument.
 
-See also: [`one`](@ref), [`oneunit`](@ref), `LinearAlgebra.I`.
+See also: [`one`](@ref), [`oneunit`](@ref), and [`LinearAlgebra`](@ref man-linalg)'s `I`.
 
 # Examples
 ```jldoctest
@@ -1287,7 +1287,7 @@ julia> [1, 2] .∈ ([2, 3],)
  1
 ```
 
-See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [issubset](@ref).
+See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 """
 in
 

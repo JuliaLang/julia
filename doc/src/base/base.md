@@ -30,10 +30,7 @@ Base.MainInclude.include
 Base.include_string
 Base.include_dependency
 Base.which(::Any, ::Any)
-Base.@which
 Base.methods
-Base.@less
-Base.@edit
 Base.@show
 ans
 Base.active_project
@@ -246,6 +243,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
+Base.splat
 ```
 
 ## Syntax
