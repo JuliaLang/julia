@@ -369,8 +369,18 @@ the real number line:
 | `-Inf16`  | `-Inf32`  | `-Inf`    | negative infinity | a value less than all finite floating-point values              |
 | `NaN16`   | `NaN32`   | `NaN`     | not a number      | a value not `==` to any floating-point value (including itself) |
 
-```
-julia> NaN==NaN#it is not equal to itself
+
+```jldoctest
+julia> NaN == NaN
+false
+
+julia> NaN != NaN
+true
+
+julia> NaN < NaN
+false
+
+julia> NaN > NaN
 false
 ```
 
