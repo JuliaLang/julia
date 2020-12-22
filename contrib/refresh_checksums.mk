@@ -9,7 +9,7 @@ SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
 
 # Default target that will have everything else added to it as a dependency
-all:
+all: checksum pack-checksum
 
 # Get this list via:
 #    using BinaryBuilder
@@ -25,9 +25,15 @@ BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools
 # These are non-BB source-only deps
 NON_BB_PROJECTS=patchelf mozillacert lapack libwhich utf8proc
 
+ifneq ($(VERBOSE),1)
+QUIET_MAKE := -s
+else
+QUIET_MAKE :=
+endif
+
 # Convert `llvm-tools` to `LLVM_TOOLS`
 define makevar
-$(shell echo $(1) | tr 'a-z' 'A-Z' | tr '-' '_')
+$(shell echo $(1) | tr 'a-z-' 'A-Z_')
 endef
 
 # If $(2) == `src`, this will generate a `USE_BINARYBUILDER_FOO=0` make flag
@@ -41,16 +47,19 @@ endef
 # if $(3) is "assert", we set BINARYBUILDER_LLVM_ASSERTS=1
 define checksum_dep
 checksum-$(1)-$(2)-$(3):
-ifeq ($$(VERBOSE),1)
-	echo "make $(call make_flags,$(1),$(2),$(3)) checksum-$(1)"
-endif
-	@-$(MAKE) -C "$(JULIAHOME)/deps" $(call make_flags,$(1),$(2),$(3)) checksum-$(1)
+	-$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" $(call make_flags,$(1),$(2),$(3)) checksum-$(1)
+.PHONY: checksum-$(1)-$(2)-$(3)
 
-# Add this guy to his project target (e.g. `make -f contrib/refresh_checksums.mk openblas`)
-$(1): checksum-$(1)-$(2)-$(3)
+# Add this guy to his project target
+checksum-$(1): checksum-$(1)-$(2)-$(3)
 
-# Add this guy to the `all` default target
-all: checksum-$(1)-$(2)-$(3)
+# Add a dependency to the pack target
+# TODO: can we make this so it only adds an ordering but not a dependency?
+pack-checksum-$(1): | checksum-$(1)
+
+# Add this guy to the `checksum` and `pack-checksum` default targets (e.g. `make -f contrib/refresh_checksums.mk openblas`)
+checksum: checksum-$1
+$1 pack-checksum: pack-checksum-$1
 endef
 
 # Generate targets for source hashes for all our projects
@@ -70,21 +79,46 @@ $(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,llvm,$(triplet),a
 
 # External stdlibs
 checksum-stdlibs:
-	@-$(MAKE) -C "$(JULIAHOME)/stdlib" checksumall
+	-$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/stdlib" checksumall
 all: checksum-stdlibs
+.PHONY: checksum-stdlibs
 
 # doc unicode data
 checksum-doc-unicodedata:
-	@-$(MAKE) -C "$(JULIAHOME)/doc" checksum-unicodedata
+	-$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/doc" checksum-unicodedata
 all: checksum-doc-unicodedata
+.PHONY: checksum-doc-unicodedata
 
 # Special LLVM source hashes for optional targets
 checksum-llvm-special-src:
-	@-$(MAKE) -C "$(JULIAHOME)/deps" USE_BINARYBUILDER_LLVM=0 DEPS_GIT=0 BUILD_LLDB=1 BUILD_LLVM_CLANG=1 BUILD_CUSTOM_LIBCXX=1 USECLANG=1 checksum-llvm
+	-$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" USE_BINARYBUILDER_LLVM=0 DEPS_GIT=0 BUILD_LLDB=1 BUILD_LLVM_CLANG=1 BUILD_CUSTOM_LIBCXX=1 USECLANG=1 checksum-llvm
 all: checksum-llvm-special-src
+.PHONY: checksum-llvm-special-src
+
+# merge substring project names to avoid races
+pack-checksum-llvm-tools: | pack-checksum-llvm
+pack-checksum-csl: | pack-checksum-compilersupportlibraries
+
+# define how to pack parallel checksums into a single file format
+pack-checksum-%: FORCE
+	@echo making "$(JULIAHOME)/deps/checksums/$*"
+	@cd "$(JULIAHOME)/deps/checksums" && \
+		for each in $$(ls | grep -i '$*'); do \
+			if [ -d $$each ]; then \
+				for type in $$(ls $$each); do \
+					echo $$each/$$type/$$(cat $$each/$$type); \
+					rm $$each/$$type; \
+				done; \
+				rmdir $$each; \
+			fi; \
+		done >> $*
+	@cd "$(JULIAHOME)/deps/checksums" && \
+		sort $* > $*.tmp && \
+		mv $*.tmp $*
 
 # This file is completely phony
-.PHONY: checksum-*
+FORCE:
+.PHONY: FORCE
 
 # Debugging helper
 print-%:
