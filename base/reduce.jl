@@ -808,6 +808,8 @@ Return the maximal element of the collection `itr` and its index or key.
 If there are multiple maximal elements, then the first one will be returned.
 Values are compared with `isless`.
 
+See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
+
 # Examples
 
 ```jldoctest
@@ -865,6 +867,8 @@ Return the minimal element of the collection `itr` and its index or key.
 If there are multiple minimal elements, then the first one will be returned.
 `NaN` is treated as less than all other values except `missing`.
 
+See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
+
 # Examples
 
 ```jldoctest
@@ -915,6 +919,8 @@ The collection must not be empty.
 
 Values are compared with `isless`.
 
+See also: [`argmin`](@ref), [`findmax`](@ref).
+
 # Examples
 ```jldoctest
 julia> argmax([8, 0.1, -9, pi])
@@ -952,7 +958,6 @@ julia> argmin(x -> -x^3 + x^2 - 10, -5:5)
 
 julia> argmin(acos, 0:0.1:1)
 1.0
-
 ```
 """
 argmin(f, domain) = findmin(f, domain)[2]
@@ -966,6 +971,8 @@ If there are multiple minimal elements, then the first one will be returned.
 The collection must not be empty.
 
 `NaN` is treated as less than all other values except `missing`.
+
+See also: [`argmax`](@ref), [`findmin`](@ref).
 
 # Examples
 ```jldoctest
