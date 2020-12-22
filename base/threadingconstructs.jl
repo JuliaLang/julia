@@ -16,7 +16,9 @@ threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 Get the number of threads available to the Julia process. This is the inclusive upper bound
 on [`threadid()`](@ref).
 
-See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the [`LinearAlgebra`](@ref man-linalg) standard library.
+See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
+[`LinearAlgebra`](@ref man-linalg) standard library, and `nprocs()` in the
+[`Distributed`](@ref man-distributed) standard library.
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
@@ -117,7 +119,9 @@ The default schedule (used when no `schedule` argument is present) is subject to
 !!! compat "Julia 1.5"
     The `schedule` argument is available as of Julia 1.5.
 
-See also: [`@spawn`](@ref Threads.@spawn), [`nthreads()`](@ref Threads.nthreads), [`threadid()`](@ref Threads.threadid), [Distributed.pmap](@ref Distributed), `BLAS.set_num_threads` in [`LinearAlgebra`](@ref man-linalg).
+See also: [`@spawn`](@ref Threads.@spawn), [`nthreads()`](@ref Threads.nthreads),
+[`threadid()`](@ref Threads.threadid), `pmap` in [`Distributed`](@ref man-distributed),
+`BLAS.set_num_threads` in [`LinearAlgebra`](@ref man-linalg).
 """
 macro threads(args...)
     na = length(args)
