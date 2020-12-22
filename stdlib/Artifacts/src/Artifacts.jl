@@ -603,7 +603,7 @@ function artifact_slash_lookup(name::String, artifact_dict::Dict,
 
     meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml; platform)
     if meta === nothing
-        error("Cannot locate artifact '$(name)' in '$(artifacts_toml)'")
+        error("Cannot locate artifact '$(name)' for $(triplet(platform)) in '$(artifacts_toml)'")
     end
     hash = SHA1(meta["git-tree-sha1"])
     return artifact_name, artifact_path_tail, hash
