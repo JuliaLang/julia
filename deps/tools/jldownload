@@ -10,9 +10,9 @@ CURL=$(which curl 2>/dev/null)
 FETCH=$(which fetch 2>/dev/null)
 
 TIMEOUT=15 # seconds
-WGET_OPTS="--no-check-certificate --tries=1 --timeout=$TIMEOUT"
-CURL_OPTS="-fkL --connect-timeout $TIMEOUT -y $TIMEOUT"
-FETCH_OPTS="-T $TIMEOUT"
+WGET_OPTS="-nv --no-check-certificate --no-use-server-timestamps --tries=1 --timeout=$TIMEOUT"
+CURL_OPTS="-fkLSs --connect-timeout $TIMEOUT -y $TIMEOUT"
+FETCH_OPTS="--no-mtime -T $TIMEOUT"
 
 if [ $# -eq 1 ]; then
     CURL_OPTS="$CURL_OPTS -O"
