@@ -442,6 +442,7 @@ endif
 	# Download all stdlibs and include the tarball filenames in light-source-dist.tmp
 	@$(MAKE) -C stdlib getall NO_GIT=1
 	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
+	-ls stdlib/*/StdlibArtifacts.toml >> light-source-dist.tmp
 
 	# Exclude git, github and CI config files
 	git ls-files | sed -E -e '/^\..+/d' -e '/\/\..+/d' -e '/appveyor.yml/d' >> light-source-dist.tmp
