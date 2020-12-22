@@ -227,16 +227,13 @@ public:
         if (!SavedObject.first) {
             auto NewBuffer = MemoryBuffer::getMemBufferCopy(
                     Object.getData(), Object.getFileName());
-            auto NewObj = object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
-            assert(NewObj);
-            SavedObject = std::make_pair(std::move(*NewObj), std::move(NewBuffer));
+            auto NewObj = cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
+            SavedObject = std::make_pair(std::move(NewObj), std::move(NewBuffer));
         }
         const object::ObjectFile &debugObj = *SavedObject.first.release();
         SavedObject.second.release();
 
-        object::section_iterator Section = debugObj.section_begin();
         object::section_iterator EndSection = debugObj.section_end();
-
         std::map<StringRef, object::SectionRef, strrefcomp> loadedSections;
         for (const object::SectionRef &lSection: Object.sections()) {
 #if JL_LLVM_VERSION >= 100000
@@ -316,16 +313,14 @@ public:
 #endif
 
 #if defined(_OS_WINDOWS_)
-        uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
+        uint64_t SectionAddrCheck = 0;
+        uint64_t SectionLoadCheck = 0;
+        uint64_t SectionWriteCheck = 0;
         uint8_t *UnwindData = NULL;
 #if defined(_CPU_X86_64_)
-        uint64_t SectionLoadOffset = 1; // The real offset shouldn't be 1.
         uint8_t *catchjmp = NULL;
         for (const object::SymbolRef &sym_iter : debugObj.symbols()) {
-            StringRef sName;
-            auto sNameOrError = sym_iter.getName();
-            assert(sNameOrError);
-            sName = sNameOrError.get();
+            StringRef sName = cantFail(sym_iter.getName());
             uint8_t **pAddr = NULL;
             if (sName.equals("__UnwindData")) {
                 pAddr = &UnwindData;
@@ -334,58 +329,50 @@ public:
                 pAddr = &catchjmp;
             }
             if (pAddr) {
-                uint64_t Addr, SectionAddr, SectionLoadAddr;
-                auto AddrOrError = sym_iter.getAddress();
-                assert(AddrOrError);
-                Addr = AddrOrError.get();
-                auto SectionOrError = sym_iter.getSection();
-                assert(SectionOrError);
-                Section = SectionOrError.get();
+                uint64_t Addr = cantFail(sym_iter.getAddress());
+                auto Section = cantFail(sym_iter.getSection());
                 assert(Section != EndSection && Section->isText());
-                SectionAddr = Section->getAddress();
+                uint64_t SectionAddr = Section->getAddress();
 #if JL_LLVM_VERSION >= 100000
-                auto secName = Section->getName();
-                assert(secName);
-                SectionLoadAddr = getLoadAddress(*secName);
+                sName = cantFail(Section->getName());
 #else
                 Section->getName(sName);
-                SectionLoadAddr = getLoadAddress(sName);
 #endif
-                Addr -= SectionAddr - SectionLoadAddr;
-                *pAddr = (uint8_t*)Addr;
-                if (SectionAddrCheck)
-                    assert(SectionAddrCheck == SectionLoadAddr);
-                else
-                    SectionAddrCheck = SectionLoadAddr;
+                uint64_t SectionLoadAddr = getLoadAddress(sName);
+                assert(SectionLoadAddr);
+                if (SectionAddrCheck) // assert that all of the Sections are at the same location
+                    assert(SectionAddrCheck == SectionAddr &&
+                           SectionLoadCheck == SectionLoadAddr);
+                SectionAddrCheck = SectionAddr;
+                SectionLoadCheck = SectionLoadAddr;
+                SectionWriteCheck = SectionLoadAddr;
                 if (memmgr)
-                    SectionAddr =
-                        (uintptr_t)lookupWriteAddressFor(memmgr,
-                                                         (void*)SectionLoadAddr);
-                if (SectionLoadOffset != 1)
-                    assert(SectionLoadOffset == SectionAddr - SectionLoadAddr);
-                else
-                    SectionLoadOffset = SectionAddr - SectionLoadAddr;
+                    SectionWriteCheck = (uintptr_t)lookupWriteAddressFor(memmgr,
+                            (void*)SectionLoadAddr);
+                Addr += SectionWriteCheck - SectionLoadAddr;
+                *pAddr = (uint8_t*)Addr;
             }
         }
         assert(catchjmp);
         assert(UnwindData);
         assert(SectionAddrCheck);
-        assert(SectionLoadOffset != 1);
-        catchjmp[SectionLoadOffset] = 0x48;
-        catchjmp[SectionLoadOffset + 1] = 0xb8; // mov RAX, QWORD PTR [&__julia_personality]
-        *(uint64_t*)(&catchjmp[SectionLoadOffset + 2]) =
-            (uint64_t)&__julia_personality;
-        catchjmp[SectionLoadOffset + 10] = 0xff;
-        catchjmp[SectionLoadOffset + 11] = 0xe0; // jmp RAX
-        UnwindData[SectionLoadOffset] = 0x09; // version info, UNW_FLAG_EHANDLER
-        UnwindData[SectionLoadOffset + 1] = 4;    // size of prolog (bytes)
-        UnwindData[SectionLoadOffset + 2] = 2;    // count of unwind codes (slots)
-        UnwindData[SectionLoadOffset + 3] = 0x05; // frame register (rbp) = rsp
-        UnwindData[SectionLoadOffset + 4] = 4;    // second instruction
-        UnwindData[SectionLoadOffset + 5] = 0x03; // mov RBP, RSP
-        UnwindData[SectionLoadOffset + 6] = 1;    // first instruction
-        UnwindData[SectionLoadOffset + 7] = 0x50; // push RBP
-        *(DWORD*)&UnwindData[SectionLoadOffset + 8] = (DWORD)(catchjmp - (uint8_t*)SectionAddrCheck); // relative location of catchjmp
+        assert(SectionLoadCheck);
+        assert(!memcmp(catchjmp, "\0\0\0\0\0\0\0\0\0\0\0\0", 12) &&
+               !memcmp(UnwindData, "\0\0\0\0\0\0\0\0\0\0\0\0", 12));
+        catchjmp[0] = 0x48;
+        catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [&__julia_personality]
+        *(uint64_t*)(&catchjmp[2]) = (uint64_t)&__julia_personality;
+        catchjmp[10] = 0xff;
+        catchjmp[11] = 0xe0; // jmp RAX
+        UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
+        UnwindData[1] = 4;    // size of prolog (bytes)
+        UnwindData[2] = 2;    // count of unwind codes (slots)
+        UnwindData[3] = 0x05; // frame register (rbp) = rsp
+        UnwindData[4] = 4;    // second instruction
+        UnwindData[5] = 0x03; // mov RBP, RSP
+        UnwindData[6] = 1;    // first instruction
+        UnwindData[7] = 0x50; // push RBP
+        *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionWriteCheck); // relative location of catchjmp
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
@@ -393,39 +380,30 @@ public:
         bool first = true;
         for (const auto &sym_size : symbols) {
             const object::SymbolRef &sym_iter = sym_size.first;
-            auto SymbolTypeOrError = sym_iter.getType();
-            assert(SymbolTypeOrError);
-            object::SymbolRef::Type SymbolType = SymbolTypeOrError.get();
+            object::SymbolRef::Type SymbolType = cantFail(sym_iter.getType());
             if (SymbolType != object::SymbolRef::ST_Function) continue;
-            auto AddrOrError = sym_iter.getAddress();
-            assert(AddrOrError);
-            uint64_t Addr = AddrOrError.get();
-            auto SectionOrError = sym_iter.getSection();
-            assert(SectionOrError);
-            Section = SectionOrError.get();
+            uint64_t Addr = cantFail(sym_iter.getAddress());
+            auto Section = cantFail(sym_iter.getSection());
             if (Section == EndSection) continue;
             if (!Section->isText()) continue;
             uint64_t SectionAddr = Section->getAddress();
 #if JL_LLVM_VERSION >= 100000
-            Expected<StringRef> secName = Section->getName();
-            assert(secName);
-            uint64_t SectionLoadAddr = getLoadAddress(*secName);
+            StringRef secName = cantFail(Section->getName());
 #else
             StringRef secName;
             Section->getName(secName);
-            uint64_t SectionLoadAddr = getLoadAddress(secName);
 #endif
+            uint64_t SectionLoadAddr = getLoadAddress(secName);
             Addr -= SectionAddr - SectionLoadAddr;
-            auto sNameOrError = sym_iter.getName();
-            assert(sNameOrError);
-            StringRef sName = sNameOrError.get();
+            StringRef sName = cantFail(sym_iter.getName());
             uint64_t SectionSize = Section->getSize();
             size_t Size = sym_size.second;
 #if defined(_OS_WINDOWS_)
             if (SectionAddrCheck)
-                assert(SectionAddrCheck == SectionLoadAddr);
-            else
-                SectionAddrCheck = SectionLoadAddr;
+                assert(SectionAddrCheck == SectionAddr &&
+                       SectionLoadCheck == SectionLoadAddr);
+            SectionAddrCheck = SectionAddr;
+            SectionLoadCheck = SectionLoadAddr;
             create_PRUNTIME_FUNCTION(
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
@@ -460,7 +438,6 @@ public:
 
     std::map<size_t, ObjectInfo, revcomp>& getObjectMap() JL_NOTSAFEPOINT
     {
-        uv_rwlock_rdlock(&threadsafe);
         return objectmap;
     }
 };
@@ -544,7 +521,11 @@ static int lookup_pointer(
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
 
+    // DWARFContext/DWARFUnit update some internal tables during these queries, so
+    // a lock is needed.
+    uv_rwlock_wrlock(&threadsafe);
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+    uv_rwlock_wrunlock(&threadsafe);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
@@ -567,7 +548,9 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
+            uv_rwlock_wrlock(&threadsafe);
             info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+            uv_rwlock_wrunlock(&threadsafe);
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -821,9 +804,8 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
         }
         if (distance != (size_t)-1) {
             if (needs_saddr) {
-                auto addr = sym_found.getAddress();
-                assert(addr);
-                *saddr = (void*)(uintptr_t)(addr.get() - slide);
+                uintptr_t addr = cantFail(sym_found.getAddress());
+                *saddr = (void*)(addr - slide);
                 needs_saddr = false;
             }
             if (needs_name) {
@@ -1215,6 +1197,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
+    uv_rwlock_wrlock(&threadsafe);
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
 
@@ -1230,7 +1213,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         }
         found = 1;
     }
-    uv_rwlock_rdunlock(&threadsafe);
+    uv_rwlock_wrunlock(&threadsafe);
     return found;
 }
 
@@ -1675,6 +1658,7 @@ extern "C"
 uint64_t jl_getUnwindInfo(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
+    uv_rwlock_rdlock(&threadsafe);
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the start of the section (if found)

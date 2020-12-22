@@ -50,7 +50,6 @@ function sin(x::T) where T<:Union{Float32, Float64}
         return -cos_kernel(y)
     end
 end
-sin(x::Real) = sin(float(x))
 
 # Coefficients in 13th order polynomial approximation on [0; π/4]
 #     sin(x) ≈ x + S1*x³ + S2*x⁵ + S3*x⁷ + S4*x⁹ + S5*x¹¹ + S6*x¹³
@@ -121,7 +120,6 @@ function cos(x::T) where T<:Union{Float32, Float64}
         end
     end
 end
-cos(x::Real) = cos(float(x))
 
 const DC1 = 4.16666666666666019037e-02
 const DC2 = -1.38888888888741095749e-03
@@ -168,7 +166,8 @@ end
 """
     sincos(x)
 
-Simultaneously compute the sine and cosine of `x`, where the `x` is in radians.
+Simultaneously compute the sine and cosine of `x`, where `x` is in radians, returning
+a tuple `(sine, cosine)`.
 """
 function sincos(x::T) where T<:Union{Float32, Float64}
     if abs(x) < T(pi)/4
@@ -230,7 +229,6 @@ function tan(x::T) where T<:Union{Float32, Float64}
         return tan_kernel(y,-1)
     end
 end
-tan(x::Real) = tan(float(x))
 
 @inline tan_kernel(y::Float64) = tan_kernel(DoubleFloat64(y, 0.0), 1)
 @inline function tan_kernel(y::DoubleFloat64, k)
@@ -449,7 +447,6 @@ function asin(x::T) where T<:Union{Float32, Float64}
     t = (T(1.0) - absx)/2
     return asin_kernel(t, x)
 end
-asin(x::Real) = asin(float(x))
 
 # atan methods
 ATAN_1_O_2_HI(::Type{Float64}) = 4.63647609000806093515e-01 # atan(0.5).hi
@@ -499,7 +496,6 @@ atan_q(w::Float32) = w*@horner(w, -1.9999158382f-01, -1.0648017377f-01)
     atan_p(x², x⁴), atan_q(x⁴)
 end
 
-atan(x::Real) = atan(float(x))
 function atan(x::T) where T<:Union{Float32, Float64}
     # Method
     #   1. Reduce x to positive by atan(x) = -atan(-x).
@@ -723,7 +719,6 @@ function acos(x::T) where T <: Union{Float32, Float64}
         return T(2.0)*(df + (zRz*s + c))
     end
 end
-acos(x::Real) = acos(float(x))
 
 # multiply in extended precision
 function mulpi_ext(x::Float64)
@@ -863,7 +858,8 @@ end
 """
     sincospi(x)
 
-Simultaneously compute `sinpi(x)` and `cospi(x)`, where the `x` is in radians.
+Simultaneously compute [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) (the sine and cosine of `π*x`,
+where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.

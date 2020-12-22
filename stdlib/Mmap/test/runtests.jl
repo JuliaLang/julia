@@ -93,10 +93,15 @@ m = Mmap.mmap(s, Vector{UInt8}, 1, sz+1)
 @test m[1] == 0x00
 close(s); finalize(m); m=nothing; GC.gc()
 
-s = open(file, "r")
-m = Mmap.mmap(s)
-@test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
-finalize(m); m=nothing; GC.gc()
+# See https://github.com/JuliaLang/julia/issues/32155
+# On PPC we receive `SEGV_MAPERR` instead of `SEGV_ACCERR` and
+# can thus not turn the segmentation fault into an exception.
+if !(Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le)
+    s = open(file, "r")
+    m = Mmap.mmap(s)
+    @test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
+    finalize(m); m=nothing; GC.gc()
+end
 
 write(file, "Hello World\n")
 

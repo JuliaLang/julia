@@ -391,12 +391,18 @@ end
             T != Rational{Int} && @test sind(convert(T,-0.0))::fT === -zero(fT)
             @test sind(convert(T,-180.0))::fT === -zero(fT)
             @test sind(convert(T,-360.0))::fT === -zero(fT)
+            if T <: AbstractFloat
+                @test isnan(sind(T(NaN)))
+            end
         end
         @testset "cosd" begin
             @test cosd(convert(T,90))::fT === zero(fT)
             @test cosd(convert(T,270))::fT === zero(fT)
             @test cosd(convert(T,-90))::fT === zero(fT)
             @test cosd(convert(T,-270))::fT === zero(fT)
+            if T <: AbstractFloat
+                @test isnan(cosd(T(NaN)))
+            end
         end
         @testset "sincosd" begin
             @test sincosd(convert(T,-360))::fTsc === ( -zero(fT),  one(fT) )
@@ -407,6 +413,10 @@ end
             @test sincosd(convert(T,  90))::fTsc === (   one(fT), zero(fT) )
             @test sincosd(convert(T, 180))::fTsc === (  zero(fT), -one(fT) )
             @test sincosd(convert(T, 270))::fTsc === (  -one(fT), zero(fT) )
+            if T <: AbstractFloat
+                @test_throws DomainError sincosd(T(Inf))
+                @test all(isnan.(sincosd(T(NaN))))
+            end
         end
 
         @testset "$name" for (name, (sinpi, cospi)) in (
@@ -992,9 +1002,11 @@ end
         @test isnan_type(T, tanh(T(NaN)))
         for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), T(1.0), H_MEDIUM_X(T)]))
             @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
-            @test tanh(-x) ≈ tanh(big(-x)) rtol=eps(T)
+            @test tanh(-x) ≈ -tanh(big(x)) rtol=eps(T)
         end
     end
+    @test tanh(18.0) ≈ tanh(big(18.0)) rtol=eps(Float64)
+    @test tanh(8.0) ≈ tanh(big(8.0)) rtol=eps(Float32)
 end
 
 @testset "asinh" begin
@@ -1181,8 +1193,23 @@ end
             @test hypot(x, x*f) ≈ x * hypot(one(f), f) rtol=eps(T)
             @test hypot(x, x*f, x*f) ≈ x * hypot(one(f), f, f) rtol=eps(T)
         end
+        let x = floatmax(T)/2
+            @test (@inferred hypot(x, x/4)) ≈ x * sqrt(17/BigFloat(16))
+            @test (@inferred hypot(x, x/4, x/4)) ≈ x * sqrt(9/BigFloat(8))
+        end
     end
     # hypot on Complex returns Real
     @test (@inferred hypot(3, 4im)) === 5.0
     @test (@inferred hypot(3, 4im, 12)) === 13.0
+end
+
+struct BadFloatWrapper <: AbstractFloat
+    x::Float64
+end
+
+@testset "not impelemented errors" begin
+    x = BadFloatWrapper(1.9)
+    for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, log1p, expm1, log) #exp2, exp10 broken for now
+        @test_throws MethodError f(x)
+    end
 end

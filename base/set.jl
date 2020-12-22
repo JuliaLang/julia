@@ -308,10 +308,12 @@ function _groupedunique!(A::AbstractVector)
     idxs = eachindex(A)
     y = first(A)
     # We always keep the first element
-    it = iterate(idxs, iterate(idxs)[2])
+    T = NTuple{2,Any} # just to eliminate `iterate(idxs)::Nothing` candidate
+    it = iterate(idxs, (iterate(idxs)::T)[2])
     count = 1
     for x in Iterators.drop(A, 1)
         if !isequal(x, y)
+            it = it::T
             y = A[it[1]] = x
             count += 1
             it = iterate(idxs, it[2])
@@ -728,3 +730,30 @@ function _replace!(new::Callable, t::Set{T}, ::AbstractSet, count::Int) where {T
     end
     t
 end
+
+### replace for tuples
+
+function _replace(f::Callable, t::Tuple, count::Int)
+    if count == 0 || isempty(t)
+        t
+    else
+        x = f(t[1])
+        (x, _replace(f, tail(t), count - !==(x, t[1]))...)
+    end
+end
+
+replace(f::Callable, t::Tuple; count::Integer=typemax(Int)) =
+    _replace(f, t, check_count(count))
+
+function _replace(t::Tuple, count::Int, old_new::Tuple{Vararg{Pair}})
+    _replace(t, count) do x
+        @_inline_meta
+        for o_n in old_new
+            isequal(first(o_n), x) && return last(o_n)
+        end
+        return x
+    end
+end
+
+replace(t::Tuple, old_new::Pair...; count::Integer=typemax(Int)) =
+    _replace(t, check_count(count), old_new)

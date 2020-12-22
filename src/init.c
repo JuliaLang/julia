@@ -28,6 +28,7 @@
 #undef DEFINE_BUILTIN_GLOBALS
 #include "threading.h"
 #include "julia_assert.h"
+#include "processor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -618,6 +619,13 @@ static void jl_set_io_wait(int v)
 
 extern jl_mutex_t jl_modules_mutex;
 
+static void restore_fp_env(void)
+{
+    if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
+        jl_error("Failed to configure floating point environment");
+    }
+}
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
@@ -634,6 +642,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
                                     // best to call this first, since it also initializes libuv
     jl_init_uv();
     init_stdio();
+    restore_fp_env();
     restore_signals();
 
     jl_page_size = jl_getpagesize();
@@ -736,9 +745,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_init_tasks();
     jl_init_root_task(stack_lo, stack_hi);
-#ifdef ENABLE_TIMINGS
-    jl_root_task->timing_stack = jl_root_timing;
-#endif
     jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();

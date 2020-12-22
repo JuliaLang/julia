@@ -17,8 +17,8 @@ variables.
 When compiled the first time, the build will automatically download
 pre-built [external
 dependencies](#required-build-tools-and-external-libraries). If you
-prefer to build all the dependencies on your own, add the following in
-`Make.user`
+prefer to build all the dependencies on your own, or are building on a system that cannot
+access the network during the build process, add the following in `Make.user`:
 
 ```
 USE_BINARYBUILDER=0
@@ -160,7 +160,7 @@ Building Julia requires that the following software be installed:
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
-sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config
+sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config curl
 ```
 
 Julia uses the following external libraries, which are automatically
@@ -252,6 +252,8 @@ As a high-performance numerical language, Julia should be linked to a multi-thre
 
 ### Intel MKL
 
+**Note:** If you are building Julia for the sole purpose of incorporating Intel MKL, it may be beneficial to first try [MKL.jl](https://github.com/JuliaComputing/MKL.jl). This package will automatically download MKL and rebuild Julia's system image against it, sidestepping the need to set up a working build environment just to add MKL functionality. MKL.jl replaces OpenBLAS with MKL for dense linear algebra functions called directly from Julia, but SuiteSparse and other C/Fortran libraries will continue to use the BLAS they were linked against at build time. If you want SuiteSparse to use MKL, you will need to build from source.
+
 For a 64-bit architecture, the environment should be set up as follows:
 ```sh
 # bash
@@ -262,8 +264,6 @@ Add the following to the `Make.user` file:
     USE_INTEL_MKL = 1
 
 It is highly recommended to start with a fresh clone of the Julia repository.
-
-If you are building Julia for the sole purpose of incorporating Intel MKL, it may be beneficial to first try [MKL.jl](https://github.com/JuliaComputing/MKL.jl). This package will automatically download MKL and rebuild Julia's system image against it, sidestepping the need to set up a working build environment just to add MKL functionality.
 
 ## Source distributions of releases
 
@@ -276,3 +276,11 @@ distribution does not include the source code of dependencies.
 
 For example, `julia-1.0.0.tar.gz` is the light source distribution for the `v1.0.0` release
 of Julia, while `julia-1.0.0-full.tar.gz` is the full source distribution.
+
+## Building Julia from source with a Git checkout of a stdlib
+
+If you need to build Julia from source with a Git checkout of a stdlib, then use `make DEPS_GIT=NAME_OF_STDLIB` when building Julia.
+
+For example, if you need to build Julia from source with a Git checkout of Pkg, then use `make DEPS_GIT=Pkg` when building Julia. The `Pkg` repo is in `stdlib/Pkg`, and created initially with a detached `HEAD`. If you're doing this from a pre-existing Julia repository, you may need to `make clean` beforehand.
+
+If you need to build Julia from source with Git checkouts of more than one stdlib, then `DEPS_GIT` should be a space-separated list of the stdlib names. For example, if you need to build Julia from source with a Git checkout of Pkg, Tar, and Downloads, then use `make DEPS_GIT='Pkg Tar Downloads'` when building Julia.

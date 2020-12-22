@@ -116,9 +116,9 @@ _range(a::T, step::T, ::Nothing, len::Integer) where {T <: AbstractFloat} =
 _range(a::T, step, ::Nothing, len::Integer) where {T} =
     _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
 _rangestyle(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
-    StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
+    StepRange{typeof(a+zero(step)),S}(a, step, a+step*(len-1))
 _rangestyle(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
-    StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
+    StepRangeLen{typeof(a+zero(step)),T,S}(a, step, len)
 
 # Malformed calls
 _range(start,     step,      ::Nothing, ::Nothing) = # range(a, step=s)
@@ -213,6 +213,9 @@ end
 function steprange_last(start::T, step, stop) where T
     if isa(start,AbstractFloat) || isa(step,AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
+    end
+    if isa(start,Integer) && !isinteger(start + step)
+        throw(ArgumentError("StepRange{<:Integer} cannot have non-integer step"))
     end
     z = zero(step)
     step == z && throw(ArgumentError("step cannot be zero"))
@@ -351,6 +354,9 @@ struct StepRangeLen{T,R,S} <: AbstractRange{T}
     offset::Int  # the index of ref
 
     function StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S}
+        if T <: Integer && !isinteger(ref + step)
+            throw(ArgumentError("StepRangeLen{<:Integer} cannot have non-integer step"))
+        end
         len >= 0 || throw(ArgumentError("length cannot be negative, got $len"))
         1 <= offset <= max(1,len) || throw(ArgumentError("StepRangeLen: offset must be in [1,$len], got $offset"))
         new(ref, step, len, offset)
@@ -410,7 +416,11 @@ struct LinRange{T} <: AbstractRange{T}
             start == stop || throw(ArgumentError("range($start, stop=$stop, length=$len): endpoints differ"))
             return new(start, stop, 1, 1)
         end
-        new(start,stop,len,max(len-1,1))
+        lendiv = max(len-1, 1)
+        if T <: Integer && !iszero(mod(stop-start, lendiv))
+            throw(ArgumentError("LinRange{<:Integer} cannot have non-integer step"))
+        end
+        new(start,stop,len,lendiv)
     end
 end
 

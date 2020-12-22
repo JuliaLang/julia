@@ -1,0 +1,10 @@
+name = "PCRE2_jll"
+uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
+version = "10.35.0+0"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[compat]
+julia = "1.6"

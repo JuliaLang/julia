@@ -152,6 +152,8 @@ end
 @test_repr ":(:(:(x)))"
 @test_repr "-\"\""
 @test_repr "-(<=)"
+@test_repr "\$x"
+@test_repr "\$(\"x\")"
 
 # order of operations
 @test_repr "x + y * z"
@@ -505,6 +507,10 @@ end
 @test sprint(show, :(using A.@foo)) == ":(using A.@foo)"
 # Hidden macro names
 @test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
+
+# PR #38418
+module M1 var"#foo#"() = 2 end
+@test occursin("M1.var\"#foo#\"", sprint(show, M1.var"#foo#", context = :module=>@__MODULE__))
 
 # issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
@@ -1665,7 +1671,7 @@ end
     end
 
     # issue #25857
-    @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int, Vararg{$Int, N} where N}[(1,), (1, 2), (1, 2, 3)]"
+    @test repr([(1,),(1,2),(1,2,3)]) == "Tuple{$Int, Vararg{$Int}}[(1,), (1, 2), (1, 2, 3)]"
 
     # issues #25466 & #26256
     @test replstr([:A => [1]]) == "1-element Vector{Pair{Symbol, Vector{$Int}}}:\n :A => [1]"

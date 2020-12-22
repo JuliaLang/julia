@@ -920,7 +920,8 @@ function setup_interface(
             Expr(:call, :(Base.repl_cmd),
                 :(Base.cmd_gen($(Base.shell_parse(line::String)[1]))),
                 outstream(repl))
-        end)
+        end,
+        sticky = true)
 
 
     ################################# Stage II #############################

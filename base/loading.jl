@@ -360,7 +360,8 @@ function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
 end
 
 function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothing,PkgId}
-    @assert where.uuid !== nothing
+    uuid = where.uuid
+    @assert uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
         # first check if `where` names the Project itself
@@ -371,7 +372,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             return PkgId(pkg_uuid, name)
         end
         # look for manifest file and `where` stanza
-        return explicit_manifest_deps_get(project_file, where.uuid, name)
+        return explicit_manifest_deps_get(project_file, uuid, name)
     elseif project_file
         # if env names a directory, search it
         return implicit_manifest_deps_get(env, where, name)
@@ -627,7 +628,7 @@ function find_all_in_cache_path(pkg::PkgId)
     entrypath, entryfile = cache_file_entry(pkg)
     for path in joinpath.(DEPOT_PATH, entrypath)
         isdir(path) || continue
-        for file in readdir(path)
+        for file in readdir(path, sort = false) # no sort given we sort later
             if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
                  (pkg.uuid !== nothing && startswith(file, entryfile * "_")))
                  continue
@@ -636,7 +637,14 @@ function find_all_in_cache_path(pkg::PkgId)
             isfile_casesensitive(filepath) && push!(paths, filepath)
         end
     end
-    return paths
+    if length(paths) > 1
+        # allocating the sort vector is less expensive than using sort!(.. by=mtime), which would
+        # call the relatively slow mtime multiple times per path
+        p = sortperm(mtime.(paths), rev = true)
+        return paths[p]
+    else
+        return paths
+    end
 end
 
 # these return either the array of modules loaded from the path / content given

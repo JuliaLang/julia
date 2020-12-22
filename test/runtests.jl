@@ -15,10 +15,12 @@ tests = unique(tests)
 
 if use_revise
     using Revise
+    union!(Revise.stdlib_names, Symbol.(STDLIBS))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
         using Revise
         const STDLIBS = $STDLIBS
+        union!(Revise.stdlib_names, Symbol.(STDLIBS))
         revise_trackall()
     end
 end
@@ -63,6 +65,7 @@ end
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
+move_to_node1("Distributed")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 

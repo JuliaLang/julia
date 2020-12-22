@@ -205,29 +205,13 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
     }
 }
 
-#  if JL_USE_IFUNC
-static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
-    if (jl_tls_states_cb != jl_get_ptls_states_init)
-        return jl_tls_states_cb;
-    // If we can't find the static version, return the wrapper instead
-    // of the slow version so that we won't resolve to the slow version
-    // due to issues in the relocation order.
-    // This may not be necessary once `ifunc` support in glibc is more mature.
-    if (!jl_get_ptls_states_static)
-        return jl_get_ptls_states_wrapper;
-    jl_tls_states_cb = jl_get_ptls_states_static;
-    return jl_tls_states_cb;
+#ifndef __clang_analyzer__
+    return (*jl_tls_states_cb)();
+#endif
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
-    __attribute__((ifunc ("jl_get_ptls_states_resolve")));
-#  else // JL_TLS_USE_IFUNC
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
-{
-    return jl_get_ptls_states_wrapper();
-}
-#  endif // JL_TLS_USE_IFUNC
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 {
     if (jl_tls_states_cb == jl_get_ptls_states_init)
@@ -408,12 +392,18 @@ void jl_init_threading(void)
 
     // how many threads available, usable
     jl_n_threads = JULIA_NUM_THREADS;
-    if (jl_options.nthreads < 0) // --threads=auto
+    if (jl_options.nthreads < 0) { // --threads=auto
         jl_n_threads = jl_cpu_threads();
-    else if (jl_options.nthreads > 0) // --threads=N
+    }
+    else if (jl_options.nthreads > 0) { // --threads=N
         jl_n_threads = jl_options.nthreads;
-    else if ((cp = getenv(NUM_THREADS_NAME)))
-        jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
+    }
+    else if ((cp = getenv(NUM_THREADS_NAME))) {
+        if (strcmp(cp, "auto"))
+            jl_n_threads = (uint64_t)strtol(cp, NULL, 10); // ENV[NUM_THREADS_NAME] == "N"
+        else
+            jl_n_threads = jl_cpu_threads(); // ENV[NUM_THREADS_NAME] == "auto"
+    }
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
 #ifndef __clang_analyzer__

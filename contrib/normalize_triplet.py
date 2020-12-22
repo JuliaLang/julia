@@ -93,9 +93,9 @@ def p(x):
     # These contain characters that can't be easily represented as
     # capture group names, unfortunately:
     os_remapping = {
-        'darwin': 'apple-darwin14',
+        'darwin': 'apple-darwin',
         'windows': 'w64-mingw32',
-        'freebsd': 'unknown-freebsd11.1',
+        'freebsd': 'unknown-freebsd',
     }
     x = r(x)
     if x:

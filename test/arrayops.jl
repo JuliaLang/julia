@@ -477,6 +477,7 @@ end
     @test a == [2, 3, 4]
     @test popat!(a, 2) == 3
     @test a == [2, 4]
+    @test popat!(a, 1, "default") == 2
     badpop() = @inbounds popat!([1], 2)
     @test_throws BoundsError badpop()
 end
@@ -553,6 +554,7 @@ end
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
     @test findfirst(Dict(1=>false, 2=>true)) == 2
+    @test findfirst(Dict(1=>false)) == nothing
     @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
@@ -1295,6 +1297,9 @@ end
     @test cmp([1, 2], [1, 1]) == 1
     @test cmp([1], [1, 1]) == -1
     @test cmp([1, 1], [1]) == 1
+    @test cmp([UInt8(1), UInt8(0)], [UInt8(0), UInt8(0)]) == 1
+    @test cmp([UInt8(1), UInt8(0)], [UInt8(1), UInt8(0)]) == 0
+    @test cmp([UInt8(0), UInt8(0)], [UInt8(1), UInt8(1)]) == -1
 end
 
 @testset "sort on arrays" begin
@@ -1532,6 +1537,7 @@ end
     @test reverse!([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
     @test reverse!([1:10;], 11) == [1:10;]
     @test_throws BoundsError reverse!([1:10;], 1, 11)
+    @test_throws BoundsError reverse!([1:10;], 0, 10)
     @test reverse!(Any[]) == Any[]
 end
 
@@ -2842,7 +2848,7 @@ end
     b = IOBuffer()
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, Bool[1, 1]]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 2-element BitVector]"
 
     # Also test : directly for custom types for which it may appear as-is
     err = BoundsError(x, (10, :))
@@ -2859,4 +2865,16 @@ end
     showerror(b, err)
     @test String(take!(b)) ==
         "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
+end
+
+@testset "inference of Union{T,Nothing} arrays 26771" begin
+    f(a) = (v = [1, nothing]; [v[x] for x in a])
+    @test only(Base.return_types(f, (Int,))) === Union{Array{Int,0}, Array{Nothing,0}}
+    @test only(Base.return_types(f, (UnitRange{Int},))) <: Vector
+end
+
+@testset "hcat error checking" begin
+    a = [2 for i in 1:4]
+    b = [2 for i in 1:5]
+    @test_throws DimensionMismatch hcat(a, b)
 end

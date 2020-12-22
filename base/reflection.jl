@@ -143,15 +143,19 @@ julia> fieldname(Rational, 2)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    if t.abstract
-        throw(ArgumentError("type does not have definite field names"))
+    throw_not_def_field() = throw(ArgumentError("type does not have definite field names"))
+    function throw_field_access(t, i, n_fields)
+        field_label = n_fields == 1 ? "field" : "fields"
+        throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
     end
+    throw_need_pos_int(i) = throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
+
+    t.abstract && throw_not_def_field()
     names = _fieldnames(t)
     n_fields = length(names)::Int
-    field_label = n_fields == 1 ? "field" : "fields"
-    i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
-    i < 1 && throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
-    return names[i]::Symbol
+    i > n_fields && throw_field_access(t, i, n_fields)
+    i < 1 && throw_need_pos_int(i)
+    return @inbounds names[i]::Symbol
 end
 
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
@@ -363,7 +367,6 @@ function datatype_nfields(dt::DataType)
     return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
 end
 
-
 """
     Base.datatype_pointerfree(dt::DataType) -> Bool
 
@@ -391,6 +394,49 @@ function datatype_fielddesc_type(dt::DataType)
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return (flags >> 1) & 3
+end
+
+# For type stability, we only expose a single struct that describes everything
+struct FieldDesc
+    isforeign::Bool
+    isptr::Bool
+    size::UInt32
+    offset::UInt32
+end
+
+struct FieldDescStorage{T}
+    ptrsize::T
+    offset::T
+end
+FieldDesc(fd::FieldDescStorage{T}) where {T} =
+    FieldDesc(false, fd.ptrsize & 1 != 0,
+              fd.ptrsize >> 1, fd.offset)
+
+struct DataTypeFieldDesc
+    dt::DataType
+    function DataTypeFieldDesc(dt::DataType)
+        dt.layout == C_NULL && throw(UndefRefError())
+        new(dt)
+    end
+end
+
+function getindex(dtfd::DataTypeFieldDesc, i::Int)
+    layout_ptr = convert(Ptr{DataTypeLayout}, dtfd.dt.layout)
+    fd_ptr = layout_ptr + sizeof(DataTypeLayout)
+    layout = unsafe_load(layout_ptr)
+    fielddesc_type = (layout.flags >> 1) & 3
+    nfields = layout.nfields
+    @boundscheck ((1 <= i <= nfields) || throw(BoundsError(dtfd, i)))
+    if fielddesc_type == 0
+        return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt8}}(fd_ptr), i))
+    elseif fielddesc_type == 1
+        return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt16}}(fd_ptr), i))
+    elseif fielddesc_type == 2
+        return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt32}}(fd_ptr), i))
+    else
+        # fielddesc_type == 3
+        return FieldDesc(true, true, 0, 0)
+    end
 end
 
 """
@@ -733,6 +779,9 @@ function to_tuple_type(@nospecialize(t))
     end
     if isa(t, Type) && t <: Tuple
         for p in unwrap_unionall(t).parameters
+            if isa(p, Core.TypeofVararg)
+                p = p.T
+            end
             if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
