@@ -37,12 +37,15 @@ const Inf = Inf64
 
 Positive infinity of type [`Float64`](@ref).
 
-See also: [`isfinite`](@ref), [`NaN`](@ref), [`Inf32`](@ref).
+See also: [`isfinite`](@ref), [`typemax`](@ref), [`NaN`](@ref), [`Inf32`](@ref).
 
 # Examples
 ```jldoctest
 julia> π/0
 Inf
+
+julia> +1.0 / -0.0
+-Inf
 
 julia> ℯ^-Inf
 0.0
@@ -65,6 +68,9 @@ NaN
 
 julia> Inf - Inf
 NaN
+
+julia> NaN == NaN, isequal(NaN, NaN), NaN === NaN
+(false, true, true)
 ```
 """
 NaN, NaN64
