@@ -1044,13 +1044,18 @@ macro test_macro_throw_1()
     throw(ErrorException("Real error"))
 end
 macro test_macro_throw_2()
-    LoadError("file", 111, throw(ErrorException("Real error")))
+    throw(LoadError("file", 111, ErrorException("Real error")))
 end
 
-@testset "Soft deprecation of @test_throws LoadError @macroexpand" begin
-    # Undecorated LoadError can stand in for the wrapped error (ie, any Exception)
-    @test_throws LoadError @macroexpand @test_macro_throw_1
-    # Expected LoadError instances are unwrapped as necessary
+@testset "Soft deprecation of @test_throws LoadError [@]macroexpand[1]" begin
+    # If a macroexpand was detected, undecorated LoadErrors can stand in for any error.
+    # This will throw a deprecation warning.
+    @test_deprecated (@test_throws LoadError macroexpand(@__MODULE__, :(@test_macro_throw_1))) Test.Pass
+    @test_deprecated (@test_throws LoadError @macroexpand @test_macro_throw_1) Test.Pass
+    # Decorated LoadErrors are unwrapped if the actual exception matches the inner, but not the outer, exception, regardless of whether or not a macroexpand is detected.
+    # This will not throw a deprecation warning.
+    @test_throws LoadError("file", 111, ErrorException("Real error")) macroexpand(@__MODULE__, :(@test_macro_throw_1))
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_1
+    # Decorated LoadErrors are not unwrapped if a LoadError was thrown.
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
 end
