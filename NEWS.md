@@ -3,6 +3,8 @@ Julia v1.7 Release Notes
 
 New language features
 ---------------------
+* An underscore `_` as a function argument, e.g. `f(_, y)`, is now shorthand
+  for the "curried" anonymous function `x -> f(x, y)` ([#24990]).
 
 Language changes
 ----------------
