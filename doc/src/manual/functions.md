@@ -294,11 +294,11 @@ field access `_.a` (equivalent to `x -> x.a`).   (This is called [partial applic
 is sometimes informally referred to by the related term "[currying](https://en.wikipedia.org/wiki/Currying)".)
 For example, the following code averages the second element of each array in a collection, by
 passing the anonymous function `_[2]` (equivalent to `x -> x[2]`) as the first argument
-to [`mean`](@ref):
+to [`sum`](@ref):
 
 ```jldoctest
-julia> mean(_[2], [ [1,3,4], [1,2,5], [3,1,2], [4,4,4] ])
-2.5
+julia> sum(_[2], [ [1,3,4], [1,2,5], [3,1,2], [4,4,4] ])
+10
 ```
 
 More generally, if `_` is passed multiple times to the *same* function call,
