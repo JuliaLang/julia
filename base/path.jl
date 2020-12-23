@@ -495,6 +495,9 @@ contractuser(path::AbstractString)
 Return a relative filepath to `path` either from the current directory or from an optional
 start directory. This is a path computation: the filesystem is not accessed to confirm the
 existence or nature of `path` or `startpath`.
+
+On Windows, case sensitivity is applied to every part of the path except drive letters. If
+`path` and `startpath` refer to different drives, the absolute path of `path` is returned.
 """
 function relpath(path::String, startpath::String = ".")
     isempty(path) && throw(ArgumentError("`path` must be specified"))
@@ -502,8 +505,13 @@ function relpath(path::String, startpath::String = ".")
     curdir = "."
     pardir = ".."
     path == startpath && return curdir
-    path_arr  = split(abspath(path),      path_separator_re)
-    start_arr = split(abspath(startpath), path_separator_re)
+    path_drive, path_without_drive = splitdrive(path)
+    startpath_drive, startpath_without_drive = splitdrive(startpath)
+    path_arr  = split(abspath(path_without_drive),      path_separator_re)
+    start_arr = split(abspath(startpath_without_drive), path_separator_re)
+    if Sys.iswindows()
+        lowercase(path_drive) != lowercase(startpath_drive) && return abspath(path)
+    end
     i = 0
     while i < min(length(path_arr), length(start_arr))
         i += 1
