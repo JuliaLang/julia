@@ -11,6 +11,7 @@ include("choosetests.jl")
 include("testenv.jl")
 
 tests, net_on, exit_on_error, use_revise, seed = choosetests(ARGS)
+tests = ["threads"]
 tests = unique(tests)
 
 if use_revise
