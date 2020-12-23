@@ -390,7 +390,19 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
 """
-abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+function abspath(a::String)::String
+    if !Sys.iswindows()
+        return normpath(isabspath(a) ? a : joinpath(pwd(),a))
+    else
+        pwd_drive, _ = splitdrive(pwd())
+        a_drive, a_nodrive = splitdrive(a)
+        if a_drive != "" && lowercase(pwd_drive) != lowercase(a_drive) && !isabspath(a)
+            return a_drive * normpath(joinpath(path_separator, a_nodrive))
+        else
+            return normpath(isabspath(a) ? a : joinpath(pwd(),a))
+        end
+    end
+end
 
 """
     abspath(path::AbstractString, paths::AbstractString...) -> String
