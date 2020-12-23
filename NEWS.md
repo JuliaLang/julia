@@ -39,6 +39,7 @@ Standard library changes
 ------------------------
 
 * `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
+* `iseven` and `isodd` functions now support non-`Integer` numeric types.
 
 #### Package Manager
 

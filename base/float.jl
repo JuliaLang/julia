@@ -763,6 +763,8 @@ function issubnormal(x::T) where {T<:IEEEFloat}
 end
 
 ispow2(x::AbstractFloat) = !iszero(x) && frexp(x)[1] == 0.5
+iseven(x::AbstractFloat) = isinteger(x) && (abs(x) > maxintfloat(x) || iseven(Integer(x)))
+isodd(x::AbstractFloat) = isinteger(x) && abs(x) ≤ maxintfloat(x) && isodd(Integer(x))
 
 @eval begin
     typemin(::Type{Float16}) = $(bitcast(Float16, 0xfc00))
