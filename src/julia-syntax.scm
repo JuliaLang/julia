@@ -1828,23 +1828,16 @@
 
 ; Convert f(_,y) into x -> f(x,y) etcetera.  That is, an _ in e is changed into the
 ; argument of an anonymous function.  Multiple underscores are turned into
-; multiple anonymous-function args.  2 arg-functions are turned into Fix1 or Fix2 calls.
+; multiple anonymous-function args.
 (define (curry-underscore e)
   (expand-forms
-   (let ((oldargs (cddr e)))
-     (if (and (length= oldargs 2) (not (any kwarg? oldargs))) ; 2-arg case lowers to Fix1 or Fix2
-         (if (eq? '_ (car oldargs))
-             (if (eq? '_ (cadr oldargs))
-                 (cadr e) ; f(_,_) becomes f
-                 `(call (top Fix2) ,(cadr e) ,(cadr oldargs)))
-             `(call (top Fix1) ,(cadr e) ,(car oldargs)))
-         (let* ((args '()) ; n-arg case just becomes anon func
-                (enew (map (lambda (y) (if (eq? '_ y)
-                                           (let ((x (gensy)))
-                                             (set! args (cons x args))
-                                             x)
-                                           y)) e)))
-           `(-> (tuple ,@(reverse args)) ,enew))))))
+   (let* ((args '()) ; n-arg case just becomes anon func
+          (enew (map (lambda (y) (if (eq? '_ y)
+                                     (let ((x (gensy)))
+                                       (set! args (cons x args))
+                                       x)
+                                     y)) e)))
+     `(-> (tuple ,@(reverse args)) ,enew))))
 
 (define (expand-where body var)
   (let* ((bounds (analyze-typevar var))
