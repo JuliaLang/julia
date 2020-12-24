@@ -888,33 +888,24 @@ end
     c = Channel(0)
 
     function f()
-        # c = Channel(0)        # Passes if here
+        #c = Channel(0)        # Passes if here
         ct = current_task()
-        t1 = Task(() -> begin
-            try
-                wait(schedule(Task(() -> begin
-                    put!(c,1)
-                end)))
+        t1 = @async try
+                put!(c,1)
             catch
                 rethrow()
             finally
                 ct.queue === nothing && schedule(ct)
             end
-        end)
-        t2 = Task(() -> begin
-            try
-                wait(schedule(Task(() -> begin
-                    undefined()
-                    r = take!(c)
-                end)))
+        t2 = @async try
+                undefined()
+                r = take!(c)
             catch
                 rethrow()
             finally
                 ct.queue === nothing && schedule(ct)
             end
-        end)
         ts = [t1,t2]
-        map(schedule, ts)
         while true
             wait()
             if any(istaskfailed, ts)
@@ -923,7 +914,7 @@ end
                 break
             end
         end
-        # close(c)        # Passes if here
+        #close(c)        # Passes if here
     end
 
     ex = nothing
@@ -934,7 +925,5 @@ end
     end
 
     close(c)
-
-    #@test ex isa ErrorException
 
 end
