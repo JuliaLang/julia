@@ -1241,3 +1241,20 @@ end
     @test_throws BoundsError Base.isstored(a, 3, 5, 5)
     @test_throws BoundsError Base.isstored(a, 3, 4, 6)
 end
+
+mutable struct TestPushArray{T, N} <: AbstractArray{T, N}
+    data::Array{T}
+end
+Base.push!(tpa::TestPushArray{T}, a::T) where T = push!(tpa.data, a)
+Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
+
+@testset "push! and pushfirst!" begin
+    a_orig = [1]
+    tpa = TestPushArray{Int, 2}(a_orig)
+    push!(tpa, 2, 3, 4, 5, 6)
+    @test tpa.data == collect(1:6)
+    a_orig = [1]
+    tpa = TestPushArray{Int, 2}(a_orig)
+    pushfirst!(tpa, 6, 5, 4, 3, 2)
+    @test tpa.data == reverse(collect(1:6))
+end
