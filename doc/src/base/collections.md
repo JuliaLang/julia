@@ -93,9 +93,9 @@ Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
-Base.reduce(::Any, ::Any)
-Base.foldl(::Any, ::Any)
-Base.foldr(::Any, ::Any)
+Base.reduce
+Base.foldl
+Base.foldr
 Base.maximum
 Base.maximum!
 Base.minimum
@@ -111,32 +111,26 @@ Base.sum
 Base.sum!
 Base.prod
 Base.prod!
-Base.any(::Any)
-Base.any(::AbstractArray, ::Any)
+Base.any
 Base.any!
-Base.all(::Any)
-Base.all(::AbstractArray, ::Any)
+Base.all
 Base.all!
 Base.count
-Base.any(::Any, ::Any)
-Base.all(::Any, ::Any)
 Base.foreach
 Base.map
 Base.map!
-Base.mapreduce(::Any, ::Any, ::Any)
-Base.mapfoldl(::Any, ::Any, ::Any)
-Base.mapfoldr(::Any, ::Any, ::Any)
+Base.mapreduce
+Base.mapfoldl
+Base.mapfoldr
 Base.first
 Base.last
 Base.front
 Base.tail
 Base.step
-Base.collect(::Any)
-Base.collect(::Type, ::Any)
+Base.collect
 Base.filter
 Base.filter!
-Base.replace(::Any, ::Pair...)
-Base.replace(::Base.Callable, ::Any)
+Base.replace
 Base.replace!
 Base.rest
 ```
@@ -200,13 +194,11 @@ Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
 Base.haskey
-Base.get(::Any, ::Any, ::Any)
 Base.get
-Base.get!(::Any, ::Any, ::Any)
-Base.get!(::Function, ::Any, ::Any)
+Base.get!
 Base.getkey
 Base.delete!
-Base.pop!(::Any, ::Any, ::Any)
+Base.pop!
 Base.keys
 Base.values
 Base.pairs
