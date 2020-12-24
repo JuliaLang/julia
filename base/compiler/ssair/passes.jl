@@ -271,7 +271,7 @@ end
 
 function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
         @nospecialize(result_t), field::Int, leaves::Vector{Any},
-        is_opaque_getfield)
+        is_opaque_getfield::Bool)
     # For every leaf, the lifted value
     lifted_leaves = IdDict{Any, Any}()
     maybe_undef = false
@@ -1218,7 +1218,7 @@ function cfg_simplify!(ir::IRCode)
     return finish(compact)
 end
 
-function analyze_env_uses(opaque_ir)
+function analyze_env_uses(opaque_ir::IRCode)
     uses = BitSet()
     for idx in 1:length(opaque_ir.stmts)
         stmt = opaque_ir.stmts[idx][:inst]

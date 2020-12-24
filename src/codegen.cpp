@@ -5832,7 +5832,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     bool is_opaque_closure = false;
     if (jl_is_method(lam->def.method)) {
         ctx.nargs = lam->def.method->nargs;
-    } else {
+    }
+    else {
         ctx.nargs = 0;
         // This is an opaque closure
         jl_datatype_t *sig = (jl_datatype_t*)lam->specTypes;

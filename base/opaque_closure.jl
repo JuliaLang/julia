@@ -22,8 +22,16 @@ function show(io::IO, oc::Core.OpaqueClosure{A, R}) where {A, R}
     print(io, "->◌")
 end
 
+"""
+    @opaque (args...)->...
 
-# @opaque macro goes here
+Marks a given closure as "opaque". Opaque closures capture the
+world age of their creation (as opposed to their invocation).
+This allows for more aggressive optimization of the capture
+list, but trades off against the ability to inline opaque
+closures at the call site, if their creation is not statically
+visible.
+"""
 macro opaque(ex)
-    Expr(:opaque_closure, esc(ex))
+    esc(Expr(:opaque_closure, ex))
 end

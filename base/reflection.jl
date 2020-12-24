@@ -1181,12 +1181,12 @@ function code_typed_opaque_closure(clos::Core.OpaqueClosure, @nospecialize(types
     if isa(clos.ci, CodeInfo)
         code = copy(clos.ci)
         debuginfo === :none && remove_linenums!(code)
-        return [code=>code.rettype]
+        return Any[Pair{CodeInfo,Any}(code=>code.rettype)]
     else
         mi = Core.Compiler.specialize_method(clos.ci::Method, Tuple{typeof(clos.env), types.parameters...}, Core.svec())
         (code, ty) = Core.Compiler.typeinf_code(interp, mi, optimize)
         debuginfo === :none && remove_linenums!(code)
-        return [code=>ty]
+        return Any[Pair{CodeInfo,Any}(code=>ty)]
     end
 end
 

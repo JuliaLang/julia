@@ -65,7 +65,7 @@ end
 @specialize
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, state::InliningState, propagate_inbounds::Bool)
-    # Go through the function, performing simple ininlingin (e.g. replacing call by constants
+    # Go through the function, performing simple inlining (e.g. replacing call by constants
     # and analyzing legality of inlining).
     for (idx, ir′) in enumerate(ir.opaques)
         ir.opaques[idx] = ssa_inlining_pass!(ir′, ir′.linetable, state, propagate_inbounds)
@@ -306,6 +306,7 @@ function transform_opaque_env!(ir::IRCode, @nospecialize(stmt′))
     if isexpr(stmt′, :call) && is_known_call(stmt′, getfield, ir, Any[]) && stmt′.args[2] === Argument(1)
         stmt′.args[1] = Core.getfield_opaque_env
     end
+    nothing
 end
 
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
@@ -1023,7 +1024,7 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, invoke_data::Invok
     return nothing
 end
 
-function narrow_opaque_closure!(ir, stmt, calltype)
+function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(calltype))
     if isa(calltype, PartialOpaque)
         lbt = argextype(stmt.args[3], ir, ir.sptypes)
         lb, exact = instanceof_tfunc(lbt)

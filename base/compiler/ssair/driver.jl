@@ -34,7 +34,7 @@ function normalize(@nospecialize(stmt), meta::Vector{Any})
     return stmt
 end
 
-function add_opaque_closure_argtypes!(argtypes, t)
+function add_opaque_closure_argtypes!(argtypes::Vector{Any}, @nospecialize(t))
     dt = unwrap_unionall(t)
     dt1 = unwrap_unionall(dt.parameters[1])
     if isa(dt1, TypeVar) || isa(dt1.parameters[1], TypeVar)
@@ -51,7 +51,9 @@ function add_opaque_closure_argtypes!(argtypes, t)
 end
 
 
-function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, nargs::Int, sv::OptimizationState, slottypes=sv.slottypes, stmtinfo=sv.stmt_info)
+function convert_to_ircode(ci::CodeInfo, code::Vector{Any},
+                           coverage::Bool, nargs::Int, sv::OptimizationState,
+                           slottypes=sv.slottypes, stmtinfo=sv.stmt_info)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
