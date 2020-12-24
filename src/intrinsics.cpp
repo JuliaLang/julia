@@ -542,6 +542,8 @@ static jl_cgval_t generic_cast(
 #endif
     }
     Value *ans = ctx.builder.CreateCast(Op, from, to);
+    if (f == fptosi || f == fptoui)
+        ans = ctx.builder.CreateFreeze(ans);
     return mark_julia_type(ctx, ans, false, jlto);
 }
 
