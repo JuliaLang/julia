@@ -925,8 +925,16 @@ end
         end
         # close(c)        # Passes if here
     end
-    @test_throws ErrorException f()
+    
+    ex = nothing
+    try
+        f()
+    catch e
+        ex = e
+    end
 
     close(c)
+
+    @test ex isa ErrorException
 
 end
