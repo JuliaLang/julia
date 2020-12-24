@@ -1484,7 +1484,7 @@ end
 
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but
 # ensures that tridiagonalization of Hermitian matrices become real. See lawn72
-@inline function reflector!(x::AbstractVector)
+@inline function reflector!(x::AbstractVector{T}) where {T}
     require_one_based_indexing(x)
     n = length(x)
     n == 0 && return zero(eltype(x))
@@ -1494,7 +1494,7 @@ end
         if iszero(normu)
             return zero(ξ1/normu)
         end
-        ν = copysign(normu, real(ξ1))
+        ν = T(copysign(normu, real(ξ1)))
         ξ1 += ν
         x[1] = -ν
         for i = 2:n
