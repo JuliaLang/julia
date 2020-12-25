@@ -2878,3 +2878,15 @@ end
     b = [2 for i in 1:5]
     @test_throws DimensionMismatch hcat(a, b)
 end
+
+@testset "similar(::ReshapedArray)" begin
+    a = reshape(TSlow(rand(Float64, 4, 4)), 2, :)
+
+    as = similar(a)
+    @test as isa TSlow{Float64,2}
+    @test size(as) == (2, 8)
+
+    as = similar(a, Int, (3, 5, 1))
+    @test as isa TSlow{Int,3}
+    @test size(as) == (3, 5, 1)
+end
