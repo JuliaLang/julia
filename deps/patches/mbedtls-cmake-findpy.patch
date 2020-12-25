@@ -1,0 +1,23 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 8833246..2ed55ed 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -17,6 +17,18 @@
+ #
+
+ cmake_minimum_required(VERSION 2.6)
++
++# https://cmake.org/cmake/help/latest/policy/CMP0011.html
++# Setting this policy is required in CMake >= 3.18.0, otherwise a warning is generated. The OLD
++# policy setting is deprecated, and will be removed in future versions.
++cmake_policy(SET CMP0011 NEW)
++# https://cmake.org/cmake/help/latest/policy/CMP0012.html
++# Setting the CMP0012 policy to NEW is required for FindPython3 to work with CMake 3.18.2
++# (there is a bug in this particular version), otherwise, setting the CMP0012 policy is required
++# for CMake versions >= 3.18.3 otherwise a deprecated warning is generated. The OLD policy setting
++# is deprecated and will be removed in future versions.
++cmake_policy(SET CMP0012 NEW)
++
+ if(TEST_CPP)
+  project("mbed TLS" C CXX)
+ else()
