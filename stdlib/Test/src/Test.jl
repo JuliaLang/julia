@@ -264,18 +264,18 @@ struct Threw <: ExecutionResult
 end
 
 function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
-    res = true
-    i = 1
     evaled_args = evaluated.args
     quoted_args = quoted.args
     n = length(evaled_args)
     kw_suffix = ""
     if evaluated.head === :comparison
         args = evaled_args
+        res = true
+        i = 1
         while i < n
             a, op, b = args[i], args[i+1], args[i+2]
             if res
-                res = op(a, b) === true  # Keep `res` type stable
+                res = op(a, b)
             end
             quoted_args[i] = a
             quoted_args[i+2] = b
@@ -287,7 +287,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
         kwargs = evaled_args[2].args  # Keyword arguments from `Expr(:parameters, ...)`
         args = evaled_args[3:n]
 
-        res = op(args...; kwargs...) === true
+        res = op(args...; kwargs...)
 
         # Create "Evaluated" expression which looks like the original call but has all of
         # the arguments evaluated
@@ -312,7 +312,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
+             res === true ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
              source)
 end
 
