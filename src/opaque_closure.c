@@ -25,6 +25,12 @@ JL_DLLEXPORT jl_value_t *jl_invoke_opaque_closure(jl_opaque_closure_t *clos, jl_
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub, jl_value_t *source, jl_value_t **env, size_t nenv)
 {
+    JL_TYPECHK(new_opaque_closure, type, (jl_value_t*)argt);
+    JL_TYPECHK(new_opaque_closure, type, rt_lb);
+    JL_TYPECHK(new_opaque_closure, type, rt_ub);
+    if (!jl_is_method(source) && !jl_is_code_info(source)) {
+        jl_error("Invalid OpaqueClosure source");
+    }
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *clos_t;
     jl_opaque_closure_t *clos;
@@ -37,6 +43,14 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
     clos->env = jl_f_tuple(NULL, env, nenv);
     JL_GC_POP();
     return clos;
+}
+
+JL_CALLABLE(jl_new_opaque_closure_jlcall)
+{
+    if (nargs < 4)
+        jl_error("new_opaque_closure: Not enough arguments");
+    return (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)args[0],
+        args[1], args[2], args[3], &args[4], nargs-4);
 }
 
 

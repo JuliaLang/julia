@@ -5,7 +5,7 @@ const_int() = 1
 
 let ci = @code_lowered const_int()
     @eval function oc_trivial()
-        $(Expr(:call, Core._opaque_closure, Tuple{}, Any, Any, ci))
+        $(Expr(:new_opaque_closure, Tuple{}, Any, Any, ci))
     end
 end
 @test isa(oc_trivial(), Core.OpaqueClosure{Tuple{}, Any})
@@ -13,7 +13,7 @@ end
 
 let ci = @code_lowered const_int()
     @eval function oc_simple_inf()
-        $(Expr(:call, Core._opaque_closure, Tuple{}, Union{}, Any, ci))
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any, ci))
     end
 end
 @test isa(oc_simple_inf(), Core.OpaqueClosure{Tuple{}, Int})
@@ -26,14 +26,14 @@ end
 (a::OcClos2Int)() = getfield(a, 1) + getfield(a, 2)
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_trivial_clos()
-        $(Expr(:call, Core._opaque_closure, Tuple{}, Int, Int, ci, 1, 2))
+        $(Expr(:new_opaque_closure, Tuple{}, Int, Int, ci, 1, 2))
     end
 end
 @test oc_trivial_clos()() == 3
 
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_self_call_clos()
-        $(Expr(:call, Core._opaque_closure, Tuple{}, Int, Int, ci, 1, 2))()
+        $(Expr(:new_opaque_closure, Tuple{}, Int, Int, ci, 1, 2))()
     end
 end
 @test oc_self_call_clos() == 3
@@ -48,7 +48,7 @@ end
 (a::OcClos1Any)() = getfield(a, 1)
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_pass_clos(x)
-        $(Expr(:call, Core._opaque_closure, Tuple{}, Any, Any, ci, :x))
+        $(Expr(:new_opaque_closure, Tuple{}, Any, Any, ci, :x))
     end
 end
 @test oc_pass_clos(1)() == 1
@@ -56,7 +56,7 @@ end
 
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_infer_pass_clos(x)
-        $(Expr(:call, Core._opaque_closure, Tuple{}, Union{}, Any, ci, :x))
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any, ci, :x))
     end
 end
 @test isa(oc_infer_pass_clos(1), Core.OpaqueClosure{Tuple{}, typeof(1)})
@@ -66,7 +66,7 @@ end
 
 let ci = @code_lowered identity(1)
     @eval function oc_infer_pass_id()
-        $(Expr(:call, Core._opaque_closure, Tuple{Any}, Any, Any, ci))
+        $(Expr(:new_opaque_closure, Tuple{Any}, Any, Any, ci))
     end
 end
 function complicated_identity(x)
@@ -87,7 +87,7 @@ end
 
 let ci = @code_lowered OcOpt([1 2])()
     @eval function oc_opt_ndims(A)
-        $(Expr(:call, Core._opaque_closure, Tuple{}, Union{}, Any,  ci, :A))
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,  ci, :A))
     end
 end
 oc_opt_ndims([1 2])

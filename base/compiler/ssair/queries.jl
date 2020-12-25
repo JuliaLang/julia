@@ -50,7 +50,13 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::
                 eT ⊑ fT || return false
             end
             return true
-        elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck || head === :new_opaque_closure
+        elseif head === :new_opaque_closure
+            length(stmt.args) >= 4 || return false
+            return argextype(ea[1], src, sptypes) ⊑ Type &&
+                argextype(ea[2], src, sptypes) ⊑ Type &&
+                argextype(ea[3], src, sptypes) ⊑ Type &&
+                let T = argextype(ea[4], src, sptypes); (T ⊑ CodeInfo || T ⊑ Method || T ⊑ OpaqueClosureIdx); end
+        elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck
             return true
         else
             # e.g. :loopinfo

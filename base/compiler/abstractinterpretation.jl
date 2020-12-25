@@ -804,10 +804,6 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
             ty = typeintersect(ty, cnd.elsetype)
         end
         return tmerge(tx, ty)
-    elseif f === Core._opaque_closure
-        la >= 5 || return Union{}
-        return _opaque_closure_tfunc(argtypes[2], argtypes[3], argtypes[4],
-            argtypes[5], argtypes[6:end], sv.linfo)
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
     if f === getfield && isa(fargs, Vector{Any}) && la == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
@@ -1230,6 +1226,22 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 let t = t, at = at; _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n); end
                 t = PartialStruct(t, at.fields)
             end
+        end
+    elseif e.head === :new_opaque_closure
+        t = Union{}
+        if length(e.args) >= 4
+            ea = e.args
+            n = length(ea)
+            argtypes = Vector{Any}(undef, n)
+            @inbounds for i = 1:n
+                ai = abstract_eval_value(interp, ea[i], vtypes, sv)
+                if ai === Bottom
+                    return Bottom
+                end
+                argtypes[i] = ai
+            end
+            t = _opaque_closure_tfunc(argtypes[1], argtypes[2], argtypes[3],
+                argtypes[4], argtypes[5:end], sv.linfo)
         end
     elseif e.head === :foreigncall
         abstract_eval_value(interp, e.args[1], vtypes, sv)

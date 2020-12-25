@@ -1423,20 +1423,6 @@ JL_CALLABLE(jl_f__equiv_typedef)
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
 }
 
-// opaque closure
-JL_CALLABLE(jl_f__opaque_closure)
-{
-    JL_NARGSV(_opaque_closure, 4)
-    JL_TYPECHK(_opaque_closure, type, args[0]);
-    JL_TYPECHK(_opaque_closure, type, args[1]);
-    JL_TYPECHK(_opaque_closure, type, args[2]);
-    if (!jl_is_method(args[3]) && !jl_is_code_info(args[3])) {
-        jl_error("Invalid OpaqueClosure source");
-    }
-    return (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)args[0], args[1], args[2],
-        args[3], args+4, nargs-4);
-}
-
 // IntrinsicFunctions ---------------------------------------------------------
 
 static void (*runtime_fp[num_intrinsics])(void);
@@ -1596,7 +1582,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
-    jl_builtin__opaque_closure = add_builtin_func("_opaque_closure", jl_f__opaque_closure);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_call_latest", jl_f__call_latest);
     add_builtin_func("_call_in_world", jl_f__call_in_world);

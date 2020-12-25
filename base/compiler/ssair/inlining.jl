@@ -366,10 +366,10 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                     compact_exprtype(compact, stmt′.val) :
                     compact_exprtype(inline_compact, stmt′.val)
                 break
-            elseif isexpr(stmt′, :new_opaque_closure)
-                stmt′ = Expr(:new_opaque_closure, stmt′.args[1:5]...,
-                    OpaqueClosureIdx((stmt′.args[6]::OpaqueClosureIdx).n + length(compact.ir.opaques)),
-                    stmt′.args[7:end]...)
+            elseif isexpr(stmt′, :new_opaque_closure) && isa(stmt′.args[4], OpaqueClosureIdx)
+                stmt′ = Expr(:new_opaque_closure, stmt′.args[1:3]...,
+                    OpaqueClosureIdx((stmt′.args[4]::OpaqueClosureIdx).n + length(compact.ir.opaques)),
+                    stmt′.args[5:end]...)
             end
             inline_compact[idx′] = stmt′
         end
@@ -1026,16 +1026,16 @@ end
 
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(calltype))
     if isa(calltype, PartialOpaque)
-        lbt = argextype(stmt.args[3], ir, ir.sptypes)
+        lbt = argextype(stmt.args[2], ir, ir.sptypes)
         lb, exact = instanceof_tfunc(lbt)
         exact || return
         # Narrow opaque closure type
         if isa(calltype.ci, OptimizationState)
-            stmt.args[3] = stmt.args[4] = widenconst(tmerge(lb, calltype.ci.src.rettype))
+            stmt.args[2] = stmt.args[3] = widenconst(tmerge(lb, calltype.ci.src.rettype))
         elseif isa(calltype.ci, Method)
             m = calltype.ci
-            stmt.args[5] = m
-            stmt.args[3] = stmt.args[4] = widenconst(tmerge(lb, m.unspecialized.cache.rettype))
+            stmt.args[4] = m
+            stmt.args[2] = stmt.args[3] = widenconst(tmerge(lb, m.unspecialized.cache.rettype))
         end
     end
 end
@@ -1071,12 +1071,6 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
         return nothing
     end
 
-    # Handle _opaque_closure (if not already handled above)
-    if sig.f === Core._opaque_closure
-        narrow_opaque_closure!(ir, stmt, calltype)
-        return
-    end
-
     # Handle invoke
     invoke_data = nothing
     if sig.f === Core.invoke && length(sig.atypes) >= 3
@@ -1091,8 +1085,10 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
     # Inlining OpaqueClosure that don't have any specializations
     if sig.ft ⊑ Core.OpaqueClosure
         callee = stmt.args[1]
-        if isa(callee, SSAValue) && isexpr(ir.stmts[callee.id][:inst], :new_opaque_closure) && length(ir.stmts[callee.id][:inst].args) >= 6
-            ir′ = ir.opaques[(ir.stmts[callee.id][:inst].args[5]::OpaqueClosureIdx).n]::IRCode
+        if isa(callee, SSAValue) && isexpr(ir.stmts[callee.id][:inst], :new_opaque_closure) &&
+                length(ir.stmts[callee.id][:inst].args) >= 5 &&
+                isa(ir.stmts[callee.id][:inst].args[4], OpaqueClosureIdx)
+            ir′ = ir.opaques[(ir.stmts[callee.id][:inst].args[4]::OpaqueClosureIdx).n]::IRCode
             push!(todo, idx=>InliningTodo(nothing, ResolvedInliningSpec(ir′, linear_inline_eligible(ir′)), true))
             return nothing
         end

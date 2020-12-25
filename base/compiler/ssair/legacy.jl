@@ -63,12 +63,11 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
             stmt = PhiNode(Int32[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, Expr) && stmt.head === :enter
             stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
-        elseif isa(stmt, Expr) && stmt.head == :new_opaque_closure
+        elseif isa(stmt, Expr) && stmt.head == :new_opaque_closure && isa(stmt.args[4], OpaqueClosureIdx)
             ci′ = copy((ci.ssavaluetypes[i]::PartialOpaque).ci.src)
-            ir′ = ir.opaques[(stmt.args[5]::OpaqueClosureIdx).n]
+            ir′ = ir.opaques[(stmt.args[4]::OpaqueClosureIdx).n]
             replace_code_newstyle!(ci′, ir′, length(ir′.argtypes)-1)
-            stmt.args[5] = ci′
-            stmt.head = :call
+            stmt.args[4] = ci′
         end
         ci.code[i] = stmt
     end

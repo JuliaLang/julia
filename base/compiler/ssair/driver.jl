@@ -83,14 +83,13 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any},
             stmt = stmt.args[2]
         end
         ssat = ci.ssavaluetypes[idx]
-        if isa(ssat, PartialOpaque) && isexpr(stmt, :call)
-            ft = argextype(stmt.args[1], ci, sv.sptypes)
+        if isa(ssat, PartialOpaque) && isexpr(stmt, :new_opaque_closure)
             # Pre-convert any OpaqueClosure objects
-            if isa(ft, Const) && ft.val === Core._opaque_closure && isa(ssat.ci, OptimizationState)
+            if isa(ssat.ci, OptimizationState)
                 opaque_ir = make_ir(ssat.ci.src, 0, ssat.ci)
                 push!(opaques, opaque_ir)
                 stmt.head = :new_opaque_closure
-                stmt.args[5] = OpaqueClosureIdx(length(opaques))
+                stmt.args[4] = OpaqueClosureIdx(length(opaques))
             end
         end
         if stmt isa Expr && ssat === Union{}

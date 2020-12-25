@@ -304,9 +304,9 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             end
 
             if is_opaque_getfield
-                if isexpr(def, :call) && is_known_call(def, Core._opaque_closure, compact) && isa(field, Int) &&
-                        1 <= field <= length(def.args)-5
-                    lift_arg(def.args[5+field])
+                if isexpr(def, :new_opaque_closure) && isa(field, Int) &&
+                        1 <= field <= length(def.args)-4
+                    lift_arg(def.args[4+field])
                     continue
                 else
                     return nothing
@@ -1246,9 +1246,11 @@ function opaque_closure_optim_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     for ((_, idx), stmt) in compact
         isexpr(stmt, :new_opaque_closure) || continue
-        this_opaque_closure_uses = uses[(stmt.args[5]::OpaqueClosureIdx).n]
+        source = stmt.args[4]
+        isa(source, OpaqueClosureIdx) || continue
+        this_opaque_closure_uses = uses[source.n]
         if isempty(this_opaque_closure_uses)
-            resize!(stmt.args, 5)
+            resize!(stmt.args, 4)
         end
     end
 
