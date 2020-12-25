@@ -983,7 +983,8 @@ argmin(itr) = findmin(itr)[2]
     any(itr) -> Bool
 
 Test whether any elements of a boolean collection are `true`, returning `true` as
-soon as the first `true` value in `itr` is encountered (short-circuiting).
+soon as the first `true` value in `itr` is encountered (short-circuiting). To
+short-circuit on `false`, use [`all`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `false` (or equivalently, if the input contains no `true` value), following
@@ -1018,7 +1019,8 @@ any(itr) = any(identity, itr)
     all(itr) -> Bool
 
 Test whether all elements of a boolean collection are `true`, returning `false` as
-soon as the first `false` value in `itr` is encountered (short-circuiting).
+soon as the first `false` value in `itr` is encountered (short-circuiting). To
+short-circuit on `true`, use [`any`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `true` (or equivalently, if the input contains no `false` value), following
@@ -1055,7 +1057,7 @@ all(itr) = all(identity, itr)
 
 Determine whether predicate `p` returns `true` for any elements of `itr`, returning
 `true` as soon as the first item in `itr` for which `p` returns `true` is encountered
-(short-circuiting).
+(short-circuiting). To short-circuit on `false`, use [`all`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `false` (or equivalently, if the input contains no `true` value), following
@@ -1103,7 +1105,7 @@ end
 
 Determine whether predicate `p` returns `true` for all elements of `itr`, returning
 `false` as soon as the first item in `itr` for which `p` returns `false` is encountered
-(short-circuiting).
+(short-circuiting). To short-circuit on `true`, use [`any`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `true` (or equivalently, if the input contains no `false` value), following
