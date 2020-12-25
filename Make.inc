@@ -795,6 +795,11 @@ XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
 endif
 
+# Normalize ppc64le to powerpc64le
+ifeq ($(ARCH), ppc64le)
+override ARCH := powerpc64le
+endif
+
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
