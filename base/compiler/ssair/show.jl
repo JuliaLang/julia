@@ -67,7 +67,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     elseif stmt isa TypedSlot
         # call `show` with the type set to Any so it will not be shown, since
         # we will show the type ourselves.
-        show_unquoted(io, TypedSlot(stmt.id, Any), indent, show_type ? prec_decl : 0)
+        show_unquoted(io, SlotNumber(stmt.id), indent, show_type ? prec_decl : 0)
     # everything else in the IR, defer to the generic AST printer
     else
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
