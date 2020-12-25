@@ -159,6 +159,8 @@ function strides(a::ReinterpretArray)
 end
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
 
+similar(a::ReinterpretArray, T::Type, d::Dims) = similar(a.parent, T, d)
+
 function check_readable(a::ReinterpretArray{T, N, S} where N) where {T,S}
     # See comment in check_writable
     if !a.readable && !array_subpadding(T, S)
