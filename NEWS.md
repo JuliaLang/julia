@@ -4,6 +4,8 @@ Julia v1.7 Release Notes
 New language features
 ---------------------
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
+* `escape_string` can now receive a collection of characters in the keyword
+  `keep` that are to be kept as they are. ([#38597])
 
 Language changes
 ----------------
