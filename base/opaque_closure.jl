@@ -4,8 +4,7 @@
 end
 
 function show(io::IO, oc::Core.OpaqueClosure{A, R}) where {A, R}
-    types = map(@nospecialize(T)->Expr(:(::), T), A.parameters)
-    show_enclosed_list(io, '(', types, ',', ')', 0)
+    show_tuple_as_call(io, Symbol(""), A; hasfirst=false)
     print(io, "::", R)
     print(io, "->◌")
 end
