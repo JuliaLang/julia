@@ -2538,6 +2538,14 @@ end
     arr = randn(4)
     @test accumulate(*, arr; init=1) ≈ accumulate(*, arr)
 
+    # bad kwarg
+    arr_B = similar(arr)
+    @test_throws ArgumentError accumulate(*, arr; bad_init=1)
+    @test_throws ArgumentError accumulate!(*, arr_B, arr; bad_init=1)
+    # must provide dims
+    md_arr = randn(4, 5)
+    @test_throws ArgumentError accumulate!(*, similar(md_arr), md_arr)
+
     N = 5
     for arr in [rand(Float64, N), rand(Bool, N), rand(-2:2, N)]
         for (op, cumop) in [(+, cumsum), (*, cumprod)]
@@ -2877,4 +2885,16 @@ end
     a = [2 for i in 1:4]
     b = [2 for i in 1:5]
     @test_throws DimensionMismatch hcat(a, b)
+end
+
+@testset "similar(::ReshapedArray)" begin
+    a = reshape(TSlow(rand(Float64, 4, 4)), 2, :)
+
+    as = similar(a)
+    @test as isa TSlow{Float64,2}
+    @test size(as) == (2, 8)
+
+    as = similar(a, Int, (3, 5, 1))
+    @test as isa TSlow{Int,3}
+    @test size(as) == (3, 5, 1)
 end

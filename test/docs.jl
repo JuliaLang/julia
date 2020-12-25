@@ -1229,3 +1229,7 @@ Test.collect_test_logs() do                          # suppress printing of any 
     eval(quote "Second docstring" Module29432 end)   # requires toplevel
 end
 @test docstrings_equal(@doc(Module29432), doc"Second docstring")
+
+# Issue #13109
+eval(Expr(:block, Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), nothing, "...", Expr(:module, false, :MBareModuleEmpty, Expr(:block)))))
+@test docstrings_equal(@doc(MBareModuleEmpty), doc"...")

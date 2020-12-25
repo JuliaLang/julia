@@ -795,6 +795,11 @@ XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
 endif
 
+# Normalize ppc64le to powerpc64le
+ifeq ($(ARCH), ppc64le)
+override ARCH := powerpc64le
+endif
+
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
@@ -1556,8 +1561,10 @@ endif
 LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBGCC_NAME))
 LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBGCC_NAME))
 
-# USE_SYSTEM_LIBM causes it to get symlinked into build_private_shlibdir
+# USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir
 ifeq ($(USE_SYSTEM_LIBM),1)
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+else ifeq ($(USE_SYSTEM_OPENLIBM),1)
 LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 else
 LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))

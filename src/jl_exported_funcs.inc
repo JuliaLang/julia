@@ -111,7 +111,6 @@
     XX(jl_clock_now) \
     XX(jl_close_uv) \
     XX(jl_code_for_staged) \
-    XX(jl_compile_extern_c) \
     XX(jl_compile_hint) \
     XX(jl_compress_argnames) \
     XX(jl_compress_ir) \

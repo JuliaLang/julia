@@ -350,3 +350,21 @@ ars = reinterpret(reshape, Int, a)
 a = [(k,k+1,k+2) for k = 1:3:4000]
 ars = reinterpret(reshape, Int, a)
 @test sum(ars) == 8010003
+
+@testset "similar(::ReinterpretArray)" begin
+    a = reinterpret(NTuple{2,Float64}, TSlow(rand(Float64, 4, 4)))
+
+    as = similar(a)
+    @test as isa TSlow{NTuple{2,Float64},2}
+    @test size(as) == (2, 4)
+
+    as = similar(a, Int, (3, 5, 1))
+    @test as isa TSlow{Int,3}
+    @test size(as) == (3, 5, 1)
+
+    a = reinterpret(reshape, NTuple{4,Float64}, TSlow(rand(Float64, 4, 4)))
+
+    as = similar(a)
+    @test as isa TSlow{NTuple{4,Float64},1}
+    @test size(as) == (4,)
+end

@@ -5,9 +5,14 @@
 #include "../src/jl_exported_data.inc"
 #include "../src/jl_exported_funcs.inc"
 
-// Define data symbols as `const void * $(name);`
+// Define pointer data as `const void * $(name);`
 #define XX(name)    JL_DLLEXPORT const void * name;
-JL_EXPORTED_DATA(XX)
+JL_EXPORTED_DATA_POINTERS(XX)
+#undef XX
+
+// Define symbol data as `$type) $(name);`
+#define XX(name, type)    JL_DLLEXPORT type name;
+JL_EXPORTED_DATA_SYMBOLS(XX)
 #undef XX
 
 // Define holder locations for function addresses as `const void * $(name)_addr`
