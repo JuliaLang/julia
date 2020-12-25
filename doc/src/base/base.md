@@ -389,6 +389,8 @@ Base.nameof(::Module)
 Base.parentmodule
 Base.pathof(::Module)
 Base.moduleroot
+__module__
+__source__
 Base.@__MODULE__
 Base.@__FILE__
 Base.@__DIR__
