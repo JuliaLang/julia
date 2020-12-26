@@ -3,7 +3,6 @@ Julia v1.7 Release Notes
 
 New language features
 ---------------------
-* `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 
 Language changes
 ----------------
@@ -38,6 +37,7 @@ New library features
 Standard library changes
 ------------------------
 
+* `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 * `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
 * `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
 * `escape_string` can now receive a collection of characters in the keyword
