@@ -341,9 +341,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[1]`
 
-        A function name, or `false` if unknown. If a symbol, then the expression first
-        behaves like the 1-argument form above. This argument is ignored from then on. When
-        this is `false`, it means a method is being added strictly by type, `(::T)(x) = x`.
+        A function name, or `nothing` if unknown or unneeded. If a symbol, then the expression
+        first behaves like the 1-argument form above. This argument is ignored from then on.
+        It can be `nothing` when methods are added strictly by type, `(::T)(x) = x`,
+        or when a method is being added to an existing function, `MyModule.f(x) = x`.
 
       * `args[2]`
 
