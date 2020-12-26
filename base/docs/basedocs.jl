@@ -414,9 +414,10 @@ kw"."
 """
     let
 
-`let` statements allocate new variable bindings each time they run. Whereas an
-assignment modifies an existing value location, `let` creates new locations. This
-difference is only detectable in the case of variables that outlive their scope via
+`let` statements create a new hard scope block and allocate new variable bindings
+each time they run. Whereas an assignment modifies an existing value location,
+`let` creates new locations.
+This difference is only detectable in the case of variables that outlive their scope via
 closures. The `let` syntax accepts a comma-separated series of assignments and variable
 names:
 
