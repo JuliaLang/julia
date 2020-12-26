@@ -149,7 +149,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
 
     /*
-      this branch returns handle of libjulia
+      this branch returns handle of libjulia-internal
     */
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_
