@@ -51,37 +51,6 @@ macro aliasscope(body)
     end
 end
 
-
-function sync_end(c::Channel{Any})
-    if !isready(c)
-        # there must be at least one item to begin with
-        close(c)
-        return
-    end
-    nremaining::Int = 0
-    while true
-        event = take!(c)
-        if event === :__completion__
-            nremaining -= 1
-            if nremaining == 0
-                break
-            end
-        else
-            nremaining += 1
-            schedule(Task(()->begin
-                try
-                    wait(event)
-                    put!(c, :__completion__)
-                catch e
-                    close(c, e)
-                end
-            end))
-        end
-    end
-    close(c)
-    nothing
-end
-
 """
     Experimental.@sync
 
@@ -98,7 +67,7 @@ macro sync(block)
     quote
         let $var = Channel(Inf)
             v = $(esc(block))
-            sync_end($var)
+            Base.sync_end($var)
             v
         end
     end

@@ -336,32 +336,42 @@ end
 
 ## lexically-scoped waiting for multiple items
 
+function schedule_result(t, rs)
+    schedule(Task(() -> begin
+        ex = nothing
+        try
+            wait(t)
+        catch e
+            ex = e
+        finally
+            put!(rs, ex)
+        end
+    end))
+end
+
 function sync_end(c::Channel{Any})
-    local c_ex
-    while isready(c)
-        r = take!(c)
-        if isa(r, Task)
-            _wait(r)
-            if istaskfailed(r)
-                if !@isdefined(c_ex)
-                    c_ex = CompositeException()
+    try
+        n = 0
+        isready(c) || return
+        while true
+            t = take!(c)
+            if t isa Exception                         # Exception from monitor. Collect
+                c_ex = CompositeException([t])         # any other exceptions and throw
+                while isready(c)
+                    t = take!(c)
+                    t isa Exception && push!(c_ex, t)
                 end
-                push!(c_ex, TaskFailedException(r))
-            end
-        else
-            try
-                wait(r)
-            catch e
-                if !@isdefined(c_ex)
-                    c_ex = CompositeException()
-                end
-                push!(c_ex, e)
+                throw(c_ex)
+            elseif isnothing(t)                        # Successful result from monitor.
+                n -= 1                                 # Leave if nothing remains.
+                n == 0 && !isready(c) && break
+            else                                       # Not a monitor result - must be
+                n += 1                                 # a new waitable. Create a new
+                schedule_result(t, c)                  # monitor and return to Channel
             end
         end
-    end
-    close(c)
-    if @isdefined(c_ex)
-        throw(c_ex)
+    finally
+        close(c)
     end
     nothing
 end

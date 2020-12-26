@@ -880,3 +880,257 @@ end
     end
     @test sort!(collect(ys)) == 1:3
 end
+
+# issue #32677
+@testset "@sync exception handling" begin
+    t = Timer(t -> killjob("KILLING BY QUICK KILL WATCHDOG\n"), 20) # this test should take <2 seconds
+
+    # async/async
+    let
+        r = 0
+        c = Channel(0)
+        @sync begin
+            @async put!(c,1)
+            @async r = take!(c)
+        end
+        close(c)
+        @test r == 1
+    end
+
+    let
+        r = 0
+        c = Channel(0)
+        @sync begin
+            @async r = take!(c)
+            @async put!(c,1)
+        end
+        close(c)
+        @test r == 1
+    end
+
+    let
+        threw = nothing
+        c = Channel(0)
+        try
+            @sync begin
+                @async put!(c,1)
+                @async begin
+                    undefined()
+                    r = take!(c)
+                end
+            end
+        catch e
+            threw = e
+        finally
+            close(c)
+        end
+        @test threw.exceptions[1].task.exception isa UndefVarError
+    end
+
+    let
+        threw = nothing
+        c = Channel(0)
+        try
+            @sync begin
+                @async begin
+                    undefined()
+                    r = take!(c)
+                end
+                @async put!(c,1)
+            end
+        catch e
+            threw = e
+        finally
+            close(c)
+        end
+        @test threw.exceptions[1].task.exception isa UndefVarError
+    end
+
+
+    # async/Threads.spawn
+    let
+        r = 0
+        c = Channel(0)
+        @sync begin
+            @async put!(c,1)
+            @Threads.spawn r = take!(c)
+        end
+        close(c)
+        @test r == 1
+    end
+
+    let
+        r = 0
+        c = Channel(0)
+        @sync begin
+            @async r = take!(c)
+            @Threads.spawn put!(c,1)
+        end
+        close(c)
+        @test r == 1
+    end
+
+    let
+        threw = nothing
+        c = Channel(0)
+        try
+            @sync begin
+                @async put!(c,1)
+                @Threads.spawn begin
+                    undefined()
+                    r = take!(c)
+                end
+            end
+        catch e
+            threw = e
+        finally
+            close(c)
+        end
+        @test threw.exceptions[1].task.exception isa UndefVarError
+    end
+
+    let
+        threw = nothing
+        c = Channel(0)
+        try
+            @sync begin
+                @async begin
+                    undefined()
+                    r = take!(c)
+                end
+                @Threads.spawn put!(c,1)
+            end
+        catch e
+            threw = e
+        finally
+            close(c)
+        end
+        @test threw.exceptions[1].task.exception isa UndefVarError
+    end
+
+
+    # Threads.spawn/async
+    let
+        r = 0
+        c = Channel(0)
+        @sync begin
+            @Threads.spawn put!(c,1)
+            @async r = take!(c)
+        end
+        close(c)
+        @test r == 1
+    end
+
+    let
+        r = 0
+        c = Channel(0)
+        @sync begin
+            @Threads.spawn r = take!(c)
+            @async put!(c,1)
+        end
+        close(c)
+        @test r == 1
+    end
+
+    let
+        threw = nothing
+        c = Channel(0)
+        try
+            @sync begin
+                @Threads.spawn put!(c,1)
+                @async begin
+                    undefined()
+                    r = take!(c)
+                end
+            end
+        catch e
+            threw = e
+        finally
+            close(c)
+        end
+        @test threw.exceptions[1].task.exception isa UndefVarError
+    end
+
+    let
+        threw = nothing
+        c = Channel(0)
+        try
+            @sync begin
+                @Threads.spawn begin
+                    undefined()
+                    r = take!(c)
+                end
+                @async put!(c,1)
+            end
+        catch e
+            threw = e
+        finally
+            close(c)
+        end
+        @test threw.exceptions[1].task.exception isa UndefVarError
+    end
+
+
+    # Threads.spawn/Threads.spawn
+    let
+        r = 0
+        c = Channel(0)
+        @sync begin
+            @Threads.spawn put!(c,1)
+            @Threads.spawn r = take!(c)
+        end
+        close(c)
+        @test r == 1
+    end
+
+    let
+        r = 0
+        c = Channel(0)
+        @sync begin
+            @Threads.spawn r = take!(c)
+            @Threads.spawn put!(c,1)
+        end
+        close(c)
+        @test r == 1
+    end
+
+    let
+        threw = nothing
+        c = Channel(0)
+        try
+            @sync begin
+                @Threads.spawn put!(c,1)
+                @Threads.spawn begin
+                    undefined()
+                    r = take!(c)
+                end
+            end
+        catch e
+            threw = e
+        finally
+            close(c)
+        end
+        @test threw.exceptions[1].task.exception isa UndefVarError
+    end
+
+    let
+        threw = nothing
+        c = Channel(0)
+        try
+            @sync begin
+                @Threads.spawn begin
+                    undefined()
+                    r = take!(c)
+                end
+                @Threads.spawn put!(c,1)
+            end
+        catch e
+            threw = e
+        finally
+            close(c)
+        end
+        @test threw.exceptions[1].task.exception isa UndefVarError
+    end
+
+    close(t)
+end
