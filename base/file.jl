@@ -175,10 +175,10 @@ function mkdir(path::AbstractString; mode::Integer = 0o777)
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
                     C_NULL, req, path, checkmode(mode), C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_fs_req_cleanup(req)
             uv_error("mkdir($(repr(path)); mode=0o$(string(mode,base=8)))", ret)
         end
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
         # mode is not implemented in mkdir in libuv yet, so do it here
         Sys.iswindows() && chmod(path, mode)
         return path
@@ -680,11 +680,11 @@ function mktempdir(parent::AbstractString=tempdir();
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
                     C_NULL, req, tpath, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_fs_req_cleanup(req)
             uv_error("mktempdir($(repr(parent)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
         cleanup && temp_cleanup_later(path)
         return path
     finally
@@ -1021,12 +1021,12 @@ function readlink(path::AbstractString)
             (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
             C_NULL, req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_fs_req_cleanup(req)
             uv_error("readlink($(repr(path)))", ret)
             @assert false
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
         return tgt
     finally
         Libc.free(req)
