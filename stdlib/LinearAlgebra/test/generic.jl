@@ -455,10 +455,17 @@ end
 
 @testset "adjtrans dot" begin
     for t in (transpose, adjoint)
-        x, y = t(rand(ComplexF64, 100)), t(rand(ComplexF64, 100))
+        x, y = t(rand(ComplexF64, 10)), t(rand(ComplexF64, 10))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
         x, y = t([rand(ComplexF64, 2, 2) for _ in 1:5]), t([rand(ComplexF64, 2, 2) for _ in 1:5])
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+        x, y = t(rand(ComplexF64, 10, 5)), t(rand(ComplexF64, 10, 5))
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+        x = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
+        y = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
     end
