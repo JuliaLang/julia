@@ -661,7 +661,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     // Load libjulia-internal (which contains this function), and libjulia, explicitly.
     jl_libjulia_internal_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
-    jl_libjulia_handle = jl_load_dynamic_library(JL_LIBJULIA_DL_LIBNAME, JL_RTLD_DEFAULT, 1);
+    jl_libjulia_handle = jl_load_dynamic_library(JL_LIBJULIA_SONAME, JL_RTLD_DEFAULT, 1);
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
