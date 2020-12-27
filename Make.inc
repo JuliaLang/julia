@@ -666,6 +666,7 @@ endif
 # put the version number before the .dylib.  Otherwise, put it after.
 ifeq ($(OS), WINNT)
 JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT)
+JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT)
 else
 ifeq ($(OS), Darwin)
 JL_MAJOR_MINOR_SHLIB_EXT := $(SOMAJOR).$(SOMINOR).$(SHLIB_EXT)
