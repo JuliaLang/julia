@@ -205,29 +205,13 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
     }
 }
 
-#  if JL_USE_IFUNC
-static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
-    if (jl_tls_states_cb != jl_get_ptls_states_init)
-        return jl_tls_states_cb;
-    // If we can't find the static version, return the wrapper instead
-    // of the slow version so that we won't resolve to the slow version
-    // due to issues in the relocation order.
-    // This may not be necessary once `ifunc` support in glibc is more mature.
-    if (!jl_get_ptls_states_static)
-        return jl_get_ptls_states_wrapper;
-    jl_tls_states_cb = jl_get_ptls_states_static;
-    return jl_tls_states_cb;
+#ifndef __clang_analyzer__
+    return (*jl_tls_states_cb)();
+#endif
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
-    __attribute__((ifunc ("jl_get_ptls_states_resolve")));
-#  else // JL_TLS_USE_IFUNC
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
-{
-    return jl_get_ptls_states_wrapper();
-}
-#  endif // JL_TLS_USE_IFUNC
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 {
     if (jl_tls_states_cb == jl_get_ptls_states_init)
@@ -237,7 +221,6 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 }
 #endif
 
-JL_DLLEXPORT int jl_n_threads;
 jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
 
 // return calling thread's ID
@@ -289,6 +272,7 @@ void jl_init_threadtls(int16_t tid)
 #ifdef _OS_WINDOWS_
     ptls->needs_resetstkoflw = 0;
 #endif
+    small_arraylist_new(&ptls->locks, 0);
     jl_init_thread_heap(ptls);
     jl_install_thread_signal_handler(ptls);
 
@@ -406,16 +390,19 @@ void jl_init_threading(void)
 #endif
 
     // how many threads available, usable
-    int max_threads = jl_cpu_threads();
     jl_n_threads = JULIA_NUM_THREADS;
-    if (jl_options.nthreads < 0) // --threads=auto
-        jl_n_threads = max_threads;
-    else if (jl_options.nthreads > 0) // --threads=N
+    if (jl_options.nthreads < 0) { // --threads=auto
+        jl_n_threads = jl_cpu_threads();
+    }
+    else if (jl_options.nthreads > 0) { // --threads=N
         jl_n_threads = jl_options.nthreads;
-    else if ((cp = getenv(NUM_THREADS_NAME)))
-        jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
-    if (jl_n_threads > max_threads)
-        jl_n_threads = max_threads;
+    }
+    else if ((cp = getenv(NUM_THREADS_NAME))) {
+        if (strcmp(cp, "auto"))
+            jl_n_threads = (uint64_t)strtol(cp, NULL, 10); // ENV[NUM_THREADS_NAME] == "N"
+        else
+            jl_n_threads = jl_cpu_threads(); // ENV[NUM_THREADS_NAME] == "auto"
+    }
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
 #ifndef __clang_analyzer__
@@ -450,6 +437,10 @@ void jl_start_threads(void)
     // according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive) {
+        if (jl_n_threads > jl_cpu_threads()) {
+            jl_printf(JL_STDERR, "ERROR: Too many threads requested for %s option.\n", MACHINE_EXCLUSIVE_NAME);
+            exit(1);
+        }
         memset(mask, 0, cpumasksize);
         mask[0] = 1;
         uvtid = (uv_thread_t)uv_thread_self();

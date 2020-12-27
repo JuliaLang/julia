@@ -1,0 +1,10 @@
+name = "libLLVM_jll"
+uuid = "8f36deef-c2a5-5394-99ed-8e07531fb29a"
+version = "11.0.0+5"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[compat]
+julia = "1.6"

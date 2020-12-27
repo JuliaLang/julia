@@ -845,3 +845,38 @@ fib34666(x) =
         f(x)
     end
 @test fib34666(25) == 75025
+
+function jitter_channel(f, k, delay, ntasks, schedule)
+    x = Channel(ch -> foreach(i -> put!(ch, i), 1:k), 1)
+    y = Channel(k) do ch
+        g = i -> begin
+            iseven(i) && sleep(delay)
+            put!(ch, f(i))
+        end
+        Threads.foreach(g, x; schedule=schedule, ntasks=ntasks)
+    end
+    return y
+end
+
+@testset "Threads.foreach(f, ::Channel)" begin
+    k = 50
+    delay = 0.01
+    expected = sin.(1:k)
+    ordered_fair = collect(jitter_channel(sin, k, delay, 1, Threads.FairSchedule()))
+    ordered_static = collect(jitter_channel(sin, k, delay, 1, Threads.StaticSchedule()))
+    @test expected == ordered_fair
+    @test expected == ordered_static
+
+    unordered_fair = collect(jitter_channel(sin, k, delay, 10, Threads.FairSchedule()))
+    unordered_static = collect(jitter_channel(sin, k, delay, 10, Threads.StaticSchedule()))
+    @test expected != unordered_fair
+    @test expected != unordered_static
+    @test Set(expected) == Set(unordered_fair)
+    @test Set(expected) == Set(unordered_static)
+
+    ys = Channel() do ys
+        inner = Channel(xs -> foreach(i -> put!(xs, i), 1:3))
+        Threads.foreach(x -> put!(ys, x), inner)
+    end
+    @test sort!(collect(ys)) == 1:3
+end

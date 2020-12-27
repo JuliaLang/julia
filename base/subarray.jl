@@ -65,6 +65,7 @@ size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), axes(V)))
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
 sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
+sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
 
 copy(V::SubArray) = V.parent[V.indices...]
 
@@ -81,7 +82,7 @@ Return the indices in the [`parent`](@ref) which correspond to the array view `A
 julia> A = [1 2; 3 4];
 
 julia> V = view(A, 1, :)
-2-element view(::Array{Int64,2}, 1, :) with eltype Int64:
+2-element view(::Matrix{Int64}, 1, :) with eltype Int64:
  1
  2
 
@@ -121,32 +122,43 @@ _maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A
 """
     view(A, inds...)
 
-Like [`getindex`](@ref), but returns a view into the parent array `A` with the
-given indices instead of making a copy.  Calling [`getindex`](@ref) or
-[`setindex!`](@ref) on the returned `SubArray` computes the
-indices to the parent array on the fly without checking bounds.
+Like [`getindex`](@ref), but returns a lightweight array that lazily references
+(or is effectively a _view_ into) the parent array `A` at the given index or indices
+`inds` instead of eagerly extracting elements or constructing a copied subset.
+Calling [`getindex`](@ref) or [`setindex!`](@ref) on the returned value
+(often a [`SubArray`](@ref)) computes the indices to access or modify the
+parent array on the fly.  The behavior is undefined if the shape of the parent array is
+changed after `view` is called because there is no bound check for the parent array; e.g.,
+it may cause a segmentation fault.
+
+Some immutable parent arrays (like ranges) may choose to simply
+recompute a new array in some circumstances instead of returning
+a `SubArray` if doing so is efficient and provides compatible semantics.
 
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> b = view(A, :, 1)
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  1
  3
 
 julia> fill!(b, 0)
-2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
+2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  0
  0
 
 julia> A # Note A has changed even though we modified b
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  0  2
  0  4
+
+julia> view(2:5, 2:3) # returns a range as type is immutable
+3:4
 ```
 """
 function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
@@ -363,17 +375,20 @@ end
 # The running sum is `f`; the cumulative stride product is `s`.
 # If the parent is a vector, then we offset the parent's own indices with parameters of I
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange}) =
-    (@_inline_meta; first(I[1]) - first(axes1(I[1]))*stride1)
+    (@_inline_meta; first(I[1]) - stride1*first(axes1(I[1])))
 # If the result is one-dimensional and it's a Colon, then linear
-# indexing uses the indices along the given dimension. Otherwise
-# linear indexing always starts with 1.
+# indexing uses the indices along the given dimension.
+# If the result is one-dimensional and it's a range, then linear
+# indexing might be offset if the index itself is offset
+# Otherwise linear indexing always starts with 1.
 compute_offset1(parent, stride1::Integer, I::Tuple) =
     (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
-compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Union{Slice, IdentityUnitRange}}, I::Tuple) =
+compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes(parent, dims[1])))  # index-preserving case
+compute_offset1(parent, stride1::Integer, dims, inds::Tuple{AbstractRange}, I::Tuple) =
+    (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes1(inds[1]))) # potentially index-offsetting case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
-
 function compute_linindex(parent, I::NTuple{N,Any}) where N
     @_inline_meta
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
@@ -398,19 +413,17 @@ find_extended_inds(::ScalarIndex, I...) = (@_inline_meta; find_extended_inds(I..
 find_extended_inds(i1, I...) = (@_inline_meta; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
 
-unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
-    unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
+function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
+    return unsafe_convert(Ptr{T}, V.parent) + _memory_offset(V.parent, map(first, V.indices)...)
+end
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
-pointer(V::SubArray, i::Int) = _pointer(V, i)
-_pointer(V::SubArray{<:Any,1}, i::Int) = pointer(V, (i,))
-_pointer(V::SubArray, i::Int) = pointer(V, Base._ind2sub(axes(V), i))
 
-function pointer(V::SubArray{T,N,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple{Vararg{Int}}) where {T,N}
+function pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::AbstractCartesianIndex{N}) where {N}
     index = first_index(V)
     strds = strides(V)
-    for d = 1:length(is)
+    for d = 1:N
         index += (is[d]-1)*strds[d]
     end
     return pointer(V.parent, index)

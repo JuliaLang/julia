@@ -12,7 +12,7 @@ using Base: uv_error, Experimental
 # Writable ends are always tested for write-ability before a write
 
 n = 20
-intvls = [2, .2, .1, .005]
+intvls = [2, .2, .1, .005, .00001]
 
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
 for i in 1:n
@@ -23,8 +23,14 @@ for i in 1:n
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
     FDmax = Sys.iswindows() ? 0x7fff : (n + 60) # expectations on reasonable values
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    fd_in_limits =
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    # Dump out what file descriptors are open for easier debugging of failure modes
+    if !fd_in_limits && Sys.islinux()
+        run(`ls -la /proc/$(getpid())/fd`)
+    end
+    @test fd_in_limits
 end
 
 function pfd_tst_reads(idx, intvl)

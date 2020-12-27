@@ -73,7 +73,9 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL,    // output-code_coverage
                             0, // incremental
                             0, // image_file_specified
-                            JL_OPTIONS_WARN_SCOPE_ON  // ambiguous scope warning
+                            JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
+                            0, // image-codegen
+                            0, // rr-detach
 };
 
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
@@ -149,7 +151,7 @@ static const char opts[]  =
 
 static const char opts_hidden[]  =
     // code generation options
-    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation\n"
+    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive or minimal compilation\n"
 
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
@@ -161,8 +163,9 @@ static const char opts_hidden[]  =
     " --output-bc name          Generate LLVM bitcode (.bc)\n"
     " --output-asm name         Generate an assembly file (.s)\n"
     " --output-incremental=no   Generate an incremental output file (rather than complete)\n"
-    " --trace-compile={stdout,stderr}\n"
-    "                           Print precompile statements for methods compiled during execution.\n\n"
+    " --trace-compile={stderr,name}\n"
+    "                           Print precompile statements for methods compiled during execution or save to a path\n\n"
+    " --image-codegen           Force generate code in imaging mode\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -199,7 +202,9 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compiled_modules,
            opt_machine_file,
            opt_project,
-           opt_bug_report
+           opt_bug_report,
+           opt_image_codegen,
+           opt_rr_detach,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -250,6 +255,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "worker",          optional_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       0, 1 },
+        { "image-codegen",   no_argument,       0, opt_image_codegen },
+        { "rr-detach",       no_argument,       0, opt_rr_detach },
         { 0, 0, 0, 0 }
     };
 
@@ -647,6 +654,12 @@ restart_switch:
                 jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_OFF;
             else
                 jl_errorf("julia: invalid argument to --handle-signals (%s)", optarg);
+            break;
+        case opt_image_codegen:
+            jl_options.image_codegen = 1;
+            break;
+        case opt_rr_detach:
+            jl_options.rr_detach = 1;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

@@ -5,10 +5,11 @@ getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compi
 using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
-             _apply, _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance, CodeInstance
+             _apply, _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
+             MethodInstance, CodeInstance, MethodMatch
 
-const getproperty = getfield
-const setproperty! = setfield!
+const getproperty = Core.getfield
+const setproperty! = Core.setfield!
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
@@ -41,6 +42,7 @@ include("expr.jl")
 include("error.jl")
 
 # core numeric operations & types
+==(x::T, y::T) where {T} = x === y
 include("bool.jl")
 include("number.jl")
 include("int.jl")
@@ -77,6 +79,13 @@ using .Iterators: zip, enumerate
 using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
 
+ntuple(f, ::Val{0}) = ()
+ntuple(f, ::Val{1}) = (@_inline_meta; (f(1),))
+ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
+ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
+ntuple(f, ::Val{n}) where {n} = ntuple(f, n::Int)
+ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
+
 # core docsystem
 include("docs/core.jl")
 
@@ -94,9 +103,11 @@ using .Sort
 # compiler #
 ############
 
+include("compiler/cicache.jl")
 include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
+include("compiler/methodtable.jl")
 
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
@@ -105,6 +116,7 @@ include("compiler/typeutils.jl")
 include("compiler/typelimits.jl")
 include("compiler/typelattice.jl")
 include("compiler/tfuncs.jl")
+include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")

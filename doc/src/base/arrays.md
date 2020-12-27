@@ -100,6 +100,7 @@ Base.LinearIndices
 Base.to_indices
 Base.checkbounds
 Base.checkindex
+Base.elsize
 ```
 
 ## Views (SubArrays and other view types)
@@ -127,6 +128,7 @@ Base.reinterpret
 Base.reshape
 Base.dropdims
 Base.vec
+Base.SubArray
 ```
 
 ## Concatenation and permutation

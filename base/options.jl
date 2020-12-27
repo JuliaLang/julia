@@ -44,6 +44,8 @@ struct JLOptions
     incremental::Int8
     image_file_specified::Int8
     warn_scope::Int8
+    image_codegen::Int8
+    rr_detach::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

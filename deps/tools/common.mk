@@ -35,13 +35,11 @@ CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
 ifneq ($(strip $(CMAKE_CXX_ARG)),)
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
-CMAKE_COMMON += -DCMAKE_LINKER="$(LD)" -DCMAKE_AR="$(shell which $(AR))" -DCMAKE_RANLIB="$(shell which $(RANLIB))"
+CMAKE_COMMON += -DCMAKE_LINKER="$$(which $(LD))" -DCMAKE_AR="$$(which $(AR))" -DCMAKE_RANLIB="$$(which $(RANLIB))"
 
 ifeq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
-ifneq ($(BUILD_OS),WINNT)
 CMAKE_COMMON += -DCMAKE_RC_COMPILER="$$(which $(CROSS_COMPILE)windres)"
-endif
 endif
 
 # For now this is LLVM specific, but I expect it won't be in the future

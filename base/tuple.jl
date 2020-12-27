@@ -14,6 +14,11 @@ true
 """
 NTuple
 
+# convenience function for extracting N from a Tuple (if defined)
+# else return `nothing` for anything else given (such as Vararg or other non-sized Union)
+_counttuple(::Type{<:NTuple{N,Any}}) where {N} = N
+_counttuple(::Type) = nothing
+
 ## indexing ##
 
 length(@nospecialize t::Tuple) = nfields(t)
@@ -91,6 +96,40 @@ function indexed_iterate(I, i, state)
     x
 end
 
+"""
+    Base.rest(collection[, itr_state])
+
+Generic function for taking the tail of `collection`, starting from a specific iteration
+state `itr_state`. Return a `Tuple`, if `collection` itself is a `Tuple`, a subtype of
+`AbstractVector`, if `collection` is an `AbstractArray`, a subtype of `AbstractString`
+if `collection` is an `AbstractString`, and an arbitrary iterator, falling back to
+`Iterators.rest(collection[, itr_state])`, otherwise.
+Can be overloaded for user-defined collection types to customize the behavior of slurping
+in assignments, like `a, b... = collection`.
+
+!!! compat "Julia 1.6"
+    `Base.rest` requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> first, state = iterate(a)
+(1, 2)
+
+julia> first, Base.rest(a, state)
+(1, [3, 2, 4])
+```
+"""
+function rest end
+rest(t::Tuple) = t
+rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
+rest(a::Array, i::Int=1) = a[i:end]
+rest(itr, state...) = Iterators.rest(itr, state...)
+
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
 first(t::Tuple) = t[1]
@@ -108,15 +147,32 @@ function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
     end
 end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
-function _compute_eltype(t::Type{<:Tuple})
+function _tuple_unique_fieldtypes(@nospecialize t)
     @_pure_meta
-    t isa Union && return promote_typejoin(eltype(t.a), eltype(t.b))
+    types = IdSet()
     t´ = unwrap_unionall(t)
-    r = Union{}
-    for ti in t´.parameters
-        r = promote_typejoin(r, rewrap_unionall(unwrapva(ti), t))
+    # Given t = Tuple{Vararg{S}} where S<:Real, the various
+    # unwrapping/wrapping/va-handling here will return Real
+    if t isa Union
+        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
+        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
+    else
+        r = Union{}
+        for ti in (t´::DataType).parameters
+            r = push!(types, rewrap_unionall(unwrapva(ti), t))
+        end
     end
-    return r
+    return Core.svec(types...)
+end
+function _compute_eltype(@nospecialize t)
+    @_pure_meta # TODO: the compiler shouldn't need this
+    types = _tuple_unique_fieldtypes(t)
+    return afoldl(types...) do a, b
+        # if we've already reached Any, it can't widen any more
+        a === Any && return Any
+        b === Any && return Any
+        return promote_typejoin(a, b)
+    end
 end
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
@@ -154,9 +210,9 @@ end
 
 # 1 argument function
 map(f, t::Tuple{})              = ()
-map(f, t::Tuple{Any,})          = (f(t[1]),)
-map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
-map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
+map(f, t::Tuple{Any,})          = (@_inline_meta; (f(t[1]),))
+map(f, t::Tuple{Any, Any})      = (@_inline_meta; (f(t[1]), f(t[2])))
+map(f, t::Tuple{Any, Any, Any}) = (@_inline_meta; (f(t[1]), f(t[2]), f(t[3])))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
 const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
@@ -173,8 +229,8 @@ function map(f, t::Any16)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
-map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (f(t[1],s[1]),)
-map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (f(t[1],s[1]), f(t[2],s[2]))
+map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (@_inline_meta; (f(t[1],s[1]),))
+map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (@_inline_meta; (f(t[1],s[1]), f(t[2],s[2])))
 function map(f, t::Tuple, s::Tuple)
     @_inline_meta
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
@@ -222,6 +278,23 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # NOTE: this means this constructor must be avoided in Core.Compiler!
 if nameof(@__MODULE__) === :Base
 
+function tuple_type_tail(T::Type)
+    @_pure_meta # TODO: this method is wrong (and not @pure)
+    if isa(T, UnionAll)
+        return UnionAll(T.var, tuple_type_tail(T.body))
+    elseif isa(T, Union)
+        return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+    else
+        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+        if isvatuple(T) && length(T.parameters) == 1
+            va = unwrap_unionall(T.parameters[1])::Core.TypeofVararg
+            (isdefined(va, :N) && isa(va.N, Int)) || return T
+            return Tuple{Vararg{va.T, va.N-1}}
+        end
+        return Tuple{argtail(T.parameters...)...}
+    end
+end
+
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 
 Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
@@ -240,7 +313,7 @@ function _totuple(T, itr, s...)
     @_inline_meta
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    (convert(tuple_type_head(T), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
+    return (convert(fieldtype(T, 1), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
 end
 
 # use iterative algorithm for long tuples
@@ -256,6 +329,11 @@ end
 _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
 
 _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
+
+# for types that `apply` knows about, just splatting is faster than collecting first
+_totuple(::Type{Tuple}, itr::Array) = (itr...,)
+_totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
+_totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 
 end
 
@@ -419,6 +497,22 @@ function _tuple_any(f::Function, tf::Bool, a, b...)
     _tuple_any(f, tf | f(a), b...)
 end
 _tuple_any(f::Function, tf::Bool) = tf
+
+
+# a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    @_pure_meta
+    for y in itr
+        y === x && return true
+    end
+    return false
+end
+function in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+    @nospecialize itr
+    return sym_in(x, itr)
+end
+
 
 """
     empty(x::Tuple)

@@ -219,6 +219,10 @@ timesofar("utils")
     # issue #24062
     @test_throws InexactError BitArray([0, 1, 2, 3])
     @test_throws MethodError BitArray([0, ""])
+
+    # construction with poor inference
+    f(c) = BitVector(c[1])
+    @test @inferred(f(AbstractVector[[0,1]])) == [false, true]
 end
 
 timesofar("constructors")
@@ -666,6 +670,8 @@ timesofar("indexing")
     b1 = bitrand(v1)
     @test_throws ArgumentError deleteat!(b1, [1, 1, 2])
     @test_throws BoundsError deleteat!(b1, [1, length(b1)+1])
+    @test_throws BoundsError deleteat!(b1, [length(b1)+rand(1:100)])
+    @test_throws BoundsError deleteat!(bitrand(1), [-1, 0, 1])
 
     @test_throws BoundsError deleteat!(BitVector(), 1)
     @test_throws BoundsError deleteat!(BitVector(), [1])
@@ -1213,6 +1219,8 @@ timesofar("datamove")
         @check_bit_operation findall(falses(t)) ret_type
         @check_bit_operation findall(bitrand(t)) ret_type
     end
+
+    @test count(trues(2, 2), init=0x03) === 0x07
 end
 
 timesofar("find")

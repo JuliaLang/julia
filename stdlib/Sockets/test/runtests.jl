@@ -21,7 +21,7 @@ function killjob(d)
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
     nothing
 end
-Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
+sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
@@ -218,6 +218,8 @@ end
 end
 
 @testset "getaddrinfo" begin
+    @test getaddrinfo("127.0.0.1") == ip"127.0.0.1"
+    @test getaddrinfo("::1") == ip"::1"
     let localhost = getnameinfo(ip"127.0.0.1")::String
         @test !isempty(localhost) && localhost != "127.0.0.1"
         @test !isempty(getalladdrinfo(localhost)::Vector{IPAddr})
@@ -255,10 +257,10 @@ end
 end
 
 # test connecting to a named port
-let localhost = getaddrinfo("localhost")
+let localhost = ip"127.0.0.1"
     global randport
     randport, server = listenany(localhost, defaultport)
-    @async connect("localhost", randport)
+    @async connect(localhost, randport)
     s1 = accept(server)
     @test_throws ErrorException("client TCPSocket is not in initialization state") accept(server, s1)
     @test_throws Base._UVError("listen", Base.UV_EADDRINUSE) listen(randport)
@@ -615,3 +617,6 @@ end
         end
     end
 end
+
+
+close(sockets_watchdog_timer)

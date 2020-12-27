@@ -431,7 +431,7 @@ Random.seed!(100)
     end
 end
 
-@testset "syr for eltype $elty" for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
+@testset "syr for eltype $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
     A = rand(elty, 5, 5)
     @test triu(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('U', one(elty), A[1,:], zeros(elty, 5, 5))
     @test tril(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), A[1,:], zeros(elty, 5, 5))
@@ -439,7 +439,7 @@ end
     @test tril(A[1,:] * transpose(A[1,:])) ≈ BLAS.syr!('L', one(elty), view(A, 1, :), zeros(elty, 5, 5))
 end
 
-@testset "her for eltype $elty" for elty in (Complex{Float32}, Complex{Float64})
+@testset "her for eltype $elty" for elty in (ComplexF32, ComplexF64)
     A = rand(elty, 5, 5)
     @test triu(A[1,:] * A[1,:]') ≈ BLAS.her!('U', one(real(elty)), A[1,:], zeros(elty, 5, 5))
     @test tril(A[1,:] * A[1,:]') ≈ BLAS.her!('L', one(real(elty)), A[1,:], zeros(elty, 5, 5))
@@ -458,7 +458,44 @@ Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
 Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
 Base.unsafe_convert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.unsafe_convert(Ptr{T}, A.A)
 
-Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
+Base.strides(A::WrappedArray) = strides(A.A)
+
+@testset "strided interface adjtrans" begin
+    x = WrappedArray([1, 2, 3, 4])
+    @test stride(x,1) == 1
+    @test stride(x,2) == stride(x,3) == 4
+    @test strides(x') == strides(transpose(x)) == (4,1)
+    @test pointer(x') == pointer(transpose(x)) == pointer(x)
+    @test_throws BoundsError stride(x,0)
+
+    A = WrappedArray([1 2; 3 4; 5 6])
+    @test stride(A,1) == 1
+    @test stride(A,2) == 3
+    @test stride(A,3) == stride(A,4) >= 6
+    @test strides(A') == strides(transpose(A)) == (3,1)
+    @test pointer(A') == pointer(transpose(A)) == pointer(A)
+    @test_throws BoundsError stride(A,0)
+
+    y = WrappedArray([1+im, 2, 3, 4])
+    @test strides(transpose(y)) == (4,1)
+    @test pointer(transpose(y)) == pointer(y)
+    @test_throws MethodError strides(y')
+    @test_throws ErrorException pointer(y')
+
+    B = WrappedArray([1+im 2; 3 4; 5 6])
+    @test strides(transpose(B)) == (3,1)
+    @test pointer(transpose(B)) == pointer(B)
+    @test_throws MethodError strides(B')
+    @test_throws ErrorException pointer(B')
+
+    @test_throws MethodError stride(1:5,0)
+    @test_throws MethodError stride(1:5,1)
+    @test_throws MethodError stride(1:5,2)
+    @test_throws MethodError strides(transpose(1:5))
+    @test_throws MethodError strides((1:5)')
+    @test_throws ErrorException pointer(transpose(1:5))
+    @test_throws ErrorException pointer((1:5)')
+end
 
 @testset "strided interface blas" begin
     for elty in (Float32, Float64, ComplexF32, ComplexF64)
@@ -550,6 +587,33 @@ Base.stride(A::WrappedArray, i::Int) = stride(A.A, i)
         @test C == WrappedArray([23 50+38im; 35+27im 152])
         @test BLAS.her2k!('U', 'N', elty(2), A, B, real(elty(1)), C) isa WrappedArray{elty,2}
         @test C == WrappedArray([63 138+38im; 35+27im 352])
+    end
+end
+
+@testset "get_set_num_threads" begin
+    default = BLAS.get_num_threads()
+    @test default isa Int
+    @test default > 0
+    BLAS.set_num_threads(1)
+    @test BLAS.get_num_threads() === 1
+    BLAS.set_num_threads(default)
+    @test BLAS.get_num_threads() === default
+
+    @test_logs (:warn,) match_mode=:any BLAS._set_num_threads(1, _blas=:unknown)
+    if BLAS.guess_vendor() !== :osxblas
+        # test osxblas which is not covered by CI
+        withenv("VECLIB_MAXIMUM_THREADS" => nothing) do
+            @test @test_logs(
+                (:warn,),
+                (:warn,),
+                match_mode=:any,
+                BLAS._get_num_threads(_blas=:osxblas),
+            ) === nothing
+            @test_logs BLAS._set_num_threads(1, _blas=:osxblas)
+            @test @test_logs(BLAS._get_num_threads(_blas=:osxblas)) === 1
+            @test_logs BLAS._set_num_threads(2, _blas=:osxblas)
+            @test @test_logs(BLAS._get_num_threads(_blas=:osxblas)) === 2
+        end
     end
 end
 

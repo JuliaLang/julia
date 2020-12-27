@@ -1,0 +1,11 @@
+name = "LibSSH2_jll"
+uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.9.1+0"
+
+[deps]
+MbedTLS_jll = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[compat]
+julia = "1.6"

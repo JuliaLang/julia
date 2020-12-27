@@ -18,18 +18,16 @@ export @test, @test_throws, @test_broken, @test_skip,
     @test_logs, @test_deprecated
 
 export @testset
-# Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 
-import Distributed: myid
-
 using Random
 using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
-using Core.Compiler: typesubtract
+using Base: typesplit
+using Serialization: Serialization
 
 const DISPLAY_FAILED = (
     :isequal,
@@ -39,6 +37,7 @@ const DISPLAY_FAILED = (
     :startswith,
     :endswith,
     :isempty,
+    :contains
 )
 
 #-----------------------------------------------------------------------
@@ -86,7 +85,11 @@ struct Pass <: Result
     orig_expr
     data
     value
+    function Pass(test_type::Symbol, orig_expr, data, thrown)
+        return new(test_type, orig_expr, data, thrown isa String ? "String" : thrown)
+    end
 end
+
 function Base.show(io::IO, t::Pass)
     printstyled(io, "Test Passed"; bold = true, color=:green)
     if !(t.orig_expr === nothing)
@@ -94,7 +97,7 @@ function Base.show(io::IO, t::Pass)
     end
     if t.test_type === :test_throws
         # The correct type of exception was thrown
-        print(io, "\n      Thrown: ", typeof(t.value))
+        print(io, "\n      Thrown: ", t.value isa String ? t.value : typeof(t.value))
     elseif t.test_type === :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
@@ -108,13 +111,21 @@ end
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
 """
-mutable struct Fail <: Result
+struct Fail <: Result
     test_type::Symbol
-    orig_expr
-    data
-    value
+    orig_expr::String
+    data::Union{Nothing, String}
+    value::String
     source::LineNumberNode
+    function Fail(test_type::Symbol, orig_expr, data, value, source::LineNumberNode)
+        return new(test_type,
+            string(orig_expr),
+            data === nothing ? nothing : string(data),
+            string(isa(data, Type) ? typeof(value) : value),
+            source)
+    end
 end
+
 function Base.show(io::IO, t::Fail)
     printstyled(io, "Test Failed"; bold=true, color=Base.error_color())
     print(io, " at ")
@@ -123,7 +134,7 @@ function Base.show(io::IO, t::Fail)
     if t.test_type === :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
         print(io, "\n    Expected: ", t.data)
-        print(io, "\n      Thrown: ", isa(t.data, Type) ? typeof(t.value) : t.value)
+        print(io, "\n      Thrown: ", t.value)
     elseif t.test_type === :test_throws_nothing
         # An exception was expected, but no exception was thrown
         print(io, "\n    Expected: ", t.data)
@@ -143,11 +154,11 @@ it evaluated to something other than a [`Bool`](@ref).
 In the case of `@test_broken` it is used to indicate that an
 unexpected `Pass` `Result` occurred.
 """
-mutable struct Error <: Result
+struct Error <: Result
     test_type::Symbol
-    orig_expr
-    value
-    backtrace
+    orig_expr::String
+    value::String
+    backtrace::String
     source::LineNumberNode
 
     function Error(test_type, orig_expr, value, bt, source)
@@ -155,17 +166,18 @@ mutable struct Error <: Result
             bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(Base.show_exception_stack, bt)
+            bt_str = sprint(Base.show_exception_stack, bt; context=stdout)
         else
             bt_str = ""
         end
-        new(test_type,
-            orig_expr,
+        return new(test_type,
+            string(orig_expr),
             sprint(show, value, context = :limit => true),
             bt_str,
             source)
     end
 end
+
 function Base.show(io::IO, t::Error)
     if t.test_type === :test_interrupted
         printstyled(io, "Interrupted", color=Base.error_color())
@@ -202,10 +214,11 @@ end
 The test condition is the expected (failed) result of a broken test,
 or was explicitly skipped with `@test_skip`.
 """
-mutable struct Broken <: Result
+struct Broken <: Result
     test_type::Symbol
     orig_expr
 end
+
 function Base.show(io::IO, t::Broken)
     printstyled(io, "Test Broken\n"; bold=true, color=Base.warn_color())
     if t.test_type === :skipped && !(t.orig_expr === nothing)
@@ -214,6 +227,25 @@ function Base.show(io::IO, t::Broken)
         print(io, "  Expression: ", t.orig_expr)
     end
 end
+
+# Types that appear in TestSetException.errors_and_fails we convert eagerly into strings
+# other types we convert lazily
+function Serialization.serialize(s::Serialization.AbstractSerializer, t::Pass)
+    Serialization.serialize_type(s, typeof(t))
+    Serialization.serialize(s, t.test_type)
+    Serialization.serialize(s, t.orig_expr === nothing ? nothing : string(t.orig_expr))
+    Serialization.serialize(s, t.data === nothing ? nothing : string(t.data))
+    Serialization.serialize(s, string(t.value))
+    nothing
+end
+
+function Serialization.serialize(s::Serialization.AbstractSerializer, t::Broken)
+    Serialization.serialize_type(s, typeof(t))
+    Serialization.serialize(s, t.test_type)
+    Serialization.serialize(s, t.orig_expr === nothing ? nothing : string(t.orig_expr))
+    nothing
+end
+
 
 #-----------------------------------------------------------------------
 
@@ -232,18 +264,18 @@ struct Threw <: ExecutionResult
 end
 
 function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
-    res = true
-    i = 1
     evaled_args = evaluated.args
     quoted_args = quoted.args
     n = length(evaled_args)
     kw_suffix = ""
     if evaluated.head === :comparison
         args = evaled_args
+        res = true
+        i = 1
         while i < n
             a, op, b = args[i], args[i+1], args[i+2]
             if res
-                res = op(a, b) === true  # Keep `res` type stable
+                res = op(a, b)
             end
             quoted_args[i] = a
             quoted_args[i+2] = b
@@ -255,7 +287,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
         kwargs = evaled_args[2].args  # Keyword arguments from `Expr(:parameters, ...)`
         args = evaled_args[3:n]
 
-        res = op(args...; kwargs...) === true
+        res = op(args...; kwargs...)
 
         # Create "Evaluated" expression which looks like the original call but has all of
         # the arguments evaluated
@@ -280,7 +312,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
+             res === true ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
              source)
 end
 
@@ -622,7 +654,7 @@ Returns the result of evaluating `expr`.
 See also [`@test_nowarn`](@ref) to check for the absence of error output.
 
 Note: Warnings generated by `@warn` cannot be tested with this macro. Use
-`@test_logs` instead.
+[`@test_logs`](@ref) instead.
 """
 macro test_warn(msg, expr)
     quote
@@ -649,7 +681,7 @@ Test whether evaluating `expr` results in empty [`stderr`](@ref) output
 (no warnings or other messages).  Returns the result of evaluating `expr`.
 
 Note: The absence of warnings generated by `@warn` cannot be tested
-with this macro. Use `@test_logs expr` instead.
+with this macro. Use [`@test_logs`](@ref) instead.
 """
 macro test_nowarn(expr)
     quote
@@ -731,8 +763,8 @@ end
 
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
-record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
-function record(ts::FallbackTestSet, t::Union{Fail,Error})
+record(ts::FallbackTestSet, t::Union{Pass, Broken}) = t
+function record(ts::FallbackTestSet, t::Union{Fail, Error})
     println(t)
     throw(FallbackTestSetException("There was an error during testing"))
 end
@@ -753,8 +785,9 @@ mutable struct DefaultTestSet <: AbstractTestSet
     results::Vector
     n_passed::Int
     anynonpass::Bool
+    verbose::Bool
 end
-DefaultTestSet(desc) = DefaultTestSet(desc, [], 0, false)
+DefaultTestSet(desc; verbose = false) = DefaultTestSet(desc, [], 0, false, verbose)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -764,21 +797,19 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
-    if myid() == 1
+    if TESTSET_PRINT_ENABLE[]
         printstyled(ts.description, ": ", color=:white)
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
-            # don't print the backtrace for Errors because it gets printed in the show
-            # method
-            if !isa(t, Error)
+            if !isa(t, Error) # if not gets printed in the show method
                 Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
             end
             println()
         end
     end
     push!(ts.results, t)
-    t, isa(t, Error) || backtrace()
+    return t
 end
 
 # When a DefaultTestSet finishes, it records itself to its parent
@@ -790,9 +821,9 @@ record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 
 function print_test_errors(ts::DefaultTestSet)
     for t in ts.results
-        if (isa(t, Error) || isa(t, Fail)) && myid() == 1
+        if isa(t, Error) || isa(t, Fail)
             println("Error in testset $(ts.description):")
-            Base.show(stdout,t)
+            show(t)
             println()
         elseif isa(t, DefaultTestSet)
             print_test_errors(t)
@@ -876,7 +907,7 @@ function finish(ts::DefaultTestSet)
     if total != total_pass + total_broken
         # Get all the error/failures and bring them along for the ride
         efs = filter_errors(ts)
-        throw(TestSetException(total_pass,total_fail,total_error, total_broken, efs))
+        throw(TestSetException(total_pass, total_fail, total_error, total_broken, efs))
     end
 
     # return the testset so it is returned from the @testset macro
@@ -987,8 +1018,9 @@ function print_counts(ts::DefaultTestSet, depth, align,
     end
     println()
 
-    # Only print results at lower levels if we had failures
-    if np + nb != subtotal
+    # Only print results at lower levels if we had failures or if the user
+    # wants.
+    if (np + nb != subtotal) || (ts.verbose)
         for t in ts.results
             if isa(t, DefaultTestSet)
                 print_counts(t, depth + 1, align,
@@ -1030,8 +1062,9 @@ along with a summary of the test results.
 
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
 also be used for any nested `@testset` invocations. The given options are only
-applied to the test set where they are given. The default test set type does
-not take any options.
+applied to the test set where they are given. The default test set type
+accepts the `verbose` boolean option: if `true`, the result summary of the
+nested testsets is shown even when they all pass (the default is `false`).
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
@@ -1100,6 +1133,7 @@ function testset_beginend(args, tests, source)
     # action (such as reporting the results)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
+        local ret
         local ts = $(testsettype)($desc; $options...)
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
@@ -1120,9 +1154,10 @@ function testset_beginend(args, tests, source)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
+            pop_testset()
+            ret = finish(ts)
         end
-        pop_testset()
-        finish(ts)
+        ret
     end
     # preserve outer location if possible
     if tests isa Expr && tests.head === :block && !isempty(tests.args) && tests.args[1] isa LineNumberNode
@@ -1237,7 +1272,7 @@ function parse_testset_args(args)
         elseif isa(arg, Expr) && arg.head === :(=)
             # we're building up a Dict literal here
             key = Expr(:quote, arg.args[1])
-            push!(options.args, Expr(:call, :(=>), key, arg.args[2]))
+            push!(options.args, Expr(:call, :(=>), key, esc(arg.args[2])))
         else
             error("Unexpected argument $arg to @testset")
         end
@@ -1320,7 +1355,7 @@ Int64
 
 julia> @code_warntype f(2)
 Variables
-  #self#::Core.Compiler.Const(f, false)
+  #self#::Core.Const(f)
   a::Int64
 
 Body::UNION{FLOAT64, INT64}
@@ -1393,19 +1428,27 @@ function _inferred(ex, mod, allow = :(Union{}))
             end)
             @assert length(inftypes) == 1
             rettype = result isa Type ? Type{result} : typeof(result)
-            rettype <: allow || rettype == typesubtract(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            rettype <: allow || rettype == typesplit(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
             result
         end
     end)
 end
 
+function is_in_mods(m::Module, recursive::Bool, mods)
+    while true
+        m in mods && return true
+        recursive || return false
+        p = parentmodule(m)
+        p === m && return false
+        m = p
+    end
+end
+
 """
-    detect_ambiguities(mod1, mod2...; imported=false, recursive=false, ambiguous_bottom=false)
+    detect_ambiguities(mod1, mod2...; recursive=false, ambiguous_bottom=false)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
-Use `imported=true` if you wish to also test functions that were
-imported into these modules from elsewhere.
 Use `recursive=true` to test in all submodules.
 
 `ambiguous_bottom` controls whether ambiguities triggered only by
@@ -1413,9 +1456,11 @@ Use `recursive=true` to test in all submodules.
 want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
 function detect_ambiguities(mods...;
-                            imported::Bool = false,
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
+    @nospecialize mods
+    ambs = Set{Tuple{Method,Method}}()
+    mods = collect(mods)::Vector{Module}
     function sortdefs(m1::Method, m2::Method)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1423,96 +1468,90 @@ function detect_ambiguities(mods...;
         end
         return ord12 ? (m1, m2) : (m2, m1)
     end
-    ambs = Set{Tuple{Method,Method}}()
-    for mod in mods
-        for n in names(mod, all = true, imported = imported)
-            Base.isdeprecated(mod, n) && continue
-            if !isdefined(mod, n)
-                println("Skipping ", mod, '.', n)  # typically stale exports
-                continue
-            end
-            f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                subambs = detect_ambiguities(f,
-                    imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
-                union!(ambs, subambs)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.mt !== Symbol.name.mt
-                mt = Base.MethodList(f.name.mt)
-                for m in mt
-                    if m.ambig !== nothing
-                        for m2 in m.ambig
-                            if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
-                                push!(ambs, sortdefs(m, m2.func))
-                            end
-                        end
+    function examine(mt::Core.MethodTable)
+        for m in Base.MethodList(mt)
+            is_in_mods(m.module, recursive, mods) || continue
+            ambig = Int32[0]
+            ms = Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+            ambig[1] == 0 && continue
+            for match2 in ms
+                m2 = match2.method
+                 if !(m === m2 || Base.morespecific(m2.sig, m.sig))
+                    if Base.isambiguous(m, m2; ambiguous_bottom)
+                        push!(ambs, sortdefs(m, m2))
                     end
                 end
             end
         end
     end
-    function is_in_mods(m::Module)
-        while true
-            m in mods && return true
-            recursive || return false
-            p = parentmodule(m)
-            p === m && return false
-            m = parent
-        end
-    end
-    for m in Base.MethodList(Symbol.name.mt)
-        if m.ambig !== nothing && is_in_mods(m.module)
-            for m2 in m.ambig
-                if Base.isambiguous(m, m2.func, ambiguous_bottom=ambiguous_bottom)
-                    push!(ambs, sortdefs(m, m2.func))
-                end
+    work = Base.loaded_modules_array()
+    while !isempty(work)
+        mod = pop!(work)
+        for n in names(mod, all = true)
+            Base.isdeprecated(mod, n) && continue
+            if !isdefined(mod, n)
+                is_in_mods(mod, recursive, mods) && println("Skipping ", mod, '.', n)  # typically stale exports
+                continue
+            end
+            f = Base.unwrap_unionall(getfield(mod, n))
+            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
+                push!(work, f)
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+                examine(f.name.mt)
             end
         end
     end
+    examine(Symbol.name.mt)
+    examine(DataType.name.mt)
     return collect(ambs)
 end
 
 """
-    detect_unbound_args(mod1, mod2...; imported=false, recursive=false)
+    detect_unbound_args(mod1, mod2...; recursive=false)
 
 Returns a vector of `Method`s which may have unbound type parameters.
-Use `imported=true` if you wish to also test functions that were
-imported into these modules from elsewhere.
 Use `recursive=true` to test in all submodules.
 """
 function detect_unbound_args(mods...;
-                             imported::Bool = false,
                              recursive::Bool = false)
+    @nospecialize mods
     ambs = Set{Method}()
-    for mod in mods
-        for n in names(mod, all = true, imported = imported)
+    mods = collect(mods)::Vector{Module}
+    function examine(mt::Core.MethodTable)
+        for m in Base.MethodList(mt)
+            has_unbound_vars(m.sig) || continue
+            is_in_mods(m.module, recursive, mods) || continue
+            tuple_sig = Base.unwrap_unionall(m.sig)::DataType
+            if Base.isvatuple(tuple_sig)
+                params = tuple_sig.parameters[1:(end - 1)]
+                tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
+                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
+                if mf !== nothing && mf !== m && mf.sig <: tuple_sig
+                    continue
+                end
+            end
+            push!(ambs, m)
+        end
+    end
+    work = Base.loaded_modules_array()
+    while !isempty(work)
+        mod = pop!(work)
+        for n in names(mod, all = true)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
-                println("Skipping ", mod, '.', n)  # typically stale exports
+                is_in_mods(mod, recursive, mods) && println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
-            if recursive && isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                subambs = detect_unbound_args(f, imported=imported, recursive=recursive)
-                union!(ambs, subambs)
-            elseif isa(f, DataType) && isdefined(f.name, :mt)
-                mt = Base.MethodList(f.name.mt)
-                for m in mt
-                    if has_unbound_vars(m.sig)
-                        tuple_sig = Base.unwrap_unionall(m.sig)::DataType
-                        if Base.isvatuple(tuple_sig)
-                            params = tuple_sig.parameters[1:(end - 1)]
-                            tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
-                            mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
-                            if mf !== nothing && mf.func !== m && mf.func.sig <: tuple_sig
-                                continue
-                            end
-                        end
-                        push!(ambs, m)
-                    end
-                end
+            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
+                push!(work, f)
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+                examine(f.name.mt)
             end
         end
     end
+    examine(Symbol.name.mt)
+    examine(DataType.name.mt)
     return collect(ambs)
 end
 
@@ -1542,9 +1581,8 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
                 end
                 lastp = typ.parameters[fc]
                 vararg = Base.unwrap_unionall(lastp)
-                if vararg isa DataType && vararg.name === Base._va_typename
-                    N = vararg.parameters[2]
-                    constrains_param(var, N, covariant) && return true
+                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
+                    constrains_param(var, vararg.N, covariant) && return true
                     # T = vararg.parameters[1] doesn't constrain var
                 else
                     constrains_param(var, lastp, covariant) && return true
@@ -1580,11 +1618,11 @@ with string types besides the standard `String` type.
 struct GenericString <: AbstractString
     string::AbstractString
 end
-Base.ncodeunits(s::GenericString) = ncodeunits(s.string)
-Base.codeunit(s::GenericString) = codeunit(s.string)
-Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)
-Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)
-Base.iterate(s::GenericString, i::Integer=1) = iterate(s.string, i)
+Base.ncodeunits(s::GenericString) = ncodeunits(s.string)::Int
+Base.codeunit(s::GenericString) = codeunit(s.string)::Type{<:Union{UInt8, UInt16, UInt32}}
+Base.codeunit(s::GenericString, i::Integer) = codeunit(s.string, i)::Union{UInt8, UInt16, UInt32}
+Base.isvalid(s::GenericString, i::Integer) = isvalid(s.string, i)::Bool
+Base.iterate(s::GenericString, i::Integer=1) = iterate(s.string, i)::Union{Nothing,Tuple{AbstractChar,Int}}
 Base.reverse(s::GenericString) = GenericString(reverse(s.string))
 Base.reverse(s::SubString{GenericString}) =
     GenericString(typeof(s.string)(reverse(String(s))))

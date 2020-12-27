@@ -582,4 +582,18 @@ a = Dates.Time(23, 1, 1)
       hash([Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
       hash(Date("2018-1-03"):Day(1):Date("2018-1-05"))
 
+@testset "range overflow" begin
+    # DateTime ranges interactions with overflow. If not handled correctly `Dates.len` could
+    # infinite loop
+    @test length(DateTime(0):typemax(Millisecond):DateTime(0)) == 1
+    @test length(typemax(DateTime):typemax(Millisecond):typemax(DateTime)) == 1
+
+    # Overflow interaction is easier to comprehend with using UTM extremes
+    utm_typemin = DateTime(Dates.UTM(typemin(Int64)))
+    utm_typemax = DateTime(Dates.UTM(typemax(Int64)))
+
+    @test length(utm_typemax:Millisecond(1):utm_typemax) == 1
+    @test length(utm_typemin:-Millisecond(1):utm_typemin) == 1
 end
+
+end  # RangesTest module

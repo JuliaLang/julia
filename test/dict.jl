@@ -356,7 +356,7 @@ end
     d = Dict{Int, String}()
     show(io, d)
     str = String(take!(io))
-    @test str == "Dict{$(Int),String}()"
+    @test str == "Dict{$(Int), String}()"
     close(io)
 end
 
@@ -439,7 +439,7 @@ mutable struct T10647{T}; x::T; end
     Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
-@testset "IdDict{Any,Any}" begin
+@testset "IdDict{Any,Any} and partial inference" begin
     a = IdDict{Any,Any}()
     a[1] = a
     a[a] = 2
@@ -478,6 +478,13 @@ end
     @test isa(d, IdDict{Any,Any})
     @test d == IdDict{Any,Any}(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Any,Any}
+
+    d = IdDict{Any,Int32}(:hi => 7)
+    let c = Ref{Any}(1.5)
+        f() = c[]
+        @test @inferred(get!(f, d, :hi)) === Int32(7)
+        @test_throws InexactError(:Int32, Int32, 1.5) get!(f, d, :hello)
+    end
 end
 
 @testset "IdDict" begin
@@ -554,7 +561,8 @@ end
     @test delete!(d, "a") === d
     @test !haskey(d, "a")
     @test_throws ArgumentError get!(IdDict{Symbol,Any}(), 2, "b")
-
+    @test get!(IdDict{Int,Int}(), 1, 2.0) === 2
+    @test get!(()->2.0, IdDict{Int,Int}(), 1) === 2
 
     # sizehint! & rehash!
     d = IdDict()
@@ -569,6 +577,13 @@ end
     end
     @test length(d.ht) >= 10^4
     @test d === Base.rehash!(d, 123452) # number needs to be even
+
+    # filter!
+    d = IdDict(1=>1, 2=>3, 3=>2)
+    filter!(x->isodd(x[2]), d)
+    @test d[1] == 1
+    @test d[2] == 3
+    @test !haskey(d, 3)
 
     # not an iterator of tuples or pairs
     @test_throws ArgumentError IdDict([1, 2, 3, 4])
@@ -722,7 +737,10 @@ import Base.ImmutableDict
     v = [k1 => v1, k2 => v2]
     d5 = ImmutableDict(v...)
     @test d5 == d2
-    @test collect(d5) == v
+    @test reverse(collect(d5)) == v
+    d6 = ImmutableDict(:a => 1, :b => 3, :a => 2)
+    @test d6[:a] == 2
+    @test d6[:b] == 3
 
     @test !haskey(ImmutableDict(-0.0=>1), 0.0)
 end
@@ -882,15 +900,40 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # issue #26939
     d26939 = WeakKeyDict()
-    d26939[big"1.0" + 1.1] = 1
-    GC.gc() # make sure this doesn't segfault
+    (@noinline d -> d[big"1.0" + 1.1] = 1)(d26939)
+    GC.gc() # primarily to make sure this doesn't segfault
+    @test count(d26939) == 0
+    @test length(d26939.ht) == 1
+    @test length(d26939) == 0
+    @test isempty(d26939)
+    empty!(d26939)
+    for i in 1:8
+        (@noinline (d, i) -> d[big(i + 12345)] = 1)(d26939, i)
+    end
+    lock(GC.gc, d26939)
+    @test length(d26939.ht) == 8
+    @test count(d26939) == 0
+    @test !haskey(d26939, nothing)
+    @test_throws KeyError(nothing) d26939[nothing]
+    @test_throws KeyError(nothing) get(d26939, nothing, 1)
+    @test_throws KeyError(nothing) get(() -> 1, d26939, nothing)
+    @test_throws KeyError(nothing) pop!(d26939, nothing)
+    @test getkey(d26939, nothing, 321) === 321
+    @test pop!(d26939, nothing, 321) === 321
+    @test delete!(d26939, nothing) === d26939
+    @test length(d26939.ht) == 8
+    @test_throws ArgumentError d26939[nothing] = 1
+    @test_throws ArgumentError get!(d26939, nothing, 1)
+    @test_throws ArgumentError get!(() -> 1, d26939, nothing)
+    @test isempty(d26939)
+    @test length(d26939.ht) == 0
+    @test length(d26939) == 0
 
     # WeakKeyDict does not convert keys on setting
     @test_throws ArgumentError WeakKeyDict{Vector{Int},Any}([5.0]=>1)
     wkd = WeakKeyDict(A=>2)
     @test_throws ArgumentError get!(wkd, [2.0], 2)
-    @test_throws ArgumentError get!(wkd, [1.0], 2) # get! fails even if the key is only
-                                                   # used for getting and not setting
+    @test get!(wkd, [1.0], 2) === 2
 
     # WeakKeyDict does convert on getting
     wkd = WeakKeyDict(A=>2)
@@ -902,16 +945,18 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # map! on values of WKD
     wkd = WeakKeyDict(A=>2, B=>3)
-    map!(v->v-1, values(wkd))
+    map!(v -> v-1, values(wkd))
     @test wkd == WeakKeyDict(A=>1, B=>2)
 
     # get!
     wkd = WeakKeyDict(A=>2)
-    get!(wkd, B, 3)
+    @test get!(wkd, B, 3) == 3
     @test wkd == WeakKeyDict(A=>2, B=>3)
-    get!(()->4, wkd, C)
+    @test get!(()->4, wkd, C) == 4
     @test wkd == WeakKeyDict(A=>2, B=>3, C=>4)
-    @test_throws ArgumentError get!(()->5, wkd, [1.0])
+    @test get!(()->5, wkd, [1.0]) == 2
+
+    GC.@preserve A B C D nothing
 end
 
 @testset "issue #19995, hash of dicts" begin
@@ -1056,38 +1101,38 @@ end
     io = IOContext(buf, :displaysize => (4, 80), :limit => true)
     d = Base.ImmutableDict(1=>2)
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int, $Int} with 1 entry: …"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 1 entry. Keys: …"
 
     io = IOContext(io, :displaysize => (5, 80))
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int, $Int} with 1 entry:\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 1 entry. Keys:\n  1"
     d = Base.ImmutableDict(d, 3=>4)
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int, $Int} with 2 entries:\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 2 entries. Keys:\n  ⋮"
 
     io = IOContext(io, :displaysize => (6, 80))
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
-        "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
+        "Base.ImmutableDict{$Int, $Int} with 2 entries:\n  3 => 4\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 2 entries. Keys:\n  3\n  1"
     d = Base.ImmutableDict(d, 5=>6)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) ==
-        "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
+        "Base.ImmutableDict{$Int, $Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeySet for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
+        "KeySet for a Base.ImmutableDict{$Int, $Int} with 3 entries. Keys:\n  5\n  ⋮"
 end
 
 @testset "copy!" begin
@@ -1123,4 +1168,43 @@ end
         @test testdict[:a] == 0
         @test testdict[:b] == 1
     end
+end
+
+# WeakKeyDict soundness (#38727)
+mutable struct ComparesWithGC38727
+	i::Int
+end
+const armed = Ref{Bool}(true)
+@noinline fwdab38727(a, b) = invoke(Base.isequal, Tuple{Any, WeakRef}, a, b)
+function Base.isequal(a::ComparesWithGC38727, b::WeakRef)
+	# This GC.gc() here simulates a GC during compilation in the original issue
+	armed[] && GC.gc()
+        armed[] = false
+        fwdab38727(a, b)
+end
+Base.isequal(a::WeakRef, b::ComparesWithGC38727) = isequal(b, a)
+Base.:(==)(a::ComparesWithGC38727, b::ComparesWithGC38727) = a.i == b.i
+Base.hash(a::ComparesWithGC38727, u::UInt) = Base.hash(a.i, u)
+function make_cwgc38727(wkd, i)
+	f = ComparesWithGC38727(i)
+	function fin(f)
+		f.i = -1
+	end
+	finalizer(fin, f)
+	f
+end
+@noinline mk38727(wkd) = wkd[make_cwgc38727(wkd, 1)] = nothing
+function bar()
+	wkd = WeakKeyDict{Any, Nothing}()
+	mk38727(wkd)
+	armed[] = true
+	z = getkey(wkd, ComparesWithGC38727(1), missing)
+end
+# Run this twice, in case compilation the first time around
+# masks something.
+let c = bar()
+    @test c === missing || c == ComparesWithGC38727(1)
+end
+let c = bar()
+    @test c === missing || c == ComparesWithGC38727(1)
 end

@@ -9,11 +9,10 @@ Generates a symbol which will not conflict with other variable names.
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
-gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, sizeof(s))
+gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Csize_t), s, sizeof(s))
 
 gensym(ss::String...) = map(gensym, ss)
-gensym(s::Symbol) =
-    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))
+gensym(s::Symbol) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Csize_t), s, -1 % Csize_t)
 
 """
     @gensym
@@ -32,32 +31,36 @@ end
 
 ## expressions ##
 
-function copy(e::Expr)
-    n = Expr(e.head)
-    n.args = copy_exprargs(e.args)
-    return n
-end
+copy(e::Expr) = exprarray(e.head, copy_exprargs(e.args))
 
 # copy parts of an AST that the compiler mutates
-copy_exprs(@nospecialize(x)) = x
-copy_exprs(x::Expr) = copy(x)
-function copy_exprs(x::PhiNode)
-    new_values = Vector{Any}(undef, length(x.values))
-    for i = 1:length(x.values)
-        isassigned(x.values, i) || continue
-        new_values[i] = copy_exprs(x.values[i])
+function copy_exprs(@nospecialize(x))
+    if isa(x, Expr)
+        return copy(x)
+    elseif isa(x, PhiNode)
+        values = x.values
+        nvalues = length(values)
+        new_values = Vector{Any}(undef, nvalues)
+        @inbounds for i = 1:nvalues
+            isassigned(values, i) || continue
+            new_values[i] = copy_exprs(values[i])
+        end
+        return PhiNode(copy(x.edges), new_values)
+    elseif isa(x, PhiCNode)
+        values = x.values
+        nvalues = length(values)
+        new_values = Vector{Any}(undef, nvalues)
+        @inbounds for i = 1:nvalues
+            isassigned(values, i) || continue
+            new_values[i] = copy_exprs(values[i])
+        end
+        return PhiCNode(new_values)
     end
-    return PhiNode(copy(x.edges), new_values)
+    return x
 end
-function copy_exprs(x::PhiCNode)
-    new_values = Vector{Any}(undef, length(x.values))
-    for i = 1:length(x.values)
-        isassigned(x.values, i) || continue
-        new_values[i] = copy_exprs(x.values[i])
-    end
-    return PhiCNode(new_values)
-end
-copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in 1:length(x)]
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(@inbounds x[i]) for i in 1:length(x)]
+
+@eval exprarray(head::Symbol, arg::Array{Any,1}) = $(Expr(:new, :Expr, :head, :arg))
 
 # create copies of the CodeInfo definition, and any mutable fields
 function copy(c::CodeInfo)
@@ -66,9 +69,9 @@ function copy(c::CodeInfo)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
     cnew.codelocs  = copy(cnew.codelocs)
-    cnew.linetable = copy(cnew.linetable)
+    cnew.linetable = copy(cnew.linetable::Union{Vector{Any},Vector{Core.LineInfoNode}})
     cnew.ssaflags  = copy(cnew.ssaflags)
-    cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges)
+    cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges::Vector)
     ssavaluetypes  = cnew.ssavaluetypes
     ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
     return cnew
@@ -77,6 +80,7 @@ end
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
+==(stmt1::Core.PhiNode, stmt2::Core.PhiNode) = stmt1.edges == stmt2.edges && stmt1.values == stmt2.values
 
 """
     macroexpand(m::Module, x; recursive=true)
@@ -210,9 +214,10 @@ prevented. This is shown in the following example:
         Function Definition
     =#
 end
-
-If the function is trivial (for example returning a constant) it might get inlined anyway.
 ```
+
+!!! note
+    If the function is trivial (for example returning a constant) it might get inlined anyway.
 """
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
@@ -265,7 +270,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     if isempty(args)
         tag = sym
     else
-        tag = Expr(sym, args...)
+        tag = Expr(sym, args...)::Expr
     end
 
     inner = ex
@@ -277,7 +282,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     if idx != 0
         push!(exargs[idx].args, tag)
     else
-        body::Expr = inner.args[2]
+        body = inner.args[2]::Expr
         pushfirst!(body.args, Expr(:meta, tag))
     end
     ex
@@ -333,7 +338,7 @@ end
 
 function findmeta(ex::Expr)
     if ex.head === :function || is_short_function_def(ex) || ex.head === :->
-        body::Expr = ex.args[2]
+        body = ex.args[2]::Expr
         body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)
     end
@@ -346,9 +351,9 @@ function findmeta_block(exargs, argsmatch=args->true)
     for i = 1:length(exargs)
         a = exargs[i]
         if isa(a, Expr)
-            if (a::Expr).head === :meta && argsmatch((a::Expr).args)
+            if a.head === :meta && argsmatch(a.args)
                 return i, exargs
-            elseif (a::Expr).head === :block
+            elseif a.head === :block
                 idx, exa = findmeta_block(a.args, argsmatch)
                 if idx != 0
                     return idx, exa

@@ -33,6 +33,7 @@ Base.which(::Any, ::Any)
 Base.methods
 Base.@show
 ans
+Base.active_project
 ```
 
 ## Keywords
@@ -233,10 +234,13 @@ Core.Function
 Base.hasmethod
 Core.applicable
 Core.invoke
+Base.@invoke
 Base.invokelatest
+Base.@invokelatest
 new
 Base.:(|>)
 Base.:(∘)
+Base.ComposedFunction
 ```
 
 ## Syntax
@@ -386,7 +390,12 @@ Base.nameof(::Module)
 Base.parentmodule
 Base.pathof(::Module)
 Base.moduleroot
+__module__
+__source__
 Base.@__MODULE__
+Base.@__FILE__
+Base.@__DIR__
+Base.@__LINE__
 Base.fullname
 Base.names
 Core.nfields
@@ -421,5 +430,9 @@ Base.precompile
 ```@docs
 Meta.quot
 Meta.isexpr
+Meta.isidentifier
+Meta.isoperator
+Meta.isunaryoperator
+Meta.isbinaryoperator
 Meta.show_sexpr
 ```

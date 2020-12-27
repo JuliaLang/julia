@@ -241,7 +241,8 @@ end
     for (a, b) in [(Dates.Date(2000), Dates.Date(2001)),
                     (Dates.Time(10), Dates.Time(11)),
                     (Dates.DateTime(3000), Dates.DateTime(3001)),
-                    (Dates.Week(42), Dates.Week(1972))]
+                    (Dates.Week(42), Dates.Week(1972)),
+                    (Dates.Quarter(3), Dates.Quarter(52))]
         @test min(a, b) == a
         @test min(b, a) == a
         @test min(a) == a
@@ -256,7 +257,7 @@ end
 
 @testset "issue #31524" begin
     dt1 = Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
-    dt2 = Base.Libc.TmStruct(14, 30, 5, 10, 1, 99, 3, 40, 0)
+    dt2 = Libc.TmStruct(14, 30, 5, 10, 1, 99, 3, 40, 0)
 
     time = Time(dt1)
     @test typeof(time) == Time

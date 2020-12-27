@@ -1,11 +1,8 @@
-Julia v1.6 Release Notes
+Julia v1.7 Release Notes
 ========================
 
 New language features
 ---------------------
-
-* Types written with `where` syntax can now be used to define constructors, e.g.
-  `(Foo{T} where T)(x) = ...`.
 
 Language changes
 ----------------
@@ -30,6 +27,8 @@ Build system changes
 New library functions
 ---------------------
 
+* Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
+* `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
 
 New library features
 --------------------
@@ -37,12 +36,23 @@ New library features
 
 Standard library changes
 ------------------------
-* The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
+
+* `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
+* `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
+* `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
+* `escape_string` can now receive a collection of characters in the keyword
+  `keep` that are to be kept as they are. ([#38597]).
+
+#### Package Manager
+
 
 #### LinearAlgebra
 
 
 #### Markdown
+
+
+#### Printf
 
 
 #### Random
@@ -66,8 +76,15 @@ Standard library changes
 #### Distributed
 
 
+#### UUIDs
+
+
+#### Mmap
+
+
 Deprecated or removed
 ---------------------
+
 
 External dependencies
 ---------------------

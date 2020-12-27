@@ -166,7 +166,7 @@ julia> perm = [2, 4, 3, 1];
 julia> permute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  4
  3
@@ -213,7 +213,7 @@ julia> perm = [2, 4, 3, 1];
 julia> invpermute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
@@ -233,7 +233,7 @@ If `B = A[v]`, then `A == B[invperm(v)]`.
 julia> v = [2; 4; 3; 1];
 
 julia> invperm(v)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
@@ -242,14 +242,14 @@ julia> invperm(v)
 julia> A = ['a','b','c','d'];
 
 julia> B = A[v]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> B[invperm(v)]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
@@ -307,7 +307,7 @@ julia> 2^2 * 3^3
 !!! compat "Julia 1.6"
     The method that accepts a tuple requires Julia 1.6 or later.
 """
-function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractVector{<:Integer}}, x::Real)
+function nextprod(a::Union{Tuple{Vararg{Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end

@@ -20,6 +20,13 @@ differs in several aspects from the behavior in various shells, Perl, or Ruby:
     interpolating variables and splitting on words as the shell would, respecting shell quoting syntax.
     The command is run as `julia`'s immediate child process, using `fork` and `exec` calls.
 
+
+!!! note
+    The following assumes a Posix environment as on Linux or MacOS.
+    On Windows, many similar commands, such as `echo` and `dir`, are not external programs and instead are built into the shell `cmd.exe` itself.
+    One option to run these commands is to invoke `cmd.exe`, for example `cmd /C echo hello`.
+    Alternatively Julia can be run inside a Posix environment such as Cygwin.
+
 Here's a simple example of running an external program:
 
 ```jldoctest
@@ -37,14 +44,15 @@ The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). The r
 returns `nothing`, and throws an [`ErrorException`](@ref) if the external command fails to run
 successfully.
 
-If you want to read the output of the external command, [`read`](@ref) can be used instead:
+If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
+can be used instead:
 
 ```jldoctest
-julia> a = read(`echo hello`, String)
+julia> read(`echo hello`, String)
 "hello\n"
 
-julia> chomp(a) == "hello"
-true
+julia> readchomp(`echo hello`)
+"hello"
 ```
 
 More generally, you can use [`open`](@ref) to read from or write to an external command.
@@ -64,7 +72,7 @@ The program name and the individual arguments in a command can be accessed
 and iterated over as if the command were an array of strings:
 ```jldoctest
 julia> collect(`echo "foo bar"`)
-2-element Array{String,1}:
+2-element Vector{String}:
  "echo"
  "foo bar"
 
@@ -124,7 +132,7 @@ to interpolate multiple words? In that case, just use an array (or any other ite
 
 ```jldoctest
 julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
-2-element Array{String,1}:
+2-element Vector{String}:
  "/etc/passwd"
  "/Volumes/External HD/data.csv"
 
@@ -137,7 +145,7 @@ generation:
 
 ```jldoctest
 julia> names = ["foo","bar","baz"]
-3-element Array{String,1}:
+3-element Vector{String}:
  "foo"
  "bar"
  "baz"
@@ -151,13 +159,13 @@ generation behavior is emulated:
 
 ```jldoctest
 julia> names = ["foo","bar","baz"]
-3-element Array{String,1}:
+3-element Vector{String}:
  "foo"
  "bar"
  "baz"
 
 julia> exts = ["aux","log"]
-2-element Array{String,1}:
+2-element Vector{String}:
  "aux"
  "log"
 

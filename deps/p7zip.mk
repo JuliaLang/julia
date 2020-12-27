@@ -11,6 +11,9 @@ $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).
 	cd $(dir $@) && $(TAR) --strip-components 1 -jxf $<
 	echo $1 > $@
 
+checksum-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-12-CVE-2016-9296.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
 	cd $(dir $@) && patch -p1 -f < $(SRCDIR)/patches/p7zip-12-CVE-2016-9296.patch
 	echo 1 > $@
@@ -58,8 +61,7 @@ check-p7zip: compile-p7zip
 
 
 else # USE_BINARYBUILDER_P7ZIP
-P7ZIP_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/p7zip_jll.jl/releases/download/p7zip-v$(P7ZIP_VER)+$(P7ZIP_BB_REL)
-P7ZIP_BB_NAME := p7zip.v$(P7ZIP_VER)
+
 $(eval $(call bb-install,p7zip,P7ZIP,false))
 
 endif

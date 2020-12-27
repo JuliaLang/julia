@@ -32,6 +32,7 @@ OPENBLAS_USE_THREAD:=1
 # Flags for using libraries available on the system instead of building them.
 # Please read the notes around usage of SYSTEM flags in README.md
 # Issues resulting from use of SYSTEM versions will generally not be accepted.
+USE_SYSTEM_CSL:=0
 USE_SYSTEM_LLVM:=0
 USE_SYSTEM_LIBUNWIND:=0
 DISABLE_LIBUNWIND:=0
@@ -49,6 +50,7 @@ USE_SYSTEM_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
 USE_SYSTEM_MBEDTLS:=0
 USE_SYSTEM_LIBSSH2:=0
+USE_SYSTEM_NGHTTP2:=0
 USE_SYSTEM_CURL:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
@@ -80,11 +82,7 @@ endif
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
 
-# Set to 1 to enable profiling with perf
-USE_PERF_JITEVENTS ?= 0
-
-# libc++ is standard on OS X 10.9, but not for earlier releases
-USE_LIBCPP := 0
+# USE_PERF_JITEVENTS defined below since default is OS specific
 
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP := 0
@@ -96,9 +94,18 @@ WITH_GC_DEBUG_ENV := 0
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
+
+# Literal values that are hard to use in Makefiles otherwise:
+define newline # a literal \n
+
+
+endef
+COMMA:=,
+SPACE:=$(eval) $(eval)
+
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
-PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
 PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
 
 # If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
@@ -339,6 +346,12 @@ USE_POLLY := 0
 USE_POLLY_OPENMP := 0  # Enable OpenMP code-generation
 USE_POLLY_ACC := 0     # Enable GPU code-generation
 
+# Options to use MLIR
+USE_MLIR := 0
+
+# Options to use RegionVectorizer
+USE_RV := 0
+
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
 #XC_HOST := x86_64-w64-mingw32
@@ -365,8 +378,10 @@ ifeq ($(XC_HOST),)
 CROSS_COMPILE:=
 # delayed expansion of $(CC), since it won't be computed until later
 HOSTCC = $(CC)
+HOSTCXX = $(CXX)
 else
 HOSTCC ?= gcc
+HOSTCXX ?= g++
 OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
@@ -415,6 +430,13 @@ fPIC := -fPIC
 EXE :=
 endif
 
+# Set to 1 to enable profiling with perf
+ifeq ("$(OS)", "Linux")
+USE_PERF_JITEVENTS ?= 1
+else
+USE_PERF_JITEVENTS ?= 0
+endif
+
 JULIACODEGEN := LLVM
 
 # flag for disabling assertions
@@ -428,6 +450,10 @@ CXX_DISABLE_ASSERTION := -DJL_NDEBUG
 DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
+ifeq ($(LLVM_ASSERTIONS),0)
+CXX_DISABLE_ASSERTION += -DNDEBUG
+endif
+
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)
@@ -435,6 +461,7 @@ USEGCC := 0
 USECLANG := 0
 USEICC := 0
 else
+USEMSVC := 0
 ifeq ($(USECLANG), 1)
 USEGCC := 0
 USEICC := 0
@@ -456,8 +483,6 @@ else
 FC := $(CROSS_COMPILE)gfortran
 endif
 
-STDLIBCPP_FLAG :=
-
 ifeq ($(OS), FreeBSD)
 USEGCC := 0
 USECLANG := 1
@@ -465,31 +490,30 @@ endif
 
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
-DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
-ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
+DARWINVER_GTE11 := $(shell expr $(DARWINVER) \>= 11)
+DARWINVER_GTE13 := $(shell expr $(DARWINVER) \>= 13)
+ifeq ($(DARWINVER_GTE11),0) # Snow Leopard specific configuration
 USEGCC := 1
 USECLANG := 0
+MACOSX_VERSION_MIN := 10.6
 OPENBLAS_TARGET_ARCH:=NEHALEM
 OPENBLAS_DYNAMIC_ARCH:=0
 USE_SYSTEM_LIBUNWIND:=1
 else
-ifeq ($(DARWINVER_GTE13),1)
-USE_LIBCPP := 1
-STDLIBCPP_FLAG := -stdlib=libstdc++
-else
-USE_LIBCPP := 0
-endif
+ifeq ($(DARWINVER_GTE13),0) # Lion / Mountain Lion specific configuration
+USEGCC := 0
+USECLANG := 1
+MACOSX_VERSION_MIN := 10.6
+else # Newer versions
 USEGCC := 0
 USECLANG := 1
 endif
 endif
+endif
 
 ifeq ($(USEGCC),1)
-ifeq ($(USE_LIBCPP),1)
-$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
-endif
 ifeq ($(SANITIZE),1)
-$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+$(error Sanitizers are only supported with clang. Try setting SANITIZE=0)
 endif
 CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
@@ -501,7 +525,7 @@ ifneq ($(OS), WINNT)
 # Do not enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
 endif
-DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector-all
+DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector
 SHIPFLAGS := -O3 -ggdb2 -falign-functions
 endif
 
@@ -512,19 +536,15 @@ JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
-DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
+DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
-ifeq ($(USE_LIBCPP), 1)
-MACOSX_VERSION_MIN := 10.8
-CC += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-CXX += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-else
-MACOSX_VERSION_MIN := 10.6
-CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
-CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+ifeq ($(MACOSX_VERSION_MIN),)
+MACOSX_VERSION_MIN := 10.9
 endif
+CC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+CXX += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 # export MACOSX_DEPLOYMENT_TARGET so that ld picks it up, especially for deps
 export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
@@ -532,18 +552,15 @@ endif
 endif
 
 ifeq ($(USEICC),1)
-ifeq ($(USE_LIBCPP),1)
-$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
-endif
 ifeq ($(SANITIZE),1)
-$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+$(error Sanitizers only supported with clang. Try setting SANITIZE=0)
 endif
 CC  := icc
 CXX := icpc
 JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
 JCPPFLAGS :=
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
+DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
 SHIPFLAGS := -O3 -g -falign-functions
 endif
 
@@ -609,11 +626,50 @@ else
   SHLIB_EXT := so
 endif
 
-# On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
-ifeq ($(OS),WINNT)
-build_shlibdir := $(build_bindir)
+ifeq ($(SHLIB_EXT), so)
+define SONAME_FLAGS
+  -Wl,-soname=$1
+endef
 else
+define SONAME_FLAGS
+endef
+endif
+
+ifeq ($(OS)$(USEMSVC),WINNT0)
+define IMPLIB_FLAGS
+  -Wl,--out-implib,$(build_libdir)/$(notdir $1).a
+endef
+else
+define IMPLIB_FLAGS
+endef
+endif
+
+# On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
+# We also don't really have a private bindir on windows right now, due to lack of RPATH.
+ifeq ($(OS),WINNT)
+shlibdir := $(bindir)
+private_shlibdir := $(bindir)
+build_shlibdir := $(build_bindir)
+build_private_shlibdir := $(build_bindir)
+else
+shlibdir := $(libdir)
+private_shlibdir := $(private_libdir)
 build_shlibdir := $(build_libdir)
+build_private_shlibdir := $(build_private_libdir)
+endif
+
+# If we're on windows, don't do versioned shared libraries.  If we're on OSX,
+# put the version number before the .dylib.  Otherwise, put it after.
+ifeq ($(OS), WINNT)
+JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT)
+else
+ifeq ($(OS), Darwin)
+JL_MAJOR_MINOR_SHLIB_EXT := $(SOMAJOR).$(SOMINOR).$(SHLIB_EXT)
+JL_MAJOR_SHLIB_EXT := $(SOMAJOR).$(SHLIB_EXT)
+else
+JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR).$(SOMINOR)
+JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
+endif
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -667,17 +723,27 @@ endif
 endif
 
 ifeq ($(SANITIZE),1)
+SANITIZE_OPTS :=
+SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
-SANITIZE_OPTS := -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
-SANITIZE_LDFLAGS := $(SANITIZE_OPTS)
-else
-SANITIZE_OPTS := -fsanitize=address -mllvm -asan-stack=0
-SANITIZE_LDFLAGS := -fsanitize=address
+SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
+endif
+ifeq ($(SANITIZE_ADDRESS),1)
+SANITIZE_OPTS += -fsanitize=address -mllvm -asan-stack=0
+SANITIZE_LDFLAGS += -fsanitize=address
+endif
+ifeq ($(SANITIZE_THREAD),1)
+SANITIZE_OPTS += -fsanitize=thread
+SANITIZE_LDFLAGS += -fsanitize=thread
+endif
+ifeq ($(SANITIZE_OPTS),)
+$(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)
 endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
 JLDFLAGS += $(SANITIZE_LDFLAGS)
-endif
+endif # SANITIZE
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
 TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
@@ -729,6 +795,11 @@ XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
 endif
 
+# Normalize ppc64le to powerpc64le
+ifeq ($(ARCH), ppc64le)
+override ARCH := powerpc64le
+endif
+
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
@@ -772,6 +843,11 @@ endif
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
 override ARCH := x86_64
+endif
+
+# We map arm64 (Apple spelling) to aarch64 to avoid having to deal with both spellings everywhere
+ifeq ($(ARCH),arm64)
+override ARCH := aarch64
 endif
 
 ifeq ($(ARCH),i386)
@@ -850,6 +926,10 @@ endif
 ifneq (,$(findstring aarch64,$(ARCH)))
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
+ifeq ($(OS),Darwin)
+# Apple Chips are all at least A12Z
+MCPU:=apple-a12
+endif
 endif
 
 # Set MARCH-specific flags
@@ -928,17 +1008,17 @@ LIBUNWIND:=
 else
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 ifneq ($(OS),Darwin)
-LIBUNWIND:=-lunwind-generic -lunwind
+LIBUNWIND:=-lunwind
 # Only for linux since we want to use not yet released libunwind features
 JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
 ifeq ($(OS),Darwin)
-LIBUNWIND:=$(build_libdir)/libosxunwind.a
+LIBUNWIND:=-losxunwind
 JCPPFLAGS+=-DLIBOSXUNWIND
 else
-LIBUNWIND:=$(build_libdir)/libunwind-generic.a $(build_libdir)/libunwind.a
+LIBUNWIND:=-lunwind
 endif
 endif
 endif
@@ -955,19 +1035,25 @@ ifeq ($(USE_SYSTEM_LLVM), 1)
 JCPPFLAGS+=-DSYSTEM_LLVM
 endif # SYSTEM_LLVM
 
+# Windows builds need a little help finding the LLVM libraries for llvm-config
+LLVM_CONFIG_PATH_FIX :=
+ifeq ($(OS),WINNT)
+LLVM_CONFIG_PATH_FIX := PATH="$(PATH):$(build_bindir)"
+endif
+
 ifeq ($(BUILD_OS),$(OS))
 LLVM_CONFIG_HOST := $(LLVM_CONFIG)
 else
 LLVM_CONFIG_HOST := $(basename $(LLVM_CONFIG))-host$(BUILD_EXE)
 ifeq (exists, $(shell [ -f '$(LLVM_CONFIG_HOST)' ] && echo exists ))
-ifeq ($(shell $(LLVM_CONFIG_HOST) --version),3.3)
+ifeq ($(shell $(LLVM_CONFIG_PATH_FIX) $(LLVM_CONFIG_HOST) --version),3.3)
 # llvm-config-host <= 3.3 is broken, use llvm-config instead (in an emulator)
 # use delayed expansion (= not :=) because spawn isn't defined until later
-LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
+LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_FIX) $(call spawn,$(LLVM_CONFIG))
 endif
 else
 # llvm-config-host does not exist (cmake build)
-LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
+LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_FIX) $(call spawn,$(LLVM_CONFIG))
 endif
 endif
 
@@ -1085,8 +1171,14 @@ endif
 USE_BINARYBUILDER ?= 0
 endif
 
+# Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
+BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(shell $(FC) --version | head -1)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
+BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
+BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
+BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI)))))
+
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1194,12 +1286,12 @@ OSLIBS += -lelf -lkvm -lrt -lpthread
 OSLIBS += -lgcc_s
 
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
+	$(NO_WHOLE_ARCHIVE)
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
-OSLIBS += -framework CoreFoundation $(LIBUNWIND)
+OSLIBS += -framework CoreFoundation
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
 JLDFLAGS :=
@@ -1437,6 +1529,62 @@ JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
 JULIA_SYSIMG := $(JULIA_SYSIMG_$(JULIA_BUILD_MODE))
 
+define dep_lib_path
+$$($(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(1) $(2))
+endef
+
+LIBJULIAINTERNAL_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIAINTERNAL_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT))
+
+LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
+LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT))
+
+ifeq ($(OS),WINNT)
+ifeq ($(BINARY),32)
+LIBGCC_NAME := libgcc_s_sjlj-1.$(SHLIB_EXT)
+else
+LIBGCC_NAME := libgcc_s_seh-1.$(SHLIB_EXT)
+endif
+endif
+ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
+LIBGCC_NAME := libgcc_s.2.$(SHLIB_EXT)
+else
+LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
+endif
+endif
+ifneq ($(findstring $(OS),Linux FreeBSD),)
+LIBGCC_NAME := libgcc_s.$(SHLIB_EXT).1
+endif
+
+
+LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBGCC_NAME))
+LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBGCC_NAME))
+
+# USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir
+ifeq ($(USE_SYSTEM_LIBM),1)
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+else ifeq ($(USE_SYSTEM_OPENLIBM),1)
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+else
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+endif
+LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+
+# We list:
+#  * libgcc_s, because FreeBSD needs to load ours, not the system one.
+#  * libopenlibm, because Windows has an untrustworthy libm, and we want to use ours more than theirs
+#  * libjulia, which must always come last.
+#
+# We need these four separate variables because:
+#  * debug builds must link against libjuliadebug, not libjulia
+#  * install time relative paths are not equal to build time relative paths (../lib vs. ../lib/julia)
+# That second point will no longer be true for most deps once they are placed within Artifacts directories.
+LOADER_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIAINTERNAL_BUILD_DEPLIB)
+LOADER_DEBUG_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB)
+LOADER_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIAINTERNAL_INSTALL_DEPLIB)
+LOADER_DEBUG_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB)
+
 # Colors for make
 ifndef VERBOSE
 VERBOSE := 0
@@ -1478,18 +1626,8 @@ PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
-
-define newline # a literal \n
-
-
-endef
-
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable
 # (hardened against any special characters appearing in the output)
 print-%:
 	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
-
-# Literal values that are hard to use in Makefiles otherwise:
-COMMA:=,
-SPACE:=$(eval) $(eval)
