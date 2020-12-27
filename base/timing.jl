@@ -126,32 +126,34 @@ end
 
 function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
-    str = length(timestr) < 10 ? (" "^(10 - length(timestr))) : ""
-    str *= string(timestr, " seconds")
-    parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
-    parens && (str *= " (")
-    if bytes != 0 || allocs != 0
-        allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
-        if ma == 1
-            str *= string(Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
-        else
-            str *= string(Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
-        end
-        str *= format_bytes(bytes)
-    end
-    if gctime > 0
+    str = sprint() do io
+        print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        print(io, timestr, " seconds")
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+        parens && print(io, " (")
         if bytes != 0 || allocs != 0
-            str *= ", "
+            allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
+            if ma == 1
+                print(io, Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
+            else
+                print(io, Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
+            end
+            print(io, format_bytes(bytes))
         end
-        str *= string(Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
-    end
-    if compile_time > 0
-        if bytes != 0 || allocs != 0 || gctime > 0
-            str *= ", "
+        if gctime > 0
+            if bytes != 0 || allocs != 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
-        str *= string(Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        if compile_time > 0
+            if bytes != 0 || allocs != 0 || gctime > 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        end
+        parens && print(io, ")")
     end
-    parens && (str *= ")")
     newline ? println(str) : print(str)
     nothing
 end
