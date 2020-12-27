@@ -907,17 +907,19 @@ end
 
 # return hint for modulname (if similar name in project deps / Stdlib) or nothing
 function modulnamehint(tn::AbstractString)
+    length(tn) < 3 && return nothing
     hns = vcat(try collect(keys(get(parsed_toml(load_path()[1]), "deps", nothing)))
             catch; String[] end, isdir(Sys.STDLIB) ? readdir(Sys.STDLIB) : String[])
-    ((length(tn) < 3) || isempty(hns)) && return nothing
+    isempty(hns) && return nothing
     scores = similar(hns, Int)
     for (index, hn) in enumerate(hns)
-        (length(tn) >= length(hn)) ? (o1 = tn; o2 = hn) : (o1 = hn; o2 = tn)
+        o1, o2 = length(tn) >= length(hn) ? (tn, hn) : (hn, tn)
         scores[index] = length(o1) - length(o2) + (contains(o1, o2) ? 0 :
                         contains(lowercase(o1), lowercase(o2)) ? 1 : 4)
     end
     score, index = findmin(scores)
-    return (score < 4) ? hns[index] : nothing
+    score > 3 && return nothing
+    return hns[index]
 end
 
 mutable struct PkgOrigin
