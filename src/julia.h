@@ -1515,6 +1515,7 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
+extern JL_DLLIMPORT int jl_n_threads;
 
 // environment entries
 JL_DLLEXPORT jl_value_t *jl_environ(int i);
@@ -1587,6 +1588,7 @@ typedef enum {
 #define jl_init jl_init__threading
 #define jl_init_with_image jl_init_with_image__threading
 
+JL_DLLEXPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
@@ -1762,7 +1764,17 @@ typedef struct _jl_task_t {
     // current exception handler
     jl_handler_t *eh;
 
-    jl_ucontext_t ctx; // saved thread state
+    union {
+        jl_ucontext_t ctx; // saved thread state
+#ifdef _OS_WINDOWS_
+        jl_ucontext_t copy_stack_ctx;
+#else
+        struct jl_stack_context_t copy_stack_ctx;
+#endif
+    };
+#if defined(JL_TSAN_ENABLED)
+    void *tsan_state;
+#endif
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf
@@ -1947,6 +1959,7 @@ typedef struct {
     int8_t image_file_specified;
     int8_t warn_scope;
     int8_t image_codegen;
+    int8_t rr_detach;
 } jl_options_t;
 
 extern JL_DLLEXPORT jl_options_t jl_options;

@@ -762,13 +762,229 @@ Inf
 """
 minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 
+## findmax, findmin, argmax & argmin
+
+"""
+    findmax(f, domain) -> (f(x), x)
+
+Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
+value in the `domain` (inputs to `f`) such that `f(x)` is maximised. If there
+are multiple maximal points, then the first one will be returned.
+
+`domain` must be a non-empty iterable.
+
+Values are compared with `isless`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
+# Examples
+
+```jldoctest
+julia> findmax(identity, 5:9)
+(9, 9)
+
+julia> findmax(-, 1:10)
+(-1, 1)
+
+julia> findmax(first, [(1, :a), (2, :b), (2, :c)])
+(2, (2, :b))
+
+julia> findmax(cos, 0:π/2:2π)
+(1.0, 0.0)
+```
+"""
+findmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)
+_rf_findmax((fm, m), (fx, x)) = isless(fm, fx) ? (fx, x) : (fm, m)
+
+"""
+    findmax(itr) -> (x, index)
+
+Return the maximal element of the collection `itr` and its index or key.
+If there are multiple maximal elements, then the first one will be returned.
+Values are compared with `isless`.
+
+# Examples
+
+```jldoctest
+julia> findmax([8, 0.1, -9, pi])
+(8.0, 1)
+
+julia> findmax([1, 7, 7, 6])
+(7, 2)
+
+julia> findmax([1, 7, 7, NaN])
+(NaN, 4)
+```
+"""
+findmax(itr) = _findmax(itr, :)
+_findmax(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmax, pairs(a) )
+
+"""
+    findmin(f, domain) -> (f(x), x)
+
+Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
+value in the `domain` (inputs to `f`) such that `f(x)` is minimised. If there
+are multiple minimal points, then the first one will be returned.
+
+`domain` must be a non-empty iterable.
+
+`NaN` is treated as less than all other values except `missing`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
+# Examples
+
+```jldoctest
+julia> findmin(identity, 5:9)
+(5, 5)
+
+julia> findmin(-, 1:10)
+(-10, 10)
+
+julia> findmin(first, [(1, :a), (1, :b), (2, :c)])
+(1, (1, :a))
+
+julia> findmin(cos, 0:π/2:2π)
+(-1.0, 3.141592653589793)
+```
+
+"""
+findmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)
+_rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
+
+"""
+    findmin(itr) -> (x, index)
+
+Return the minimal element of the collection `itr` and its index or key.
+If there are multiple minimal elements, then the first one will be returned.
+`NaN` is treated as less than all other values except `missing`.
+
+# Examples
+
+```jldoctest
+julia> findmin([8, 0.1, -9, pi])
+(-9.0, 3)
+
+julia> findmin([1, 7, 7, 6])
+(1, 1)
+
+julia> findmin([1, 7, 7, NaN])
+(NaN, 4)
+```
+"""
+findmin(itr) = _findmin(itr, :)
+_findmin(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmin, pairs(a) )
+
+"""
+    argmax(f, domain)
+
+Return a value `x` in the domain of `f` for which `f(x)` is maximised.
+If there are multiple maximal values for `f(x)` then the first one will be found.
+
+`domain` must be a non-empty iterable.
+
+Values are compared with `isless`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
+# Examples
+```jldoctest
+julia> argmax(abs, -10:5)
+-10
+
+julia> argmax(cos, 0:π/2:2π)
+0.0
+```
+"""
+argmax(f, domain) = findmax(f, domain)[2]
+
+"""
+    argmax(itr)
+
+Return the index or key of the maximal element in a collection.
+If there are multiple maximal elements, then the first one will be returned.
+
+The collection must not be empty.
+
+Values are compared with `isless`.
+
+# Examples
+```jldoctest
+julia> argmax([8, 0.1, -9, pi])
+1
+
+julia> argmax([1, 7, 7, 6])
+2
+
+julia> argmax([1, 7, 7, NaN])
+4
+```
+"""
+argmax(itr) = findmax(itr)[2]
+
+"""
+    argmin(f, domain)
+
+Return a value `x` in the domain of `f` for which `f(x)` is minimised.
+If there are multiple minimal values for `f(x)` then the first one will be found.
+
+`domain` must be a non-empty iterable.
+
+`NaN` is treated as less than all other values except `missing`.
+
+!!! compat "Julia 1.7"
+    This method requires Julia 1.7 or later.
+
+# Examples
+```jldoctest
+julia> argmin(sign, -10:5)
+-10
+
+julia> argmin(x -> -x^3 + x^2 - 10, -5:5)
+5
+
+julia> argmin(acos, 0:0.1:1)
+1.0
+
+```
+"""
+argmin(f, domain) = findmin(f, domain)[2]
+
+"""
+    argmin(itr)
+
+Return the index or key of the minimal element in a collection.
+If there are multiple minimal elements, then the first one will be returned.
+
+The collection must not be empty.
+
+`NaN` is treated as less than all other values except `missing`.
+
+# Examples
+```jldoctest
+julia> argmin([8, 0.1, -9, pi])
+3
+
+julia> argmin([7, 1, 1, 6])
+2
+
+julia> argmin([7, 1, 1, NaN])
+4
+```
+"""
+argmin(itr) = findmin(itr)[2]
+
 ## all & any
 
 """
     any(itr) -> Bool
 
 Test whether any elements of a boolean collection are `true`, returning `true` as
-soon as the first `true` value in `itr` is encountered (short-circuiting).
+soon as the first `true` value in `itr` is encountered (short-circuiting). To
+short-circuit on `false`, use [`all`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `false` (or equivalently, if the input contains no `true` value), following
@@ -803,7 +1019,8 @@ any(itr) = any(identity, itr)
     all(itr) -> Bool
 
 Test whether all elements of a boolean collection are `true`, returning `false` as
-soon as the first `false` value in `itr` is encountered (short-circuiting).
+soon as the first `false` value in `itr` is encountered (short-circuiting). To
+short-circuit on `true`, use [`any`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `true` (or equivalently, if the input contains no `false` value), following
@@ -840,7 +1057,7 @@ all(itr) = all(identity, itr)
 
 Determine whether predicate `p` returns `true` for any elements of `itr`, returning
 `true` as soon as the first item in `itr` for which `p` returns `true` is encountered
-(short-circuiting).
+(short-circuiting). To short-circuit on `false`, use [`all`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `false` (or equivalently, if the input contains no `true` value), following
@@ -888,7 +1105,7 @@ end
 
 Determine whether predicate `p` returns `true` for all elements of `itr`, returning
 `false` as soon as the first item in `itr` for which `p` returns `false` is encountered
-(short-circuiting).
+(short-circuiting). To short-circuit on `true`, use [`any`](@ref).
 
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `true` (or equivalently, if the input contains no `false` value), following

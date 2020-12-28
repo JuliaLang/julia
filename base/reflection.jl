@@ -143,15 +143,19 @@ julia> fieldname(Rational, 2)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    if t.abstract
-        throw(ArgumentError("type does not have definite field names"))
+    throw_not_def_field() = throw(ArgumentError("type does not have definite field names"))
+    function throw_field_access(t, i, n_fields)
+        field_label = n_fields == 1 ? "field" : "fields"
+        throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
     end
+    throw_need_pos_int(i) = throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
+
+    t.abstract && throw_not_def_field()
     names = _fieldnames(t)
     n_fields = length(names)::Int
-    field_label = n_fields == 1 ? "field" : "fields"
-    i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
-    i < 1 && throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
-    return names[i]::Symbol
+    i > n_fields && throw_field_access(t, i, n_fields)
+    i < 1 && throw_need_pos_int(i)
+    return @inbounds names[i]::Symbol
 end
 
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)

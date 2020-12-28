@@ -45,16 +45,20 @@ default: release
 all: release debug
 release debug :  % : julia-% libjulia-%
 
-$(BUILDDIR)/loader_lib.o : $(SRCDIR)/loader_lib.c $(HEADERS)
+$(BUILDDIR)/loader_lib.o : $(SRCDIR)/loader_lib.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) -DLIBRARY_EXPORTS $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
-$(BUILDDIR)/loader_lib.dbg.obj : $(SRCDIR)/loader_lib.c $(HEADERS)
+$(BUILDDIR)/loader_lib.dbg.obj : $(SRCDIR)/loader_lib.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) -DLIBRARY_EXPORTS $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
-$(BUILDDIR)/loader_exe.o : $(SRCDIR)/loader_exe.c $(HEADERS)
+$(BUILDDIR)/loader_exe.o : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
-$(BUILDDIR)/loader_exe.dbg.obj : $(SRCDIR)/loader_exe.c $(HEADERS)
+$(BUILDDIR)/loader_exe.dbg.obj : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_trampolines.o : $(SRCDIR)/trampolines/trampolines_$(ARCH).S
-	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
+	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
+
+# Debugging target to help us see what kind of code is being generated for our trampolines
+dump-trampolines: $(SRCDIR)/trampolines/trampolines_$(ARCH).S
+	$(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -S | sed -E 's/ ((%%)|;) /\n/g' | sed -E 's/.global/\n.global/g'
 
 DIRS = $(build_bindir) $(build_libdir)
 $(DIRS):
@@ -114,7 +118,7 @@ endef
 endif
 
 $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT))
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT))
 	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
 ifneq ($(OS), WINNT)
 	@ln -sf $(notdir $@) $(build_shlibdir)/libjulia.$(JL_MAJOR_SHLIB_EXT)
@@ -124,7 +128,7 @@ else
 endif
 
 $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,$(notdir $@))
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 ifneq ($(OS), WINNT)
 	@ln -sf $(notdir $@) $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_SHLIB_EXT)

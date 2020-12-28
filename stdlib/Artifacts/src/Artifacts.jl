@@ -603,7 +603,7 @@ function artifact_slash_lookup(name::String, artifact_dict::Dict,
 
     meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml; platform)
     if meta === nothing
-        error("Cannot locate artifact '$(name)' in '$(artifacts_toml)'")
+        error("Cannot locate artifact '$(name)' for $(triplet(platform)) in '$(artifacts_toml)'")
     end
     hash = SHA1(meta["git-tree-sha1"])
     return artifact_name, artifact_path_tail, hash
@@ -671,7 +671,7 @@ macro artifact_str(name, platform=nothing)
         platform = HostPlatform()
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
         return quote
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))::String
         end
     else
         if platform === nothing
@@ -680,7 +680,7 @@ macro artifact_str(name, platform=nothing)
         return quote
             local platform = $(esc(platform))
             local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))::String
         end
     end
 end

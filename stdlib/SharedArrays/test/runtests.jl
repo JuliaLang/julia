@@ -3,7 +3,9 @@
 using Test, Distributed, SharedArrays, Random
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
-addprocs_with_testenv(4)
+# These processes explicitly want to share memory, we can't have
+# them in separate rr sessions
+addprocs_with_testenv(4; rr_allowed=false)
 @test nprocs() == 5
 
 @everywhere using Test, SharedArrays

@@ -97,9 +97,9 @@ function _frexp_exp(x::T) where T<:Union{Float32, Float64}
     exp_x = exp(x - kr*log(T(2))) # exp_x*2^k = exp(x)
 
     # Calculate the ks in exp_x*2^ks
-    ks = exponent_rshift(T, highword(exp_x)) - (exponent_bias(T) + (exponent_max(T) - 1)) + kr
+    ks = exponent_rshift(T, highword(exp_x)) - (exponent_bias(T) + exponent_max(T)) + kr
 
-    # Rescale exp_x to have exponent k2 = exponent_max(T) - 1
-    exp_x = modify_exponent(exp_x, UInt32(exponent_bias(T) + (exponent_max(T) - 1)))
+    # Rescale exp_x to have exponent k2 = exponent_max(T)
+    exp_x = modify_exponent(exp_x, UInt32(exponent_bias(T) + exponent_max(T)))
     return exp_x, ks
 end

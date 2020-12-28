@@ -406,8 +406,7 @@ function moduledoc(__source__, __module__, meta, def, def′::Expr)
         def = unblock(def)
         block = def.args[3].args
         if !def.args[1]
-            isempty(block) && error("empty baremodules are not documentable.")
-            insert!(block, 2, :(import Base: @doc))
+            pushfirst!(block, :(import Base: @doc))
         end
         push!(block, docex)
         esc(Expr(:toplevel, def))

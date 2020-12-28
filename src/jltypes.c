@@ -433,7 +433,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
         if (jl_options.depwarn) {
             if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
                 jl_error("Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).");
-            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).");
+            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\n");
         }
         jl_vararg_t *vm = (jl_vararg_t*)body;
         int T_has_tv = vm->T && jl_has_typevar(vm->T, v);

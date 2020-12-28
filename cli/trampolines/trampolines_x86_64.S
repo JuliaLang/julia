@@ -34,10 +34,10 @@
 
 #define XX(name) \
 DEBUGINFO(name); \
-.global name; \
+.global CNAME(name); \
 .cfi_startproc; \
 SEH_START1(name); \
-name##:; \
+CNAME(name)##:; \
 SEH_START2(); \
     CET_START(); \
     mov CNAME(name##_addr)(%rip),%r11; \

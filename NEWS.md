@@ -3,7 +3,6 @@ Julia v1.7 Release Notes
 
 New language features
 ---------------------
-* `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 
 Language changes
 ----------------
@@ -28,6 +27,8 @@ Build system changes
 New library functions
 ---------------------
 
+* Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
+* `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
 
 New library features
 --------------------
@@ -36,6 +37,11 @@ New library features
 Standard library changes
 ------------------------
 
+* `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
+* `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
+* `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
+* `escape_string` can now receive a collection of characters in the keyword
+  `keep` that are to be kept as they are. ([#38597]).
 
 #### Package Manager
 

@@ -221,7 +221,6 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 }
 #endif
 
-JL_DLLEXPORT int jl_n_threads;
 jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
 
 // return calling thread's ID
@@ -392,12 +391,18 @@ void jl_init_threading(void)
 
     // how many threads available, usable
     jl_n_threads = JULIA_NUM_THREADS;
-    if (jl_options.nthreads < 0) // --threads=auto
+    if (jl_options.nthreads < 0) { // --threads=auto
         jl_n_threads = jl_cpu_threads();
-    else if (jl_options.nthreads > 0) // --threads=N
+    }
+    else if (jl_options.nthreads > 0) { // --threads=N
         jl_n_threads = jl_options.nthreads;
-    else if ((cp = getenv(NUM_THREADS_NAME)))
-        jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
+    }
+    else if ((cp = getenv(NUM_THREADS_NAME))) {
+        if (strcmp(cp, "auto"))
+            jl_n_threads = (uint64_t)strtol(cp, NULL, 10); // ENV[NUM_THREADS_NAME] == "N"
+        else
+            jl_n_threads = jl_cpu_threads(); // ENV[NUM_THREADS_NAME] == "auto"
+    }
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
 #ifndef __clang_analyzer__

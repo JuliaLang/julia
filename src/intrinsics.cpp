@@ -168,7 +168,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         return ConstantFP::get(jl_LLVMContext,
                 APFloat(lt->getFltSemantics(), APInt(64, data64)));
     }
-    if (lt->isFloatingPointTy() || lt->isIntegerTy()) {
+    if (lt->isFloatingPointTy() || lt->isIntegerTy() || lt->isPointerTy()) {
         int nb = jl_datatype_size(bt);
         APInt val(8 * nb, 0);
         void *bits = const_cast<uint64_t*>(val.getRawData());
@@ -177,6 +177,11 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         if (lt->isFloatingPointTy()) {
             return ConstantFP::get(jl_LLVMContext,
                     APFloat(lt->getFltSemantics(), val));
+        }
+        if (lt->isPointerTy()) {
+            Type *Ty = IntegerType::get(jl_LLVMContext, 8 * nb);
+            Constant *addr = ConstantInt::get(Ty, val);
+            return ConstantExpr::getIntToPtr(addr, lt);
         }
         assert(cast<IntegerType>(lt)->getBitWidth() == 8u * nb);
         return ConstantInt::get(lt, val);
@@ -257,8 +262,10 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         return ConstantVector::get(fields);
     if (StructType *st = dyn_cast<StructType>(lt))
         return ConstantStruct::get(st, fields);
-    ArrayType *at = cast<ArrayType>(lt);
-    return ConstantArray::get(at, fields);
+    if (ArrayType *at = dyn_cast<ArrayType>(lt))
+        return ConstantArray::get(at, fields);
+    assert(false && "Unknown LLVM type");
+    jl_unreachable();
 }
 
 static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e)
@@ -542,6 +549,8 @@ static jl_cgval_t generic_cast(
 #endif
     }
     Value *ans = ctx.builder.CreateCast(Op, from, to);
+    if (f == fptosi || f == fptoui)
+        ans = ctx.builder.CreateFreeze(ans);
     return mark_julia_type(ctx, ans, false, jlto);
 }
 

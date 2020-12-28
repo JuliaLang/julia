@@ -496,7 +496,7 @@ end
 
 Documenting a `baremodule` by placing a docstring above the expression automatically imports
 `@doc` into the module. These imports must be done manually when the module expression is not
-documented. Empty `baremodule`s cannot be documented.
+documented.
 
 ### Global Variables
 
