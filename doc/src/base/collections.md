@@ -198,7 +198,7 @@ Base.get
 Base.get!
 Base.getkey
 Base.delete!
-Base.pop!
+Base.pop!(::Any, ::Any, ::Any)
 Base.keys
 Base.values
 Base.pairs
