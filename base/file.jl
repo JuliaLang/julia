@@ -825,27 +825,30 @@ julia> readdir(abspath("base"), join=true)
 function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
     req = Libc.malloc(_sizeof_uv_fs)
+    try
+        # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
+        err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
+                    C_NULL, req, dir, 0, C_NULL)
+        err < 0 && uv_error("readdir($(repr(dir)))", err)
 
-    # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
-                C_NULL, req, dir, 0, C_NULL)
-    err < 0 && uv_error("readdir($(repr(dir)))", err)
+        # iterate the listing into entries
+        entries = String[]
+        ent = Ref{uv_dirent_t}()
+        while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), req, ent)
+            name = unsafe_string(ent[].name)
+            push!(entries, join ? joinpath(dir, name) : name)
+        end
 
-    # iterate the listing into entries
-    entries = String[]
-    ent = Ref{uv_dirent_t}()
-    while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), req, ent)
-        name = unsafe_string(ent[].name)
-        push!(entries, join ? joinpath(dir, name) : name)
+        # Clean up the request string
+        uv_fs_req_cleanup(req)
+
+        # sort entries unless opted out
+        sort && sort!(entries)
+
+        return entries
+    finally
+        Libc.free(req)
     end
-
-    # Clean up the request string
-    ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-
-    # sort entries unless opted out
-    sort && sort!(entries)
-
-    return entries
 end
 readdir(; join::Bool=false, sort::Bool=true) =
     readdir(join ? pwd() : ".", join=join, sort=sort)
