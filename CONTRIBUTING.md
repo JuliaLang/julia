@@ -207,8 +207,6 @@ or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.
 
     ./usr/bin/julia test/runtests.jl bitarray math
 
-Make sure that [Travis](https://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](https://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
-
 #### Modifying base more efficiently with Revise.jl
 
 [Revise](https://github.com/timholy/Revise.jl) is a package that
