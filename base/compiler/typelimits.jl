@@ -299,6 +299,10 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
             isa(typeb, MaybeUndef) ? typeb.typ : typeb))
     end
     # type-lattice for Conditional wrapper
+    if isa(typea, Conditional) && isa(typeb, Conditional) && typea.var !== typeb.var
+        widenconditional(typea) isa Const && (typea = widenconditional(typea))
+        widenconditional(typeb) isa Const && (typeb = widenconditional(typeb))
+    end
     if isa(typea, Conditional) && isa(typeb, Const)
         if typeb.val === true
             typeb = Conditional(typea.var, Any, Union{})
