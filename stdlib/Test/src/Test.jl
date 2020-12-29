@@ -685,7 +685,26 @@ with this macro. Use [`@test_logs`](@ref) instead.
 """
 macro test_nowarn(expr)
     quote
-        @test_warn r"^(?!.)"s $(esc(expr))
+        # Duplicate some code from `@test_warn` to allow printing the content of
+        # `stderr` again to `stderr` here while suppressing it for `@test_warn`.
+        # If that shouldn't be used, it would be possible to just use
+        #     @test_warn r"^(?!.)"s $(esc(expr))
+        # here.
+        let fname = tempname()
+            try
+                ret = open(fname, "w") do f
+                    redirect_stderr(f) do
+                    $(esc(expr))
+                    end
+                end
+                stderr_content = read(fname, String)
+                print(stderr, stderr_content) # this is helpful for debugging
+                @test isempty(stderr_content)
+                ret
+            finally
+                rm(fname, force=true)
+            end
+        end
     end
 end
 
