@@ -19,7 +19,7 @@
 
     @test widen('a') === 'a'
     # just check this works
-    @test_throws Base.CodePointError Base.code_point_err(UInt32(1))
+    @test_throws Base.CodePointError Base.throw_code_point_err(UInt32(1))
 end
 
 @testset "ASCII conversion to/from Integer" begin
