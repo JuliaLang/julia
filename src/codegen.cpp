@@ -862,6 +862,8 @@ static const std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map = {
     { &jl_f_apply_type,         new JuliaFunction{"jl_f_apply_type", get_func_sig, get_func_attrs} },
 };
 
+static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction{"jl_new_opaque_closure_jlcall", get_func_sig, get_func_attrs};
+
 static int globalUnique = 0;
 
 // --- code generation ---
@@ -2635,6 +2637,13 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     return emit_box_compare(ctx, arg1, arg2, nullcheck1, nullcheck2);
 }
 
+static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
+    emit_function(
+        jl_method_instance_t *lam,
+        jl_code_info_t *src,
+        jl_value_t *jlrettype,
+        jl_codegen_params_t &params);
+
 static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                               const jl_cgval_t *argv, size_t nargs, jl_value_t *rt,
                               jl_expr_t *ex)
@@ -3239,6 +3248,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         return true;
     }
+
     return false;
 }
 
@@ -4487,6 +4497,98 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         // temporarily mark as `Any`, expecting `emit_ssaval_assign` to update
         // it to the inferred type.
         return mark_julia_type(ctx, val, true, (jl_value_t*)jl_any_type);
+    }
+    else if (head == new_opaque_closure_sym) {
+        size_t nargs = jl_array_len(ex->args);
+        assert(nargs >= 4 && "Not enough arguments in new_opaque_closure");
+        jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
+        for (size_t i = 0; i < nargs; ++i) {
+            argv[i] = emit_expr(ctx, args[i]);
+        }
+        const jl_cgval_t &argt = argv[0];
+        const jl_cgval_t &lb = argv[1];
+        const jl_cgval_t &ub = argv[2];
+        const jl_cgval_t &source = argv[3];
+        if (source.constant == NULL || argt.constant == NULL || lb.constant == NULL || ub.constant == NULL) {
+            // For now, we require non-constant source to be created using
+            // eval - we may lift this restriction if necessary.
+            emit_error(ctx, "Opaque closure source be constant");
+            return jl_cgval_t();
+        }
+        bool valid = jl_is_type(argt.constant) && jl_is_type(lb.constant) &&
+            jl_is_type(ub.constant);
+        if (valid && jl_is_code_info(source.constant) && jl_is_concrete_immutable(argt.constant)) {
+            // TODO: Emit this inline and outline it late using LLVM's coroutine
+            // support.
+            jl_code_info_t *closure_src = (jl_code_info_t *)source.constant;
+            std::unique_ptr<Module> closure_m;
+            jl_llvm_functions_t closure_decls;
+
+            jl_method_instance_t *li;
+            jl_value_t *closure_t;
+            jl_tupletype_t *env_t;
+            jl_svec_t *sig_args;
+            JL_GC_PUSH4(&li, &closure_t, &env_t, &sig_args);
+
+            li = jl_new_method_instance_uninit();
+            li->uninferred = (jl_value_t*)closure_src;
+            jl_tupletype_t *argt_typ = (jl_tupletype_t *)argt.constant;
+
+            closure_t = jl_apply_type2((jl_value_t*)jl_opaque_closure_type, (jl_value_t*)argt_typ, ub.constant);
+
+            size_t nsig = 1 + jl_svec_len(argt_typ->parameters);
+            sig_args = jl_alloc_svec_uninit(nsig);
+            jl_svecset(sig_args, 0, closure_t);
+            for (size_t i = 0; i < jl_svec_len(argt_typ->parameters); ++i) {
+                jl_svecset(sig_args, 1+i, jl_svecref(argt_typ->parameters, i));
+            }
+            li->specTypes = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
+            li->def.module = ctx.module;
+            std::tie(closure_m, closure_decls) = emit_function(li, closure_src,
+                ub.constant, ctx.emission_context);
+            jl_merge_module(ctx.f->getParent(), std::move(closure_m));
+
+            jl_value_t **env_component_ts = (jl_value_t**)alloca(sizeof(jl_value_t*) * (nargs-4));
+            for (size_t i = 0; i < nargs - 4; ++i) {
+                env_component_ts[i] = argv[4+i].typ;
+            }
+
+            env_t = jl_apply_tuple_type_v(env_component_ts, nargs-4);
+
+            // TODO: Inline the env at the end of the opaque closure and generate a descriptor for GC
+            jl_cgval_t env = emit_new_struct(ctx, (jl_value_t*)env_t, nargs-4, &argv[4]);
+
+            Function *specptr = ctx.f->getParent()->getFunction(closure_decls.specFunctionObject);
+            jl_cgval_t fptr = mark_julia_type(ctx,
+                specptr ? (llvm::Value*)specptr : (llvm::Value*)ConstantPointerNull::get((llvm::PointerType*)T_pvoidfunc),
+                false, jl_voidpointer_type);
+
+            Value *jlptr;
+            if (closure_decls.functionObject == "jl_fptr_args" ||
+                closure_decls.functionObject == "jl_fptr_sparam") {
+                jlptr = specptr;
+            } else {
+                jlptr = ctx.f->getParent()->getFunction(closure_decls.functionObject);
+            }
+            jl_cgval_t jlcall_ptr = mark_julia_type(ctx,
+                jlptr ? (llvm::Value*)jlptr : (llvm::Value*)ConstantPointerNull::get((llvm::PointerType*)T_pvoidfunc),
+                false, jl_voidpointer_type);
+
+            jl_cgval_t closure_fields[4] =  {
+                env,
+                source,
+                jlcall_ptr,
+                fptr
+            };
+
+            jl_cgval_t ret = emit_new_struct(ctx, closure_t, 4, closure_fields);
+            JL_GC_POP();
+            return ret;
+        }
+
+        return mark_julia_type(ctx,
+                emit_jlcall(ctx, jl_new_opaque_closure_jlcall_func, V_rnull, argv, nargs, JLCALL_F_CC),
+                true, jl_any_type);
     }
     else if (head == exc_sym) {
         return mark_julia_type(ctx,
@@ -5753,15 +5855,29 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     ctx.code = src->code;
 
     std::map<int, BasicBlock*> labels;
+    bool toplevel = false;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
+    ctx.name = name_from_method_instance(lam);
+    bool is_opaque_closure = false;
+    if (jl_is_method(lam->def.method)) {
+        ctx.nargs = lam->def.method->nargs;
+    }
+    else {
+        ctx.nargs = 0;
+        // This is an opaque closure
+        jl_datatype_t *closure = jl_first_argument_datatype(lam->specTypes);
+        if (closure && jl_is_opaque_closure_type(closure)) {
+            assert(jl_is_concrete_immutable(jl_tparam0(closure)));
+            ctx.nargs = 1 + jl_datatype_nfields(jl_tparam0(closure));
+            is_opaque_closure = true;
+        }
+    }
+    toplevel = !jl_is_method(lam->def.method);
     ctx.rettype = jlrettype;
     ctx.source = src;
-    ctx.name = name_from_method_instance(lam);
     ctx.funcName = ctx.name;
     ctx.spvals_ptr = NULL;
-    ctx.nargs = jl_is_method(lam->def.method) ? lam->def.method->nargs : 0;
-    bool toplevel = !jl_is_method(lam->def.method);
     jl_array_t *stmts = ctx.code;
     size_t stmtslen = jl_array_dim0(stmts);
 
@@ -5775,7 +5891,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
-    if (jl_is_method(lam->def.method)) {
+    if (lam && jl_is_method(lam->def.method)) {
         toplineno = lam->def.method->line;
         ctx.file = jl_symbol_name(lam->def.method->file);
     }
@@ -5804,7 +5920,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     assert(lam->specTypes); // the specTypes field should always be assigned
 
-    if (nreq > 0 && lam->def.method->isva) {
+    if (nreq > 0 && jl_is_method(lam->def.value) && lam->def.method->isva) {
         nreq--;
         va = 1;
         jl_sym_t *vn = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, ctx.nargs - 1);
@@ -5831,6 +5947,15 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         if (argname == unused_sym)
             continue;
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
+        // OpaqueClosure implicitly loads the env
+        if (i == 0 && is_opaque_closure) {
+            if (jl_is_array(src->slottypes)) {
+                ty = jl_arrayref((jl_array_t*)src->slottypes, i);
+            }
+            else {
+                ty = (jl_value_t*)jl_any_type;
+            }
+        }
         varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, ty);
     }
     if (va && ctx.vaSlot != -1) {
@@ -6311,6 +6436,13 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                                         ctx.builder.GetInsertBlock());
                     }
                 }
+            }
+
+            // If this is an opaque closure, implicitly load the env
+            if (i == 0 && is_opaque_closure) {
+                theArg = convert_julia_type(ctx,
+                    emit_getfield_knownidx(ctx, theArg, 0, (jl_datatype_t*)argType),
+                    vi.value.typ);
             }
 
             if (vi.boxroot == NULL) {

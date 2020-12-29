@@ -43,6 +43,7 @@ jl_sym_t *pop_exception_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *splatnew_sym;
+jl_sym_t *new_opaque_closure_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *foreigncall_sym; jl_sym_t *as_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
@@ -359,6 +360,7 @@ void jl_init_common_symbols(void)
     pop_exception_sym = jl_symbol("pop_exception");
     new_sym = jl_symbol("new");
     splatnew_sym = jl_symbol("splatnew");
+    new_opaque_closure_sym = jl_symbol("new_opaque_closure");
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");

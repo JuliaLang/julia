@@ -676,6 +676,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_typeis(v, jl_task_type)) {
         jl_error("Task cannot be serialized");
     }
+    else if (jl_typeis(v, jl_opaque_closure_type)) {
+        jl_error("Live opaque closures cannot be serialized");
+    }
     else if (jl_typeis(v, jl_string_type)) {
         write_uint8(s->s, TAG_STRING);
         write_int32(s->s, jl_string_len(v));
@@ -2635,7 +2638,6 @@ void jl_init_serializer(void)
                      jl_box_int64(12), jl_box_int64(13), jl_box_int64(14),
                      jl_box_int64(15), jl_box_int64(16), jl_box_int64(17),
                      jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
-                     jl_box_int64(21),
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
@@ -2652,6 +2654,7 @@ void jl_init_serializer(void)
                      jl_namedtuple_type, jl_array_int32_type,
                      jl_typedslot_type, jl_uint32_type, jl_uint64_type,
                      jl_type_type_mt, jl_nonfunction_mt,
+                     jl_opaque_closure_type,
 
                      ptls->root_task,
 

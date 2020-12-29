@@ -232,6 +232,9 @@ using .Libc: getpid, gethostname, time
 
 include("env.jl")
 
+# OpaqueClosure
+include("opaque_closure.jl")
+
 # Concurrency
 include("linked_list.jl")
 include("condition.jl")

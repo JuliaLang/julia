@@ -149,6 +149,18 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             if (e->head == method_sym || e->head == module_sym) {
                 i++;
             }
+            if (e->head == new_opaque_closure_sym) {
+                JL_NARGSV(opaque closure definition, 4);
+                for (; i < 3; i++) {
+                    // TODO: this should be making a copy, not mutating the source
+                    jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals, binding_effects, eager_resolve));
+                }
+                jl_value_t *ci = jl_exprarg(e, 3);
+                if (jl_is_code_info(ci)) {
+                    jl_resolve_globals_in_ir((jl_array_t*)((jl_code_info_t*)ci)->code, module, NULL, binding_effects);
+                    i++;
+                }
+            }
             for (; i < nargs; i++) {
                 // TODO: this should be making a copy, not mutating the source
                 jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals, binding_effects, eager_resolve));

@@ -1140,6 +1140,9 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
+    if isa(f, Core.OpaqueClosure)
+        return code_typed_opaque_closure(f, types; optimize, debuginfo, world, interp)
+    end
     ft = Core.Typeof(f)
     if isa(types, Type)
         u = unwrap_unionall(types)
@@ -1184,6 +1187,24 @@ function code_typed_by_type(@nospecialize(tt::Type);
         push!(asts, code => ty)
     end
     return asts
+end
+
+function code_typed_opaque_closure(closure::Core.OpaqueClosure, @nospecialize(types=Tuple);
+        optimize=true,
+        debuginfo::Symbol=:default,
+        world = get_world_counter(),
+        interp = Core.Compiler.NativeInterpreter(world))
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    if isa(closure.ci, CodeInfo)
+        code = copy(closure.ci)
+        debuginfo === :none && remove_linenums!(code)
+        return Any[Pair{CodeInfo,Any}(code, code.rettype)]
+    else
+        mi = Core.Compiler.specialize_method(closure.ci::Method, signature_type(closure.env, types), Core.svec())
+        (code, ty) = Core.Compiler.typeinf_code(interp, mi, optimize)
+        debuginfo === :none && remove_linenums!(code)
+        return Any[Pair{CodeInfo,Any}(code, ty)]
+    end
 end
 
 function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.Compiler.NativeInterpreter())

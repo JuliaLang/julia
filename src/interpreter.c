@@ -270,6 +270,17 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return v;
     }
+    else if (head == new_opaque_closure_sym) {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, nargs);
+        for (size_t i = 0; i < nargs; i++)
+            argv[i] = eval_value(args[i], s);
+        JL_NARGSV(new_opaque_closure, 4);
+        jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
+            argv[3], argv+4, nargs-4);
+        JL_GC_POP();
+        return ret;
+    }
     else if (head == static_parameter_sym) {
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);
@@ -648,6 +659,41 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->continue_at = 0;
     s->mi = mi;
     JL_GC_ENABLEFRAME(s);
+    jl_value_t *r = eval_body(stmts, s, 0, 0);
+    JL_GC_POP();
+    return r;
+}
+
+jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs)
+{
+    jl_code_info_t *source = NULL;
+    jl_value_t *code = clos->code;
+    if (jl_is_method(code)) {
+        source = (jl_code_info_t*)clos->method->source;
+    }
+    else {
+        source = clos->source;
+    }
+    jl_array_t *stmts = source->code;
+    assert(jl_typeis(stmts, jl_array_any_type));
+    interpreter_state *s;
+    unsigned nroots = jl_source_nslots(source) + jl_source_nssavalues(source) + 2;
+    jl_value_t **locals = NULL;
+    JL_GC_PUSHFRAME(s, locals, nroots);
+    locals[0] = (jl_value_t*)clos;
+    // The analyzer has some trouble with this
+    locals[1] = (jl_value_t*)stmts;
+    JL_GC_PROMISE_ROOTED(stmts);
+    locals[2] = (jl_value_t*)clos->env;
+    s->locals = locals + 2;
+    s->src = source;
+    s->module = NULL;
+    s->sparam_vals = NULL;
+    s->preevaluation = 0;
+    s->continue_at = 0;
+    s->mi = NULL;
+    for (int i = 0; i < nargs; ++i)
+        s->locals[1 + i] = args[i];
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
     return r;
