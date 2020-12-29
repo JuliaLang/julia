@@ -994,7 +994,7 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
             show(io, def)
         else
             print(io, "MethodInstance for ")
-            show_tuple_as_call(io, def.name, l.specTypes, false, nothing, nothing, true)
+            show_tuple_as_call(io, def.name, l.specTypes; qualified=true)
         end
     else
         print(io, "Toplevel MethodInstance thunk")
@@ -1024,7 +1024,7 @@ function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
         else
             print(io, "InferenceFrameInfo for ")
             argnames = [isa(a, Core.Const) ? (isa(a.val, Type) ? "" : a.val) : "" for a in mi_info.slottypes[1:mi_info.nargs]]
-            show_tuple_as_call(io, def.name, mi.specTypes, false, nothing, argnames, true)
+            show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
         end
     else
         linetable = mi.uninferred.linetable
@@ -2176,7 +2176,9 @@ function print_within_stacktrace(io, s...; color=:normal, bold=false)
     end
 end
 
-function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwargs=nothing, argnames=nothing, qualified=false)
+function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
+                            demangle=false, kwargs=nothing, argnames=nothing,
+                            qualified=false, hasfirst=true)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
         print(io, demangle ? demangle_function_name(name) : name, "(...)")
@@ -2189,12 +2191,16 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type, demangle=false, kwa
         env_io = IOContext(env_io, :unionall_env => sig.var)
         sig = sig.body
     end
+    n = 1
     sig = (sig::DataType).parameters
-    show_signature_function(env_io, sig[1], demangle, "", false, qualified)
+    if hasfirst
+        show_signature_function(env_io, sig[1], demangle, "", false, qualified)
+        n += 1
+    end
     first = true
     print_within_stacktrace(io, "(", bold=true)
     show_argnames = argnames !== nothing && length(argnames) == length(sig)
-    for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
+    for i = n:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         if show_argnames

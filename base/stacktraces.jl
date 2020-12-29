@@ -236,9 +236,12 @@ function show_spec_linfo(io::IO, frame::StackFrame)
                         kwnames[i] = Symbol(str[1:end-3])
                     end
                 end
-                Base.show_tuple_as_call(io, def.name, pos_sig, true, zip(kwnames, kwarg_types), argnames[def.nkw+2:end])
+                Base.show_tuple_as_call(io, def.name, pos_sig;
+                                        demangle=true,
+                                        kwargs=zip(kwnames, kwarg_types),
+                                        argnames=argnames[def.nkw+2:end])
             else
-                Base.show_tuple_as_call(io, def.name, sig, true, nothing, argnames)
+                Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
             end
         else
             Base.show_mi(io, linfo, true)
