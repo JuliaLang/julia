@@ -918,6 +918,9 @@ function dot(x::AbstractArray, y::AbstractArray)
     s
 end
 
+dot(x::Adjoint, y::Adjoint) = conj(dot(parent(x), parent(y)))
+dot(x::Transpose, y::Transpose) = dot(parent(x), parent(y))
+
 """
     dot(x, A, y)
 
