@@ -369,7 +369,7 @@ endif
 
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
-	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
+	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
