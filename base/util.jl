@@ -383,25 +383,41 @@ end
 getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
-    prompt(message; default="") -> Union{String, Nothing}
+    prompt(message; default="", timeout=Real) -> Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
 then the user can enter just a newline character to select the `default`.
 
+For TTY input streams, a `timeout` in seconds greater than 0 can be provided, after which
+the default will be returned.
+
+For instance, the user enters a value and hits `return`:
+```julia
+julia> Base.prompt("Proceed? y/n"; default="n", timeout=5)
+Proceed? y/n [n] timeout 5s: y
+"y"
+```
+
+The user hits `return` alone to select the default:
+```julia
+julia> Base.prompt("Proceed? y/n"; default="n", timeout=5)
+Proceed? y/n [n] timeout 5s:
+"n"
+```
+
+The user doesn't input and hit `return` before the timeout, so default returns:
+```julia
+julia> Base.prompt("Proceed? y/n"; default="n", timeout=5)
+Proceed? y/n [n] timeout 5s: timed out
+"n"
+```
+
 See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
-
-# Examples
-
-```julia-repl
-julia> your_name = Base.prompt("Enter your name");
-Enter your name: Logan
-
-julia> your_name
-"Logan"
 ```
 """
-function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
+function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="", timeout::Real = 0)
+    # timeout is ignored for non-TTY input
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
     print(output, msg)
     uinput = readline(input, keep=true)
@@ -409,10 +425,93 @@ function prompt(input::IO, output::IO, message::AbstractString; default::Abstrac
     uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
 end
+function prompt(input::TTY, output::IO, message::AbstractString; default::AbstractString="", timeout::Real = 0)
+    in_stat_before = input.status
+    timed_out = false
+    start_msg = isempty(default) ? "$message" : "$message [$default]"
+    timeout_default_timer = if timeout > 0
+        msg = string(start_msg, " timeout ", timeout, "s: ")
+        Timer(timeout) do t
+            lock(input.cond)
+            timed_out = true
+            input.status = StatusEOF
+            notify(input.cond)
+            unlock(input.cond)
+        end
+    else
+        msg = string(start_msg, ": ")
+        nothing
+    end
+    print(output, msg)
+    timeout_message_timer = nothing
+    t_start = time()
+    if timeout > 0
+        timeout_message_timer = Timer(0; interval=1) do t
+            if isopen(timeout_default_timer)
+                print(output, "\e[$(textwidth(msg))D\e[0J") # clear previous message
+                t = ceil(Int, timeout - (time() - t_start))
+                msg = string(start_msg, " timeout ", t, "s: ")
+                print(output, msg)
+            end
+        end
+    end
+    # wait on input but don't consume so we can stop timeout timers while maintaining terminal edit behavior
+    # FIXME: with this the first char entered isn't editable in the terminal
+    uinput = ""
+    _return = false
+    _interrupt = false
+    with_raw_tty(input) do
+        wait_readnb(input, 1)
+        try
+            c = read(input, Char)
+            print(output, "\e[$(textwidth(msg))D\e[0J") # clear previous message
+            msg = string(start_msg, ": ")
+            print(output, msg)
+            if c == '\r'
+                _return = true
+            elseif c == '\x03'
+                _interrupt = true
+            else
+                print(output, c)
+                uinput = string(c)
+            end
+        catch e
+            e isa EOFError || rethrow()
+        end
+    end
+    timeout_default_timer isa Timer && close(timeout_default_timer)
+    timeout_message_timer isa Timer && close(timeout_message_timer)
+    if !_interrupt
+        if _return
+            println(output)
+            return default
+        end
+        try
+            uinput *= readline(input, keep=true)
+        catch e
+            e isa InterruptException || rethrow()
+            _interrupt = true
+        end
+    end
+    if _interrupt
+        println(output)
+        error("Prompt interrupted")
+    end
+    if timed_out
+        print(output, "\e[$(textwidth(msg))D\e[0J") # clear previous message
+        println(output, string(start_msg, " timed out:"))
+        input.status = in_stat_before
+        return default
+    else
+        isempty(uinput) && return nothing  # Encountered an EOF
+        uinput = chomp(uinput)
+        return isempty(uinput) ? default : uinput
+    end
+end
 
 # allow new prompt methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, stdout, message, default=default)
+prompt(message::AbstractString; kwargs...) = prompt(stdin, stdout, message; kwargs...)
 
 # Windows authentication prompt
 if Sys.iswindows()
