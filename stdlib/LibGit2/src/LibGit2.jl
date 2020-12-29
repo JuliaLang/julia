@@ -963,11 +963,15 @@ end
 
 const ENSURE_INITIALIZED_LOCK = ReentrantLock()
 
+@noinline function throw_negative_refcount_error(x::Int)
+    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
+end
+
 function ensure_initialized()
     lock(ENSURE_INITIALIZED_LOCK) do
         x = Threads.atomic_cas!(REFCOUNT, 0, 1)
         x > 0 && return
-        x < 0 && negative_refcount_error(x)::Union{}
+        x < 0 && throw_negative_refcount_error(x)
         try initialize()
         catch
             Threads.atomic_sub!(REFCOUNT, 1)
@@ -976,10 +980,6 @@ function ensure_initialized()
         end
     end
     return nothing
-end
-
-@noinline function negative_refcount_error(x::Int)
-    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
 end
 
 @noinline function initialize()
