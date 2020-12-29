@@ -161,7 +161,26 @@ julia> dirname("/home/myuser/")
 
 See also: [`basename`](@ref)
 """
- dirname(path::AbstractString) = splitdir(path)[1]
+dirname(path::AbstractString) = splitdir(path)[1]
+
+"""
+    dirname(path::AbstractString, n::Integer) -> AbstractString
+Get the `n`-th parent directory of a path. Trailing characters ('/' or '\\') in the path
+are counted as part of the path.
+
+# Examples
+```jldoctest
+julia> dirname("/home/myuser", 1)
+"/home"
+
+julia> dirname("/home/myuser/", 1)
+"/home/myuser"
+
+julia> dirname("/home/myuser/stats/plots", 3)
+"/home"
+```
+"""
+dirname(path::AbstractString, n::Integer) = ∘(repeat([dirname], n)...)(path)
 
 """
     basename(path::AbstractString) -> AbstractString

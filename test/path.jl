@@ -11,6 +11,8 @@
     end
     @test basename(S("foo$(sep)bar")) == "bar"
     @test dirname(S("foo$(sep)bar")) == "foo"
+    @test dirname(S("foo$(sep)bar"), 1) == "foo"
+    @test dirname(S("a$(sep)b$(sep)c$(sep)d"), 3) == "a"
 
     @testset "expanduser" begin
         @test expanduser(S("")) == ""
