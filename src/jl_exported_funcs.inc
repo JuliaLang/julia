@@ -200,6 +200,7 @@
     XX(jl_finalize_th) \
     XX(jl_find_free_typevars) \
     XX(jl_f_intrinsic_call) \
+    XX(jl_f_opaque_closure_call) \
     XX(jl_f_invoke) \
     XX(jl_f_invoke_kwsorter) \
     XX(jl_first_argument_datatype) \

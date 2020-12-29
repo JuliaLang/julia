@@ -53,6 +53,11 @@ JL_CALLABLE(jl_new_opaque_closure_jlcall)
         args[1], args[2], args[3], &args[4], nargs-4);
 }
 
+JL_CALLABLE(jl_f_opaque_closure_call)
+{
+    jl_opaque_closure_t* opaque = (jl_opaque_closure_t*)F;
+    return opaque->fptr1(F, args, nargs);
+}
 
 JL_DLLEXPORT jl_method_t* jl_mk_opaque_closure_method(jl_module_t *def_mod)
 {

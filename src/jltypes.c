@@ -2383,7 +2383,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
 
     tv = jl_svec2(tvar("A"), tvar("R"));
-    jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_any_type, tv,
+    jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
         jl_perm_symsvec(4, "env", "ci", "fptr1", "fptr"),
         jl_svec(4, jl_any_type, jl_any_type, pointer_void, pointer_void), 0, 0, 4)->name->wrapper;
     jl_opaque_closure_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type))->name;

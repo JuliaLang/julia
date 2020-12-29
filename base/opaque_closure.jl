@@ -1,12 +1,11 @@
-@noinline function (y::Core.OpaqueClosure{A, R})(args...) where {A,R}
-    typeassert(args, A)
-    ccall(y.fptr1, Any, (Any, Ptr{Any}, Int), y, Any[args...], length(args))::R
-end
-
 function show(io::IO, oc::Core.OpaqueClosure{A, R}) where {A, R}
     show_tuple_as_call(io, Symbol(""), A; hasfirst=false)
     print(io, "::", R)
     print(io, "->◌")
+end
+
+function show(io::IO, ::MIME"text/plain", oc::Core.OpaqueClosure{A, R}) where {A, R}
+    show(io, oc)
 end
 
 """

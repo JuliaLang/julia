@@ -676,6 +676,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_typeis(v, jl_task_type)) {
         jl_error("Task cannot be serialized");
     }
+    else if (jl_typeis(v, jl_opaque_closure_type)) {
+        jl_error("Live opaque closures cannot be serialized");
+    }
     else if (jl_typeis(v, jl_string_type)) {
         write_uint8(s->s, TAG_STRING);
         write_int32(s->s, jl_string_len(v));

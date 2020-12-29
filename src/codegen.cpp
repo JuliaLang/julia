@@ -4540,7 +4540,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 ub.constant, ctx.emission_context);
             jl_merge_module(ctx.f->getParent(), std::move(closure_m));
 
-            jl_value_t **env_component_ts = (jl_value_t**)alloca(sizeof(jl_value_t*) * nargs-4);
+            jl_value_t **env_component_ts = (jl_value_t**)alloca(sizeof(jl_value_t*) * (nargs-4));
             for (size_t i = 0; i < nargs - 4; ++i) {
                 env_component_ts[i] = argv[4+i].typ;
             }

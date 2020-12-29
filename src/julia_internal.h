@@ -440,6 +440,7 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_intrinsic_call);
+JL_CALLABLE(jl_f_opaque_closure_call);
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
 void jl_install_thread_signal_handler(jl_ptls_t ptls);
