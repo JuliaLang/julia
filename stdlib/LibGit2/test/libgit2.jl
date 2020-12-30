@@ -1726,6 +1726,18 @@ mktempdir() do dir
         end
     end
 
+    @testset "checkout_head" begin
+        LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
+            # modify file
+            repo_file = open(joinpath(cache_repo,test_file), "a")
+            println(repo_file, commit_msg1 * randstring(10))
+            # and checkout HEAD once more
+            LibGit2.checkout_head(repo)
+            @test LibGit2.headname(repo) == master_branch
+            @test !LibGit2.isdirty(repo)
+        end
+    end
+
     @testset "checkout/headname" begin
         LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
             LibGit2.checkout!(repo, string(commit_oid1))
@@ -1733,7 +1745,6 @@ mktempdir() do dir
             @test LibGit2.headname(repo) == "(detached from $(string(commit_oid1)[1:7]))"
         end
     end
-
 
     if Sys.isunix()
         @testset "checkout/proptest" begin
