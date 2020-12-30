@@ -47,7 +47,7 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start[, stop]; length, stop, step=1)
+    range(start[, stop[, length]]; length, stop, step=1)
 
 Given a starting value, construct a range either by length or from `start` to `stop`,
 optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
@@ -58,6 +58,8 @@ automatically such that there are `length` linearly spaced elements in the range
 
 If `step` and `stop` are provided and `length` is not, the overall range length will be computed
 automatically such that the elements are `step` spaced.
+
+If `start`, `stop`, and `length` are specified by position, no keywords are permitted.
 
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
@@ -84,6 +86,9 @@ julia> range(1, step=5, stop=100)
 julia> range(1, 10, length=101)
 1.0:0.09:10.0
 
+julia> range(1, 10, 101)
+1.0:0.09:10.0
+
 julia> range(1, 100, step=5)
 1:5:96
 ```
@@ -93,6 +98,9 @@ range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing)
 
 range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) =
     _range2(start, step, stop, length)
+
+range(start, stop, length::Union{Integer,Nothing}) =
+    _range(start, nothing, stop, length)
 
 _range2(start, ::Nothing, stop, ::Nothing) =
     throw(ArgumentError("At least one of `length` or `step` must be specified"))
