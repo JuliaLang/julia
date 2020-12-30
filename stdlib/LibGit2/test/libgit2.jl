@@ -1733,7 +1733,7 @@ mktempdir() do dir
             println(repo_file, commit_msg1 * randstring(10))
             close(repo_file)
             # and checkout HEAD once more
-            LibGit2.checkout_head(repo)
+            LibGit2.checkout_head(repo, options=LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE))
             @test LibGit2.headname(repo) == master_branch
             @test !LibGit2.isdirty(repo)
         end
