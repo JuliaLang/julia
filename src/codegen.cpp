@@ -5631,6 +5631,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
         unsigned argno = 1;
 #if JL_LLVM_VERSION < 120000
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::StructRet);
+        (void)srt; // silence unused variable error
 #else
         Attribute sret = Attribute::getWithStructRetType(jl_LLVMContext, srt);
         attributes = attributes.addAttribute(jl_LLVMContext, argno, sret);
