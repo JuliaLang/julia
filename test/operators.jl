@@ -162,6 +162,35 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
 end
 
+@testset "function iteration" begin
+    @test (sin^0)(1.2) == 1.2
+    @test (sin^1)(1.2) == sin(1.2)
+    @test (sin^2)(1.2) == sin(sin(1.2))
+    @test (sin^3)(1.2) == sin(sin(sin(1.2)))
+    @test (sin^4)(1.2) == sin(sin(sin(sin(1.2))))
+    @test (sin^5)(1.2) == sin(sin(sin(sin(sin(1.2)))))
+    @test sin^0 == identity
+    @test sin^1 == sin
+    @test sin^2 == sin ∘ sin
+    @test repr(sin^8) == "sin^8" == repr("text/plain", sin^8)
+    @test (sin^8)^2 == sin^16
+    @test (sin^8)^10 == sin^80
+    let f(x; y) = x + y
+        @test (f^0)(0; y=3) == 0
+        @test (f^1)(0; y=3) == 3
+        @test (f^2)(0; y=3) == 3*2
+        @test (f^3)(0; y=3) == 3*3
+        @test (f^4)(0; y=3) == 3*4
+        for n = 0:10
+            @test (f^n)(0; y=3) == 3*n
+        end
+    end
+    @test_throws MethodError sin^-1 # calls inv(sin)
+    let n=-1
+        @test_throws ArgumentError sin^n
+    end
+end
+
 @testset "function negation" begin
     str = randstring(20)
     @test filter(!isuppercase, str) == replace(str, r"[A-Z]" => "")
