@@ -14,7 +14,7 @@
                             .endef
 #define EXPORT(name)        .section .drectve,"r"; \
                             .ascii " -export:"#name""; \
-                            .section text
+                            .section .text
 #define SEH_START1(name)    .seh_proc name
 #define SEH_START2()        .seh_endprologue
 #define SEH_END()           .seh_endproc
