@@ -866,7 +866,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
     for j = 2:t
         while true
             rand!(view(X,1:n,j), (-1, 1))
-            yaux = X[1:n,j]' * X[1:n,1:j-1]
+            yaux = @views X[1:n,j]' * X[1:n,1:j-1]
             if !_any_abs_eq(yaux,n)
                 break
             end
@@ -884,7 +884,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
         est = zero(real(eltype(Y)))
         est_ind = 0
         for i = 1:t
-            y = norm(Y[1:n,i], 1)
+            y = norm(view(Y,1:n,i), 1)
             if y > est
                 est = y
                 est_ind = i
@@ -914,13 +914,13 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
                 while true
                     repeated = false
                     if j > 1
-                        saux = S[1:n,j]' * S[1:n,1:j-1]
+                        saux = @views S[1:n,j]' * S[1:n,1:j-1]
                         if _any_abs_eq(saux,n)
                             repeated = true
                         end
                     end
                     if !repeated
-                        saux2 = S[1:n,j]' * S_old[1:n,1:t]
+                        saux2 = @views S[1:n,j]' * S_old[1:n,1:t]
                         if _any_abs_eq(saux2,n)
                             repeated = true
                         end
@@ -940,7 +940,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
         h = zeros(real(eltype(Z)), n)
         h_ind = 0
         for i = 1:n
-            h[i] = norm(Z[i,1:t], Inf)
+            h[i] = norm(view(Z,i,1:t), Inf)
             if h[i] > h_max
                 h_max = h[i]
                 h_ind = i
