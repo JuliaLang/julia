@@ -1731,6 +1731,7 @@ mktempdir() do dir
             # modify file
             repo_file = open(joinpath(cache_repo,test_file), "a")
             println(repo_file, commit_msg1 * randstring(10))
+            close(repo_file)
             # and checkout HEAD once more
             LibGit2.checkout_head(repo)
             @test LibGit2.headname(repo) == master_branch
