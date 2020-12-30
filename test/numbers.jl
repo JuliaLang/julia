@@ -2514,7 +2514,7 @@ end
         @test divrem(T(-1.5), T(2), RoundDown)[2]    == 0.5
         @test divrem(T(-1.5), T(2), RoundUp)[2]      == -1.5
     end
-    for (a, b, nearest) in (
+    for (a, b) in (
             (3, 2),
             (5, 3),
             (-3, 2),
@@ -2527,6 +2527,13 @@ end
             @test divrem(a, b, RoundNearest) == (div(a, b, RoundNearest),rem(a, b, RoundNearest))
         end
     end
+
+    a = 122322388883338838388383888823233122323
+    b = 343443
+    c = 122322388883338838388383888823233122333
+    @test divrem(a, b) == (div(a,b), rem(a,b))
+    @test divrem(a, c) == (div(a,c), rem(a,c))
+    @test divrem(a,-(a-20), RoundDown) == (div(a,-(a-20), RoundDown), rem(a,-(a-20), RoundDown))
 end
 
 @testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
