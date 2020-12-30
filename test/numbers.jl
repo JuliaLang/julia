@@ -2503,6 +2503,32 @@ end
     end
 end
 
+@testset "divrem rounded" begin
+    for T in (Float16, Float32, Float64, BigFloat)
+        @test divrem(T(1.5), T(2), RoundToZero)[2]  == 1.5
+        @test divrem(T(1.5), T(2), RoundNearest)[2] == -0.5
+        @test divrem(T(1.5), T(2), RoundDown)[2]    == 1.5
+        @test divrem(T(1.5), T(2), RoundUp)[2]      == -0.5
+        @test divrem(T(-1.5), T(2), RoundToZero)[2]  == -1.5
+        @test divrem(T(-1.5), T(2), RoundNearest)[2] == 0.5
+        @test divrem(T(-1.5), T(2), RoundDown)[2]    == 0.5
+        @test divrem(T(-1.5), T(2), RoundUp)[2]      == -1.5
+    end
+    for (a, b, nearest) in (
+            (3, 2),
+            (5, 3),
+            (-3, 2),
+            (5, 2),
+            (-5, 2),
+            (-5, 3),
+            (5, -3))
+        for sign in (+1, -1)
+            (a, b) = (a*sign, b*sign)
+            @test divrem(a, b, RoundNearest) == (div(a, b, RoundNearest),rem(a, b, RoundNearest))
+        end
+    end
+end
+
 @testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
     @test rem2pi(T(1), RoundToZero)  == 1
     @test rem2pi(T(1), RoundNearest) == 1

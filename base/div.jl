@@ -133,30 +133,35 @@ julia> divrem(7,3)
 ```
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
+
+#avoids calling div twice
 function divrem(a, b, r::RoundingMode)
     if r === RoundToZero
         # For compat. Remove in 2.0.
-        (div(a, b), rem(a, b))
+        d = div(a, b)
+        (d, a - d*b)
     elseif r === RoundDown
         # For compat. Remove in 2.0.
-        (fld(a, b), mod(a, b))
+        d = fld(a, b)
+        (d, a - d*b)
     else
-        (div(a, b, r), rem(a, b, r))
+        d = div(a, b, r)
+        (d, a - b*d)
     end
 end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
     (q, r) = divrem(x, y)
     if x >= 0
         if y >= 0
-            r >=        (y÷2) + (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
+            r >=  (y÷2) + (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
         else
-            r >=       -(y÷2) + (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
+            r >=  -(y÷2) + (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
         end
     else
         if y >= 0
-            r <= -signed(y÷2) - (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
+            r <=  -signed(y÷2) - (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
         else
-            r <=        (y÷2) - (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
+            r <=  (y÷2) - (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
         end
     end
 end
@@ -164,15 +169,15 @@ function divrem(x::Integer, y::Integer, rnd:: typeof(RoundNearestTiesAway))
     (q, r) = divrem(x, y)
     if x >= 0
         if y >= 0
-            r >=        (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
+            r >=  (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
         else
-            r >=       -(y÷2) + isodd(y) ? (q-true, r+y) : (q, r)
+            r >=  -(y÷2) + isodd(y) ? (q-true, r+y) : (q, r)
         end
     else
         if y >= 0
-            r <= -signed(y÷2) - isodd(y) ? (q-true, r+y) : (q, r)
+            r <=  -signed(y÷2) - isodd(y) ? (q-true, r+y) : (q, r)
         else
-            r <=        (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
+            r <=  (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
         end
     end
 end
@@ -180,15 +185,15 @@ function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearestTiesUp))
     (q, r) = divrem(x, y)
     if x >= 0
         if y >= 0
-            r >=        (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
+            r >=  (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
         else
-            r >=       -(y÷2) + true     ? (q-true, r+y) : (q, r)
+            r >=  -(y÷2) + true ? (q-true, r+y) : (q, r)
         end
     else
         if y >= 0
-            r <= -signed(y÷2) - true     ? (q-true, r+y) : (q, r)
+            r <=  -signed(y÷2) - true ? (q-true, r+y) : (q, r)
         else
-            r <=        (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
+            r <=  (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
         end
     end
 end
