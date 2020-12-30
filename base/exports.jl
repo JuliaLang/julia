@@ -57,6 +57,7 @@ export
     IOStream,
     LinRange,
     Irrational,
+    IteratedFunction,
     Matrix,
     MergeSort,
     Missing,
