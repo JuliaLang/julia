@@ -329,15 +329,6 @@ julia> diagm([1,2,3])
 diagm(v::AbstractVector) = diagm(0 => v)
 diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 
-function tr(A::Matrix{T}) where T
-    n = checksquare(A)
-    t = zero(T)
-    for i=1:n
-        t += A[i,i]
-    end
-    t
-end
-
 """
     kron!(C, A, B)
 
