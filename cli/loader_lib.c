@@ -196,6 +196,8 @@ JL_DLLEXPORT int jl_load_repl(int argc, char * argv[]) {
 
 #ifdef _OS_WINDOWS_
 int __stdcall DllMainCRTStartup(void* instance, unsigned reason, void* reserved) {
+    setup_stdio();
+
     // Because we override DllMainCRTStartup, we have to manually call our constructor methods
     jl_load_libjulia_internal();
     return 1;
