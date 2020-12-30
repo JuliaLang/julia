@@ -656,6 +656,7 @@ export
     isbits,
     isequal,
     ismutable,
+    ismutabletype,
     isless,
     isunordered,
     ifelse,

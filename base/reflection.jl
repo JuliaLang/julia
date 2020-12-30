@@ -460,6 +460,23 @@ true
 """
 ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
 
+
+"""
+    ismutabletype(T) -> Bool
+
+Determine whether type `T` was declared as a mutable type
+(i.e. using `mutable struct` keyword).
+
+!!! compat "Julia 1.7"
+    This function requires at least Julia 1.7.
+"""
+function ismutabletype(@nospecialize(t::Type))
+    t = unwrap_unionall(t)
+    # TODO: what to do for `Union`?
+    return isa(t, DataType) && t.mutable
+end
+
+
 """
     isstructtype(T) -> Bool
 
