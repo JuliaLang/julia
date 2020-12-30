@@ -1721,4 +1721,12 @@ end
     @test isempty(range(typemin(Int), step=-1//1, length=0))
     @test eltype(range(typemin(Int), step=-1//1, length=0)) === Rational{Int}
     @test typeof(step(range(typemin(Int), step=-1//1, length=0))) === Rational{Int}
+
+    @test StepRangeLen(Int8(1), Int8(2), 3) == Int8[1, 3, 5]
+    @test eltype(StepRangeLen(Int8(1), Int8(2), 3)) === Int8
+    @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3))) === Int8
+
+    @test StepRangeLen(Int8(1), Int8(2), 3, 2) == Int8[-1, 1, 3]
+    @test eltype(StepRangeLen(Int8(1), Int8(2), 3, 2)) === Int8
+    @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3, 2))) === Int8
 end
