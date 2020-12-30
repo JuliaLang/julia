@@ -5668,6 +5668,11 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
         else if (isboxed && jl_is_immutable_datatype(jt)) {
             attributes = attributes.addParamAttribute(jl_LLVMContext, argno, Attribute::ReadOnly);
         }
+        else if (jl_is_primitivetype(jt) && ty->isIntegerTy()) {
+            bool issigned = jl_signed_type && jl_subtype(jt, (jl_value_t*)jl_signed_type);
+            Attribute::AttrKind attr = issigned ? Attribute::SExt : Attribute::ZExt;
+            attributes = attributes.addParamAttribute(jl_LLVMContext, argno, attr);
+        }
         fsig.push_back(ty);
     }
 
