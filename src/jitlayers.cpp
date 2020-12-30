@@ -78,14 +78,16 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
 extern "C" JL_DLLEXPORT
 uint64_t jl_cumulative_compile_time_ns_before()
 {
-    jl_measure_compile_time = 1;
-    return jl_cumulative_compile_time;
+    int tid = jl_threadid();
+    jl_measure_compile_time[tid] = 1;
+    return jl_cumulative_compile_time[tid];
 }
 extern "C" JL_DLLEXPORT
 uint64_t jl_cumulative_compile_time_ns_after()
 {
-    jl_measure_compile_time = 0;
-    return jl_cumulative_compile_time;
+    int tid = jl_threadid();
+    jl_measure_compile_time[tid] = 0;
+    return jl_cumulative_compile_time[tid];
 }
 
 // this generates llvm code for the lambda info
@@ -231,7 +233,7 @@ int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt
 {
     JL_LOCK(&codegen_lock);
     uint64_t compiler_start_time = 0;
-    if (jl_measure_compile_time)
+    if (jl_measure_compile_time[jl_threadid()])
         compiler_start_time = jl_hrtime();
     jl_codegen_params_t params;
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
@@ -255,8 +257,8 @@ int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt
         if (success && llvmmod == NULL)
             jl_add_to_ee(std::unique_ptr<Module>(into));
     }
-    if (codegen_lock.count == 1 && jl_measure_compile_time)
-        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
+    if (codegen_lock.count == 1 && jl_measure_compile_time[jl_threadid()])
+        jl_cumulative_compile_time[jl_threadid()] += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock);
     return success;
 }
@@ -314,7 +316,7 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
 {
     JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     uint64_t compiler_start_time = 0;
-    if (jl_measure_compile_time)
+    if (jl_measure_compile_time[jl_threadid()])
         compiler_start_time = jl_hrtime();
     // if we don't have any decls already, try to generate it now
     jl_code_info_t *src = NULL;
@@ -352,8 +354,8 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
     else {
         codeinst = NULL;
     }
-    if (codegen_lock.count == 1 && jl_measure_compile_time)
-        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
+    if (codegen_lock.count == 1 && jl_measure_compile_time[jl_threadid()])
+        jl_cumulative_compile_time[jl_threadid()] += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock);
     JL_GC_POP();
     return codeinst;
@@ -367,7 +369,7 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
     }
     JL_LOCK(&codegen_lock);
     uint64_t compiler_start_time = 0;
-    if (jl_measure_compile_time)
+    if (jl_measure_compile_time[jl_threadid()])
         compiler_start_time = jl_hrtime();
     if (unspec->invoke == NULL) {
         jl_code_info_t *src = NULL;
@@ -395,8 +397,8 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         }
         JL_GC_POP();
     }
-    if (codegen_lock.count == 1 && jl_measure_compile_time)
-        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
+    if (codegen_lock.count == 1 && jl_measure_compile_time[jl_threadid()])
+        jl_cumulative_compile_time[jl_threadid()] += (jl_hrtime() - compiler_start_time);
     JL_UNLOCK(&codegen_lock); // Might GC
 }
 
@@ -419,7 +421,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             uint64_t compiler_start_time = 0;
-            if (jl_measure_compile_time)
+            if (jl_measure_compile_time[jl_threadid()])
                 compiler_start_time = jl_hrtime();
             specfptr = (uintptr_t)codeinst->specptr.fptr;
             if (specfptr == 0) {
@@ -444,8 +446,8 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
                 }
                 JL_GC_POP();
             }
-            if (jl_measure_compile_time)
-                jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
+            if (jl_measure_compile_time[jl_threadid()])
+                jl_cumulative_compile_time[jl_threadid()] += (jl_hrtime() - compiler_start_time);
             JL_UNLOCK(&codegen_lock);
         }
         if (specfptr != 0)
