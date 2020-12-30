@@ -838,6 +838,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
     maxiter = 5
     # Check the input
     n = checksquare(A)
+    iszero(n) && return zero(T)
     if t <= 0
         throw(ArgumentError("number of blocks must be a positive integer"))
     end
