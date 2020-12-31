@@ -939,24 +939,12 @@ function opnormest1(
         end
         if T <: Real
             # (2)
-            _each_col_has_parallel_col(S, S_old) && break
-            # Check whether cols of S are parallel to cols of S or S_old
+            iter >= 2 && _each_col_has_parallel_col(S, S_old) && break
+            # Randomly permute any cols of S that are parallel to cols of S or S_old
             for j = 1:t
-                while true
-                    repeated = false
-                    if j > 1 && _any_cols_are_parallel(S, j, S, 1:j-1)
-                        repeated = true
-                    end
-                    if !repeated
-                        if _any_cols_are_parallel(S, j, S_old, 1:t)
-                            repeated = true
-                        end
-                    end
-                    if repeated
-                        rand!(view(S,1:n,j), (-1, 1))
-                    else
-                        break
-                    end
+                while (j > 1 && _any_cols_are_parallel(S, j, S, 1:(j - 1))) ||
+                    (iter >= 2 && _any_cols_are_parallel(S, j, S_old, 1:t))
+                    rand!(view(S, 1:n, j), (-1, 1))
                 end
             end
         end
