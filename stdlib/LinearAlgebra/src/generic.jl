@@ -847,6 +847,13 @@ function _any_cols_are_parallel(X, xrange, Y, yrange)
     return false
 end
 
+function _each_col_has_parallel_col(X, Y)
+    for x in eachcol(X)
+        any(y -> _isparallel(x, y), eachcol(Y)) || return false
+    end
+    return true
+end
+
 function opnormest1(
     A,
     t::Integer=min(2,maximum(size(A))),
@@ -928,6 +935,7 @@ function opnormest1(
         end
 
         if T <: Real
+            _each_col_has_parallel_col(S, S_old) && break
             # Check whether cols of S are parallel to cols of S or S_old
             for j = 1:t
                 while true
