@@ -833,7 +833,12 @@ opnorm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(co
 opnorm(v::AdjointAbsVec) = norm(conj(v.parent))
 opnorm(v::TransposeAbsVec) = norm(v.parent)
 
-function opnormest1(A, t::Integer = min(2,maximum(size(A))))
+function opnormest1(
+    A,
+    t::Integer=min(2,maximum(size(A))),
+    ::Val{retv}=Val(false),
+    ::Val{retw}=Val(false),
+) where {retv,retw}
     T = eltype(A)
     maxiter = 5
     # Check the input
@@ -866,6 +871,9 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
 
     # Generate the block matrix
     X = Matrix{Ti}(undef, n, t)
+    if retw
+        w = Vector{Ti}(undef, n)
+    end
     X[1:n,1] .= 1
     for j = 2:t
         while true
@@ -881,6 +889,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
     iter = 0
     local est
     local est_old
+    local ind_best
     est_ind = 0
     while iter < maxiter
         iter += 1
@@ -899,6 +908,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
         end
         if est > est_old || iter == 2
             ind_best = est_ind
+            retw && copyto!(w, view(Y, 1:n, est_ind))
         end
         if iter >= 2 && est <= est_old
             est = est_old
@@ -997,7 +1007,16 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
             end
         end
     end
-    return est
+    ret = (est,)
+    if retv
+        v = zeros(Ti, n)
+        v[ind_best] = 1
+        ret = (ret..., v)
+    end
+    if retw
+        ret = (ret..., w)
+    end
+    return ret
 end
 
 norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
