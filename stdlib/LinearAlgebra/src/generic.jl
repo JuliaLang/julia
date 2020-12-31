@@ -855,11 +855,40 @@ function _each_col_has_parallel_col(X, Y)
 end
 
 # algorithm 2.4 (practical block 1-norm estimator) from
-# Higham, Nicholas J. and Tisseur, Françoise (2000)
-# A block algorithm for matrix 1-norm estimation, with an application to 1-norm pseudospectra.
-# SIAM Journal On Matrix Analysis And Applications, 21 (4). pp. 1185-1201. ISSN 1095-7162
-# doi: 10.1137/S0895479899356080
-# http://eprints.maths.manchester.ac.uk/id/eprint/321
+"""
+    opnormest1(A, t::Integer = 2) -> est
+
+Estimate the operator 1-norm [`opnorm(A, 1)`](@ref) of the matrix or linear operator `A`
+using a block algorithm.
+
+The estimate is a lower bound on the 1-norm and can be computed much more efficiently for
+large and sparse matrices (see Algorithm 2.4 of [^HighamTisseur]). `t` is a parameter that
+sets the size of an ``n × t`` matrix that is multiplied by `A` and must be less than `n`.
+
+[^HighamTisseur]:
+    Nicholas J. Higham and Françoise Tisseur,
+    "A block algorithm for matrix 1-norm estimation, with an application to 1-norm pseudospectra",
+    SIAM Journal on Matrix Analysis and Applications, 21(4), 2000, pp. 1185-1201.
+    [doi:10.1137/S0895479899356080](https://doi.org/10.1137/S0895479899356080)
+
+`A` can be of any type `Op`, representing a square matrix, that implements the following
+methods:
+- `size(A::Op)`
+- `eltype(A::Op)`
+- `*(A::Op, B::AbstractMatrix)`
+- `adjoint(A::Op)`
+
+Note: the algorithm uses random numbers, so the result may change between evaluations.
+
+    opnormest1(A, t::Integer, retv::Val{true}) -> (est, v)
+    opnormest1(A, t::Integer, retv::Val{false}, retw::Val{true}) -> (est, w)
+    opnormest1(A, t::Integer, retv::Val{true}, retw::Val{true}) -> (est, v, w)
+
+Along with the estimate of the operator 1-norm, return a vector `v` and/or a vector `w` that
+correspond to the estimate, such that ``w = A v`` and ``\\|w\\|_1 = γ \\|v\\|_1``,
+where ``γ`` is the estimate of the 1-norm of `A`, and ``\\|⋅\\|`` is the Frobenius
+1-[`norm`](@ref).
+"""
 function opnormest1(
     A,
     t::Integer=min(2,maximum(size(A))),
@@ -938,6 +967,7 @@ function opnormest1(
         end
         if T <: Real
             # (2)
+            # Complex vectors are much less likely to be parallel, so the check is skipped
             iter >= 2 && _each_col_has_parallel_col(S, S_old) && break
             # Randomly permute any cols of S that are parallel to cols of S or S_old
             for j = 1:t
