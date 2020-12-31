@@ -900,9 +900,9 @@ function opnormest1(
 
     iter = 0
     local est
-    local est_old
     local ind_best
     est_ind = 0
+    est_old = zero(real(eltype(X)))
     while true
         iter += 1
         Y = A * X
@@ -914,9 +914,6 @@ function opnormest1(
                 est = y
                 est_ind = i
             end
-        end
-        if iter == 1
-            est_old = est
         end
         if est > est_old || iter == 2
             ind_best = ind[est_ind]
