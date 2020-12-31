@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Div is truncating by default
-
 """
     div(x, y, r::RoundingMode=RoundToZero)
 
@@ -134,7 +133,16 @@ julia> divrem(7,3)
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
 
-#avoids calling div twice
+function divrem(a::T, b::T, r::RoundingMode) where {T<:AbstractFloat}
+    if r === RoundToZero
+        (div(a,b), rem(a,b))
+    elseif r === RoundDown
+        (fld(a, b),mod(a,b))
+    else
+        (div(a,b,r), rem(a,b,r))
+    end
+end
+#avoids calling rem for Integers, Rationals
 function divrem(a, b, r::RoundingMode)
     if r === RoundToZero
         # For compat. Remove in 2.0.
