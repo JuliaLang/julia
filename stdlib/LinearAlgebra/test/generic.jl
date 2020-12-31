@@ -209,6 +209,33 @@ end
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
 @test_throws ArgumentError opnorm(Matrix{Float64}(undef,5,5),5)
 
+@testset "estimate of matrix (operator) 1-opnorm" begin
+    @testset for T in (Float64, ComplexF64), n in (10, 100), t in 1:4
+        A = randn(T, n, n)
+        @inferred LinearAlgebra.opnormest1(A, t)
+        # estimates are probabilistic but bounded by opnorm
+        ests = [LinearAlgebra.opnormest1(A, t) for _ in 1:100]
+        nrm1 = opnorm(A, 1)
+        @test all(est -> est ≈ nrm1 || est < nrm1, ests)
+
+        # estimate is exact for positive matrix
+        Apos = abs.(randn(T, n, n))
+        @test LinearAlgebra.opnormest1(Apos, t) ≈ opnorm(Apos, 1)
+
+        # check vectors
+        @test length(LinearAlgebra.opnormest1(A, t, Val(true))) == 2
+        @test length(LinearAlgebra.opnormest1(A, t, Val(false), Val(true))) == 2
+        @test length(LinearAlgebra.opnormest1(A, t, Val(true), Val(true))) == 3
+        est, v, w = LinearAlgebra.opnormest1(A, t, Val(true), Val(true))
+        @test w ≈ A * v
+        @test norm(v, 1) ≈ 1
+        @test norm(w, 1) ≈ est
+    end
+    A = randn(ComplexF64, 10, 10)
+    @test_throws ArgumentError LinearAlgebra.opnormest1(A,0)
+    @test_throws ArgumentError LinearAlgebra.opnormest1(A,11)
+end
+
 @testset "generic norm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
     @test @inferred(norm(x)) ≈ sqrt(30)
