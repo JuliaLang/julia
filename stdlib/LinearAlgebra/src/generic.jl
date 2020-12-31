@@ -892,7 +892,7 @@ function opnormest1(
     local est_old
     local ind_best
     est_ind = 0
-    while iter < maxiter
+    while true
         iter += 1
         Y = A * X
         est = zero(real(eltype(Y)))
@@ -916,6 +916,7 @@ function opnormest1(
             break
         end
         est_old = est
+        iter > maxiter && break
         copyto!(S_old, S)
         broadcast!(S, Y) do Yij
             Sij = sign(Yij)
