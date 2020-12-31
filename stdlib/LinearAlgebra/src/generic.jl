@@ -899,7 +899,6 @@ function opnormest1(
     maxiter = 5
     # Check the input
     n = checksquare(A)
-    iszero(n) && return zero(T)
     if t <= 0
         throw(ArgumentError("number of blocks must be a positive integer"))
     end
