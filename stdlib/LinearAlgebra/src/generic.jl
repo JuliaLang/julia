@@ -852,6 +852,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))), maxiter::Integer = 
     S = zeros(T <: Real ? Int : Ti, n, t)
     S_old = copy(S)
     h = Vector{real(Base.promote_eltype(S, A))}(undef, n)
+    p = Vector{Int64}(undef, n)
 
     function _any_abs_eq(v,n::Int)
         for vv in v
@@ -950,8 +951,8 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))), maxiter::Integer = 
         if iter >=2 && ind_best == h_ind
             break
         end
-        p = sortperm(h, rev=true)
-        h = h[p]
+        sortperm!(p, h; rev=true)
+        permute!(h, p)
         permute!(ind, p)
         if t > 1
             addcounter = t
