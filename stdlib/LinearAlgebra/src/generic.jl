@@ -1096,10 +1096,11 @@ methods:
 - `eltype(A::Op)`
 - `\\(A::Op, B::AbstractMatrix)`
 - `adjoint(A::Op)`
-If `A` is an `AbstractMatrix`, it is passed to [`factorize`](@ref).
+
+If `A` is an `AbstractMatrix`, it will be more efficient to pass its factorization
+to this function.
 """
 opnormestinv1(A, args...) = opnormest1(InvMat(A), args...)
-opnormestinv1(A::AbstractMatrix, args...) = opnormest1(InvMat(factorize(A)), args...)
 
 norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
 
