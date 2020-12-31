@@ -831,12 +831,14 @@ end
 
 ## from general iterable to any array
 
+@noinline throw_dest_too_short() =
+    throw(ArgumentError("destination has fewer elements than required"))
+
 function copyto!(dest::AbstractArray, src)
     destiter = eachindex(dest)
     y = iterate(destiter)
     for x in src
-        y === nothing &&
-            throw(ArgumentError("destination has fewer elements than required"))
+        y === nothing && throw_dest_too_short()
         dest[y[1]] = x
         y = iterate(destiter, y[2])
     end
