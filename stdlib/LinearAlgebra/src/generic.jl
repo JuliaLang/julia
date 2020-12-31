@@ -833,9 +833,8 @@ opnorm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(co
 opnorm(v::AdjointAbsVec) = norm(conj(v.parent))
 opnorm(v::TransposeAbsVec) = norm(v.parent)
 
-function opnormest1(A, t::Integer = min(2,maximum(size(A))))
+function opnormest1(A, t::Integer = min(2,maximum(size(A))), maxiter::Integer = 5)
     T = eltype(A)
-    maxiter = 5
     # Check the input
     n = checksquare(A)
     iszero(n) && return zero(T)
