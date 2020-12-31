@@ -988,7 +988,7 @@ function opnormest1(
     if retv
         v = zeros(Ti, n)
         v[ind_best] = 1
-        ret = (ret..., v)
+        ret = (ret, v)
     end
     if retw
         ret = (ret..., w)
