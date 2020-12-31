@@ -850,7 +850,7 @@ function opnormest1(
     if t > n
         throw(ArgumentError("number of blocks must not be greater than $n"))
     end
-    ind = Vector{Int64}(undef, n)
+    ind = ones(Int64, n)
     ind_hist = Vector{Int64}(undef, maxiter * t)
 
     Ti = typeof(float(zero(T)))
@@ -908,7 +908,7 @@ function opnormest1(
             est_old = est
         end
         if est > est_old || iter == 2
-            ind_best = est_ind
+            ind_best = ind[est_ind]
             retw && copyto!(w, view(Y, 1:n, est_ind))
         end
         if iter >= 2 && est <= est_old
