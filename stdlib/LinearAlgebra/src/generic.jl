@@ -854,6 +854,12 @@ function _each_col_has_parallel_col(X, Y)
     return true
 end
 
+# algorithm 2.4 (practical block 1-norm estimator) from
+# Higham, Nicholas J. and Tisseur, Françoise (2000)
+# A block algorithm for matrix 1-norm estimation, with an application to 1-norm pseudospectra.
+# SIAM Journal On Matrix Analysis And Applications, 21 (4). pp. 1185-1201. ISSN 1095-7162
+# doi: 10.1137/S0895479899356080
+# http://eprints.maths.manchester.ac.uk/id/eprint/321
 function opnormest1(
     A,
     t::Integer=min(2,maximum(size(A))),
