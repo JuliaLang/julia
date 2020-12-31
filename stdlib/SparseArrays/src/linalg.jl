@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import LinearAlgebra: checksquare, sym_uplo
+import LinearAlgebra: checksquare, sym_uplo, opnormestinv1
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 const StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
@@ -1161,21 +1161,13 @@ function cond(A::AbstractSparseMatrixCSC, p::Real=2)
     end
 end
 
-# utility type for opnormestinv
-struct InvMat{TF}
-    F::TF
-end
-InvMat(A::AbstractMatrix) = InvMat(factorize(A))
-Base.eltype(M::InvMat) = eltype(M.F)
-Base.size(M::InvMat) = size(M.F)
-Base.:*(M::InvMat, X) = M.F \ X
-function Base.adjoint(M::InvMat)
-    Ft = adjoint(M.F)
-    return InvMat{typeof(Ft)}(Ft)
+# this method exists to preserve old functionality
+function opnormestinv(A::AbstractSparseMatrixCSC, t::Integer = min(2,maximum(size(A))))
+    return opnormestinv1(A, t)
 end
 
-function opnormestinv(A::AbstractSparseMatrixCSC, t::Integer = min(2,maximum(size(A))))
-    return LinearAlgebra.opnormest1(InvMat(A), t)
+function opnormestinv1(A::AbstractSparseMatrixCSC, t::Integer = min(2,maximum(size(A))))
+    return opnormestinv1(factorize(A), t)
 end
 
 ## kron
