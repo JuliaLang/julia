@@ -1162,13 +1162,17 @@ function cond(A::AbstractSparseMatrixCSC, p::Real=2)
 end
 
 # utility type for opnormestinv
-struct InvMat{TF<:Factorization}
+struct InvMat{TF}
     F::TF
 end
 InvMat(A::AbstractMatrix) = InvMat(factorize(A))
 Base.eltype(M::InvMat) = eltype(M.F)
 Base.size(M::InvMat) = size(M.F)
 Base.:*(M::InvMat, X) = M.F \ X
+function Base.adjoint(M::InvMat)
+    Ft = adjoint(M.F)
+    return InvMat{typeof(Ft)}(Ft)
+end
 
 function opnormestinv(A::AbstractSparseMatrixCSC, t::Integer = min(2,maximum(size(A))))
     return LinearAlgebra.opnormest1(InvMat(A), t)
