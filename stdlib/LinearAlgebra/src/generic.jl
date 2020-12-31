@@ -953,17 +953,15 @@ function opnormest1(
         # Use the conjugate transpose
         Z = A' * S
         h_max = zero(eltype(h))
-        h_ind = 0
         for i = 1:n
-            h[i] = normInf(view(Z,i,1:t))
-            if h[i] > h_max
-                h_max = h[i]
-                h_ind = i
+            h[i] = hi = normInf(view(Z,i,1:t))
+            if hi > h_max
+                h_max = hi
             end
             ind[i] = i
         end
         # (4)
-        if iter >= 2 && ind_best == h_ind
+        if iter >= 2 && h_max == h[ind_best]
             break
         end
         sortperm!(p, h; rev=true)
