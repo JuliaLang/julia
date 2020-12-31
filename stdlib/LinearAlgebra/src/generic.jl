@@ -885,7 +885,6 @@ function opnormest1(
     S_old = zeros(Ti, n, t)
     S = Matrix{Ti}(undef, n, t)
     h = Vector{real(Base.promote_type(Ti, T))}(undef, n)
-    p = Vector{Int64}(undef, n)
 
     # Generate the block matrix
     X = Matrix{Ti}(undef, n, t)
@@ -958,15 +957,13 @@ function opnormest1(
             if hi > h_max
                 h_max = hi
             end
-            ind[i] = i
         end
         # (4)
         if iter >= 2 && h_max == h[ind_best]
             break
         end
-        sortperm!(p, h; rev=true)
-        permute!(h, p)
-        permute!(ind, p)
+        sortperm!(ind, h; rev=true)
+        permute!(h, ind)
         if t > 1
             # (5)
             addcounter = t
