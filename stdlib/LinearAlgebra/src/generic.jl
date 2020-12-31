@@ -851,6 +851,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
     Ti = typeof(float(zero(T)))
 
     S = zeros(T <: Real ? Int : Ti, n, t)
+    S_old = copy(S)
 
     function _any_abs_eq(v,n::Int)
         for vv in v
@@ -902,11 +903,9 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
             break
         end
         est_old = est
-        S_old = copy(S)
-        for j = 1:t
-            for i = 1:n
-                S[i,j] = Y[i,j]==0 ? one(Y[i,j]) : sign(Y[i,j])
-            end
+        copyto!(S_old, S)
+        for j = 1:t, i = 1:n
+            S[i,j] = Y[i,j]==0 ? one(Y[i,j]) : sign(Y[i,j])
         end
 
         if T <: Real
