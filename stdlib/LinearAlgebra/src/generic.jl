@@ -930,8 +930,8 @@ function opnormest1(
             break
         end
         est_old = est
-        iter > maxiter && break
         S, S_old = S_old, S
+        iter > maxiter && break
         broadcast!(S, Y) do Yij
             Sij = sign(Yij)
             return ifelse(iszero(Sij), one(Sij), Sij)
