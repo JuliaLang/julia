@@ -852,6 +852,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
 
     S = zeros(T <: Real ? Int : Ti, n, t)
     S_old = copy(S)
+    h = Vector{real(Base.promote_eltype(S, A))}(undef, n)
 
     function _any_abs_eq(v,n::Int)
         for vv in v
@@ -937,8 +938,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
 
         # Use the conjugate transpose
         Z = A' * S
-        h_max = zero(real(eltype(Z)))
-        h = zeros(real(eltype(Z)), n)
+        h_max = zero(eltype(h))
         h_ind = 0
         for i = 1:n
             h[i] = normInf(view(Z,i,1:t))
