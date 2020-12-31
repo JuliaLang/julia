@@ -871,9 +871,6 @@ function opnormest1(
 
     # Generate the block matrix
     X = Matrix{Ti}(undef, n, t)
-    if retw
-        w = Vector{Ti}(undef, n)
-    end
     X[1:n,1] .= 1
     for j = 2:t
         while true
@@ -885,6 +882,10 @@ function opnormest1(
         end
     end
     rmul!(X, inv(n))
+
+    if retw
+        w = Vector{Ti}(undef, n)
+    end
 
     iter = 0
     local est
