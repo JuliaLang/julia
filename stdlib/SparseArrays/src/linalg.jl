@@ -1147,7 +1147,7 @@ end
 # cond
 function cond(A::AbstractSparseMatrixCSC, p::Real=2)
     if p == 1
-        normAinv = opnormestinv(A)
+        normAinv = opnormestinv1(A)
         normA = opnorm(A, 1)
         return normA * normAinv
     elseif p == Inf
