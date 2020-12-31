@@ -882,9 +882,9 @@ function opnormest1(
 
     Ti = typeof(float(zero(T)))
 
-    S = zeros(Ti, n, t)
-    S_old = copy(S)
-    h = Vector{real(Base.promote_eltype(S, A))}(undef, n)
+    S_old = zeros(Ti, n, t)
+    S = Matrix{Ti}(undef, n, t)
+    h = Vector{real(Base.promote_type(Ti, T))}(undef, n)
     p = Vector{Int64}(undef, n)
 
     # Generate the block matrix
@@ -932,7 +932,7 @@ function opnormest1(
         end
         est_old = est
         iter > maxiter && break
-        copyto!(S_old, S)
+        S, S_old = S_old, S
         broadcast!(S, Y) do Yij
             Sij = sign(Yij)
             return ifelse(iszero(Sij), one(Sij), Sij)
