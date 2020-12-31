@@ -919,6 +919,7 @@ function opnormest1(
             ind_best = ind[est_ind]
             retw && copyto!(w, view(Y, 1:n, est_ind))
         end
+        # (1)
         if iter >= 2 && est <= est_old
             est = est_old
             break
@@ -930,8 +931,8 @@ function opnormest1(
             Sij = sign(Yij)
             return ifelse(iszero(Sij), one(Sij), Sij)
         end
-
         if T <: Real
+            # (2)
             _each_col_has_parallel_col(S, S_old) && break
             # Check whether cols of S are parallel to cols of S or S_old
             for j = 1:t
@@ -954,6 +955,7 @@ function opnormest1(
             end
         end
 
+        # (3)
         # Use the conjugate transpose
         Z = A' * S
         h_max = zero(eltype(h))
@@ -966,13 +968,15 @@ function opnormest1(
             end
             ind[i] = i
         end
-        if iter >=2 && ind_best == h_ind
+        # (4)
+        if iter >= 2 && ind_best == h_ind
             break
         end
         sortperm!(p, h; rev=true)
         permute!(h, p)
         permute!(ind, p)
         if t > 1
+            # (5)
             addcounter = t
             elemcounter = 0
             while addcounter > 0 && elemcounter < n
@@ -1015,6 +1019,7 @@ function opnormest1(
         end
     end
     ret = (est,)
+    # (6)
     if retv
         v = zeros(Ti, n)
         v[ind_best] = 1
