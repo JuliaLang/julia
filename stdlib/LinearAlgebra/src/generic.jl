@@ -854,7 +854,6 @@ function _each_col_has_parallel_col(X, Y)
     return true
 end
 
-# algorithm 2.4 (practical block 1-norm estimator) from
 """
     opnormest1(A, t::Integer = 2) -> est
 
