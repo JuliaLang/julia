@@ -833,6 +833,20 @@ opnorm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(co
 opnorm(v::AdjointAbsVec) = norm(conj(v.parent))
 opnorm(v::TransposeAbsVec) = norm(v.parent)
 
+_isparallel(x, y) = abs(dot(x, y)) == length(x)
+
+function _any_cols_are_parallel(X, xrange, Y, yrange)
+    n = size(X, 1)
+    for i in xrange
+        x = view(X,1:n,i)
+        for j in yrange
+            y = view(Y,1:n,j)
+            _isparallel(x, y) && return true
+        end
+    end
+    return false
+end
+
 function opnormest1(
     A,
     t::Integer=min(2,maximum(size(A))),
@@ -860,23 +874,13 @@ function opnormest1(
     h = Vector{real(Base.promote_eltype(S, A))}(undef, n)
     p = Vector{Int64}(undef, n)
 
-    function _any_abs_eq(v,n::Int)
-        for vv in v
-            if abs(vv)==n
-                return true
-            end
-        end
-        return false
-    end
-
     # Generate the block matrix
     X = Matrix{Ti}(undef, n, t)
     X[1:n,1] .= 1
     for j = 2:t
         while true
             rand!(view(X,1:n,j), (-1, 1))
-            yaux = @views X[1:n,j]' * X[1:n,1:j-1]
-            if !_any_abs_eq(yaux,n)
+            if !_any_cols_are_parallel(X, j, X, 1:j-1)
                 break
             end
         end
@@ -928,15 +932,11 @@ function opnormest1(
             for j = 1:t
                 while true
                     repeated = false
-                    if j > 1
-                        saux = @views S[1:n,j]' * S[1:n,1:j-1]
-                        if _any_abs_eq(saux,n)
-                            repeated = true
-                        end
+                    if j > 1 && _any_cols_are_parallel(S, j, S, 1:j-1)
+                        repeated = true
                     end
                     if !repeated
-                        saux2 = @views S[1:n,j]' * S_old[1:n,1:t]
-                        if _any_abs_eq(saux2,n)
+                        if _any_cols_are_parallel(S, j, S_old, 1:t)
                             repeated = true
                         end
                     end
