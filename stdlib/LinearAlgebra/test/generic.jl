@@ -99,8 +99,11 @@ end
 @test_throws DimensionMismatch cross(fill(1,3), fill(1,4))
 @test_throws DimensionMismatch cross(fill(1,2), fill(1,3))
 
-@test tr(Bidiagonal(fill(1,5),fill(0,4),:U)) == 5
-
+@testset "trace" begin
+    @test_throws DimensionMismatch tr(zeros(5,6))
+    @test tr(Matrix(1.0I, 5, 5)) == 5
+    @test tr(Bidiagonal(fill(1,5),fill(0,4),:U)) == 5
+end
 
 @testset "array and subarray" begin
     aa = reshape([1.:6;], (2,3))

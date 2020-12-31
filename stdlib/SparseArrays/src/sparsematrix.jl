@@ -3683,16 +3683,6 @@ function diag(A::AbstractSparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
     return SparseVector{Tv,Ti}(l, ind, val)
 end
 
-function tr(A::AbstractSparseMatrixCSC{Tv}) where Tv
-    n = checksquare(A)
-    s = zero(Tv)
-    for i in 1:n
-        s += A[i,i]
-    end
-    return s
-end
-
-
 # Sort all the indices in each column of a CSC sparse matrix
 # sortSparseMatrixCSC!(A, sortindices = :sortcols)        # Sort each column with sort()
 # sortSparseMatrixCSC!(A, sortindices = :doubletranspose) # Sort with a double transpose

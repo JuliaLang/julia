@@ -1738,11 +1738,6 @@ end
     @test nnz(dropzeros!(sparse([1, 2, 3],[1, 2, 3],[0.0, 1.0, 2.0]))) == 2
 end
 
-@testset "trace" begin
-    @test_throws DimensionMismatch tr(spzeros(5,6))
-    @test tr(sparse(1.0I, 5, 5)) == 5
-end
-
 @testset "spdiagm" begin
     x = fill(1, 2)
     @test spdiagm(0 => x, -1 => x) == [1 0 0; 1 1 0; 0 1 0]
