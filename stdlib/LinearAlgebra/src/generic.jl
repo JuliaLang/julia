@@ -947,7 +947,6 @@ function opnormest1(
                 end
             end
         end
-
         # (3)
         # Use the conjugate transpose
         Z = A' * S
@@ -984,7 +983,7 @@ function opnormest1(
         end
         union!(ind_hist, view(ind,1:t))
     end
-    ret = (est,)
+    ret = est
     # (6)
     if retv
         v = zeros(Ti, n)
