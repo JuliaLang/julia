@@ -215,34 +215,81 @@ end
 Base.eltype(M::LinearOperator) = eltype(M.A)
 Base.size(M::LinearOperator) = size(M.A)
 Base.:*(M::LinearOperator, X) = M.A * X
+Base.:\(M::LinearOperator, X) = M.A \ X
 Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
 
 @testset "estimate of matrix (operator) 1-opnorm" begin
-    @testset for T in (Float64, ComplexF64), n in (10, 100), t in 2:4, TOp in (Matrix, LinearOperator)
-        A = randn(T, n, n)
-        OpA = TOp(A)
-        @inferred LinearAlgebra.opnormest1(OpA, t)
+    @testset "opnormest1" begin
+        @testset for T in (Float64, ComplexF64), n in (10, 100), t in 2:4, TOp in (Matrix, LinearOperator)
+            A = randn(T, n, n)
+            OpA = TOp(A)
+            @inferred LinearAlgebra.opnormest1(OpA, t)
+            # estimates are probabilistic but bounded by opnorm
+            ests = [LinearAlgebra.opnormest1(OpA, t) for _ in 1:100]
+            nrm1 = opnorm(A, 1)
+            @test all(est -> est ≈ nrm1 || est < nrm1, ests)
+
+            # estimate is exact for positive matrix
+            Apos = abs.(randn(T, n, n))
+            @test LinearAlgebra.opnormest1(TOp(Apos), t) ≈ opnorm(Apos, 1)
+
+            # check vectors
+            @test length(LinearAlgebra.opnormest1(OpA, t, Val(true))) == 2
+            @test length(LinearAlgebra.opnormest1(OpA, t, Val(false), Val(true))) == 2
+            @test length(LinearAlgebra.opnormest1(OpA, t, Val(true), Val(true))) == 3
+            est, v, w = LinearAlgebra.opnormest1(OpA, t, Val(true), Val(true))
+            @test w ≈ A * v
+            @test norm(v, 1) ≈ 1
+            @test norm(w, 1) ≈ est
+        end
+        A = randn(ComplexF64, 10, 10)
+        @test_throws ArgumentError LinearAlgebra.opnormest1(A,0)
+        @test_throws ArgumentError LinearAlgebra.opnormest1(A,11)
+    end
+
+    @testset "opnormestinv1" begin
+        @testset for T in (Float64, ComplexF64), n in (10, 100), t in 2:4, TOp in (Matrix, LinearOperator)
+            A = randn(T, n, n)
+            OpA = TOp(A)
+            @inferred LinearAlgebra.opnormestinv1(OpA, t)
+            # estimates are probabilistic but bounded by opnorm
+            ests = [LinearAlgebra.opnormestinv1(OpA, t) for _ in 1:100]
+            nrm1 = opnorm(inv(A), 1)
+            @test all(est -> est ≈ nrm1 || est < nrm1, ests)
+
+            # estimate is exact for positive matrix
+            Apos = inv(abs.(randn(T, n, n)))
+            @test LinearAlgebra.opnormestinv1(TOp(Apos), t) ≈ opnorm(inv(Apos), 1)
+
+            # check vectors
+            @test length(LinearAlgebra.opnormestinv1(OpA, t, Val(true))) == 2
+            @test length(LinearAlgebra.opnormestinv1(OpA, t, Val(false), Val(true))) == 2
+            @test length(LinearAlgebra.opnormestinv1(OpA, t, Val(true), Val(true))) == 3
+            est, v, w = LinearAlgebra.opnormestinv1(OpA, t, Val(true), Val(true))
+            @test w ≈ A \ v
+            @test norm(v, 1) ≈ 1
+            @test norm(w, 1) ≈ est
+        end
+        A = randn(ComplexF64, 10, 10)
+        @test_throws ArgumentError LinearAlgebra.opnormestinv1(A,0)
+        @test_throws ArgumentError LinearAlgebra.opnormestinv1(A,11)
+    end
+
+    @testset "opnormestprod1" begin
+        As = [randn(10, 2), randn(2, 10), randn(10, 10)]
+        @inferred LinearAlgebra.opnormestprod1(As...)
+
         # estimates are probabilistic but bounded by opnorm
-        ests = [LinearAlgebra.opnormest1(OpA, t) for _ in 1:100]
-        nrm1 = opnorm(A, 1)
+        ests = [LinearAlgebra.opnormestprod1(As...) for _ in 1:100]
+        nrm1 = opnorm(prod(As), 1)
         @test all(est -> est ≈ nrm1 || est < nrm1, ests)
 
-        # estimate is exact for positive matrix
-        Apos = abs.(randn(T, n, n))
-        @test LinearAlgebra.opnormest1(TOp(Apos), t) ≈ opnorm(Apos, 1)
-
-        # check vectors
-        @test length(LinearAlgebra.opnormest1(OpA, t, Val(true))) == 2
-        @test length(LinearAlgebra.opnormest1(OpA, t, Val(false), Val(true))) == 2
-        @test length(LinearAlgebra.opnormest1(OpA, t, Val(true), Val(true))) == 3
-        est, v, w = LinearAlgebra.opnormest1(OpA, t, Val(true), Val(true))
-        @test w ≈ A * v
-        @test norm(v, 1) ≈ 1
-        @test norm(w, 1) ≈ est
+        A = randn(10, 10)
+        @inferred LinearAlgebra.opnormestprod1(A, 3)
+        ests = [LinearAlgebra.opnormestprod1(A, 3) for _ in 1:100]
+        nrm1 = opnorm(A^3, 1)
+        @test all(est -> est ≈ nrm1 || est < nrm1, ests)
     end
-    A = randn(ComplexF64, 10, 10)
-    @test_throws ArgumentError LinearAlgebra.opnormest1(A,0)
-    @test_throws ArgumentError LinearAlgebra.opnormest1(A,11)
 end
 
 @testset "generic norm for arrays of arrays" begin
