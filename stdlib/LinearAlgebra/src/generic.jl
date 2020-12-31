@@ -855,7 +855,7 @@ function opnormest1(
 
     Ti = typeof(float(zero(T)))
 
-    S = zeros(T <: Real ? Int : Ti, n, t)
+    S = zeros(Ti, n, t)
     S_old = copy(S)
     h = Vector{real(Base.promote_eltype(S, A))}(undef, n)
     p = Vector{Int64}(undef, n)
