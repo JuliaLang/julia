@@ -1072,6 +1072,35 @@ function opnormestprod1(A, p::Integer)
     return opnormest1(ProductMat(repeat([A], p)))
 end
 
+# Linear operator representing inverse of a matrix
+# utility type for opnormestinv
+struct InvMat{T}
+    A::T
+end
+Base.eltype(M::InvMat) = eltype(M.A)
+Base.size(M::InvMat) = size(M.A)
+Base.:*(M::InvMat, X) = M.A \ X
+Base.adjoint(M::InvMat) = InvMat(adjoint(M.A))
+
+"""
+    opnormestinv1(A, args...)
+
+Estimate the operator 1-norm [`opnorm(inv(A), 1)`](@ref) of a matrix or linear operator
+`A` without computing the inverse.
+
+See [`opnormest1`](@ref) for a description of the arguments and return values.
+
+`A` can be of any type `Op`, representing a square matrix, that implements the following
+methods:
+- `size(A::Op)`
+- `eltype(A::Op)`
+- `\\(A::Op, B::AbstractMatrix)`
+- `adjoint(A::Op)`
+If `A` is an `AbstractMatrix`, it is passed to [`factorize`](@ref).
+"""
+opnormestinv1(A, args...) = opnormest1(InvMat(A), args...)
+opnormestinv1(A::AbstractMatrix, args...) = opnormest1(InvMat(factorize(A)), args...)
+
 norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
 
 """
