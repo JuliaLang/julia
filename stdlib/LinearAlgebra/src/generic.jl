@@ -884,9 +884,9 @@ Note: the algorithm uses random numbers, so the result may change between evalua
     opnormest1(A, t::Integer, retv::Val{true}, retw::Val{true}) -> (est, v, w)
 
 Along with the estimate of the operator 1-norm, return a vector `v` and/or a vector `w` that
-correspond to the estimate, such that ``w = A v`` and ``\\|w\\|_1 = γ \\|v\\|_1``,
-where ``γ`` is the estimate of the 1-norm of `A`, and ``\\|⋅\\|`` is the Frobenius
-1-[`norm`](@ref).
+correspond to the estimate, such that ``w = A v`` and
+``\\|w\\|_1 = \\mathrm{est} \\|v\\|_1``, where ``\\mathrm{est}`` is the estimate of the
+matrix 1-norm of `A`, and ``\\|⋅\\|`` is the Frobenius 1-[`norm`](@ref).
 """
 function opnormest1(
     A,
