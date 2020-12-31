@@ -878,7 +878,7 @@ function opnormest1(
         throw(ArgumentError("number of blocks must not be greater than $n"))
     end
     ind = ones(Int64, n)
-    ind_hist = Vector{Int64}(undef, maxiter * t)
+    ind_hist = Set{Int64}()
 
     Ti = typeof(float(zero(T)))
 
@@ -966,46 +966,23 @@ function opnormest1(
         permute!(h, ind)
         if t > 1
             # (5)
-            addcounter = t
-            elemcounter = 0
-            while addcounter > 0 && elemcounter < n
-                elemcounter = elemcounter + 1
-                current_element = ind[elemcounter]
-                found = false
-                for i = 1:t * (iter - 1)
-                    if current_element == ind_hist[i]
-                        found = true
-                        break
-                    end
+            issubset(view(ind,1:t), ind_hist) && break
+            # replace ind[1:t] by first t indices in ind not in ind_hist
+            j = 1
+            for i in 1:n
+                indi = ind[i]
+                if indi ∉ ind_hist
+                    ind[j] = indi
+                    j += 1
                 end
-                if !found
-                    addcounter = addcounter - 1
-                    for i = 1:current_element - 1
-                        X[i,t-addcounter] = 0
-                    end
-                    X[current_element,t-addcounter] = 1
-                    for i = current_element + 1:n
-                        X[i,t-addcounter] = 0
-                    end
-                    ind_hist[iter * t - addcounter] = current_element
-                else
-                    if elemcounter == t && addcounter == t
-                        break
-                    end
-                end
-            end
-        else
-            for j = 1:t
-                ind_hist[j] = ind[j]
-                for i = 1:ind[j] - 1
-                    X[i,j] = 0
-                end
-                X[ind[j],j] = 1
-                for i = ind[j] + 1:n
-                    X[i,j] = 0
-                end
+                j > t && break
             end
         end
+        for j = 1:t
+            fill!(view(X,1:n,j), 0)
+            X[ind[j],j] = 1
+        end
+        union!(ind_hist, view(ind,1:t))
     end
     ret = (est,)
     # (6)
