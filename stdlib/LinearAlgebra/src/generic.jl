@@ -904,8 +904,9 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
         end
         est_old = est
         copyto!(S_old, S)
-        for j = 1:t, i = 1:n
-            S[i,j] = Y[i,j]==0 ? one(Y[i,j]) : sign(Y[i,j])
+        broadcast!(S, Y) do Yij
+            Sij = sign(Yij)
+            return ifelse(iszero(Sij), one(Sij), Sij)
         end
 
         if T <: Real
