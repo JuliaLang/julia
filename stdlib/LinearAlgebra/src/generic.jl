@@ -885,7 +885,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
         est = zero(real(eltype(Y)))
         est_ind = 0
         for i = 1:t
-            y = norm(view(Y,1:n,i), 1)
+            y = norm1(view(Y,1:n,i))
             if y > est
                 est = y
                 est_ind = i
@@ -941,7 +941,7 @@ function opnormest1(A, t::Integer = min(2,maximum(size(A))))
         h = zeros(real(eltype(Z)), n)
         h_ind = 0
         for i = 1:n
-            h[i] = norm(view(Z,i,1:t), Inf)
+            h[i] = normInf(view(Z,i,1:t))
             if h[i] > h_max
                 h_max = h[i]
                 h_ind = i
