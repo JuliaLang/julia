@@ -1024,6 +1024,54 @@ function opnormest1(
     return ret
 end
 
+# Linear operator representing product of matrices A₁ * A₂ * …
+# utility type for opnormestprod1
+struct ProductMat{T}
+    As::T
+end
+Base.eltype(M::ProductMat) = Base.promote_eltype(M.As...)
+Base.size(M::ProductMat) = (size(first(M.As))[1], size(last(M.As))[2])
+function Base.:*(M::ProductMat, X)
+    for A in reverse(M.As)
+        X = A * X
+    end
+    return X
+end
+function Base.adjoint(M::ProductMat)
+    Ast = map(adjoint, reverse(M.As))
+    return ProductMat(Ast)
+end
+
+"""
+    opnormestprod1(As...)
+
+Estimate the operator 1-norm [`opnorm(prod(As), 1)`](@ref) of a product of matrices or
+linear operators without forming the product.
+
+Each element `A` in `As` can be of any type `Op`, representing a matrix or vector, that
+implements the following methods:
+- `size(A::Op)`
+- `eltype(A::Op)`
+- `*(A::Op, B::AbstractMatrix)`
+- `adjoint(A::Op)`
+Additionally, the first dimension of `As[1]` and the last dimension of `As[end]` must be
+equal for their product to be square.
+
+See [`opnormest1`](@ref) for details on the algorithm that computes the estimate.
+
+    opnormestprod1(A, p::Integer)
+
+Estimate the operator 1-norm for the matrix power `A^p` without exponentiating the matrix.
+"""
+opnormestprod1
+
+function opnormestprod1(A1, A2, As...)
+    return opnormest1(ProductMat([A1, A2, As...]))
+end
+function opnormestprod1(A, p::Integer)
+    return opnormest1(ProductMat(repeat([A], p)))
+end
+
 norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
 
 """
