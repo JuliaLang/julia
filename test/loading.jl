@@ -268,8 +268,8 @@ end
 end
 
 module NotPkgModule; end
-#=
-@testset "modul name hint" begin
+
+@testset "modulnamehint()" begin
     @test modulnamehint("Fooo") == "Foo"
     @test modulnamehint("fooo") == "Foo"
     @test modulnamehint("foo") == "Foo"
@@ -281,7 +281,7 @@ module NotPkgModule; end
     @test isnothing(modulnamehint("infoodrest"))
     @test isnothing(modulnamehint("fo"))
     @test isnothing(modulnamehint("xfoxox"))
-
+#=
     #test Stdlib still works with empty load_path() for Project
     l_p = copy(LOAD_PATH)
     empty!(LOAD_PATH)
@@ -299,9 +299,9 @@ module NotPkgModule; end
     @test_throws ArgumentError("""Package xfoxox not found in current path:
     - Run `import Pkg; Pkg.add("xfoxox")` to install the xfoxox package.
     """) using xfoxox
-    @test_throws ArgumentError import xfoxox
+    @test_throws ArgumentError import xfoxox =#
 end
-=#
+
 @testset "project & manifest import" begin
     @test !@isdefined Foo
     @test !@isdefined Bar
