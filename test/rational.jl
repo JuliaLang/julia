@@ -123,7 +123,7 @@ using Test
     @test_throws DivideError 1//0 - 1//0
     @test_throws DivideError -1//0 + 1//0
     @test Int128(1)//0 + 1//0 isa Rational{Int128}
-    @test 1//0 + Int128(1)//0 isa Rational{Int128}    
+    @test 1//0 + Int128(1)//0 isa Rational{Int128}
 end
 
 @testset "Rational methods" begin
