@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Div is truncating by default
+
 """
     div(x, y, r::RoundingMode=RoundToZero)
 
@@ -161,15 +162,15 @@ function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
     (q, r) = divrem(x, y)
     if x >= 0
         if y >= 0
-            r >=  (y÷2) + (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
+            r >=        (y÷2) + (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
         else
-            r >=  -(y÷2) + (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
+            r >=       -(y÷2) + (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
         end
     else
         if y >= 0
-            r <=  -signed(y÷2) - (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
+            r <= -signed(y÷2) - (isodd(y) | iseven(q)) ? (q-true, r+y) : (q, r)
         else
-            r <=  (y÷2) - (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
+            r <=        (y÷2) - (isodd(y) | iseven(q)) ? (q+true, r-y) : (q, r)
         end
     end
 end
@@ -177,15 +178,15 @@ function divrem(x::Integer, y::Integer, rnd:: typeof(RoundNearestTiesAway))
     (q, r) = divrem(x, y)
     if x >= 0
         if y >= 0
-            r >=  (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
+            r >=        (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
         else
-            r >=  -(y÷2) + isodd(y) ? (q-true, r+y) : (q, r)
+            r >=       -(y÷2) + isodd(y) ? (q-true, r+y) : (q, r)
         end
     else
         if y >= 0
-            r <=  -signed(y÷2) - isodd(y) ? (q-true, r+y) : (q, r)
+            r <= -signed(y÷2) - isodd(y) ? (q-true, r+y) : (q, r)
         else
-            r <=  (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
+            r <=        (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
         end
     end
 end
@@ -193,15 +194,15 @@ function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearestTiesUp))
     (q, r) = divrem(x, y)
     if x >= 0
         if y >= 0
-            r >=  (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
+            r >=        (y÷2) + isodd(y) ? (q+true, r-y) : (q, r)
         else
-            r >=  -(y÷2) + true ? (q-true, r+y) : (q, r)
+            r >=       -(y÷2) + true     ? (q-true, r+y) : (q, r)
         end
     else
         if y >= 0
-            r <=  -signed(y÷2) - true ? (q-true, r+y) : (q, r)
+            r <= -signed(y÷2) - true     ? (q-true, r+y) : (q, r)
         else
-            r <=  (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
+            r <=        (y÷2) - isodd(y) ? (q+true, r-y) : (q, r)
         end
     end
 end
