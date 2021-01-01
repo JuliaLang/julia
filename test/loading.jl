@@ -88,7 +88,7 @@ end
 ## unit tests of project parsing ##
 
 import Base: SHA1, PkgId, load_path, identify_package, locate_package, version_slug,
-            dummy_uuid, modulnamehint, require
+            dummy_uuid, modulnamehint
 import UUIDs: UUID, uuid4, uuid_version
 import Random: shuffle, randstring
 using Test
@@ -281,7 +281,7 @@ module NotPkgModule; end
     @test isnothing(modulnamehint("infoodrest"))
     @test isnothing(modulnamehint("fo"))
     @test isnothing(modulnamehint("xfoxox"))
-#=
+
     #test Stdlib still works with empty load_path() for Project
     l_p = copy(LOAD_PATH)
     empty!(LOAD_PATH)
@@ -299,7 +299,7 @@ module NotPkgModule; end
     @test_throws ArgumentError("""Package xfoxox not found in current path:
     - Run `import Pkg; Pkg.add("xfoxox")` to install the xfoxox package.
     """) using xfoxox
-    @test_throws ArgumentError import xfoxox =#
+    @test_throws ArgumentError import xfoxox
 end
 
 @testset "project & manifest import" begin
