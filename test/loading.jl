@@ -269,7 +269,7 @@ end
 
 module NotPkgModule; end
 
-@testset "require exceptions and modul name hints" begin
+@testset "modul name hints" begin
     @test modulnamehint("Fooo") == "Foo"
     @test modulnamehint("fooo") == "Foo"
     @test modulnamehint("foo") == "Foo"
@@ -300,12 +300,6 @@ module NotPkgModule; end
     - Run `import Pkg; Pkg.add("xfoxox")` to install the xfoxox package.
     """) using xfoxox
     @test_throws ArgumentError import xfoxox
-
-    # require Error - xfoxox does not exist
-    @test_throws ArgumentError require(Test, :xfoxox)
-
-    # require Warning - Loading Foo into Test
-    @test_logs (:warn, r"Loading Foo into Test from") require(Test, :Foo)
 end
 
 @testset "project & manifest import" begin
