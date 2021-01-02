@@ -917,7 +917,7 @@ function opnormest1(
     h = Vector{real(Base.promote_type(Ti, T))}(undef, n)
 
     # Generate the block matrix
-    X = Matrix{Ti}(undef, n, t)
+    X = Matrix{real(Ti)}(undef, n, t)
     X[1:n,1] .= 1
     for j = 2:t
         while true
