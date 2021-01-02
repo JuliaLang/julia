@@ -598,3 +598,16 @@ end
 # issue #38837
 f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
 @test @inferred(f38837((1,2))) === (1.0f0, 2.0)
+
+@testset "indexing with UnitRanges" begin
+    f(t) = t[3:end-2]
+    @test @inferred(f(Tuple(1:10))) === Tuple(3:8)
+    @test @inferred(f((true, 2., 3, 4f0, 0x05, 6, 7.))) === (3, 4f0, 0x05)
+
+    f(t) = t[Base.OneTo(5)]
+    @test @inferred(f(Tuple(1:10))) === Tuple(1:5)
+    @test @inferred(f((true, 2., 3, 4f0, 0x05, 6, 7.))) === (true, 2., 3, 4f0, 0x05)
+
+    @test_throws BoundsError (1, 2)[1:4]
+    @test_throws BoundsError (1, 2)[0:2]
+end

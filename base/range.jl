@@ -299,16 +299,18 @@ unitrange(x) = UnitRange(x)
 
 if isdefined(Main, :Base)
     # Constant-fold-able indexing into tuples to functionally expose Base.tail and Base.front
-    function getindex(@nospecialize(t::Tuple), r::UnitRange)
+    function getindex(@nospecialize(t::Tuple), r::AbstractUnitRange)
         @_inline_meta
-        r.start > r.stop && return ()
-        if r.start == 1
-            r.stop == length(t)   && return t
-            r.stop == length(t)-1 && return front(t)
-            r.stop == length(t)-2 && return front(front(t))
-        elseif r.stop == length(t)
-            r.start == 2 && return tail(t)
-            r.start == 3 && return tail(tail(t))
+        isempty(r) && return ()
+        if length(r) <= 10
+            return ntuple(i -> t[i + first(r) - 1], length(r))
+        elseif first(r) == 1
+            last(r) == length(t)   && return t
+            last(r) == length(t)-1 && return front(t)
+            last(r) == length(t)-2 && return front(front(t))
+        elseif last(r) == length(t)
+            first(r) == 2 && return tail(t)
+            first(r) == 3 && return tail(tail(t))
         end
         return (eltype(t)[t[ri] for ri in r]...,)
     end
