@@ -9,6 +9,8 @@ export HTML, @html_str
 export HTML, Text
 
 """
+DO NOT USE; WILL BE REMOVED IN JULIA 2.0
+
 `HTML(s)`: Create an object that renders `s` as html.
 
     HTML("<div>foo</div>")
