@@ -1081,7 +1081,7 @@ struct InvMat{T}
     A::T
 end
 Base.eltype(M::InvMat) = eltype(M.A)
-Base.size(M::InvMat) = size(M.A)
+Base.size(M::InvMat) = reverse(size(M.A))
 Base.:*(M::InvMat, X) = M.A \ X
 Base.adjoint(M::InvMat) = InvMat(adjoint(M.A))
 
