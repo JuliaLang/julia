@@ -679,6 +679,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
         else {
             t->bufsz = JL_STACK_SIZE;
         }
+        t->stkbuf = NULL;
     }
     else {
         // user requested dedicated stack of a certain size
@@ -704,7 +705,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->sticky = 1;
     t->gcstack = NULL;
     t->excstack = NULL;
-    t->stkbuf = NULL;
     t->started = 0;
     t->prio = -1;
     t->tid = -1;
