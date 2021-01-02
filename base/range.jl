@@ -94,6 +94,44 @@ range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing)
 range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) =
     _range2(start, step, stop, length)
 
+"""
+    range(start => stop[, length=2])
+
+Given a `start` to `stop` [`Pair`](@ref) and an optional integer `length`,
+construct a range iterator of `length` elements whose first element is `start`
+and last element is `stop`. If `length` is not provided, the range will consist
+of two elements.
+
+This is distinct from `start:stop` where `stop` may not be the last
+element. Also, in this form `step` is not assumed to be 1. `length` cannot be
+`nothing`.
+
+No keywords are accepted when `start` and `stop` are provided as a [`Pair`](@ref).
+
+Special care is taken to ensure intermediate values are computed rationally.
+To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
+
+!!! compat "Julia 1.7"
+    Providing `start => stop` as a `Pair` requires at least Julia 1.7.
+
+# Examples
+```jldoctest
+julia> range(1 => 5, 3)
+1.0:2.0:5.0
+
+julia> range(0 => 100, 101)
+0.0:1.0:100.0)
+
+julia> range(1 => 10)
+1.0:9.0:10.0
+
+julia> range(1 => 1.5)
+1.0:0.5:1.5
+```
+"""
+range(start_stop::Pair, length::Integer=2) =
+    _range(start_stop.first, nothing, start_stop.second, length)
+
 _range2(start, ::Nothing, stop, ::Nothing) =
     throw(ArgumentError("At least one of `length` or `step` must be specified"))
 
