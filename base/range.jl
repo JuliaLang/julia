@@ -1488,3 +1488,49 @@ julia> mod(3, 0:2)  # mod(3, 3)
 """
 mod(i::Integer, r::OneTo) = mod1(i, last(r))
 mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)
+
+"""
+    logrange(start => stop, length)
+
+Returns an iterator which runs from `start` to `stop` with `length` elements,
+spaced logarithmically rather than linearly as for [`range`](@ref).
+That is, the ratio of successive elements is constant, not the difference.
+
+!!! compat "Julia 1.3"
+     This function requires at least Julia 1.7.
+
+# Examples
+```
+julia> foreach(println, logrange(2 => 16, 4))
+2.0
+4.0
+8.0
+16.0
+
+julia> collect(logrange(1000 => 1, 4))
+4-element Vector{Float64}:
+    1.0
+    9.999999999999998
+   99.99999999999997
+ 1000.0
+
+julia> ans ≈ 10 .^ (3:-1:0)
+true
+
+julia> collect(logrange(-1 => -2f0, 3))
+3-element Vector{Float32}:
+ -1.0
+ -1.4142135
+ -2.0
+```
+"""
+function logrange(p::Pair{<:Real, <:Real}, n::Integer)
+    lo, hi = promote(p.first, p.second)
+    if lo>0 && hi>0
+        (exp(x) for x in range(log(lo), log(hi), length=n))
+    elseif lo<0 && hi<0
+        (-exp(x) for x in range(log(-lo), log(-hi), length=n))
+    else
+        throw(DomainError(p, "logrange requires that first and last elements are both positive, or both negative"))
+    end
+end
