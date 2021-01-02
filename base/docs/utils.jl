@@ -56,6 +56,8 @@ end
 export Text, @text_str
 
 """
+DO NOT USE; WILL BE REMOVED IN JULIA 2.0
+
 `Text(s)`: Create an object that renders `s` as plain text.
 
     Text("foo")
