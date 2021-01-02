@@ -120,13 +120,19 @@ julia> range(1 => 5, 3)
 1.0:2.0:5.0
 
 julia> range(0 => 100, 101)
-0.0:1.0:100.0)
+0.0:1.0:100.0
 
 julia> range(1 => 10)
 1.0:9.0:10.0
 
 julia> range(1 => 1.5)
 1.0:0.5:1.5
+
+julia> range(5 => 3)
+5.0:-2.0:3.0
+
+julia> range(5 => 3, 3)
+5.0:-1.0:3.0
 ```
 """
 range(start_stop::Pair, length::Integer=2) =
