@@ -860,9 +860,11 @@ end
 Estimate the operator 1-norm [`opnorm(A, 1)`](@ref) of the matrix or linear operator `A`
 using a block algorithm.
 
-The estimate is a lower bound on the 1-norm and can be computed much more efficiently for
-large and sparse matrices (see Algorithm 2.4 of [^HighamTisseur]). `t` is a parameter that
-sets the size of an ``n × t`` matrix that is multiplied by `A` and must be less than `n`.
+The estimate is a based on Algorithm 2.4 of [^HighamTisseur], with a generalization to non-
+square operators `A` by implicitly padding `A` with zeros to be square. It produces a lower
+bound on the 1-norm and can be much more efficient than `opnorm` for large and sparse
+matrices. Note that the algorithm uses random numbers, so the result may change between
+evaluations.
 
 [^HighamTisseur]:
     Nicholas J. Higham and Françoise Tisseur,
@@ -877,7 +879,8 @@ methods:
 - `*(A::Op, B::AbstractMatrix)`
 - `adjoint(A::Op)`
 
-Note: the algorithm uses random numbers, so the result may change between evaluations.
+`t` is a parameter that sets the number of columns of a matrix that is multiplied by `A` and
+must not exceed the number of rows or columns of `A`.
 
     opnormest1(A, t::Integer, retv::Val{true}) -> (est, v)
     opnormest1(A, t::Integer, retv::Val{false}, retw::Val{true}) -> (est, w)
@@ -890,27 +893,27 @@ matrix 1-norm of `A`, and ``\\|⋅\\|`` is the Frobenius 1-[`norm`](@ref).
 """
 function opnormest1(
     A,
-    t::Integer=min(2,maximum(size(A))),
+    t::Integer=min(2,minimum(size(A))),
     ::Val{retv}=Val(false),
     ::Val{retw}=Val(false),
 ) where {retv,retw}
     T = eltype(A)
     maxiter = 5
     # Check the input
-    n = checksquare(A)
+    m, n = size(A)
     if t <= 0
         throw(ArgumentError("number of blocks must be a positive integer"))
     end
-    if t > n
-        throw(ArgumentError("number of blocks must not be greater than $n"))
+    if t > min(m, n)
+        throw(ArgumentError("number of blocks must not be greater than $(min(m, n))"))
     end
     ind = ones(Int64, n)
     ind_hist = Set{Int64}()
 
     Ti = typeof(float(zero(T)))
 
-    S_old = zeros(Ti, n, t)
-    S = Matrix{Ti}(undef, n, t)
+    S_old = zeros(Ti, m, t)
+    S = Matrix{Ti}(undef, m, t)
     h = Vector{real(Base.promote_type(Ti, T))}(undef, n)
 
     # Generate the block matrix
@@ -924,10 +927,10 @@ function opnormest1(
             end
         end
     end
-    rmul!(X, inv(n))
+    rmul!(X, inv(max(m, n)))
 
     if retw
-        w = Vector{Ti}(undef, n)
+        w = Vector{Ti}(undef, m)
     end
 
     iter = 0
@@ -941,7 +944,7 @@ function opnormest1(
         est = zero(real(eltype(Y)))
         est_ind = 0
         for i = 1:t
-            y = norm1(view(Y,1:n,i))
+            y = norm1(view(Y,1:m,i))
             if y > est
                 est = y
                 est_ind = i
@@ -949,7 +952,7 @@ function opnormest1(
         end
         if est > est_old || iter == 2
             ind_best = ind[est_ind]
-            retw && copyto!(w, view(Y, 1:n, est_ind))
+            retw && copyto!(w, view(Y, 1:m, est_ind))
         end
         # (1)
         if iter >= 2 && est <= est_old
@@ -971,7 +974,7 @@ function opnormest1(
             for j = 1:t
                 while (j > 1 && _any_cols_are_parallel(S, j, S, 1:(j - 1))) ||
                       (iter >= 2 && _any_cols_are_parallel(S, j, S_old, 1:t))
-                    rand!(view(S, 1:n, j), (-1, 1))
+                    rand!(view(S, 1:m, j), (-1, 1))
                 end
             end
         end

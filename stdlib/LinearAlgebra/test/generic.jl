@@ -220,8 +220,8 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
 
 @testset "estimate of matrix (operator) 1-opnorm" begin
     @testset "opnormest1" begin
-        @testset for T in (Float64, ComplexF64), n in (10, 100), t in 2:4, TOp in (Matrix, LinearOperator)
-            A = randn(T, n, n)
+        @testset for T in (Float64, ComplexF64), m in (1, 10, 100), n in (1, 10, 100), t in 1:min(min(m, n),4), TOp in (Matrix, LinearOperator)
+            A = randn(T, m, n)
             OpA = TOp(A)
             @inferred LinearAlgebra.opnormest1(OpA, t)
             # estimates are probabilistic but bounded by opnorm
@@ -229,22 +229,34 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
             nrm1 = opnorm(A, 1)
             @test all(est -> est ≈ nrm1 || est < nrm1, ests)
 
-            # estimate is exact for positive matrix
-            Apos = abs.(randn(T, n, n))
-            @test LinearAlgebra.opnormest1(TOp(Apos), t) ≈ opnorm(Apos, 1)
+            if t > 1 && T <: Real
+                # estimate is exact for positive matrix
+                Apos = abs.(randn(T, m, n))
+                @test LinearAlgebra.opnormest1(TOp(Apos), t) ≈ opnorm(Apos, 1)
+
+                # estimate is exact for matrix with entries in {-1, 1}
+                Asign = rand((-1, 1), m, n)
+                @test LinearAlgebra.opnormest1(TOp(Asign), t) ≈ opnorm(Asign, 1)
+            end
 
             # check vectors
             @test length(LinearAlgebra.opnormest1(OpA, t, Val(true))) == 2
             @test length(LinearAlgebra.opnormest1(OpA, t, Val(false), Val(true))) == 2
             @test length(LinearAlgebra.opnormest1(OpA, t, Val(true), Val(true))) == 3
             est, v, w = LinearAlgebra.opnormest1(OpA, t, Val(true), Val(true))
+            @test size(v) === (n,)
+            @test size(w) === (m,)
             @test w ≈ A * v
             @test norm(v, 1) ≈ 1
             @test norm(w, 1) ≈ est
         end
-        A = randn(ComplexF64, 10, 10)
+        A = randn(10, 10)
         @test_throws ArgumentError LinearAlgebra.opnormest1(A,0)
         @test_throws ArgumentError LinearAlgebra.opnormest1(A,11)
+        A = randn(1, 10)
+        @test_throws ArgumentError LinearAlgebra.opnormest1(A,2)
+        A = randn(10, 1)
+        @test_throws ArgumentError LinearAlgebra.opnormest1(A,2)
     end
 
     @testset "opnormestinv1" begin
@@ -258,8 +270,10 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
             @test all(est -> est ≈ nrm1 || est < nrm1, ests)
 
             # estimate is exact for positive matrix
-            Apos = inv(abs.(randn(T, n, n)))
-            @test LinearAlgebra.opnormestinv1(TOp(Apos), t) ≈ opnorm(inv(Apos), 1)
+            if T <: Real
+                Apos = inv(abs.(randn(T, n, n)))
+                @test LinearAlgebra.opnormestinv1(TOp(Apos), t) ≈ opnorm(inv(Apos), 1)
+            end
 
             # check vectors
             @test length(LinearAlgebra.opnormestinv1(OpA, t, Val(true))) == 2
@@ -276,7 +290,7 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
     end
 
     @testset "opnormestprod1" begin
-        As = [randn(10, 2), randn(2, 10), randn(10, 10)]
+        As = [randn(10, 2), randn(2, 10), randn(10, 11)]
         @inferred LinearAlgebra.opnormestprod1(As...)
 
         # estimates are probabilistic but bounded by opnorm
