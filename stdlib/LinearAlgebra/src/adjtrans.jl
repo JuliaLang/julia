@@ -172,6 +172,10 @@ julia> x'ᵀx
 """
 transpose(A::AbstractVecOrMat) = Transpose(A)
 
+# special warning for String/Char array
+transpose(A::AbstractArray{T}) where T<: Union{AbstractString, AbstractChar} = 
+    throw(ArgumentError("Cannot transpose array with element of $T, you may want to use `permutedims`."))
+
 # unwrapping lowercase quasi-constructors
 adjoint(A::Adjoint) = A.parent
 transpose(A::Transpose) = A.parent

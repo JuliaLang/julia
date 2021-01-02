@@ -277,6 +277,15 @@ end
     @test vec(cvec')[1] == cvec[1]'
 end
 
+@testset "Special warning for tranpose array of String/Char" begin
+    c = 'a':'c'
+    for T in (String, Char)
+        v = T.(c)
+        m = hcat(v,v)
+        @test_throws ArgumentError transpose(v)
+        @test_throws ArgumentError transpose(m)
+    end
+end
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
     # horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers
     # should preserve the Adjoint/Transpose-wrapper to preserve semantics downstream
