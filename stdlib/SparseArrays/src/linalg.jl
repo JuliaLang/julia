@@ -1168,10 +1168,10 @@ function opnormestinv(A::AbstractSparseMatrixCSC, t::Integer = min(2,maximum(siz
     return LinearAlgebra.opnormest1(invA; t = t)
 end
 
-function opnormest(::typeof(inv), A::AbstractSparseMatrixCSC, p::Real=2)
+function opnormest(::typeof(inv), A::AbstractSparseMatrixCSC, p::Real)
     return opnormest(inv, factorize(A), p)
 end
-function opnormest(::typeof(pinv), A::AbstractSparseMatrixCSC, p::Real=2)
+function opnormest(::typeof(pinv), A::AbstractSparseMatrixCSC, p::Real)
     return opnormest(pinv, factorize(A), p)
 end
 

@@ -2040,20 +2040,16 @@ end
     @test_deprecated SparseArrays.opnormestinv(sprand(3,5,.9))
 end
 
-@testset "sparse matrix opnormest(inv, A[, p])" begin
+Base.USE_GPL_LIBS && @testset "sparse matrix opnormest(inv, A, $p)" for p in (1,2,Inf)
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
     Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
 
-    @test opnormest(inv, Ac, 2) == opnormest(inv, Ac)
-
-    Base.USE_GPL_LIBS && @testset "p=$p" for p in (1,2,Inf)
-        # estimates are bounded by opnorm
-        for A in (Ac, Aci, Ar)
-            ests = [opnormest(inv, A, p) for _ in 1:100]
-            nrm = opnorm(inv(Array(A)), p)
-            @test all(est -> est ≈ nrm || est < nrm, ests)
-        end
+    # estimates are bounded by opnorm
+    for A in (Ac, Aci, Ar)
+        ests = [opnormest(inv, A, p) for _ in 1:100]
+        nrm = opnorm(inv(Array(A)), p)
+        @test all(est -> est ≈ nrm || est < nrm, ests)
     end
 end
 
