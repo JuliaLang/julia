@@ -939,15 +939,7 @@ function opnormest1(
     while true
         iter += 1
         Y = A * X
-        est = zero(real(eltype(Y)))
-        est_ind = 1
-        for i = 1:t
-            y = norm1(view(Y,1:m,i))
-            if y > est
-                est = y
-                est_ind = i
-            end
-        end
+        est, est_ind = findmax(i -> norm1(view(Y,1:m,i)), 1:t)
         if est > est_old || iter == 2
             ind_best = ind[est_ind]
             retw && copyto!(w, view(Y, 1:m, est_ind))
