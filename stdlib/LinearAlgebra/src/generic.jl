@@ -855,7 +855,7 @@ function _each_col_has_parallel_col(X, Y)
 end
 
 """
-    opnormest1(A, t::Integer = 2) -> est
+    opnormest1(A; t::Integer = 2) -> est
 
 Estimate the operator 1-norm [`opnorm(A, 1)`](@ref) of the matrix or linear operator `A`
 using a block algorithm.
@@ -882,9 +882,9 @@ methods:
 `t` is a parameter that sets the number of columns of a matrix that is multiplied by `A` and
 must not exceed the number of rows or columns of `A`.
 
-    opnormest1(A, t::Integer, retv::Val{true}) -> (est, v)
-    opnormest1(A, t::Integer, retv::Val{false}, retw::Val{true}) -> (est, w)
-    opnormest1(A, t::Integer, retv::Val{true}, retw::Val{true}) -> (est, v, w)
+    opnormest1(A, retv::Val{true}; t::Integer = 2) -> (est, v)
+    opnormest1(A, retv::Val{false}, retw::Val{true}; t::Integer = 2) -> (est, w)
+    opnormest1(A, retv::Val{true}, retw::Val{true}; t::Integer = 2) -> (est, v, w)
 
 Along with the estimate of the operator 1-norm, return a vector `v` and/or a vector `w` that
 correspond to the estimate, such that ``w = A v`` and
@@ -893,9 +893,9 @@ matrix 1-norm of `A`, and ``\\|⋅\\|`` is the Frobenius 1-[`norm`](@ref).
 """
 function opnormest1(
     A,
-    t::Integer=min(2,minimum(size(A))),
     ::Val{retv}=Val(false),
-    ::Val{retw}=Val(false),
+    ::Val{retw}=Val(false);
+    t::Integer=min(2,minimum(size(A))),
 ) where {retv,retw}
     T = eltype(A)
     maxiter = 5
