@@ -2031,13 +2031,13 @@ end
     Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
         # NOTE: opnormestinv is probabilistic, so requires a fixed seed (set above in Random.seed!(1234))
-        @test (@test_deprecated SparseArrays.opnormestinv(Ac,3)) ≈ opnorm(inv(Array(Ac)),1) atol=1e-4
-        @test (@test_deprecated SparseArrays.opnormestinv(Aci,3)) ≈ opnorm(inv(Array(Aci)),1) atol=1e-4
-        @test (@test_deprecated SparseArrays.opnormestinv(Ar)) ≈ opnorm(inv(Array(Ar)),1) atol=1e-4
-        @test_throws ArgumentError (@test_deprecated SparseArrays.opnormestinv(Ac,0))
-        @test_throws ArgumentError (@test_deprecated SparseArrays.opnormestinv(Ac,21))
+        @test_deprecated SparseArrays.opnormestinv(Ac,3)
+        @test_deprecated SparseArrays.opnormestinv(Aci,3)
+        @test_deprecated SparseArrays.opnormestinv(Ar)
+        @test_deprecated SparseArrays.opnormestinv(Ac,0)
+        @test_deprecated SparseArrays.opnormestinv(Ac,21)
     end
-    @test_throws DimensionMismatch (@test_deprecated SparseArrays.opnormestinv(sprand(3,5,.9)))
+    @test_deprecated SparseArrays.opnormestinv(sprand(3,5,.9))
 end
 
 @testset "sparse matrix opnormest(inv, A[, p])" begin
