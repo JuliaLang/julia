@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import LinearAlgebra: checksquare, sym_uplo, opnormestinv1
+import LinearAlgebra: checksquare, sym_uplo, opnormest
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 const StridedOrTriangularMatrix{T} = Union{StridedMatrix{T}, LowerTriangular{T}, UnitLowerTriangular{T}, UpperTriangular{T}, UnitUpperTriangular{T}}
@@ -1147,11 +1147,11 @@ end
 # cond
 function cond(A::AbstractSparseMatrixCSC, p::Real=2)
     if p == 1
-        normAinv = opnormestinv1(A)
+        normAinv = opnormest(inv, A, 1)
         normA = opnorm(A, 1)
         return normA * normAinv
     elseif p == Inf
-        normAinv = opnormestinv1(A')
+        normAinv = opnormest(inv, A, Inf)
         normA = opnorm(A, Inf)
         return normA * normAinv
     elseif p == 2
@@ -1163,11 +1163,16 @@ end
 
 # this method exists to preserve old functionality
 function opnormestinv(A::AbstractSparseMatrixCSC, t::Integer = min(2,maximum(size(A))))
-    return opnormestinv1(A, t)
+    checksquare(A)
+    invA = LinearAlgebra.PInvLinearOperator(factorize(A))
+    return LinearAlgebra.opnormest1(invA; t = t)
 end
 
-function opnormestinv1(A::AbstractSparseMatrixCSC, t::Integer = min(2,maximum(size(A))))
-    return opnormestinv1(factorize(A), t)
+function opnormest(::typeof(inv), A::AbstractSparseMatrixCSC, p::Real)
+    return opnormest(inv, factorize(A), p)
+end
+function opnormest(::typeof(pinv), A::AbstractSparseMatrixCSC, p::Real)
+    return opnormest(pinv, factorize(A), p)
 end
 
 ## kron
