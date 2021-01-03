@@ -1092,7 +1092,7 @@ end
 opnormestInf(A) = opnormest1(A')
 
 """
-    opnormest(A, p::Real) -> est
+    opnormest(A, p::Real=2) -> est
 
 Estimate the operator p-norm [`opnorm(A, p)`](@ref) of the matrix or linear operator `A`.
 
@@ -1105,13 +1105,13 @@ than `opnorm` for large and sparse matrices.
 - `*(A::Op, B::AbstractMatrix)`
 - `adjoint(A::Op)`
 
-    opnormest(f, A, p::Real, args...)
+    opnormest(f, A, p::Real=2)
 
 Estimate the operator p-norm [`opnorm(inv(A), p)`](@ref) of a matrix or linear operator
 `A` without computing `f(A)`.
 
-    opnormest(::typeof(inv), A, p::Real)
-    opnormest(::typeof(pinv), A, p::Real)
+    opnormest(::typeof(inv), A[, p])
+    opnormest(::typeof(pinv), A[, p])
 
 Estimate the operator p-norm of `inv(A)` or `pinv(A)`. If `A` is an `AbstractMatrix`, it
 will be more efficient to pass its factorization to this function.
@@ -1122,20 +1122,22 @@ will be more efficient to pass its factorization to this function.
 - `\\(A::Op, B::AbstractMatrix)`
 - `adjoint(A::Op)`
 
-    opnormest(::typeof(prod), As, p::Real)
+    opnormest(::typeof(prod), As[, p])
 
 Estimate the operator p-norm of the product of the matrices or linear operators `As` without
 forming the product `prod(As)`.
 """
 opnormest
 
-function opnormest(A, p::Real)
-    if p == 1
+function opnormest(A, p::Real=2)
+    if p == 2
+        return opnormest2(A)
+    elseif p == 1
         return opnormest1(A)
     elseif p == Inf
         return opnormestInf(A)
     else
-        throw(ArgumentError("unsupported p-norm p=$p. Valid: 1, Inf"))
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
 end
 
@@ -1148,12 +1150,12 @@ Base.size(M::PInvLinearOperator) = reverse(size(M.A))
 Base.:*(M::PInvLinearOperator, X) = M.A \ X
 Base.adjoint(M::PInvLinearOperator) = PInvLinearOperator(adjoint(M.A))
 
-function opnormest(::typeof(inv), A, p::Real)
+function opnormest(::typeof(inv), A, p::Real=2)
     checksquare(A)
     return opnormest(PInvLinearOperator(A), p)
 end
 
-function opnormest(::typeof(pinv), A, p::Real)
+function opnormest(::typeof(pinv), A, p::Real=2)
     return opnormest(PInvLinearOperator(A), p)
 end
 
@@ -1174,7 +1176,7 @@ function Base.adjoint(M::ProdLinearOperator)
     return ProdLinearOperator(Ast)
 end
 
-function opnormest(::typeof(prod), As, p::Real)
+function opnormest(::typeof(prod), As, p::Real=2)
     return opnormest(ProdLinearOperator(As), p)
 end
 
