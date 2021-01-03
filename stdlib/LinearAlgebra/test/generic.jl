@@ -287,6 +287,7 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         A = randn(ComplexF64, 10, 10)
         @test_throws ArgumentError LinearAlgebra.opnormestinv1(A,0)
         @test_throws ArgumentError LinearAlgebra.opnormestinv1(A,11)
+        @test_throws DimensionMismatch LinearAlgebra.opnormestinv1(randn(3,5))
     end
 
     @testset "opnormestprod1" begin

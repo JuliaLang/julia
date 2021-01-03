@@ -1103,7 +1103,10 @@ methods:
 If `A` is an `AbstractMatrix`, it will be more efficient to pass its factorization
 to this function.
 """
-opnormestinv1(A, args...) = opnormest1(InvMat(A), args...)
+function opnormestinv1(A, args...)
+    checksquare(A)
+    return opnormest1(InvMat(A), args...)
+end
 
 norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
 
