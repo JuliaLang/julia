@@ -961,10 +961,12 @@ function opnormest1(
             # Complex vectors are much less likely to be parallel, so the check is skipped
             iter >= 2 && _each_col_has_parallel_col(S, S_old) && break
             # Randomly permute any cols of S that are parallel to cols of S or S_old
-            for j = 1:t
-                while (j > 1 && _any_cols_are_parallel(S, j, S, 1:(j - 1))) ||
-                      (iter >= 2 && _any_cols_are_parallel(S, j, S_old, 1:t))
-                    rand!(view(S, 1:m, j), (-1, 1))
+            if t > 1 # if t == 1 and we've reached this loop, then never runs
+                for j = 1:t
+                    while (j > 1 && _any_cols_are_parallel(S, j, S, 1:(j - 1))) ||
+                        (iter >= 2 && _any_cols_are_parallel(S, j, S_old, 1:t))
+                        rand!(view(S, 1:m, j), (-1, 1))
+                    end
                 end
             end
         end
