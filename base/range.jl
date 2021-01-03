@@ -128,7 +128,7 @@ julia> range(5 => 3, 3)
 range(start_stop::Pair, length::Integer) =
     _range(start_stop.first, nothing, start_stop.second, length)
 
-range(start_stop::Pair) =
+range(start_stop::Pair, length::Nothing = nothing) =
     throw(ArgumentError("`length` must be specified after $start_stop"))
 
 _range2(start, ::Nothing, stop, ::Nothing) =
