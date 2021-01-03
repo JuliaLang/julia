@@ -888,7 +888,7 @@ must not exceed the number of rows or columns of `A`.
 Along with the estimate of the operator 1-norm, return a vector `v` and/or a vector `w` that
 correspond to the estimate, such that ``w = A v`` and
 ``\\|w\\|_1 = \\mathrm{est} \\|v\\|_1``, where ``\\mathrm{est}`` is the estimate of the
-matrix 1-norm of `A`, and ``\\|⋅\\|`` is the Frobenius 1-[`norm`](@ref).
+matrix 1-norm of `A`, and ``\\|⋅\\|_1`` is the Frobenius 1-[`norm`](@ref).
 """
 function opnormest1(
     A,
