@@ -115,6 +115,7 @@ export
     normalize,
     normalize!,
     nullspace,
+    opnormest,
     ordschur!,
     ordschur,
     pinv,
