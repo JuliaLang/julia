@@ -277,7 +277,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         if doopt && last(valid_worlds) == typemax(UInt)
             # if we aren't cached, we don't need this edge
             # but our caller might, so let's just make it anyways
-            store_backedges(caller, edges)
+            store_backedges(interp, caller, edges)
         end
     end
     return true
@@ -424,15 +424,15 @@ function finish(src::CodeInfo, interp::AbstractInterpreter)
 end
 
 # record the backedges
-function store_backedges(frame::InferenceResult, edges::Vector{Any})
+function store_backedges(interp::AbstractInterpreter, frame::InferenceResult, edges::Vector{Any})
     toplevel = !isa(frame.linfo.def, Method)
     if !toplevel
-        store_backedges(frame.linfo, edges)
+        store_backedges(interp, frame.linfo, edges)
     end
     nothing
 end
 
-function store_backedges(caller::MethodInstance, edges::Vector)
+function store_backedges(interp::AbstractInterpreter, caller::MethodInstance, edges::Vector{Any})
     i = 1
     while i <= length(edges)
         to = edges[i]
