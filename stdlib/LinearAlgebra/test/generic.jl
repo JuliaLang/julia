@@ -247,7 +247,45 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         @test norm(w, 1) ≈ est * norm(v, 1)
     end
 
-    @testset "opnormest(A, $p), T=$T, size=($m,$n)" for p in (1, Inf), T in (Float64, ComplexF64), m in (1, 10, 100), n in (1, 10, 100), TOp in (Matrix, LinearOperator)
+    @testset "opnormest2(A), T=$T, size=($m,$n)" for T in (Float64, ComplexF64), m in (1, 10, 100), n in (1, 10, 100), TOp in (Matrix, LinearOperator)
+        A = randn(T, m, n)
+        OpA = TOp(A)
+        @inferred LinearAlgebra.opnormest2(OpA)
+        # estimates are probabilistic but bounded by opnorm
+        ests = [LinearAlgebra.opnormest2(OpA) for _ in 1:100]
+        nrm = opnorm(A, 2)
+        @test all(est -> est ≈ nrm || est < nrm, ests)
+
+        if T <: Real
+            # estimate is exact for positive matrix
+            Apos = abs.(randn(T, m, n))
+            @test LinearAlgebra.opnormest2(TOp(Apos); tol=eps(real(T))) ≈ opnorm(Apos, 2)
+
+            # matrix with Asign * ones(n) = 0, so power iteration needs a new start
+            if (m, n) == (1, 10) || (m, n) == (10, 1)
+                Asign = reshape([1, -1, 1, 1, -1, -1, 1, 1, -1, -1], m, n)
+                @test LinearAlgebra.opnormest2(TOp(Asign); tol=eps(real(T))) ≈ opnorm(Asign, 2)
+            end
+        end
+
+        # check vectors
+        @test length(LinearAlgebra.opnormest2(OpA, Val(true))) == 2
+        @test length(LinearAlgebra.opnormest2(OpA, Val(false), Val(true))) == 2
+        @test length(LinearAlgebra.opnormest2(OpA, Val(true), Val(true))) == 3
+        est, v, w = LinearAlgebra.opnormest2(OpA, Val(true), Val(true); tol = eps(real(T)))
+        @test w ≈ A * v
+        @test norm(w, 2) ≈ est * norm(v, 2)
+        if OpA isa Matrix
+            U, S, V = svd(A)
+            # 2-norm is leading singular value
+            @test S[1] ≈ est
+            # v and w are leading singular vectors
+            @test abs(dot(w / est, svd(A).U[:,1])) ≈ 1
+            @test abs(dot(v, svd(A).V[:,1])) ≈ 1
+        end
+    end
+
+    @testset "opnormest(A, $p), T=$T, size=($m,$n)" for p in (1, 2, Inf), T in (Float64, ComplexF64), m in (1, 10, 100), n in (1, 10, 100), TOp in (Matrix, LinearOperator)
         A = randn(T, m, n)
         OpA = TOp(A)
         @inferred opnormest(OpA, p)
@@ -259,15 +297,21 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         if T <: Real
             # estimate is exact for positive matrix
             Apos = abs.(randn(T, m, n))
-            @test opnormest(TOp(Apos), p) ≈ opnorm(Apos, p)
+            @test opnormest(TOp(Apos), p) ≈ opnorm(Apos, p) atol=(p==2 ? 1e-3 : 1e-8)
 
             # estimate is exact for matrix with entries in {-1, 1}
             Asign = rand((-1, 1), m, n)
-            @test opnormest(TOp(Asign), p) ≈ opnorm(Asign, p)
+            @test opnormest(TOp(Asign), p) ≈ opnorm(Asign, p) atol=(p==2 ? 1e-3 : 1e-8)
         end
     end
 
-    @testset "opnormest(::typeof($f), A, $p), n=$n" for f in (pinv, inv), p in (1, Inf), n in (10, 30)
+    @testset "opnormest(A) default" begin
+        A = randn(10, 10)
+        @test opnormest(A) == opnormest(A, 2)
+        @test_throws ArgumentError opnormest(A, 3)
+    end
+
+    @testset "opnormest(::typeof($f), A, $p), n=$n" for f in (pinv, inv), p in (1, 2, Inf), n in (10, 30)
         m = f === pinv ? 20 : n
         A = randn(m, n)
         @inferred opnormest(f, A, p)
@@ -279,7 +323,7 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         # estimate is exact for positive matrix
         if m == n
             Apos = f(abs.(randn(m, n)))
-            @test opnormest(f, Apos, p) ≈ opnorm(f(Apos), p)
+            @test opnormest(f, Apos, p) ≈ opnorm(f(Apos), p) atol=(p==2 ? 1e-3 : 1e-8)
         end
 
         if f === inv
@@ -287,7 +331,7 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         end
     end
 
-    @testset "opnormest(::typeof(prod), A, $p)" for p in (1, Inf)
+    @testset "opnormest(::typeof(prod), A, $p)" for p in (1, 2, Inf)
         As = [randn(10, 2), randn(2, 10), randn(10, 11)]
         @inferred opnormest(prod, As, p)
 
@@ -299,12 +343,12 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         # estimate is exact for positive matrix
         Apos = abs.(randn(10, 10))
         sqrtApos = sqrt(Apos)
-        @test opnormest(prod, [sqrtApos, sqrtApos], p) ≈ opnorm(Apos, p)
+        @test opnormest(prod, [sqrtApos, sqrtApos], p) ≈ opnorm(Apos, p) atol=(p==2 ? 1e-3 : 1e-8)
 
         # estimate is exact for matrix with entries in {-1, 1}
         Asign = rand((-1, 1), 10, 10)
         sqrtAsign = sqrt(Asign)
-        @test opnormest(prod, [sqrtAsign, sqrtAsign], p) ≈ opnorm(Asign, p)
+        @test opnormest(prod, [sqrtAsign, sqrtAsign], p) ≈ opnorm(Asign, p) atol=(p==2 ? 1e-3 : 1e-8)
     end
 end
 
