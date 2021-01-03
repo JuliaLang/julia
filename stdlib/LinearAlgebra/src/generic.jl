@@ -1019,85 +1019,93 @@ function opnormest1(
     return ret
 end
 
-# Linear operator representing product of matrices A₁ * A₂ * …
-# utility type for opnormestprod1
-struct ProductMat{T}
-    As::T
-end
-Base.eltype(M::ProductMat) = Base.promote_eltype(M.As...)
-Base.size(M::ProductMat) = (size(first(M.As))[1], size(last(M.As))[2])
-function Base.:*(M::ProductMat, X)
-    for A in reverse(M.As)
-        X = A * X
-    end
-    return X
-end
-function Base.adjoint(M::ProductMat)
-    Ast = map(adjoint, reverse(M.As))
-    return ProductMat(Ast)
-end
+opnormestInf(A) = opnormest1(A')
 
 """
-    opnormestprod1(As...)
+    opnormest(A, p::Real) -> est
 
-Estimate the operator 1-norm [`opnorm(prod(As), 1)`](@ref) of a product of matrices or
-linear operators without forming the product.
+Estimate the operator p-norm [`opnorm(A, p)`](@ref) of the matrix or linear operator `A`.
 
-Each element `A` in `As` can be of any type `Op`, representing a matrix or vector, that
-implements the following methods:
+The estimate produces produces a lower bound on the p-norm and can be much more efficient
+than `opnorm` for large and sparse matrices.
+
+`A` can be of any type `Op`, representing a matrix, that implements the following methods:
 - `size(A::Op)`
 - `eltype(A::Op)`
 - `*(A::Op, B::AbstractMatrix)`
 - `adjoint(A::Op)`
-Additionally, the first dimension of `As[1]` and the last dimension of `As[end]` must be
-equal for their product to be square.
 
-See [`opnormest1`](@ref) for details on the algorithm that computes the estimate.
+    opnormest(f, A, p::Real, args...)
 
-    opnormestprod1(A, p::Integer)
+Estimate the operator p-norm [`opnorm(inv(A), p)`](@ref) of a matrix or linear operator
+`A` without computing `f(A)`.
 
-Estimate the operator 1-norm for the matrix power `A^p` without exponentiating the matrix.
-"""
-opnormestprod1
+    opnormest(::typeof(inv), A, p::Real)
+    opnormest(::typeof(pinv), A, p::Real)
 
-function opnormestprod1(A1, A2, As...)
-    return opnormest1(ProductMat([A1, A2, As...]))
-end
-function opnormestprod1(A, p::Integer)
-    return opnormest1(ProductMat(repeat([A], p)))
-end
+Estimate the operator p-norm of `inv(A)` or `pinv(A)`. If `A` is an `AbstractMatrix`, it
+will be more efficient to pass its factorization to this function.
 
-# Linear operator representing inverse of a matrix
-# utility type for opnormestinv
-struct InvMat{T}
-    A::T
-end
-Base.eltype(M::InvMat) = eltype(M.A)
-Base.size(M::InvMat) = reverse(size(M.A))
-Base.:*(M::InvMat, X) = M.A \ X
-Base.adjoint(M::InvMat) = InvMat(adjoint(M.A))
-
-"""
-    opnormestinv1(A, args...)
-
-Estimate the operator 1-norm [`opnorm(inv(A), 1)`](@ref) of a matrix or linear operator
-`A` without computing the inverse.
-
-See [`opnormest1`](@ref) for a description of the arguments and return values.
-
-`A` can be of any type `Op`, representing a square matrix, that implements the following
-methods:
+`A` can be of any type `Op`, representing a matrix, that implements the following methods:
 - `size(A::Op)`
 - `eltype(A::Op)`
 - `\\(A::Op, B::AbstractMatrix)`
 - `adjoint(A::Op)`
 
-If `A` is an `AbstractMatrix`, it will be more efficient to pass its factorization
-to this function.
+    opnormest(::typeof(prod), As, p::Real)
+
+Estimate the operator p-norm of the product of the matrices or linear operators `As` without
+forming the product `prod(As)`.
 """
-function opnormestinv1(A, args...)
+opnormest
+
+function opnormest(A, p::Real)
+    if p == 1
+        return opnormest1(A)
+    elseif p == Inf
+        return opnormestInf(A)
+    else
+        throw(ArgumentError("unsupported p-norm p=$p. Valid: 1, Inf"))
+    end
+end
+
+# Linear operator representing inverse of a matrix
+struct PInvLinearOperator{T}
+    A::T
+end
+Base.eltype(M::PInvLinearOperator) = eltype(M.A)
+Base.size(M::PInvLinearOperator) = reverse(size(M.A))
+Base.:*(M::PInvLinearOperator, X) = M.A \ X
+Base.adjoint(M::PInvLinearOperator) = PInvLinearOperator(adjoint(M.A))
+
+function opnormest(::typeof(inv), A, p::Real)
     checksquare(A)
-    return opnormest1(InvMat(A), args...)
+    return opnormest(PInvLinearOperator(A), p)
+end
+
+function opnormest(::typeof(pinv), A, p::Real)
+    return opnormest(PInvLinearOperator(A), p)
+end
+
+# Linear operator representing product of matrices A₁ * A₂ * …
+struct ProdLinearOperator{T}
+    As::T
+end
+Base.eltype(M::ProdLinearOperator) = Base.promote_eltype(M.As...)
+Base.size(M::ProdLinearOperator) = (size(first(M.As))[1], size(last(M.As))[2])
+function Base.:*(M::ProdLinearOperator, X)
+    for A in reverse(M.As)
+        X = A * X
+    end
+    return X
+end
+function Base.adjoint(M::ProdLinearOperator)
+    Ast = map(adjoint, reverse(M.As))
+    return ProdLinearOperator(Ast)
+end
+
+function opnormest(::typeof(prod), As, p::Real)
+    return opnormest(ProdLinearOperator(As), p)
 end
 
 norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
