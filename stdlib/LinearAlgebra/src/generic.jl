@@ -872,8 +872,7 @@ evaluations.
     SIAM Journal on Matrix Analysis and Applications, 21(4), 2000, pp. 1185-1201.
     [doi:10.1137/S0895479899356080](https://doi.org/10.1137/S0895479899356080)
 
-`A` can be of any type `Op`, representing a square matrix, that implements the following
-methods:
+`A` can be of any type `Op`, representing a matrix, that implements the following methods:
 - `size(A::Op)`
 - `eltype(A::Op)`
 - `*(A::Op, B::AbstractMatrix)`
