@@ -934,15 +934,13 @@ function opnormest1(
     end
 
     iter = 0
-    local est
-    local ind_best
-    est_ind = 0
-    est_old = zero(real(eltype(X)))
+    ind_best = 1
+    est = est_old = zero(real(eltype(X)))
     while true
         iter += 1
         Y = A * X
         est = zero(real(eltype(Y)))
-        est_ind = 0
+        est_ind = 1
         for i = 1:t
             y = norm1(view(Y,1:m,i))
             if y > est
