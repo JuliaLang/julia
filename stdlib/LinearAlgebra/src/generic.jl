@@ -855,6 +855,77 @@ function _each_col_has_parallel_col(X, Y)
 end
 
 """
+    opnormest2(A; tol) -> est
+
+Estimate the operator 2-norm [`opnorm(A, 2)`](@ref) of the matrix or linear operator `A`
+using power iteration.
+
+The estimate is a lower bound on the 2-norm and can be much more efficient than `opnorm` for
+large and sparse matrices. To improve the estimate, set `tol`.
+
+`A` can be of any type `Op`, representing a matrix, that implements the following methods:
+- `size(A::Op)`
+- `eltype(A::Op)`
+- `*(A::Op, B::AbstractMatrix)`
+- `adjoint(A::Op)`
+
+    opnormest2(A, retv::Val{true}; tol) -> (est, v)
+    opnormest2(A, retv::Val{false}, retw::Val{true}; tol) -> (est, w)
+    opnormest2(A, retv::Val{true}, retw::Val{true}; tol) -> (est, v, w)
+
+Along with the estimate of the operator 2-norm, return a vector `v` and/or a vector `w` that
+correspond to the estimate, such that ``w = A v`` and
+``\\|w\\|_2 = \\mathrm{est} \\|v\\|_2``, where ``\\mathrm{est}`` is the estimate of the
+matrix 2-norm of `A`, and ``\\|⋅\\|_2`` is the Frobenius 2-[`norm`](@ref).
+"""
+function opnormest2(
+    A,
+    ::Val{retv} = Val(false),
+    ::Val{retw} = Val(false);
+    tol = sqrt(eps(real(float(eltype(A))))),
+) where {retv,retw}
+    T = eltype(A)
+    m, n = size(A)
+    A′ = A'
+    v = fill(float(T)(sqrt(inv(n))), n)
+    est = est_old = float(real(T))(Inf)
+    iter = 0
+    local w
+    while true
+        iter += 1
+        w = A * v
+        est = norm(w)
+        if iter == 1 && iszero(est)
+            k = 0
+            while k < 5 && iszero(est)
+                k += 1
+                # decrease chance of accidentally picking a v such that A v == 0 when A != 0
+                rand!(v, (-1, 1))
+                rmul!(v, inv(n))
+                w = A * v
+                est = norm(w)
+            end
+        end
+        z = A′ * w
+        znorm = norm(z)
+        if iter > 1 && (znorm * est ≤ real(dot(z, v)) || (est - est_old) ≤ tol*est)
+            break
+        end
+        est_old = est
+        copyto!(v, z)
+        iszero(znorm) || rmul!(v, inv(znorm))
+    end
+    ret = est
+    if retv
+        ret = (ret, v)
+    end
+    if retw
+        ret = (ret..., w)
+    end
+    return ret
+end
+
+"""
     opnormest1(A; t::Integer = 2) -> est
 
 Estimate the operator 1-norm [`opnorm(A, 1)`](@ref) of the matrix or linear operator `A`
