@@ -432,7 +432,7 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
     nothing
 end
 
-function store_backedges(caller::MethodInstance, edges::Vector)
+function store_backedges(caller::MethodInstance, edges::Vector{Any})
     i = 1
     while i <= length(edges)
         to = edges[i]
