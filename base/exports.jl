@@ -58,6 +58,7 @@ export
     IOBuffer,
     IOStream,
     LinRange,
+    LogRange,
     Irrational,
     LazyString,
     Matrix,
@@ -676,6 +677,7 @@ export
     enumerate,  # re-exported from Iterators
     zip,
     only,
+    logrange,
 
 # object identity and equality
     copy,
