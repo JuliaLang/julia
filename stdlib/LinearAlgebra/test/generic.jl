@@ -223,7 +223,7 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         A = randn(T, m, n)
         OpA = TOp(A)
         @inferred LinearAlgebra.opnormest1(OpA)
-        # estimates are probabilistic but bounded by opnorm
+        # estimates are bounded by opnorm
         ests = [LinearAlgebra.opnormest1(OpA) for _ in 1:100]
         nrm = opnorm(A, 1)
         @test all(est -> est ≈ nrm || est < nrm, ests)
@@ -251,7 +251,7 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         A = randn(T, m, n)
         OpA = TOp(A)
         @inferred LinearAlgebra.opnormest2(OpA)
-        # estimates are probabilistic but bounded by opnorm
+        # estimates are bounded by opnorm
         ests = [LinearAlgebra.opnormest2(OpA) for _ in 1:100]
         nrm = opnorm(A, 2)
         @test all(est -> est ≈ nrm || est < nrm, ests)
@@ -289,7 +289,7 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         A = randn(T, m, n)
         OpA = TOp(A)
         @inferred opnormest(OpA, p)
-        # estimates are probabilistic but bounded by opnorm
+        # estimates are bounded by opnorm
         ests = [opnormest(OpA, p) for _ in 1:100]
         nrm = opnorm(A, p)
         @test all(est -> est ≈ nrm || est < nrm, ests)
@@ -315,7 +315,7 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         m = f === pinv ? 20 : n
         A = randn(m, n)
         @inferred opnormest(f, A, p)
-        # estimates are probabilistic but bounded by opnorm
+        # estimates are bounded by opnorm
         ests = [opnormest(f, A, p) for _ in 1:100]
         nrm = opnorm(f(A), p)
         @test all(est -> est ≈ nrm || est < nrm, ests)
@@ -335,7 +335,7 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         As = [randn(10, 2), randn(2, 10), randn(10, 11)]
         @inferred opnormest(prod, As, p)
 
-        # estimates are probabilistic but bounded by opnorm
+        # estimates are bounded by opnorm
         ests = [opnormest(prod, As, p) for _ in 1:100]
         nrm = opnorm(prod(As), p)
         @test all(est -> est ≈ nrm || est < nrm, ests)
