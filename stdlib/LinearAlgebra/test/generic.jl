@@ -218,92 +218,93 @@ Base.:*(M::LinearOperator, X) = M.A * X
 Base.:\(M::LinearOperator, X) = M.A \ X
 Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
 
-@testset "estimate of matrix (operator) 1-opnorm" begin
-    @testset "opnormest1" begin
-        @testset for T in (Float64, ComplexF64), m in (1, 10, 100), n in (1, 10, 100), t in 1:min(min(m, n),4), TOp in (Matrix, LinearOperator)
-            A = randn(T, m, n)
-            OpA = TOp(A)
-            @inferred LinearAlgebra.opnormest1(OpA, t)
-            # estimates are probabilistic but bounded by opnorm
-            ests = [LinearAlgebra.opnormest1(OpA, t) for _ in 1:100]
-            nrm1 = opnorm(A, 1)
-            @test all(est -> est ≈ nrm1 || est < nrm1, ests)
+@testset "estimate of matrix (operator) p-norm" begin
+    @testset "opnormest1(A), T=$T, size=($m,$n)" for T in (Float64, ComplexF64), m in (1, 10, 100), n in (1, 10, 100), TOp in (Matrix, LinearOperator)
+        A = randn(T, m, n)
+        OpA = TOp(A)
+        @inferred LinearAlgebra.opnormest1(OpA)
+        # estimates are probabilistic but bounded by opnorm
+        ests = [LinearAlgebra.opnormest1(OpA) for _ in 1:100]
+        nrm = opnorm(A, 1)
+        @test all(est -> est ≈ nrm || est < nrm, ests)
 
-            if t > 1 && T <: Real
-                # estimate is exact for positive matrix
-                Apos = abs.(randn(T, m, n))
-                @test LinearAlgebra.opnormest1(TOp(Apos), t) ≈ opnorm(Apos, 1)
-
-                # estimate is exact for matrix with entries in {-1, 1}
-                Asign = rand((-1, 1), m, n)
-                @test LinearAlgebra.opnormest1(TOp(Asign), t) ≈ opnorm(Asign, 1)
-            end
-
-            # check vectors
-            @test length(LinearAlgebra.opnormest1(OpA, t, Val(true))) == 2
-            @test length(LinearAlgebra.opnormest1(OpA, t, Val(false), Val(true))) == 2
-            @test length(LinearAlgebra.opnormest1(OpA, t, Val(true), Val(true))) == 3
-            est, v, w = LinearAlgebra.opnormest1(OpA, t, Val(true), Val(true))
-            @test size(v) === (n,)
-            @test size(w) === (m,)
-            @test w ≈ A * v
-            @test norm(v, 1) ≈ 1
-            @test norm(w, 1) ≈ est
-        end
-        A = randn(10, 10)
-        @test_throws ArgumentError LinearAlgebra.opnormest1(A,0)
-        @test_throws ArgumentError LinearAlgebra.opnormest1(A,11)
-        A = randn(1, 10)
-        @test_throws ArgumentError LinearAlgebra.opnormest1(A,2)
-        A = randn(10, 1)
-        @test_throws ArgumentError LinearAlgebra.opnormest1(A,2)
-    end
-
-    @testset "opnormestinv1" begin
-        @testset for T in (Float64, ComplexF64), n in (10, 100), t in 2:4, TOp in (Matrix, LinearOperator)
-            A = randn(T, n, n)
-            OpA = TOp(A)
-            @inferred LinearAlgebra.opnormestinv1(OpA, t)
-            # estimates are probabilistic but bounded by opnorm
-            ests = [LinearAlgebra.opnormestinv1(OpA, t) for _ in 1:100]
-            nrm1 = opnorm(inv(A), 1)
-            @test all(est -> est ≈ nrm1 || est < nrm1, ests)
-
+        if T <: Real
             # estimate is exact for positive matrix
-            if T <: Real
-                Apos = inv(abs.(randn(T, n, n)))
-                @test LinearAlgebra.opnormestinv1(TOp(Apos), t) ≈ opnorm(inv(Apos), 1)
-            end
+            Apos = abs.(randn(T, m, n))
+            @test LinearAlgebra.opnormest1(TOp(Apos)) ≈ opnorm(Apos, 1)
 
-            # check vectors
-            @test length(LinearAlgebra.opnormestinv1(OpA, t, Val(true))) == 2
-            @test length(LinearAlgebra.opnormestinv1(OpA, t, Val(false), Val(true))) == 2
-            @test length(LinearAlgebra.opnormestinv1(OpA, t, Val(true), Val(true))) == 3
-            est, v, w = LinearAlgebra.opnormestinv1(OpA, t, Val(true), Val(true))
-            @test w ≈ A \ v
-            @test norm(v, 1) ≈ 1
-            @test norm(w, 1) ≈ est
+            # estimate is exact for matrix with entries in {-1, 1}
+            Asign = rand((-1, 1), m, n)
+            @test LinearAlgebra.opnormest1(TOp(Asign)) ≈ opnorm(Asign, 1)
         end
-        A = randn(ComplexF64, 10, 10)
-        @test_throws ArgumentError LinearAlgebra.opnormestinv1(A,0)
-        @test_throws ArgumentError LinearAlgebra.opnormestinv1(A,11)
-        @test_throws DimensionMismatch LinearAlgebra.opnormestinv1(randn(3,5))
+
+        # check vectors
+        @test length(LinearAlgebra.opnormest1(OpA, Val(true))) == 2
+        @test length(LinearAlgebra.opnormest1(OpA, Val(false), Val(true))) == 2
+        @test length(LinearAlgebra.opnormest1(OpA, Val(true), Val(true))) == 3
+        est, v, w = LinearAlgebra.opnormest1(OpA, Val(true), Val(true))
+        @test w ≈ A * v
+        @test norm(w, 1) ≈ est * norm(v, 1)
     end
 
-    @testset "opnormestprod1" begin
+    @testset "opnormest(A, $p), T=$T, size=($m,$n)" for p in (1, Inf), T in (Float64, ComplexF64), m in (1, 10, 100), n in (1, 10, 100), TOp in (Matrix, LinearOperator)
+        A = randn(T, m, n)
+        OpA = TOp(A)
+        @inferred opnormest(OpA, p)
+        # estimates are probabilistic but bounded by opnorm
+        ests = [opnormest(OpA, p) for _ in 1:100]
+        nrm = opnorm(A, p)
+        @test all(est -> est ≈ nrm || est < nrm, ests)
+
+        if T <: Real
+            # estimate is exact for positive matrix
+            Apos = abs.(randn(T, m, n))
+            @test opnormest(TOp(Apos), p) ≈ opnorm(Apos, p)
+
+            # estimate is exact for matrix with entries in {-1, 1}
+            Asign = rand((-1, 1), m, n)
+            @test opnormest(TOp(Asign), p) ≈ opnorm(Asign, p)
+        end
+    end
+
+    @testset "opnormest(::typeof($f), A, $p), n=$n" for f in (pinv, inv), p in (1, Inf), n in (10, 30)
+        m = f === pinv ? 20 : n
+        A = randn(m, n)
+        @inferred opnormest(f, A, p)
+        # estimates are probabilistic but bounded by opnorm
+        ests = [opnormest(f, A, p) for _ in 1:100]
+        nrm = opnorm(f(A), p)
+        @test all(est -> est ≈ nrm || est < nrm, ests)
+
+        # estimate is exact for positive matrix
+        if m == n
+            Apos = f(abs.(randn(m, n)))
+            @test opnormest(f, Apos, p) ≈ opnorm(f(Apos), p)
+        end
+
+        if f === inv
+            @test_throws DimensionMismatch opnormest(f, randn(10,11), p)
+        end
+    end
+
+    @testset "opnormest(::typeof(prod), A, $p)" for p in (1, Inf)
         As = [randn(10, 2), randn(2, 10), randn(10, 11)]
-        @inferred LinearAlgebra.opnormestprod1(As...)
+        @inferred opnormest(prod, As, p)
 
         # estimates are probabilistic but bounded by opnorm
-        ests = [LinearAlgebra.opnormestprod1(As...) for _ in 1:100]
-        nrm1 = opnorm(prod(As), 1)
-        @test all(est -> est ≈ nrm1 || est < nrm1, ests)
+        ests = [opnormest(prod, As, p) for _ in 1:100]
+        nrm = opnorm(prod(As), p)
+        @test all(est -> est ≈ nrm || est < nrm, ests)
 
-        A = randn(10, 10)
-        @inferred LinearAlgebra.opnormestprod1(A, 3)
-        ests = [LinearAlgebra.opnormestprod1(A, 3) for _ in 1:100]
-        nrm1 = opnorm(A^3, 1)
-        @test all(est -> est ≈ nrm1 || est < nrm1, ests)
+        # estimate is exact for positive matrix
+        Apos = abs.(randn(10, 10))
+        sqrtApos = sqrt(Apos)
+        @test opnormest(prod, [sqrtApos, sqrtApos], p) ≈ opnorm(Apos, p)
+
+        # estimate is exact for matrix with entries in {-1, 1}
+        Asign = rand((-1, 1), 10, 10)
+        sqrtAsign = sqrt(Asign)
+        @test opnormest(prod, [sqrtAsign, sqrtAsign], p) ≈ opnorm(Asign, p)
     end
 end
 
