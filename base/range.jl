@@ -95,16 +95,15 @@ range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) =
     _range2(start, step, stop, length)
 
 """
-    range(start => stop[, length=2])
+    range(start => stop, length)
 
-Given a `start` to `stop` [`Pair`](@ref) and an optional integer `length`,
+Given a `start` to `stop` [`Pair`](@ref) and an integer `length`,
 construct a range iterator of `length` elements whose first element is `start`
-and last element is `stop`. If `length` is not provided, the range will consist
-of two elements.
+and last element is `stop`.
 
 This is distinct from `start:stop` where `stop` may not be the last
-element. Also, in this form `step` is not assumed to be 1. `length` cannot be
-`nothing`.
+element. Also, in this form `step` is not assumed to be 1. `length` must be an
+`Integer` and cannot be `nothing`.
 
 No keywords are accepted when `start` and `stop` are provided as a [`Pair`](@ref).
 
@@ -122,21 +121,15 @@ julia> range(1 => 5, 3)
 julia> range(0 => 100, 101)
 0.0:1.0:100.0
 
-julia> range(1 => 10)
-1.0:9.0:10.0
-
-julia> range(1 => 1.5)
-1.0:0.5:1.5
-
-julia> range(5 => 3)
-5.0:-2.0:3.0
-
 julia> range(5 => 3, 3)
 5.0:-1.0:3.0
 ```
 """
-range(start_stop::Pair, length::Integer=2) =
+range(start_stop::Pair, length::Integer) =
     _range(start_stop.first, nothing, start_stop.second, length)
+
+range(start_stop::Pair) =
+    throw(ArgumentError("`length` must be specified after $start_stop"))
 
 _range2(start, ::Nothing, stop, ::Nothing) =
     throw(ArgumentError("At least one of `length` or `step` must be specified"))
