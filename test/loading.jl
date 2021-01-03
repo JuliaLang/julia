@@ -282,12 +282,6 @@ module NotPkgModule; end
     @test isnothing(modulnamehint("fo"))
     @test isnothing(modulnamehint("xfoxox"))
 
-    #test Stdlib still works with empty load_path() for Project
-    l_p = copy(LOAD_PATH)
-    empty!(LOAD_PATH)
-    @test modulnamehint("Rand") == "Random"
-    append!(LOAD_PATH, l_p)
-
     # using/import foo - Error with modulmamehint = "Foo"
     @test_throws ArgumentError("""Did you mean Foo? Your entry foo is
     not found in current path. Correct your entry and try again, or run

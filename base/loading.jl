@@ -905,17 +905,20 @@ function require(into::Module, mod::Symbol)
     return require(uuidkey)
 end
 
-# return hint for modulname (if similar name in project deps / Stdlib) or nothing
+# return hint for modul name (from project deps / stdlib) or return nothing
 function modulnamehint(tn::AbstractString)
     length(tn) < 3 && return nothing
-    hns = vcat(try collect(keys(get(parsed_toml(load_path()[1]), "deps", nothing)))
-            catch; String[] end, isdir(Sys.STDLIB) ? readdir(Sys.STDLIB) : String[])
+    hns = Vector{String}()
+    for env in load_path()
+        append!(hns, collect(keys(get(parsed_toml(env), "deps", Dict{String, Any}()))))
+    end
+    append!(hns, readdir(Sys.STDLIB))
     isempty(hns) && return nothing
     scores = similar(hns, Int)
     for (index, hn) in enumerate(hns)
-        o1, o2 = length(tn) >= length(hn) ? (tn, hn) : (hn, tn)
-        scores[index] = length(o1) - length(o2) + (contains(o1, o2) ? 0 :
-                        contains(lowercase(o1), lowercase(o2)) ? 1 : 4)
+        s1, s2 = length(tn) >= length(hn) ? (tn, hn) : (hn, tn)
+        scores[index] = length(s1) - length(s2) + (contains(s1, s2) ? 0 :
+                        contains(lowercase(s1), lowercase(s2)) ? 1 : 4)
     end
     score, index = findmin(scores)
     score > 3 && return nothing
