@@ -1161,8 +1161,8 @@ function cond(A::AbstractSparseMatrixCSC, p::Real=2)
     end
 end
 
-# this method exists to preserve old functionality
 function opnormestinv(A::AbstractSparseMatrixCSC, t::Integer = min(2,maximum(size(A))))
+    Base.depwarn("`SparseArrays.opnormestinv(A)` is deprecated, use `LinearAlgebra.opnormest(inv,A,1)` instead.", :opnormestinv)
     checksquare(A)
     invA = LinearAlgebra.PInvLinearOperator(factorize(A))
     return LinearAlgebra.opnormest1(invA; t = t)
