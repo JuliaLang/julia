@@ -835,25 +835,6 @@ opnorm(v::TransposeAbsVec) = norm(v.parent)
 
 _isparallel(x, y) = abs(dot(x, y)) == length(x)
 
-function _any_cols_are_parallel(X, xrange, Y, yrange)
-    n = size(X, 1)
-    for i in xrange
-        x = view(X,1:n,i)
-        for j in yrange
-            y = view(Y,1:n,j)
-            _isparallel(x, y) && return true
-        end
-    end
-    return false
-end
-
-function _each_col_has_parallel_col(X, Y)
-    for x in eachcol(X)
-        any(y -> _isparallel(x, y), eachcol(Y)) || return false
-    end
-    return true
-end
-
 """
     opnormest2(A; tol) -> est
 
@@ -923,6 +904,25 @@ function opnormest2(
         ret = (ret..., w)
     end
     return ret
+end
+
+function _any_cols_are_parallel(X, xrange, Y, yrange)
+    n = size(X, 1)
+    for i in xrange
+        x = view(X,1:n,i)
+        for j in yrange
+            y = view(Y,1:n,j)
+            _isparallel(x, y) && return true
+        end
+    end
+    return false
+end
+
+function _each_col_has_parallel_col(X, Y)
+    for x in eachcol(X)
+        any(y -> _isparallel(x, y), eachcol(Y)) || return false
+    end
+    return true
 end
 
 """
