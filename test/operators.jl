@@ -277,3 +277,17 @@ end
 
 a = rand(3, 3)
 @test transpose(a) === a'ᵀ
+
+@testset "**" begin
+    @test contains(sprint(Base.showerror, UndefVarError(:(**))), "x^y")
+    let a**b = a^b
+        @test 2**3 == 8
+        a, b = 3, 4
+        @test a**b == a^b
+    end
+    let **a = -a
+        @test **2 == -2
+        a = 3
+        @test **a == -3
+    end
+end
