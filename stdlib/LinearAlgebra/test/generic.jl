@@ -294,14 +294,14 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         nrm = opnorm(A, p)
         @test all(est -> est ≈ nrm || est < nrm, ests)
 
-        if T <: Real
+        if T <: Real && p in (1, Inf)
             # estimate is exact for positive matrix
             Apos = abs.(randn(T, m, n))
-            @test opnormest(TOp(Apos), p) ≈ opnorm(Apos, p) atol=(p==2 ? 1e-3 : 1e-8)
+            @test opnormest(TOp(Apos), p) ≈ opnorm(Apos, p)
 
             # estimate is exact for matrix with entries in {-1, 1}
             Asign = rand((-1, 1), m, n)
-            @test opnormest(TOp(Asign), p) ≈ opnorm(Asign, p) atol=(p==2 ? 1e-3 : 1e-8)
+            @test opnormest(TOp(Asign), p) ≈ opnorm(Asign, p)
         end
     end
 
@@ -321,9 +321,9 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         @test all(est -> est ≈ nrm || est < nrm, ests)
 
         # estimate is exact for positive matrix
-        if m == n
+        if m == n && p in (1, Inf)
             Apos = f(abs.(randn(m, n)))
-            @test opnormest(f, Apos, p) ≈ opnorm(f(Apos), p) atol=(p==2 ? 1e-3 : 1e-8)
+            @test opnormest(f, Apos, p) ≈ opnorm(f(Apos), p)
         end
 
         if f === inv
@@ -340,15 +340,17 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         nrm = opnorm(prod(As), p)
         @test all(est -> est ≈ nrm || est < nrm, ests)
 
-        # estimate is exact for positive matrix
-        Apos = abs.(randn(10, 10))
-        sqrtApos = sqrt(Apos)
-        @test opnormest(prod, [sqrtApos, sqrtApos], p) ≈ opnorm(Apos, p) atol=(p==2 ? 1e-3 : 1e-8)
+        if p in (1, Inf)
+            # estimate is exact for positive matrix
+            Apos = abs.(randn(10, 10))
+            sqrtApos = sqrt(Apos)
+            @test opnormest(prod, [sqrtApos, sqrtApos], p) ≈ opnorm(Apos, p)
 
-        # estimate is exact for matrix with entries in {-1, 1}
-        Asign = rand((-1, 1), 10, 10)
-        sqrtAsign = sqrt(Asign)
-        @test opnormest(prod, [sqrtAsign, sqrtAsign], p) ≈ opnorm(Asign, p) atol=(p==2 ? 1e-3 : 1e-8)
+            # estimate is exact for matrix with entries in {-1, 1}
+            Asign = rand((-1, 1), 10, 10)
+            sqrtAsign = sqrt(Asign)
+            @test opnormest(prod, [sqrtAsign, sqrtAsign], p) ≈ opnorm(Asign, p)
+        end
     end
 end
 
