@@ -98,7 +98,9 @@ function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_
     end
     SVD(u,s,vt)
 end
-
+function svd!(A::StridedVector{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T<:BlasFloat
+    svd!(reshape(A, (length(A), 1)), full = full, alg = alg)
+end
 
 _svd!(A::StridedMatrix{T}, full::Bool, alg::Algorithm) where T<:BlasFloat = throw(ArgumentError("Unsupported value for `alg` keyword."))
 _svd!(A::StridedMatrix{T}, full::Bool, alg::DivideAndConquer) where T<:BlasFloat = LAPACK.gesdd!(full ? 'A' : 'S', A)
@@ -153,8 +155,11 @@ julia> Uonly == U
 true
 ```
 """
-function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T
+function svd(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T
     svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
+end
+function svd(A::StridedVector{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where T
+    svd!(copy_oftype(reshape(A, (length(A), 1)), eigtype(T)), full = full, alg = alg)
 end
 function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
     SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
@@ -190,7 +195,9 @@ See also [`svdvals`](@ref) and [`svd`](@ref).
 ```
 """
 svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
+svdvals!(A::StridedVector{T}) where {T<:BlasFloat} = svdvals!(reshape(A, (length(A), 1)))
 svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
+svdvals(A::AbstractVector{<:BlasFloat}) = svdvals!(copy(reshape(A, (length(A), 1))))
 
 """
     svdvals(A)
@@ -215,6 +222,7 @@ julia> svdvals(A)
 ```
 """
 svdvals(A::AbstractMatrix{T}) where T = svdvals!(copy_oftype(A, eigtype(T)))
+svdvals(A::AbstractVector{T}) where T = svdvals!(copy_oftype(reshape(A, (length(A), 1)), eigtype(T)))
 svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S.S)::Vector{T}
 

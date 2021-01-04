@@ -8,6 +8,17 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
 @testset "Simple svdvals / svd tests" begin
     ≊(x,y) = isapprox(x,y,rtol=1e-15)
 
+    m = [2, 0]
+    @test @inferred(svdvals(m)) ≊ [2]
+    @test @inferred(svdvals!(float(m))) ≊ [2]
+    for sf in (svd(m), svd!(float(m)))
+        @test sf.S ≊ [2]
+        @test sf.U'sf.U ≊ [1]
+        @test sf.Vt'sf.Vt ≊ [1]
+        @test sf.U*Diagonal(sf.S)*sf.Vt' ≊ m
+    end
+    @test @inferred(svdvals(3:4)) ≊ [5]
+
     m1 = [2 0; 0 0]
     m2 = [2 -2; 1 1]/sqrt(2)
     m2c = Complex.([2 -2; 1 1]/sqrt(2))
