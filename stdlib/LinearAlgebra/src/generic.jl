@@ -870,16 +870,17 @@ function opnormest2(
     m, n = size(A)
     A′ = A'
     c = float(T)(inv(sqrt(n)))
-    v = v_old = rand((-c, c), n)
+    v = rand((-c, c), n)
     w = A * v
     est = norm(w)
     est_old = oftype(est, Inf)
     for iter in 1:maxiter
-        v, v_old = A′ * w, v
-        vnorm = norm(v)
-        # stop if v_old and v are equal
-        vnorm ≤ real(dot(v, v_old)) && break
-        iszero(vnorm) || rmul!(v, inv(vnorm))
+        z = A′ * w
+        znorm = norm(z)
+        # stop if new v will equal old v
+        znorm ≤ real(dot(z, v)) && break
+        iszero(znorm) || rmul!(z, inv(znorm))
+        v = z
         w = A * v
         est, est_old = norm(w), est
         # stop if estimate has converged within tolerance
