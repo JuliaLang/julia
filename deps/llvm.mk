@@ -531,8 +531,10 @@ $(eval $(call LLVM_PATCH,llvm-11-D90722-rtdyld-absolute-relocs)) # remove for LL
 $(eval $(call LLVM_PATCH,llvm-invalid-addrspacecast-sink)) # upstreamed as D92210
 $(eval $(call LLVM_PATCH,llvm-11-D92906-ppc-setjmp)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-PR48458-X86ISelDAGToDAG)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-D93092-ppc-knownbits))
+$(eval $(call LLVM_PATCH,llvm-11-D93092-ppc-knownbits)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D93154-globalisel-as))
+$(eval $(call LLVM_PATCH,llvm-11-ppc-half-ctr)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-ppc-sp-from-bp)) # remove for LLVM 12
 endif # LLVM_VER 11.0
 
 
