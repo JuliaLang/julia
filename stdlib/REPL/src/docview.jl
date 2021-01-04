@@ -303,6 +303,7 @@ end
 
 function find_readme(m::Module)::Union{String, Nothing}
     path = dirname(pathof(m))
+    top_path = pkgdir(m)
     while true
         for readme in ["README.md", "readme.md", "Readme.md", "ReadMe.md"]
             readme_path = joinpath(path, readme)
@@ -310,17 +311,19 @@ function find_readme(m::Module)::Union{String, Nothing}
                 return readme_path
             end
         end
+        path == top_path && break # go no further than pkgdir
         path = dirname(path) # work up through nested modules
-        Base.endswith(path, "src") && break
     end
     return nothing
 end
 function summarize(io::IO, m::Module, binding::Binding)
-    println(io, "No docstring found for module `", m, "`.\n")
     readme_path = find_readme(m)
     if !isnothing(readme_path)
+        println(io, "No docstring found for module `", m, "`.\n")
         readme_string = read(readme_path, String)
         println(io, "Displaying the contents of `$(readme_path)`:\n\n", readme_string)
+    else
+        println(io, "No docstring or readme found for module `", m, "`.\n")
     end
 end
 
