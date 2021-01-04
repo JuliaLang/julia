@@ -204,7 +204,7 @@ to the number of CPU threads.
 !!! compat "Julia 1.5"
     In Julia 1.5 and above the number of threads can also be specified on startup
     using the `-t`/`--threads` command line argument.
-    
+
 !!! compat "Julia 1.7"
     The `auto` value for `$JULIA_NUM_THREADS` requires Julia 1.7 or above.
 
