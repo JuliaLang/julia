@@ -141,9 +141,6 @@ end
 """
 abstract type AbstractMatch end
 
-# TODO: map offsets into strings in other encodings back to original indices.
-# or maybe it's better to just fail since that would be quite slow
-
 struct RegexMatch <: AbstractMatch
     match::SubString{String}
     captures::Vector{Union{Nothing,SubString{String}}}
