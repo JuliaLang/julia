@@ -367,7 +367,7 @@ struct StepRangeLen{T,R,S} <: AbstractRange{T}
 end
 
 StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
-    StepRangeLen{typeof(ref+0*step),R,S}(ref, step, len, offset)
+    StepRangeLen{typeof(ref+zero(step)),R,S}(ref, step, len, offset)
 StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
     StepRangeLen{T,R,S}(ref, step, len, offset)
 

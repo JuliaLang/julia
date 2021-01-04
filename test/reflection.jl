@@ -113,6 +113,9 @@ not_const = 1
 
 @test ismutable(1) == false
 @test ismutable([]) == true
+@test ismutabletype(Int) == false
+@test ismutabletype(Vector{Any}) == true
+@test ismutabletype(Union{Int, Vector{Any}}) == false
 
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
