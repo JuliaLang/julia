@@ -726,45 +726,17 @@ end
 
 #Linear solvers
 ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
-ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
+ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(copy(A), b)
+ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(copy(A), b)
 function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     require_one_based_indexing(A, B)
-    nA,mA = size(A)
+    mA, nA = size(A)
     n = size(B, 1)
-    if nA != n
-        throw(DimensionMismatch("size of A is ($nA,$mA), corresponding dimension of B is $n"))
+    if mA != n
+        throw(DimensionMismatch("size of A is ($mA,$nA), corresponding dimension of B is $n"))
     end
     for b in eachcol(B)
         ldiv!(A, b)
-    end
-    B
-end
-function ldiv!(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractMatrix)
-    require_one_based_indexing(adjA, B)
-    mA, nA = size(adjA)
-    n = size(B, 1)
-    tmp = similar(B, n)
-    Ac = copy(adjA)
-    if mA != n
-        throw(DimensionMismatch("size of adjoint of A is ($mA,$nA), corresponding dimension of B is $n"))
-    end
-    for b in eachcol(B)
-        ldiv!(Ac, b)
-    end
-    B
-end
-function ldiv!(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractMatrix)
-    require_one_based_indexing(tA, B)
-    mA, nA = size(tA)
-    n = size(B, 1)
-    tmp = similar(B, n)
-    At = copy(tA)
-    if mA != n
-        throw(DimensionMismatch("size of transpose of A is ($mA,$nA), corresponding dimension of B is $n"))
-    end
-    for b in eachcol(B)
-        ldiv!(At, b)
     end
     B
 end
@@ -810,6 +782,41 @@ function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) w
     return x
 end
 
+function rdiv!(A::StridedMatrix, B::Bidiagonal)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    if B.uplo == 'L'
+        diagB = B.dv[n]
+        for i = 1:m
+            A[i,n] /= diagB
+        end
+        for j = n-1:-1:1
+            diagB = B.dv[j]
+            offdiagB = B.ev[j]
+            for i = 1:m
+                A[i,j] = (A[i,j] - A[i,j+1]*offdiagB)/diagB
+            end
+        end
+    else
+        diagB = B.dv[1]
+        for i = 1:m
+            A[i,1] /= diagB
+        end
+        for j = 2:n
+            diagB = B.dv[j]
+            offdiagB = B.ev[j-1]
+            for i = 1:m
+                A[i,j] = (A[i,j] - A[i,j-1]*offdiagB)/diagB
+            end
+        end
+    end
+    A
+end
+rdiv!(A::StridedMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = rdiv!(A, copy(B))
+rdiv!(A::StridedMatrix, B::Transpose{<:Any,<:Bidiagonal}) = rdiv!(A, copy(B))
+
 ### Generic promotion methods and fallbacks
 function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
     TA, TB = eltype(A), eltype(B)
@@ -833,6 +840,62 @@ end
 \(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(adjA, copy(B))
 
 factorize(A::Bidiagonal) = A
+
+lu!(A::Bidiagonal{T}; check::Bool = true) where {T} =
+    lu!(A, pivot; check = check)
+function lu!(A::Bidiagonal{T}, pivot::NoPivot; check::Bool = true) where {T}
+    if A.uplo == 'U'
+        info = something(findfirst(iszero, A.dv), 0)
+    else
+        info = 0
+        for i in eachindex(A.ev)
+            if iszero(A.ev[i])
+                info = i
+            end
+            A.ev[i] /= A.dv[i]
+        end
+    end
+    check && checknonsingular(info, pivot)
+    return LU{T}(A, 1:length(A.dv), info)
+end
+lu!(A::Bidiagonal{T}, pivot::RowMaximum; check::Bool = true) where {T} =
+    lu!(Tridiagonal{T}(A), pivot; check = check)
+
+lu(A::Bidiagonal{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T} =
+    lu!(copy_oftype(A, lutype(T)), pivot; check = check)
+
+function Base.getproperty(F::LU{T,<:Bidiagonal}, d::Symbol) where {T}
+    m, n = size(F)
+    if d === :L
+        L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
+        for i = 1:min(m,n); L[i,i] = one(T); end
+        return L
+    elseif d === :U
+        return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
+    elseif d === :p
+        return ipiv2perm(getfield(F, :ipiv), m)
+    elseif d === :P
+        return Matrix{T}(I, m, m)[:,invperm(F.p)]
+    else
+        getfield(F, d)
+    end
+end
+function ldiv!(F::LU{<:Any,<:Bidiagonal}, B::AbstractVecOrMat)
+    Bi = F.factors
+    if Bi.uplo == 'U'
+        return ldiv!(Bi, B)
+    else
+        return ldiv!(Diagonal(Bi.dv), ldiv!(UnitLowerTriangular(Bi), B))
+    end
+end
+function rdiv!(B::AbstractMatrix, F::LU{<:Any,<:Bidiagonal})
+    Bi = F.factors
+    if Bi.uplo == 'U'
+        return rdiv!(B, Bi)
+    else
+        return rdiv!(rdiv!(B, Diagonal(Bi.dv)), UnitLowerTriangular(Bi))
+    end
+end
 
 # Eigensystems
 eigvals(M::Bidiagonal) = M.dv

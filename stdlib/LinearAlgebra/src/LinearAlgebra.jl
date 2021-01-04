@@ -399,7 +399,7 @@ cases where a more specific implementation of `lu!` (or `lu`) is not available.
 
 See also: `copy_oftype`, `copy_similar`
 """
-copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
+copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)), A)
 
 # The three copy functions above return mutable arrays with eltype T.
 # To only ensure a certain eltype, and if a mutable copy is not needed, it is

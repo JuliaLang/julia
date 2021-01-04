@@ -76,9 +76,6 @@ adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
 # StridedMatrix
-lu(A::StridedMatrix, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
-    lu!(copy_oftype(A, lutype(eltype(A))), pivot; check=check)
-
 lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
 function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
     lpt = LAPACK.getrf!(A)
@@ -88,10 +85,6 @@ end
 function lu!(A::StridedMatrix{<:BlasFloat}, pivot::NoPivot; check::Bool = true)
     return generic_lufact!(A, pivot; check = check)
 end
-
-lu(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
-    lu!(copy_oftype(A, lutype(eltype(A))), pivot; check=check)
-
 function lu!(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
     copytri!(A.data, A.uplo, isa(A, Hermitian))
     lu!(A.data, pivot; check = check)
@@ -285,10 +278,11 @@ function lu(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
     S = lutype(T)
     lu!(copy_to_array(A, S), pivot; check = check)
 end
+lu(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
+    lu!(copy_oftype(A, lutype(eltype(A))), pivot; check=check)
 # TODO: remove for Julia v2.0
 @deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, RowMaximum(); check=check)
 @deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, NoPivot(); check=check)
-
 
 lu(S::LU) = S
 function lu(x::Number; check::Bool=true)
@@ -755,3 +749,10 @@ AbstractMatrix(F::LU{T,Tridiagonal{T,V}}) where {T,V} = Tridiagonal(F)
 AbstractArray(F::LU{T,Tridiagonal{T,V}}) where {T,V} = AbstractMatrix(F)
 Matrix(F::LU{T,Tridiagonal{T,V}}) where {T,V} = Array(AbstractArray(F))
 Array(F::LU{T,Tridiagonal{T,V}}) where {T,V} = Matrix(F)
+
+# SymTridiagonal
+lu(S::SymTridiagonal{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T} =
+    lu!(copy_oftype(Tridiagonal(S), lutype(T)), pivot, check = check)
+function lu!(S::SymTridiagonal{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T}
+    return lu!(Tridiagonal(S), pivot, check = check)
+end

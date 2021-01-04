@@ -617,6 +617,34 @@ function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
     end
 end
 
+lu(D::Diagonal{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T} =
+    lu!(copy_oftype(D, lutype(T)), pivot, check = check)
+function lu!(D::Diagonal{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T}
+    info = something(findfirst(iszero, D.diag), 0)
+    check && checknonsingular(info, pivot)
+    return LU{T}(D, 1:length(D.diag), info)
+end
+
+function Base.getproperty(F::LU{T,<:Diagonal}, d::Symbol) where T
+    m, n = size(F)
+    if d === :L
+        L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
+        for i = 1:min(m,n); L[i,i] = one(T); end
+        return L
+    elseif d === :U
+        return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
+    elseif d === :p
+        return ipiv2perm(getfield(F, :ipiv), m)
+    elseif d === :P
+        return Matrix{T}(I, m, m)[:,invperm(F.p)]
+    else
+        getfield(F, d)
+    end
+end
+
+ldiv!(F::LU{<:Any,<:Diagonal}, B::AbstractVecOrMat) = ldiv!(F.factors, B)
+rdiv!(B::AbstractMatrix, F::LU{<:Any,<:Diagonal}) = rdiv!(B, F.factors)
+
 Base._sum(A::Diagonal, ::Colon) = sum(A.diag)
 function Base._sum(A::Diagonal, dims::Integer)
     res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
