@@ -101,11 +101,10 @@ Given a `start` to `stop` [`Pair`](@ref) and an integer `length`,
 construct a range iterator of `length` elements whose first element is `start`
 and last element is `stop`.
 
-This is distinct from `start:stop` where `stop` may not be the last
-element. Also, in this form `step` is not assumed to be 1. `length` must be an
-`Integer` and cannot be `nothing`.
-
-No keywords are accepted when `start` and `stop` are provided as a [`Pair`](@ref).
+In contrast to the [`:`](@ref) range syntaxes `start:stop` and `start:step:stop`,
+this method ensures the endpoints are hit exactly and a `length` must be provided.
+The `step` is always computed based upon the provided endpoints and length.
+In contrast to the other `range` methods, no keyword arguments are accepted.
 
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
