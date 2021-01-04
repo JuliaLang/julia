@@ -278,12 +278,18 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         @test abs(dot(w2, U[:,1])) ≈ est2
         @test abs(dot(v2, V[:,1])) ≈ 1
 
-        if T <: Real
-            # matrix with Asign * ones(n) = 0, so power iteration needs a new start
-            if (m, n) == (1, 10) || (m, n) == (10, 1)
+        if TOp <: Matrix
+            # A orthogonal to ones(n) = 0, so power iteration needs a new start
+            if (m, n) == (1, 10)
                 Asign = reshape([1, -1, 1, 1, -1, -1, 1, 1, -1, -1], m, n)
                 @test LinearAlgebra.opnormest2(TOp(Asign); tol=eps(real(T)), maxiter=1000) ≈ opnorm(Asign, 2)
             end
+
+            Azero = zeros(T, m, n)
+            est3, v3, w3 = LinearAlgebra.opnormest2(Azero, Val(true), Val(true))
+            @test iszero(est3)
+            @test v3 ≈ T[1; zeros(n-1)]
+            @test iszero(w3)
         end
     end
 

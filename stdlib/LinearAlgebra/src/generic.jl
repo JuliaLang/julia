@@ -875,14 +875,14 @@ function opnormest2(
     v = fill(c, n)
     w = A * v
     est = norm(w)
-    if iszero(est)
-        # either A is zero or we picked a bad initial v. try sampling v.
-        rand!(v, (-c, c))
-        w = A * v
-        est = norm(w)
-    end
-    est_old = oftype(est, Inf)
-    for iter in 1:maxiter
+    est_old = oftype(est, -Inf)
+    iter = 0
+    while iter < maxiter && est-est_old > tol*est
+        iter += 1
+        # if est is zero, then 1) v is orthogonal to singular vectors or 2) A is zero
+        # if (1), randomly sampling gives probability 0 of being orthogonal to singular vector
+        # if (2), z will be zero, and termination occurs
+        iszero(est) && rand!(w)
         z = A′ * w
         znorm = norm(z)
         # stop if new v will equal old v
@@ -891,14 +891,19 @@ function opnormest2(
         v = z
         w = A * v
         est, est_old = norm(w), est
-        # stop if estimate has converged within tolerance
-        est-est_old ≤ tol*est && break
     end
     ret = est
     if retv
+        if iszero(est) # zero matrix, give same result as svd
+            v[1] = 1
+            for j in 2:n
+                v[j] = 0
+            end
+        end
         ret = (ret, v)
     end
     if retw
+        iszero(est) && fill!(w, false) # zero matrix, reset to zero in case was randomized
         ret = (ret..., w)
     end
     return ret
