@@ -863,7 +863,7 @@ function opnormest2(
     A,
     ::Val{retv} = Val(false),
     ::Val{retw} = Val(false);
-    tol = sqrt(eps(real(float(eltype(A))))),
+    tol = 1e-6,
     maxiter = 100,
 ) where {retv,retw}
     T = eltype(A)
