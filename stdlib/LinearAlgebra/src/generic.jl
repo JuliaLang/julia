@@ -836,13 +836,15 @@ opnorm(v::TransposeAbsVec) = norm(v.parent)
 _isparallel(x, y) = abs(dot(x, y)) == length(x)
 
 """
-    opnormest2(A; tol) -> est
+    opnormest2(A; tol=1e-6, maxiter=100) -> est
 
 Estimate the operator 2-norm [`opnorm(A, 2)`](@ref) of the matrix or linear operator `A`
 using power iteration.
 
 The estimate is a lower bound on the 2-norm and can be much more efficient than `opnorm` for
-large and sparse matrices. To improve the estimate, set `tol`.
+large and sparse matrices. The power iteration terminates when the estimate converges,
+within the relative tolerance `tol`, or after `maxiter` iterations. Note that the algorithm
+uses random numbers, so the result may change between evaluations.
 
 `A` can be of any type `Op`, representing a matrix, that implements the following methods:
 - `size(A::Op)`
@@ -850,9 +852,9 @@ large and sparse matrices. To improve the estimate, set `tol`.
 - `*(A::Op, B::AbstractMatrix)`
 - `adjoint(A::Op)`
 
-    opnormest2(A, retv::Val{true}; tol) -> (est, v)
-    opnormest2(A, retv::Val{false}, retw::Val{true}; tol) -> (est, w)
-    opnormest2(A, retv::Val{true}, retw::Val{true}; tol) -> (est, v, w)
+    opnormest2(A, retv::Val{true}; kwargs...) -> (est, v)
+    opnormest2(A, retv::Val{false}, retw::Val{true}; kwargs...) -> (est, w)
+    opnormest2(A, retv::Val{true}, retw::Val{true}; kwargs...) -> (est, v, w)
 
 Along with the estimate of the operator 2-norm, return a vector `v` and/or a vector `w` that
 correspond to the estimate, such that ``w = A v`` and
