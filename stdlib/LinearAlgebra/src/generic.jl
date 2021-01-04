@@ -864,37 +864,26 @@ function opnormest2(
     ::Val{retv} = Val(false),
     ::Val{retw} = Val(false);
     tol = sqrt(eps(real(float(eltype(A))))),
+    maxiter = 100,
 ) where {retv,retw}
     T = eltype(A)
     m, n = size(A)
     A′ = A'
-    v = fill(float(T)(sqrt(inv(n))), n)
-    est = est_old = float(real(T))(Inf)
-    iter = 0
-    local w
-    while true
-        iter += 1
+    c = float(T)(inv(sqrt(n)))
+    v = v_old = rand((-c, c), n)
+    w = A * v
+    est = norm(w)
+    est_old = oftype(est, Inf)
+    for iter in 1:maxiter
+        v, v_old = A′ * w, v
+        vnorm = norm(v)
+        # stop if v_old and v are equal
+        vnorm ≤ real(dot(v, v_old)) && break
+        iszero(vnorm) || rmul!(v, inv(vnorm))
         w = A * v
-        est = norm(w)
-        if iter == 1 && iszero(est)
-            k = 0
-            while k < 5 && iszero(est)
-                k += 1
-                # decrease chance of accidentally picking a v such that A v == 0 when A != 0
-                rand!(v, (-1, 1))
-                rmul!(v, inv(n))
-                w = A * v
-                est = norm(w)
-            end
-        end
-        z = A′ * w
-        znorm = norm(z)
-        if iter > 1 && (znorm * est ≤ real(dot(z, v)) || (est - est_old) ≤ tol*est)
-            break
-        end
-        est_old = est
-        copyto!(v, z)
-        iszero(znorm) || rmul!(v, inv(znorm))
+        est, est_old = norm(w), est
+        # stop if estimate has converged within tolerance
+        est-est_old ≤ tol*est && break
     end
     ret = est
     if retv
