@@ -17,7 +17,7 @@ mutable struct InferenceState
     valid_worlds::WorldRange
     nargs::Int
     stmt_types::Vector{Any}
-    stmt_edges::Vector{Any}
+    stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
     # return type
     bestguess #::Type
@@ -66,7 +66,7 @@ mutable struct InferenceState
         stmt_info = Any[ nothing for i = 1:length(code) ]
 
         n = length(code)
-        s_edges = Any[ nothing for i = 1:n ]
+        s_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
         s_types = Any[ nothing for i = 1:n ]
 
         # initial types
@@ -245,21 +245,23 @@ end
 # temporarily accumulate our edges to later add as backedges in the callee
 function add_backedge!(li::MethodInstance, caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    if caller.stmt_edges[caller.currpc] === nothing
-        caller.stmt_edges[caller.currpc] = []
+    edges = caller.stmt_edges[caller.currpc]
+    if edges === nothing
+        edges = caller.stmt_edges[caller.currpc] = []
     end
-    push!(caller.stmt_edges[caller.currpc], li)
+    push!(edges, li)
     nothing
 end
 
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
 function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    if caller.stmt_edges[caller.currpc] === nothing
-        caller.stmt_edges[caller.currpc] = []
+    edges = caller.stmt_edges[caller.currpc]
+    if edges === nothing
+        edges = caller.stmt_edges[caller.currpc] = []
     end
-    push!(caller.stmt_edges[caller.currpc], mt)
-    push!(caller.stmt_edges[caller.currpc], typ)
+    push!(edges, mt)
+    push!(edges, typ)
     nothing
 end
 
