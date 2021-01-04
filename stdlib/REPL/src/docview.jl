@@ -302,6 +302,7 @@ function summarize(io::IO, T::DataType, binding::Binding)
 end
 
 function find_readme(m::Module)::Union{String, Nothing}
+    isnothing(pathof(m)) && return nothing
     path = dirname(pathof(m))
     top_path = pkgdir(m)
     while true
