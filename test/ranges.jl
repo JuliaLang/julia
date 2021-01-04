@@ -1610,6 +1610,17 @@ end
     @test_throws ArgumentError range(1, 100)
 end
 
+@testset "range wtih start, stop, and length" begin
+    for starts in [-1, 0, 1, 10]
+        for stops in [-2, 0, 2, 100]
+            for lengths in [2, 10, 100]
+                @test range(starts, stops, lengths) === range(starts, stop=stops, length=lengths)
+            end
+            @test range(starts, stops, nothing) === range(starts, stop=stops)
+        end
+    end
+end
+
 @testset "Reverse empty ranges" begin
     @test reverse(1:0) === 0:-1:1
     @test reverse(Base.OneTo(0)) === 0:-1:1
