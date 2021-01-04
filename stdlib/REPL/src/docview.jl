@@ -243,10 +243,12 @@ end
 
 function summarize(binding::Binding, sig)
     io = IOBuffer()
-    println(io, "No documentation found.\n")
     if defined(binding)
-        summarize(io, resolve(binding), binding)
+        binding_res = resolve(binding)
+        !isa(binding_res, Module) && println(io, "No documentation found.\n")
+        summarize(io, binding_res, binding)
     else
+        println(io, "No documentation found.\n")
         println(io, "Binding `", binding, "` does not exist.")
     end
     md = Markdown.parse(seekstart(io))
@@ -299,8 +301,27 @@ function summarize(io::IO, T::DataType, binding::Binding)
     end
 end
 
+function find_readme(m::Module)::Union{String, Nothing}
+    path = dirname(pathof(m))
+    while true
+        for readme in ["README.md", "readme.md", "Readme.md", "ReadMe.md"]
+            readme_path = joinpath(path, readme)
+            if isfile(readme_path)
+                return readme_path
+            end
+        end
+        path = dirname(path) # work up through nested modules
+        Base.endswith(path, "src") && break
+    end
+    return nothing
+end
 function summarize(io::IO, m::Module, binding::Binding)
     println(io, "No docstring found for module `", m, "`.\n")
+    readme_path = find_readme(m)
+    if !isnothing(readme_path)
+        readme_string = read(readme_path, String)
+        println(io, "Displaying the contents of `$(readme_path)`:\n\n", readme_string)
+    end
 end
 
 function summarize(io::IO, @nospecialize(T), binding::Binding)
