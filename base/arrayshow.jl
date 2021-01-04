@@ -58,9 +58,9 @@ Alignment is reported as a vector of (left,right) tuples, one for each
 column going across the screen.
 """
 function alignment(io::IO, X::AbstractVecOrMat,
-        rows::AbstractVector, cols::AbstractVector,
-        cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer)
-    a = Tuple{Int, Int}[]
+        rows::AbstractVector{T}, cols::AbstractVector{V},
+        cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer) where {T,V}
+    a = Tuple{T, V}[]
     for j in cols # need to go down each column one at a time
         l = r = 0
         for i in rows # plumb down and see what largest element sizes are
@@ -166,6 +166,11 @@ function print_matrix(io::IO, @nospecialize(X::AbstractVecOrMat),
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
+    # use invokelatest to avoid backtracing in type invalidation, ref #37741
+    invokelatest(_print_matrix, io, X, pre, sep, post, hdots, vdots, ddots, hmod, vmod, unitrange(axes(X,1)), unitrange(axes(X,2)))
+end
+
+function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, hdots, vdots, ddots, hmod, vmod, rowsA, colsA)
     hmod, vmod = Int(hmod)::Int, Int(vmod)::Int
     if !(get(io, :limit, false)::Bool)
         screenheight = screenwidth = typemax(Int)
@@ -178,7 +183,6 @@ function print_matrix(io::IO, @nospecialize(X::AbstractVecOrMat),
     postsp = ""
     @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)::Int
-    rowsA, colsA = UnitRange{Int}(axes(X,1)), UnitRange{Int}(axes(X,2))
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
