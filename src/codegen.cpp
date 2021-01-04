@@ -3068,7 +3068,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         else if (jl_is_type_type(obj.typ)) {
             jl_value_t *tp0 = jl_tparam0(obj.typ);
             if (jl_is_datatype(tp0) && jl_is_datatype_singleton((jl_datatype_t*)tp0))
-                nf = jl_datatype_nfields(jl_typeof(tp0));
+                nf = jl_datatype_nfields((jl_value_t*)jl_datatype_type);
         }
         else if (jl_is_concrete_type(obj.typ)) {
             nf = jl_datatype_nfields(obj.typ);
