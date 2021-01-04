@@ -256,32 +256,34 @@ Base.adjoint(M::LinearOperator) = LinearOperator(adjoint(M.A))
         nrm = opnorm(A, 2)
         @test all(est -> est ≈ nrm || est < nrm, ests)
 
-        if T <: Real
-            # estimate is exact for positive matrix
-            Apos = abs.(randn(T, m, n))
-            @test LinearAlgebra.opnormest2(TOp(Apos); tol=eps(real(T))) ≈ opnorm(Apos, 2)
-
-            # matrix with Asign * ones(n) = 0, so power iteration needs a new start
-            if (m, n) == (1, 10) || (m, n) == (10, 1)
-                Asign = reshape([1, -1, 1, 1, -1, -1, 1, 1, -1, -1], m, n)
-                @test LinearAlgebra.opnormest2(TOp(Asign); tol=eps(real(T))) ≈ opnorm(Asign, 2)
-            end
-        end
-
-        # check vectors
+        # check vectors satisfy constraints
         @test length(LinearAlgebra.opnormest2(OpA, Val(true))) == 2
         @test length(LinearAlgebra.opnormest2(OpA, Val(false), Val(true))) == 2
         @test length(LinearAlgebra.opnormest2(OpA, Val(true), Val(true))) == 3
-        est, v, w = LinearAlgebra.opnormest2(OpA, Val(true), Val(true); tol = eps(real(T)))
+        est, v, w = LinearAlgebra.opnormest2(OpA, Val(true), Val(true))
         @test w ≈ A * v
         @test norm(w, 2) ≈ est * norm(v, 2)
-        if OpA isa Matrix
-            U, S, V = svd(A)
-            # 2-norm is leading singular value
-            @test S[1] ≈ est
-            # v and w are leading singular vectors
-            @test abs(dot(w / est, svd(A).U[:,1])) ≈ 1
-            @test abs(dot(v, svd(A).V[:,1])) ≈ 1
+
+        A2 = randn(T, m, n)
+        U, S, V = svd(A2)
+        if minimum(size(A2)) > 1
+            S[1] = S[2] * 5 # convergence is faster when highest singular value is well-separated
+            A2 = U * Diagonal(S) * V'
+        end
+        OpA2 = TOp(A2)
+        est2, v2, w2 = LinearAlgebra.opnormest2(OpA2, Val(true), Val(true))
+        # est2 is leading singular value
+        @test est2 ≈ S[1]
+        # v2 and w2/est2 are leading singular vectors
+        @test abs(dot(w2, U[:,1])) ≈ est2
+        @test abs(dot(v2, V[:,1])) ≈ 1
+
+        if T <: Real
+            # matrix with Asign * ones(n) = 0, so power iteration needs a new start
+            if (m, n) == (1, 10) || (m, n) == (10, 1)
+                Asign = reshape([1, -1, 1, 1, -1, -1, 1, 1, -1, -1], m, n)
+                @test LinearAlgebra.opnormest2(TOp(Asign); tol=eps(real(T)), maxiter=1000) ≈ opnorm(Asign, 2)
+            end
         end
     end
 
