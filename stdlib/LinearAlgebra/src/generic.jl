@@ -870,9 +870,15 @@ function opnormest2(
     m, n = size(A)
     A′ = A'
     c = float(T)(inv(sqrt(n)))
-    v = rand((-c, c), n)
+    v = fill(c, n)
     w = A * v
     est = norm(w)
+    if iszero(est)
+        # either A is zero or we picked a bad initial v. try sampling v.
+        rand!(v, (-c, c))
+        w = A * v
+        est = norm(w)
+    end
     est_old = oftype(est, Inf)
     for iter in 1:maxiter
         z = A′ * w
