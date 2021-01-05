@@ -190,11 +190,7 @@ endif
 ifeq ($(USE_LLVM_SHLIB),1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-11jl
 endif
-ifeq ($(OS),Darwin)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libosxunwind
-else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
-endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm

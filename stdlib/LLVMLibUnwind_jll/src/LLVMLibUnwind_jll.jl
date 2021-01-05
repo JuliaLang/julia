@@ -1,32 +1,32 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## dummy stub for https://github.com/JuliaBinaryWrappers/LibOSXUnwind_jll.jl
+## dummy stub for https://github.com/JuliaBinaryWrappers/LLVMLibUnwind_jll.jl
 
-baremodule LibOSXUnwind_jll
+baremodule LLVMLibUnwind_jll
 using Base, Libdl
 Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
 
-export libosxunwind
+export llvmlibunwind
 
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
 artifact_dir = ""
-libosxunwind_handle = C_NULL
-libosxunwind_path = ""
+llvmlibunwind_handle = C_NULL
+llvmlibunwind_path = ""
 
-const libosxunwind = "@rpath/libosxunwind.dylib"
+const llvmlibunwind = "libunwind"
 
 function __init__()
     # We only dlopen something on MacOS
     @static if Sys.isapple()
-        global libosxunwind_handle = dlopen(libosxunwind)
-        global libosxunwind_path = dlpath(libosxunwind_handle)
+        global llvmlibunwind_handle = dlopen(llvmlibunwind)
+        global llvmlibunwind_path = dlpath(llvmlibunwind_handle)
         global artifact_dir = dirname(Sys.BINDIR)
-        LIBPATH[] = dirname(libosxunwind_path)
+        LIBPATH[] = dirname(llvmlibunwind_path)
         push!(LIBPATH_list, LIBPATH[])
     end
 end
@@ -38,6 +38,6 @@ is_available() = @static Sys.isapple() ? true : false
 find_artifact_dir() = artifact_dir
 dev_jll() = error("stdlib JLLs cannot be dev'ed")
 best_wrapper = nothing
-get_libosxunwind_path() = libosxunwind_path
+get_llvmlibunwind_path() = llvmlibunwind_path
 
-end  # module LibOSXUnwind_jll
+end  # module LLVMLibUnwind_jll
