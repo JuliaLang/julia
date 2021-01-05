@@ -663,11 +663,14 @@ let s, c, r
     @test s[r] == "tmp"
 
     # This should match things that are inside the tmp directory
-    if !isdir("/tmp/tmp")
-        s = "/tmp/"
+    s = tempdir()
+    if !endswith(s, "/")
+        s = string(s, "/")
+    end
+    if !isdir(joinpath(s, "tmp"))
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r === 6:5
+        @test r === length(s) + 1:0
         @test s[r] == ""
     end
 
