@@ -318,9 +318,10 @@ end
 function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     readme_path = find_readme(m)
     if !isnothing(readme_path)
-        println(io, "No docstring found for module `$m`.\n")
+        print(io, "No docstring found for module `$m`.")
         readme_lines = readlines(readme_path)
-        println(io, "Displaying the contents of `$(readme_path)`:\n\n")
+        isempty(readme_lines) && return  # don't say we are going to print empty file
+        println(io, " Displaying the contents of `$(readme_path)`:\n\n")
         for line in first(readme_lines, nlines)
             println(io, line)
         end
