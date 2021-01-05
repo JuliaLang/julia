@@ -60,7 +60,7 @@ viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 
 # Simple utilities
-size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), axes(V)))
+size(V::SubArray) = (@_inline_meta; map(unsafe_length, axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
@@ -90,7 +90,7 @@ julia> parentindices(V)
 (1, Base.Slice(Base.OneTo(2)))
 ```
 """
-parentindices(a::AbstractArray) = map(OneTo, size(a))
+parentindices(a::AbstractArray) = map(oneto, size(a))
 
 ## Aliasing detection
 dataids(A::SubArray) = (dataids(A.parent)..., _splatmap(dataids, A.indices)...)
@@ -107,7 +107,7 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
 end
 # Transform indices to be "dense"
 _trimmedindex(i::Real) = oftype(i, 1)
-_trimmedindex(i::AbstractUnitRange) = oftype(i, OneTo(length(i)))
+_trimmedindex(i::AbstractUnitRange) = oftype(i, oneto(length(i)))
 _trimmedindex(i::AbstractArray) = oftype(i, reshape(eachindex(IndexLinear(), i), axes(i)))
 
 ## SubArray creation

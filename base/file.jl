@@ -282,12 +282,15 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                 rm(joinpath(path, p), force=force, recursive=true)
             end
         end
-        @static if Sys.iswindows()
-            ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
-        else
-            ret = ccall(:rmdir, Int32, (Cstring,), path)
+        req = Libc.malloc(_sizeof_uv_fs)
+        try
+            ret = ccall(:uv_fs_rmdir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), C_NULL, req, path, C_NULL)
+            uv_fs_req_cleanup(req)
+            ret < 0 && uv_error("rm($(repr(path)))", ret)
+            nothing
+        finally
+            Libc.free(req)
         end
-        systemerror(:rmdir, ret != 0, extrainfo=path)
     end
 end
 

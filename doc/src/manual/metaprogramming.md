@@ -149,7 +149,7 @@ julia> :(::)
 The second syntactic purpose of the `:` character is to create expression objects without using
 the explicit [`Expr`](@ref) constructor. This is referred to as *quoting*. The `:` character, followed
 by paired parentheses around a single statement of Julia code, produces an `Expr` object based
-on the enclosed code. Here is example of the short form used to quote an arithmetic expression:
+on the enclosed code. Here is an example of the short form used to quote an arithmetic expression:
 
 ```jldoctest
 julia> ex = :(a+b*c+1)
