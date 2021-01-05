@@ -328,7 +328,7 @@ function show_completions(s::PromptState, completions::Vector{String})
         println(terminal(s))
     end
     # make space for the prompt
-    for i = 1:input_string_newlines(s)
+    for i = 1:input_string_newlines(s)+1
         println(terminal(s))
     end
 end
