@@ -302,8 +302,10 @@ function summarize(io::IO, T::DataType, binding::Binding)
 end
 
 function find_readme(m::Module)::Union{String, Nothing}
-    isnothing(pathof(m)) && return nothing
-    path = dirname(pathof(m))
+    mpath = pathof(m)
+    isnothing(mpath) && return nothing
+    !isfile(mpath) && return nothing # modules in sysimage, where src files are omitted
+    path = dirname(mpath)
     top_path = pkgdir(m)
     while true
         for file in readdir(path; join=true, sort=true)
