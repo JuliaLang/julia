@@ -317,12 +317,14 @@ function find_readme(m::Module)::Union{String, Nothing}
     end
     return nothing
 end
-function summarize(io::IO, m::Module, binding::Binding)
+function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     readme_path = find_readme(m)
     if !isnothing(readme_path)
         println(io, "No docstring found for module `", m, "`.\n")
-        readme_string = read(readme_path, String)
-        println(io, "Displaying the contents of `$(readme_path)`:\n\n", readme_string)
+        readme_lines = readlines(readme_path)
+        println(io, "Displaying the contents of `$(readme_path)`:\n\n")
+        [println(io, line) for line in first(readme_lines, nlines)]
+        length(readme_lines) > nlines && println(io, "[output truncated to first $nlines lines]")
     else
         println(io, "No docstring or readme found for module `", m, "`.\n")
     end
