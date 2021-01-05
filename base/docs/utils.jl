@@ -9,8 +9,6 @@ export HTML, @html_str
 export HTML, Text
 
 """
-DO NOT USE; WILL BE REMOVED IN JULIA 2.0
-
 `HTML(s)`: Create an object that renders `s` as html.
 
     HTML("<div>foo</div>")
@@ -20,6 +18,12 @@ You can also use a stream for large amounts of data:
     HTML() do io
       println(io, "<div>foo</div>")
     end
+
+!!! warning
+    `HTML` is currently exported to maintain
+    backwards-compatibility, but is considered to be
+    deprecated and should not be used.
+    It will be removed in Julia 2.0.
 """
 mutable struct HTML{T}
     content::T
@@ -56,8 +60,6 @@ end
 export Text, @text_str
 
 """
-DO NOT USE; WILL BE REMOVED IN JULIA 2.0
-
 `Text(s)`: Create an object that renders `s` as plain text.
 
     Text("foo")
@@ -67,6 +69,12 @@ You can also use a stream for large amounts of data:
     Text() do io
       println(io, "foo")
     end
+
+!!! warning
+    `Text` is currently exported to maintain
+    backwards-compatibility, but is considered to be
+    deprecated and should not be used.
+    It will be removed in Julia 2.0.
 """
 mutable struct Text{T}
     content::T
