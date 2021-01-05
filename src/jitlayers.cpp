@@ -814,13 +814,21 @@ JL_JITSymbol JuliaOJIT::findUnmangledSymbol(StringRef Name)
 uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 {
     auto addr = findSymbol(getMangledName(Name), false);
-    return addr ? cantFail(addr.getAddress()) : 0;
+    if (!addr) {
+        consumeError(addr.takeError());
+        return 0;
+    }
+    return cantFail(addr.getAddress());
 }
 
 uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 {
     auto addr = findSymbol(getMangledName(Name), false);
-    return addr ? cantFail(addr.getAddress()) : 0;
+    if (!addr) {
+        consumeError(addr.takeError());
+        return 0;
+    }
+    return cantFail(addr.getAddress());
 }
 
 static int globalUniqueGeneratedNames;
