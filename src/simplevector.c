@@ -79,6 +79,17 @@ JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
     return c;
 }
 
+JL_DLLEXPORT jl_svec_t *jl_svec_copy_resize(jl_svec_t *a, size_t n)
+{
+    size_t i, nold = jl_svec_len(a);
+    jl_svec_t *c = jl_alloc_svec_uninit(n);
+    for (i = 0; i < nold && i < n; i++)
+        jl_svecset(c, i, jl_svecref(a,i));
+    for (; i < n; i++)
+        jl_svec_data(c)[i] = NULL;
+    return c;
+}
+
 JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
 {
     if (n == 0) return jl_emptysvec;

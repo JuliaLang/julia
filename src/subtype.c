@@ -902,7 +902,7 @@ static int subtype_tuple_varargs(
             if (jl_is_typevar(yl)) {
                 jl_varbinding_t *ylv = lookup(e, (jl_tvar_t*)yl);
                 if (ylv)
-                    yl = ylv->lb;
+                    yl = ylv->ub;
             }
             if (jl_is_long(yl)) {
                 return 0;
@@ -914,7 +914,7 @@ static int subtype_tuple_varargs(
         if (jl_is_typevar(xl)) {
             jl_varbinding_t *xlv = lookup(e, (jl_tvar_t*)xl);
             if (xlv)
-                xl = xlv->lb;
+                xl = xlv->ub;
         }
         if (jl_is_long(xl)) {
             if (jl_unbox_long(xl) + 1 == vx) {
@@ -926,7 +926,7 @@ static int subtype_tuple_varargs(
                     if (jl_is_typevar(yl)) {
                         jl_varbinding_t *ylv = lookup(e, (jl_tvar_t*)yl);
                         if (ylv)
-                            yl = ylv->lb;
+                            yl = ylv->ub;
                     }
                     if (jl_is_long(yl)) {
                         return jl_unbox_long(yl) + 1 == vy;
@@ -957,7 +957,7 @@ constrain_length:
         if (jl_is_typevar(yl)) {
             ylv = lookup(e, (jl_tvar_t*)yl);
             if (ylv)
-                yl = ylv->lb;
+                yl = ylv->ub;
         }
         if (jl_is_long(yl)) {
             // The length of the x tuple is unconstrained, but the
@@ -2164,9 +2164,18 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_
     if (othervar && offset == 0)
         offset = -othervar->offset;
     assert(!othervar || othervar->offset == -offset);
-    if (bb->lb == jl_bottom_type && bb->ub == (jl_value_t*)jl_any_type) {
-        if (jl_is_long(v))
-            v = jl_box_long(jl_unbox_long(v) + offset);
+    if (bb->ub == (jl_value_t*)jl_any_type) {
+        if (jl_is_long(v)) {
+            ssize_t nv = jl_unbox_long(v) + offset;
+            if (jl_is_long(bb->lb)) {
+                if (nv < jl_unbox_long(bb->lb))
+                    return jl_bottom_type;
+            }
+            v = jl_box_long(nv);
+        }
+        else if (bb->lb != jl_bottom_type) {
+            return jl_bottom_type;
+        }
         bb->lb = bb->ub = v;
     }
     else if (jl_is_long(v) && jl_is_long(bb->lb)) {
@@ -2185,12 +2194,16 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
     if (bb->depth0 != e->invdepth)
         return jl_bottom_type;
     record_var_occurrence(bb, e, 2);
-    if (jl_is_long(bb->lb)) {
+    if (bb->offset != 0) {
+        ssize_t bound = jl_is_long(bb->lb) ? jl_unbox_long(bb->lb) : 0;
+        bb->lb = jl_box_long(MAX(bb->offset, bound));
+    }
+    if (jl_is_long(bb->ub)) {
         if (bb->offset == 0)
-            return bb->lb;
-        if (jl_unbox_long(bb->lb) < bb->offset)
+            return bb->ub;
+        if (jl_unbox_long(bb->ub) < bb->offset)
             return jl_bottom_type;
-        return jl_box_long(jl_unbox_long(bb->lb) - bb->offset);
+        return jl_box_long(jl_unbox_long(bb->ub) - bb->offset);
     }
     return (jl_value_t*)tv;
 }
@@ -2412,7 +2425,7 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
 static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbinding_t *vb, jl_unionall_t *u, jl_stenv_t *e)
 {
     jl_value_t *varval = NULL;
-    jl_tvar_t *newvar = vb->var;
+    jl_value_t *newvar = (jl_value_t*)vb->var;
     JL_GC_PUSH2(&res, &newvar);
     // try to reduce var to a single value
     if (jl_is_long(vb->ub) && jl_is_typevar(vb->lb)) {
@@ -2433,6 +2446,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     if (vb->intvalued) {
         if ((varval && jl_is_long(varval)) ||
             (vb->lb == jl_bottom_type && vb->ub == (jl_value_t*)jl_any_type) ||
+            (jl_is_long(vb->lb) && vb->ub == (jl_value_t*)jl_any_type) ||
             (jl_is_typevar(vb->lb) && vb->ub == vb->lb)) {
             // int-valued typevar must either be an Int, or have Bottom-Any bounds,
             // or be set equal to another typevar.
@@ -2443,9 +2457,15 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
     }
 
-    // TODO: this can prevent us from matching typevar identities later
-    if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
-        newvar = jl_new_typevar(vb->var->name, vb->lb, vb->ub);
+    int is_bound = 0;
+    if (!varval && vb->intvalued && jl_is_long(vb->lb) && vb->ub == (jl_value_t*)jl_any_type) {
+        is_bound = 1;
+        newvar = vb->lb;
+    }
+    else if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub)) {
+        // TODO: this can prevent us from matching typevar identities later
+        newvar = (jl_value_t*)jl_new_typevar(vb->var->name, vb->lb, vb->ub);
+    }
 
     // remove/replace/rewrap free occurrences of this var in the environment
     jl_varbinding_t *btemp = e->vars;
@@ -2472,12 +2492,14 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 // move the `where T` outside `where S` instead of putting it here. issue #21243.
                 if (btemp->innervars == NULL)
                     btemp->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
-                if (newvar != vb->var) {
-                    btemp->lb = jl_substitute_var(btemp->lb, vb->var, (jl_value_t*)newvar);
-                    btemp->ub = jl_substitute_var(btemp->ub, vb->var, (jl_value_t*)newvar);
+                if (newvar != (jl_value_t*)vb->var) {
+                    btemp->lb = jl_substitute_or_bound_var(btemp->lb, vb->var, (jl_value_t*)newvar, is_bound);
+                    btemp->ub = jl_substitute_or_bound_var(btemp->ub, vb->var, (jl_value_t*)newvar, is_bound);
                 }
-                jl_array_ptr_1d_push(btemp->innervars, (jl_value_t*)newvar);
-                wrap = 0;
+                if (jl_is_typevar(newvar)) {
+                    jl_array_ptr_1d_push(btemp->innervars, (jl_value_t*)newvar);
+                    wrap = 0;
+                }
                 btemp = btemp->prev;
                 continue;
             }
@@ -2524,11 +2546,12 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             }
         }
         else {
-            if (newvar != vb->var)
-                res = jl_substitute_var(res, vb->var, (jl_value_t*)newvar);
+            if (newvar != (jl_value_t*)vb->var)
+                res = jl_substitute_or_bound_var(res, vb->var, (jl_value_t*)newvar, is_bound);
             varval = (jl_value_t*)newvar;
             if (wrap)
-                res = jl_type_unionall((jl_tvar_t*)newvar, res);
+                res = jl_type_unionall(
+                    jl_is_typevar(newvar) ? (jl_tvar_t*)newvar : vb->var, res);
         }
     }
 
@@ -2716,6 +2739,97 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, jl_sten
     return ii;
 }
 
+static int normalize_vb_offset(jl_svec_t **params JL_REQUIRE_ROOTED_SLOT, jl_tvar_t *v, jl_varbinding_t *vb, jl_vararg_t *ii, jl_stenv_t *e)
+{
+    assert(!jl_has_typevar(ii->T, v));
+    if (ii->N != (jl_value_t*)v) {
+        return 1;
+    }
+    ssize_t pos = jl_svec_len(*params) - 1;
+    if (vb->offset < 0) {
+        // Insert additional copies of the type to make up the
+        // `offset` difference.
+        *params = jl_svec_copy_resize(*params, jl_svec_len(*params) - vb->offset);
+        for (size_t i = 0; i < -vb->offset; ++i) {
+            jl_svecset(*params, pos + i, ii->T);
+        }
+        jl_svecset(*params, pos + -vb->offset, ii);
+    } else {
+        assert(vb->offset > 0);
+        // Go backwards over the parameter list and verify that
+        // they are all equal to the vararg type.
+        for (ssize_t i = pos - 1; i > pos - 1 - vb->offset; i--) {
+            if (!forall_exists_equal(jl_svecref(*params, i), ii->T, e)) {
+                return 0;
+            }
+        }
+        jl_svecset(*params, pos - vb->offset, ii);
+        *params = jl_svec_copy_resize(*params, pos - vb->offset + 1);
+    }
+    return 1;
+}
+
+static jl_value_t *intersect_tuple_vararg_tail(jl_svec_t *params JL_MAYBE_UNROOTED, size_t lx, size_t ly, jl_value_t *xi, jl_value_t *yi, jl_stenv_t *e, int param)
+{
+    jl_varbinding_t *xb=NULL, *yb=NULL;
+    jl_value_t *ii=NULL, *res=NULL;
+    JL_GC_PUSH1(&params);
+    // {A^n...,Vararg{T,N}} ∩ {Vararg{S,M}} = {(A∩S)^n...,Vararg{T∩S,N}} plus N = M-n
+    jl_value_t *xlen = jl_unwrap_vararg_num(xi);
+    if (xlen && jl_is_typevar(xlen)) {
+        xb = lookup(e, (jl_tvar_t*)xlen);
+        if (xb)
+            xb->offset = ly-lx;
+    }
+    jl_value_t *ylen = jl_unwrap_vararg_num(yi);
+    if (ylen && jl_is_typevar(ylen)) {
+        yb = lookup(e, (jl_tvar_t*)ylen);
+        if (yb)
+            yb->offset = lx-ly;
+    }
+    ii = intersect_varargs((jl_vararg_t*)xi,
+                            (jl_vararg_t*)yi,
+                            e, param);
+    if (ii == jl_bottom_type) {
+        int len = jl_svec_len(params)-1;
+        if ((xb && jl_is_long(xb->lb) && lx-1+jl_unbox_long(xb->lb) != len) ||
+            (yb && jl_is_long(yb->lb) && ly-1+jl_unbox_long(yb->lb) != len)) {
+            res = jl_bottom_type;
+        }
+        else if (param == 2 && jl_is_unionall(xi) != jl_is_unionall(yi)) {
+            res = jl_bottom_type;
+        }
+        else {
+            if (xb) set_var_to_const(xb, jl_box_long(len-lx+1), yb);
+            if (yb) set_var_to_const(yb, jl_box_long(len-ly+1), xb);
+            res = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(params), len);
+        }
+        goto done;
+    }
+    jl_svecset(params, jl_svec_len(params) - 1, ii);
+    // If this vararg got introduced while we were under vararg
+    // normalize that out now.
+    if (jl_is_vararg(ii)) {
+        if (xb && xb->offset != 0) {
+            if (!normalize_vb_offset(&params, (jl_tvar_t*)xlen, xb, (jl_vararg_t*)ii, e)) {
+                res = jl_bottom_type;
+                goto done;
+            }
+        }
+        if (yb && yb->offset != 0) {
+            if (!normalize_vb_offset(&params, (jl_tvar_t*)ylen, yb, (jl_vararg_t*)ii, e)) {
+                res = jl_bottom_type;
+                goto done;
+            }
+        }
+    }
+    res = (jl_value_t*)jl_apply_tuple_type(params);
+done:
+    if (xb) xb->offset = 0;
+    if (yb) yb->offset = 0;
+    JL_GC_POP();
+    return res;
+}
 
 static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int param)
 {
@@ -2749,27 +2863,10 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
                 res = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(params), i);
             break;
         }
-        jl_varbinding_t *xb=NULL, *yb=NULL;
         jl_value_t *ii = NULL;
         if (vx && vy) {
-            // {A^n...,Vararg{T,N}} ∩ {Vararg{S,M}} = {(A∩S)^n...,Vararg{T∩S,N}} plus N = M-n
-            jl_value_t *xlen = jl_unwrap_vararg_num(xi);
-            if (xlen && jl_is_typevar(xlen)) {
-                xb = lookup(e, (jl_tvar_t*)xlen);
-                if (xb)
-                    xb->offset = ly-lx;
-            }
-            jl_value_t *ylen = jl_unwrap_vararg_num(yi);
-            if (ylen && jl_is_typevar(ylen)) {
-                yb = lookup(e, (jl_tvar_t*)ylen);
-                if (yb)
-                    yb->offset = lx-ly;
-            }
-            ii = intersect_varargs((jl_vararg_t*)xi,
-                                   (jl_vararg_t*)yi,
-                                   e, param);
-            if (xb) xb->offset = 0;
-            if (yb) yb->offset = 0;
+            JL_GC_POP();
+            return intersect_tuple_vararg_tail(params, lx, ly, xi, yi, e, param);
         } else {
             if (vx)
                 xi = jl_unwrap_vararg(xi);
@@ -2778,33 +2875,13 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
             ii = intersect(xi, yi, e, param == 0 ? 1 : param);
         }
         if (ii == jl_bottom_type) {
-            if (vx && vy) {
-                int len = i > j ? i : j;
-                if ((xb && jl_is_long(xb->lb) && lx-1+jl_unbox_long(xb->lb) != len) ||
-                    (yb && jl_is_long(yb->lb) && ly-1+jl_unbox_long(yb->lb) != len)) {
-                    res = jl_bottom_type;
-                }
-                else if (param == 2 && jl_is_unionall(xi) != jl_is_unionall(yi)) {
-                    res = jl_bottom_type;
-                }
-                else {
-                    if (xb) set_var_to_const(xb, jl_box_long(len-lx+1), yb);
-                    if (yb) set_var_to_const(yb, jl_box_long(len-ly+1), xb);
-                    res = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(params), len);
-                }
-            }
-            else {
-                res = jl_bottom_type;
-            }
+            res = jl_bottom_type;
             break;
         }
         jl_svecset(params, (i > j ? i : j), ii);
-        if (vx && vy)
-            break;
         if (i < lx-1 || !vx) i++;
         if (j < ly-1 || !vy) j++;
     }
-    // TODO: handle Vararg with explicit integer length parameter
     if (res == NULL)
         res = (jl_value_t*)jl_apply_tuple_type(params);
     JL_GC_POP();
@@ -3755,13 +3832,13 @@ static int num_occurs(jl_tvar_t *v, jl_typeenv_t *env)
 
 #define HANDLE_UNIONALL_A                                               \
     jl_unionall_t *ua = (jl_unionall_t*)a;                              \
-    jl_typeenv_t newenv = { ua->var, 0x0, env };                        \
+    jl_typeenv_t newenv = { ua->var, 0x0, 0, env };                      \
     newenv.val = (jl_value_t*)(intptr_t)count_occurs(ua->body, ua->var); \
     return type_morespecific_(ua->body, b, invariant, &newenv)
 
 #define HANDLE_UNIONALL_B                                               \
     jl_unionall_t *ub = (jl_unionall_t*)b;                              \
-    jl_typeenv_t newenv = { ub->var, 0x0, env };                        \
+    jl_typeenv_t newenv = { ub->var, 0x0, 0, env };                     \
     newenv.val = (jl_value_t*)(intptr_t)count_occurs(ub->body, ub->var); \
     return type_morespecific_(a, ub->body, invariant, &newenv)
 

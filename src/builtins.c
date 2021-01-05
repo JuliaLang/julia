@@ -180,7 +180,7 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
             return 0;
         if (!(egal_types(ua->var->lb, ub->var->lb, env, tvar_names) && egal_types(ua->var->ub, ub->var->ub, env, tvar_names)))
             return 0;
-        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
+        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, 0, env };
         return egal_types(ua->body, ub->body, &e, tvar_names);
     }
     if (dt == jl_uniontype_type) {

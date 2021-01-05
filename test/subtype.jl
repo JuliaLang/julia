@@ -2020,3 +2020,8 @@ end
 #issue #43082
 struct X43082{A, I, B<:Union{Ref{I},I}}; end
 @testintersect(Tuple{X43082{T}, Int} where T, Tuple{X43082{Int}, Any}, Tuple{X43082{Int}, Int})
+
+# issue #39088
+@testintersect(Tuple{NTuple{N, Int}, NTuple{N, Int}} where N,
+               Tuple{Tuple{Int, Vararg{Any}}, NTuple{4, Int64}},
+               Tuple{NTuple{4, Int64}, NTuple{4, Int64}})

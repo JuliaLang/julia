@@ -823,11 +823,14 @@ static void jl_compilation_sig(
             int nsp = jl_svec_len(sparams);
             if (nsp > 0 && jl_has_free_typevars(lastdeclt)) {
                 assert(jl_subtype_env_size(decl) == nsp);
-                lastdeclt = jl_instantiate_type_in_env(lastdeclt, (jl_unionall_t*)decl, jl_svec_data(sparams));
+                lastdeclt = jl_instantiate_type_in_env(((jl_vararg_t*)lastdeclt)->T, (jl_unionall_t*)decl, jl_svec_data(sparams));
+                jl_svecset(limited, i, lastdeclt); // Root it
+                jl_svecset(limited, i, jl_wrap_vararg(lastdeclt, NULL));
                 // TODO: rewrap_unionall(lastdeclt, sparams) if any sparams isa TypeVar???
                 // TODO: if we made any replacements above, sparams may now be incorrect
+            } else {
+                jl_svecset(limited, i, lastdeclt);
             }
-            jl_svecset(limited, i, lastdeclt);
         }
         *newparams = limited;
         // now there is a problem: the widened signature is more

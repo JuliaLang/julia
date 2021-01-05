@@ -643,6 +643,7 @@ void jl_uv_flush(uv_stream_t *stream);
 typedef struct jl_typeenv_t {
     jl_tvar_t *var;
     jl_value_t *val;
+    int val_is_lb;
     struct jl_typeenv_t *prev;
 } jl_typeenv_t;
 
@@ -671,6 +672,7 @@ JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals);
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
+jl_value_t *jl_substitute_or_bound_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int is_bound);
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 int jl_count_union_components(jl_value_t *v);
