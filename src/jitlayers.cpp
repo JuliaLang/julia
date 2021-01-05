@@ -726,7 +726,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
         static void *atomic_hdl = jl_load_dynamic_library(libatomic, JL_RTLD_LOCAL, 0);
         if (atomic_hdl != NULL) {
             GlobalJD.addGenerator(
-              std::move(*orc::DynamicLibrarySearchGenerator::Load(
+              cantFail(orc::DynamicLibrarySearchGenerator::Load(
                   libatomic,
                   DL.getGlobalPrefix(),
                   [&](const orc::SymbolStringPtr &S) {
