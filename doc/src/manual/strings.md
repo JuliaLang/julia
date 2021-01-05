@@ -335,7 +335,7 @@ julia> s[1:4]
 Because of variable-length encodings, the number of characters in a string (given by [`length(s)`](@ref))
 is not always the same as the last index. If you iterate through the indices 1 through [`lastindex(s)`](@ref)
 and index into `s`, the sequence of characters returned when errors aren't thrown is the sequence
-of characters comprising the string `s`. Thus we have the inequality `length(s) <= lastindex(s)`,
+of characters comprising the string `s`. Thus `length(s) <= lastindex(s)`,
 since each character in a string must have its own index. The following is an inefficient and
 verbose way to iterate through the characters of `s`:
 
