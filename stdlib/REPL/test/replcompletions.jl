@@ -699,20 +699,22 @@ let s, c, r
     end
 
     # Tests homedir expansion
-    let path, s, c, r
-        path = homedir()
-        dir = joinpath(path, "tmpfoobar")
-        mkdir(dir)
-        s = "\"" * path * "/tmpfoob"
-        c,r = test_complete(s)
-        @test "tmpfoobar/" in c
-        l = 3 + length(path)
-        @test r == l:l+6
-        @test s[r] == "tmpfoob"
-        s = "\"~"
-        @test "tmpfoobar/" in c
-        c,r = test_complete(s)
-        rm(dir)
+    mktempdir() do tmphome
+        withenv("HOME" => tmphome, "USERPROFILE" => tmphome) do
+            path = homedir()
+            dir = joinpath(path, "tmpfoobar")
+            mkdir(dir)
+            s = "\"" * path * "/tmpfoob"
+            c,r = test_complete(s)
+            @test "tmpfoobar/" in c
+            l = 3 + length(path)
+            @test r == l:l+6
+            @test s[r] == "tmpfoob"
+            s = "\"~"
+            @test "tmpfoobar/" in c
+            c,r = test_complete(s)
+            rm(dir)
+        end
     end
 
     # Tests detecting of files in the env path (in shell mode)
