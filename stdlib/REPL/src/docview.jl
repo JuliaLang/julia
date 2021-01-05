@@ -306,11 +306,9 @@ function find_readme(m::Module)::Union{String, Nothing}
     path = dirname(pathof(m))
     top_path = pkgdir(m)
     while true
-        for readme in ["README.md", "readme.md", "Readme.md", "ReadMe.md"]
-            readme_path = joinpath(path, readme)
-            if isfile(readme_path)
-                return readme_path
-            end
+        for file in readdir(path; join=true, sort=true)
+            isfile(file) && (basename(lowercase(file)) in ["readme.md", "readme"]) || continue
+            return file
         end
         path == top_path && break # go no further than pkgdir
         path = dirname(path) # work up through nested modules
@@ -320,13 +318,15 @@ end
 function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     readme_path = find_readme(m)
     if !isnothing(readme_path)
-        println(io, "No docstring found for module `", m, "`.\n")
+        println(io, "No docstring found for module `$m`.\n")
         readme_lines = readlines(readme_path)
         println(io, "Displaying the contents of `$(readme_path)`:\n\n")
-        [println(io, line) for line in first(readme_lines, nlines)]
-        length(readme_lines) > nlines && println(io, "[output truncated to first $nlines lines]")
+        for line in first(readme_lines, nlines)
+            println(io, line)
+        end
+        length(readme_lines) > nlines && println(io, "\n[output truncated to first $nlines lines]")
     else
-        println(io, "No docstring or readme found for module `", m, "`.\n")
+        println(io, "No docstring or readme file found for module `$m`.\n")
     end
 end
 
