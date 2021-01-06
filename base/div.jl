@@ -134,7 +134,7 @@ julia> divrem(7,3)
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
 
-function divrem(a::T, b::T, r::RoundingMode) where {T<:AbstractFloat}
+function divrem(a::AbstractFloat, b::AbstractFloat, r::RoundingMode)
     if r === RoundToZero
         (div(a,b), rem(a,b))
     elseif r === RoundDown
