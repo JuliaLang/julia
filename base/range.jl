@@ -643,7 +643,7 @@ function getindex(v::AbstractRange{T}, i::Integer) where T
     ret
 end
 
-getindex(v::AbstractRange{T}, i::Integer) where T =
+getindex(v::AbstractRange{T}, i::Bool) where T =
     throw(ArgumentError("invalid index: $i of type Bool"))
 
 function getindex(r::Union{StepRangeLen,LinRange}, i::Integer)
