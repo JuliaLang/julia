@@ -482,6 +482,10 @@ JL_CALLABLE(jl_f_typeassert)
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);
+    int tid = jl_threadid();
+    // @time needs its compile timer disabled on error,
+    // and cannot use a try-finally as it would break scope for assignments
+    jl_measure_compile_time[tid] = 0;
     jl_throw(args[0]);
     return jl_nothing;
 }
