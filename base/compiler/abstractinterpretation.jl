@@ -1364,7 +1364,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 frame.cur_hand = Pair{Any,Any}(l, frame.cur_hand)
                 # propagate type info to exception handler
                 old = s[l]
-                new = s[pc]::Array{Any,1}
+                new = s[pc]::VarTable
                 newstate_catch = stupdate!(old, new)
                 if newstate_catch !== false
                     if l < frame.pc´´
