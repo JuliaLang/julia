@@ -793,10 +793,7 @@ function getindex(r::OneTo{T}, s::OneTo{Bool}) where T
     if length(s) == 0
         return r
     else # length(s) == 1
-        if s[1]
-            return r
-        else
-            return OneTo{T}(zero(T))
+        return r
         end
     end
 end
