@@ -13,5 +13,6 @@ name##:; \
     .word name##_addr-(.L##name + 8); \
 .cfi_endproc; \
 
-JL_EXPORTED_FUNCS(XX)
+JL_RUNTIME_EXPORTED_FUNCS(XX)
+JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX

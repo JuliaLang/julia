@@ -10,5 +10,6 @@ name##: ; \
     bctr; \
 .cfi_endproc; \
 
-JL_EXPORTED_FUNCS(XX)
+JL_RUNTIME_EXPORTED_FUNCS(XX)
+JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX

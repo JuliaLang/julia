@@ -8,5 +8,6 @@ name##:; \
     ldr x0, [x0, #:lo12:name##_addr]; \
     br x0; \
 .cfi_endproc; \
-JL_EXPORTED_FUNCS(XX)
+JL_RUNTIME_EXPORTED_FUNCS(XX)
+JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX

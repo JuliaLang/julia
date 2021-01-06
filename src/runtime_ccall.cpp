@@ -202,7 +202,7 @@ std::string jl_format_filename(StringRef output_pattern)
     return outfile.str();
 }
 
-JL_DLLEXPORT char *jl_format_filename(const char *output_pattern)
+extern "C" JL_DLLEXPORT char *jl_format_filename(const char *output_pattern)
 {
     return strdup(jl_format_filename(StringRef(output_pattern)).c_str());
 }

@@ -166,23 +166,13 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
 
     // Once we have libjulia-internal loaded, re-export its symbols:
-    for (unsigned int symbol_idx=0; jl_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
-        const char *name = jl_exported_func_names[symbol_idx];
-        // A symbol might be exported by both the runtime and codegen; in such
-        // a case we generally want to use the codegen implementation. We
-        // assume that when codegen's symbol matches libjulia's symbol, codegen
-        // does not have its own implementation.
-        void *rt_sym = lookup_symbol(libjulia_runtime, name);
-        void *cg_sym = lookup_symbol(libjulia_internal, name);
-        void *lj_sym = lookup_symbol(NULL, name);
-        if ((cg_sym == rt_sym) && (cg_sym == lj_sym)) {
-            jl_loader_print_stderr3("ERROR: symbol missing from runtime and codegen: ", name, "\n");
-            exit(1);
-        } else if (cg_sym == lj_sym) {
-            (*jl_exported_func_addrs[symbol_idx]) = rt_sym;
-        } else {
-            (*jl_exported_func_addrs[symbol_idx]) = cg_sym;
-        }
+    for (unsigned int symbol_idx=0; jl_runtime_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
+        const char *name = jl_runtime_exported_func_names[symbol_idx];
+        (*jl_runtime_exported_func_addrs[symbol_idx]) = lookup_symbol(libjulia_runtime, name);
+    }
+    for (unsigned int symbol_idx=0; jl_codegen_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
+        const char *name = jl_codegen_exported_func_names[symbol_idx];
+        (*jl_codegen_exported_func_addrs[symbol_idx]) = lookup_symbol(libjulia_internal, name);
     }
 }
 
