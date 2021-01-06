@@ -243,3 +243,5 @@ g(::Val{x}) where {x} = x ? 1 : 0
 ci = code_lowered(g, Tuple{Val{true}})[1]
 @test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[Val{true}], 0, 0, :propagate)[1] ==
    Core.GotoIfNot(QuoteNode(Val{true}), 3)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[Val{true}], 0, 2, :propagate)[1] ==
+   Core.GotoIfNot(QuoteNode(Val{true}), 5)
