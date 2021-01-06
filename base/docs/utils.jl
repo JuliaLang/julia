@@ -21,9 +21,8 @@ You can also use a stream for large amounts of data:
 
 !!! warning
     `HTML` is currently exported to maintain
-    backwards-compatibility, but is considered to be
-    deprecated and should not be used.
-    It will be removed in Julia 2.0.
+    backwards-compatibility, but is considered
+    to be deprecated and should not be used.
 """
 mutable struct HTML{T}
     content::T
@@ -72,9 +71,8 @@ You can also use a stream for large amounts of data:
 
 !!! warning
     `Text` is currently exported to maintain
-    backwards-compatibility, but is considered to be
-    deprecated and should not be used.
-    It will be removed in Julia 2.0.
+    backwards-compatibility, but is considered
+    to be deprecated and should not be used.
 """
 mutable struct Text{T}
     content::T
