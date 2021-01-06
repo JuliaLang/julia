@@ -16,7 +16,7 @@ mutable struct InferenceState
     world::UInt
     valid_worlds::WorldRange
     nargs::Int
-    stmt_types::Vector{Any}
+    stmt_types::Vector{Union{Nothing, Vector{Any}}} # ::Vector{Union{Nothing, VarTable}}
     stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
     # return type
@@ -67,7 +67,7 @@ mutable struct InferenceState
 
         n = length(code)
         s_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
-        s_types = Any[ nothing for i = 1:n ]
+        s_types = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
 
         # initial types
         nslots = length(src.slotflags)
