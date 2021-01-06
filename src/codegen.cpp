@@ -838,7 +838,6 @@ static const std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map = {
     { &jl_f_isa,                new JuliaFunction{"jl_f_isa", get_func_sig, get_func_attrs} },
     { &jl_f_typeassert,         new JuliaFunction{"jl_f_typeassert", get_func_sig, get_func_attrs} },
     { &jl_f_ifelse,             new JuliaFunction{"jl_f_ifelse", get_func_sig, get_func_attrs} },
-    { &jl_f__apply,             new JuliaFunction{"jl_f__apply", get_func_sig, get_func_attrs} },
     { &jl_f__apply_iterate,     new JuliaFunction{"jl_f__apply_iterate", get_func_sig, get_func_attrs} },
     { &jl_f__apply_pure,        new JuliaFunction{"jl_f__apply_pure", get_func_sig, get_func_attrs} },
     { &jl_f__call_latest,       new JuliaFunction{"jl_f__call_latest", get_func_sig, get_func_attrs} },
@@ -2684,13 +2683,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (((f == jl_builtin__apply && nargs == 2) ||
-              (f == jl_builtin__apply_iterate && nargs == 3)) && ctx.vaSlot > 0) {
-        int arg_start = f == jl_builtin__apply ? 2 : 3;
-        // turn Core._apply(f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
-        if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[arg_start].V)) {
+    else if ((f == jl_builtin__apply_iterate && nargs == 3) && ctx.vaSlot > 0) {
+        // turn Core._apply_iterate(iter, f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
+        if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[3].V)) {
             if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
-                Value *theF = boxed(ctx, argv[arg_start-1]);
+                Value *theF = boxed(ctx, argv[2]);
                 Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
                 nva = ctx.builder.CreateTrunc(nva, T_int32);
