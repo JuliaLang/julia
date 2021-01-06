@@ -1730,3 +1730,122 @@ end
     @test eltype(StepRangeLen(Int8(1), Int8(2), 3, 2)) === Int8
     @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3, 2))) === Int8
 end
+
+@testset "Bool indexing of ranges" begin
+    @test_throws ArgumentError (1:2)[true]
+    @test_throws ArgumentError (big(1):big(2))[true]
+    @test_throws ArgumentError Base.OneTo(10)[true]
+    @test_throws ArgumentError (1:2:5)[true]
+    @test_throws ArgumentError LinRange(1,2,2)[true]
+    @test_throws ArgumentError (1.0:2.0:5.0)[true]
+    
+    r = 3:2
+    r2 = r[true:flase]
+    @test r.start == r2.start && r.stop == r2.stop
+    @test_throws BoundsError r[true:true]
+    @test_throws BoundsError r[false:true]
+    
+    r = 3:3
+    r2 = r[true:true]
+    @test r.start == r2.start && r.stop == r2.stop
+    r2 = r[false:false]
+    @test r2.start == 3 && r2.stop == 2
+    @test_throws BoundsError r[true:false]
+    @test_throws BoundsError r[false:true]
+    
+    r = 2:3
+    r2 = r[false:true]
+    @test r2.start == r2.stop == 3
+    @test_throws BoundsError r[true:false]
+    @test_throws BoundsError r[true:true]
+    
+    r = Base.OneTo(0)
+    r2 = r[Base.OneTo(false)]
+    @test r2 isa Base.OneTo && r2.stop == 0
+    @test_throws BoundsError r[Base.OneTo(true)]
+
+    r = Base.OneTo(1)
+    r2 = r[Base.OneTo(true)]
+    @test r2 isa Base.OneTo && r2.stop == 1
+    @test_throws BoundsError r[Base.OneTo(false)]
+
+    @test_throws BoundsError Base.OneTo(2)[Base.OneTo(false)]
+    @test_throws BoundsError Base.OneTo(2)[Base.OneTo(true)]
+    
+    r = 2:1
+    r2 = r[true:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    @test_throws BoundsError r[false:true:false]
+
+    r = 2:2
+    r2 = r[false:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    r2 = r[true:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = 1:2
+    r2 = r[false:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = 2:1:1
+    r2 = r[true:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    @test_throws BoundsError r[false:true:false]
+
+    r = 2:1:2
+    r2 = r[false:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    r2 = r[true:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = 1:1:2
+    r2 = r[false:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = 2.0:1.0:1.0
+    r2 = r[true:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    @test_throws BoundsError r[false:true:false]
+
+    r = 2.0:1.0:2.0
+    r2 = r[false:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    r2 = r[true:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = 1.0:1.0:2.0
+    r2 = r[false:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = LinRange(2, 1, 0)
+    r2 = r[true:true:false]
+    @test r2 isa LinRange && r2 == 2:1
+    @test_throws BoundsError r[false:true:false]
+
+    r = LinRange(2, 2, 1)
+    r2 = r[false:true:false]
+    @test r2 isa LinRange && r2 == 2:1
+    r2 = r[true:true:true]
+    @test r2 isa LinRange && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = LinRange(1, 2, 1)
+    r2 = r[false:true:true]
+    @test r2 isa LinRange && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+end
