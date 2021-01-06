@@ -1543,3 +1543,16 @@ end
         chmod(dir, 0o777; recursive=true)
     end
 end
+
+if Sys.iswindows()
+@testset "mkdir/rm permissions" begin
+    # test delete permission in system folders (i.e. impliclty test chmod permissions)
+    # issue #38433
+    @test withenv("TMP" => "C:\\") do
+        mktempdir() do dir end
+    end === nothing
+    # same as above, but test rm explicitly
+    tmp = mkdir(tempname("C:\\"))
+    @test rm(tmp) === nothing
+end
+end
