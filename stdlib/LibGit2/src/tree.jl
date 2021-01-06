@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function GitTree(c::GitCommit)
+    tree_out = Ref{Ptr{Cvoid}}(C_NULL)
+    @check ccall((:git_commit_tree, :libgit2), Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), tree_out, c)
+    GitTree(repository(c), tree_out[])
+end
+
 """
     treewalk(f, tree::GitTree, post::Bool=false)
 
@@ -122,14 +128,14 @@ tree_entry = tree[1]
 blob = LibGit2.GitBlob(tree_entry)
 ```
 """
-function GitObject(e::GitTreeEntry) end
+GitObject(e::GitTreeEntry)
 function (::Type{T})(te::GitTreeEntry) where T<:GitObject
     ensure_initialized()
     repo = repository(te)
     obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
-                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ref{Nothing}),
-                   obj_ptr_ptr, repo.ptr, te.ptr)
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}),
+                   obj_ptr_ptr, repo, te)
     return T(repo, obj_ptr_ptr[])
 end
 
@@ -144,6 +150,23 @@ function Base.show(io::IO, tree::GitTree)
     println(io, "GitTree:")
     println(io, "Owner: ", repository(tree))
     println(io, "Number of entries: ", count(tree))
+end
+
+function _getindex(tree::GitTree, target::AbstractString)
+    if basename(target) == ""
+        # get rid of any trailing separator
+        target = dirname(target)
+    end
+    if isempty(target) || target == "/"
+        return tree
+    end
+
+    entry = Ref{Ptr{Cvoid}}(C_NULL)
+    err = ccall((:git_tree_entry_bypath, :libgit2), Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring), entry, tree, target)
+    err == Int(Error.ENOTFOUND) && return nothing
+    err < 0 && throw(Error.GitError(err))
+    entry = GitTreeEntry(tree, entry[], true #= N.B.: Most other lookups need false here =#)
+    return GitObject(entry)
 end
 
 """
@@ -161,33 +184,11 @@ runtests = subtree["runtests.jl"]
 ```
 """
 function Base.getindex(tree::GitTree, target::AbstractString)
-    if basename(target) == ""
-        # get rid of any trailing separator
-        target = dirname(target)
-    end
-    if target == "" || target == "/"
-        return tree
-    end
+    e = _getindex(tree, target)
+    e === nothing && throw(KeyError(target))
+    return e
+end
 
-    local oid = nothing
-    function _getindex_callback(root::String, entry::GitTreeEntry)::Cint
-        path = joinpath(root, filename(entry))
-        if path == target
-            # we found the target, save the oid and stop the walk
-            oid = entryid(entry)
-            # workaround for issue: https://github.com/libgit2/libgit2/issues/4693
-            ensure_initialized()
-            ccall((:giterr_set_str, :libgit2), Cvoid,
-                  (Cint, Cstring), Cint(Error.Callback),
-                  "git_tree_walk callback returned -1")
-            return -1
-        elseif entrytype(entry) == GitTree && !startswith(target, path)
-            # this subtree isn't relevant, so skip it
-            return 1
-        end
-        return 0
-    end
-    treewalk(_getindex_callback, tree)
-    oid === nothing && throw(KeyError(target))
-    return GitObject(repository(tree), oid)
+function Base.haskey(tree::GitTree, target::AbstractString)
+    return _getindex(tree, target) !== nothing
 end

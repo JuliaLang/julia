@@ -1,4 +1,4 @@
-# Variables
+# [Variables](@id man-variables)
 
 A variable, in Julia, is a name associated (or bound) to a value. It's useful when you want to
 store a value (that you obtained after some math, for example) for later use. For example:
@@ -54,8 +54,8 @@ julia> 안녕하세요 = "Hello"
 
 In the Julia REPL and several other Julia editing environments, you can type many Unicode math
 symbols by typing the backslashed LaTeX symbol name followed by tab. For example, the variable
-name `δ` can be entered by typing `\delta`-*tab*, or even `α̂₂` by `\alpha`-*tab*-`\hat`-
-*tab*-`\_2`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
+name `δ` can be entered by typing `\delta`-*tab*, or even `α̂⁽²⁾` by `\alpha`-*tab*-`\hat`-
+*tab*-`\^(2)`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
 that you don't know how to type, the REPL help will tell you: just type `?` and
 then paste the symbol.)
 
@@ -106,8 +106,11 @@ will reassign it. Most of the Unicode infix operators (in category Sm), such as 
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
 to define `⊗` as an infix Kronecker product).  Operators can also be suffixed with modifying marks,
 primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator with the same precedence as `+`.
+A space is required between an operator that ends with a subscript/superscript letter and a subsequent
+variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
+it from `+ ᵃx` where `ᵃx` is the variable name.
 
-The only explicitly disallowed names for variables are the names of built-in statements:
+The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
 
 ```julia-repl
 julia> else = false
@@ -119,7 +122,7 @@ ERROR: syntax: unexpected "="
 
 Some Unicode characters are considered to be equivalent in identifiers.
 Different ways of entering Unicode combining characters (e.g., accents)
-are treated as equivalent (specifically, Julia identifiers are NFC-normalized).
+are treated as equivalent (specifically, Julia identifiers are [NFC](http://www.macchiato.com/unicode/nfc-faq)-normalized).
 The Unicode characters `ɛ` (U+025B: Latin small letter open e)
 and `µ` (U+00B5: micro sign) are treated as equivalent to the corresponding
 Greek letters, because the former are easily accessible via some input methods.

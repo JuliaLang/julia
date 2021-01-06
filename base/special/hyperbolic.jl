@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# sinh, cosh, tanh, asinh, acosh, and atanh are heavily based on FDLIBM code:
+# asinh, acosh, and atanh are heavily based on FDLIBM code:
 # e_sinh.c, e_sinhf, e_cosh.c, e_coshf, s_tanh.c, s_tanhf.c, s_asinh.c,
 # s_asinhf.c, e_acosh.c, e_coshf.c, e_atanh.c, and e_atanhf.c
 # that are made available under the following licence:
@@ -14,6 +14,20 @@
 # is preserved.
 # ====================================================
 
+@inline function exthorner(x, p::Tuple)
+	# polynomial evaluation using compensated summation.
+	# much more accurate, especially when lo can be combined with other rounding errors
+    hi, lo = p[end], zero(x)
+    for i in length(p)-1:-1:1
+        pi = p[i]
+        prod = hi*x
+        err = fma(hi, x, -prod)
+        hi = pi+prod
+        lo = fma(lo, x, prod - (hi - pi) + err)
+    end
+    return hi, lo
+end
+
 # Hyperbolic functions
 # sinh methods
 H_SMALL_X(::Type{Float64}) = 2.0^-28
@@ -23,159 +37,127 @@ H_SMALL_X(::Type{Float32}) = 2f-12
 H_MEDIUM_X(::Type{Float32}) = 9f0
 
 H_LARGE_X(::Type{Float64}) = 709.7822265633563 # nextfloat(709.7822265633562)
-H_OVERFLOW_X(::Type{Float64}) = 710.475860073944 # nextfloat(710.4758600739439)
 
 H_LARGE_X(::Type{Float32}) = 88.72283f0
-H_OVERFLOW_X(::Type{Float32}) = 89.415985f0
-function sinh(x::T) where T <: Union{Float32, Float64}
+
+SINH_SMALL_X(::Type{Float64}) = 2.1
+SINH_SMALL_X(::Type{Float32}) = 3.0f0
+
+# For Float64, use DoubleFloat scheme for extra accuracy
+function sinh_kernel(x::Float64)
+    x2 = x*x
+    x2lo = fma(x,x,-x2)
+    hi_order = evalpoly(x2, (8.333333333336817e-3, 1.9841269840165435e-4,
+                             2.7557319381151335e-6, 2.5052096530035283e-8,
+                             1.6059550718903307e-10, 7.634842144412119e-13,
+                             2.9696954760355812e-15))
+    hi,lo = exthorner(x2, (1.0, 0.16666666666666635, hi_order))
+    return muladd(x, hi, muladd(x, lo, x*x2lo*0.16666666666666635))
+end
+# For Float32, using Float64 is simpler, faster, and doesn't require FMA
+function sinh_kernel(x::Float32)
+    x=Float64(x)
+    res = evalpoly(x*x, (1.0, 0.1666666779967941, 0.008333336726447933,
+                         0.00019841001151414065, 2.7555538207080807e-6,
+                         2.5143389765825282e-8, 1.6260094552031644e-10))
+    return Float32(res*x)
+end
+
+
+function sinh(x::T) where T<:Union{Float32,Float64}
     # Method
     # mathematically sinh(x) is defined to be (exp(x)-exp(-x))/2
-    #    1. Replace x by |x| (sinh(-x) = -sinh(x)).
+    #    1. Sometimes replace x by |x| (sinh(-x) = -sinh(x)).
     #    2. Find the branch and the expression to calculate and return it
-    #      a)   0 <= x < H_SMALL_X
-    #               return x
-    #      b)   H_SMALL_X <= x < H_MEDIUM_X
-    #               return sinh(x) = (E + E/(E+1))/2, where E=expm1(x)
-    #      c)   H_MEDIUM_X <= x < H_LARGE_X
-    #               return sinh(x) = exp(x)/2
-    #      d)   H_LARGE_X  <= x < H_OVERFLOW_X
+    #      a)   0 <= x < SINH_SMALL_X
+    #               approximate sinh(x) with a  minimax polynomial
+    #      b)   SINH_SMALL_X <= x < H_LARGE_X
+    #               return sinh(x) = (exp(x) - exp(-x))/2
+    #      d)   H_LARGE_X  <= x
     #               return sinh(x) = exp(x/2)/2 * exp(x/2)
-    #      e)   H_OVERFLOW_X <=  x
-    #               return sinh(x) = T(Inf)
-    #
-    # Notes:
-    #    only sinh(0) = 0 is exact for finite x.
-
-    isnan(x) && return x
+    #               Note that this branch automatically deals with Infs and NaNs
 
     absx = abs(x)
-
-    h = T(0.5)
-    if x < 0
-        h = -h
+    if absx <= SINH_SMALL_X(T)
+        return sinh_kernel(x)
+    elseif absx >= H_LARGE_X(T)
+        E = exp(T(.5)*absx)
+        return copysign(T(.5)*E*E, x)
     end
-    # in a) or b)
-    if absx < H_MEDIUM_X(T)
-        # in a)
-        if absx < H_SMALL_X(T)
-            return x
-        end
-        t = expm1(absx)
-        if absx < T(1)
-            return h*(T(2)*t - t*t/(t + T(1)))
-        end
-        return h*(t + t/(t + T(1)))
-    end
-    # in c)
-    if absx < H_LARGE_X(T)
-        return h*exp(absx)
-    end
-    # in d)
-    if absx < H_OVERFLOW_X(T)
-        return h*T(2)*_ldexp_exp(absx, Int32(-1))
-    end
-    # in e)
-    return copysign(T(Inf), x)
+    E = exp(absx)
+    return copysign(T(.5)*(E - 1/E),x)
 end
-sinh(x::Real) = sinh(float(x))
 
-# cosh methods
-COSH_SMALL_X(::Type{Float32}) = 0.00024414062f0
-COSH_SMALL_X(::Type{Float64}) = 2.7755602085408512e-17
-function cosh(x::T) where T <: Union{Float32, Float64}
+COSH_SMALL_X(::Type{T}) where T= one(T)
+
+function cosh_kernel(x2::Float32)
+    return evalpoly(x2, (1.0f0, 0.49999997f0, 0.041666888f0, 0.0013882756f0, 2.549933f-5))
+end
+
+function cosh_kernel(x2::Float64)
+    return evalpoly(x2, (1.0, 0.5000000000000002, 0.04166666666666269,
+                         1.3888888889206764e-3, 2.4801587176784207e-5,
+                         2.7557345825742837e-7, 2.0873617441235094e-9,
+                         1.1663435515945578e-11))
+end
+
+function cosh(x::T) where T<:Union{Float32,Float64}
     # Method
     # mathematically cosh(x) is defined to be (exp(x)+exp(-x))/2
     #    1. Replace x by |x| (cosh(x) = cosh(-x)).
     #    2. Find the branch and the expression to calculate and return it
     #      a)   x <= COSH_SMALL_X
-    #               return T(1)
-    #      b)   COSH_SMALL_X <= x <= ln2/2
-    #               return 1+expm1(|x|)^2/(2*exp(|x|))
-    #      c)   ln2/2 <= x <= H_MEDIUM_X
-    #               return (exp(|x|)+1/exp(|x|)/2
-    #      d)   H_MEDIUM_X <= x < H_LARGE_X
-    #               return cosh(x) = exp(x)/2
-    #      e)   H_LARGE_X  <= x < H_OVERFLOW_X
+    #               approximate sinh(x) with a minimax polynomial
+    #      b)   COSH_SMALL_X <= x < H_LARGE_X
+    #               return cosh(x) = = (exp(x) + exp(-x))/2
+    #      e)   H_LARGE_X  <= x
     #               return cosh(x) = exp(x/2)/2 * exp(x/2)
-    #      f)   H_OVERFLOW_X <=  x
-    #               return cosh(x) = T(Inf)
-
-    isnan(x) && return x
+    #      			Note that this branch automatically deals with Infs and NaNs
 
     absx = abs(x)
-    h = T(0.5)
-    # in a) or b)
-    if absx < log(T(2))/2
-        # in a)
-        if absx < COSH_SMALL_X(T)
-            return T(1)
-        end
-        t = expm1(absx)
-        w = T(1) + t
-        return T(1) + (t*t)/(w + w)
+    if absx <= COSH_SMALL_X(T)
+        return cosh_kernel(x*x)
+    elseif absx >= H_LARGE_X(T)
+        E = exp(T(.5)*absx)
+        return T(.5)*E*E
     end
-    # in c)
-    if absx < H_MEDIUM_X(T)
-        t = exp(absx)
-        return h*t + h/t
-    end
-    # in d)
-    if absx < H_LARGE_X(T)
-        return h*exp(absx)
-    end
-    # in e)
-    if absx < H_OVERFLOW_X(T)
-        return _ldexp_exp(absx, Int32(-1))
-    end
-    # in f)
-    return T(Inf)
+    E = exp(absx)
+    return T(.5)*(E + 1/E)
 end
-cosh(x::Real) = cosh(float(x))
 
 # tanh methods
-TANH_LARGE_X(::Type{Float64}) = 22.0
-TANH_LARGE_X(::Type{Float32}) = 9.0f0
+TANH_LARGE_X(::Type{Float64}) = 44.0
+TANH_LARGE_X(::Type{Float32}) = 18.0f0
+TANH_SMALL_X(::Type{Float64}) = 1.0
+TANH_SMALL_X(::Type{Float32}) = 1.3862944f0       #2*log(2)
+@inline function tanh_kernel(x::Float64)
+    return evalpoly(x, (1.0, -0.33333333333332904, 0.13333333333267555,
+                        -0.05396825393066753, 0.02186948742242217,
+                        -0.008863215974794633, 0.003591910693118715,
+                        -0.0014542587440487815, 0.0005825521659411748,
+                        -0.00021647574085351332, 5.5752458452673005e-5))
+end
+@inline function tanh_kernel(x::Float32)
+    return evalpoly(x, (1.0f0, -0.3333312f0, 0.13328037f0,
+                        -0.05350336f0, 0.019975215f0, -0.0050525228f0))
+end
 function tanh(x::T) where T<:Union{Float32, Float64}
     # Method
     # mathematically tanh(x) is defined to be (exp(x)-exp(-x))/(exp(x)+exp(-x))
     #    1. reduce x to non-negative by tanh(-x) = -tanh(x).
     #    2. Find the branch and the expression to calculate and return it
     #      a) 0 <= x < H_SMALL_X
-    #             return x
-    #      b) H_SMALL_X <= x < 1
-    #            -expm1(-2x)/(expm1(-2x) + 2)
-    #      c) 1 <= x < TANH_LARGE_X
-    #           1 - 2/(expm1(2x) + 2)
-    #      d) TANH_LARGE_X <= x
+    #             Use a minimax polynomial over the range
+    #      b) H_SMALL_X <= x < TANH_LARGE_X
+    #           1 - 2/(exp(2x) + 1)
+    #      c) TANH_LARGE_X <= x
     #            return 1
-    if isnan(x)
-        return x
-    elseif isinf(x)
-        return copysign(T(1), x)
-    end
-
-    absx = abs(x)
-    if absx < TANH_LARGE_X(T)
-        # in a)
-        if absx < H_SMALL_X(T)
-            return x
-        end
-        if absx >= T(1)
-            # in c)
-            t = expm1(T(2)*absx)
-            z = T(1) - T(2)/(t + T(2))
-        else
-            # in b)
-            t = expm1(-T(2)*absx)
-            z = -t/(t + T(2))
-        end
-    else
-        # in d)
-        z = T(1)
-    end
-    return copysign(z, x)
+    abs2x = abs(2x)
+    abs2x >= TANH_LARGE_X(T) && return copysign(one(T), x)
+    abs2x <= TANH_SMALL_X(T) && return x*tanh_kernel(x*x)
+    k = exp(abs2x)
+    return copysign(1 - 2/(k+1), x)
 end
-tanh(x::Real) = tanh(float(x))
 
 # Inverse hyperbolic functions
 AH_LN2(::Type{Float64}) = 6.93147180559945286227e-01
@@ -216,7 +198,6 @@ function asinh(x::T) where T <: Union{Float32, Float64}
     end
     return copysign(w, x)
 end
-asinh(x::Real) = asinh(float(x))
 
 # acosh methods
 @noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x ≥ 1."))
@@ -255,7 +236,6 @@ function acosh(x::T) where T <: Union{Float32, Float64}
         return log(x) + AH_LN2(T)
     end
 end
-acosh(x::Real) = acosh(float(x))
 
 # atanh methods
 @noinline atanh_domain_error(x) = throw(DomainError(x, "atanh(x) is only defined for |x| ≤ 1."))
@@ -297,4 +277,3 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     end
     return copysign(t, x)
 end
-atanh(x::Real) = atanh(float(x))

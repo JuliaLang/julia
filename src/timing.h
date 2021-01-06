@@ -3,6 +3,15 @@
 #ifndef JL_TIMING_H
 #define JL_TIMING_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+void jl_init_timing(void);
+void jl_destroy_timing(void);
+#ifdef __cplusplus
+}
+#endif
+
 #ifndef ENABLE_TIMINGS
 #define JL_TIMING(owner)
 #else
@@ -13,10 +22,7 @@
 extern "C" {
 #endif
 void jl_print_timings(void);
-void jl_init_timing(void);
 jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
-void jl_destroy_timing(void);
-extern jl_timing_block_t *jl_root_timing;
 void jl_timing_block_start(jl_timing_block_t *cur_block);
 void jl_timing_block_stop(jl_timing_block_t *cur_block);
 #ifdef __cplusplus
@@ -35,13 +41,6 @@ void jl_timing_block_stop(jl_timing_block_t *cur_block);
 #define JL_TIMING(owner)
 #else
 
-static inline uint64_t rdtscp(void)
-{
-    uint64_t rax,rdx;
-    asm volatile ( "rdtscp\n" : "=a" (rax), "=d" (rdx) : : "rcx" );
-    return (rdx << 32) + rax;
-}
-
 #define JL_TIMING_OWNERS          \
         X(ROOT),                  \
         X(GC),                    \
@@ -53,8 +52,6 @@ static inline uint64_t rdtscp(void)
         X(METHOD_LOOKUP_FAST),    \
         X(LLVM_OPT),              \
         X(LLVM_MODULE_FINISH),    \
-        X(LLVM_EMIT),             \
-        X(METHOD_LOOKUP_COMPILE), \
         X(METHOD_MATCH),          \
         X(TYPE_CACHE_LOOKUP),     \
         X(TYPE_CACHE_INSERT),     \
@@ -107,7 +104,7 @@ STATIC_INLINE void _jl_timing_block_start(jl_timing_block_t *block, uint64_t t) 
 }
 
 STATIC_INLINE uint64_t _jl_timing_block_init(jl_timing_block_t *block, int owner) {
-    uint64_t t = rdtscp();
+    uint64_t t = cycleclock();
     block->owner = owner;
     block->total = 0;
 #ifdef JL_DEBUG_BUILD
@@ -119,7 +116,8 @@ STATIC_INLINE uint64_t _jl_timing_block_init(jl_timing_block_t *block, int owner
 
 STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) {
     uint64_t t = _jl_timing_block_init(block, owner);
-    jl_timing_block_t **prevp = jl_current_task ? &jl_current_task->timing_stack : &jl_root_timing;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_timing_block_t **prevp = &ptls->timing_stack;
     block->prev = *prevp;
     if (block->prev)
         _jl_timing_block_stop(block->prev, t);
@@ -127,10 +125,11 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) {
 }
 
 STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) {
-    uint64_t t = rdtscp();
+    uint64_t t = cycleclock();
+    jl_ptls_t ptls = jl_get_ptls_states();
     _jl_timing_block_stop(block, t);
     jl_timing_data[block->owner] += block->total;
-    jl_timing_block_t **pcur = jl_current_task ? &jl_current_task->timing_stack : &jl_root_timing;
+    jl_timing_block_t **pcur = &ptls->timing_stack;
     assert(*pcur == block);
     *pcur = block->prev;
     if (block->prev)

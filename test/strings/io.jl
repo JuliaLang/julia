@@ -64,6 +64,13 @@
     @test typeof(escape_string("test", "t")) == String
     @test escape_string("test", "t") == "\\tes\\t"
 
+    @test escape_string("\\cdot") == "\\\\cdot"
+    @test escape_string("\\cdot"; keep = '\\') == "\\cdot"
+    @test escape_string("\\cdot", '\\'; keep = '\\') == "\\\\cdot"
+    @test escape_string("\\cdot\n"; keep = "\\\n") == "\\cdot\n"
+    @test escape_string("\\cdot\n", '\n'; keep = "\\\n") == "\\cdot\\\n"
+    @test escape_string("\\cdot\n", "\\\n"; keep = "\\\n") == "\\\\cdot\\\n"
+
     for i = 1:size(cx,1)
         cp, ch, st = cx[i,:]
         @test cp == convert(UInt32, ch)
@@ -143,7 +150,12 @@
         @test "\x01" == unescape_string("\\x01")
         @test "\x0f" == unescape_string("\\x0f")
         @test "\x0F" == unescape_string("\\x0F")
+
+        str= "aaa \\g \\n"
+        @test "aaa \\g \n" == unescape_string(str, ['g'])
+        @test "aaa \\g \\n" == unescape_string(str, ['g', 'n'])
     end
+    @test Base.escape_raw_string(raw"\"\\\"\\-\\") == "\\\"\\\\\\\"\\\\-\\\\"
 end
 @testset "join()" begin
     @test join([]) == join([],",") == ""

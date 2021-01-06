@@ -220,8 +220,7 @@ julia> Dates.Day(t)
 31 days
 ```
 
-Compound methods are provided, as they provide a measure of efficiency if multiple fields are
-needed at the same time:
+Compound methods are provided because it is more efficient to access multiple fields at the same time than individually:
 
 ```jldoctest tdate
 julia> Dates.yearmonth(t)
@@ -331,7 +330,7 @@ function `dayabbr` will error.
 
 ```jldoctest tdate2
 julia> Dates.dayabbr(t;locale="french")
-ERROR: BoundsError: attempt to access 1-element Array{String,1} at index [5]
+ERROR: BoundsError: attempt to access 1-element Vector{String} at index [5]
 Stacktrace:
 [...]
 ```
@@ -350,7 +349,7 @@ calculation in a conversation. Why all the fuss about this? Let's take a classic
 1 month to January 31st, 2014. What's the answer? Javascript will say [March 3](https://markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/)
 (assumes 31 days). PHP says [March 2](https://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month)
 (assumes 30 days). The fact is, there is no right answer. In the `Dates` module, it gives
-the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7
+the result of February 28th. How does it figure that out? Consider the classic 7-7-7
 gambling game in casinos.
 
 Now just imagine that instead of 7-7-7, the slots are Year-Month-Day, or in our example, 2014-01-31.
@@ -400,29 +399,29 @@ As a bonus, all period arithmetic objects work directly with ranges:
 
 ```jldoctest
 julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
-Date(2014, 1, 29):Day(1):Date(2014, 2, 3)
+Date("2014-01-29"):Day(1):Date("2014-02-03")
 
 julia> collect(dr)
-6-element Array{Date,1}:
- Date(2014, 1, 29)
- Date(2014, 1, 30)
- Date(2014, 1, 31)
- Date(2014, 2, 1)
- Date(2014, 2, 2)
- Date(2014, 2, 3)
+6-element Vector{Date}:
+ 2014-01-29
+ 2014-01-30
+ 2014-01-31
+ 2014-02-01
+ 2014-02-02
+ 2014-02-03
 
 julia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)
-Date(2014, 1, 29):Month(1):Date(2014, 7, 29)
+Date("2014-01-29"):Month(1):Date("2014-07-29")
 
 julia> collect(dr)
-7-element Array{Date,1}:
- Date(2014, 1, 29)
- Date(2014, 2, 28)
- Date(2014, 3, 29)
- Date(2014, 4, 29)
- Date(2014, 5, 29)
- Date(2014, 6, 29)
- Date(2014, 7, 29)
+7-element Vector{Date}:
+ 2014-01-29
+ 2014-02-28
+ 2014-03-29
+ 2014-04-29
+ 2014-05-29
+ 2014-06-29
+ 2014-07-29
 ```
 
 ## Adjuster Functions
@@ -491,16 +490,15 @@ julia> filter(dr) do x
            Dates.April <= Dates.month(x) <= Dates.Nov &&
            Dates.dayofweekofmonth(x) == 2
        end
-8-element Array{Date,1}:
- Date(2014, 4, 8)
- Date(2014, 5, 13)
- Date(2014, 6, 10)
- Date(2014, 7, 8)
- Date(2014, 8, 12)
- Date(2014, 9, 9)
- Date(2014, 10, 14)
- Date(2014, 11, 11)
-
+8-element Vector{Date}:
+ 2014-04-08
+ 2014-05-13
+ 2014-06-10
+ 2014-07-08
+ 2014-08-12
+ 2014-09-09
+ 2014-10-14
+ 2014-11-11
 ```
 
 Additional examples and tests are available in [`stdlib/Dates/test/adjusters.jl`](https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/test/adjusters.jl).
@@ -644,6 +642,8 @@ Dates.TimeType
 Dates.DateTime
 Dates.Date
 Dates.Time
+Dates.TimeZone
+Dates.UTC
 ```
 
 ## Dates Functions
@@ -654,7 +654,7 @@ Dates.DateTime(::Dates.Period)
 Dates.DateTime(::Function, ::Any...)
 Dates.DateTime(::Dates.TimeType)
 Dates.DateTime(::AbstractString, ::AbstractString)
-Dates.format
+Dates.format(::Dates.TimeType, ::AbstractString)
 Dates.DateFormat
 Dates.@dateformat_str
 Dates.DateTime(::AbstractString, ::Dates.DateFormat)
@@ -670,7 +670,7 @@ Dates.Time(::Function, ::Any...)
 Dates.Time(::Dates.DateTime)
 Dates.now()
 Dates.now(::Type{Dates.UTC})
-Base.eps
+Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, TimeType})
 ```
 
 ### Accessor Functions

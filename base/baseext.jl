@@ -4,8 +4,8 @@
 
 # hook up VecElement constructor to Base.convert
 VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
-convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
+convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 
 # ## dims-type-converting Array constructors for convenience
 # type and dimensionality specified, accepting dims as series of Integers

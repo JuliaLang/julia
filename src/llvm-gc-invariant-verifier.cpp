@@ -3,6 +3,8 @@
 // This LLVM pass verifies invariants required for correct GC root placement.
 // See the devdocs for a description of these invariants.
 
+#include "llvm-version.h"
+
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -17,14 +19,15 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/InstVisitor.h>
+#if JL_LLVM_VERSION < 110000
 #include <llvm/IR/CallSite.h>
+#endif
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
 
@@ -153,7 +156,7 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
     CallingConv::ID CC = CI.getCallingConv();
-    if (CC == JLCALL_CC || CC == JLCALL_F_CC) {
+    if (CC == JLCALL_F_CC || CC == JLCALL_F2_CC) {
         for (Value *Arg : CI.arg_operands()) {
             Type *Ty = Arg->getType();
             Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == AddressSpace::Tracked,

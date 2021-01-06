@@ -4,7 +4,7 @@ module TestSymmetric
 
 using Test, LinearAlgebra, SparseArrays, Random
 
-Random.seed!(101)
+Random.seed!(1010)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
         Any[ [1 0; 0 1], [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
@@ -64,6 +64,11 @@ end
                     @test_throws ArgumentError Hermitian(Symmetric(aherm, :U), :L)
                 end
             end
+            @testset "diag" begin
+                D = Diagonal(x)
+                @test diag(Symmetric(D, :U))::Vector == x
+                @test diag(Hermitian(D, :U))::Vector == real(x)
+            end
             @testset "similar" begin
                 @test isa(similar(Symmetric(asym)), Symmetric{eltya})
                 @test isa(similar(Hermitian(aherm)), Hermitian{eltya})
@@ -88,6 +93,8 @@ end
             @testset "Unary minus for Symmetric/Hermitian matrices" begin
                 @test (-Symmetric(asym))::typeof(Symmetric(asym)) == -asym
                 @test (-Hermitian(aherm))::typeof(Hermitian(aherm)) == -aherm
+                @test (-Symmetric([true true; false false]))::Symmetric{Int,Matrix{Int}} == [-1 -1; -1 0]
+                @test (-Hermitian([true false; true false]))::Hermitian{Int,Matrix{Int}} == [-1 0; 0 0]
             end
 
             @testset "Addition and subtraction for Symmetric/Hermitian matrices" begin
@@ -363,6 +370,52 @@ end
                 @test Symmetric(asym)\b  ≈ asym\b
             end
         end
+        @testset "generalized dot product" begin
+            for uplo in (:U, :L)
+                @test dot(x, Hermitian(aherm, uplo), y) ≈ dot(x, Hermitian(aherm, uplo)*y) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), y)
+                @test dot(x, Hermitian(aherm, uplo), x) ≈ dot(x, Hermitian(aherm, uplo)*x) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), x)
+            end
+            if eltya <: Real
+                for uplo in (:U, :L)
+                    @test dot(x, Symmetric(aherm, uplo), y) ≈ dot(x, Symmetric(aherm, uplo)*y) ≈ dot(x, Matrix(Symmetric(aherm, uplo)), y)
+                    @test dot(x, Symmetric(aherm, uplo), x) ≈ dot(x, Symmetric(aherm, uplo)*x) ≈ dot(x, Matrix(Symmetric(aherm, uplo)), x)
+                end
+            end
+        end
+
+        @testset "dot product of symmetric and Hermitian matrices" begin
+            for mtype in (Symmetric, Hermitian)
+                symau = mtype(a, :U)
+                symal = mtype(a, :L)
+                msymau = Matrix(symau)
+                msymal = Matrix(symal)
+                @test_throws DimensionMismatch dot(symau, mtype(zeros(eltya, n-1, n-1)))
+                for eltyc in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
+                    creal = randn(n, n)/2
+                    cimag = randn(n, n)/2
+                    c = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimag) : creal)
+                    symcu = mtype(c, :U)
+                    symcl = mtype(c, :L)
+                    msymcu = Matrix(symcu)
+                    msymcl = Matrix(symcl)
+                    @test dot(symau, symcu) ≈ dot(msymau, msymcu)
+                    @test dot(symau, symcl) ≈ dot(msymau, msymcl)
+                    @test dot(symal, symcu) ≈ dot(msymal, msymcu)
+                    @test dot(symal, symcl) ≈ dot(msymal, msymcl)
+                end
+
+                # block matrices
+                blockm = [eltya == Int ? rand(1:7, 3, 3) : convert(Matrix{eltya}, eltya <: Complex ? complex.(randn(3, 3)/2, randn(3, 3)/2) : randn(3, 3)/2) for _ in 1:3, _ in 1:3]
+                symblockmu = mtype(blockm, :U)
+                symblockml = mtype(blockm, :L)
+                msymblockmu = Matrix(symblockmu)
+                msymblockml = Matrix(symblockml)
+                @test dot(symblockmu, symblockmu) ≈ dot(msymblockmu, msymblockmu)
+                @test dot(symblockmu, symblockml) ≈ dot(msymblockmu, msymblockml)
+                @test dot(symblockml, symblockmu) ≈ dot(msymblockml, msymblockmu)
+                @test dot(symblockml, symblockml) ≈ dot(msymblockml, msymblockml)
+            end
+        end
     end
 end
 
@@ -433,6 +486,9 @@ end
         W[1,1] = 4
         @test W == T([4 -1; -1 1])
         @test_throws ArgumentError (W[1,2] = 2)
+        if T == Hermitian
+            @test_throws ArgumentError (W[2,2] = 3+4im)
+        end
 
         @test Y + I == T([2 -1; -1 2])
         @test Y - I == T([0 -1; -1 0])
@@ -596,11 +652,79 @@ end
     @test Symmetric(B) == Symmetric(Matrix(B))
 end
 
+@testset "issue #32079: det for singular Symmetric matrix" begin
+    A = ones(Float64, 3, 3)
+    @test det(Symmetric(A))::Float64 == det(A) == 0.0
+    @test det(Hermitian(A))::Float64 == det(A) == 0.0
+    A = ones(ComplexF64, 3, 3)
+    @test det(Symmetric(A))::ComplexF64 == det(A) == 0.0
+    @test det(Hermitian(A))::Float64 == det(A) == 0.0
+end
+
 @testset "symmetric()/hermitian() for Numbers" begin
     @test LinearAlgebra.symmetric(1, :U) == 1
     @test LinearAlgebra.symmetric_type(Int) == Int
     @test LinearAlgebra.hermitian(1, :U) == 1
     @test LinearAlgebra.hermitian_type(Int) == Int
+end
+
+@testset "sqrt(nearly semidefinite)" begin
+    let A = [0.9999999999999998 4.649058915617843e-16 -1.3149405273715513e-16 9.9959579317056e-17; -8.326672684688674e-16 1.0000000000000004 2.9280733590254494e-16 -2.9993900031619594e-16; 9.43689570931383e-16 -1.339206523454095e-15 1.0000000000000007 -8.550505126287743e-16; -6.245004513516506e-16 -2.0122792321330962e-16 1.183061278035052e-16 1.0000000000000002],
+        B = [0.09648289218436859 0.023497875751503007 0.0 0.0; 0.023497875751503007 0.045787575150300804 0.0 0.0; 0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0],
+        C = Symmetric(A*B*A'), # semidefinite up to roundoff
+        Csqrt = sqrt(C)
+        @test Csqrt isa Symmetric{Float64}
+        @test Csqrt*Csqrt ≈ C rtol=1e-14
+    end
+    let D = Symmetric(Matrix(Diagonal([1 0; 0 -1e-14])))
+        @test sqrt(D) ≈ [1 0; 0 1e-7im] rtol=1e-14
+        @test sqrt(D, rtol=1e-13) ≈ [1 0; 0 0] rtol=1e-14
+        @test sqrt(D, rtol=1e-13)^2 ≈ D rtol=1e-13
+    end
+end
+
+@testset "Multiplications symmetric/hermitian for $T and $S" for T in
+        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
+    let A = Transpose(Symmetric(rand(S, 3, 3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ parent(A) * Bv
+        @test A * Bm ≈ parent(A) * Bm
+        @test Bm * A ≈ Bm * parent(A)
+    end
+    let A = Adjoint(Hermitian(rand(S, 3,3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ parent(A) * Bv
+        @test A * Bm ≈ parent(A) * Bm
+        @test Bm * A ≈ Bm * parent(A)
+    end
+end
+
+@testset "Dsiambiguation multiplication with transposed AbstractMatrix methods in linalg/matmul.jl for $T and $S" for T in
+        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
+    let Ahrs = Transpose(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = Transpose(Symmetric(rand(S, 3, 3))),
+        Ahcs = Transpose(Hermitian(Symmetric(rand(S, 3, 3))))
+
+        @test Ahrs * Ahrs ≈ Ahrs * parent(Ahrs)
+        @test Ahrs * Acs ≈ Ahrs * parent(Acs)
+        @test Acs * Acs ≈ parent(Acs) * parent(Acs)
+        @test Acs * Ahrs ≈ parent(Acs) * Ahrs
+        @test Ahrs * Ahcs ≈ parent(Ahrs) * Ahcs
+        @test Ahcs * Ahrs ≈ Ahcs * parent(Ahrs)
+    end
+end
+
+@testset "Dsiambiguation multiplication with adjointed AbstractMatrix methods in linalg/matmul.jl for $T and $S" for T in
+        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
+    let Ahrs = Adjoint(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = Adjoint(Symmetric(rand(S, 3, 3))),
+        Ahcs = Adjoint(Hermitian(Symmetric(rand(S, 3, 3))))
+
+        @test Ahrs * Ahrs ≈ Ahrs * parent(Ahrs)
+        @test Ahcs * Ahcs ≈ parent(Ahcs) * parent(Ahcs)
+        @test Ahrs * Ahcs ≈ Ahrs * parent(Ahcs)
+        @test Acs * Ahcs ≈ Acs * parent(Ahcs)
+        @test Ahcs * Ahrs ≈ parent(Ahcs) * Ahrs
+        @test Ahcs * Acs ≈ parent(Ahcs) * Acs
+    end
 end
 
 end # module TestSymmetric

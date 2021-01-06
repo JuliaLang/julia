@@ -93,10 +93,15 @@ m = Mmap.mmap(s, Vector{UInt8}, 1, sz+1)
 @test m[1] == 0x00
 close(s); finalize(m); m=nothing; GC.gc()
 
-s = open(file, "r")
-m = Mmap.mmap(s)
-@test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
-finalize(m); m=nothing; GC.gc()
+# See https://github.com/JuliaLang/julia/issues/32155
+# On PPC we receive `SEGV_MAPERR` instead of `SEGV_ACCERR` and
+# can thus not turn the segmentation fault into an exception.
+if !(Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le)
+    s = open(file, "r")
+    m = Mmap.mmap(s)
+    @test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
+    finalize(m); m=nothing; GC.gc()
+end
 
 write(file, "Hello World\n")
 
@@ -226,6 +231,22 @@ m = Mmap.mmap(s, BitArray, (72,))
 @test Test._check_bitarray_consistency(m)
 @test length(m) == 72
 close(s); finalize(m); m = nothing; GC.gc()
+
+m = Mmap.mmap(file, BitArray, (72,))
+@test Test._check_bitarray_consistency(m)
+@test length(m) == 72
+finalize(m); m = nothing; GC.gc()
+
+s = open(file, "r+")
+m = Mmap.mmap(s, BitArray, 72) # len integer instead of dims
+@test Test._check_bitarray_consistency(m)
+@test length(m) == 72
+close(s); finalize(m); m = nothing; GC.gc()
+
+m = Mmap.mmap(file, BitArray, 72) # len integer instead of dims
+@test Test._check_bitarray_consistency(m)
+@test length(m) == 72
+finalize(m); m = nothing; GC.gc()
 rm(file)
 
 # Mmap.mmap with an offset
@@ -290,6 +311,20 @@ n = similar(m, 12)
 @test length(n) == 12
 @test size(n) == (12,)
 finalize(m); m = nothing; GC.gc()
+
+if Sys.isunix()
+    file = tempname()
+    write(file, rand(Float64, 20))
+    A = Mmap.mmap(file, Vector{Float64}, 20)
+    @test Mmap.madvise!(A, Mmap.MADV_WILLNEED) === nothing # checking for no error
+    finalize(A); A = nothing; GC.gc()
+
+    write(file, BitArray(rand(Bool, 20)))
+    b = Mmap.mmap(file, BitArray, 20)
+    @test Mmap.madvise!(b, Mmap.MADV_WILLNEED) === nothing
+    finalize(b); b = nothing; GC.gc()
+    rm(file)
+end
 
 # test #14885
 file = tempname()

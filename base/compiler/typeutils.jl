@@ -15,10 +15,10 @@ isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 # true if Type{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
-isconstType(@nospecialize t) = isType(t) && issingletontype(t.parameters[1])
+isconstType(@nospecialize t) = isType(t) && hasuniquerep(t.parameters[1])
 
-# test whether T is a singleton type, s.t. T == S implies T === S
-function issingletontype(@nospecialize t)
+# test whether type T has a unique representation, s.t. T == S implies T === S
+function hasuniquerep(@nospecialize t)
     # typeof(Bottom) is special since even though it is a leaftype,
     # at runtime, it might be Type{Union{}} instead, so don't attempt inference of it
     t === typeof(Union{}) && return false
@@ -27,21 +27,21 @@ function issingletontype(@nospecialize t)
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return _all(issingletontype, t.parameters)
+        return _all(hasuniquerep, t.parameters)
     end
     return false
 end
 
 function has_nontrivial_const_info(@nospecialize t)
     isa(t, PartialStruct) && return true
-    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && issingletontype(t.val))
+    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && hasuniquerep(t.val))
 end
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || issingletontype(a.parameters[1]))
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
@@ -61,15 +61,60 @@ function valid_tparam(@nospecialize(x))
     return isa(x, Symbol) || isbits(x)
 end
 
+function compatible_vatuple(a::DataType, b::DataType)
+    vaa = a.parameters[end]
+    vab = a.parameters[end]
+    if !(isa(vaa, Core.TypeofVararg) && isa(vab, Core.TypeofVararg))
+        return isa(vaa, Core.TypeofVararg) == isa(vab, Core.TypeofVararg)
+    end
+    (isdefined(vaa, :N) == isdefined(vab, :N)) || return false
+    !isdefined(vaa, :N) && return true
+    return vaa.N === vab.N
+end
+
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
-function typesubtract(@nospecialize(a), @nospecialize(b))
+function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::Int)
     if a <: b && isnotbrokensubtype(a, b)
         return Bottom
     end
-    if isa(a, Union)
-        return Union{typesubtract(a.a, b),
-                     typesubtract(a.b, b)}
+    ua = unwrap_unionall(a)
+    if isa(ua, Union)
+        return Union{typesubtract(rewrap_unionall(ua.a, a), b, MAX_UNION_SPLITTING),
+                     typesubtract(rewrap_unionall(ua.b, a), b, MAX_UNION_SPLITTING)}
+    elseif a isa DataType
+        ub = unwrap_unionall(b)
+        if ub isa DataType
+            if a.name === ub.name === Tuple.name &&
+                    length(a.parameters) == length(ub.parameters)
+                if 1 < unionsplitcost(a.parameters) <= MAX_UNION_SPLITTING
+                    ta = switchtupleunion(a)
+                    return typesubtract(Union{ta...}, b, 0)
+                elseif b isa DataType
+                    if !compatible_vatuple(a, b)
+                        return a
+                    end
+                    # if exactly one element is not bottom after calling typesubtract
+                    # then the result is all of the elements as normal except that one
+                    notbottom = fill(false, length(a.parameters))
+                    for i = 1:length(notbottom)
+                        ap = unwrapva(a.parameters[i])
+                        bp = unwrapva(b.parameters[i])
+                        notbottom[i] = !(ap <: bp && isnotbrokensubtype(ap, bp))
+                    end
+                    let i = findfirst(notbottom)
+                        if i !== nothing && findnext(notbottom, i + 1) === nothing
+                            ta = collect(a.parameters)
+                            ap = a.parameters[i]
+                            bp = b.parameters[i]
+                            (isa(ap, Core.TypeofVararg) || isa(bp, Core.TypeofVararg)) && return a
+                            ta[i] = typesubtract(ap, bp, min(2, MAX_UNION_SPLITTING))
+                            return Tuple{ta...}
+                        end
+                    end
+                end
+            end
+        end
     end
     return a # TODO: improve this bound?
 end
@@ -95,23 +140,31 @@ _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
 
 function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
-    # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-    tmerge_maybe_vararg(@nospecialize(a), @nospecialize(b)) = tmerge(a, tvar_extent(unwrapva(b)))
     t = init
     for x in ct
-        t = tmerge_maybe_vararg(t, x)
+        # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
+        t = tmerge(t, tvar_extent(unwrapva(x)))
     end
     return Vararg{widenconst(t)}
 end
 
-function countunionsplit(atypes::Union{SimpleVector,Vector{Any}})
+# Gives a cost function over the effort to switch a tuple-union representation
+# as a cartesian product, relative to the size of the original representation.
+# Thus, we count the longest element as being roughly invariant to being inside
+# or outside of the Tuple/Union nesting, though somewhat more expensive to be
+# outside than inside because the representation is larger (because and it
+# informs the callee whether any splitting is possible).
+function unionsplitcost(atypes::Union{SimpleVector,Vector{Any}})
     nu = 1
+    max = 2
     for ti in atypes
         if isa(ti, Union)
-            nu, ovf = Core.Intrinsics.checked_smul_int(nu, unionlen(ti::Union))
-            if ovf
-                return typemax(Int)
+            nti = unionlen(ti)
+            if nti > max
+                max, nti = nti, max
             end
+            nu, ovf = Core.Intrinsics.checked_smul_int(nu, nti)
+            ovf && return typemax(Int)
         end
     end
     return nu
@@ -147,21 +200,18 @@ end
 # unioncomplexity estimates the number of calls to `tmerge` to obtain the given type by
 # counting the Union instances, taking also into account those hidden in a Tuple or UnionAll
 function unioncomplexity(u::Union)
-    inner = max(unioncomplexity(u.a), unioncomplexity(u.b))
-    return inner == 0 ? 0 : 1 + inner
+    return unioncomplexity(u.a) + unioncomplexity(u.b) + 1
 end
 function unioncomplexity(t::DataType)
-    t.name === Tuple.name || return 0
-    c = 1
+    t.name === Tuple.name || isvarargtype(t) || return 0
+    c = 0
     for ti in t.parameters
-        ci = unioncomplexity(ti)
-        if ci > c
-            c = ci
-        end
+        c = max(c, unioncomplexity(ti))
     end
     return c
 end
 unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body), unioncomplexity(u.var.ub))
+unioncomplexity(t::Core.TypeofVararg) = isdefined(t, :T) ? unioncomplexity(t.T) : 0
 unioncomplexity(@nospecialize(x)) = 0
 
 function improvable_via_constant_propagation(@nospecialize(t))

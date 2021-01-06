@@ -101,8 +101,12 @@ end
         @test_throws(ArgumentError, eigen(fill(eltya, 1, 1)))
         @test_throws(ArgumentError, eigen(fill(eltya, 2, 2)))
         test_matrix = rand(typeof(eltya),3,3)
-        test_matrix[2,2] = eltya
+        test_matrix[1,3] = eltya
         @test_throws(ArgumentError, eigen(test_matrix))
+        @test_throws(ArgumentError, eigen(Symmetric(test_matrix)))
+        @test_throws(ArgumentError, eigen(Hermitian(test_matrix)))
+        @test eigen(Symmetric(test_matrix, :L)) isa Eigen
+        @test eigen(Hermitian(test_matrix, :L)) isa Eigen
     end
 end
 
@@ -129,7 +133,16 @@ end
     valsstring = sprint((t, s) -> show(t, "text/plain", s), e.values)
     vecsstring = sprint((t, s) -> show(t, "text/plain", s), e.vectors)
     factstring = sprint((t, s) -> show(t, "text/plain", s), e)
-    @test factstring == "$(summary(e))\neigenvalues:\n$valsstring\neigenvectors:\n$vecsstring"
+    @test factstring == "$(summary(e))\nvalues:\n$valsstring\nvectors:\n$vecsstring"
 end
+
+@testset "eigen of an Adjoint" begin
+    A = randn(3,3)
+    @test eigvals(A') == eigvals(copy(A'))
+    @test eigen(A')   == eigen(copy(A'))
+    @test eigmin(A') == eigmin(copy(A'))
+    @test eigmax(A') == eigmax(copy(A'))
+end
+
 
 end # module TestEigen

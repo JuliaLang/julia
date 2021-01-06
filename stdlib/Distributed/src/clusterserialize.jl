@@ -2,7 +2,7 @@
 
 using Serialization: serialize_cycle, deserialize_cycle, writetag,
                      serialize_typename, deserialize_typename,
-                     TYPENAME_TAG, reset_state, serialize_type
+                     TYPENAME_TAG, TASK_TAG, reset_state, serialize_type
 using Serialization.__deserialized_types__
 
 import Serialization: object_number, lookup_object_number, remember_object
@@ -102,6 +102,19 @@ function serialize(s::ClusterSerializer, t::Core.TypeName)
     nothing
 end
 
+function serialize(s::ClusterSerializer, t::Task)
+    serialize_cycle(s, t) && return
+    if istaskstarted(t) && !istaskdone(t)
+        error("cannot serialize a running Task")
+    end
+    writetag(s.io, TASK_TAG)
+    serialize(s, t.code)
+    serialize(s, t.storage)
+    serialize(s, t._state)
+    serialize(s, t.result)
+    serialize(s, t._isexception)
+end
+
 function serialize(s::ClusterSerializer, g::GlobalRef)
     # Record if required and then invoke the default GlobalRef serializer.
     sym = g.name
@@ -123,7 +136,7 @@ end
 # d) is a bits type
 function syms_2b_sent(s::ClusterSerializer, identifier)
     lst = Symbol[]
-    check_syms = get(s.glbs_in_tnobj, identifier, [])
+    check_syms = get(s.glbs_in_tnobj, identifier, Symbol[])
     for sym in check_syms
         v = getfield(Main, sym)
 
@@ -158,6 +171,15 @@ end
 function deserialize_global_from_main(s::ClusterSerializer, sym)
     sym_isconst = deserialize(s)
     v = deserialize(s)
+    if isdefined(Main, sym) && (sym_isconst || isconst(Main, sym))
+        if isequal(getfield(Main, sym), v)
+            # same value; ok
+            return nothing
+        else
+            @warn "Cannot transfer global variable $sym; it already has a value."
+            return nothing
+        end
+    end
     if sym_isconst
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), Main, sym, v)
     else
@@ -222,6 +244,17 @@ function deserialize(s::ClusterSerializer, t::Type{<:CapturedException})
     return CapturedException(capex, bt)
 end
 
+function deserialize(s::ClusterSerializer, ::Type{Task})
+    t = Task(nothing)
+    deserialize_cycle(s, t)
+    t.code = deserialize(s)
+    t.storage = deserialize(s)
+    t._state = deserialize(s)::UInt8
+    t.result = deserialize(s)
+    t._isexception = deserialize(s)
+    t
+end
+
 """
     clear!(syms, pids=workers(); mod=Main)
 
@@ -234,7 +267,7 @@ An exception is raised if a global constant is requested to be cleared.
 """
 function clear!(syms, pids=workers(); mod=Main)
     @sync for p in pids
-        @async remotecall_wait(clear_impl!, p, syms, mod)
+        @sync_add remotecall(clear_impl!, p, syms, mod)
     end
 end
 clear!(sym::Symbol, pid::Int; mod=Main) = clear!([sym], [pid]; mod=mod)

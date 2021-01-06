@@ -1,4 +1,5 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 [ "$(uname)" = Darwin ] || { echo "Requires Darwin." 2>&1; exit 1; }
 

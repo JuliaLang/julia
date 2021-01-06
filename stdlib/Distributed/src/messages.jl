@@ -2,18 +2,6 @@
 
 abstract type AbstractMsg end
 
-const REF_ID = Ref(1)
-next_ref_id() = (id = REF_ID[]; REF_ID[] = id+1; id)
-
-struct RRID
-    whence::Int
-    id::Int
-
-    RRID() = RRID(myid(),next_ref_id())
-    RRID(whence, id) = new(whence,id)
-end
-hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
-==(r::RRID, s::RRID) = (r.whence==s.whence && r.id==s.id)
 
 ## Wire format description
 #
@@ -36,17 +24,17 @@ end
 null_id(id) =  id == RRID(0, 0)
 
 struct CallMsg{Mode} <: AbstractMsg
-    f::Function
+    f::Any
     args::Tuple
     kwargs
 end
 struct CallWaitMsg <: AbstractMsg
-    f::Function
+    f::Any
     args::Tuple
     kwargs
 end
 struct RemoteDoMsg <: AbstractMsg
-    f::Function
+    f::Any
     args::Tuple
     kwargs
 end
@@ -147,6 +135,7 @@ function flush_gc_msgs(w::Worker)
     end
 
     # del_msgs gets populated by finalizers, so be very careful here about ordering of allocations
+    # XXX: threading requires this to be atomic
     new_array = Any[]
     msgs = w.del_msgs
     w.del_msgs = new_array
@@ -178,7 +167,7 @@ function send_msg_(w::Worker, header, msg, now::Bool)
         wait(w.initialized)
     end
     io = w.w_stream
-    lock(io.lock)
+    lock(io)
     try
         reset_state(w.w_serializer)
         serialize_hdr_raw(io, header)
@@ -191,7 +180,7 @@ function send_msg_(w::Worker, header, msg, now::Bool)
             flush(io)
         end
     finally
-        unlock(io.lock)
+        unlock(io)
     end
 end
 

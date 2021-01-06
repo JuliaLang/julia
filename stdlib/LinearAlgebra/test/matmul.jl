@@ -2,6 +2,7 @@
 
 module TestMatmul
 
+using Base: rtoldefault
 using Test, LinearAlgebra, Random
 using LinearAlgebra: mul!
 
@@ -105,6 +106,19 @@ end
         @test mul!(C, transpose(A), transpose(B)) == A'*B'
         @test LinearAlgebra.mul!(C, adjoint(A), transpose(B)) == A'*transpose(B)
 
+        # Inplace multiply-add
+        α = rand(-10:10)
+        β = rand(-10:10)
+        rand!(C, -10:10)
+        βC = β * C
+        _C0 = copy(C)
+        C0() = (C .= _C0; C)  # reset C but don't change the container type
+        @test mul!(C0(), A, B, α, β) == α*A*B .+ βC
+        @test mul!(C0(), transpose(A), B, α, β) == α*A'*B .+ βC
+        @test mul!(C0(), A, transpose(B), α, β) == α*A*B' .+ βC
+        @test mul!(C0(), transpose(A), transpose(B), α, β) == α*A'*B' .+ βC
+        @test mul!(C0(), adjoint(A), transpose(B), α, β) == α*A'*transpose(B) .+ βC
+
         #test DimensionMismatch for generic_matmatmul
         @test_throws DimensionMismatch LinearAlgebra.mul!(C, adjoint(A), transpose(fill(1,4,4)))
         @test_throws DimensionMismatch LinearAlgebra.mul!(C, adjoint(fill(1,4,4)), transpose(B))
@@ -113,6 +127,9 @@ end
     CC = Matrix{Int}(undef, 2, 2)
     for v in (copy(vv), view(vv, 1:2)), C in (copy(CC), view(CC, 1:2, 1:2))
         @test @inferred(mul!(C, v, adjoint(v))) == [1 2; 2 4]
+
+        C .= [1 0; 0 1]
+        @test @inferred(mul!(C, v, adjoint(v), 2, 3)) == [5 4; 4 11]
     end
 end
 
@@ -127,11 +144,15 @@ end
     CC = Matrix{Int}(undef, 3, 3)
     for v in (copy(vv), view(vv, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test mul!(C, v, transpose(v)) == v*v'
+        C .= C0 = rand(-10:10, size(C))
+        @test mul!(C, v, transpose(v), 2, 3) == 2v*v' .+ 3C0
     end
     vvf = map(Float64,vv)
     CC = Matrix{Float64}(undef, 3, 3)
     for vf in (copy(vvf), view(vvf, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test mul!(C, vf, transpose(vf)) == vf*vf'
+        C .= C0 = rand(eltype(C), size(C))
+        @test mul!(C, vf, transpose(vf), 2, 3) == 2vf*vf' .+ 3C0
     end
 end
 
@@ -140,6 +161,29 @@ end
     BB = rand(Float64,6,6)
     CC = zeros(Float64,6,6)
     for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
+        @test LinearAlgebra.mul!(C, transpose(A), transpose(B)) == transpose(A)*transpose(B)
+        @test LinearAlgebra.mul!(C, A, adjoint(B)) == A*transpose(B)
+        @test LinearAlgebra.mul!(C, adjoint(A), B) == transpose(A)*B
+
+        # Inplace multiply-add
+        α = rand(Float64)
+        β = rand(Float64)
+        rand!(C)
+        βC = β * C
+        _C0 = copy(C)
+        C0() = (C .= _C0; C)  # reset C but don't change the container type
+        @test mul!(C0(), transpose(A), transpose(B), α, β) ≈ α*transpose(A)*transpose(B) .+ βC
+        @test mul!(C0(), A, adjoint(B), α, β) ≈ α*A*transpose(B) .+ βC
+        @test mul!(C0(), adjoint(A), B, α, β) ≈ α*transpose(A)*B .+ βC
+    end
+end
+
+@testset "mixed Blas-non-Blas matmul" begin
+    AA = rand(-10:10,6,6)
+    BB = rand(Float64,6,6)
+    CC = zeros(Float64,6,6)
+    for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
+        @test LinearAlgebra.mul!(C, A, B) == A*B
         @test LinearAlgebra.mul!(C, transpose(A), transpose(B)) == transpose(A)*transpose(B)
         @test LinearAlgebra.mul!(C, A, adjoint(B)) == A*transpose(B)
         @test LinearAlgebra.mul!(C, adjoint(A), B) == transpose(A)*B
@@ -248,6 +292,110 @@ end
     end
 end
 
+@testset "muladd" begin
+    A23 = reshape(1:6, 2,3) .+ 0
+    B34 = reshape(1:12, 3,4) .+ im
+    u2 = [10,20]
+    v3 = [3,5,7] .+ im
+    w4 = [11,13,17,19im]
+
+    @testset "matrix-matrix" begin
+        @test muladd(A23, B34, 0) == A23 * B34
+        @test muladd(A23, B34, 100) == A23 * B34 .+ 100
+        @test muladd(A23, B34, u2) == A23 * B34 .+ u2
+        @test muladd(A23, B34, w4') == A23 * B34 .+ w4'
+        @test_throws DimensionMismatch muladd(B34, A23, 1)
+        @test muladd(ones(1,3), ones(3,4), ones(1,4)) == fill(4.0,1,4)
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(9,4))
+
+        # broadcasting fallback method allows trailing dims
+        @test muladd(A23, B34, ones(2,4,1)) == A23 * B34 + ones(2,4,1)
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(9,4,1))
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3,4), ones(1,4,9))
+        # and catches z::Array{T,0}
+        @test muladd(A23, B34, fill(0)) == A23 * B34
+    end
+    @testset "matrix-vector" begin
+        @test muladd(A23, v3, 0) == A23 * v3
+        @test muladd(A23, v3, 100) == A23 * v3 .+ 100
+        @test muladd(A23, v3, u2) == A23 * v3 .+ u2
+        @test muladd(A23, v3, im) isa Vector{Complex{Int}}
+        @test muladd(ones(1,3), ones(3), ones(1)) == [4]
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(7))
+
+        # fallback
+        @test muladd(A23, v3, ones(2,1,1)) == A23 * v3 + ones(2,1,1)
+        @test_throws DimensionMismatch muladd(A23, v3, ones(2,2))
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(7,1))
+        @test_throws DimensionMismatch muladd(ones(1,3), ones(3), ones(1,7))
+        @test muladd(A23, v3, fill(0)) == A23 * v3
+    end
+    @testset "adjoint-matrix" begin
+        @test muladd(v3', B34, 0) isa Adjoint
+        @test muladd(v3', B34, 2im) == v3' * B34 .+ 2im
+        @test muladd(v3', B34, w4') == v3' * B34 .+ w4'
+
+        # via fallback
+        @test muladd(v3', B34, ones(1,4)) == (B34' * v3 + ones(4,1))'
+        @test_throws DimensionMismatch muladd(v3', B34, ones(7,4))
+        @test_throws DimensionMismatch muladd(v3', B34, ones(1,4,7))
+        @test muladd(v3', B34, fill(0)) == v3' * B34 # does not make an Adjoint
+    end
+    @testset "vector-adjoint" begin
+        @test muladd(u2, v3', 0) isa Matrix
+        @test muladd(u2, v3', 99) == u2 * v3' .+ 99
+        @test muladd(u2, v3', A23) == u2 * v3' .+ A23
+
+        @test muladd(u2, v3', ones(2,3,1)) == u2 * v3' + ones(2,3,1)
+        @test_throws DimensionMismatch muladd(u2, v3', ones(2,3,4))
+        @test_throws DimensionMismatch muladd([1], v3', ones(7,3))
+        @test muladd(u2, v3', fill(0)) == u2 * v3'
+    end
+    @testset "dot" begin # all use muladd(::Any, ::Any, ::Any)
+        @test muladd(u2', u2, 0) isa Number
+        @test muladd(v3', v3, im) == dot(v3,v3) + im
+        @test muladd(u2', u2, [1]) == [dot(u2,u2) + 1]
+        @test_throws DimensionMismatch muladd(u2', u2, [1,1]) == [dot(u2,u2) + 1]
+        @test muladd(u2', u2, fill(0)) == dot(u2,u2)
+    end
+    @testset "arrays of arrays" begin
+        vofm = [rand(1:9,2,2) for _ in 1:3]
+        Mofm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
+
+        @test muladd(vofm', vofm, vofm[1]) == vofm' * vofm .+ vofm[1] # inner
+        @test muladd(vofm, vofm', Mofm) == vofm * vofm' .+ Mofm       # outer
+        @test muladd(vofm', Mofm, vofm') == vofm' * Mofm .+ vofm'     # bra-mat
+        @test muladd(Mofm, Mofm, vofm) == Mofm * Mofm .+ vofm         # mat-mat
+        @test muladd(Mofm, vofm, vofm) == Mofm * vofm .+ vofm         # mat-vec
+    end
+end
+
+@testset "muladd & structured matrices" begin
+    A33 = reshape(1:9, 3,3) .+ im
+    v3 = [3,5,7im]
+
+    # no special treatment
+    @test muladd(Symmetric(A33), Symmetric(A33), 1) == Symmetric(A33) * Symmetric(A33) .+ 1
+    @test muladd(Hermitian(A33), Hermitian(A33), v3) == Hermitian(A33) * Hermitian(A33) .+ v3
+    @test muladd(adjoint(A33), transpose(A33), A33) == A33' * transpose(A33) .+ A33
+
+    u1 = muladd(UpperTriangular(A33), UpperTriangular(A33), Diagonal(v3))
+    @test u1 isa UpperTriangular
+    @test u1 == UpperTriangular(A33) * UpperTriangular(A33) + Diagonal(v3)
+
+    # diagonal
+    @test muladd(Diagonal(v3), Diagonal(A33), Diagonal(v3)).diag == ([1,5,9] .+ im .+ 1) .* v3
+
+    # uniformscaling
+    @test muladd(Diagonal(v3), I, I).diag == v3 .+ 1
+    @test muladd(2*I, 3*I, I).λ == 7
+    @test muladd(A33, A33', I) == A33 * A33' + I
+
+    # https://github.com/JuliaLang/julia/issues/38426
+    @test @evalpoly(A33, 1.0*I, 1.0*I) == I + A33
+    @test @evalpoly(A33, 1.0*I, 1.0*I, 1.0*I) == I + A33 + A33^2
+end
+
 # issue #6450
 @test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
 
@@ -350,6 +498,13 @@ end
     end
 end
 
+@testset "#35163" begin
+    # typemax(Int32) * Int32(1) + Int32(1) * Int32(1) should wrap around
+    # not promote to Int64, convert to Int32 and throw inexacterror
+    val = mul!(Int32[1], fill(typemax(Int32), 1, 1), Int32[1], Int32(1), Int32(1))
+    @test val[1] == typemin(Int32)
+end
+
 # Number types that lack conversion to the destination type
 struct RootInt
     i::Int
@@ -371,6 +526,9 @@ Transpose(x::RootInt) = x
     C = [0]
     mul!(C, a, transpose(a))
     @test C[1] == 9
+    C = [1]
+    mul!(C, a, transpose(a), 2, 3)
+    @test C[1] == 21
     a = [RootInt(2),RootInt(10)]
     @test a*adjoint(a) == [4 20; 20 100]
     A = [RootInt(3) RootInt(5)]
@@ -381,6 +539,20 @@ function test_mul(C, A, B)
     mul!(C, A, B)
     @test Array(A) * Array(B) ≈ C
     @test A*B ≈ C
+
+    # This is similar to how `isapprox` choose `rtol` (when `atol=0`)
+    # but consider all number types involved:
+    rtol = max(rtoldefault.(real.(eltype.((C, A, B))))...)
+
+    rand!(C)
+    T = promote_type(eltype.((A, B))...)
+    α = rand(T)
+    β = rand(T)
+    βArrayC = β * Array(C)
+    βC = β * C
+    mul!(C, A, B, α, β)
+    @test α * Array(A) * Array(B) .+ βArrayC ≈ C  rtol=rtol
+    @test α * A * B .+ βC ≈ C  rtol=rtol
 end
 
 @testset "mul! vs * for special types" begin
@@ -482,7 +654,7 @@ end
     @test  transpose(Xv2)*Xv2     ≈ XtX
     @test (transpose(Xv3)*Xv3)[1] ≈ XtX
     @test  Xv1'*Xv1     ≈ XcX
-    @test Xv2'*Xv2 ≈ norm(Xv2)^2
+    @test  Xv2'*Xv2     ≈ XcX
     @test (Xv3'*Xv3)[1] ≈ XcX
     @test (Xv1*transpose(Xv1))[1] ≈ XXt
     @test  Xv2*transpose(Xv2)     ≈ XXt
@@ -506,6 +678,61 @@ end
     script = joinpath(@__DIR__, "ambiguous_exec.jl")
     cmd = `$(Base.julia_cmd()) --startup-file=no $script`
     @test success(pipeline(cmd; stdout=stdout, stderr=stderr))
+end
+
+struct A32092
+    x::Float64
+end
+Base.:+(x::Float64, a::A32092) = x + a.x
+Base.:*(x::Float64, a::A32092) = x * a.x
+@testset "Issue #32092" begin
+    @test ones(2, 2) * [A32092(1.0), A32092(2.0)] == fill(3.0, (2,))
+end
+
+@testset "strong zero" begin
+    @testset for α in Any[false, 0.0, 0], n in 1:4
+        C = ones(n, n)
+        A = fill!(zeros(n, n), NaN)
+        B = ones(n, n)
+        @test mul!(copy(C), A, B, α, 1.0) == C
+    end
+end
+
+@testset "CartesianIndex handling in _modify!" begin
+    C = rand(10, 10)
+    A = rand(10, 10)
+    @test mul!(view(C, 1:10, 1:10), A, 0.5) == A * 0.5
+end
+
+@testset "Issue #33214: tiled generic mul!" begin
+    n = 100
+    A = rand(n, n)
+    B = rand(n, n)
+    C = zeros(n, n)
+    mul!(C, A, B, -1 + 0im, 0)
+    D = -A * B
+    @test D ≈ C
+
+    # Just in case dispatching on the surface API `mul!` is changed in the future,
+    # let's test the function where the tiled multiplication is defined.
+    fill!(C, 0)
+    LinearAlgebra._generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(-1, 0))
+    @test D ≈ C
+end
+
+@testset "multiplication of empty matrices without calling zero" begin
+    r, c = rand(0:9, 2)
+    A = collect(Number, rand(r, c))
+    B = rand(c, 0)
+    C = A * B
+    @test size(C) == (r, 0)
+    @test_throws MethodError zero(eltype(C))
+end
+
+@testset "Issue #33873: genmatmul! with empty operands" begin
+    @test Matrix{Any}(undef, 0, 2) * Matrix{Any}(undef, 2, 3) == Matrix{Any}(undef, 0, 3)
+    @test_throws MethodError Matrix{Any}(undef, 2, 0) * Matrix{Any}(undef, 0, 3)
+    @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
 end
 
 end # module TestMatmul

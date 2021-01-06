@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const Chars = Union{AbstractChar,Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}
+const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}
 
 # starts with and ends with predicates
 
@@ -22,7 +22,7 @@ function startswith(a::AbstractString, b::AbstractString)
     a, b = Iterators.Stateful(a), Iterators.Stateful(b)
     all(splat(==), zip(a, b)) && isempty(b)
 end
-startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
+startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::AbstractChar in chars
 
 """
     endswith(s::AbstractString, suffix::AbstractString)
@@ -50,8 +50,7 @@ function startswith(a::Union{String, SubString{String}},
     cub = ncodeunits(b)
     if ncodeunits(a) < cub
         false
-    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                 pointer(a), pointer(b), sizeof(b)) == 0
+    elseif _memcmp(a, b, sizeof(b)) == 0
         nextind(a, cub) == cub + 1
     else
         false
@@ -64,13 +63,100 @@ function endswith(a::Union{String, SubString{String}},
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
-    elseif ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-                 pointer(a, astart), pointer(b), sizeof(b)) == 0
+    elseif GC.@preserve(a, _memcmp(pointer(a, astart), b, sizeof(b))) == 0
         thisind(a, astart) == astart
     else
         false
     end
 end
+
+"""
+    contains(haystack::AbstractString, needle)
+
+Return `true` if `haystack` contains `needle`.
+This is the same as `occursin(needle, haystack)`, but is provided for consistency with
+`startswith(haystack, needle)` and `endswith(haystack, needle)`.
+
+# Examples
+```jldoctest
+julia> contains("JuliaLang is pretty cool!", "Julia")
+true
+
+julia> contains("JuliaLang is pretty cool!", 'a')
+true
+
+julia> contains("aba", r"a.a")
+true
+
+julia> contains("abba", r"a.a")
+false
+```
+
+!!! compat "Julia 1.5"
+    The `contains` function requires at least Julia 1.5.
+"""
+contains(haystack::AbstractString, needle) = occursin(needle, haystack)
+
+"""
+    endswith(suffix)
+
+Create a function that checks whether its argument ends with `suffix`, i.e.
+a function equivalent to `y -> endswith(y, suffix)`.
+
+The returned function is of type `Base.Fix2{typeof(endswith)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.5"
+    The single argument `endswith(suffix)` requires at least Julia 1.5.
+
+# Examples
+```jldoctest
+julia> endswith_julia = endswith("Julia");
+
+julia> endswith_julia("Julia")
+true
+
+julia> endswith_julia("JuliaLang")
+false
+```
+"""
+endswith(s) = Base.Fix2(endswith, s)
+
+"""
+    startswith(prefix)
+
+Create a function that checks whether its argument starts with `prefix`, i.e.
+a function equivalent to `y -> startswith(y, prefix)`.
+
+The returned function is of type `Base.Fix2{typeof(startswith)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.5"
+    The single argument `startswith(prefix)` requires at least Julia 1.5.
+
+# Examples
+```jldoctest
+julia> startswith_julia = startswith("Julia");
+
+julia> startswith_julia("Julia")
+true
+
+julia> startswith_julia("NotJulia")
+false
+```
+"""
+startswith(s) = Base.Fix2(startswith, s)
+
+"""
+    contains(needle)
+
+Create a function that checks whether its argument contains `needle`, i.e.
+a function equivalent to `haystack -> contains(haystack, needle)`.
+
+The returned function is of type `Base.Fix2{typeof(contains)}`, which can be
+used to implement specialized methods.
+"""
+contains(needle) = Base.Fix2(contains, needle)
 
 """
     chop(s::AbstractString; head::Integer = 0, tail::Integer = 1)
@@ -106,7 +192,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chomp(s::AbstractString)
+    chomp(s::AbstractString) -> SubString
 
 Remove a single trailing newline from a string.
 
@@ -135,8 +221,8 @@ function chomp(s::String)
 end
 
 """
-    lstrip([pred=isspace,] str::AbstractString)
-    lstrip(str::AbstractString, chars)
+    lstrip([pred=isspace,] str::AbstractString) -> SubString
+    lstrip(str::AbstractString, chars) -> SubString
 
 Remove leading characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -158,7 +244,7 @@ julia> lstrip(a)
 """
 function lstrip(f, s::AbstractString)
     e = lastindex(s)
-    for (i, c) in pairs(s)
+    for (i::Int, c::AbstractChar) in pairs(s)
         !f(c) && return @inbounds SubString(s, i, e)
     end
     SubString(s, e+1, e)
@@ -167,8 +253,8 @@ lstrip(s::AbstractString) = lstrip(isspace, s)
 lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 
 """
-    rstrip([pred=isspace,] str::AbstractString)
-    rstrip(str::AbstractString, chars)
+    rstrip([pred=isspace,] str::AbstractString) -> SubString
+    rstrip(str::AbstractString, chars) -> SubString
 
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -190,7 +276,7 @@ julia> rstrip(a)
 """
 function rstrip(f, s::AbstractString)
     for (i, c) in Iterators.reverse(pairs(s))
-        f(c) || return @inbounds SubString(s, 1, i)
+        f(c::AbstractChar) || return @inbounds SubString(s, 1, i::Int)
     end
     SubString(s, 1, 0)
 end
@@ -198,8 +284,8 @@ rstrip(s::AbstractString) = rstrip(isspace, s)
 rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 
 """
-    strip([pred=isspace,] str::AbstractString)
-    strip(str::AbstractString, chars)
+    strip([pred=isspace,] str::AbstractString) -> SubString
+    strip(str::AbstractString, chars) -> SubString
 
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.
@@ -238,14 +324,15 @@ julia> lpad("March", 10)
 "     March"
 ```
 """
-lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = lpad(string(s), n, string(p))
+lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = lpad(string(s)::AbstractString, n, string(p))
 
 function lpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
-    m = n - length(s)
+    n = Int(n)::Int
+    m = signed(n) - Int(length(s))::Int
     m ≤ 0 && return string(s)
     l = length(p)
     q, r = divrem(m, l)
@@ -265,14 +352,15 @@ julia> rpad("March", 20)
 "March               "
 ```
 """
-rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = rpad(string(s), n, string(p))
+rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = rpad(string(s)::AbstractString, n, string(p))
 
 function rpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
-    m = n - length(s)
+    n = Int(n)::Int
+    m = signed(n) - Int(length(s))::Int
     m ≤ 0 && return string(s)
     l = length(p)
     q, r = divrem(m, l)
@@ -302,8 +390,8 @@ See also [`rsplit`](@ref).
 julia> a = "Ma.rch"
 "Ma.rch"
 
-julia> split(a,".")
-2-element Array{SubString{String},1}:
+julia> split(a, ".")
+2-element Vector{SubString{String}}:
  "Ma"
  "rch"
 ```
@@ -314,7 +402,7 @@ function split(str::T, splitter;
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
-function split(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+function split(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _split(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
@@ -323,26 +411,28 @@ function split(str::T, splitter::AbstractChar;
     _split(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
 
-function _split(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
+function _split(str::AbstractString, splitter::F, limit::Integer, keepempty::Bool, strs::Vector) where F
+    # Forcing specialization on `splitter` improves performance (roughly 30% decrease in runtime)
+    # and prevents a major invalidation risk (1550 MethodInstances)
     i = 1 # firstindex(str)
-    n = lastindex(str)
-    r = something(findfirst(splitter,str), 0)
-    if r != 0:-1
-        j, k = first(r), nextind(str,last(r))
+    n = lastindex(str)::Int
+    r = findfirst(splitter,str)::Union{Nothing,Int,UnitRange{Int}}
+    if r !== nothing
+        j, k = first(r), nextind(str,last(r))::Int
         while 0 < j <= n && length(strs) != limit-1
             if i < k
                 if keepempty || i < j
-                    push!(strs, @inbounds SubString(str,i,prevind(str,j)))
+                    push!(strs, @inbounds SubString(str,i,prevind(str,j)::Int))
                 end
                 i = k
             end
-            (k <= j) && (k = nextind(str,j))
-            r = something(findnext(splitter,str,k), 0)
-            r == 0:-1 && break
-            j, k = first(r), nextind(str,last(r))
+            (k <= j) && (k = nextind(str,j)::Int)
+            r = findnext(splitter,str,k)::Union{Nothing,Int,UnitRange{Int}}
+            r === nothing && break
+            j, k = first(r), nextind(str,last(r))::Int
         end
     end
-    if keepempty || i <= ncodeunits(str)
+    if keepempty || i <= ncodeunits(str)::Int
         push!(strs, @inbounds SubString(str,i))
     end
     return strs
@@ -364,20 +454,20 @@ Similar to [`split`](@ref), but starting from the end of the string.
 julia> a = "M.a.r.c.h"
 "M.a.r.c.h"
 
-julia> rsplit(a,".")
-5-element Array{SubString{String},1}:
+julia> rsplit(a, ".")
+5-element Vector{SubString{String}}:
  "M"
  "a"
  "r"
  "c"
  "h"
 
-julia> rsplit(a,".";limit=1)
-1-element Array{SubString{String},1}:
+julia> rsplit(a, "."; limit=1)
+1-element Vector{SubString{String}}:
  "M.a.r.c.h"
 
-julia> rsplit(a,".";limit=2)
-2-element Array{SubString{String},1}:
+julia> rsplit(a, "."; limit=2)
+2-element Vector{SubString{String}}:
  "M.a.r.c"
  "h"
 ```
@@ -388,7 +478,7 @@ function rsplit(str::T, splitter;
                 limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
-function rsplit(str::T, splitter::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+function rsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
                 limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
     _rsplit(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
 end
@@ -398,13 +488,13 @@ function rsplit(str::T, splitter::AbstractChar;
 end
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
-    n = lastindex(str)
-    r = something(findlast(splitter, str), 0)
+    n = lastindex(str)::Int
+    r = something(findlast(splitter, str)::Union{Nothing,Int,UnitRange{Int}}, 0)
     j, k = first(r), last(r)
     while j > 0 && k > 0 && length(strs) != limit-1
-        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k),n))
-        n = prevind(str, j)
-        r = something(findprev(splitter,str,n), 0)
+        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k)::Int,n))
+        n = prevind(str, j)::Int
+        r = something(findprev(splitter,str,n)::Union{Nothing,Int,UnitRange{Int}}, 0)
         j, k = first(r), last(r)
     end
     (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))
@@ -423,10 +513,13 @@ _replace(io, repl::Function, str, r, pattern::Function) =
 replace(str::String, pat_repl::Pair{<:AbstractChar}; count::Integer=typemax(Int)) =
     replace(str, isequal(first(pat_repl)) => last(pat_repl); count=count)
 
-replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{<:AbstractChar}},
+replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{AbstractChar}},
                                             AbstractVector{<:AbstractChar},Set{<:AbstractChar}}};
         count::Integer=typemax(Int)) =
     replace(str, in(first(pat_repl)) => last(pat_repl), count=count)
+
+_pat_replacer(x) = x
+_free_pat_replacer(x) = nothing
 
 function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     pattern, repl = pat_repl
@@ -435,12 +528,17 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
     n = 1
     e = lastindex(str)
     i = a = firstindex(str)
+    pattern = _pat_replacer(pattern)
     r = something(findnext(pattern,str,i), 0)
     j, k = first(r), last(r)
+    if j == 0
+        _free_pat_replacer(pattern)
+        return str
+    end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
     while j != 0
         if i == a || i <= k
-            unsafe_write(out, pointer(str, i), UInt(j-i))
+            GC.@preserve str unsafe_write(out, pointer(str, i), UInt(j-i))
             _replace(out, repl, str, r, pattern)
         end
         if k < j
@@ -451,10 +549,11 @@ function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
             i = k = nextind(str, k)
         end
         r = something(findnext(pattern,str,k), 0)
-        r == 0:-1 || n == count && break
+        r === 0:-1 || n == count && break
         j, k = first(r), last(r)
         n += 1
     end
+    _free_pat_replacer(pattern)
     write(out, SubString(str,i))
     String(take!(out))
 end
@@ -467,7 +566,7 @@ If `count` is provided, replace at most `count` occurrences.
 `pat` may be a single character, a vector or a set of characters, a string,
 or a regular expression.
 If `r` is a function, each occurrence is replaced with `r(s)`
-where `s` is the matched substring (when `pat`is a `Regex` or `AbstractString`) or
+where `s` is the matched substring (when `pat` is a `AbstractPattern` or `AbstractString`) or
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
@@ -511,12 +610,12 @@ julia> s = string(12345, base = 16)
 "3039"
 
 julia> hex2bytes(s)
-2-element Array{UInt8,1}:
+2-element Vector{UInt8}:
  0x30
  0x39
 
 julia> a = b"01abEF"
-6-element Base.CodeUnits{UInt8,String}:
+6-element Base.CodeUnits{UInt8, String}:
  0x30
  0x31
  0x61
@@ -525,7 +624,7 @@ julia> a = b"01abEF"
  0x46
 
 julia> hex2bytes(a)
-3-element Array{UInt8,1}:
+3-element Vector{UInt8}:
  0x01
  0xab
  0xef
@@ -580,7 +679,7 @@ julia> a = string(12345, base = 16)
 "3039"
 
 julia> b = hex2bytes(a)
-2-element Array{UInt8,1}:
+2-element Vector{UInt8}:
  0x30
  0x39
 
@@ -590,7 +689,7 @@ julia> bytes2hex(b)
 """
 function bytes2hex end
 
-function bytes2hex(a::AbstractArray{UInt8})
+function bytes2hex(a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
     b = Base.StringVector(2*length(a))
     @inbounds for (i, x) in enumerate(a)
         b[2i - 1] = hex_chars[1 + x >> 4]
@@ -599,10 +698,11 @@ function bytes2hex(a::AbstractArray{UInt8})
     return String(b)
 end
 
-bytes2hex(io::IO, a::AbstractArray{UInt8}) =
+function bytes2hex(io::IO, a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
     for x in a
         print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
     end
+end
 
 # check for pure ASCII-ness
 function ascii(s::String)
@@ -631,3 +731,12 @@ julia> ascii("abcdefgh")
 ```
 """
 ascii(x::AbstractString) = ascii(String(x))
+
+Base.rest(s::Union{String,SubString{String}}, i=1) = SubString(s, i)
+function Base.rest(s::AbstractString, st...)
+    io = IOBuffer()
+    for c in Iterators.rest(s, st...)
+        print(io, c)
+    end
+    return String(take!(io))
+end

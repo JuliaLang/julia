@@ -60,9 +60,6 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
         @test @fastmath(cmp(two,two)) == cmp(two,two)
         @test @fastmath(cmp(two,three)) == cmp(two,three)
         @test @fastmath(cmp(three,two)) == cmp(three,two)
-        @test @fastmath(one/zero) == convert(T,Inf)
-        @test @fastmath(-one/zero) == -convert(T,Inf)
-        @test isnan(@fastmath(zero/zero)) # must not throw
 
         for x in (zero, two, convert(T, Inf), convert(T, NaN))
             @test @fastmath(isfinite(x))
@@ -109,7 +106,8 @@ end
         for f in (:+, :-, :abs, :abs2, :conj, :inv, :sign,
                   :acos, :asin, :asinh, :atan, :atanh, :cbrt, :cos, :cosh,
                   :exp10, :exp2, :exp, :log10, :log1p,
-                  :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh)
+                  :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh,
+                  :min, :max)
             @eval begin
                 @test @fastmath($f($half)) ≈ $f($half)
                 @test @fastmath($f($third)) ≈ $f($third)
@@ -142,6 +140,14 @@ end
                 @test @fastmath($f($third, $half)) ≈ $f($third, $half)
             end
         end
+
+        # issue 31795
+        for f in (:min, :max)
+            @eval begin
+                @test @fastmath($f($half, $third, 1+$half)) ≈ $f($half, $third, 1+$half)
+            end
+        end
+
         for f in (:minmax,)
             @eval begin
                 @test @fastmath($f($half, $third)[1]) ≈ $f($half, $third)[1]
@@ -225,4 +231,21 @@ end
 
 @testset "literal powers" begin
     @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
+end
+
+@testset "sincos fall-backs" begin
+    struct FloatWrapper
+        inner::Float64
+    end
+    Base.sin(outer::FloatWrapper) = sin(outer.inner)
+    Base.cos(outer::FloatWrapper) = cos(outer.inner)
+    for zilch in (FloatWrapper(0.0), 0, 0 + 0 * im)
+        @test (@fastmath sincos(zilch)) == (0, 1)
+    end
+end
+
+@testset "non-numeric fallbacks" begin
+    @test (@fastmath :(:sin)) == :(:sin)
+    @test (@fastmath "a" * "b") == "ab"
+    @test (@fastmath "a" ^ 2) == "aa"
 end

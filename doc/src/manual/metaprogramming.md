@@ -47,7 +47,7 @@ julia> ex1.head
 
 ```jldoctest prog
 julia> ex1.args
-3-element Array{Any,1}:
+3-element Vector{Any}:
   :+
  1
  1
@@ -105,10 +105,10 @@ an [interned string](https://en.wikipedia.org/wiki/String_interning) used as one
 of expressions:
 
 ```jldoctest
-julia> :foo
+julia> s = :foo
 :foo
 
-julia> typeof(ans)
+julia> typeof(s)
 Symbol
 ```
 
@@ -125,6 +125,9 @@ julia> Symbol("func",10)
 julia> Symbol(:var,'_',"sym")
 :var_sym
 ```
+
+Note that to use `:` syntax, the symbol's name must be a valid identifier.
+Otherwise the `Symbol(str)` constructor must be used.
 
 In the context of an expression, symbols are used to indicate access to variables; when an expression
 is evaluated, a symbol is replaced with the value bound to that symbol in the appropriate [scope](@ref scope-of-variables).
@@ -146,7 +149,7 @@ julia> :(::)
 The second syntactic purpose of the `:` character is to create expression objects without using
 the explicit [`Expr`](@ref) constructor. This is referred to as *quoting*. The `:` character, followed
 by paired parentheses around a single statement of Julia code, produces an `Expr` object based
-on the enclosed code. Here is example of the short form used to quote an arithmetic expression:
+on the enclosed code. Here is an example of the short form used to quote an arithmetic expression:
 
 ```jldoctest
 julia> ex = :(a+b*c+1)
@@ -196,7 +199,7 @@ julia> typeof(ex)
 Expr
 ```
 
-### Interpolation
+### [Interpolation](@id man-expression-interpolation)
 
 Direct construction of [`Expr`](@ref) objects with value arguments is powerful, but `Expr` constructors
 can be tedious compared to "normal" Julia syntax. As an alternative, Julia allows *interpolation* of
@@ -265,7 +268,7 @@ end))
 end
 ```
 
-Notice that the result contains `Expr(:$, :x)`, which means that `x` has not been
+Notice that the result contains `$x`, which means that `x` has not been
 evaluated yet.
 In other words, the `$` expression "belongs to" the inner quote expression, and
 so its argument is only evaluated when the inner quote expression is:
@@ -293,7 +296,7 @@ end))
 end
 ```
 
-Notice that `:(1 + 2)` now appears in the result instead of the symbol `:x`.
+Notice that `(1 + 2)` now appears in the result instead of the symbol `x`.
 Evaluating this expression yields an interpolated `3`:
 
 ```jldoctest interp1
@@ -308,7 +311,7 @@ The intuition behind this behavior is that `x` is evaluated once for each `$`:
 one `$` works similarly to `eval(:x)`, giving `x`'s value, while two `$`s do the
 equivalent of `eval(eval(:x))`.
 
-### QuoteNode
+### [QuoteNode](@id man-quote-node)
 
 The usual representation of a `quote` form in an AST is an [`Expr`](@ref) with head `:quote`:
 
@@ -328,9 +331,15 @@ Expr
 As we have seen, such expressions support interpolation with `$`.
 However, in some situations it is necessary to quote code *without* performing interpolation.
 This kind of quoting does not yet have syntax, but is represented internally
-as an object of type `QuoteNode`.
-The parser yields `QuoteNode`s for simple quoted items like symbols:
+as an object of type `QuoteNode`:
+```jldoctest interp1
+julia> eval(Meta.quot(Expr(:$, :(1+2))))
+3
 
+julia> eval(QuoteNode(Expr(:$, :(1+2))))
+:($(Expr(:$, :(1 + 2))))
+```
+The parser yields `QuoteNode`s for simple quoted items like symbols:
 ```jldoctest interp1
 julia> dump(Meta.parse(":x"))
 QuoteNode
@@ -339,16 +348,16 @@ QuoteNode
 
 `QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
-### [`eval`](@ref) and effects
+### Evaluating expressions
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using
 [`eval`](@ref):
 
 ```jldoctest interp1
-julia> :(1 + 2)
+julia> ex1 = :(1 + 2)
 :(1 + 2)
 
-julia> eval(ans)
+julia> eval(ex1)
 3
 
 julia> ex = :(a + b)
@@ -544,7 +553,7 @@ julia> macro twostep(arg)
 @twostep (macro with 1 method)
 
 julia> ex = macroexpand(Main, :(@twostep :(1, 2, 3)) );
-I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
+I execute at parse time. The argument is: :((1, 2, 3))
 ```
 
 The first call to [`println`](@ref) is executed when [`macroexpand`](@ref) is called. The
@@ -762,19 +771,19 @@ final value. The macro might look like this:
 ```julia
 macro time(ex)
     return quote
-        local t0 = time()
+        local t0 = time_ns()
         local val = $ex
-        local t1 = time()
-        println("elapsed time: ", t1-t0, " seconds")
+        local t1 = time_ns()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds")
         val
     end
 end
 ```
 
-Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time` to refer
-to the [`time`](@ref) function in Julia Base, not to any `time` variable the user
+Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time_ns` to refer
+to the [`time_ns`](@ref) function in Julia Base, not to any `time_ns` variable the user
 might have (the same applies to `println`). Imagine the problems that could occur if the user
-expression `ex` also contained assignments to a variable called `t0`, or defined its own `time`
+expression `ex` also contained assignments to a variable called `t0`, or defined its own `time_ns`
 variable. We might get errors, or mysteriously incorrect behavior.
 
 Julia's macro expander solves these problems in the following way. First, variables within a macro
@@ -783,7 +792,7 @@ to (and not declared global), declared local, or used as a function argument nam
 it is considered global. Local variables are then renamed to be unique (using the [`gensym`](@ref)
 function, which generates new symbols), and global variables are resolved within the macro definition
 environment. Therefore both of the above concerns are handled; the macro's locals will not conflict
-with any user variables, and `time` and `println` will refer to the Julia Base definitions.
+with any user variables, and `time_ns` and `println` will refer to the Julia Base definitions.
 
 One problem remains however. Consider the following use of this macro:
 
@@ -791,14 +800,14 @@ One problem remains however. Consider the following use of this macro:
 module MyModule
 import Base.@time
 
-time() = ... # compute something
+time_ns() = ... # compute something
 
-@time time()
+@time time_ns()
 end
 ```
 
-Here the user expression `ex` is a call to `time`, but not the same `time` function that the macro
-uses. It clearly refers to `MyModule.time`. Therefore we must arrange for the code in `ex` to
+Here the user expression `ex` is a call to `time_ns`, but not the same `time_ns` function that the macro
+uses. It clearly refers to `MyModule.time_ns`. Therefore we must arrange for the code in `ex` to
 be resolved in the macro call environment. This is done by "escaping" the expression with [`esc`](@ref):
 
 ```julia
@@ -848,10 +857,10 @@ macro time(expr)
     return :(timeit(() -> $(esc(expr))))
 end
 function timeit(f)
-    t0 = time()
+    t0 = time_ns()
     val = f()
-    t1 = time()
-    println("elapsed time: ", t1-t0, " seconds")
+    t1 = time_ns()
+    println("elapsed time: ", (t1-t0)/1e9, " seconds")
     return val
 end
 ```
@@ -1068,6 +1077,21 @@ but they are just functions, written entirely in Julia. You can read their sourc
 what they do -- and all they do is construct expression objects to be inserted into your program's
 syntax tree.
 
+Another way to define a macro would be like this:
+
+```julia
+macro foo_str(str, flag)
+    # do stuff
+end
+```
+This macro can then be called with the following syntax:
+
+```julia
+foo"str"flag
+```
+
+The type of flag in the above mentioned syntax would be a `String` with contents of whatever trails after the string literal.
+
 ## Generated functions
 
 A very special macro is [`@generated`](@ref), which allows you to define so-called *generated functions*.
@@ -1084,16 +1108,17 @@ To make this efficient, the result is usually cached. And to make this inferable
 subset of the language is usable. Thus, generated functions provide a flexible way to move work from
 run time to compile time, at the expense of greater restrictions on allowed constructs.
 
-When defining generated functions, there are four main differences to ordinary functions:
+When defining generated functions, there are five main differences to ordinary functions:
 
 1. You annotate the function declaration with the `@generated` macro. This adds some information
    to the AST that lets the compiler know that this is a generated function.
 2. In the body of the generated function you only have access to the *types* of the arguments –
-   not their values – and any function that was defined *before* the definition of the generated
-   function.
+   not their values.
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
-4. Generated functions must not *mutate* or *observe* any non-constant global state (including,
+4. Generated functions are only permitted to call functions that were defined *before* the definition of the generated
+   function. (Failure to follow this may result in getting `MethodErrors` referring to functions from a future world-age.)
+5. Generated functions must not *mutate* or *observe* any non-constant global state (including,
    for example, IO, locks, non-local dictionaries, or using [`hasmethod`](@ref)).
    This means they can only read global constants, and cannot have any side effects.
    In other words, they must be completely pure.
@@ -1285,7 +1310,7 @@ to build some more advanced (and valid) functionality...
 
 ### An advanced example
 
-Julia's base library has a an internal `sub2ind` function to calculate a linear index into an n-dimensional
+Julia's base library has an internal `sub2ind` function to calculate a linear index into an n-dimensional
 array, based on a set of n multilinear indices - in other words, to calculate the index `i` that
 can be used to index into an array `A` using `A[i]`, instead of `A[x,y,z,...]`. One possible implementation
 is the following:

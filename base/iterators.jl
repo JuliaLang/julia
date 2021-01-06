@@ -10,9 +10,9 @@ import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
-    tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
-    IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, map, any
+    tail, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
+    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, AbstractRange,
+    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple
 
 import .Base:
     first, last,
@@ -22,7 +22,27 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
+
+"""
+    Iterators.map(f, iterators...)
+
+Create a lazy mapping.  This is another syntax for writing
+`(f(args...) for args in zip(iterators...))`.
+
+!!! compat "Julia 1.6"
+    This function requires at least Julia 1.6.
+
+# Examples
+```jldoctest
+julia> collect(Iterators.map(x -> x^2, 1:3))
+3-element Vector{Int64}:
+ 1
+ 4
+ 9
+```
+"""
+map(f, args...) = Base.Generator(f, args...)
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)
@@ -254,12 +274,6 @@ get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
 
 # zip
 
-zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
-zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
-zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
-zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
-zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
-
 struct Zip{Is<:Tuple}
     is::Is
 end
@@ -270,8 +284,9 @@ end
 Run multiple iterators at the same time, until any of them is exhausted. The value type of
 the `zip` iterator is a tuple of values of its subiterators.
 
-Note: `zip` orders the calls to its subiterators in such a way that stateful iterators will
-not advance when another iterator finishes in the current iteration.
+!!! note
+    `zip` orders the calls to its subiterators in such a way that stateful iterators will
+    not advance when another iterator finishes in the current iteration.
 
 # Examples
 ```jldoctest
@@ -279,7 +294,7 @@ julia> a = 1:5
 1:5
 
 julia> b = ["e","d","b","c","a"]
-5-element Array{String,1}:
+5-element Vector{String}:
  "e"
  "d"
  "b"
@@ -287,7 +302,7 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Iterators.Zip{Tuple{UnitRange{Int64},Array{String,1}}}((1:5, ["e", "d", "b", "c", "a"]))
+zip(1:5, ["e", "d", "b", "c", "a"])
 
 julia> length(c)
 5
@@ -312,16 +327,19 @@ function _zip_min_length(is)
     end
 end
 _zip_min_length(is::Tuple{}) = nothing
-size(z::Zip) = _promote_shape(map(size, z.is)...)
-axes(z::Zip) = _promote_shape(map(axes, z.is)...)
-_promote_shape(a, b...) = promote_shape(a, _promote_shape(b...))
-_promote_shape(a) = a
-eltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_eltype(Is)
-_zip_eltype(::Type{Is}) where {Is<:Tuple} =
-    tuple_type_cons(eltype(tuple_type_head(Is)), _zip_eltype(tuple_type_tail(Is)))
-_zip_eltype(::Type{Tuple{}}) = Tuple{}
-@inline isdone(z::Zip) = _zip_any_isdone(z.is, map(_ -> (), z.is))
-@inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, map(tuple, ss))
+size(z::Zip) = _promote_tuple_shape(Base.map(size, z.is)...)
+axes(z::Zip) = _promote_tuple_shape(Base.map(axes, z.is)...)
+_promote_tuple_shape((a,)::Tuple{OneTo}, (b,)::Tuple{OneTo}) = (intersect(a, b),)
+_promote_tuple_shape((m,)::Tuple{Integer}, (n,)::Tuple{Integer}) = (min(m, n),)
+_promote_tuple_shape(a, b) = promote_shape(a, b)
+_promote_tuple_shape(a, b...) = _promote_tuple_shape(a, _promote_tuple_shape(b...))
+_promote_tuple_shape(a) = a
+eltype(::Type{Zip{Is}}) where {Is<:Tuple} = Tuple{ntuple(n -> eltype(fieldtype(Is, n)), _counttuple(Is)::Int)...}
+#eltype(::Type{Zip{Tuple{}}}) = Tuple{}
+#eltype(::Type{Zip{Tuple{A}}}) where {A} = Tuple{eltype(A)}
+#eltype(::Type{Zip{Tuple{A, B}}}) where {A, B} = Tuple{eltype(A), eltype(B)}
+@inline isdone(z::Zip) = _zip_any_isdone(z.is, Base.map(_ -> (), z.is))
+@inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, Base.map(tuple, ss))
 @inline function _zip_any_isdone(is, ss)
     d1 = isdone(is[1], ss[1]...)
     d1 === true && return true
@@ -329,8 +347,8 @@ _zip_eltype(::Type{Tuple{}}) = Tuple{}
 end
 @inline _zip_any_isdone(::Tuple{}, ::Tuple{}) = false
 
-@propagate_inbounds iterate(z::Zip) = _zip_iterate_all(z.is, map(_ -> (), z.is))
-@propagate_inbounds iterate(z::Zip, ss) = _zip_iterate_all(z.is, map(tuple, ss))
+@propagate_inbounds iterate(z::Zip) = _zip_iterate_all(z.is, Base.map(_ -> (), z.is))
+@propagate_inbounds iterate(z::Zip, ss) = _zip_iterate_all(z.is, Base.map(tuple, ss))
 
 # This first queries isdone from every iterator. If any gives true, it immediately returns
 # nothing. It then iterates all those where isdone returned missing, afterwards all those
@@ -374,19 +392,23 @@ function _zip_isdone(is, ss)
 end
 _zip_isdone(::Tuple{}, ::Tuple{}) = (false, ())
 
-IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_size(Is)
-_zip_iterator_size(::Type{Is}) where {Is<:Tuple} =
-    zip_iteratorsize(IteratorSize(tuple_type_head(Is)),
-                     _zip_iterator_size(tuple_type_tail(Is)))
-_zip_iterator_size(::Type{Tuple{I}}) where {I} = IteratorSize(I)
-_zip_iterator_size(::Type{Tuple{}}) = IsInfinite()
-IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = _zip_iterator_eltype(Is)
-_zip_iterator_eltype(::Type{Is}) where {Is<:Tuple} =
-    and_iteratoreltype(IteratorEltype(tuple_type_head(Is)),
-                       _zip_iterator_eltype(tuple_type_tail(Is)))
-_zip_iterator_eltype(::Type{Tuple{}}) = HasEltype()
+IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratorsize(ntuple(n -> IteratorSize(fieldtype(Is, n)), _counttuple(Is)::Int)...)
+IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratoreltype(ntuple(n -> IteratorEltype(fieldtype(Is, n)), _counttuple(Is)::Int)...)
 
-reverse(z::Zip) = Zip(map(reverse, z.is))
+zip_iteratorsize() = IsInfinite()
+zip_iteratorsize(I) = I
+zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
+zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
+zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
+zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
+zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
+zip_iteratorsize(a, b, tail...) = zip_iteratorsize(a, zip_iteratorsize(b, tail...))
+
+zip_iteratoreltype() = HasEltype()
+zip_iteratoreltype(a) = a
+zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
+
+reverse(z::Zip) = Zip(Base.map(reverse, z.is))
 
 # filter
 
@@ -413,7 +435,7 @@ See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 # Examples
 ```jldoctest
 julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
-Base.Iterators.Filter{typeof(isodd),Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
+Base.Iterators.Filter{typeof(isodd), Vector{Int64}}(isodd, [1, 2, 3, 4, 5])
 
 julia> foreach(println, f)
 1
@@ -440,6 +462,70 @@ IteratorSize(::Type{<:Filter}) = SizeUnknown()
 
 reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
 
+# Accumulate -- partial reductions of a function over an iterator
+
+struct Accumulate{F,I,T}
+    f::F
+    itr::I
+    init::T
+end
+
+"""
+    Iterators.accumulate(f, itr; [init])
+
+Given a 2-argument function `f` and an iterator `itr`, return a new
+iterator that successively applies `f` to the previous value and the
+next element of `itr`.
+
+This is effectively a lazy version of [`Base.accumulate`](@ref).
+
+!!! compat "Julia 1.5"
+    Keyword argument `init` is added in Julia 1.5.
+
+# Examples
+```jldoctest
+julia> f = Iterators.accumulate(+, [1,2,3,4]);
+
+julia> foreach(println, f)
+1
+3
+6
+10
+
+julia> f = Iterators.accumulate(+, [1,2,3]; init = 100);
+
+julia> foreach(println, f)
+101
+103
+106
+```
+"""
+accumulate(f, itr; init = Base._InitialValue()) = Accumulate(f, itr, init)
+
+function iterate(itr::Accumulate)
+    state = iterate(itr.itr)
+    if state === nothing
+        return nothing
+    end
+    val = Base.BottomRF(itr.f)(itr.init, state[1])
+    return (val, (val, state[2]))
+end
+
+function iterate(itr::Accumulate, state)
+    nxt = iterate(itr.itr, state[2])
+    if nxt === nothing
+        return nothing
+    end
+    val = itr.f(state[1], nxt[1])
+    return (val, (val, nxt[2]))
+end
+
+length(itr::Accumulate) = length(itr.itr)
+size(itr::Accumulate) = size(itr.itr)
+
+IteratorSize(::Type{<:Accumulate{<:Any,I}}) where {I} = IteratorSize(I)
+IteratorEltype(::Type{<:Accumulate}) = EltypeUnknown()
+
 # Rest -- iterate starting at the given state
 
 struct Rest{I,S}
@@ -455,7 +541,7 @@ An iterator that yields the same elements as `iter`, but starting at the given `
 # Examples
 ```jldoctest
 julia> collect(Iterators.rest([1,2,3,4], 2))
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  4
@@ -478,9 +564,9 @@ julia> a
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> collect(rest)
-2-element Array{Char,1}:
- 'b'
- 'c'
+2-element Vector{Char}:
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
 ```
 """
 function peel(itr)
@@ -554,7 +640,7 @@ julia> a = 1:2:11
 1:2:11
 
 julia> collect(a)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
   1
   3
   5
@@ -563,7 +649,7 @@ julia> collect(a)
  11
 
 julia> collect(Iterators.take(a,3))
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  5
@@ -611,7 +697,7 @@ julia> a = 1:2:11
 1:2:11
 
 julia> collect(a)
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
   1
   3
   5
@@ -620,7 +706,7 @@ julia> collect(a)
  11
 
 julia> collect(Iterators.drop(a,4))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
   9
  11
 ```
@@ -647,6 +733,105 @@ function iterate(it::Drop)
 end
 iterate(it::Drop, state) = iterate(it.xs, state)
 isdone(it::Drop, state) = isdone(it.xs, state)
+
+
+# takewhile
+
+struct TakeWhile{I,P<:Function}
+    pred::P
+    xs::I
+end
+
+"""
+    takewhile(pred, iter)
+
+An iterator that generates element from `iter` as long as predicate `pred` is true,
+afterwards, drops every element.
+
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> collect(Iterators.takewhile(<(3),s))
+2-element Vector{Int64}:
+ 1
+ 2
+```
+"""
+takewhile(pred,xs) = TakeWhile(pred,xs)
+
+function iterate(ibl::TakeWhile, itr...)
+    y = iterate(ibl.xs,itr...)
+    y === nothing && return nothing
+    ibl.pred(y[1]) || return nothing
+    y
+end
+
+IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
+eltype(::Type{TakeWhile{I,P}} where P) where {I} = eltype(I)
+IteratorEltype(::Type{TakeWhile{I}} where P) where {I} = IteratorEltype(I)
+
+
+# dropwhile
+
+struct DropWhile{I,P<:Function}
+    pred::P
+    xs::I
+end
+
+"""
+    dropwhile(pred, iter)
+
+An iterator that drops element from `iter` as long as predicate `pred` is true,
+afterwards, returns every element.
+
+!!! compat "Julia 1.4"
+    This function requires at least Julia 1.4.
+
+# Examples
+
+```jldoctest
+julia> s = collect(1:5)
+5-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> collect(Iterators.dropwhile(<(3),s))
+3-element Vector{Int64}:
+ 3
+ 4
+ 5
+```
+"""
+dropwhile(pred,itr) = DropWhile(pred,itr)
+
+iterate(ibl::DropWhile,itr) = iterate(ibl.xs, itr)
+function iterate(ibl::DropWhile)
+    y = iterate(ibl.xs)
+    while y !== nothing
+        ibl.pred(y[1]) || break
+        y = iterate(ibl.xs,y[2])
+    end
+    y
+end
+
+IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
+eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
+IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
+
 
 # Cycle an iterator forever
 
@@ -704,7 +889,7 @@ many times (equivalent to `take(repeated(x), n)`).
 julia> a = Iterators.repeated([1 2], 4);
 
 julia> collect(a)
-4-element Array{Array{Int64,2},1}:
+4-element Vector{Matrix{Int64}}:
  [1 2]
  [1 2]
  [1 2]
@@ -737,7 +922,7 @@ changes the fastest.
 # Examples
 ```jldoctest
 julia> collect(Iterators.product(1:2, 3:5))
-2×3 Array{Tuple{Int64,Int64},2}:
+2×3 Matrix{Tuple{Int64, Int64}}:
  (1, 3)  (1, 4)  (1, 5)
  (2, 3)  (2, 4)  (2, 5)
 ```
@@ -746,7 +931,10 @@ product(iters...) = ProductIterator(iters)
 
 IteratorSize(::Type{ProductIterator{Tuple{}}}) = HasShape{0}()
 IteratorSize(::Type{ProductIterator{T}}) where {T<:Tuple} =
-    prod_iteratorsize( IteratorSize(tuple_type_head(T)), IteratorSize(ProductIterator{tuple_type_tail(T)}) )
+    prod_iteratorsize(ntuple(n -> IteratorSize(fieldtype(T, n)), _counttuple(T)::Int)..., HasShape{0}())
+
+prod_iteratorsize() = HasShape{0}()
+prod_iteratorsize(I) = I
 
 prod_iteratorsize(::HasLength, ::HasLength) = HasShape{2}()
 prod_iteratorsize(::HasLength, ::HasShape{N}) where {N} = HasShape{N+1}()
@@ -758,6 +946,7 @@ prod_iteratorsize(::IsInfinite, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(a, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(::IsInfinite, b) = IsInfinite()
 prod_iteratorsize(a, b) = SizeUnknown()
+prod_iteratorsize(a, b, tail...) = prod_iteratorsize(a, prod_iteratorsize(b, tail...))
 
 size(P::ProductIterator) = _prod_size(P.iterators)
 _prod_size(::Tuple{}) = ()
@@ -780,16 +969,17 @@ length(P::ProductIterator) = prod(size(P))
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
+
 function IteratorEltype(::Type{ProductIterator{T}}) where {T<:Tuple}
-    I = tuple_type_head(T)
-    P = ProductIterator{tuple_type_tail(T)}
-    IteratorEltype(I) == EltypeUnknown() ? EltypeUnknown() : IteratorEltype(P)
+    E = ntuple(n -> IteratorEltype(fieldtype(T, n)), _counttuple(T)::Int)
+    any(I -> I == EltypeUnknown(), E) && return EltypeUnknown()
+    return E[end]
 end
 
-eltype(::Type{<:ProductIterator{I}}) where {I} = _prod_eltype(I)
+eltype(::Type{ProductIterator{I}}) where {I} = _prod_eltype(I)
 _prod_eltype(::Type{Tuple{}}) = Tuple{}
 _prod_eltype(::Type{I}) where {I<:Tuple} =
-    Base.tuple_type_cons(eltype(tuple_type_head(I)),_prod_eltype(tuple_type_tail(I)))
+    Tuple{ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...}
 
 iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
@@ -817,7 +1007,7 @@ end
     isdone(P) === true && return nothing
     next = _piterate(P.iterators...)
     next === nothing && return nothing
-    return (map(x -> x[1], next), next)
+    return (Base.map(x -> x[1], next), next)
 end
 
 @inline _piterate1(::Tuple{}, ::Tuple{}) = nothing
@@ -838,10 +1028,10 @@ end
     isdone(P, states) === true && return nothing
     next = _piterate1(P.iterators, states)
     next === nothing && return nothing
-    return (map(x -> x[1], next), next)
+    return (Base.map(x -> x[1], next), next)
 end
 
-reverse(p::ProductIterator) = ProductIterator(map(reverse, p.iterators))
+reverse(p::ProductIterator) = ProductIterator(Base.map(reverse, p.iterators))
 
 # flatten an iterator of iterators
 
@@ -859,7 +1049,7 @@ Put differently, the elements of the argument iterator are concatenated.
 # Examples
 ```jldoctest
 julia> collect(Iterators.flatten((1:2, 8:9)))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  8
@@ -887,7 +1077,7 @@ _flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
 IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
-    fieldcount(T)*length(f.it)
+    return N * length(f.it)
 end
 flatten_length(f, ::Type{<:Number}) = length(f.it)
 flatten_length(f, T) = throw(ArgumentError(
@@ -921,38 +1111,56 @@ Iterate over a collection `n` elements at a time.
 # Examples
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
-3-element Array{Array{Int64,1},1}:
+3-element Vector{SubArray{Int64, 1, Vector{Int64}, Tuple{UnitRange{Int64}}, true}}:
  [1, 2]
  [3, 4]
  [5]
 ```
 """
-partition(c::T, n::Integer) where {T} = PartitionIterator{T}(c, Int(n))
-
+function partition(c, n::Integer)
+    n < 1 && throw(ArgumentError("cannot create partitions of length $n"))
+    return PartitionIterator(c, Int(n))
+end
 
 struct PartitionIterator{T}
     c::T
     n::Int
 end
+# Partitions are explicitly a linear indexing operation, so reshape to 1-d immediately
+PartitionIterator(A::AbstractArray, n::Int) = PartitionIterator(vec(A), n)
+PartitionIterator(v::AbstractVector, n::Int) = PartitionIterator{typeof(v)}(v, n)
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
+# Arrays use a generic `view`-of-a-`vec`, so we cannot exactly predict what we'll get back
+eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{eltype(T)}
+# But for some common implementations in Base we know the answer exactly
+eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
+
+IteratorEltype(::Type{PartitionIterator{T}}) where {T} = IteratorEltype(T)
+IteratorEltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
+IteratorEltype(::Type{PartitionIterator{T}}) where {T<:Vector} = IteratorEltype(T)
+
 partition_iteratorsize(::HasShape) = HasLength()
 partition_iteratorsize(isz) = isz
 function IteratorSize(::Type{PartitionIterator{T}}) where {T}
     partition_iteratorsize(IteratorSize(T))
 end
 
-IteratorEltype(::Type{<:PartitionIterator{T}}) where {T} = IteratorEltype(T)
-
 function length(itr::PartitionIterator)
     l = length(itr.c)
-    return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
+    return cld(l, itr.n)
 end
 
-function iterate(itr::PartitionIterator{<:Vector}, state=1)
+function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
     state > length(itr.c) && return nothing
     r = min(state + itr.n - 1, length(itr.c))
-    return view(itr.c, state:r), r + 1
+    return @inbounds itr.c[state:r], r + 1
+end
+
+function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
+    return @inbounds view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
@@ -990,7 +1198,7 @@ There are several different ways to think about this iterator wrapper:
    whenever an item is produced.
 
 `Stateful` provides the regular iterator interface. Like other mutable iterators
-(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a `break` in a `for` loop),
+(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a [`break`](@ref) in a [`for`](@ref) loop),
 iteration can be resumed from the same spot by continuing to iterate over the
 same iterator object (in contrast, an immutable iterator would restart from the
 beginning).
@@ -1006,15 +1214,15 @@ julia> popfirst!(a)
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> collect(Iterators.take(a, 3))
-3-element Array{Char,1}:
- 'b'
- 'c'
- 'd'
+3-element Vector{Char}:
+ 'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
+ 'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+ 'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
 
 julia> collect(a)
-2-element Array{Char,1}:
- 'e'
- 'f'
+2-element Vector{Char}:
+ 'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
+ 'f': ASCII/Unicode U+0066 (category Ll: Letter, lowercase)
 ```
 
 ```jldoctest
@@ -1022,7 +1230,7 @@ julia> a = Iterators.Stateful([1,1,1,2,3,4]);
 
 julia> for x in a; x == 1 || break; end
 
-julia> Base.peek(a)
+julia> peek(a)
 3
 
 julia> sum(a) # Sum the remaining elements
@@ -1058,7 +1266,7 @@ else
     # fixpoint.
     approx_iter_type(itrT::Type) = _approx_iter_type(itrT, Base._return_type(iterate, Tuple{itrT}))
     # Not actually called, just passed to return type to avoid
-    # having to typesubtract
+    # having to typesplit on Nothing
     function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
         valstate === nothing && return nothing
         val, st = valstate
@@ -1088,11 +1296,51 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
     end
 end
 
-@inline peek(s::Stateful, sentinel=nothing) = s.nextvalstate !== nothing ? s.nextvalstate[1] : sentinel
+@inline function peek(s::Stateful, sentinel=nothing)
+    ns = s.nextvalstate
+    return ns !== nothing ? ns[1] : sentinel
+end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
 IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
 eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
 IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
 length(s::Stateful) = length(s.itr) - s.taken
+
+"""
+    only(x)
+
+Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
+collection has zero or multiple elements.
+
+See also: [`first`](@ref), [`last`](@ref).
+
+!!! compat "Julia 1.4"
+    This method requires at least Julia 1.4.
+"""
+@propagate_inbounds function only(x)
+    i = iterate(x)
+    @boundscheck if i === nothing
+        throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
+    end
+    (ret, state) = i
+    @boundscheck if iterate(x, state) !== nothing
+        throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
+    end
+    return ret
+end
+
+# Collections of known size
+only(x::Ref) = x[]
+only(x::Number) = x
+only(x::Char) = x
+only(x::Tuple{Any}) = x[1]
+only(x::Tuple) = throw(
+    ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
+)
+only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
+only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
+only(x::NamedTuple) = throw(
+    ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
+)
 
 end

@@ -132,9 +132,12 @@ value_t fl_iogetc(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     argcount(fl_ctx, "io.getc", nargs, 1);
     ios_t *s = toiostream(fl_ctx, args[0], "io.getc");
     uint32_t wc;
-    if (ios_getutf8(s, &wc) == IOS_EOF)
+    int result = ios_getutf8(s, &wc);
+    if (result == IOS_EOF)
         //lerror(fl_ctx, IOError, "io.getc: end of file reached");
         return fl_ctx->FL_EOF;
+    if (result == 0)
+        lerror(fl_ctx, fl_ctx->IOError, "invalid UTF-8 sequence");
     return mk_wchar(fl_ctx, wc);
 }
 
@@ -143,8 +146,11 @@ value_t fl_iopeekc(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     argcount(fl_ctx, "io.peekc", nargs, 1);
     ios_t *s = toiostream(fl_ctx, args[0], "io.peekc");
     uint32_t wc;
-    if (ios_peekutf8(s, &wc) == IOS_EOF)
+    int result = ios_peekutf8(s, &wc);
+    if (result == IOS_EOF)
         return fl_ctx->FL_EOF;
+    if (result == 0)
+        lerror(fl_ctx, fl_ctx->IOError, "invalid UTF-8 sequence");
     return mk_wchar(fl_ctx, wc);
 }
 
@@ -346,10 +352,13 @@ value_t fl_ioreaduntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     cv->len = n;
     if (dest.buf != data) {
         // outgrew initial space
-        cv->data = dest.buf;
+        size_t sz;
+        cv->data = ios_take_buffer(&dest, &sz);
         cv_autorelease(fl_ctx, cv);
     }
-    ((char*)cv->data)[n] = '\0';
+    else {
+        ((char*)cv->data)[n] = '\0';
+    }
     if (n == 0 && ios_eof(src))
         return fl_ctx->FL_EOF;
     return str;

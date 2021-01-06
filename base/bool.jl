@@ -26,15 +26,11 @@ julia> !missing
 missing
 
 julia> .![true false true]
-1×3 BitArray{2}:
+1×3 BitMatrix:
  0  1  0
 ```
 """
-function !(x::Bool)
-    ## We need a better heuristic to detect this automatically
-    @_pure_meta
-    return not_int(x)
-end
+!(x::Bool) = not_int(x)
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = and_int(x, y)
@@ -66,7 +62,7 @@ julia> false ⊻ false
 false
 
 julia> [true; true; false] .⊻ [true; false; false]
-3-element BitArray{1}:
+3-element BitVector:
  0
  1
  0
@@ -112,7 +108,5 @@ end
 *(y::AbstractFloat, x::Bool) = x * y
 
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
-fld(x::Bool, y::Bool) = div(x,y)
-cld(x::Bool, y::Bool) = div(x,y)
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
 mod(x::Bool, y::Bool) = rem(x,y)

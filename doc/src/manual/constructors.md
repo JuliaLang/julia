@@ -38,7 +38,7 @@ addresses all of these cases and more.
     is used to mean "constructor method" rather than "constructor function", especially as it is often
     used in the sense of singling out a particular method of the constructor from all of the others.
 
-## Outer Constructor Methods
+## [Outer Constructor Methods](@id man-outer-constructor-methods)
 
 A constructor is just like any other function in Julia in that its overall behavior is defined
 by the combined behavior of its methods. Accordingly, you can add functionality to a constructor
@@ -71,7 +71,7 @@ become clear very shortly, additional constructor methods declared as normal met
 are called *outer* constructor methods. Outer constructor methods can only ever create a new instance
 by calling another constructor method, such as the automatically provided default ones.
 
-## Inner Constructor Methods
+## [Inner Constructor Methods](@id man-inner-constructor-methods)
 
 While outer constructor methods succeed in addressing the problem of providing additional convenience
 methods for constructing objects, they fail to address the other two use cases mentioned in the
@@ -294,7 +294,7 @@ Point{Float64}(1.0, 2.5)
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point(::T<:Real, ::T<:Real) where T<:Real at none:2
+  Point(::T, ::T) where T<:Real at none:2
 
 julia> Point{Int64}(1, 2) ## explicit T ##
 Point{Int64}(1, 2)
@@ -360,10 +360,10 @@ and then delegates construction to the general constructor for the case where bo
 successfully creates a point of type `Point{Float64}`:
 
 ```jldoctest parametric2
-julia> Point(1,2.5)
+julia> p = Point(1,2.5)
 Point{Float64}(1.0, 2.5)
 
-julia> typeof(ans)
+julia> typeof(p)
 Point{Float64}
 ```
 
@@ -373,7 +373,7 @@ However, other similar calls still don't work:
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
 Closest candidates are:
-  Point(::T<:Real, !Matched::T<:Real) where T<:Real at none:1
+  Point(::T, !Matched::T) where T<:Real at none:1
 ```
 
 For a more general way to make all such calls work sensibly, see [Conversion and Promotion](@ref conversion-and-promotion).
@@ -465,7 +465,7 @@ and `den::T` indicate that the data held in a `OurRational{T}` object are a pair
 `T`, one representing the rational value's numerator and the other representing its denominator.
 
 Now things get interesting. `OurRational` has a single inner constructor method which checks that
-both of `num` and `den` aren't zero and ensures that every rational is constructed in "lowest
+`num` and `den` aren't both zero and ensures that every rational is constructed in "lowest
 terms" with a non-negative denominator. This is accomplished by dividing the given numerator and
 denominator values by their greatest common divisor, computed using the `gcd` function. Since
 `gcd` returns the greatest common divisor of its arguments with sign matching the first argument
@@ -527,7 +527,7 @@ julia> struct SummedArray{T<:Number,S<:Number}
        end
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
-SummedArray{Int32,Int32}(Int32[1, 2, 3], 6)
+SummedArray{Int32, Int32}(Int32[1, 2, 3], 6)
 ```
 
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements
@@ -548,9 +548,11 @@ julia> struct SummedArray{T<:Number,S<:Number}
        end
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
-ERROR: MethodError: no method matching SummedArray(::Array{Int32,1}, ::Int32)
+ERROR: MethodError: no method matching SummedArray(::Vector{Int32}, ::Int32)
 Closest candidates are:
-  SummedArray(::Array{T,1}) where T at none:5
+  SummedArray(::Vector{T}) where T at none:4
+Stacktrace:
+[...]
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows

@@ -1,0 +1,65 @@
+From 4c7e1defbddafcfcfe1211b041d43a36114a8f48 Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Sat, 14 Dec 2019 10:33:30 -0500
+Subject: [PATCH 2/2] [CodegenPrepare] Guard against degenerate branches
+
+Summary:
+Guard against a potential crash observed in https://github.com/JuliaLang/julia/issues/32994#issuecomment-524249628
+If two branches are collapsed we can encounter a degenerate conditional branch `TBB==FBB`.
+The subsequent code assumes that they differ, so we exit out early.
+
+Reviewers: ributzka, spatel
+
+Subscribers: loladiro, dexonsmith, hiraditya, llvm-commits
+
+Tags: #llvm
+
+Differential Revision: https://reviews.llvm.org/D66657
+---
+ llvm/lib/CodeGen/CodeGenPrepare.cpp            |  4 ++++
+ .../CodeGen/X86/codegen-prepare-collapse.ll    | 18 ++++++++++++++++++
+ 2 files changed, 22 insertions(+)
+ create mode 100644 llvm/test/CodeGen/X86/codegen-prepare-collapse.ll
+
+diff --git a/lib/CodeGen/CodeGenPrepare.cpp b/lib/CodeGen/CodeGenPrepare.cpp
+index c35f8666fa3..3647641c594 100644
+--- a/lib/CodeGen/CodeGenPrepare.cpp
++++ b/lib/CodeGen/CodeGenPrepare.cpp
+@@ -6929,6 +6929,10 @@ bool CodeGenPrepare::splitBranchCondition(Function &F) {
+     if (Br1->getMetadata(LLVMContext::MD_unpredictable))
+       continue;
+ 
++    // The merging of mostly empty BB can cause a degenerate branch.
++    if (TBB == FBB)
++      continue;
++
+     unsigned Opc;
+     Value *Cond1, *Cond2;
+     if (match(LogicOp, m_And(m_OneUse(m_Value(Cond1)),
+diff --git a/test/CodeGen/X86/codegen-prepare-collapse.ll b/test/CodeGen/X86/codegen-prepare-collapse.ll
+new file mode 100644
+index 00000000000..18e3ef7afbd
+--- /dev/null
++++ b/test/CodeGen/X86/codegen-prepare-collapse.ll
+@@ -0,0 +1,18 @@
++; RUN: llc -fast-isel=true -O1 -mtriple=x86_64-unkown-linux-gnu -start-before=codegenprepare -stop-after=codegenprepare -o - < %s | FileCheck %s
++
++; CHECK-LABEL: @foo
++define void @foo() {
++top:
++; CHECK: br label %L34
++  br label %L34
++
++L34:                                              ; preds = %L34, %L34, %top
++  %.sroa.075.0 = phi i64 [ undef, %top ], [ undef, %L34 ], [ undef, %L34 ]
++  %0 = icmp sgt i8 undef, -1
++  %cond5896 = icmp eq i8 0, 2
++  %cond58 = and i1 %cond5896, %0
++; During codegenprepare such degenerate branches can occur and should not
++; lead to crashes.
++; CHECK: br label %L34
++  br i1 %cond58, label %L34, label %L34
++}
+-- 
+2.24.1
+
