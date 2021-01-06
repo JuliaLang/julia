@@ -790,12 +790,7 @@ end
 function getindex(r::OneTo{T}, s::OneTo{Bool}) where T
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    if length(s) == 0
-        return r
-    else # length(s) == 1
-        return r
-        end
-    end
+    return r
 end
 
 function getindex(r::AbstractUnitRange, s::StepRange{<:Integer})
