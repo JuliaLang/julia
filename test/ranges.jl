@@ -1847,5 +1847,4 @@ end
     @test r2 isa LinRange && r2 == 2:2
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
-
 end
