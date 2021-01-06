@@ -83,6 +83,8 @@ void JL_UV_LOCK(void);
 extern "C" {
 #endif
 
+int jl_running_under_rr(int recheck);
+
 //--------------------------------------------------
 // timers
 // Returns time in nanosec
@@ -122,8 +124,8 @@ static inline uint64_t cycleclock(void)
 
 #include "timing.h"
 
-extern uint8_t jl_measure_compile_time;
-extern uint64_t jl_cumulative_compile_time;
+extern uint8_t *jl_measure_compile_time;
+extern uint64_t *jl_cumulative_compile_time;
 
 #ifdef _COMPILER_MICROSOFT_
 #  define jl_return_address() ((uintptr_t)_ReturnAddress())
@@ -528,7 +530,7 @@ jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t 
 void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT void jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
+int jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 // Each tuple can exist in one of 4 Vararg states:
 //   NONE: no vararg                            Tuple{Int,Float32}
@@ -990,7 +992,8 @@ STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed)
 }
 
 // libuv stuff:
-JL_DLLEXPORT extern void *jl_dl_handle;
+JL_DLLEXPORT extern void *jl_libjulia_handle;
+JL_DLLEXPORT extern void *jl_libjulia_internal_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
 #if defined(_OS_WINDOWS_)
 JL_DLLEXPORT extern void *jl_exe_handle;
@@ -1012,8 +1015,13 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
 
 
 // Windows only
-#define JL_EXE_LIBNAME ((const char*)1)
-#define JL_DL_LIBNAME ((const char*)2)
+#define JL_EXE_LIBNAME                  ((const char*)1)
+#define JL_LIBJULIA_INTERNAL_DL_LIBNAME ((const char*)2)
+#if defined(JL_DEBUG_BUILD)
+#define JL_LIBJULIA_DL_LIBNAME          "libjulia-debug"
+#else
+#define JL_LIBJULIA_DL_LIBNAME          "libjulia"
+#endif
 const char *jl_dlfind_win32(const char *name);
 
 // libuv wrappers:

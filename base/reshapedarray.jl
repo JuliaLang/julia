@@ -153,7 +153,7 @@ rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = ()
 rdims(out::Tuple{Any}, inds::Tuple{}) = out # N == 1, M == 0
 rdims(out::NTuple{N,Any}, inds::Tuple{}) where {N} = out # N > 1, M == 0
 rdims(out::Tuple{Any}, inds::Tuple{Any}) = inds # N == 1, M == 1
-rdims(out::Tuple{Any}, inds::NTuple{M,Any}) where {M} = (OneTo(rdims_trailing(inds...)),) # N == 1, M > 1
+rdims(out::Tuple{Any}, inds::NTuple{M,Any}) where {M} = (oneto(rdims_trailing(inds...)),) # N == 1, M > 1
 rdims(out::NTuple{N,Any}, inds::NTuple{N,Any}) where {N} = inds # N > 1, M == N
 rdims(out::NTuple{N,Any}, inds::NTuple{M,Any}) where {N,M} = (first(inds), rdims(tail(out), tail(inds))...) # N > 1, M > 1, M != N
 
@@ -207,7 +207,7 @@ size(A::ReshapedArray) = A.dims
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
-parentindices(A::ReshapedArray) = map(OneTo, size(parent(A)))
+parentindices(A::ReshapedArray) = map(oneto, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 

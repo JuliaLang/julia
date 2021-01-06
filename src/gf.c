@@ -3139,21 +3139,20 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 //static jl_mutex_t typeinf_lock;
 #define typeinf_lock codegen_lock
 
-uint8_t jl_measure_compile_time = 0;
-uint64_t jl_cumulative_compile_time = 0;
 static uint64_t inference_start_time = 0;
 
 JL_DLLEXPORT void jl_typeinf_begin(void)
 {
     JL_LOCK(&typeinf_lock);
-    if (jl_measure_compile_time)
+    if (jl_measure_compile_time[jl_threadid()])
         inference_start_time = jl_hrtime();
 }
 
 JL_DLLEXPORT void jl_typeinf_end(void)
 {
-    if (typeinf_lock.count == 1 && jl_measure_compile_time)
-        jl_cumulative_compile_time += (jl_hrtime() - inference_start_time);
+    int tid = jl_threadid();
+    if (typeinf_lock.count == 1 && jl_measure_compile_time[tid])
+        jl_cumulative_compile_time[tid] += (jl_hrtime() - inference_start_time);
     JL_UNLOCK(&typeinf_lock);
 }
 

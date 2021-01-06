@@ -79,21 +79,9 @@ JL_DLLEXPORT void jl_init(void)
 {
     char *libbindir = NULL;
 #ifdef _OS_WINDOWS_
-    void *hdl = (void*)jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 0);
-    if (hdl) {
-        char *to_free = (char*)jl_pathname_for_handle(hdl);
-        if (to_free) {
-            libbindir = strdup(dirname(to_free));
-            free(to_free);
-        }
-    }
+    libbindir = strdup(jl_get_libdir());
 #else
-    Dl_info dlinfo;
-    if (dladdr((void*)jl_init, &dlinfo) != 0 && dlinfo.dli_fname) {
-        char *to_free = strdup(dlinfo.dli_fname);
-        (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", dirname(to_free), "bin");
-        free(to_free);
-    }
+    (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
 #endif
     if (!libbindir) {
         printf("jl_init unable to find libjulia!\n");
@@ -663,6 +651,17 @@ static void lock_low32(void)
 // Actual definition in `ast.c`
 void jl_lisp_prompt(void);
 
+static void rr_detach_teleport(void) {
+#ifdef _OS_LINUX_
+#define RR_CALL_BASE 1000
+#define SYS_rrcall_detach_teleport (RR_CALL_BASE + 9)
+    int err = syscall(SYS_rrcall_detach_teleport, 0, 0, 0, 0, 0, 0);
+    if (err < 0 || jl_running_under_rr(1)) {
+        jl_error("Failed to detach from rr session");
+    }
+#endif
+}
+
 JL_DLLEXPORT int repl_entrypoint(int argc, char *argv[])
 {
     // no-op on Windows, note that the caller must have already converted
@@ -678,7 +677,19 @@ JL_DLLEXPORT int repl_entrypoint(int argc, char *argv[])
         memmove(&argv[1], &argv[2], (argc-2)*sizeof(void*));
         argc--;
     }
+    char **orig_argv = argv;
     jl_parse_opts(&argc, (char***)&argv);
+
+    // The parent process requested that we detach from the rr session.
+    // N.B.: In a perfect world, we would only do this for the portion of
+    // the execution where we actually need to exclude rr (e.g. because we're
+    // testing for the absence of a memory-model-dependent bug).
+    if (jl_options.rr_detach && jl_running_under_rr(0)) {
+        rr_detach_teleport();
+        execv("/proc/self/exe", orig_argv);
+        jl_error("Failed to self-execute");
+    }
+
     julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     if (lisp_prompt) {
         jl_get_ptls_states()->world_age = jl_get_world_counter();

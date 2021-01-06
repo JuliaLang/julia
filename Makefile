@@ -87,7 +87,7 @@ julia-sysimg-bc : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-sr
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-cli-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
-julia-debug julia-release : julia-% : julia-sysimg-% julia-symlink julia-libccalltest julia-libllvmcalltest julia-base-cache
+julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest julia-libllvmcalltest julia-base-cache
 
 debug release : % : julia-%
 
@@ -163,7 +163,7 @@ endif
 # private libraries, that are installed in $(prefix)/lib/julia
 JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-JL_TARGETS += libjulia-internal-debug
+JL_PRIVATE_LIBS-0 += libjulia-internal-debug
 endif
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS-0 += libsuitesparse_wrapper
@@ -357,6 +357,15 @@ endif
 		$(call stringreplace,$${DEBUG_TARGET},sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT)); \
 	fi;
 endif
+	
+	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.  We only need to do this for Linux/FreeBSD
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
+ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
+endif
+endif
+
 
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $(LOADER_BUILD_DEP_LIBS) != $(LOADER_INSTALL_DEP_LIBS)
@@ -442,6 +451,7 @@ endif
 	# Download all stdlibs and include the tarball filenames in light-source-dist.tmp
 	@$(MAKE) -C stdlib getall NO_GIT=1
 	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
+	-ls stdlib/*/StdlibArtifacts.toml >> light-source-dist.tmp
 
 	# Exclude git, github and CI config files
 	git ls-files | sed -E -e '/^\..+/d' -e '/\/\..+/d' -e '/appveyor.yml/d' >> light-source-dist.tmp

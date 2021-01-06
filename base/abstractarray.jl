@@ -86,7 +86,7 @@ julia> axes(A)
 """
 function axes(A)
     @_inline_meta
-    map(OneTo, size(A))
+    map(oneto, size(A))
 end
 
 """
@@ -107,10 +107,10 @@ require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError
 # in other applications.
 axes1(A::AbstractArray{<:Any,0}) = OneTo(1)
 axes1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
-axes1(iter) = OneTo(length(iter))
+axes1(iter) = oneto(length(iter))
 
 unsafe_indices(A) = axes(A)
-unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
+unsafe_indices(r::AbstractRange) = (oneto(unsafe_length(r)),) # Ranges use checked_sub for size
 
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
@@ -308,7 +308,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     eachindex(IndexStyle(A,B...), A, B...)
 end
-eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(length(A)))
+eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; oneto(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
@@ -1481,12 +1481,11 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
-    n = 0
-    for Vk in V
-        n += Int(length(Vk))::Int
-    end
-    a = similar(V[1], T, n)
+_typed_vcat_similar(V, T, n) = similar(V[1], T, n)
+_typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
+    _typed_vcat!(_typed_vcat_similar(V, T, mapreduce(length, +, V)), V)
+
+function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
     for k=1:Int(length(V))::Int
         Vk = V[k]
@@ -1632,7 +1631,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, map(cat_size, X)::Tuple{Vararg{Union{Int,Dims}}})::Dims
+    shape = cat_shape(catdims, map(cat_size, X))
     A = cat_similar(X[1], T, shape)
     if count(!iszero, catdims)::Int > 1
         fill!(A, zero(T))
@@ -1640,7 +1639,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
     return __cat(A, shape, catdims, X...)
 end
 
-function __cat(A, shape::NTuple{M,Int}, catdims, X...) where M
+function __cat(A, shape::NTuple{M}, catdims, X...) where M
     N = M::Int
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(undef, N)

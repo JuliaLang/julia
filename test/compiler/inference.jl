@@ -2970,3 +2970,13 @@ g37943(i::Int) = fieldtype(Pair{false, T} where T, i)
 f_partial_struct_constprop(a, b) = (a[1]+b[1], nothing)
 g_partial_struct_constprop() = Val{f_partial_struct_constprop((1,), (1,))[1]}()
 @test only(Base.return_types(g_partial_struct_constprop, Tuple{})) === Val{2}
+
+# issue #38888
+struct S38888{T}
+    S38888(x::S) where {S<:Int} = new{S}()
+    S38888(x::S, y) where {S2<:Int,S<:S2} = new{S}()
+end
+f38888() = S38888(Base.inferencebarrier(3))
+@test f38888() isa S38888
+g38888() = S38888(Base.inferencebarrier(3), nothing)
+@test g38888() isa S38888
