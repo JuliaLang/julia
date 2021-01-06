@@ -7,6 +7,7 @@ New language features
 Language changes
 ----------------
 
+* ranges now correctly handle `Bool` indexing ([#31829])
 
 Compiler/Runtime improvements
 -----------------------------
