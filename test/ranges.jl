@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-@testset "range costruction" begin
+@testset "range construction" begin
     @testset "range(;kw...)" begin
         @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
         @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
