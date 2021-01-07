@@ -4,12 +4,10 @@ Julia v1.7 Release Notes
 New language features
 ---------------------
 
+
 Language changes
 ----------------
 
-* Subtypes of `AbstractRange` now correctly follow the general array indexing
-  behavior when indexed by `Bool`s, erroring for scalar `Bool`s and treating
-  arrays (including ranges) of `Bool` as an logical index ([#31829])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -47,6 +45,9 @@ Standard library changes
 * `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
 * `escape_string` can now receive a collection of characters in the keyword
   `keep` that are to be kept as they are. ([#38597]).
+* Subtypes of `AbstractRange` now correctly follow the general array indexing
+  behavior when indexed by `Bool`s, erroring for scalar `Bool`s and treating
+  arrays (including ranges) of `Bool` as an logical index ([#31829])
 
 #### Package Manager
 
