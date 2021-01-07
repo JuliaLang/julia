@@ -342,3 +342,20 @@ let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
     @test nisa == 1
     @test found_pi
 end
+
+# issue #38936
+# check that getfield elim can handle unions of tuple types
+mutable struct S38936{T} content::T end
+struct PrintAll{T} <: Function
+    parts::T
+end
+function (f::PrintAll)(io::IO)
+    for x in f.parts
+        print(io, x)
+    end
+end
+let f = PrintAll((S38936("<span>"), "data", S38936("</span")))
+    @test !any(code_typed(f, (IOBuffer,))[1][1].code) do stmt
+        stmt isa Expr && stmt.head === :call && stmt.args[1] === GlobalRef(Core, :tuple)
+    end
+end

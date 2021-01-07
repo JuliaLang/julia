@@ -637,6 +637,9 @@ function getfield_elim_pass!(ir::IRCode)
         isa(field, Union{Int, Symbol}) || continue
 
         struct_typ = unwrap_unionall(widenconst(compact_exprtype(compact, stmt.args[2])))
+        if isa(struct_typ, Union) && struct_typ <: Tuple
+            struct_typ = unswitchtupleunion(struct_typ)
+        end
         isa(struct_typ, DataType) || continue
 
         def, typeconstraint = stmt.args[2], struct_typ
