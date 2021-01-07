@@ -1,4 +1,5 @@
 ## libgit2
+ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
 LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
@@ -11,8 +12,6 @@ endif
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
-
-ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
 LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
 ifeq ($(OS),WINNT)
@@ -96,8 +95,6 @@ $(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libg
 
 else # USE_BINARYBUILDER_LIBGIT2
 
-LIBGIT2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
-LIBGIT2_BB_NAME := LibGit2.v$(LIBGIT2_VER)
 $(eval $(call bb-install,libgit2,LIBGIT2,false))
 
 # BB tarball doesn't create a manifest, so directly depend the `install` target
@@ -113,6 +110,9 @@ $(build_datarootdir)/julia/cert.pem: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION
 	$(JLCHECKSUM) $<
 	mkdir -p $(build_datarootdir)/julia
 	cp $< $@
+
+checksum-mozillacert: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem
+	$(JLCHECKSUM) $<
 
 # When "get"'ing libgit2, download the .pem
 get-libgit2: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem

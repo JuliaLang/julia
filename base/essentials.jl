@@ -255,6 +255,14 @@ function rewrap_unionall(@nospecialize(t), @nospecialize(u))
     return UnionAll(u.var, rewrap_unionall(t, u.body))
 end
 
+function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
+    isdefined(t, :T) || return t
+    if !isdefined(t, :N) || t.N === u.var
+        return Vararg{rewrap_unionall(t.T, u)}
+    end
+    Vararg{rewrap_unionall(t.T, u), t.N}
+end
+
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
 function rename_unionall(@nospecialize(u))
     if !isa(u, UnionAll)
@@ -271,10 +279,8 @@ function rename_unionall(@nospecialize(u))
     return UnionAll(nv, body{nv})
 end
 
-const _va_typename = Vararg.body.body.name
 function isvarargtype(@nospecialize(t))
-    t = unwrap_unionall(t)
-    return isa(t, DataType) && (t::DataType).name === _va_typename
+    return isa(t, Core.TypeofVararg)
 end
 
 function isvatuple(@nospecialize(t))
@@ -286,18 +292,14 @@ function isvatuple(@nospecialize(t))
     return false
 end
 
-function unwrapva(@nospecialize(t))
-    # NOTE: this returns a related type, but it's NOT a subtype of the original tuple
-    t2 = unwrap_unionall(t)
-    return isvarargtype(t2) ? rewrap_unionall(t2.parameters[1], t) : t
-end
+unwrapva(t::Core.TypeofVararg) = isdefined(t, :T) ? t.T : Any
+unwrapva(@nospecialize(t)) = t
 
-function unconstrain_vararg_length(@nospecialize(va))
+function unconstrain_vararg_length(va::Core.TypeofVararg)
     # construct a new Vararg type where its length is unconstrained,
     # but its element type still captures any dependencies the input
     # element type may have had on the input length
-    T = unwrap_unionall(va).parameters[1]
-    return rewrap_unionall(Vararg{T}, va)
+    return Vararg{unwrapva(va)}
 end
 
 typename(a) = error("typename does not apply to this type")
@@ -703,12 +705,11 @@ call obsolete versions of a function `f`.
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
+    kwargs = Base.merge(NamedTuple(), kwargs)
     if isempty(kwargs)
-        return Core._apply_latest(f, args)
+        return Core._call_latest(f, args...)
     end
-    # We use a closure (`inner`) to handle kwargs.
-    inner() = f(args...; kwargs...)
-    Core._apply_latest(inner)
+    return Core._call_latest(Core.kwfunc(f), kwargs, f, args...)
 end
 
 """
@@ -738,11 +739,11 @@ of [`invokelatest`](@ref).
     world age refers to system state unrelated to the main Julia session.
 """
 function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
+    kwargs = Base.merge(NamedTuple(), kwargs)
     if isempty(kwargs)
-        return Core._apply_in_world(world, f, args)
+        return Core._call_in_world(world, f, args...)
     end
-    inner() = f(args...; kwargs...)
-    Core._apply_in_world(world, inner)
+    return Core._call_in_world(world, Core.kwfunc(f), kwargs, f, args...)
 end
 
 # TODO: possibly make this an intrinsic

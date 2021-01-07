@@ -45,11 +45,24 @@ Return the valid range of indices for array `A` along dimension `d`.
 See also [`size`](@ref), and the manual chapter on [arrays with custom indices](@ref man-custom-indices).
 
 # Examples
+
 ```jldoctest
 julia> A = fill(1, (5,6,7));
 
 julia> axes(A, 2)
 Base.OneTo(6)
+```
+
+# Usage note
+
+Each of the indices has to be an `AbstractUnitRange{<:Integer}`, but at the same time can be
+a type that uses custom indices. So, for example, if you need a subset, use generalized
+indexing constructs like `begin`/`end` or [`firstindex`](@ref)/[`lastindex`](@ref):
+
+```julia
+ix = axes(v, 1)
+ix[2:end]          # will work for eg Vector, but may fail in general
+ix[(begin+1):end]  # works for generalized indexes
 ```
 """
 function axes(A::AbstractArray{T,N}, d) where {T,N}
@@ -63,6 +76,7 @@ end
 Return the tuple of valid indices for array `A`.
 
 # Examples
+
 ```jldoctest
 julia> A = fill(1, (5,6,7));
 
@@ -72,7 +86,7 @@ julia> axes(A)
 """
 function axes(A)
     @_inline_meta
-    map(OneTo, size(A))
+    map(oneto, size(A))
 end
 
 """
@@ -93,10 +107,10 @@ require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError
 # in other applications.
 axes1(A::AbstractArray{<:Any,0}) = OneTo(1)
 axes1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
-axes1(iter) = OneTo(length(iter))
+axes1(iter) = oneto(length(iter))
 
 unsafe_indices(A) = axes(A)
-unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
+unsafe_indices(r::AbstractRange) = (oneto(unsafe_length(r)),) # Ranges use checked_sub for size
 
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
@@ -294,7 +308,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     eachindex(IndexStyle(A,B...), A, B...)
 end
-eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(length(A)))
+eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; oneto(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
@@ -331,7 +345,7 @@ julia> lastindex(rand(3,4,5), 2)
 ```
 """
 lastindex(a::AbstractArray) = (@_inline_meta; last(eachindex(IndexLinear(), a)))
-lastindex(a::AbstractArray, d) = (@_inline_meta; last(axes(a, d)))
+lastindex(a, d) = (@_inline_meta; last(axes(a, d)))
 
 """
     firstindex(collection) -> Integer
@@ -349,7 +363,7 @@ julia> firstindex(rand(3,4,5), 2)
 ```
 """
 firstindex(a::AbstractArray) = (@_inline_meta; first(eachindex(IndexLinear(), a)))
-firstindex(a::AbstractArray, d) = (@_inline_meta; first(axes(a, d)))
+firstindex(a, d) = (@_inline_meta; first(axes(a, d)))
 
 first(a::AbstractArray) = a[first(eachindex(a))]
 
@@ -817,12 +831,14 @@ end
 
 ## from general iterable to any array
 
+@noinline throw_dest_too_short() =
+    throw(ArgumentError("destination has fewer elements than required"))
+
 function copyto!(dest::AbstractArray, src)
     destiter = eachindex(dest)
     y = iterate(destiter)
     for x in src
-        y === nothing &&
-            throw(ArgumentError("destination has fewer elements than required"))
+        y === nothing && throw_dest_too_short()
         dest[y[1]] = x
         y = iterate(destiter, y[2])
     end
@@ -1118,9 +1134,9 @@ end
 """
     getindex(A, inds...)
 
-Return a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref). See the manual section on
-[array indexing](@ref man-array-indexing) for details.
+Return a subset of array `A` as specified by `inds`, where each `ind` may be,
+for example, an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+See the manual section on [array indexing](@ref man-array-indexing) for details.
 
 # Examples
 ```jldoctest
@@ -1225,7 +1241,7 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; _ind2sub(sz, i))
     A[inds...] = X
 
 Store values from array `X` within some subset of `A` as specified by `inds`.
-The syntax `A[inds...] = X` is equivalent to `setindex!(A, X, inds...)`.
+The syntax `A[inds...] = X` is equivalent to `(setindex!(A, X, inds...); X)`.
 
 # Examples
 ```jldoctest
@@ -1467,12 +1483,11 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
-    n = 0
-    for Vk in V
-        n += Int(length(Vk))::Int
-    end
-    a = similar(V[1], T, n)
+_typed_vcat_similar(V, T, n) = similar(V[1], T, n)
+_typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
+    _typed_vcat!(_typed_vcat_similar(V, T, mapreduce(length, +, V)), V)
+
+function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
     for k=1:Int(length(V))::Int
         Vk = V[k]
@@ -1618,7 +1633,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, map(cat_size, X)::Tuple{Vararg{Union{Int,Dims}}})::Dims
+    shape = cat_shape(catdims, map(cat_size, X))
     A = cat_similar(X[1], T, shape)
     if count(!iszero, catdims)::Int > 1
         fill!(A, zero(T))
@@ -1626,7 +1641,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
     return __cat(A, shape, catdims, X...)
 end
 
-function __cat(A, shape::NTuple{M,Int}, catdims, X...) where M
+function __cat(A, shape::NTuple{M}, catdims, X...) where M
     N = M::Int
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(undef, N)

@@ -22,11 +22,11 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
     GlobalVariable *libptrgv;
     jl_codegen_params_t::SymMapGV *symMap;
 #ifdef _OS_WINDOWS_
-    if ((intptr_t)f_lib == 1) {
+    if ((intptr_t)f_lib == (intptr_t)JL_EXE_LIBNAME) {
         libptrgv = prepare_global_in(M, jlexe_var);
         symMap = &emission_context.symMapExe;
     }
-    else if ((intptr_t)f_lib == 2) {
+    else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME) {
         libptrgv = prepare_global_in(M, jldll_var);
         symMap = &emission_context.symMapDl;
     }
@@ -1014,7 +1014,11 @@ std::string generate_func_sig(const char *fname)
         else if (abi->use_sret((jl_datatype_t*)rt)) {
             AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
+#if JL_LLVM_VERSION < 120000
             retattrs.addAttribute(Attribute::StructRet);
+#else
+            retattrs.addStructRetAttr(lrt);
+#endif
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
             paramattrs.push_back(std::move(retattrs));
@@ -1262,7 +1266,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     auto _is_libjulia_func = [&] (uintptr_t ptr, const char *name) {
         if ((uintptr_t)fptr == ptr)
             return true;
-        return (!f_lib || f_lib == JL_DL_LIBNAME) && f_name && !strcmp(f_name, name);
+        return (!f_lib || f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) && f_name && !strcmp(f_name, name);
     };
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
 

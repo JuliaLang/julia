@@ -196,7 +196,7 @@ saved_depot_path = copy(DEPOT_PATH)
 saved_active_project = Base.ACTIVE_PROJECT[]
 
 push!(empty!(LOAD_PATH), "project")
-push!(empty!(DEPOT_PATH), "depot")
+append!(empty!(DEPOT_PATH), [mktempdir(), "depot"])
 Base.ACTIVE_PROJECT[] = nothing
 
 @test load_path() == [abspath("project","Project.toml")]

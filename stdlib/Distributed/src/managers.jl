@@ -34,8 +34,8 @@ struct SSHManager <: ClusterManager
 end
 
 
-function check_addprocs_args(kwargs)
-    valid_kw_names = collect(keys(default_addprocs_params()))
+function check_addprocs_args(manager, kwargs)
+    valid_kw_names = keys(default_addprocs_params(manager))
     for keyname in keys(kwargs)
         !(keyname in valid_kw_names) && throw(ArgumentError("Invalid keyword argument $(keyname)"))
     end
@@ -72,10 +72,19 @@ Keyword arguments:
 
 * `multiplex`: if `true` then SSH multiplexing is used for SSH tunneling. Default is `false`.
 
-* `sshflags`: specifies additional ssh options, e.g. ```sshflags=\`-i /home/foo/bar.pem\````
+* `ssh`: the name or path of the SSH client executable used to start the workers.
+  Default is `"ssh"`.
+
+* `sshflags`: specifies additional ssh options, e.g. ``` sshflags=\`-i /home/foo/bar.pem\` ```
 
 * `max_parallel`: specifies the maximum number of workers connected to in parallel at a
   host. Defaults to 10.
+
+* `shell`: specifies the type of shell to which ssh connects on the workers.
+
+    + `shell=:posix`: a POSIX-compatible Unix/Linux shell (bash, sh, etc.). The default.
+
+    + `shell=:wincmd`: Microsoft Windows `cmd.exe`.
 
 * `dir`: specifies the working directory on the workers. Defaults to the host's current
   directory (as found by `pwd()`)
@@ -105,8 +114,22 @@ Keyword arguments:
   are setup lazily, i.e. they are setup at the first instance of a remote call between
   workers. Default is true.
 
+* `env`: provide an array of string pairs such as
+  `env=["JULIA_DEPOT_PATH"=>"/depot"]` to request that environment variables
+  are set on the remote machine. By default only the environment variable
+  `JULIA_WORKER_TIMEOUT` is passed automatically from the local to the remote
+  environment.
 
-Environment variables :
+* `cmdline_cookie`: pass the authentication cookie via the `--worker` commandline
+   option. The (more secure) default behaviour of passing the cookie via ssh stdio
+   may hang with Windows workers that use older (pre-ConPTY) Julia or Windows versions,
+   in which case `cmdline_cookie=true` offers a work-around.
+
+!!! compat "Julia 1.6"
+    The keyword arguments `ssh`, `shell`, `env` and `cmdline_cookie`
+    were added in Julia 1.6.
+
+Environment variables:
 
 If the master process fails to establish a connection with a newly launched worker within
 60.0 seconds, the worker treats it as a fatal situation and terminates.
@@ -114,11 +137,23 @@ This timeout can be controlled via environment variable `JULIA_WORKER_TIMEOUT`.
 The value of `JULIA_WORKER_TIMEOUT` on the master process specifies the number of seconds a
 newly launched worker waits for connection establishment.
 """
-function addprocs(machines::AbstractVector; tunnel=false, multiplex=false, sshflags=``, max_parallel=10, kwargs...)
-    check_addprocs_args(kwargs)
-    addprocs(SSHManager(machines); tunnel=tunnel, multiplex=multiplex, sshflags=sshflags, max_parallel=max_parallel, kwargs...)
+function addprocs(machines::AbstractVector; kwargs...)
+    manager = SSHManager(machines)
+    check_addprocs_args(manager, kwargs)
+    addprocs(manager; kwargs...)
 end
 
+default_addprocs_params(::SSHManager) =
+    merge(default_addprocs_params(),
+          Dict{Symbol,Any}(
+              :ssh            => "ssh",
+              :sshflags       => ``,
+              :shell          => :posix,
+              :cmdline_cookie => false,
+              :env            => [],
+              :tunnel         => false,
+              :multiplex      => false,
+              :max_parallel   => 10))
 
 function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy::Condition)
     # Launch one worker on each unique host in parallel. Additional workers are launched later.
@@ -184,11 +219,15 @@ function parse_machine(machine::AbstractString)
 end
 
 function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, params::Dict, launched::Array, launch_ntfy::Condition)
+    shell = params[:shell]
+    ssh = params[:ssh]
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
     tunnel = params[:tunnel]
     multiplex = params[:multiplex]
+    cmdline_cookie = params[:cmdline_cookie]
+    env = Dict{String,String}(params[:env])
 
     # machine could be of the format [user@]host[:port] bind_addr[:bind_port]
     # machine format string is split on whitespace
@@ -199,7 +238,11 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     if length(machine_bind) > 1
         exeflags = `--bind-to $(machine_bind[2]) $exeflags`
     end
-    exeflags = `$exeflags --worker`
+    if cmdline_cookie
+        exeflags = `$exeflags --worker=$(cluster_cookie())`
+    else
+        exeflags = `$exeflags --worker`
+    end
 
     host, portnum = parse_machine(machine_bind[1])
     portopt = portnum === nothing ? `` : `-p $portnum`
@@ -210,7 +253,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
         # If it's already running, later ssh sessions also use the same ssh multiplexing session even if
         # `multiplex` is not explicitly specified; otherwise the tunneling session launched later won't
         # go to background and hang. This is because of OpenSSH implementation.
-        if success(`ssh $sshflags -O check $host`)
+        if success(`$ssh $sshflags -O check $host`)
             multiplex = true
         elseif multiplex
             # automatically create an SSH multiplexing session at the next SSH connection
@@ -221,17 +264,50 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
 
     # Build up the ssh command
 
-    # the default worker timeout
-    tval = get(ENV, "JULIA_WORKER_TIMEOUT", "")
+    # pass on some environment variables by default
+    for var in ["JULIA_WORKER_TIMEOUT"]
+        if !haskey(env, var) && haskey(ENV, var)
+            env[var] = ENV[var]
+        end
+    end
 
     # Julia process with passed in command line flag arguments
-    cmds = """
-        cd -- $(shell_escape_posixly(dir))
-        $(isempty(tval) ? "" : "export JULIA_WORKER_TIMEOUT=$(shell_escape_posixly(tval))")
-        $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"""
+    if shell == :posix
+        # ssh connects to a POSIX shell
 
-    # shell login (-l) with string command (-c) to launch julia process
-    cmd = `sh -l -c $cmds`
+        cmds = "$(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
+        # set environment variables
+        for (var, val) in env
+            occursin(r"^[a-zA-Z_][a-zA-Z_0-9]*\z", var) ||
+                throw(ArgumentError("invalid env key $var"))
+            cmds = "export $(var)=$(shell_escape_posixly(val))\n$cmds"
+        end
+        # change working directory
+        cmds = "cd -- $(shell_escape_posixly(dir))\n$cmds"
+
+        # shell login (-l) with string command (-c) to launch julia process
+        remotecmd = shell_escape_posixly(`sh -l -c $cmds`)
+
+    elseif shell == :wincmd
+        # ssh connects to Windows cmd.exe
+
+        any(c -> c == '"', exename) && throw(ArgumentError("invalid exename"))
+
+        remotecmd = shell_escape_wincmd(escape_microsoft_c_args(exename, exeflags...))
+        # change working directory
+        if dir !== nothing && dir != ""
+            any(c -> c == '"', dir) && throw(ArgumentError("invalid dir"))
+            remotecmd = "pushd \"$(dir)\" && $remotecmd"
+        end
+        # set environment variables
+        for (var, val) in env
+            occursin(r"^[a-zA-Z0-9_()[\]{}\$\\/#',;\.@!?*+-]+\z", var) || throw(ArgumentError("invalid env key $var"))
+            remotecmd = "set $(var)=$(shell_escape_wincmd(val))&& $remotecmd"
+        end
+
+    else
+        throw(ArgumentError("invalid shell"))
+    end
 
     # remote launch with ssh with given ssh flags / host / port information
     # -T → disable pseudo-terminal allocation
@@ -239,7 +315,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     # -x → disable X11 forwarding
     # -o ClearAllForwardings → option if forwarding connections and
     #                          forwarded connections are causing collisions
-    cmd = `ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $(shell_escape_posixly(cmd))`
+    cmd = `$ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $remotecmd`
 
     # launch the remote Julia process
 
@@ -247,7 +323,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     # the initial julia process (Ctrl-C and teardown methods are handled through messages)
     # for the launched processes.
     io = open(detach(cmd), "r+")
-    write_cookie(io)
+    cmdline_cookie || write_cookie(io)
 
     wconfig = WorkerConfig()
     wconfig.io = io.out
@@ -362,8 +438,9 @@ processes on the local machine. If `restrict` is `true`, binding is restricted t
 `enable_threaded_blas` have the same effect as documented for `addprocs(machines)`.
 """
 function addprocs(np::Integer; restrict=true, kwargs...)
-    check_addprocs_args(kwargs)
-    addprocs(LocalManager(np, restrict); kwargs...)
+    manager = LocalManager(np, restrict)
+    check_addprocs_args(manager, kwargs)
+    addprocs(manager; kwargs...)
 end
 
 Base.show(io::IO, manager::LocalManager) = print(io, "LocalManager()")

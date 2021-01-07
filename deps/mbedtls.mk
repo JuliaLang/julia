@@ -28,6 +28,20 @@ $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 	touch -c $(SRCCACHE)/$(MBEDTLS_SRC)/CMakeLists.txt # old target
 	echo 1 > $@
 
+checksum-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
+	$(JLCHECKSUM) $<
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
+	# Apply workaround for CMake 3.18.2 bug (https://github.com/ARMmbed/mbedtls/pull/3691).
+	# This patch merged upstream shortly after MBedTLS's 2.25.0 minor release, so chances
+	# are it will be included at least in their next minor release (2.26.0?).
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls-cmake-findpy.patch
+	echo 1 > @$
+
+$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: \
+	$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied
+
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
@@ -87,9 +101,6 @@ fastcheck-mbedtls: #check-mbedtls
 check-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked
 
 else # USE_BINARYBUILDER_MBEDTLS
-
-MBEDTLS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/MbedTLS_jll.jl/releases/download/MbedTLS-v$(MBEDTLS_VER)+$(MBEDTLS_BB_REL)
-MBEDTLS_BB_NAME := MbedTLS.v$(MBEDTLS_VER)
 
 $(eval $(call bb-install,mbedtls,MBEDTLS,false))
 

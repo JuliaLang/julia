@@ -104,7 +104,7 @@ listed after the ending quote, to change its behaviour:
   `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
   these sequences only match ASCII characters.
 
-See `Regex` if interpolation is needed.
+See [`Regex`](@ref) if interpolation is needed.
 
 # Examples
 ```jldoctest
@@ -140,9 +140,6 @@ end
    using an `AbstractPattern`.
 """
 abstract type AbstractMatch end
-
-# TODO: map offsets into strings in other encodings back to original indices.
-# or maybe it's better to just fail since that would be quite slow
 
 struct RegexMatch <: AbstractMatch
     match::SubString{String}
@@ -378,6 +375,9 @@ julia> findall("a", "banana")
  4:4
  6:6
 ```
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
 """
 function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     found = UnitRange{Int}[]
@@ -394,8 +394,28 @@ function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; ov
 end
 
 """
+    findall(c::AbstractChar, s::AbstractString)
+
+Return a vector `I` of the indices of `s` where `s[i] == c`. If there are no such
+elements in `s`, return an empty array.
+
+# Examples
+```jldoctest
+julia> findall('a', "batman")
+2-element Vector{Int64}:
+ 2
+ 5
+```
+
+!!! compat "Julia 1.7"
+     This method requires at least Julia 1.7.
+"""
+findall(c::AbstractChar, s::AbstractString) = findall(isequal(c),s)
+
+
+"""
     count(
-        pattern::Union{AbstractString,AbstractPattern},
+        pattern::Union{AbstractChar,AbstractString,AbstractPattern},
         string::AbstractString;
         overlap::Bool = false,
     )
@@ -405,8 +425,14 @@ calling `length(findall(pattern, string))` but more efficient.
 
 If `overlap=true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from disjoint character ranges.
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
+
+!!! compat "Julia 1.7"
+      Using a character as the pattern requires at least Julia 1.7.
 """
-function count(t::Union{AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
+function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
     i, e = firstindex(s), lastindex(s)
     while true

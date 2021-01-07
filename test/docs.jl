@@ -73,6 +73,11 @@ end
 @test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
+# issue #38819
+
+module NoDocStrings end
+@test meta(NoDocStrings) === getfield(NoDocStrings, Base.Docs.META)
+
 # General tests for docstrings.
 
 const LINE_NUMBER = @__LINE__() + 1
@@ -1231,3 +1236,7 @@ Test.collect_test_logs() do                          # suppress printing of any 
     eval(quote "Second docstring" Module29432 end)   # requires toplevel
 end
 @test docstrings_equal(@doc(Module29432), doc"Second docstring")
+
+# Issue #13109
+eval(Expr(:block, Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), nothing, "...", Expr(:module, false, :MBareModuleEmpty, Expr(:block)))))
+@test docstrings_equal(@doc(MBareModuleEmpty), doc"...")

@@ -33,6 +33,9 @@ deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
 	cp "$<" UnicodeData.txt
 
+checksum-unicodedata: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
+	$(JLCHECKSUM) "$<"
+
 clean:
 	-rm -rf _build/* deps/* docbuild.log UnicodeData.txt
 
@@ -48,7 +51,7 @@ pdf: deps
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- pdf $(DOCUMENTER_OPTIONS)
 	@echo "Build finished."
 
-# The deploy target should only be called in Travis builds
+# The deploy target should only be called in CI builds
 deploy: deps
 	@echo "Deploying HTML documentation."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy $(DOCUMENTER_OPTIONS)

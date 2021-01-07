@@ -142,7 +142,7 @@ static int type_in_worklist(jl_datatype_t *dt) JL_NOTSAFEPOINT
     int i, l = jl_svec_len(dt->parameters);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_unwrap_unionall(jl_tparam(dt, i));
-        // XXX: what about Union and TypeVar??
+        // TODO: what about Union and TypeVar??
         if (type_in_worklist((jl_datatype_t*)(jl_is_datatype(p) ? p : jl_typeof(p))))
             return 1;
     }
@@ -641,6 +641,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 backedges = NULL;
         }
         jl_serialize_value(s, (jl_value_t*)backedges);
+        jl_serialize_value(s, (jl_value_t*)NULL); //callbacks
         jl_serialize_value(s, (jl_value_t*)mi->cache);
     }
     else if (jl_is_code_instance(v)) {
@@ -1346,7 +1347,7 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
         isptr = (elsize >> 15) & 1;
         hasptr = (elsize >> 14) & 1;
         isunion = (elsize >> 13) & 1;
-        elsize = elsize & 0x3fff;
+        elsize = elsize & 0x1fff;
     }
     uintptr_t pos = backref_list.len;
     arraylist_push(&backref_list, NULL);
@@ -1491,6 +1492,9 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     mi->backedges = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&mi->backedges);
     if (mi->backedges)
         jl_gc_wb(mi, mi->backedges);
+    mi->callbacks = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&mi->callbacks);
+    if (mi->callbacks)
+        jl_gc_wb(mi, mi->callbacks);
     mi->cache = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&mi->cache);
     if (mi->cache)
         jl_gc_wb(mi, mi->cache);
@@ -2252,7 +2256,52 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
 }
 #endif
 
-static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
+
+static jl_datatype_t *recache_datatype(jl_datatype_t *dt) JL_GC_DISABLED;
+
+static jl_value_t *recache_type(jl_value_t *p) JL_GC_DISABLED
+{
+    if (jl_is_datatype(p)) {
+        jl_datatype_t *pdt = (jl_datatype_t*)p;
+        if (ptrhash_get(&uniquing_table, p) != HT_NOTFOUND) {
+            p = (jl_value_t*)recache_datatype(pdt);
+        }
+        else {
+            jl_svec_t *tt = pdt->parameters;
+            // ensure all type parameters are recached
+            size_t i, l = jl_svec_len(tt);
+            for (i = 0; i < l; i++)
+                jl_svecset(tt, i, recache_type(jl_svecref(tt, i)));
+            ptrhash_put(&uniquing_table, p, p); // ensures this algorithm isn't too exponential
+        }
+    }
+    else if (jl_is_typevar(p)) {
+        jl_tvar_t *ptv = (jl_tvar_t*)p;
+        ptv->lb = recache_type(ptv->lb);
+        ptv->ub = recache_type(ptv->ub);
+    }
+    else if (jl_is_uniontype(p)) {
+        jl_uniontype_t *pu = (jl_uniontype_t*)p;
+        pu->a = recache_type(pu->a);
+        pu->b = recache_type(pu->b);
+    }
+    else if (jl_is_unionall(p)) {
+        jl_unionall_t *pa = (jl_unionall_t*)p;
+        pa->var = (jl_tvar_t*)recache_type((jl_value_t*)pa->var);
+        pa->body = recache_type(pa->body);
+    }
+    else {
+        jl_datatype_t *pt = (jl_datatype_t*)jl_typeof(p);
+        jl_datatype_t *cachep = recache_datatype(pt);
+        if (cachep->instance)
+            p = cachep->instance;
+        else if (pt != cachep)
+            jl_set_typeof(p, cachep);
+    }
+    return p;
+}
+
+static jl_datatype_t *recache_datatype(jl_datatype_t *dt) JL_GC_DISABLED
 {
     jl_datatype_t *t; // the type after unique'ing
     assert(verify_type((jl_value_t*)dt));
@@ -2265,27 +2314,8 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
     jl_svec_t *tt = dt->parameters;
     // recache all type parameters
     size_t i, l = jl_svec_len(tt);
-    for (i = 0; i < l; i++) {
-        jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
-        if (jl_is_datatype(p)) {
-            jl_datatype_t *cachep = jl_recache_type(p);
-            if (p != cachep)
-                jl_svecset(tt, i, cachep);
-        }
-        // XXX: else if (jl_is_typevar(p))
-        // XXX: else if (jl_is_uniontype(p))
-        // XXX: else if (jl_is_unionall(p))
-        else {
-            p = (jl_datatype_t*)jl_typeof(p);
-            jl_datatype_t *cachep = jl_recache_type(p);
-            if (p != cachep) {
-                if (cachep->instance)
-                    jl_svecset(tt, i, cachep->instance);
-                else
-                    jl_set_typeof(jl_svecref(tt, i), cachep);
-            }
-        }
-    }
+    for (i = 0; i < l; i++)
+        jl_svecset(tt, i, recache_type(jl_svecref(tt, i)));
 
     // then recache the type itself
     if (jl_svec_len(tt) == 0) { // jl_cache_type doesn't work if length(parameters) == 0
@@ -2323,7 +2353,7 @@ static void jl_recache_types(void) JL_GC_DISABLED
                 dt = (jl_datatype_t*)jl_typeof(o);
                 v = o;
             }
-            jl_datatype_t *t = jl_recache_type(dt);
+            jl_datatype_t *t = recache_datatype(dt);
             if ((jl_value_t*)dt == o && t != dt) {
                 assert(!type_in_worklist(dt));
                 if (loc)
@@ -2546,7 +2576,9 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     for (int i = 0; i < ccallable_list.len; i++) {
         jl_svec_t *item = (jl_svec_t*)ccallable_list.items[i];
         JL_GC_PROMISE_ROOTED(item);
-        jl_compile_extern_c(NULL, NULL, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+        int success = jl_compile_extern_c(NULL, NULL, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+        if (!success)
+            jl_safe_printf("@ccallable was already defined for this method name\n");
     }
     arraylist_free(&ccallable_list);
     jl_value_t *ret = (jl_value_t*)jl_svec(2, restored, init_order);
@@ -2607,7 +2639,8 @@ void jl_init_serializer(void)
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
-                     jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_nothing_type,
+                     jl_pointer_type, jl_abstractarray_type, jl_nothing_type,
+                     jl_vararg_type,
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,

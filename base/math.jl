@@ -97,6 +97,15 @@ function clamp!(x::AbstractArray, lo, hi)
     x
 end
 
+"""
+    clamp(x::Integer, r::AbstractUnitRange)
+
+Clamp `x` to lie within range `r`.
+
+!!! compat "Julia 1.6"
+     This method requires at least Julia 1.6.
+"""
+clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))
 
 """
     evalpoly(x, p)
@@ -359,12 +368,20 @@ asinh(x::Number)
 """
     expm1(x)
 
-Accurately compute ``e^x-1``.
+Accurately compute ``e^x-1``. It avoids the loss of precision involved in the direct
+evaluation of exp(x)-1 for small values of x.
+# Examples
+```jldoctest
+julia> expm1(1e-16)
+1.0e-16
+
+julia> exp(1e-16) - 1
+0.0
+```
 """
 expm1(x)
 expm1(x::Float64) = ccall((:expm1,libm), Float64, (Float64,), x)
 expm1(x::Float32) = ccall((:expm1f,libm), Float32, (Float32,), x)
-expm1(x::Real) = expm1(float(x))
 
 """
     exp2(x)
@@ -392,8 +409,12 @@ julia> exp10(2)
 """
 exp10(x::AbstractFloat) = 10^x
 
-for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :expm1)
-    @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
+for f in (:sin, :cos, :tan,  :sinh, :cosh, :tanh, :atan, :acos, :asin, :asinh, :acosh, :atanh, :expm1, :log, :log1p)
+    @eval function ($f)(x::Real)
+        xf = float(x)
+        x === xf && throw(MethodError($f, (x,)))
+        return ($f)(xf)
+    end
 end
 
 # functions with special cases for integer arguments
@@ -690,6 +711,9 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
+_hypot(x::Float16, y::Float16) = Float16(_hypot(Float32(x), Float32(y)))
+_hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
+
 function _hypot(x...)
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
@@ -776,6 +800,15 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 Get the exponent of a normalized floating-point number.
 Returns the largest integer `y` such that `2^y ≤ abs(x)`.
+
+# Examples
+```jldoctest
+julia> exponent(6.5)
+2
+
+julia> exponent(16.0)
+4
+```
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
@@ -826,6 +859,11 @@ end
 
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
+# Examples
+```jldoctest
+julia> frexp(12.8)
+(0.8, 4)
+```
 """
 function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)

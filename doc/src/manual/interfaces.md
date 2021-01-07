@@ -41,7 +41,7 @@ Any object that defines this function is iterable and can be used in the [many f
 It can also be used directly in a [`for`](@ref) loop since the syntax:
 
 ```julia
-for i in iter   # or  "for i = iter"
+for item in iter   # or  "for item = iter"
     # body
 end
 ```
@@ -51,7 +51,7 @@ is translated into:
 ```julia
 next = iterate(iter)
 while next !== nothing
-    (i, state) = next
+    (item, state) = next
     # body
     next = iterate(iter, state)
 end
@@ -71,8 +71,8 @@ With only [`iterate`](@ref) definition, the `Squares` type is already pretty pow
 We can iterate over all the elements:
 
 ```jldoctest squaretype
-julia> for i in Squares(7)
-           println(i)
+julia> for item in Squares(7)
+           println(item)
        end
 1
 4
@@ -193,6 +193,10 @@ julia> Squares(23)[end]
 529
 ```
 
+For multi-dimensional `begin`/`end` indexing as in `a[3, begin, 7]`, for example,
+you should define `firstindex(a, dim)` and `lastindex(a, dim)`
+(which default to calling `first` and `last` on `axes(a, dim)`, respectively).
+
 Note, though, that the above *only* defines [`getindex`](@ref) with one integer index. Indexing with
 anything other than an `Int` will throw a [`MethodError`](@ref) saying that there was no matching method.
 In order to support indexing with ranges or vectors of `Int`s, separate methods must be written:
@@ -234,7 +238,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A, dims::Dims)`                        | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
 | `similar(A, ::Type{S}, dims::Dims)`             | `Array{S}(undef, dims)`                | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
-| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
+| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the a tuple of `AbstractUnitRange{<:Integer}` of valid indices                    |
 | `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 

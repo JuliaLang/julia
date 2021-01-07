@@ -27,25 +27,14 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
         t === Any && return s, ""
     end
     if isvarargtype(t)
-        v1, v2 = nothing, nothing
-        if isa(t, UnionAll)
-            v1 = t.var
-            t = t.body
-            if isa(t, UnionAll)
-                v2 = t.var
-                t = t.body
-            end
-        end
-        ut = unwrap_unionall(t)
-        tt, tn = ut.parameters[1], ut.parameters[2]
-        if isa(tn, TypeVar) && (tn === v1 || tn === v2)
-            if tt === Any || (isa(tt, TypeVar) && (tt === v1 || tt === v2))
+        if !isdefined(t, :N)
+            if unwrapva(t) === Any
                 return string(s, "..."), ""
             else
-                return s, string_with_env(env, tt) * "..."
+                return s, string_with_env(env, unwrapva(t)) * "..."
             end
         end
-        return s, string_with_env(env, "Vararg{", tt, ", ", tn, "}")
+        return s, string_with_env(env, "Vararg{", t.T, ", ", t.N, "}")
     end
     return s, string_with_env(env, t)
 end
@@ -90,7 +79,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
-            slotnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), kwli.slot_syms)
+            slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
             kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
             # ensure the kwarg... is always printed last. The order of the arguments are not
             # necessarily the same as defined in the function
@@ -102,7 +91,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
             return kws
         end
     end
-    return Any[]
+    return Symbol[]
 end
 
 function show_method_params(io::IO, tv)
@@ -152,7 +141,7 @@ function updated_methodloc(m::Method)::Tuple{String, Int32}
         end
     end
     file = fixup_stdlib_path(string(file))
-    return file, line
+    return file, Int32(line)
 end
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)

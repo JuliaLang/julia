@@ -40,7 +40,7 @@ uint64_t io_wakeup_leave;
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
 {
     // Try to acquire the lock on this task.
-    int16_t was = task->tid;
+    int16_t was = jl_atomic_load_relaxed(&task->tid);
     if (was == tid)
         return 1;
     if (was == -1)
@@ -274,14 +274,14 @@ JL_DLLEXPORT int jl_enqueue_task(jl_task_t *task)
 }
 
 
-static int running_under_rr(void)
+int jl_running_under_rr(int recheck)
 {
 #ifdef _OS_LINUX_
 #define RR_CALL_BASE 1000
 #define SYS_rrcall_check_presence (RR_CALL_BASE + 8)
     static int checked_running_under_rr = 0;
     static int is_running_under_rr = 0;
-    if (!checked_running_under_rr) {
+    if (!checked_running_under_rr || recheck) {
         int ret = syscall(SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0);
         if (ret == -1) {
             // Should always be ENOSYS, but who knows what people do for
@@ -311,7 +311,7 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
      * scheduling logic from switching to other threads. Just don't bother
      * trying to wait here
      */
-    if (running_under_rr())
+    if (jl_running_under_rr(0))
         return 1;
     if (!(*start_cycles)) {
         *start_cycles = jl_hrtime();
@@ -348,9 +348,9 @@ static void wake_libuv(void)
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    int16_t uvlock = jl_atomic_load(&jl_uv_mutex.owner);
+    jl_thread_t uvlock = jl_atomic_load(&jl_uv_mutex.owner);
     int16_t self = ptls->tid;
-    unsigned long system_self = jl_all_tls_states[self]->system_id;
+    jl_thread_t system_self = jl_all_tls_states[self]->system_id;
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
     if (tid == self || tid == -1) {
         // we're already awake, but make sure we'll exit uv_run
@@ -363,7 +363,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         // something added to the sticky-queue: notify that thread
         wake_thread(tid);
         // check if we need to notify uv_run too
-        unsigned long system_tid = jl_all_tls_states[tid]->system_id;
+        jl_thread_t system_tid = jl_all_tls_states[tid]->system_id;
         if (uvlock != system_self && jl_atomic_load(&jl_uv_mutex.owner) == system_tid)
             wake_libuv();
     }

@@ -84,12 +84,8 @@ end
                    "Thrown: ErrorException")
 end
 # Test printing of Fail results
-mutable struct NoThrowTestSet <: Test.AbstractTestSet
-    results::Vector
-    NoThrowTestSet(desc) = new([])
-end
-Test.record(ts::NoThrowTestSet, t::Test.Result) = (push!(ts.results, t); t)
-Test.finish(ts::NoThrowTestSet) = ts.results
+include("nothrow_testset.jl")
+
 let fails = @testset NoThrowTestSet begin
         # 1 - Fail - wrong exception
         @test_throws OverflowError error()
@@ -134,6 +130,8 @@ let fails = @testset NoThrowTestSet begin
         @test startswith(str1, str2)
         # 20 - Fail - endswith
         @test endswith(str1, str2)
+        # 21 - Fail - contains
+        @test contains(str1, str2)
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -237,6 +235,11 @@ let fails = @testset NoThrowTestSet begin
     let str = sprint(show, fails[20])
         @test occursin("Expression: endswith(str1, str2)", str)
         @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[21])
+        @test occursin("Expression: contains(str1, str2)", str)
+        @test occursin("Evaluated: contains(\"Hello\", \"World\")", str)
     end
 end
 
@@ -802,29 +805,30 @@ end
     @test startswith(fails[4].value, "ErrorException")
 end
 
-function newfunc()
-    42
-end
-@deprecate oldfunc newfunc
-
-@testset "@test_deprecated" begin
-    @test_deprecated oldfunc()
-
-    # Expression passthrough
-    if Base.JLOptions().depwarn != 2
-        @test (@test_deprecated oldfunc()) == 42
-
-        fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
-            @test_deprecated newfunc()
-            @test_deprecated r"Not found in message" oldfunc()
+let code = quote
+        function newfunc()
+            42
         end
-        @test length(fails) == 2
-        @test fails[1] isa Test.LogTestFailure
-        @test fails[2] isa Test.LogTestFailure
-    else
-        @warn """Omitting `@test_deprecated` tests which can't yet
-                 be tested in --depwarn=error mode"""
+        @deprecate oldfunc newfunc
+
+        @testset "@test_deprecated" begin
+            @test_deprecated oldfunc()
+            @test Base.JLOptions().depwarn == 1
+
+            @test (@test_deprecated oldfunc()) == 42
+
+            fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
+                @test_deprecated newfunc()
+                @test_deprecated r"Not found in message" oldfunc()
+            end
+            @test length(fails) == 2
+            @test fails[1] isa Test.LogTestFailure
+            @test fails[2] isa Test.LogTestFailure
+        end
     end
+    incl = "include($(repr(joinpath(@__DIR__, "nothrow_testset.jl"))))"
+    cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=yes -e 'using Test' -e $incl -e $code`
+    @test success(pipeline(cmd))
 end
 
 @testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
@@ -972,5 +976,163 @@ let ex = :(something_complex + [1, 2, 3])
         serialize(b, t)
         @test string(t) == string(deserialize(b))
         @test eof(b)
+    end
+end
+
+@testset "verbose option" begin
+    expected = """
+    Test Summary: | Pass  Total
+    Parent        |    9      9
+      Child 1     |    3      3
+        Child 1.1 |    1      1
+        Child 1.2 |    1      1
+        Child 1.3 |    1      1
+      Child 2     |    3      3
+      Child 3     |    3      3
+        Child 3.1 |    1      1
+        Child 3.2 |    1      1
+        Child 3.3 |    1      1
+    """
+
+    mktemp() do f, _
+        write(f,
+        """
+        using Test
+
+        @testset "Parent" verbose = true begin
+            @testset "Child 1" verbose = true begin
+                @testset "Child 1.1" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 1.2" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 1.3" begin
+                    @test 1 == 1
+                end
+            end
+
+            @testset "Child 2" begin
+                @testset "Child 2.1" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 2.2" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 2.3" begin
+                    @test 1 == 1
+                end
+            end
+
+            @testset "Child 3" verbose = true begin
+                @testset "Child 3.1" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 3.2" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 3.3" begin
+                    @test 1 == 1
+                end
+            end
+        end
+        """)
+        cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+        result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+        @test occursin(expected, result)
+    end
+end
+
+# Non-booleans in @test (#35888)
+struct T35888 end
+Base.isequal(::T35888, ::T35888) = T35888()
+Base.:!(::T35888) = missing
+let errors = @testset NoThrowTestSet begin
+        # 1 - evaluates to non-Boolean
+        @test missing
+        # 2 - evaluates to non-Boolean
+        @test !missing
+        # 3 - evaluates to non-Boolean
+        @test isequal(5)
+        # 4 - evaluates to non-Boolean
+        @test !isequal(5)
+        # 5 - evaluates to non-Boolean
+        @test isequal(T35888(), T35888())
+        # 6 - evaluates to non-Boolean
+        @test !isequal(T35888(), T35888())
+        # 7 - evaluates to non-Boolean
+        @test 1 < 2 < missing
+        # 8 - evaluates to non-Boolean
+        @test !(1 < 2 < missing)
+        # 9 - TypeError in chained comparison
+        @test 1 < 2 < missing < 4
+        # 10 - TypeError in chained comparison
+        @test !(1 < 2 < missing < 4)
+    end
+
+    for err in errors
+        @test err isa Test.Error
+    end
+
+    let str = sprint(show, errors[1])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: missing", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[2])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !missing", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[3])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: isequal(5)", str)
+    end
+
+    let str = sprint(show, errors[4])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !(isequal(5))", str)
+    end
+
+    let str = sprint(show, errors[5])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: isequal(T35888(), T35888())", str)
+        @test occursin("Value: $T35888()", str)
+    end
+
+    let str = sprint(show, errors[6])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !(isequal(T35888(), T35888()))", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[7])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: 1 < 2 < missing", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[8])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !(1 < 2 < missing)", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[9])
+        @test occursin("TypeError: non-boolean (Missing) used in boolean context", str)
+        @test occursin("Expression: 1 < 2 < missing < 4", str)
+    end
+
+    let str = sprint(show, errors[10])
+        @test occursin("TypeError: non-boolean (Missing) used in boolean context", str)
+        @test occursin("Expression: !(1 < 2 < missing < 4)", str)
     end
 end

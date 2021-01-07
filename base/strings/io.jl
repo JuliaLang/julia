@@ -310,8 +310,8 @@ escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
-    escape_string(str::AbstractString[, esc])::AbstractString
-    escape_string(io, str::AbstractString[, esc::])::Nothing
+    escape_string(str::AbstractString[, esc]; keep = ())::AbstractString
+    escape_string(io, str::AbstractString[, esc]; keep = ())::Nothing
 
 General escaping of traditional C and Unicode escape sequences. The first form returns the
 escaped string, the second prints the result to `io`.
@@ -323,10 +323,19 @@ unambiguous), unicode code point (`"\\u"` prefix) or hex (`"\\x"` prefix).
 The optional `esc` argument specifies any additional characters that should also be
 escaped by a prepending backslash (`\"` is also escaped by default in the first form).
 
+The argument `keep` specifies a collection of characters which are to be kept as
+they are. Notice that `esc` has precedence here.
+
+!!! compat "Julia 1.7"
+    The `keep` argument is available as of Julia 1.7.
+
 # Examples
 ```jldoctest
 julia> escape_string("aaa\\nbbb")
 "aaa\\\\nbbb"
+
+julia> escape_string("aaa\\nbbb"; keep = '\\n')
+"aaa\\nbbb"
 
 julia> escape_string("\\xfe\\xff") # invalid utf-8
 "\\\\xfe\\\\xff"
@@ -341,11 +350,13 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 ## See also
 [`unescape_string`](@ref) for the reverse operation.
 """
-function escape_string(io::IO, s::AbstractString, esc="")
+function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
     a = Iterators.Stateful(s)
     for c::AbstractChar in a
         if c in esc
             print(io, '\\', c)
+        elseif c in keep
+            print(io, c)
         elseif isascii(c)
             c == '\0'          ? print(io, escape_nul(peek(a)::Union{AbstractChar,Nothing})) :
             c == '\e'          ? print(io, "\\e") :
@@ -368,7 +379,8 @@ function escape_string(io::IO, s::AbstractString, esc="")
     end
 end
 
-escape_string(s::AbstractString, esc=('\"',)) = sprint(escape_string, s, esc, sizehint=lastindex(s))
+escape_string(s::AbstractString, esc=('\"',); keep = ()) =
+    sprint((io)->escape_string(io, s, esc; keep = keep), sizehint=lastindex(s))
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')
@@ -427,7 +439,7 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
                 m = c == 'x' ? 2 :
                     c == 'u' ? 4 : 8
                 while (k += 1) <= m && !isempty(a)
-                    nc = peek(a)
+                    nc = peek(a)::AbstractChar
                     n = '0' <= nc <= '9' ? n<<4 + (nc-'0') :
                         'a' <= nc <= 'f' ? n<<4 + (nc-'a'+10) :
                         'A' <= nc <= 'F' ? n<<4 + (nc-'A'+10) : break
@@ -447,7 +459,7 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
                 k = 1
                 n = c-'0'
                 while (k += 1) <= 3 && !isempty(a)
-                    c = peek(a)
+                    c = peek(a)::AbstractChar
                     n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                     popfirst!(a)
                 end
@@ -621,6 +633,8 @@ julia> Base.unindent("   a\\n   b", 2)
 julia> Base.unindent("\\ta\\n\\tb", 2, tabwidth=8)
 "      a\\n      b"
 ```
+
+See also `indent` from the [`MultilineStrings` package](https://github.com/invenia/MultilineStrings.jl).
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str

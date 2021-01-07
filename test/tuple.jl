@@ -504,6 +504,7 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+@test Base.tuple_type_tail(Tuple{Vararg{Int}}) == Tuple{Vararg{Int}}
 
 @testset "setindex" begin
     @test Base.setindex((1, ), 2, 1) === (2, )
@@ -593,3 +594,7 @@ end
     @test r isa Iterators.Rest
     @test collect(r) == -[3, 2, 4]
 end
+
+# issue #38837
+f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
+@test @inferred(f38837((1,2))) === (1.0f0, 2.0)

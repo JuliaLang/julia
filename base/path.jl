@@ -72,7 +72,7 @@ function homedir()
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
         else
-            uv_error(:homedir, rc)
+            uv_error("homedir()", rc)
         end
     end
 end
@@ -137,8 +137,11 @@ _splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
 function _splitdir_nodrive(a::String, b::String)
     m = match(path_dir_splitter,b)
     m === nothing && return (a,b)
-    a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
-    a, String(m.captures[3])
+    cs = m.captures
+    getcapture(cs, i) = cs[i]::AbstractString
+    c1, c2, c3 = getcapture(cs, 1), getcapture(cs, 2), getcapture(cs, 3)
+    a = string(a, isempty(c1) ? c2[1] : c1)
+    a, String(c3)
 end
 
 """
@@ -432,11 +435,11 @@ function realpath(path::AbstractString)
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
                     C_NULL, req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("realpath", ret)
+            uv_fs_req_cleanup(req)
+            uv_error("realpath($(repr(path)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
         return path
     finally
         Libc.free(req)
@@ -492,6 +495,9 @@ contractuser(path::AbstractString)
 Return a relative filepath to `path` either from the current directory or from an optional
 start directory. This is a path computation: the filesystem is not accessed to confirm the
 existence or nature of `path` or `startpath`.
+
+On Windows, case sensitivity is applied to every part of the path except drive letters. If
+`path` and `startpath` refer to different drives, the absolute path of `path` is returned.
 """
 function relpath(path::String, startpath::String = ".")
     isempty(path) && throw(ArgumentError("`path` must be specified"))
@@ -499,8 +505,13 @@ function relpath(path::String, startpath::String = ".")
     curdir = "."
     pardir = ".."
     path == startpath && return curdir
-    path_arr  = split(abspath(path),      path_separator_re)
-    start_arr = split(abspath(startpath), path_separator_re)
+    path_drive, path_without_drive = splitdrive(path)
+    startpath_drive, startpath_without_drive = splitdrive(startpath)
+    path_arr  = split(abspath(path_without_drive),      path_separator_re)
+    start_arr = split(abspath(startpath_without_drive), path_separator_re)
+    if Sys.iswindows()
+        lowercase(path_drive) != lowercase(startpath_drive) && return abspath(path)
+    end
     i = 0
     while i < min(length(path_arr), length(start_arr))
         i += 1

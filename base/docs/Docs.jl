@@ -73,7 +73,12 @@ const modules = Module[]
 const META    = gensym(:meta)
 const METAType = IdDict{Any,Any}
 
-meta(m::Module) = isdefined(m, META) ? getfield(m, META)::METAType : METAType()
+function meta(m::Module)
+    if !isdefined(m, META)
+        initmeta(m)
+    end
+    return getfield(m, META)::METAType
+end
 
 function initmeta(m::Module)
     if !isdefined(m, META)
@@ -401,8 +406,7 @@ function moduledoc(__source__, __module__, meta, def, def′::Expr)
         def = unblock(def)
         block = def.args[3].args
         if !def.args[1]
-            isempty(block) && error("empty baremodules are not documentable.")
-            insert!(block, 2, :(import Base: @doc))
+            pushfirst!(block, :(import Base: @doc))
         end
         push!(block, docex)
         esc(Expr(:toplevel, def))

@@ -129,13 +129,15 @@ end
 function _trimdocs(md::Markdown.MD, brief::Bool)
     content, trimmed = [], false
     for c in md.content
-        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
-            !isempty(c.text) && isa(c.text[1], AbstractString) &&
-            lowercase(c.text[1]) ∈ ("extended help",
-                                    "extended documentation",
-                                    "extended docs")
-            trimmed = true
-            break
+        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) && !isempty(c.text)
+            item = c.text[1]
+            if isa(item, AbstractString) &&
+                lowercase(item) ∈ ("extended help",
+                                   "extended documentation",
+                                   "extended docs")
+                trimmed = true
+                break
+            end
         end
         c, trm = _trimdocs(c, brief)
         trimmed |= trm
@@ -217,12 +219,14 @@ function lookup_doc(ex)
     end
     if isa(ex, Symbol) && Base.isoperator(ex)
         str = string(ex)
+        isdotted = startswith(str, ".")
         if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment
             op = str[1:end-1]
-            return Markdown.parse("`x $op= y` is a synonym for `x = x $op y`")
-        elseif startswith(str, ".")
+            eq = isdotted ? ".=" : "="
+            return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
+        elseif isdotted
             op = str[2:end]
-            return Markdown.parse("`x $ex y` is equivalent to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+            return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
         end
     end
     binding = esc(bindingexpr(namify(ex)))
@@ -347,15 +351,36 @@ function repl_latex(io::IO, s::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
+        state = '\0'
         with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
-                    print(io, symbols_latex[cstr], "<tab>")
+                    latex = symbols_latex[cstr]
+                    if length(latex) == 3 && latex[2] in ('^','_')
+                        # coalesce runs of sub/superscripts
+                        if state != latex[2]
+                            '\0' != state && print(io, "<tab>")
+                            print(io, latex[1:2])
+                            state = latex[2]
+                        end
+                        print(io, latex[3])
+                    else
+                        if '\0' != state
+                            print(io, "<tab>")
+                            state = '\0'
+                        end
+                        print(io, latex, "<tab>")
+                    end
                 else
+                    if '\0' != state
+                        print(io, "<tab>")
+                        state = '\0'
+                    end
                     print(io, c)
                 end
             end
+            '\0' != state && print(io, "<tab>")
         end
         println(io, '\n')
     end
@@ -572,8 +597,6 @@ function printmatch(io::IO, word, match)
     end
 end
 
-printmatch(args...) = printfuzzy(stdout, args...)
-
 function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
@@ -629,7 +652,7 @@ doc_completions(name::Symbol) = doc_completions(string(name))
 # Searching and apropos
 
 # Docsearch simply returns true or false if an object contains the given needle
-docsearch(haystack::AbstractString, needle) = findfirst(needle, haystack) !== nothing
+docsearch(haystack::AbstractString, needle) = occursin(needle, haystack)
 docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
 docsearch(::Nothing, needle) = false
 function docsearch(haystack::Array, needle)

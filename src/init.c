@@ -28,6 +28,7 @@
 #undef DEFINE_BUILTIN_GLOBALS
 #include "threading.h"
 #include "julia_assert.h"
+#include "processor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -292,7 +293,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
 static void post_boot_hooks(void);
 
-JL_DLLEXPORT void *jl_dl_handle;
+JL_DLLEXPORT void *jl_libjulia_internal_handle;
+JL_DLLEXPORT void *jl_libjulia_handle;
 void *jl_RTLD_DEFAULT_handle;
 JL_DLLEXPORT void *jl_exe_handle;
 #ifdef _OS_WINDOWS_
@@ -618,6 +620,13 @@ static void jl_set_io_wait(int v)
 
 extern jl_mutex_t jl_modules_mutex;
 
+static void restore_fp_env(void)
+{
+    if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
+        jl_error("Failed to configure floating point environment");
+    }
+}
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
@@ -634,6 +643,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
                                     // best to call this first, since it also initializes libuv
     jl_init_uv();
     init_stdio();
+    restore_fp_env();
     restore_signals();
 
     jl_page_size = jl_getpagesize();
@@ -648,7 +658,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
-    jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+
+    // Load libjulia-internal (which contains this function), and libjulia, explicitly.
+    jl_libjulia_internal_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+    jl_libjulia_handle = jl_load_dynamic_library(JL_LIBJULIA_SONAME, JL_RTLD_DEFAULT, 1);
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
@@ -736,9 +749,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_init_tasks();
     jl_init_root_task(stack_lo, stack_hi);
-#ifdef ENABLE_TIMINGS
-    jl_root_task->timing_stack = jl_root_timing;
-#endif
     jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();

@@ -1816,85 +1816,74 @@ for isunittri in (true, false), islowertri in (true, false)
     tritype = :(LinearAlgebra.$(Symbol(unitstr, halfstr, "Triangular")))
 
     # build out-of-place left-division operations
+    # broad method where elements are Numbers
+    @eval function \(A::$tritype{<:TA,<:AbstractMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
+        TAb = $(isunittri ?
+            :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
+            :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
+        LinearAlgebra.ldiv!(convert(AbstractArray{TAb}, A), convert(Array{TAb}, b))
+    end
+    # fallback where elements are not Numbers
+    @eval function \(A::$tritype, b::SparseVector)
+        LinearAlgebra.ldiv!(A, copy(b))
+    end
+
+    # faster method requiring good view support of the
+    # triangular matrix type. hence the StridedMatrix restriction.
     for (istrans, applyxform, xformtype, xformop) in (
             (false, false, :identity,  :identity),
             (true,  true,  :Transpose, :transpose),
             (true,  true,  :Adjoint,   :adjoint) )
 
-        # broad method where elements are Numbers
-        xformtritype = applyxform ? :($xformtype{<:TA,<:$tritype{<:Any,<:AbstractMatrix}}) :
-                                    :($tritype{<:TA,<:AbstractMatrix})
-        @eval function \(xformA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
-            A = $(applyxform ? :(xformA.parent) : :(xformA) )
-            TAb = $(isunittri ?
-                :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
-                :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
-            LinearAlgebra.ldiv!($xformop(convert(AbstractArray{TAb}, A)), convert(Array{TAb}, b))
-        end
-
-        # faster method requiring good view support of the
-        # triangular matrix type. hence the StridedMatrix restriction.
-        xformtritype = applyxform ? :($xformtype{<:TA,<:$tritype{<:Any,<:StridedMatrix}}) :
+        xformtritype = applyxform ? :($tritype{<:TA,<:$xformtype{<:Any,<:StridedMatrix}}) :
                                     :($tritype{<:TA,<:StridedMatrix})
-        @eval function \(xformA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
-            A = $(applyxform ? :(xformA.parent) : :(xformA) )
-            TAb = $(isunittri ?
+        @eval function \(xA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
+            TAb = $( isunittri ?
                 :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
                 :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
             r = convert(Array{TAb}, b)
             # If b has no nonzero entries, then r is necessarily zero. If b has nonzero
             # entries, then the operation involves only b[nzrange], so we extract and
             # operate on solely b[nzrange] for efficiency.
+            A = $( applyxform ? :(parent(parent(xA))) : :(parent(xA)) )
             if nnz(b) != 0
-                nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
+                nzrange = $( islowertri ?
                     :(nonzeroinds(b)[1]:length(b::SparseVector)) :
                     :(1:nonzeroinds(b)[end]) )
                 nzrangeviewr = view(r, nzrange)
-                nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
-                LinearAlgebra.ldiv!($xformop(convert(AbstractArray{TAb}, nzrangeviewA)), nzrangeviewr)
+                nzrangeviewA = $tritype($xformop(view(A, nzrange, nzrange)))
+                LinearAlgebra.ldiv!(convert(AbstractArray{TAb}, nzrangeviewA), nzrangeviewr)
             end
             r
         end
 
-        # fallback where elements are not Numbers
-        xformtritype = applyxform ? :($xformtype{<:Any,<:$tritype}) : :($tritype)
-        @eval function \(xformA::$xformtritype, b::SparseVector)
-            A = $(applyxform ? :(xformA.parent) : :(xformA) )
-            LinearAlgebra.ldiv!($xformop(A), copy(b))
-        end
-    end
-
-    # build in-place left-division operations
-    for (istrans, applyxform, xformtype, xformop) in (
-            (false, false, :identity,  :identity),
-            (true,  true,  :Transpose, :transpose),
-            (true,  true,  :Adjoint,   :adjoint) )
-        xformtritype = applyxform ? :($xformtype{<:Any,<:$tritype{<:Any,<:StridedMatrix}}) :
+        # build in-place left-division operations
+        xformtritype = applyxform ? :($tritype{<:Any,<:$xformtype{<:Any,<:StridedMatrix}}) :
                                     :($tritype{<:Any,<:StridedMatrix})
 
         # the generic in-place left-division methods handle these cases, but
         # we can achieve greater efficiency where the triangular matrix provides
-        # good view support. hence the StridedMatrix restriction.
-        @eval function ldiv!(xformA::$xformtritype, b::SparseVector)
-            A = $(applyxform ? :(xformA.parent) : :(xformA) )
+        # good view support, hence the StridedMatrix restriction.
+        @eval function ldiv!(xA::$xformtritype, b::SparseVector)
+            A = $( applyxform ? :(parent(parent(xA))) : :(parent(xA)) )
             # If b has no nonzero entries, the result is necessarily zero and this call
             # reduces to a no-op. If b has nonzero entries, then...
             if nnz(b) != 0
                 # densify the relevant part of b in one shot rather
                 # than potentially repeatedly reallocating during the solve
-                $( (islowertri && !istrans) || (!islowertri && istrans) ?
+                $( islowertri ?
                     :(_densifyfirstnztoend!(b)) :
                     :(_densifystarttolastnz!(b)) )
                 # this operation involves only the densified section, so
                 # for efficiency we extract and operate on solely that section
                 # furthermore we operate on that section as a dense vector
                 # such that dispatch has a chance to exploit, e.g., tuned BLAS
-                nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
-                    :(nonzeroinds(b)[1]:length(b::SparseVector)) :
+                nzrange = $( islowertri ?
+                    :(nonzeroinds(b)[1]:length(b)) :
                     :(1:nonzeroinds(b)[end]) )
                 nzrangeviewbnz = view(nonzeros(b), nzrange .- (nonzeroinds(b)[1] - 1))
-                nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
-                LinearAlgebra.ldiv!($xformop(nzrangeviewA), nzrangeviewbnz)
+                nzrangeviewA = $tritype($xformop(view(A, nzrange, nzrange)))
+                LinearAlgebra.ldiv!(nzrangeviewA, nzrangeviewbnz)
             end
             b
         end

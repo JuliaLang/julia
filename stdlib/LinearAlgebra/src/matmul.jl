@@ -201,32 +201,52 @@ julia> muladd(A, B, z)
  107.0  107.0
 ```
 """
-function Base.muladd(A::AbstractMatrix{TA}, y::AbstractVector{Ty}, z) where {TA, Ty}
-    T = promote_type(TA, Ty, eltype(z))
+function Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, AbstractArray})
+    Ay = A * y
+    for d in 1:ndims(Ay)
+        # Same error as Ay .+= z would give, to match StridedMatrix method:
+        size(z,d) > size(Ay,d) && throw(DimensionMismatch("array could not be broadcast to match destination"))
+    end
+    for d in ndims(Ay)+1:ndims(z)
+        # Similar error to what Ay + z would give, to match (Any,Any,Any) method:
+        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+            axes(z), ", must have singleton at dim ", d)))
+    end
+    Ay .+ z
+end
+
+function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, AbstractArray})
+    if size(z,1) > length(u) || size(z,2) > length(v)
+        # Same error as (u*v) .+= z:
+        throw(DimensionMismatch("array could not be broadcast to match destination"))
+    end
+    for d in 3:ndims(z)
+        # Similar error to (u*v) + z:
+        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+            axes(z), ", must have singleton at dim ", d)))
+    end
+    (u .* v) .+ z
+end
+
+Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+    muladd(A', x', z')'
+Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
+    transpose(muladd(transpose(A), transpose(x), transpose(z)))
+
+StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+
+function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, y::AbstractVector{<:Number}, z::Union{Number, AbstractVector})
+    T = promote_type(eltype(A), eltype(y), eltype(z))
     C = similar(A, T, axes(A,1))
     C .= z
     mul!(C, A, y, true, true)
 end
 
-function Base.muladd(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}, z) where {TA, TB}
-    T = promote_type(TA, TB, eltype(z))
+function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, B::StridedMaybeAdjOrTransMat{<:Number}, z::Union{Number, AbstractVecOrMat})
+    T = promote_type(eltype(A), eltype(B), eltype(z))
     C = similar(A, T, axes(A,1), axes(B,2))
     C .= z
     mul!(C, A, B, true, true)
-end
-
-Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z) = muladd(A', x', z')'
-Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z) = transpose(muladd(transpose(A), transpose(x), transpose(z)))
-
-function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z)
-    ndims(z) > 2 && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
-    (u .* v) .+ z
-end
-
-function Base.muladd(u::AdjOrTransAbsVec, v::AbstractVector, z)
-    uv = _dot_nonrecursive(u, v)
-    ndims(z) > ndims(uv) && throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
-    uv .+ z
 end
 
 """

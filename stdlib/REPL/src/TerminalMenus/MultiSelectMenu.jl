@@ -59,7 +59,7 @@ function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=In
     pagesize = pagesize == -1 ? length(options) : pagesize
     # pagesize shouldn't be bigger than options
     pagesize = min(length(options), pagesize)
-    # after other checks, pagesize must be greater than 2
+    # after other checks, pagesize must be at least 1
     pagesize < 1 && error("pagesize must be >= 1")
 
     pageoffset = 0

@@ -694,6 +694,8 @@ eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).typ
 function promote_typejoin_union(::Type{T}) where T
     if T === Union{}
         return Union{}
+    elseif T isa UnionAll
+        return Any # TODO: compute more precise bounds
     elseif T isa Union
         return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
     elseif T <: Tuple
@@ -725,8 +727,7 @@ end
             ci = U
         end
         if i == lr && Core.Compiler.isvarargtype(pi)
-            N = (Base.unwrap_unionall(pi)::DataType).parameters[2]
-            c[i] = Base.rewrap_unionall(Vararg{ci, N}, pi)
+            c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
         else
             c[i] = ci
         end

@@ -47,7 +47,6 @@ static uint32_t sysimg_init_cb(const void *id)
             best_idx = i;
         }
     }
-    target = sysimg[best_idx];
     jit_targets.push_back(std::move(target));
     return best_idx;
 }
@@ -159,4 +158,14 @@ extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
 extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
 {
     return isZero;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void)
+{
+    return 0;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault)
+{
+    return isDefault;
 }

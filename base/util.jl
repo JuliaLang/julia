@@ -306,7 +306,13 @@ if Sys.iswindows()
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
              CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
-        @assert succeeded
+        if !succeeded
+            credbuf = resize!(credbuf, credbufsize[])
+            succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
+                (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
+                 CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
+            @assert succeeded
+        end
 
         # Step 2: Create the actual dialog
         #      2.1: Set up the window
@@ -507,6 +513,54 @@ function _kwdef!(blk, params_args, call_args)
         end
     end
     blk
+end
+
+"""
+    @invoke f(arg::T, ...; kwargs...)
+
+Provides a convenient way to call [`invoke`](@ref);
+`@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
+When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
+`@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
+"""
+macro invoke(ex)
+    f, args, kwargs = destructure_callex(ex)
+    arg2typs = map(args) do x
+        is_expr(x, :(::)) ? (x.args...,) : (x, GlobalRef(Core, :Any))
+    end
+    args, argtypes = first.(arg2typs), last.(arg2typs)
+    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(argtypes...)}, $(args...); $(kwargs...))))
+end
+
+"""
+    @invokelatest f(args...; kwargs...)
+
+Provides a convenient way to call [`Base.invokelatest`](@ref).
+`@invokelatest f(args...; kwargs...)` will simply be expanded into
+`Base.invokelatest(f, args...; kwargs...)`.
+"""
+macro invokelatest(ex)
+    f, args, kwargs = destructure_callex(ex)
+    return esc(:($(GlobalRef(Base, :invokelatest))($(f), $(args...); $(kwargs...))))
+end
+
+function destructure_callex(ex)
+    is_expr(ex, :call) || throw(ArgumentError("a call expression f(args...; kwargs...) should be given"))
+
+    f = first(ex.args)
+    args = []
+    kwargs = []
+    for x in ex.args[2:end]
+        if is_expr(x, :parameters)
+            append!(kwargs, x.args)
+        elseif is_expr(x, :kw)
+            push!(kwargs, x)
+        else
+            push!(args, x)
+        end
+    end
+
+    return f, args, kwargs
 end
 
 # testing

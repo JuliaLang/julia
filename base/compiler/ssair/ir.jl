@@ -708,7 +708,9 @@ end
 function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typ), ltable_idx::Int32, reverse_affinity::Bool=false)
     refinish = false
     result_idx = compact.result_idx
-    if result_idx == first(compact.result_bbs[compact.active_result_bb].stmts) && reverse_affinity
+    if reverse_affinity &&
+            ((compact.active_result_bb == length(compact.result_bbs) + 1) ||
+             result_idx == first(compact.result_bbs[compact.active_result_bb].stmts))
         compact.active_result_bb -= 1
         refinish = true
     end
@@ -1265,6 +1267,8 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     stmt === nothing && return false
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
         effect_free = false
+    elseif isa(compact.result[idx][:info], MethodResultPure)
+        effect_free = true
     else
         effect_free = stmt_effect_free(stmt, compact.result[idx][:type], compact, compact.ir.sptypes)
     end

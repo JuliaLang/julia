@@ -209,6 +209,24 @@ Say: hey there friend
 kw"macro"
 
 """
+    __module__
+
+The argument `__module__` is only visible inside the macro, and it provides information
+(in the form of a `Module` object) about the expansion context of the macro invocation.
+See the manual section on [Macro invocation](@ref) for more information.
+"""
+kw"__module__"
+
+"""
+    __source__
+
+The argument `__source__` is only visible inside the macro, and it provides information
+(in the form of a `LineNumberNode` object) about the parser location of the `@` sign from
+the macro invocation. See the manual section on [Macro invocation](@ref) for more information.
+"""
+kw"__source__"
+
+"""
     local
 
 `local` introduces a new local variable.
@@ -396,9 +414,10 @@ kw"."
 """
     let
 
-`let` statements allocate new variable bindings each time they run. Whereas an
-assignment modifies an existing value location, `let` creates new locations. This
-difference is only detectable in the case of variables that outlive their scope via
+`let` statements create a new hard scope block and introduce new variable bindings
+each time they run. Whereas assignments might reassign a new value to an existing value location,
+`let` always creates a new location.
+This difference is only detectable in the case of variables that outlive their scope via
 closures. The `let` syntax accepts a comma-separated series of assignments and variable
 names:
 
@@ -2346,7 +2365,7 @@ arguments accepted by varargs methods (see the section on [Varargs Functions](@r
 # Examples
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString, Vararg{Int}}
-Tuple{AbstractString, Vararg{Int64, N} where N}
+Tuple{AbstractString, Vararg{Int64}}
 
 julia> isa(("1",), mytupletype)
 true

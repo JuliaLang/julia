@@ -9,9 +9,16 @@ using ..CoreLogging
 
 export quot,
        isexpr,
+       isidentifier,
+       isoperator,
+       isunaryoperator,
+       isbinaryoperator,
+       ispostfixoperator,
        replace_sourceloc!,
        show_sexpr,
        @dump
+
+using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
 
 """
     Meta.quot(ex)::Expr
@@ -336,6 +343,19 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                           slot_offset, statement_offset, boundscheck)
         x.edges .+= slot_offset
         return x
+    end
+    if isa(x, Core.ReturnNode)
+        return Core.ReturnNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+        )
+    end
+    if isa(x, Core.GotoIfNot)
+        return Core.GotoIfNot(
+            _partially_inline!(x.cond, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+            x.dest + statement_offset,
+        )
     end
     if isa(x, Expr)
         head = x.head
