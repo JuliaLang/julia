@@ -164,6 +164,14 @@ function timev_print(elapsedtime, diff::GC_Diff, compile_time)
     padded_nonzero_print(diff.full_sweep,   "full collections")
 end
 
+# Like a try-finally block, except without introducing the try scope
+macro tryfinally(ex, fin)
+    Expr(:tryfinally,
+       :($(esc(ex))),
+       :($(esc(fin)))
+       )
+end
+
 """
     @time
 
