@@ -134,28 +134,29 @@ julia> divrem(7,3)
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
 
-function divrem(a::AbstractFloat, b::AbstractFloat, r::RoundingMode)
+#avoids calling rem for Integers-Integers,
+#a-d*b not precise for Floats - AbstractFloat, AbstractIrrational. Rationals are still slower
+function divrem(a::Integer, b::Integer, r::RoundingMode)
     if r === RoundToZero
-        (div(a,b), rem(a,b))
-    elseif r === RoundDown
-        (fld(a, b),mod(a,b))
-    else
-        (div(a,b,r), rem(a,b,r))
-    end
-end
-#avoids calling rem for Integers, Rationals
-function divrem(a, b, r::RoundingMode)
-    if r === RoundToZero
-        # For compat. Remove in 2.0.
         d = div(a, b)
         (d, a - d*b)
     elseif r === RoundDown
-        # For compat. Remove in 2.0.
         d = fld(a, b)
         (d, a - d*b)
     else
         d = div(a, b, r)
-        (d, a - b*d)
+        (d, a - d*b)
+    end
+end
+function divrem(a, b, r::RoundingMode)
+    if r === RoundToZero
+        # For compat. Remove in 2.0.
+        (div(a,b), rem(a,b))
+    elseif r === RoundDown
+        # For compat. Remove in 2.0.
+        (fld(a, b),mod(a,b))
+    else
+        (div(a,b,r), rem(a,b,r))
     end
 end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))

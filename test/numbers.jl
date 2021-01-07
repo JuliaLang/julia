@@ -2504,6 +2504,7 @@ end
 end
 
 @testset "divrem rounded" begin
+    #rounded Floats
     for T in (Float16, Float32, Float64, BigFloat)
         @test divrem(T(1.5), T(2), RoundToZero)[2]  == 1.5
         @test divrem(T(1.5), T(2), RoundNearest)[2] == -0.5
@@ -2514,6 +2515,7 @@ end
         @test divrem(T(-1.5), T(2), RoundDown)[2]    == 0.5
         @test divrem(T(-1.5), T(2), RoundUp)[2]      == -1.5
     end
+    #rounded Integers
     for (a, b) in (
             (3, 2),
             (5, 3),
