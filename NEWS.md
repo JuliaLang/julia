@@ -7,7 +7,9 @@ New language features
 Language changes
 ----------------
 
-* Subtypes of `AbstractRange` now correctly follow the general array indexing behavior when indexed by `Bool`s, erroring for scalar `Bool`s and treating arrays (including ranges) of `Bool` as an logical index ([#31829])
+* Subtypes of `AbstractRange` now correctly follow the general array indexing
+  behavior when indexed by `Bool`s, erroring for scalar `Bool`s and treating
+  arrays (including ranges) of `Bool` as an logical index ([#31829])
 
 Compiler/Runtime improvements
 -----------------------------
