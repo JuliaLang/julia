@@ -92,9 +92,9 @@ overwriting the input `A`, instead of creating a copy. See documentation of [`sv
 function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T<:BlasFloat}
     m,n = size(A)
     if m == 0 || n == 0
-        u,s,vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
+        u, s, vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
     else
-        u,s,vt = _svd!(A,full,alg)
+        u, s, vt = _svd!(A,full,alg)
     end
     SVD(u,s,vt)
 end
@@ -102,7 +102,7 @@ function svd!(A::StridedVector{T}; full::Bool = false, alg::Algorithm = default_
     if !full
         normA = norm(A)
         normalize!(A)
-        return SVD(reshape(A, (length(A), 1)), [normA], fill!(Matrix{T}(undef, 1, 1), 1))
+        return SVD(reshape(A, (length(A), 1)), [normA], fill(one(T), 1, 1))
     else
         return svd!(reshape(A, (length(A), 1)), full = full, alg = alg)
     end
@@ -228,9 +228,9 @@ julia> svdvals(A)
 ```
 """
 svdvals(A::AbstractMatrix{T}) where {T} = svdvals!(copy_oftype(A, eigtype(T)))
-svdvals(A::AbstractVector{T}) where {T} = svdvals!(copy_oftype(reshape(A, (length(A), 1)), eigtype(T)))
+svdvals(A::AbstractVector{T}) where {T} = [convert(eigtype(T), norm(A))]
 svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
-svdvals(A::AbstractVector{<:BlasFloat}) = svdvals!(copy(reshape(A, (length(A), 1))))
+svdvals(A::AbstractVector{<:BlasFloat}) = [norm(A)]
 svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S.S)::Vector{T}
 
