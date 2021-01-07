@@ -487,12 +487,13 @@ function get_test_result(ex, source)
                     push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
                 elseif isa(a, Expr) && a.head === :...
                     push!(escaped_kwargs, Expr(:..., esc(a.args[1])))
+                elseif isa(a, Expr) && a.head === :.
+                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[2].value), esc(Expr(:., a.args[1], QuoteNode(a.args[2].value)))))
                 elseif isa(a, Symbol)
                     push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a), esc(a)))
                 end
             end
         end
-
         # Positional arguments
         for a in ex.args[2:end]
             isa(a, Expr) && a.head in (:kw, :parameters) && continue
