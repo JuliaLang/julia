@@ -37,7 +37,6 @@ private:
     Function *queueRootFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
-    CallInst *ptlsStates;
 
     bool doInitialization(Module &M) override;
     bool doFinalization(Module &M) override;
@@ -111,6 +110,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                         T_size->getPointerTo()),
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
+    auto ptlsStates = ptlsBefore(*builder.GetInsertPoint());
     Value *pgcstack = builder.Insert(getPgcstack(ptlsStates));
     inst = builder.CreateAlignedStore(
             builder.CreateAlignedLoad(pgcstack, Align(sizeof(void*))),
@@ -136,6 +136,7 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
         cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
     Instruction *inst = builder.CreateAlignedLoad(gcpop, Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
+    auto ptlsStates = ptlsBefore(*builder.GetInsertPoint());
     inst = builder.CreateAlignedStore(
         inst,
         builder.CreateBitCast(
@@ -282,13 +283,6 @@ bool FinalLowerGC::runOnFunction(Function &F)
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!ptls_getter)
-        return true;
-
-    // Look for a call to 'julia.ptls_states'.
-    ptlsStates = getPtls(F);
-    if (!ptlsStates)
-        return true;
 
     // Acquire intrinsic functions.
     auto newGCFrameFunc = getOrNull(jl_intrinsics::newGCFrame);

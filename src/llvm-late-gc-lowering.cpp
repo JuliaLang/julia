@@ -326,8 +326,6 @@ protected:
     }
 
 private:
-    CallInst *ptlsStates;
-
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
     void NoteUse(State &S, BBState &BBS, Value *V) {
@@ -1161,7 +1159,9 @@ static bool isLoadFromConstGV(Value *v, bool &task_local)
         if (callee && callee->getName() == "julia.typeof") {
             return true;
         }
-        if (callee && callee->getName() == "julia.ptls_states") {
+        if (callee && (callee->getName() == "julia.ptls_states" ||
+                       callee->getName() == "julia.reuse_ptls_states" ||
+                       callee->getName() == "julia.refetch_ptls_states")) {
             task_local = true;
             return true;
         }
@@ -1528,6 +1528,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
                         callee == ptls_getter ||
+                        callee == reuse_jltls_states_func ||
+                        callee == refetch_jltls_states_func ||
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
@@ -2544,6 +2546,15 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 
     // Insert instructions for the actual gc frame
     if (MaxColor != -1 || !S.Allocas.empty() || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
+        // Fetch or insert the call to `julia.ptls_states` in the entry block.
+        //
+        // Note: It is OK to use the PTLS of the entry block since the runtime
+        // (`ctx_switch`) is responsible for maintaining the association of PTLS
+        // and GC fame. What the lowering cares is the uses of the PTLS after
+        // re-fetches *other than* the GC frame.
+        auto ptlsStates = ensureEntryBlockPtls(*F);
+        // TODO: Ask for a review.
+
         // Create and push a GC frame.
         auto gcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::newGCFrame),
@@ -2651,12 +2662,6 @@ bool LateLowerGCFrame::runOnFunction(Function &F) {
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!ptls_getter)
-        return CleanupIR(F);
-
-    ptlsStates = getPtls(F);
-    if (!ptlsStates)
-        return CleanupIR(F);
 
     State S = LocalScan(F);
     ComputeLiveness(S);

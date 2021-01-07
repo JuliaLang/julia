@@ -230,6 +230,7 @@ private:
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 
+Pass *createLowerPTLSReusePass();
 Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createCombineMulAddPass();
 Pass *createFinalLowerGCPass();

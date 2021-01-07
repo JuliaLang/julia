@@ -40,6 +40,8 @@ void JuliaPassContext::initFunctions(Module &M)
 {
     module = &M;
 
+    refetch_jltls_states_func = M.getFunction("julia.refetch_ptls_states");
+    reuse_jltls_states_func = M.getFunction("julia.reuse_ptls_states");
     ptls_getter = M.getFunction("julia.ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
@@ -71,17 +73,43 @@ void JuliaPassContext::initAll(Module &M)
     T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
 }
 
-llvm::CallInst *JuliaPassContext::getPtls(llvm::Function &F) const
+llvm::Function *JuliaPassContext::getOrDeclarePtlsStatesFunc() {
+    if (!ptls_getter) {
+        ptls_getter = getOrDeclare(jl_intrinsics::ptlsStates);
+    }
+    return ptls_getter;
+}
+
+llvm::Function *JuliaPassContext::getOrNullReusePtlsStatesFunc() {
+    if (!reuse_jltls_states_func) {
+        reuse_jltls_states_func = getOrNull(jl_intrinsics::reusePtlsStates);
+    }
+    return reuse_jltls_states_func;
+}
+
+llvm::Function *JuliaPassContext::getOrDeclareReusePtlsStatesFunc() {
+    if (!reuse_jltls_states_func) {
+        reuse_jltls_states_func = getOrDeclare(jl_intrinsics::reusePtlsStates);
+    }
+    return reuse_jltls_states_func;
+}
+
+llvm::CallInst *JuliaPassContext::ensureEntryBlockPtls(llvm::Function &F)
 {
-    for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
-         ptls_getter && I != E; ++I) {
+    auto ptls_states = getOrDeclarePtlsStatesFunc();  // julia.ptls_states
+    for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end(); I != E; ++I) {
         if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
-            if (callInst->getCalledOperand() == ptls_getter) {
+            if (callInst->getCalledOperand() == ptls_states) {
                 return callInst;
             }
         }
     }
-    return nullptr;
+    return CallInst::Create(ptls_states, "ptls", F.getEntryBlock().getFirstNonPHI());
+}
+
+llvm::CallInst *JuliaPassContext::ptlsBefore(llvm::Instruction &InsertBefore)
+{
+    return CallInst::Create(getOrDeclareReusePtlsStatesFunc(), "ptls", &InsertBefore);
 }
 
 llvm::Function *JuliaPassContext::getOrNull(
@@ -111,6 +139,8 @@ llvm::Function *JuliaPassContext::getOrDeclare(
 }
 
 namespace jl_intrinsics {
+    static const char *PTLS_STATES_NAME = "julia.ptls_states";
+    static const char *REUSE_PTLS_STATES_NAME = "julia.reuse_ptls_states";
     static const char *GET_GC_FRAME_SLOT_NAME = "julia.get_gc_frame_slot";
     static const char *GC_ALLOC_BYTES_NAME = "julia.gc_alloc_bytes";
     static const char *NEW_GC_FRAME_NAME = "julia.new_gc_frame";
@@ -128,6 +158,30 @@ namespace jl_intrinsics {
         target->addFnAttr(Attribute::getWithAllocSizeArgs(context, 1, None)); // returns %1 bytes
         return target;
     }
+
+    const IntrinsicDescription ptlsStates(
+        PTLS_STATES_NAME,
+        [](const JuliaPassContext &context) {
+            return Function::Create(
+                FunctionType::get(
+                    PointerType::get(context.T_ppjlvalue, 0),
+                    {},
+                    false),
+                Function::ExternalLinkage,
+                PTLS_STATES_NAME);
+        });
+
+    const IntrinsicDescription reusePtlsStates(
+        REUSE_PTLS_STATES_NAME,
+        [](const JuliaPassContext &context) {
+            return Function::Create(
+                FunctionType::get(
+                    PointerType::get(context.T_ppjlvalue, 0),
+                    {},
+                    false),
+                Function::ExternalLinkage,
+                REUSE_PTLS_STATES_NAME);
+        });
 
     const IntrinsicDescription getGCFrameSlot(
         GET_GC_FRAME_SLOT_NAME,

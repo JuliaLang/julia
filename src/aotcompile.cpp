@@ -628,6 +628,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createVerifierPass());
 #endif
 
+    PM->add(createLowerPTLSReusePass());
     PM->add(createConstantMergePass());
     if (opt_level < 2) {
         PM->add(createCFGSimplificationPass());
@@ -648,6 +649,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createRemoveNIPass());
             PM->add(createLateLowerGCFramePass());
             PM->add(createFinalLowerGCPass());
+            PM->add(createLowerPTLSReusePass());
             PM->add(createLowerPTLSPass(dump_native));
         }
         else {
@@ -777,6 +779,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createRemoveNIPass());
         PM->add(createLateLowerGCFramePass());
         PM->add(createFinalLowerGCPass());
+        PM->add(createLowerPTLSReusePass());
         // We need these two passes and the instcombine below
         // after GC lowering to let LLVM do some constant propagation on the tags.
         // and remove some unnecessary write barrier checks.
