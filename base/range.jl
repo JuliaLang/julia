@@ -102,8 +102,8 @@ If both are specified as positional arguments, one of `step` or `length` must al
 !!! compat "Julia 1.1"
     `stop` as a positional argument requires at least Julia 1.1.
 
-!!! compat "Julia 1.6"
-    `start` as a keyword argument requires at least Julia 1.6.
+!!! compat "Julia 1.7"
+    `start` as a keyword argument requires at least Julia 1.7.
 """
 function range end
 
