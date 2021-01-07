@@ -1084,8 +1084,8 @@ public:
     int nargs = 0;
     int nvargs = -1;
 
+    Instruction *currentTask = NULL;
     CallInst *ptlsStates = NULL;
-    Value *signalPage = NULL;
     Value *world_age_field = NULL;
 
     bool debug_enabled = false;
@@ -1121,6 +1121,9 @@ static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name,
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const std::string &msg);
 static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0);
+static Instruction *get_current_task(jl_codectx_t &ctx);
+static Instruction *get_current_ptls(jl_codectx_t &ctx);
+static Value *get_current_signal_page(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
                              jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
@@ -1194,7 +1197,13 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
 
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty)
 {
-    return new AllocaInst(lty, 0, "", /*InsertBefore=*/ctx.ptlsStates);
+    auto InsertBefore = ctx.f->getEntryBlock().getFirstNonPHI();
+    if (InsertBefore) {
+        return new AllocaInst(lty, 0, "", InsertBefore);
+    }
+    else {
+        return new AllocaInst(lty, 0, "", &ctx.f->getEntryBlock());
+    }
 }
 
 static void undef_derived_strct(IRBuilder<> &irbuilder, Value *ptr, jl_datatype_t *sty, MDNode *tbaa)
@@ -4580,17 +4589,66 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0)
 
     // allocate a placeholder gc instruction
     ctx.ptlsStates = ctx.builder.CreateCall(prepare_call(jltls_states_func));
-    int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void*);
-    ctx.signalPage = emit_nthptr_recast(ctx, ctx.ptlsStates, nthfield, tbaa_const,
-                                        PointerType::get(T_psize, 0));
+
+    Value *ptls_pv = emit_bitcast(ctx, ctx.ptlsStates, T_pprjlvalue);
+    const int ct_offset = offsetof(jl_tls_states_t, current_task);
+    Value *pct =
+        ctx.builder.CreateInBoundsGEP(ptls_pv,
+                                      ConstantInt::get(T_size, ct_offset / sizeof(void *)),
+                                      "current_task_field");
+    LoadInst *ct =
+        ctx.builder.CreateAlignedLoad(pct, Align(sizeof(void *)), "current_task");
+    tbaa_decorate(tbaa_const, ct);
+    ctx.currentTask = ct;
 }
 
+// Store world age at the entry block of the function. This function should be
+// called right after `allocate_gc_frame` and there should be no context switch.
 static void emit_last_age_field(jl_codectx_t &ctx)
 {
+    auto ptls = ctx.ptlsStates;
+    assert(ctx.builder.GetInsertBlock() == ptls->getParent());
     ctx.world_age_field = ctx.builder.CreateInBoundsGEP(
             T_size,
-            ctx.builder.CreateBitCast(ctx.ptlsStates, T_psize),
-            ConstantInt::get(T_size, offsetof(jl_tls_states_t, world_age) / sizeof(size_t)));
+            ctx.builder.CreateBitCast(ptls, T_psize),
+            ConstantInt::get(T_size, offsetof(jl_tls_states_t, world_age) / sizeof(size_t)),
+            "world_age");
+}
+
+// Get current task.
+static Instruction *get_current_task(jl_codectx_t &ctx)
+{
+    return ctx.currentTask;
+}
+
+// Get PTLS through current task.
+static Instruction *get_current_ptls(jl_codectx_t &ctx)
+{
+    Value *task_pv =
+        emit_bitcast(ctx, decay_derived(ctx, get_current_task(ctx)), T_pprjlvalue);
+    const int ptls_offset = offsetof(jl_task_t, ptls);
+    Value *pptls = ctx.builder.CreateInBoundsGEP(
+        T_prjlvalue, task_pv, ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
+        "ptls_field");
+    LoadInst *ptls_load = ctx.builder.CreateAlignedLoad(
+        emit_bitcast(ctx, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
+    // Note: Corersponding store (`t->ptls = ptls`) happes in `ctx_switch` of tasks.c.
+    ptls_load->setOrdering(AtomicOrdering::Monotonic);  // TODO: what should we use?
+    tbaa_decorate(tbaa_const, ptls_load);
+    // Using `CastInst::Create` to get an `Instruction*` without explicit cast:
+    auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
+    ctx.builder.Insert(ptls);
+    return ptls;
+}
+
+// Get signal page through current task.
+static Value *get_current_signal_page(jl_codectx_t &ctx)
+{
+    // return ctx.builder.CreateCall(prepare_call(reuse_signal_page_func));
+    auto ptls = get_current_ptls(ctx);
+    int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void *);
+    return emit_nthptr_recast(ctx, ptls, nthfield, tbaa_const,
+                              PointerType::get(T_psize, 0));
 }
 
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_codegen_params_t &params)
@@ -4815,7 +4873,7 @@ static Function* gen_cfun_wrapper(
     emit_last_age_field(ctx);
 
     Value *dummy_world = ctx.builder.CreateAlloca(T_size);
-    Value *have_tls = ctx.builder.CreateIsNotNull(ctx.ptlsStates);
+    Value *have_tls = ctx.builder.CreateIsNotNull(get_current_ptls(ctx));
     // TODO: in the future, try to initialize a full TLS context here
     // for now, just use a dummy field to avoid a branch in this function
     ctx.world_age_field = ctx.builder.CreateSelect(have_tls, ctx.world_age_field, dummy_world);
@@ -6166,9 +6224,9 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             (va && (int)i == ctx.vaSlot) || // or it's the va arg tuple
             i == 0) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(T_prjlvalue, 0,
-                jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
+                jl_symbol_name(s), /*InsertBefore*/get_current_ptls(ctx));
             StoreInst *SI = new StoreInst(V_rnull, av, false, Align(sizeof(void*)));
-            SI->insertAfter(ctx.ptlsStates);
+            SI->insertAfter(get_current_ptls(ctx));
             varinfo.boxroot = av;
             if (ctx.debug_enabled && varinfo.dinfo) {
                 DIExpression *expr;

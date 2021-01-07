@@ -2761,7 +2761,7 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std
 // allocation for known size object
 static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
 {
-    Value *ptls_ptr = emit_bitcast(ctx, ctx.ptlsStates, T_pint8);
+    Value *ptls_ptr = emit_bitcast(ctx, get_current_ptls(ctx), T_pint8);
     Function *F = prepare_call(jl_alloc_obj_func);
     auto call = ctx.builder.CreateCall(F, {ptls_ptr, ConstantInt::get(T_size, static_size), maybe_decay_untracked(ctx, jt)});
     call->setAttributes(F->getAttributes());
@@ -3087,7 +3087,7 @@ static void emit_signal_fence(jl_codectx_t &ctx)
 
 static Value *emit_defer_signal(jl_codectx_t &ctx)
 {
-    Value *ptls = emit_bitcast(ctx, ctx.ptlsStates,
+    Value *ptls = emit_bitcast(ctx, get_current_ptls(ctx),
                                         PointerType::get(T_sigatomic, 0));
     Constant *offset = ConstantInt::getSigned(T_int32,
         offsetof(jl_tls_states_t, defer_signal) / sizeof(sig_atomic_t));

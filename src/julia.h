@@ -1780,6 +1780,8 @@ typedef struct _jl_task_t {
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
 
+    jl_tls_states_t *ptls;
+
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
 } jl_task_t;
