@@ -326,19 +326,19 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex
-            if f === Main.Core.getfield || f === Main.Core.tuple
+            if f === Core.getfield || f === Core.tuple
                 # we might like to penalize non-inferrability, but
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif f === Main.Core.isa
+            elseif f === Core.isa
                 # If we're in a union context, we penalize type computations
                 # on union types. In such cases, it is usually better to perform
                 # union splitting on the outside.
                 if union_penalties && isa(argextype(ex.args[2],  src, sptypes, slottypes), Union)
                     return params.inline_nonleaf_penalty
                 end
-            elseif (f === Main.Core.arrayref || f === Main.Core.const_arrayref) && length(ex.args) >= 3
+            elseif (f === Core.arrayref || f === Core.const_arrayref) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes, slottypes)
                 return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             end

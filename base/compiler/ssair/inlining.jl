@@ -573,7 +573,7 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
     return ir
 end
 
-# This assumes the caller has verified that all arguments to the _apply call are Tuples.
+# This assumes the caller has verified that all arguments to the _apply_iterate call are Tuples.
 function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int,
         argexprs::Vector{Any}, atypes::Vector{Any}, arginfos::Vector{Any},
         arg_start::Int, et::Union{EdgeTracker, Nothing}, caches::Union{InferenceCaches, Nothing},
@@ -909,7 +909,7 @@ end
 function inline_apply!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sig::Signature,
                        et, caches, params::OptimizationParams)
     stmt = ir.stmts[idx][:inst]
-    while sig.f === Core._apply || sig.f === Core._apply_iterate
+    while sig.f === Core._apply_iterate
         info = ir.stmts[idx][:info]
         if isa(info, UnionSplitApplyCallInfo)
             if length(info.infos) != 1
@@ -923,7 +923,7 @@ function inline_apply!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sig::
             @assert info === nothing || info === false
             new_info = info = nothing
         end
-        arg_start = sig.f === Core._apply ? 2 : 3
+        arg_start = 3
         atypes = sig.atypes
         if arg_start > length(atypes)
             return nothing
@@ -1010,7 +1010,7 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
     sig = call_sig(ir, stmt)
     sig === nothing && return nothing
 
-    # Handle _apply
+    # Handle _apply_iterate
     sig = inline_apply!(ir, todo, idx, sig, state.et, state.caches, state.params)
     sig === nothing && return nothing
 

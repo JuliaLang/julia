@@ -175,7 +175,7 @@ end
 # 2 for now because the compiler leaves a GotoNode around
 @test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
 
-# Test that inlining of _apply properly hits the inference cache
+# Test that inlining of _apply_iterate properly hits the inference cache
 @noinline cprop_inline_foo1() = (1, 1)
 @noinline cprop_inline_foo2() = (2, 2)
 function cprop_inline_bar(x...)

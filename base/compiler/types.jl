@@ -102,14 +102,14 @@ struct InferenceParams
     # before computing the set of matching methods
     MAX_UNION_SPLITTING::Int
     # the maximum number of union-tuples to swap / expand
-    # when inferring a call to _apply
+    # when inferring a call to _apply_iterate
     MAX_APPLY_UNION_ENUM::Int
 
     # parameters limiting large (tuple) types
     TUPLE_COMPLEXITY_LIMIT_DEPTH::Int
 
-    # when attempting to inlining _apply, abort the optimization if the tuple
-    # contains more than this many elements
+    # when attempting to inline _apply_iterate, abort the optimization if the
+    # tuple contains more than this many elements
     MAX_TUPLE_SPLAT::Int
 
     function InferenceParams(;
