@@ -90,7 +90,7 @@ default_svd_alg(A) = DivideAndConquer()
 overwriting the input `A`, instead of creating a copy. See documentation of [`svd`](@ref) for details.
 """
 function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T<:BlasFloat}
-    m,n = size(A)
+    m, n = size(A)
     if m == 0 || n == 0
         u, s, vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
     else
@@ -99,12 +99,15 @@ function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_
     SVD(u,s,vt)
 end
 function svd!(A::StridedVector{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T<:BlasFloat}
-    if !full
-        normA = norm(A)
+    m = length(A)
+    normA = norm(A)
+    if iszero(normA)
+        return SVD(Matrix{T}(I, m, full ? m : 1), [normA], ones(T, 1, 1))
+    elseif !full
         normalize!(A)
-        return SVD(reshape(A, (length(A), 1)), [normA], fill(one(T), 1, 1))
+        return SVD(reshape(A, (m, 1)), [normA], ones(T, 1, 1))
     else
-        return svd!(reshape(A, (length(A), 1)), full = full, alg = alg)
+        return _svd!(reshape(A, (m, 1)), full, alg)
     end
 end
 
