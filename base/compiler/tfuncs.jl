@@ -1612,7 +1612,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if contains_is(argtypes_vec, Union{})
                         return Const(Union{})
                     end
-                    rt = abstract_call(interp, nothing, argtypes_vec, sv, -1).rt
+                    rt = widenconditional(abstract_call(interp, nothing, argtypes_vec, sv, -1).rt)
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))
