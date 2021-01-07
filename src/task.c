@@ -587,6 +587,9 @@ static void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->io_wait = 0;
+    // @time needs its compile timer disabled on error,
+    // and cannot use a try-finally as it would break scope for assignments
+    jl_measure_compile_time[ptls->tid] = 0;
     if (ptls->safe_restore)
         jl_longjmp(*ptls->safe_restore, 1);
     // During startup
