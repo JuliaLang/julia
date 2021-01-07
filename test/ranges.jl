@@ -1738,13 +1738,11 @@ end
     @test_throws ArgumentError (1:2:5)[true]
     @test_throws ArgumentError LinRange(1,2,2)[true]
     @test_throws ArgumentError (1.0:2.0:5.0)[true]
-    
     r = 3:2
-    r2 = r[true:flase]
+    r2 = r[true:false]
     @test r.start == r2.start && r.stop == r2.stop
     @test_throws BoundsError r[true:true]
     @test_throws BoundsError r[false:true]
-    
     r = 3:3
     r2 = r[true:true]
     @test r.start == r2.start && r.stop == r2.stop
@@ -1752,13 +1750,11 @@ end
     @test r2.start == 3 && r2.stop == 2
     @test_throws BoundsError r[true:false]
     @test_throws BoundsError r[false:true]
-    
     r = 2:3
     r2 = r[false:true]
     @test r2.start == r2.stop == 3
     @test_throws BoundsError r[true:false]
     @test_throws BoundsError r[true:true]
-    
     r = Base.OneTo(0)
     r2 = r[Base.OneTo(false)]
     @test r2 isa Base.OneTo && r2.stop == 0
@@ -1771,7 +1767,6 @@ end
 
     @test_throws BoundsError Base.OneTo(2)[Base.OneTo(false)]
     @test_throws BoundsError Base.OneTo(2)[Base.OneTo(true)]
-    
     r = 2:1
     r2 = r[true:true:false]
     @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
