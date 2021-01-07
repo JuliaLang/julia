@@ -159,6 +159,9 @@ end
     d = Dict(i==1 ? (1=>2) : (2.0=>3.0) for i=1:2)
     @test isa(d, Dict{Real,Real})
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
+
+    # issue #39117
+    @test Dict(t[1]=>t[2] for t in zip((1,"2"), (2,"2"))) == Dict{Any,Any}(1=>2, "2"=>"2")
 end
 
 @testset "type of Dict constructed from varargs of Pairs" begin
