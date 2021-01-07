@@ -4,6 +4,7 @@ Julia v1.7 Release Notes
 New language features
 ---------------------
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
+* `range` now supports `start` as an optional keyword argument ([#38041]).
 
 Language changes
 ----------------
