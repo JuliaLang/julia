@@ -66,7 +66,7 @@ static bool hasObjref(Type *ty)
         return ptrty->getAddressSpace() == AddressSpace::Tracked;
 #if JL_LLVM_VERSION >= 110000
     if (isa<ArrayType>(ty) || isa<VectorType>(ty))
-        return GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0);
+        return hasObjref(GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0));
 #else
     if (auto seqty = dyn_cast<SequentialType>(ty))
         return hasObjref(seqty->getElementType());
