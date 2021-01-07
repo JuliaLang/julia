@@ -166,11 +166,8 @@ julia> Uonly == U
 true
 ```
 """
-function svd(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
+function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
     svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
-end
-function svd(A::StridedVector{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
-    svd!(copy_oftype(reshape(A, (length(A), 1)), eigtype(T)), full = full, alg = alg)
 end
 function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
     SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
