@@ -5080,6 +5080,19 @@ end
 @test f17255(10000)[1]
 GC.enable(true)
 
+# PR #39133, ensure that @time evaluates in the same scope
+function time_macro_scope()
+    @time time_macro_local_var = 1
+    time_macro_local_var
+end
+@test time_macro_scope() == 1
+
+function timev_macro_scope()
+    @timev timev_macro_local_var = 1
+    timev_macro_local_var
+end
+@time timev_macro_scope() == 1
+
 # issue #18710
 bad_tvars() where {T} = 1
 @test isa(which(bad_tvars, ()), Method)

@@ -129,11 +129,6 @@ LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERM
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
 endif # LLVM_ASSERTIONS
-ifeq ($(LLVM_DEBUG), 1)
-ifeq ($(OS), WINNT)
-LLVM_CXXFLAGS += -Wa,-mbig-obj
-endif # OS == WINNT
-endif # LLVM_DEBUG
 ifeq ($(OS), WINNT)
 LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 endif # OS == WINNT
@@ -534,8 +529,10 @@ endif
 $(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D90722-rtdyld-absolute-relocs)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-invalid-addrspacecast-sink)) # upstreamed as D92210
-$(eval $(call LLVM_PATCH,llvm-11-D92906-ppc-setjmp))
+$(eval $(call LLVM_PATCH,llvm-11-D92906-ppc-setjmp)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-PR48458-X86ISelDAGToDAG)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D93092-ppc-knownbits))
+$(eval $(call LLVM_PATCH,llvm-11-D93154-globalisel-as))
 endif # LLVM_VER 11.0
 
 

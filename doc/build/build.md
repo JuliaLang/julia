@@ -17,8 +17,8 @@ variables.
 When compiled the first time, the build will automatically download
 pre-built [external
 dependencies](#required-build-tools-and-external-libraries). If you
-prefer to build all the dependencies on your own, add the following in
-`Make.user`
+prefer to build all the dependencies on your own, or are building on a system that cannot
+access the network during the build process, add the following in `Make.user`:
 
 ```
 USE_BINARYBUILDER=0
@@ -252,6 +252,8 @@ As a high-performance numerical language, Julia should be linked to a multi-thre
 
 ### Intel MKL
 
+**Note:** If you are building Julia for the sole purpose of incorporating Intel MKL, it may be beneficial to first try [MKL.jl](https://github.com/JuliaComputing/MKL.jl). This package will automatically download MKL and rebuild Julia's system image against it, sidestepping the need to set up a working build environment just to add MKL functionality. MKL.jl replaces OpenBLAS with MKL for dense linear algebra functions called directly from Julia, but SuiteSparse and other C/Fortran libraries will continue to use the BLAS they were linked against at build time. If you want SuiteSparse to use MKL, you will need to build from source.
+
 For a 64-bit architecture, the environment should be set up as follows:
 ```sh
 # bash
@@ -262,8 +264,6 @@ Add the following to the `Make.user` file:
     USE_INTEL_MKL = 1
 
 It is highly recommended to start with a fresh clone of the Julia repository.
-
-If you are building Julia for the sole purpose of incorporating Intel MKL, it may be beneficial to first try [MKL.jl](https://github.com/JuliaComputing/MKL.jl). This package will automatically download MKL and rebuild Julia's system image against it, sidestepping the need to set up a working build environment just to add MKL functionality.
 
 ## Source distributions of releases
 

@@ -432,7 +432,7 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
     nothing
 end
 
-function store_backedges(caller::MethodInstance, edges::Vector)
+function store_backedges(caller::MethodInstance, edges::Vector{Any})
     i = 1
     while i <= length(edges)
         to = edges[i]
@@ -568,7 +568,7 @@ function type_annotate!(sv::InferenceState)
     src = sv.src
     states = sv.stmt_types
     nargs = sv.nargs
-    nslots = length(states[1]::Array{Any,1})
+    nslots = length(states[1]::VarTable)
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
     nexpr = length(body)

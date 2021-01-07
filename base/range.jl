@@ -374,6 +374,8 @@ unitrange_last(start::T, stop::T) where {T} =
     ifelse(stop >= start, convert(T,start+floor(stop-start)),
                           convert(T,start-oneunit(stop-start)))
 
+unitrange(x) = UnitRange(x)
+
 if isdefined(Main, :Base)
     # Constant-fold-able indexing into tuples to functionally expose Base.tail and Base.front
     function getindex(@nospecialize(t::Tuple), r::UnitRange)
@@ -411,6 +413,7 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
+oneto(r) = OneTo(r)
 
 ## Step ranges parameterized by length
 
@@ -443,7 +446,7 @@ struct StepRangeLen{T,R,S} <: AbstractRange{T}
 end
 
 StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
-    StepRangeLen{typeof(ref+0*step),R,S}(ref, step, len, offset)
+    StepRangeLen{typeof(ref+zero(step)),R,S}(ref, step, len, offset)
 StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
     StepRangeLen{T,R,S}(ref, step, len, offset)
 

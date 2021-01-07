@@ -29,6 +29,10 @@ Build system changes
 New library functions
 ---------------------
 
+* Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
+* `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
+* New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
+* New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}; kwargs...)` ([#38438])
 
 New library features
 --------------------
@@ -37,6 +41,11 @@ New library features
 Standard library changes
 ------------------------
 
+* `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
+* `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
+* `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
+* `escape_string` can now receive a collection of characters in the keyword
+  `keep` that are to be kept as they are. ([#38597]).
 
 #### Package Manager
 

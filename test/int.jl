@@ -395,3 +395,27 @@ end
     @test bitreverse(Int64(456618293)) === Int64(-6012608040035942400)
     @test bitreverse(Int32(456618293)) === Int32(-1399919400)
 end
+
+@testset "min/max of datatype" begin
+    @test typemin(Int8) == Int8(-128)
+    @test typemin(UInt8) == UInt8(0)
+    @test typemin(Int16) == Int16(-32768)
+    @test typemin(UInt16) == UInt16(0)
+    @test typemin(Int32) == Int32(-2147483648)
+    @test typemin(UInt32) == UInt32(0)
+    @test typemin(Int64) == Int64(-9223372036854775808)
+    @test typemin(UInt64) == UInt64(0)
+    @test typemin(Int128) == Int128(-170141183460469231731687303715884105728)
+    @test typemin(UInt128) == UInt128(0)
+
+    @test typemax(Int8) == Int8(127)
+    @test typemax(UInt8) == UInt8(255)
+    @test typemax(Int16) == Int16(32767)
+    @test typemax(UInt16) == UInt16(65535)
+    @test typemax(Int32) == Int32(2147483647)
+    @test typemax(UInt32) == UInt32(4294967295)
+    @test typemax(Int64) == Int64(9223372036854775807)
+    @test typemax(UInt64) == UInt64(0xffffffffffffffff)
+    @test typemax(Int128) == Int128(170141183460469231731687303715884105727)
+    @test typemax(UInt128) == UInt128(0xffffffffffffffffffffffffffffffff)
+end

@@ -14,7 +14,7 @@
                             .endef
 #define EXPORT(name)        .section .drectve,"r"; \
                             .ascii " -export:"#name""; \
-                            .section text
+                            .section .text
 #define SEH_START1(name)    .seh_proc name
 #define SEH_START2()        .seh_endprologue
 #define SEH_END()           .seh_endproc
@@ -34,10 +34,10 @@
 
 #define XX(name) \
 DEBUGINFO(name); \
-.global name; \
+.global CNAME(name); \
 .cfi_startproc; \
 SEH_START1(name); \
-name##:; \
+CNAME(name)##:; \
 SEH_START2(); \
     CET_START(); \
     mov CNAME(name##_addr)(%rip),%r11; \

@@ -1234,10 +1234,32 @@ end
     @test Base.rest(a, st) == [3, 2, 4]
 end
 
+@testset "issue #37741, non-int cat" begin
+    @test [1; 1:BigInt(5)] == [1; 1:5]
+    @test [1:BigInt(5); 1] == [1:5; 1]
+end
+
 @testset "Base.isstored" begin
     a = rand(3, 4, 5)
     @test Base.isstored(a, 1, 2, 3)
     @test_throws BoundsError Base.isstored(a, 4, 4, 5)
     @test_throws BoundsError Base.isstored(a, 3, 5, 5)
     @test_throws BoundsError Base.isstored(a, 3, 4, 6)
+end
+
+mutable struct TestPushArray{T, N} <: AbstractArray{T, N}
+    data::Array{T}
+end
+Base.push!(tpa::TestPushArray{T}, a::T) where T = push!(tpa.data, a)
+Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
+
+@testset "push! and pushfirst!" begin
+    a_orig = [1]
+    tpa = TestPushArray{Int, 2}(a_orig)
+    push!(tpa, 2, 3, 4, 5, 6)
+    @test tpa.data == collect(1:6)
+    a_orig = [1]
+    tpa = TestPushArray{Int, 2}(a_orig)
+    pushfirst!(tpa, 6, 5, 4, 3, 2)
+    @test tpa.data == reverse(collect(1:6))
 end

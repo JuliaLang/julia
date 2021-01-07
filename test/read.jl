@@ -99,7 +99,7 @@ close(s)
 push!(l, ("PipeEndpoint", io))
 
 #FIXME See https://github.com/JuliaLang/julia/issues/14747
-#      Reading from open(::Command) seems to deadlock on Linux/Travis
+#      Reading from open(::Command) seems to deadlock on Linux
 #=
 if !Sys.iswindows()
 

@@ -855,7 +855,7 @@ end
 aa20704(x) = x(nothing)
 @test code_typed(aa20704, (typeof(a20704),))[1][1].pure
 
-#issue #21065, elision of _apply when splatted expression is not effect_free
+#issue #21065, elision of _apply_iterate when splatted expression is not effect_free
 function f21065(x,y)
     println("x=$x, y=$y")
     return x, y
@@ -865,7 +865,7 @@ function test_no_apply(expr::Expr)
     return all(test_no_apply, expr.args)
 end
 function test_no_apply(ref::GlobalRef)
-    return ref.mod != Core || ref.name !== :_apply
+    return ref.mod != Core || ref.name !== :_apply_iterate
 end
 test_no_apply(::Any) = true
 @test all(test_no_apply, code_typed(g21065, Tuple{Int,Int})[1].first.code)
@@ -2041,6 +2041,7 @@ T27078 = Vector{Vector{T}} where T
 # issue #28070
 g28070(f, args...) = f(args...)
 @test @inferred g28070(Core._apply, Base.:/, (1.0, 1.0)) == 1.0
+@test @inferred g28070(Core._apply_iterate, Base.iterate, Base.:/, (1.0, 1.0)) == 1.0
 
 # issue #28079
 struct Foo28079 end
@@ -2298,9 +2299,9 @@ end
 
 @test @inferred(g28955((1,), 1.0)) === Bool
 
-# Test that inlining can look through repeated _applys
+# Test that inlining can look through repeated _apply_iterates
 foo_inlining_apply(args...) = ccall(:jl_, Nothing, (Any,), args[1])
-bar_inlining_apply() = Core._apply(Core._apply, (foo_inlining_apply,), ((1,),))
+bar_inlining_apply() = Core._apply_iterate(iterate, Core._apply_iterate, (iterate,), (foo_inlining_apply,), ((1,),))
 let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
     @test ci.code[1].head == :foreigncall
@@ -2979,3 +2980,13 @@ gVarargInt(x::Int) = 1
 gVarargInt(x) = 2
 fVarargInt(::Tuple{Vararg{Int, N}}) where {N} = Val{gVarargInt(N)}()
 @test only(Base.return_types(fVarargInt, Tuple{Tuple{Vararg{Int}}})) == Val{1}
+
+# issue #38888
+struct S38888{T}
+    S38888(x::S) where {S<:Int} = new{S}()
+    S38888(x::S, y) where {S2<:Int,S<:S2} = new{S}()
+end
+f38888() = S38888(Base.inferencebarrier(3))
+@test f38888() isa S38888
+g38888() = S38888(Base.inferencebarrier(3), nothing)
+@test g38888() isa S38888

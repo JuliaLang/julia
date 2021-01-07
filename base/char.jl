@@ -82,8 +82,8 @@ end
 struct CodePointError{T<:Integer} <: Exception
     code::T
 end
-@noinline invalid_char(c::AbstractChar) = throw(InvalidCharError(c))
-@noinline code_point_err(u::Integer) = throw(CodePointError(u))
+@noinline throw_invalid_char(c::AbstractChar) = throw(InvalidCharError(c))
+@noinline throw_code_point_err(u::Integer) = throw(CodePointError(u))
 
 function ismalformed(c::Char)
     u = reinterpret(UInt32, c)
@@ -129,7 +129,7 @@ function UInt32(c::Char)
     t0 = trailing_zeros(u) & 56
     (l1 == 1) | (8l1 + t0 > 32) |
     ((((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0) | is_overlong_enc(u)) &&
-        invalid_char(c)::Union{}
+        throw_invalid_char(c)
     u &= 0xffffffff >> l1
     u >>= t0
     ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
@@ -157,7 +157,7 @@ end
 
 function Char(u::UInt32)
     u < 0x80 && return reinterpret(Char, u << 24)
-    u < 0x00200000 || code_point_err(u)::Union{}
+    u < 0x00200000 || throw_code_point_err(u)
     c = ((u << 0) & 0x0000003f) | ((u << 2) & 0x00003f00) |
         ((u << 4) & 0x003f0000) | ((u << 6) & 0x3f000000)
     c = u < 0x00000800 ? (c << 16) | 0xc0800000 :

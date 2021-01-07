@@ -963,11 +963,15 @@ end
 
 const ENSURE_INITIALIZED_LOCK = ReentrantLock()
 
+@noinline function throw_negative_refcount_error(x::Int)
+    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
+end
+
 function ensure_initialized()
     lock(ENSURE_INITIALIZED_LOCK) do
         x = Threads.atomic_cas!(REFCOUNT, 0, 1)
         x > 0 && return
-        x < 0 && negative_refcount_error(x)::Union{}
+        x < 0 && throw_negative_refcount_error(x)
         try initialize()
         catch
             Threads.atomic_sub!(REFCOUNT, 1)
@@ -976,10 +980,6 @@ function ensure_initialized()
         end
     end
     return nothing
-end
-
-@noinline function negative_refcount_error(x::Int)
-    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
 end
 
 @noinline function initialize()
@@ -1003,8 +1003,10 @@ function set_ssl_cert_locations(cert_loc)
     else # files, /dev/null, non-existent paths, etc.
         cert_file = cert_loc
     end
-    ret = ccall((:git_libgit2_opts, :libgit2), Cint, (Cint, Cstring...),
-        Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+    ret = @ccall "libgit2".git_libgit2_opts(
+        Consts.SET_SSL_CERT_LOCATIONS::Cint;
+        cert_file::Cstring,
+        cert_dir::Cstring)::Cint
     ret >= 0 && return ret
     err = Error.GitError(ret)
     err.class == Error.SSL &&

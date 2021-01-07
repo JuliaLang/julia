@@ -4,7 +4,8 @@ using Artifacts, Test, Base.BinaryPlatforms
 using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform
 
 # prepare for the package tests by ensuring the required artifacts are downloaded now
-run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl"))`, "TERM"=>"dumb"))
+artifacts_dir = mktempdir()
+run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl")) $(artifacts_dir)`, "TERM"=>"dumb"))
 
 @testset "Artifact Paths" begin
     mktempdir() do tempdir
@@ -81,8 +82,7 @@ end
 end
 
 @testset "Artifact Slash-indexing" begin
-    tempdir = joinpath(@__DIR__, "artifacts")
-    with_artifacts_directory(tempdir) do
+    with_artifacts_directory(artifacts_dir) do
         exeext = Sys.iswindows() ? ".exe" : ""
 
         # simple lookup, gives us the directory for `c_simple` for the current architecture
@@ -112,8 +112,7 @@ end
 end
 
 @testset "@artifact_str Platform passing" begin
-    tempdir = joinpath(@__DIR__, "artifacts")
-    with_artifacts_directory(tempdir) do
+    with_artifacts_directory(artifacts_dir) do
         win64 = Platform("x86_64", "windows")
         mac64 = Platform("x86_64", "macos")
         @test basename(@artifact_str("c_simple", win64)) == "444cecb70ff39e8961dd33e230e151775d959f37"

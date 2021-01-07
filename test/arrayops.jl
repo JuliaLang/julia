@@ -554,6 +554,7 @@ end
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
     @test findfirst(Dict(1=>false, 2=>true)) == 2
+    @test findfirst(Dict(1=>false)) == nothing
     @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
@@ -1536,6 +1537,7 @@ end
     @test reverse!([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
     @test reverse!([1:10;], 11) == [1:10;]
     @test_throws BoundsError reverse!([1:10;], 1, 11)
+    @test_throws BoundsError reverse!([1:10;], 0, 10)
     @test reverse!(Any[]) == Any[]
 end
 
@@ -2536,6 +2538,14 @@ end
     arr = randn(4)
     @test accumulate(*, arr; init=1) ≈ accumulate(*, arr)
 
+    # bad kwarg
+    arr_B = similar(arr)
+    @test_throws ArgumentError accumulate(*, arr; bad_init=1)
+    @test_throws ArgumentError accumulate!(*, arr_B, arr; bad_init=1)
+    # must provide dims
+    md_arr = randn(4, 5)
+    @test_throws ArgumentError accumulate!(*, similar(md_arr), md_arr)
+
     N = 5
     for arr in [rand(Float64, N), rand(Bool, N), rand(-2:2, N)]
         for (op, cumop) in [(+, cumsum), (*, cumprod)]
@@ -2869,4 +2879,22 @@ end
     f(a) = (v = [1, nothing]; [v[x] for x in a])
     @test only(Base.return_types(f, (Int,))) === Union{Array{Int,0}, Array{Nothing,0}}
     @test only(Base.return_types(f, (UnitRange{Int},))) <: Vector
+end
+
+@testset "hcat error checking" begin
+    a = [2 for i in 1:4]
+    b = [2 for i in 1:5]
+    @test_throws DimensionMismatch hcat(a, b)
+end
+
+@testset "similar(::ReshapedArray)" begin
+    a = reshape(TSlow(rand(Float64, 4, 4)), 2, :)
+
+    as = similar(a)
+    @test as isa TSlow{Float64,2}
+    @test size(as) == (2, 8)
+
+    as = similar(a, Int, (3, 5, 1))
+    @test as isa TSlow{Int,3}
+    @test size(as) == (3, 5, 1)
 end

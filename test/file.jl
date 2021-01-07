@@ -444,8 +444,8 @@ cp(newfile, c_file)
 
 @test isdir(c_subdir)
 @test isfile(c_file)
-@test_throws SystemError rm(c_tmpdir)
-@test_throws SystemError rm(c_tmpdir, force=true)
+@test_throws Base.IOError rm(c_tmpdir)
+@test_throws Base.IOError rm(c_tmpdir, force=true)
 
 # create temp dir in specific directory
 d_tmpdir = mktempdir(c_tmpdir)
@@ -1542,4 +1542,17 @@ end
         # Reset permissions to all at the end, so it can be deleted properly.
         chmod(dir, 0o777; recursive=true)
     end
+end
+
+if Sys.iswindows()
+@testset "mkdir/rm permissions" begin
+    # test delete permission in system folders (i.e. impliclty test chmod permissions)
+    # issue #38433
+    @test withenv("TMP" => "C:\\") do
+        mktempdir() do dir end
+    end === nothing
+    # same as above, but test rm explicitly
+    tmp = mkdir(tempname("C:\\"))
+    @test rm(tmp) === nothing
+end
 end

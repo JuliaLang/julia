@@ -30,14 +30,16 @@ extern "C"
 void *jl_get_library_(const char *f_lib, int throw_err) JL_NOTSAFEPOINT
 {
     void *hnd;
+    if (f_lib == NULL)
+        return jl_RTLD_DEFAULT_handle;
 #ifdef _OS_WINDOWS_
     if (f_lib == JL_EXE_LIBNAME)
         return jl_exe_handle;
-    if (f_lib == JL_DL_LIBNAME)
-        return jl_dl_handle;
+    if (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return jl_libjulia_internal_handle;
+    if (strcmp(f_lib, JL_LIBJULIA_DL_LIBNAME) == 0)
+        return jl_libjulia_handle;
 #endif
-    if (f_lib == NULL)
-        return jl_RTLD_DEFAULT_handle;
     JL_LOCK_NOGC(&libmap_lock);
     // This is the only operation we do on the map, which doesn't invalidate
     // any references or iterators.

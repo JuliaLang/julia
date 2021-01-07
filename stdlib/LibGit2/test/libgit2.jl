@@ -124,18 +124,21 @@ end
 
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
-    LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
-                         (Cint, Cint, Ptr{LibGit2.Buffer}),
-                         LibGit2.Consts.GET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, buf)
+
+    LibGit2.@check @ccall "libgit2".git_libgit2_opts(
+        LibGit2.Consts.GET_SEARCH_PATH::Cint;
+        LibGit2.Consts.CONFIG_LEVEL_GLOBAL::Cint,
+        buf::Ptr{LibGit2.Buffer})::Cint
     path = unsafe_string(buf[].ptr)
     LibGit2.free(buf)
     return path
 end
 
 function set_global_dir(dir)
-    LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
-                         (Cint, Cint, Cstring),
-                         LibGit2.Consts.SET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, dir)
+    LibGit2.@check @ccall "libgit2".git_libgit2_opts(
+        LibGit2.Consts.SET_SEARCH_PATH::Cint;
+        LibGit2.Consts.CONFIG_LEVEL_GLOBAL::Cint,
+        dir::Cstring)::Cint
     return
 end
 
@@ -1723,6 +1726,19 @@ mktempdir() do dir
         end
     end
 
+    @testset "checkout_head" begin
+        LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
+            # modify file
+            repo_file = open(joinpath(cache_repo,test_file), "a")
+            println(repo_file, commit_msg1 * randstring(10))
+            close(repo_file)
+            # and checkout HEAD once more
+            LibGit2.checkout_head(repo, options=LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE))
+            @test LibGit2.headname(repo) == master_branch
+            @test !LibGit2.isdirty(repo)
+        end
+    end
+
     @testset "checkout/headname" begin
         LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
             LibGit2.checkout!(repo, string(commit_oid1))
@@ -1730,7 +1746,6 @@ mktempdir() do dir
             @test LibGit2.headname(repo) == "(detached from $(string(commit_oid1)[1:7]))"
         end
     end
-
 
     if Sys.isunix()
         @testset "checkout/proptest" begin
