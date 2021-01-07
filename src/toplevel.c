@@ -45,15 +45,13 @@ JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 // create a new top-level module
 void jl_init_main_module(void)
 {
-    if (jl_main_module != NULL)
-        jl_error("Main module already initialized.");
-
+    assert(jl_main_module == NULL);
     jl_main_module = jl_new_module(jl_symbol("Main"));
     jl_main_module->parent = jl_main_module;
     jl_set_const(jl_main_module, jl_symbol("Core"),
                  (jl_value_t*)jl_core_module);
-    jl_set_global(jl_core_module, jl_symbol("Main"),
-                  (jl_value_t*)jl_main_module);
+    jl_set_const(jl_core_module, jl_symbol("Main"),
+                 (jl_value_t*)jl_main_module);
 }
 
 static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROOT)
