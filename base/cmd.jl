@@ -246,14 +246,19 @@ setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir="") =
 setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 
 """
-    addenv(command::Cmd, env...)
+    addenv(command::Cmd, env...; inherit::Bool = true)
 
 Merge new environment mappings into the given `Cmd` object, returning a new `Cmd` object.
-Duplicate keys are replaced.
+Duplicate keys are replaced.  If `command` does not contain any environment values set already,
+it inherits the current environment at time of `addenv()` call if `inherit` is `true`.
 """
-function addenv(cmd::Cmd, env::Dict)
+function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
     new_env = Dict{String,String}()
-    if cmd.env !== nothing
+    if cmd.env === nothing
+        if inherit
+            merge!(new_env, ENV)
+        end
+    else
         for (k, v) in split.(cmd.env, "=")
             new_env[string(k)::String] = string(v)::String
         end
@@ -264,12 +269,12 @@ function addenv(cmd::Cmd, env::Dict)
     return setenv(cmd, new_env)
 end
 
-function addenv(cmd::Cmd, pairs::Pair{<:AbstractString}...)
-    return addenv(cmd, Dict(k => v for (k, v) in pairs))
+function addenv(cmd::Cmd, pairs::Pair{<:AbstractString}...; inherit::Bool = true)
+    return addenv(cmd, Dict(k => v for (k, v) in pairs); inherit)
 end
 
-function addenv(cmd::Cmd, env::Vector{<:AbstractString})
-    return addenv(cmd, Dict(k => v for (k, v) in split.(env, "=")))
+function addenv(cmd::Cmd, env::Vector{<:AbstractString}; inherit::Bool = true)
+    return addenv(cmd, Dict(k => v for (k, v) in split.(env, "=")); inherit)
 end
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
