@@ -51,7 +51,7 @@ end
     range(start; length, stop, step)
     range(;start, length, stop, step)
 
-Construct a `range` from the arguments.
+Construct a specialized array with evenly spaced elements and optimized storage (an [`AbstractRange`](@ref)) from the arguments.
 Mathematically a range is uniquely determined by any three of `start`, `step`, `stop` and `length`.
 Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
