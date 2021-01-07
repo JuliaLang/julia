@@ -494,6 +494,7 @@ function get_test_result(ex, source)
                 end
             end
         end
+
         # Positional arguments
         for a in ex.args[2:end]
             isa(a, Expr) && a.head in (:kw, :parameters) && continue
