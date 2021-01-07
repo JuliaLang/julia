@@ -1718,7 +1718,7 @@
      ((and (null? splat)
            (length= expr 3) (eq? (car expr) 'call)
            (eq? (caddr expr) argname)
-           (eq? '_ argname)
+           (underscore-symbol? argname)
            (not (dotop-named? (cadr expr)))
            (not (expr-contains-eq argname (cadr expr))))
       ;; eta reduce `_->f(_)` => `f`
