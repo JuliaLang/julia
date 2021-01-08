@@ -1221,6 +1221,7 @@ timesofar("datamove")
     end
 
     @test count(trues(2, 2), init=0x03) === 0x07
+    @test count(trues(2, 2, 2), dims=2) == fill(2, 2, 1, 2)
 end
 
 timesofar("find")
