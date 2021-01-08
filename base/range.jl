@@ -546,9 +546,6 @@ step(r::StepRangeLen) = r.step
 step(r::StepRangeLen{T}) where {T<:AbstractFloat} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
 
-step_hp(r::StepRangeLen) = r.step
-step_hp(r::AbstractRange) = step(r)
-
 unsafe_length(r::AbstractRange) = length(r)  # generic fallback
 
 function unsafe_length(r::StepRange)
@@ -703,13 +700,15 @@ function getindex(v::OneTo{T}, i::Integer) where T
     convert(T, i)
 end
 
-function getindex(v::AbstractRange{T}, i::Integer) where T
+function getindex(v::StepRange{T}, i::Integer) where T
     @_inline_meta
-    ret = convert(T, first(v) + (i - 1)*step_hp(v))
-    ok = ifelse(step(v) > zero(step(v)),
-                (ret <= last(v)) & (ret >= first(v)),
-                (ret <= first(v)) & (ret >= last(v)))
-    @boundscheck ((i > 0) & ok) || throw_boundserror(v, i)
+    ret = convert(T, first(v) + (i - 1)*step(v))
+    @boundscheck begin
+        ok = ifelse(step(v) > zero(step(v)),
+                    (ret <= last(v)) & (ret >= first(v)),
+                    (ret <= first(v)) & (ret >= last(v)))
+        ((i > 0) & ok) || throw_boundserror(v, i)
+    end
     ret
 end
 
