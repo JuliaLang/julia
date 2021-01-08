@@ -603,21 +603,40 @@ end
 
 else # !windows
 
+# Based of musl __randname
+function _rand_string()
+    r = Base.rand(UInt) # FIXME: https://git.musl-libc.org/cgit/musl/tree/src/temp/__randname.c
+    buf = Vector{Char}(undef, 6)
+    for i in 1:6
+        buf[i] = 'A'+(r&15)+(r&16)*2;
+        r >>= 5
+    end
+    String(buf)
+end
+
 # Obtain a temporary filename.
 function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    # If TMPDIR is set libc's `tempnam` will ignore `parent` as an argument (#38873)
-    # So we unset the environment variable for the call to libc, after checking
-    # in `tempdir` for the default argument.
-    s = withenv("TMPDIR" => nothing) do
-        p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
-        systemerror(:tempnam, p == C_NULL)
-        s = unsafe_string(p)
-        Libc.free(p)
-        return s
+
+    prefix = joinpath(parent, temp_prefix)
+    MAX_TRIES = 100
+
+    filename = nothing
+    for i in 1:MAX_TRIES
+        filename = string(prefix, _rand_string())
+        if ispath(filename)
+            filename = nothing
+        else
+            break
+        end
     end
-    cleanup && temp_cleanup_later(s)
-    return s
+
+    if filename === nothing
+        error("tempname: MAX_TRIES exhausted")
+    end
+
+    cleanup && temp_cleanup_later(filename)
+    return filename
 end
 
 # Create and return the name of a temporary file along with an IOStream
