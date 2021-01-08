@@ -352,7 +352,7 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
     return ht_keyindex2!(h, key)
 end
 
-@propagate_inbounds function _setindex!(h::Dict, v, key, index)
+@propagate_inbounds @inline function _setindex!(h::Dict, v, key, index)
     h.slots[index] = 0x1
     h.keys[index] = key
     h.vals[index] = v
@@ -368,6 +368,7 @@ end
         # > 3/4 deleted or > 2/3 full
         rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
     end
+    nothing
 end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
@@ -392,6 +393,22 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
 
     return h
 end
+
+function setindex!(h::Dict{K,Any}, v, key::K) where K
+    @nospecialize v
+    index = ht_keyindex2!(h, key)
+
+    if index > 0
+        h.age += 1
+        @inbounds h.keys[index] = key
+        @inbounds h.vals[index] = v
+    else
+        @inbounds _setindex!(h, v, key, -index)
+    end
+
+    return h
+end
+
 
 """
     get!(collection, key, default)
