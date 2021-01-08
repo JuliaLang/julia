@@ -367,7 +367,7 @@ function recvfrom(sock::UDPSocket)
     end
 end
 
-alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), size) # size is always 64k from libuv
+alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
 
 function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::Ptr{Cvoid}, flags::Cuint)
     sock = @handle_as handle UDPSocket
