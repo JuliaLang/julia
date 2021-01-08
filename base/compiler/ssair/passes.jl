@@ -69,8 +69,8 @@ function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
     end
 end
 
-function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, curblock::Int)
-    curblock = find_curblock(domtree, allblocks, curblock)
+function compute_value_for_block(ir::IRCode, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, curblock::Int)
+    curblock = find_curblock(ir.cfg.domtree, allblocks, curblock)
     def = 0
     for stmt in du.defs
         if block_for_inst(ir.cfg, stmt) == curblock
@@ -80,10 +80,10 @@ function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector
     def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
 end
 
-function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use_idx::Int)
+function compute_value_for_use(ir::IRCode, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use_idx::Int)
     # Find the first dominating def
     curblock = stmtblock = block_for_inst(ir.cfg, use_idx)
-    curblock = find_curblock(domtree, allblocks, curblock)
+    curblock = find_curblock(ir.cfg.domtree, allblocks, curblock)
     defblockdefs = let curblock = curblock
         Int[stmt for stmt in du.defs if block_for_inst(ir.cfg, stmt) == curblock]
     end
@@ -107,7 +107,7 @@ function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{I
         if !haskey(phinodes, curblock)
             # If this happens, we need to search the predecessors for defs. Which
             # one doesn't matter - if it did, we'd have had a phinode
-            return compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, first(ir.cfg.blocks[stmtblock].preds))
+            return compute_value_for_block(ir, allblocks, du, phinodes, fidx, first(ir.cfg.blocks[stmtblock].preds))
         end
         # The use is the phinode
         return phinodes[curblock]
@@ -723,13 +723,6 @@ function getfield_elim_pass!(ir::IRCode)
     used_ssas = copy(compact.used_ssas)
     simple_dce!(compact)
     ir = complete(compact)
-
-    # Compute domtree, needed below, now that we have finished compacting the
-    # IR. This needs to be after we iterate through the IR with
-    # `IncrementalCompact` because removing dead blocks can invalidate the
-    # domtree.
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
-
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
@@ -796,7 +789,7 @@ function getfield_elim_pass!(ir::IRCode)
                 ldu = compute_live_ins(ir.cfg, du)
                 phiblocks = Int[]
                 if !isempty(ldu.live_in_bbs)
-                    phiblocks = idf(ir.cfg, ldu, domtree)
+                    phiblocks = idf(ir.cfg, ldu)
                 end
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks
@@ -806,19 +799,19 @@ function getfield_elim_pass!(ir::IRCode)
                 # Now go through all uses and rewrite them
                 allblocks = sort(vcat(phiblocks, ldu.def_bbs))
                 for stmt in du.uses
-                    ir[SSAValue(stmt)] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
+                    ir[SSAValue(stmt)] = compute_value_for_use(ir, allblocks, du, phinodes, fidx, stmt)
                 end
                 if !isbitstype(ftyp)
                     for (use, list) in preserve_uses
-                        push!(list, compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use))
+                        push!(list, compute_value_for_use(ir, allblocks, du, phinodes, fidx, use))
                     end
                 end
                 for b in phiblocks
                     for p in ir.cfg.blocks[b].preds
                         n = ir[phinodes[b]]
                         push!(n.edges, p)
-                        push!(n.values, compute_value_for_block(ir, domtree,
-                            allblocks, du, phinodes, fidx, p))
+                        push!(n.values, compute_value_for_block(
+                            ir, allblocks, du, phinodes, fidx, p))
                     end
                 end
             end
@@ -1043,6 +1036,9 @@ end
 
 function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
+    old_domtree = ir.cfg.domtree
+    new_domtree = copy(old_domtree)
+
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))
     function follow_merge_into(idx::Int)
@@ -1066,6 +1062,13 @@ function cfg_simplify!(ir::IRCode)
                 # Prevent cycles by making sure we don't end up back at `idx`
                 # by following what is to be merged into `succ`
                 if follow_merged_succ(succ) != idx
+                    # Update domtree, by combining the block that `idx` is
+                    # going to be merged into with the block that `succ` was
+                    # going to be merged into (before this merge)
+                    combine_blocks!(new_domtree,
+                                    follow_merge_into(idx),
+                                    follow_merge_into(succ))
+
                     merge_into[succ] = idx
                     merged_succ[idx] = succ
                 end
@@ -1077,12 +1080,8 @@ function cfg_simplify!(ir::IRCode)
     max_bb_num = 1
     bb_rename_succ = zeros(Int, length(bbs))
     for i = 1:length(bbs)
-        # Drop blocks that will be merged away
-        if merge_into[i] != 0
-            bb_rename_succ[i] = -1
-        end
-        # Drop blocks with no predecessors
-        if i != 1 && length(ir.cfg.blocks[i].preds) == 0
+        # Drop blocks that will be merged away or are unreachable
+        if merge_into[i] != 0 || bb_unreachable(old_domtree, i)
             bb_rename_succ[i] = -1
         end
 
@@ -1171,6 +1170,7 @@ function cfg_simplify!(ir::IRCode)
     compact.bb_rename_succ = bb_rename_succ
     compact.bb_rename_pred = bb_rename_pred
     compact.result_bbs = cresult_bbs
+    compact.result_domtree = rename_blocks!(new_domtree, bb_rename_succ)
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb

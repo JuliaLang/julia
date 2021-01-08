@@ -112,9 +112,8 @@ end
 
 function slot2reg(ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
-    @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes) # consumes `ir`
+    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, defuse_insts, nargs, sv.sptypes, sv.slottypes) # consumes `ir`
     return ir
 end
 
@@ -123,7 +122,6 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, sv)
     ir = slot2reg(ir, ci, nargs, sv)
     #@Base.show ("after_construct", ir)
-    # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     #@timeit "verify 2" verify_ir(ir)

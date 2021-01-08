@@ -70,7 +70,7 @@ let cfg = CFG(BasicBlock[
     dfs = Compiler.DFS(cfg.blocks)
     @test dfs.from_pre[dfs.to_parent_pre[dfs.to_pre[5]]] == 4
     let correct_idoms = Compiler.naive_idoms(cfg.blocks)
-        @test Compiler.construct_domtree(cfg.blocks).idoms_bb == correct_idoms
+        @test cfg.domtree.idoms_bb == correct_idoms
         # For completeness, reverse the order of pred/succ in the CFG and verify
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
@@ -217,12 +217,14 @@ end
 # nodes
 let ci = make_ci([
         # Block 1
-        Core.Compiler.GotoNode(3),
-        # Block 2 (no predecessors)
-        Core.Compiler.ReturnNode(3),
-        # Block 3
-        Core.PhiNode(Int32[1, 2], Any[100, 200]),
-        Core.Compiler.ReturnNode(Core.SSAValue(3))
+        Core.Compiler.GotoIfNot(Expr(:call, GlobalRef(Main, :something)), 4),
+        # Block 2
+        Core.Compiler.GotoNode(4),
+        # Block 3 (no predecessors)
+        Core.Compiler.GotoNode(4),
+        # Block 4
+        Core.PhiNode(Int32[1, 2, 3], Any[100, 200, 300]),
+        Core.Compiler.ReturnNode(Core.SSAValue(4))
     ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
@@ -260,53 +262,98 @@ let cfg = CFG(BasicBlock[
         make_bb([2, 6], []),
         make_bb([4],    [5, 3]),
     ], Int[])
-    domtree = Compiler.construct_domtree(cfg.blocks)
-    @test domtree.dfs_tree.to_pre == [1, 2, 4, 5, 3, 6]
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.dfs_tree.to_pre == [1, 2, 4, 5, 3, 6]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
     # Test removal of edge between a parent and child in the DFS tree, which
     # should trigger complete recomputation of domtree (first case in algorithm
     # for removing edge from domtree dynamically)
     Compiler.cfg_delete_edge!(cfg, 2, 5)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 2, 5)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 6, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 6, 4]
     # Add edge back (testing first case for insertion)
     Compiler.cfg_insert_edge!(cfg, 2, 5)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 2, 5)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
     # Test second case in algorithm for removing edges from domtree, in which
     # `from` is on a semidominator path from the semidominator of `to` to `to`
     Compiler.cfg_delete_edge!(cfg, 6, 5)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 6, 5)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 2, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 2, 4]
     # Add edge back (testing second case for insertion)
     Compiler.cfg_insert_edge!(cfg, 6, 5)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 6, 5)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
     # Test last case for removing edges, in which edge does not satisfy either
     # of the above conditions
     Compiler.cfg_delete_edge!(cfg, 6, 3)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 6, 3)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
     # Add edge back (testing second case for insertion)
     Compiler.cfg_insert_edge!(cfg, 6, 3)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 6, 3)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
     # Try removing all edges from root
     Compiler.cfg_delete_edge!(cfg, 1, 2)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 1, 2)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 0, 1, 3, 6, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 0, 1, 3, 6, 4]
     Compiler.cfg_delete_edge!(cfg, 1, 3)
-    Compiler.domtree_delete_edge!(domtree, cfg.blocks, 1, 3)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 0, 0, 0, 0, 0]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 0, 0, 0, 0, 0]
     # Add edges back
     Compiler.cfg_insert_edge!(cfg, 1, 2)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 1, 2)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 0, 0, 2, 0]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 0, 0, 2, 0]
     Compiler.cfg_insert_edge!(cfg, 1, 3)
-    Compiler.domtree_insert_edge!(domtree, cfg.blocks, 1, 3)
-    @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+    @test cfg.domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+end
+
+# Make sure killing edges while iterating through an `IncrementalCompact` kills
+# all the statements in the dead blocks too.
+#
+# Block that becomes unreachable is before the active BB
+let ci = make_ci([
+        # Block 1
+        Core.Compiler.GotoNode(4),
+        # Block 2
+        Core.Compiler.PhiNode(Any[2, 4], Any[100, 200]),
+        Core.Compiler.GotoNode(2),
+        # Block 3
+        Core.Compiler.GotoIfNot(Expr(:call, GlobalRef(Main, :something)), 2),
+        # Block 4
+        Core.Compiler.ReturnNode(0)
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    compact = Core.Compiler.IncrementalCompact(ir, true)
+    Core.Compiler.foreach(x -> begin
+                              # Delete edge to block 2 when at statement 4
+                              if x.first == 4
+                                  Core.Compiler.kill_edge!(
+                                      compact, compact.active_result_bb, 3, 2)
+                                  compact.result[4] = Core.Compiler.GotoNode(4)
+                              end
+                          end, compact)
+    ir = Core.Compiler.finish(compact)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test ir.stmts[2][:inst] === nothing
+end
+# Block that becomes unreachable is after the active BB
+let ci = make_ci([
+        # Block 1
+        Core.Compiler.GotoIfNot(Expr(:call, GlobalRef(Main, :something)), 3),
+        # Block 2
+        Core.Compiler.GotoNode(5),
+        # Block 3
+        Core.Compiler.PhiNode(Any[2, 3], Any[100, 200]),
+        Core.Compiler.GotoNode(3),
+        # Block 4
+        Core.Compiler.ReturnNode(0)
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    compact = Core.Compiler.IncrementalCompact(ir, true)
+    Core.Compiler.foreach(x -> begin
+                              # Delete edge to block 3 when at statement 1
+                              if x.first == 1
+                                  Core.Compiler.kill_edge!(
+                                      compact, compact.active_result_bb, 1, 3)
+                                  compact.result[1] = Core.Compiler.GotoNode(2)
+                              end
+                          end, compact)
+    ir = Core.Compiler.finish(compact)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test ir.stmts[3][:inst] === nothing
 end
