@@ -1394,7 +1394,7 @@ function bitcount(Bc::Vector{UInt64}; init::T=0) where {T}
     return n
 end
 
-count(B::BitArray; init=0) = bitcount(B.chunks; init)
+_count(::typeof(identity), B::BitArray, ::Colon, init) = bitcount(B.chunks; init)
 
 function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
