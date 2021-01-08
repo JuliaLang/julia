@@ -260,10 +260,8 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     if (old_defer_signal && !eh->defer_signal) {
         jl_sigint_safepoint(ptls);
     }
-    if (unlocks && eh->locks_len == 0 && ptls->finalizers_inhibited == 0) {
-        // call run_finalizers
-        ptls->finalizers_inhibited = 1;
-        jl_gc_enable_finalizers(ptls, 1);
+    if (jl_gc_have_pending_finalizers && unlocks && eh->locks_len == 0) {
+        jl_gc_run_pending_finalizers(ptls);
     }
 }
 

@@ -61,12 +61,12 @@ Base.assert_havelock(l::SpinLock) = islocked(l) ? nothing : Base.concurrency_vio
 function lock(l::SpinLock)
     while true
         if _get(l) == 0
-            GC.enable_finalizers(false)
+            GC.disable_finalizers()
             p = _xchg!(l, 1)
             if p == 0
                 return
             end
-            GC.enable_finalizers(true)
+            GC.enable_finalizers()
         end
         ccall(:jl_cpu_pause, Cvoid, ())
         # Temporary solution before we have gc transition support in codegen.
@@ -76,12 +76,12 @@ end
 
 function trylock(l::SpinLock)
     if _get(l) == 0
-        GC.enable_finalizers(false)
+        GC.disable_finalizers()
         p = _xchg!(l, 1)
         if p == 0
             return true
         end
-        GC.enable_finalizers(true)
+        GC.enable_finalizers()
     end
     return false
 end
@@ -89,7 +89,7 @@ end
 function unlock(l::SpinLock)
     _get(l) == 0 && error("unlock count must match lock count")
     _set!(l, 0)
-    GC.enable_finalizers(true)
+    GC.enable_finalizers()
     ccall(:jl_cpu_wake, Cvoid, ())
     return
 end

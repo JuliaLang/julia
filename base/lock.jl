@@ -59,7 +59,7 @@ function trylock(rl::ReentrantLock)
     if rl.reentrancy_cnt == 0
         rl.locked_by = t
         rl.reentrancy_cnt = 1
-        GC.enable_finalizers(false)
+        GC.disable_finalizers()
         got = true
     elseif t === notnothing(rl.locked_by)
         rl.reentrancy_cnt += 1
@@ -87,7 +87,7 @@ function lock(rl::ReentrantLock)
         if rl.reentrancy_cnt == 0
             rl.locked_by = t
             rl.reentrancy_cnt = 1
-            GC.enable_finalizers(false)
+            GC.disable_finalizers()
             break
         elseif t === notnothing(rl.locked_by)
             rl.reentrancy_cnt += 1
@@ -128,7 +128,7 @@ function unlock(rl::ReentrantLock)
                 rethrow()
             end
         end
-        GC.enable_finalizers(true)
+        GC.enable_finalizers()
     end
     unlock(rl.cond_wait)
     return
@@ -150,7 +150,7 @@ function unlockall(rl::ReentrantLock)
             rethrow()
         end
     end
-    GC.enable_finalizers(true)
+    GC.enable_finalizers()
     unlock(rl.cond_wait)
     return n
 end
