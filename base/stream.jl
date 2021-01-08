@@ -554,7 +554,7 @@ function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     nb = min(length(buffer.data), buffer.maxsize) - ptr + 1
-    return (pointer(buffer.data, ptr), nb)
+    return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
 notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Cvoid}, len::UInt) = notify_filled(buffer, nread)
