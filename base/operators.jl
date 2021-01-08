@@ -973,7 +973,7 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...) = c.outer(c.inner(x...))
+(c::ComposedFunction)(x...; kw...) = c.outer(c.inner(x...; kw...))
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
