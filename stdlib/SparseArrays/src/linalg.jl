@@ -58,12 +58,14 @@ for (T, t) in ((Adjoint, adjoint), (Transpose, transpose))
         if β != 1
             β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
         end
-        @inbounds for k in 1:size(C, 2), col in 1:size(A, 2)
-            tmp = zero(eltype(C))
-            @simd for j in nzrange(A, col)
-                tmp += $t(nzv[j])*B[rv[j],k]
+        @inbounds for k in 1:size(C, 2)
+            for col in 1:size(A, 2)
+                tmp = zero(eltype(C))
+                for j in nzrange(A, col)
+                    tmp += $t(nzv[j])*B[rv[j],k]
+                end
+                C[col,k] += tmp * α
             end
-            C[col,k] += tmp * α
         end
         C
     end
@@ -96,8 +98,10 @@ function mul!(C::StridedVecOrMat, X::AdjOrTransStridedOrTriangularMatrix, A::Abs
             end
         end
     else # X isa Adjoint or Transpose
-        @inbounds for multivec_row in 1:mX, col in 1:size(A, 2), k in nzrange(A, col)
-            C[multivec_row, col] += X[multivec_row, rv[k]] * nzv[k] * α
+        for multivec_row in 1:mX, col in 1:size(A, 2)
+            @inbounds for k in nzrange(A, col)
+                C[multivec_row, col] += X[multivec_row, rv[k]] * nzv[k] * α
+            end
         end
     end
     C
@@ -117,19 +121,11 @@ for (T, t) in ((Adjoint, adjoint), (Transpose, transpose))
         if β != 1
             β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
         end
-        if X isa StridedOrTriangularMatrix
-            @inbounds for col in 1:size(A, 2), k in nzrange(A, col)
-                Aiα = $t(nzv[k]) * α
-                rvk = rv[k]
-                @simd for multivec_col in 1:mX
-                    C[multivec_col, rvk] += X[multivec_col, col] * Aiα
-                end
-            end
-        else # X isa Adjoint or Transpose
-            @inbounds for multivec_col in 1:mX, col in 1:size(A, 2)
-                @simd for k in nzrange(A, col)
-                    C[multivec_col, rv[k]] += X[multivec_col, col] * $t(nzv[k]) * α
-                end
+        @inbounds for col in 1:size(A, 2), k in nzrange(A, col)
+            Aiα = $t(nzv[k]) * α
+            rvk = rv[k]
+            @simd for multivec_col in 1:mX
+                C[multivec_col, rvk] += X[multivec_col, col] * Aiα
             end
         end
         C
