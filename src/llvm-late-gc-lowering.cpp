@@ -1127,12 +1127,14 @@ static bool isConstGV(GlobalVariable *gv)
     return gv->isConstant() || gv->getMetadata("julia.constgv");
 }
 
-static bool isLoadFromConstGV(LoadInst *LI, bool &task_local);
-static bool isLoadFromConstGV(Value *v, bool &task_local)
+static bool isLoadFromConstGV(LoadInst *LI, bool &task_local,
+                              SmallDenseSet<const PHINode *> &Seen);
+static bool isLoadFromConstGV(Value *v, bool &task_local,
+                              SmallDenseSet<const PHINode *> &Seen)
 {
     v = v->stripInBoundsOffsets();
     if (auto LI = dyn_cast<LoadInst>(v))
-        return isLoadFromConstGV(LI, task_local);
+        return isLoadFromConstGV(LI, task_local, Seen);
     if (auto gv = dyn_cast<GlobalVariable>(v))
         return isConstGV(gv);
     // null pointer
@@ -1143,12 +1145,17 @@ static bool isLoadFromConstGV(Value *v, bool &task_local)
         return (CE->getOpcode() == Instruction::IntToPtr &&
                 isa<ConstantData>(CE->getOperand(0)));
     if (auto SL = dyn_cast<SelectInst>(v))
-        return (isLoadFromConstGV(SL->getTrueValue(), task_local) &&
-                isLoadFromConstGV(SL->getFalseValue(), task_local));
+        return (isLoadFromConstGV(SL->getTrueValue(), task_local, Seen) &&
+                isLoadFromConstGV(SL->getFalseValue(), task_local, Seen));
     if (auto Phi = dyn_cast<PHINode>(v)) {
+        if (!Seen.insert(Phi).second) {
+            // Recursive call to `isLoadFromConstGV`. Let other values decide
+            // the predicate (i.e., returning the identity element of `&&`).
+            return true;
+        }
         auto n = Phi->getNumIncomingValues();
         for (unsigned i = 0; i < n; ++i) {
-            if (!isLoadFromConstGV(Phi->getIncomingValue(i), task_local)) {
+            if (!isLoadFromConstGV(Phi->getIncomingValue(i), task_local, Seen)) {
                 return false;
             }
         }
@@ -1184,6 +1191,12 @@ static bool isLoadFromConstGV(Value *v, bool &task_local)
 // cover all the cases we and LLVM generates.
 static bool isLoadFromConstGV(LoadInst *LI, bool &task_local)
 {
+    SmallDenseSet<const PHINode *> Seen;
+    return isLoadFromConstGV(LI, task_local, Seen);
+}
+static bool isLoadFromConstGV(LoadInst *LI, bool &task_local,
+                              SmallDenseSet<const PHINode *> &Seen)
+{
     // We only emit single slot GV in codegen
     // but LLVM global merging can change the pointer operands to GEPs/bitcasts
     auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
@@ -1192,7 +1205,7 @@ static bool isLoadFromConstGV(LoadInst *LI, bool &task_local)
                {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"})) {
         if (gv)
             return true;
-        return isLoadFromConstGV(load_base, task_local);
+        return isLoadFromConstGV(load_base, task_local, Seen);
     }
     if (gv)
         return isConstGV(gv);

@@ -1135,6 +1135,7 @@ static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name,
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const std::string &msg);
 static Instruction *current_ptls(jl_codectx_t &ctx);
+static void emit_refetch_ptls(jl_codectx_t &ctx);
 static Value *current_signal_page(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
@@ -3494,6 +3495,9 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
     if (!handled) {
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, JLCALL_F2_CC);
         result = mark_julia_type(ctx, r, true, rt);
+#ifdef MIGRATE_TASKS
+        emit_refetch_ptls(ctx);
+#endif
     }
     if (result.typ == jl_bottom_type)
         CreateTrap(ctx.builder);
@@ -4600,6 +4604,10 @@ JL_GCC_IGNORE_STOP
 static Instruction *current_ptls(jl_codectx_t &ctx)
 {
     return ctx.builder.CreateCall(prepare_call(reuse_jltls_states_func));
+}
+
+static void emit_refetch_ptls(jl_codectx_t &ctx) {
+    ctx.builder.CreateCall(prepare_call(refetch_jltls_states_func));
 }
 
 // Get signal page associated with the currently usable PTLS at the insertion

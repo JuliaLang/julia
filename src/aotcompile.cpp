@@ -628,7 +628,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createVerifierPass());
 #endif
 
+    // TODO: `createLowerPTLSReusePass` here requires `LowerPTLSReuse` pass to
+    // handle phi nodes (but currently it doesn't).
     PM->add(createLowerPTLSReusePass());
+#ifdef JL_DEBUG_BUILD
+    PM->add(createVerifierPass(false));
+#endif
     PM->add(createConstantMergePass());
     if (opt_level < 2) {
         PM->add(createCFGSimplificationPass());
@@ -650,6 +655,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createLateLowerGCFramePass());
             PM->add(createFinalLowerGCPass());
             PM->add(createLowerPTLSReusePass());
+#ifdef JL_DEBUG_BUILD
+            PM->add(createVerifierPass(false));
+#endif
             PM->add(createLowerPTLSPass(dump_native));
         }
         else {
@@ -780,6 +788,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLateLowerGCFramePass());
         PM->add(createFinalLowerGCPass());
         PM->add(createLowerPTLSReusePass());
+#ifdef JL_DEBUG_BUILD
+        PM->add(createVerifierPass(false));
+#endif
         // We need these two passes and the instcombine below
         // after GC lowering to let LLVM do some constant propagation on the tags.
         // and remove some unnecessary write barrier checks.

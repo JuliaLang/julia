@@ -73,6 +73,25 @@ void JuliaPassContext::initAll(Module &M)
     T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
 }
 
+bool JuliaPassContext::usePtls(llvm::Function &F) {
+    for (BasicBlock &BB: F) {
+        for (Instruction &I: BB) {
+            if (auto *C = dyn_cast<CallInst>(&I)) {
+                if (C->getCalledFunction() == ptls_getter) {
+                    return true;
+                }
+                if (C->getCalledFunction() == reuse_jltls_states_func) {
+                    return true;
+                }
+                if (C->getCalledFunction() == refetch_jltls_states_func) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 llvm::Function *JuliaPassContext::getOrDeclarePtlsStatesFunc() {
     if (!ptls_getter) {
         ptls_getter = getOrDeclare(jl_intrinsics::ptlsStates);
@@ -92,6 +111,13 @@ llvm::Function *JuliaPassContext::getOrDeclareReusePtlsStatesFunc() {
         reuse_jltls_states_func = getOrDeclare(jl_intrinsics::reusePtlsStates);
     }
     return reuse_jltls_states_func;
+}
+
+llvm::Function *JuliaPassContext::getOrNullRefetchPtlsStatesFunc() {
+    if (!refetch_jltls_states_func) {
+        refetch_jltls_states_func = getOrNull(jl_intrinsics::refetchPtlsStates);
+    }
+    return refetch_jltls_states_func;
 }
 
 llvm::CallInst *JuliaPassContext::ensureEntryBlockPtls(llvm::Function &F)
@@ -141,6 +167,7 @@ llvm::Function *JuliaPassContext::getOrDeclare(
 namespace jl_intrinsics {
     static const char *PTLS_STATES_NAME = "julia.ptls_states";
     static const char *REUSE_PTLS_STATES_NAME = "julia.reuse_ptls_states";
+    static const char *REFETCH_PTLS_STATES_NAME = "julia.refetch_ptls_states";
     static const char *GET_GC_FRAME_SLOT_NAME = "julia.get_gc_frame_slot";
     static const char *GC_ALLOC_BYTES_NAME = "julia.gc_alloc_bytes";
     static const char *NEW_GC_FRAME_NAME = "julia.new_gc_frame";
@@ -181,6 +208,18 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 REUSE_PTLS_STATES_NAME);
+        });
+
+    const IntrinsicDescription refetchPtlsStates(
+        REFETCH_PTLS_STATES_NAME,
+        [](const JuliaPassContext &context) {
+            return Function::Create(
+                FunctionType::get(
+                    PointerType::get(context.T_ppjlvalue, 0),
+                    {},
+                    false),
+                Function::ExternalLinkage,
+                REFETCH_PTLS_STATES_NAME);
         });
 
     const IntrinsicDescription getGCFrameSlot(

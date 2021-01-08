@@ -88,6 +88,8 @@ struct JuliaPassContext {
         return module->getContext();
     }
 
+    bool usePtls(llvm::Function &F);
+
     // Gets a call to the `julia.ptls_states` intrinsic in the entry
     // point of the given function, if there exists such a call.
     // Otherwise, a new call is created and returned.
@@ -97,6 +99,7 @@ struct JuliaPassContext {
     llvm::Function *getOrDeclarePtlsStatesFunc();
     llvm::Function *getOrDeclareReusePtlsStatesFunc();
     llvm::Function *getOrNullReusePtlsStatesFunc();
+    llvm::Function *getOrNullRefetchPtlsStatesFunc();
 
     // Gets the intrinsic or well-known function that conforms to
     // the given description if it exists in the module. If not,
@@ -120,6 +123,8 @@ namespace jl_intrinsics {
     extern const IntrinsicDescription ptlsStates;
     // `julia.reuse_ptls_states`:
     extern const IntrinsicDescription reusePtlsStates;
+    // `julia.refetch_ptls_states`:
+    extern const IntrinsicDescription refetchPtlsStates;
 
     // `julia.get_gc_frame_slot`: an intrinsic that creates a
     // pointer to a GC frame slot.
