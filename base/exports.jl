@@ -447,6 +447,7 @@ export
     contains,
     eachmatch,
     endswith,
+    escape_regex,
     findall,
     findfirst,
     findlast,

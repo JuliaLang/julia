@@ -671,7 +671,7 @@ function hash(r::Regex, h::UInt)
     h = hash(r.match_options, h)
 end
 
-## String operations ##
+## string operations ##
 
 """
     *(s::Regex, t::Union{Regex,AbstractString,AbstractChar}) -> Regex
@@ -774,3 +774,31 @@ RegexMatch("Test Test ")
 ```
 """
 ^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, "){$i}"), r.compile_options, r.match_options)
+
+## conversion from strings/chars ##
+
+"""
+    escape_regex(x::AbstractChar)
+    escape_regex(x::AbstractString)
+
+Create a `Regex` which matches `x` exactly. This means that special characters are
+not interpreted as having special meaning.
+Multiplication can also be used in order to create a regex with specific flags.
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> match(escape_regex('('), "(").match
+"("
+
+julia> match(escape_regex(".*"), "abc") == nothing
+true
+
+julia> match(escape_regex(".*"), ".*")
+RegexMatch(".*")
+```
+
+"""
+escape_regex(s::Union{AbstractString,AbstractChar}) = Regex(wrap_string(s, zero(UInt32)))

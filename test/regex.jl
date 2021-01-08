@@ -166,6 +166,25 @@
         @test r"this|that"^2 == r"(?:this|that){2}"
     end
 
+    @testset "escape_regex" begin
+        r = escape_regex('a')
+        @test r == r"\Qa\E" # these tests can change if the implementation changes
+        @test match(r, "a").match == "a"
+        r = escape_regex('\\')
+        @test r == r"\Q\\E"
+        @test match(r, "\\").match == "\\"
+        r = escape_regex('(')
+        @test r == r"\Q(\E"
+        @test match(r, "(").match == "("
+
+        r = escape_regex("a\\b(c")
+        @test r == r"\Qa\b(c\E"
+        @test match(r, "a\\b(c").match == "a\\b(c"
+        r = escape_regex("a\\E\\Qz")
+        @test r == r"\Qa\\E\QE\Qz\E"
+        @test match(r, "a\\E\\Qz") != nothing
+    end
+
     # Test that PCRE throws the correct kind of error
     # TODO: Uncomment this once the corresponding change has propagated to CI
     #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
