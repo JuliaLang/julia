@@ -523,8 +523,6 @@ STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
     *n_alloc = newalloc;
 }
 
-static jl_function_t *jl_iterate_func JL_GLOBALLY_ROOTED;
-
 static jl_value_t *do_apply( jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
 {
     jl_function_t *f = args[0];
