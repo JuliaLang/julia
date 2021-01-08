@@ -783,7 +783,7 @@ end
 function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::Union{Nothing,Vector{Any}},
         argtypes::Vector{Any}, sv::InferenceState, max_methods::Int)
     la = length(argtypes)
-    if f === ifelse && fargs isa Vector{Any} && la == 4 && argtypes[2] isa Conditional
+    if f === Core.ifelse && fargs isa Vector{Any} && la == 4 && argtypes[2] isa Conditional
         # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
         cnd = argtypes[2]::Conditional
         tx = argtypes[3]
