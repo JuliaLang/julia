@@ -76,6 +76,10 @@ end
 # Finally, we also add some symbols manually (at the top) as needed,
 # and edited others for consistency (e.g. #21646 and #14751).
 
+# When a symbol has several completions, a canonical reverse mapping is
+# specified at the bottom of this file. The complete reverse mapping is
+# generated lazily in docview.jl.
+
 # "font" prefixes
 const bold = "\\bf"
 const italic = "\\it"
@@ -2613,4 +2617,38 @@ const latex_symbols = Dict(
     "\\1/" => "⅟", # fraction numerator one
     "\\0/3" => "↉", # vulgar fraction zero thirds
     "\\1/4" => "¼", # vulgar fraction one quarter
+)
+
+
+# Canonical reverse mapping for symbols that have several completions (#39148).
+#
+# These duplicate mappings can be investigated with the folllowing commands:
+#=
+ls = REPL.REPLCompletions.latex_symbols; symbols = values(ls)
+duplicates = [v for v in unique(symbols) if count(==(v), symbols) > 1]
+[(v, REPL.symbol_latex(v)) => findall(==(v), ls) for v in duplicates]
+=#
+const symbols_latex_canonical = Dict(
+    "ð" => "\\dh",
+    "…" => "\\dots",
+    "∅" => "\\emptyset",
+    "ℯ" => "\\euler",
+    "♀" => "\\female",
+    "≥" => "\\ge",
+    "⟺" => "\\iff",
+    "ℑ" => "\\Im",
+    "⟸" => "\\impliedby",
+    "⟹" => "\\implies",
+    "≤" => "\\le",
+    "⟦" => "\\llbracket",
+    "♂" => "\\male",
+    "∇" => "\\del",
+    "ℎ" => "\\planck",
+    "ℜ" => "\\Re",
+    "⟧" => "\\rrbracket",
+    "√" => "\\sqrt",
+    "̶" => "\\sout",
+    "→" => "\\to",
+    "ε" => "\\varepsilon",
+    "⊻" => "\\xor",
 )
