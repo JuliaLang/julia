@@ -911,6 +911,7 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
     Multiple function composition requires at least Julia 1.4.
 
 !!! compat "Julia 1.5"
+    Composition of one function ∘(f) requires at least Julia 1.5.
     Composition of one function ∘(f)  requires at least Julia 1.5.
 
 # Examples
