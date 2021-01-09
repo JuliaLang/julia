@@ -4,6 +4,7 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
+#include "options.h"
 #include <atomics.h>
 // threading ------------------------------------------------------------------
 

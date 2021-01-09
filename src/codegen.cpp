@@ -3495,10 +3495,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
     if (!handled) {
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, JLCALL_F2_CC);
         result = mark_julia_type(ctx, r, true, rt);
-#ifdef MIGRATE_TASKS
-        emit_refetch_ptls(ctx);
-#endif
     }
+#ifdef MIGRATE_TASKS
+    emit_refetch_ptls(ctx);
+#endif
     if (result.typ == jl_bottom_type)
         CreateTrap(ctx.builder);
     return result;

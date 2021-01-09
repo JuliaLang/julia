@@ -503,9 +503,11 @@ JL_DLLEXPORT void jl_switch(void)
         if (jl_atomic_compare_exchange(&t->tid, -1, ptls->tid) != -1)
             jl_error("cannot switch to task running on another thread");
     }
+#ifndef MIGRATE_TASKS
     else if (t->tid != ptls->tid) {
         jl_error("cannot switch to task running on another thread");
     }
+#endif
 
     // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
