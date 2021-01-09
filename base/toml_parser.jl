@@ -658,9 +658,12 @@ end
 
 function push!!(v::Vector, el)
     T = eltype(v)
-    if el isa T || typeof(el) === T
+    t = typeof(el)
+    if el isa T || t === T
         push!(v, el::T)
         return v
+    elseif T === Union{}
+        return t[el]
     else
         if typeof(T) === Union
             newT = Any
