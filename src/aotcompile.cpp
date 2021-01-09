@@ -628,8 +628,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createVerifierPass());
 #endif
 
-    // TODO: `createLowerPTLSReusePass` here requires `LowerPTLSReuse` pass to
-    // handle phi nodes (but currently it doesn't).
     PM->add(createLowerPTLSReusePass());
 #ifdef JL_DEBUG_BUILD
     PM->add(createVerifierPass(false));

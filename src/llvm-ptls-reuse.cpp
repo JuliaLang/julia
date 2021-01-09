@@ -43,6 +43,8 @@ private:
 
     bool runOnModule(Module &M) override;
     bool runOnFunction(Function &F);
+    void propagatePtls(Instruction *Ptls, BbToInstructionMapTy &BbToPtls,
+                       SmallDenseSet<const Instruction *> &Seen);
     Instruction *mergePtls(BasicBlock *BB, BbToInstructionMapTy &BbToPtls);
     Instruction *ptlsForBb(BasicBlock *BB, BbToInstructionMapTy &BbToPtls);
     void populatePtls(BasicBlock *BB, BbToInstructionMapTy &BbToPtls);
@@ -67,7 +69,43 @@ bool LowerPTLSReuse::runOnModule(Module &M)
     if (reuse_jltls_states_func) {
         reuse_jltls_states_func->eraseFromParent();
     }
+    if (refetch_jltls_states_func) {
+        refetch_jltls_states_func->eraseFromParent();
+    }
     return changed;
+}
+
+void LowerPTLSReuse::propagatePtls(Instruction *Ptls, BbToInstructionMapTy &BbToPtls,
+                                   SmallDenseSet<const Instruction *> &Seen)
+{
+    if (!Seen.insert(Ptls).second) {
+        return;
+    }
+    auto BB = Ptls->getParent();
+    auto InsertResult = BbToPtls.insert({BB, Ptls});
+    if (isa<SelectInst>(Ptls)) {
+        // TODO: Ask if this branch is required. Since we don't introduce select
+        // for PTLS variables explicitly, this won't be necessary if we can be
+        // sure that other LLVM passes won't introduces select instructions.
+        // TODO: Test this branch if we keep this branch.
+        if (!InsertResult.second) {
+            auto OldPtls = InsertResult.first->second;
+            if (OldPtls->comesBefore(Ptls)) {
+                BbToPtls[BB] = Ptls;
+            }
+        }
+    }
+    else if (isa<PHINode>(Ptls)) {
+        // Nothing to do, since PHINode is always before other instructions.
+    }
+    else {
+        return;
+    }
+    for (auto User : Ptls->users()) {
+        if (auto I = dyn_cast<Instruction>(User)) {
+            propagatePtls(I, BbToPtls, Seen);
+        }
+    }
 }
 
 Instruction *LowerPTLSReuse::mergePtls(BasicBlock *BB, BbToInstructionMapTy &BbToPtls)
@@ -161,9 +199,6 @@ bool LowerPTLSReuse::runOnFunction(Function &F)
     LLVM_DEBUG(dbgs() << "LOWER PTLS REUSE (" << static_cast<void *>(this)
                       << "): Processing function  " << F.getName() << "\n");
     getOrNullReusePtlsStatesFunc();
-    if (!reuse_jltls_states_func) {
-        return false;
-    }
     if (!usePtls(F)) {
         return false;
     }
@@ -171,11 +206,11 @@ bool LowerPTLSReuse::runOnFunction(Function &F)
 
     // Create a mapping from BB to PTLS-at-the-end-of-BB:
     BbToInstructionMapTy BbToPtls;
-    SmallVector<BasicBlock *, 8> BbWithPtls;
+    SmallVector<Instruction *> PtlsGetters;
+    SmallVector<BasicBlock *> BbWithPtls;
     for (BasicBlock &BB : F) {
         auto inserted = false;
         for (Instruction &I : BB) {
-            // TODO: handle phi nodes?
             if (auto *C = dyn_cast<CallInst>(&I)) {
                 if (!C->getCalledFunction()) {
                     continue;
@@ -185,6 +220,7 @@ bool LowerPTLSReuse::runOnFunction(Function &F)
                          C->getCalledFunction() == refetch_jltls_states_func) {
                     assert(C->getType() == PtlsType);
                     BbToPtls[&BB] = C;
+                    PtlsGetters.push_back(C);
 
                     if (!inserted) {
                         inserted = true;
@@ -192,6 +228,14 @@ bool LowerPTLSReuse::runOnFunction(Function &F)
                     }
                 }
             }
+        }
+    }
+
+    // Forward-propagate PTLS through phi and select instructions.
+    {
+        SmallDenseSet<const Instruction *> Seen;
+        for (auto I : PtlsGetters) {
+            propagatePtls(I, BbToPtls, Seen);
         }
     }
 
