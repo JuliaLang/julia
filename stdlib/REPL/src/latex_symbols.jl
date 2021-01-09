@@ -2577,7 +2577,6 @@ const latex_symbols = Dict(
     "\\leftouterjoin" => "⟕",  # left outer join
     "\\rightouterjoin" => "⟖",  # right outer join
     "\\fullouterjoin" => "⟗",  # full outer join
-    "\\Join" => "⨝",  # join
     "\\join" => "⨝",  # join
     "\\underbar" => "̲",  # combining low line
     "\\underleftrightarrow" => "͍",  # underleftrightarrow accent
