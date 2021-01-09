@@ -1743,6 +1743,25 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     dest
 end
 
+function map!(f::F, dest::BitArray, src::AbstractArray) where F
+    tmp = Vector{Bool}(undef, bitcache_size)
+    destc = dest.chunks
+    cind = 1
+    for P in Iterators.partition(eachindex(src), bitcache_size)
+        ind = 1
+        @simd for I in P
+            @inbounds tmp[ind] = f(src[I])
+            ind += 1
+        end
+        @simd for i in ind:bitcache_size
+            @inbounds tmp[i] = false
+        end
+        dumpbitcache(destc, cind, tmp)
+        cind += bitcache_chunks
+    end
+    return dest
+end
+
 ## Filter ##
 
 function filter(f, Bs::BitArray)

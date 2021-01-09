@@ -947,6 +947,20 @@ end
     end
 end
 
+# This specialization is easier on codegen for a common case `f.(v)`
+@inline function copyto!(dest::AbstractArray, bc::Broadcasted{DefaultArrayStyle{1},<:Tuple{<:AbstractUnitRange},<:Any,<:Tuple{<:AbstractArray{T,1}}}) where T
+    src = bc.args[1]
+    if axes(dest) == axes(src)
+        return map!(bc.f, dest, src)
+    end
+    @assert length(src) == 1
+    val = first(src)
+    for i in eachindex(dest)
+        dest[i] = bc.f(val)
+    end
+    return dest
+end
+
 # For broadcasted assignments like `broadcast!(f, A, ..., A, ...)`, where `A`
 # appears on both the LHS and the RHS of the `.=`, then we know we're only
 # going to make one pass through the array, and even though `A` is aliasing
