@@ -148,7 +148,7 @@ The default value (for iterators that do not define this function) is `NotIndexa
 
 ```jldoctest
 julia> Base.IteratorIndexable([1,2,3])
-Base.HasEachIndex{Base.OneTo{$Int}}
+Base.HasEachIndex{Base.OneTo{$Int}}()
 
 julia> Base.IteratorIndexable(Ref(1))
 Base.Indexable()
