@@ -848,3 +848,13 @@ end
     @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
+
+@testset "IteratorIndexable" begin
+    A = CartesianIndices([1 2; 3 4])
+    @test Base.IteratorIndexable(1) == Base.HasEachIndex{Base.OneTo{Int}}()
+    @test Base.IteratorIndexable([1]) == Base.HasEachIndex{Base.OneTo{Int}}()
+    @test Base.IteratorIndexable(Ref(1)) == Base.Indexable()
+    @test Base.IteratorIndexable((1,2)) == Base.HasEachIndex{Base.OneTo{Int}}()
+    @test Base.IteratorIndexable("abc") == Base.HasEachIndex{Base.EachStringIndex{String}}()
+    @test Base.IteratorIndexable(A) == Base.HasEachIndex{CartesianIndices{2, NTuple{2, Base.OneTo{Int}}}}()
+end

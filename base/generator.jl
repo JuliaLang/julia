@@ -128,3 +128,51 @@ IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
 IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
 
 IteratorEltype(::Type{Any}) = EltypeUnknown()
+
+
+abstract type IteratorIndexable end
+struct Indexable <: IteratorIndexable end
+struct HasEachIndex{I} <: IteratorIndexable end
+struct NotIndexable <: IteratorIndexable end
+
+"""
+    IteratorIndexable(itertype::Type) -> IteratorIndexable
+
+Given the type of an iterator, return one of the following values:
+
+* `NotIndexable()` if `getindex` is not implemented or the elements it returns do not match the iterator's eltype.
+* `Indexable()` if `getindex` is implemented for the iterator but `eachindex` is not.
+* `HasEachIndex{I}` if both `getindex` and `eachindex` are implemented for the iterator, where I is the type of `eachindex(iterator)`.
+
+The default value (for iterators that do not define this function) is `NotIndexable()`.
+
+```jldoctest
+julia> Base.IteratorIndexable([1,2,3])
+Base.HasEachIndex{Base.OneTo{$Int}}
+
+julia> Base.IteratorIndexable(Ref(1))
+Base.Indexable()
+
+julia> Base.IteratorIndexable(Set([1,2,3]))
+Base.NotIndexable()
+
+julia> Base.IteratorIndexable(Dict(1=>'a', 2=>'b'))
+Base.NotIndexable()
+
+```
+"""
+IteratorIndexable(x) = IteratorIndexable(typeof(x))
+IteratorIndexable(::Type) = NotIndexable()
+IteratorIndexable(::Type{<:Ref}) = Indexable()
+IteratorIndexable(::Type{<:Tuple}) = HasEachIndex{Base.OneTo{Int}}()
+IteratorIndexable(::Type{<:Number}) = HasEachIndex{Base.OneTo{Int}}()
+IteratorIndexable(::Type{<:AbstractArray{T,1}}) where T = HasEachIndex{Base.OneTo{Int}}()
+IteratorIndexable(T::Type{<:AbstractString}) = HasEachIndex{Base.EachStringIndex{T}}()
+
+function IteratorIndexable(T::Type{<:AbstractArray{E,N}}) where {E,N}
+    if IndexStyle(T) === IndexLinear()
+        HasEachIndex{Base.OneTo{Int}}()
+    else
+        HasEachIndex{CartesianIndices{N, NTuple{N, Base.OneTo{Int}}}}()
+    end
+end
