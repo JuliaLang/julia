@@ -595,7 +595,6 @@ function diag(D::Diagonal, k::Integer=0)
 end
 tr(D::Diagonal) = sum(tr, D.diag)
 det(D::Diagonal) = prod(det, D.diag)
-logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
 function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     z = sum(log, D.diag)
     complex(real(z), rem2pi(imag(z), RoundNearest))

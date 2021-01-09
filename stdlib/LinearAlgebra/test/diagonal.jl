@@ -361,6 +361,8 @@ Random.seed!(1)
         d2, s2 = logabsdet(lM)
         @test d1 ≈ d2
         @test s1 == s2
+        @test logdet(Diagonal(relty[-1,-2])) ≈ log(2)
+        @test_throws DomainError logdet(Diagonal(relty[-1,-2,-3]))
     end
 
     @testset "similar" begin
