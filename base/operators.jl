@@ -900,7 +900,7 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 """
     f ∘ g
 
-Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
+Compose functions: i.e. `(f ∘ g)(args...; kwargs...)` means `f(g(args...; kwargs...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
@@ -912,7 +912,9 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
 
 !!! compat "Julia 1.5"
     Composition of one function ∘(f) requires at least Julia 1.5.
-    Composition of one function ∘(f)  requires at least Julia 1.5.
+
+!!! compat "Julia 1.7"
+    Using keyword arguments requires at least Julia 1.7.
 
 # Examples
 ```jldoctest
