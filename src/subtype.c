@@ -1058,7 +1058,8 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
         if (!check_vararg_length(yi, lx+1-ly, e))
             return 0;
     }
-    return (lx + vx == ly + vy) || (vy && (lx >= (vx ? ly : (ly-1))));
+    assert((lx + vx == ly + vy) || (vy && (lx >= (vx ? ly : (ly-1)))));
+    return 1;
 }
 
 static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int param)
