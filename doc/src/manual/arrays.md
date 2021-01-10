@@ -946,8 +946,8 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
 ```
 
 Sometimes, you want a container (like an array) that would normally participate in broadcast to be "protected"
-from broadcast's behavior of iterating over all of its elements. By placing it inside another container
-(we suggest [`Fill`](@ref)) broadcast will treat it as a single value. 
+from broadcast's behavior of iterating over all of its elements. By placing it inside another container broadcast
+will treat it as a single value. 
 ```jldoctest
 julia> ([1, 2, 3], [4, 5, 6]) .+ Fill([1, 2, 3])
 ([2, 4, 6], [5, 7, 9])
