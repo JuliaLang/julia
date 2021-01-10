@@ -708,8 +708,29 @@ static int var_occurs_invariant(jl_value_t *v, jl_tvar_t *var, int inv) JL_NOTSA
     return var_occurs_inside(v, var, 0, 1);
 }
 
-static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, int8_t R, jl_stenv_t *e, int param)
+static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
 {
+    jl_varbinding_t *btemp = e->vars;
+    // if the var for this unionall (based on identity) already appears somewhere
+    // in the environment, rename to get a fresh var.
+    JL_GC_PUSH1(&u);
+    while (btemp != NULL) {
+        if (btemp->var == u->var ||
+            // outer var can only refer to inner var if bounds changed
+            (btemp->lb != btemp->var->lb && jl_has_typevar(btemp->lb, u->var)) ||
+            (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var))) {
+            u = rename_unionall(u);
+            break;
+        }
+        btemp = btemp->prev;
+    }
+    JL_GC_POP();
+    return u;
+}
+
+static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
+{
+    u = unalias_unionall(u, e);
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0,
                            R ? e->Rinvdepth : e->invdepth, 0, NULL, 0, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
@@ -717,7 +738,7 @@ static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, in
     int ans;
     if (R) {
         e->envidx++;
-        ans = callback(context, R, e, param);
+        ans = subtype(t, u->body, e, param);
         e->envidx--;
         // widen Type{x} to typeof(x) in argument position
         if (!vb.occurs_inv)
@@ -750,7 +771,8 @@ static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, in
         }
     }
     else {
-        ans = callback(context, R, e, param);
+        ans = R ? subtype(t, u->body, e, param) :
+                  subtype(u->body, t, e, param);
     }
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
@@ -800,53 +822,6 @@ static int with_tvar(tvar_callback callback, void *context, jl_unionall_t *u, in
 
     JL_GC_POP();
     return ans;
-}
-
-static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
-{
-    jl_varbinding_t *btemp = e->vars;
-    // if the var for this unionall (based on identity) already appears somewhere
-    // in the environment, rename to get a fresh var.
-    JL_GC_PUSH1(&u);
-    while (btemp != NULL) {
-        if (btemp->var == u->var ||
-            // outer var can only refer to inner var if bounds changed
-            (btemp->lb != btemp->var->lb && jl_has_typevar(btemp->lb, u->var)) ||
-            (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var))) {
-            u = rename_unionall(u);
-            break;
-        }
-        btemp = btemp->prev;
-    }
-    JL_GC_POP();
-    return u;
-}
-
-struct subtype_unionall_env {
-    jl_value_t *t;
-    jl_value_t *ubody;
-};
-
-static int subtype_unionall_callback(struct subtype_unionall_env *env, int8_t R, jl_stenv_t *s, int param) {
-    JL_GC_PROMISE_ROOTED(env->t);
-    JL_GC_PROMISE_ROOTED(env->ubody);
-    if (R) {
-        return subtype(env->t, env->ubody, s, param);
-    }
-    else {
-        return subtype(env->ubody, env->t, s, param);
-    }
-}
-
-// compare UnionAll type `u` to `t`. `R==1` if `u` came from the right side of A <: B.
-static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
-{
-    u = unalias_unionall(u, e);
-    struct subtype_unionall_env env = {t, u->body};
-    JL_GC_PUSH1(&u);
-    int res = with_tvar((tvar_callback)subtype_unionall_callback, (void*)&env, u, R, e, param);
-    JL_GC_POP();
-    return res;
 }
 
 // check n <: (length of vararg type v)
@@ -1004,21 +979,7 @@ loop: // while (i <= lx) {
         if (env->i == env->lx-1 && env->vvx) {
             if (!env->vtx) {
                 xi = jl_tparam(env->xd, env->i);
-                // Unbounded vararg on the LHS without vararg on the RHS should
-                // have been caught earlier.
-                assert(env->vvy || !jl_is_unionall(xi));
-                if (jl_is_unionall(xi)) {
-                    // TODO: If !var_occurs_inside(jl_tparam0(xid), p1, 0, 1),
-                    // we could avoid introducing the tvar into the environment
-                    jl_unionall_t *u = (jl_unionall_t*)xi;
-                    u = unalias_unionall(u, e);
-                    env->vtx = (jl_value_t*)u;
-                    // goto loop, but with the tvar introduced
-                    JL_GC_PUSH1(&u);
-                    int res = with_tvar((tvar_callback)subtype_tuple_tail, env, u, 0, e, param);
-                    JL_GC_POP();
-                    return res;
-                }
+                assert(jl_is_vararg(xi));
                 env->vtx = xi;
             }
             xi = env->vtx;
@@ -1032,16 +993,7 @@ loop: // while (i <= lx) {
             if (env->j == env->ly-1 && env->vvy) {
                 if (!env->vty) {
                     yi = jl_tparam(env->yd, env->j);
-                    if (jl_is_unionall(yi)) {
-                        jl_unionall_t *u = (jl_unionall_t*)yi;
-                        u = unalias_unionall(u, e);
-                        env->vty = (jl_value_t*)u;
-                        // goto loop, but with the tvar introduced
-                        JL_GC_PUSH1(&u);
-                        int res = with_tvar((tvar_callback)subtype_tuple_tail, env, u, 1, e, param);
-                        JL_GC_POP();
-                        return res;
-                    }
+                    assert(jl_is_vararg(yi));
                     env->vty = yi;
                 }
                 yi = env->vty;
