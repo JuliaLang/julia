@@ -742,6 +742,140 @@ use `import`, then you'll replace the other module's implementation of `bar(s::A
 with your new implementation, which could easily do something completely different (and break
 all/many future usages of the other functions in module Foo that depend on calling bar).
 
+### Creating your first Julia package
+
+A quick way to start any new package is to create a skeleton with the Julia package manager:
+```julia-repl
+julia> ]
+pkg> generate path/to/my_package_repo/MyFirstPackage
+```
+
+The `path/to/my_package_repo` directory you should now have the following contents:
+```
+my_package_repo
+└── MyFirstPackage
+    ├── Project.toml
+    └── src
+        └── MyFirstPackage.jl
+```
+
+Using this method, a [UUID](@id man-code-loading-uuid) is automatically generated for the new package and written to `Project.toml`.
+
+### Testing/developing your new package
+
+An easy way to make packages available to the active Julia environment is to add a package repository to the `LOAD_PATH` variable:
+```julia-repl
+julia> push!(Base.LOAD_PATH, "/abs/path/to/my_package_repo")
+```
+
+To automate this process and make the repository available for every new julia session, add the above statement to `~/.julia/config/startup.jl`.
+
+#### Hello World!
+Since `pkg> generate` automatically creates a `greet()` function, you can call it after loading `MyFirstPackage` with either [`import`](@ref) or [`using`](@ref):
+```julia-repl
+julia> import MyFirstPackage
+julia> MyFirstPackage.greet()
+Hello World!
+```
+
+### Alternative: Testing/developing your new package
+
+It is also possible to add new packages-under-development to a given project/environment using [`pkg> dev /abs/path/to/my_package_repo/MyFirstPackage`](@ref Pkg). However, beginners might want to keep to the `LOAD_PATH` solution until they get a better grasp of Julia [projects & environments](@ref man-code-loading-environments).
+
+### Organizing package files
+There are no strict rules on how to organize package files, but the following is a good starting point:
+```
+my_package_repo
+└── MyFirstPackage
+    ├── Project.toml
+    └── src
+        ├── MyFirstPackage.jl
+        ├── component1.jl
+        ├── component2.jl
+        ├── component3
+        │   ├── subcomponent1.jl
+        │   └── subcomponent2.jl
+        ├── component4.jl
+        ...
+```
+In this example, a "component" could be anything that warrants being in a seperate file, for example:
+ - A set of functions to operate on a given type (like an "object" definition).
+ - Code used to display objects of multiple types (ex: collection of [`show`](@ref) methods).
+ - A collection of type definitions.
+ - A given software layer (ex: the external interface intended for users of the package).
+ - ...
+
+Here is a more concrete example:
+```
+my_package_repo
+└── MyFirstPackage
+    ├── Project.toml
+    └── src
+        ├── MyFirstPackage.jl
+        ├── types.jl
+        ├── mainalgorithm.jl
+        ├── FileFormatA
+        │   ├── FileFormatA.jl
+        │   ├── reader.jl
+        │   └── writer.jl
+        ├── FileFormatB
+        │   ├── FileFormatB.jl
+        │   ├── reader.jl
+        │   └── writer.jl
+        └── display.jl
+```
+
+With such a file structure, `MyFirstPackage` is assembled by loading code from the individual files ([`include()`](@ref) statements).  The following illustrates how this can be done:
+
+`MyFirstPackage.jl`
+```julia
+module MyFirstPackage
+
+#Import EXTERNAL packages required by solution:
+using FFTW #Does frequency analysis
+import Gtk #Needs a GUI (import avoids namespace pollution/collisions)
+...
+
+#Include INTERNAL project files themselves:
+include("types.jl")
+include("mainalgorithm.jl")
+include("FileFormatA/FileFormatA.jl")
+include("FileFormatB/FileFormatB.jl")
+include("display.jl")
+
+#Convenience functions:
+readAdata(filename::String) = FileFormatA.readdata(filename)
+readBdata(filename::String) = FileFormatB.readdata(filename)
+
+...
+
+end
+```
+
+`FileFormatA/FileFormatA.jl`
+```julia
+#Outside: Namespace is still "MyFirstPackage"
+
+module FileFormatA #Preference: solution is cleaner with separate namespace
+#Inside: Namespace is "MyFirstPackage.FileFormatA"
+
+#Import EXTERNAL packages required by this "sub-module":
+using DataFrames #Build on readily available reader/writer
+...
+
+#[Probably add type definitions here]
+
+#Include INTERNAL project files themselves (file-relative):
+include("reader.jl")
+include("writer.jl")
+
+...
+
+end
+```
+
+On a conceptual basis, `FileFormatB/FileFormatB.jl` would be similar to `FileFormatA/FileFormatA.jl`.
+
 ## Nothingness and missing values
 
 ### [How does "null", "nothingness" or "missingness" work in Julia?](@id faq-nothing)
