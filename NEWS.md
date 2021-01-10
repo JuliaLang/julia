@@ -68,6 +68,7 @@ Standard library changes
 
 #### Dates
 
+* The `Dates.periods` function can be used to get the `Vector` of `Period`s that comprise a `CompoundPeriod` ([#39169]).
 
 #### Statistics
 
