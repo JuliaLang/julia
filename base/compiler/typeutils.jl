@@ -5,7 +5,7 @@
 #####################
 
 function rewrap(@nospecialize(t), @nospecialize(u))
-    if isa(t, TypeVar) || isa(t, Type)
+    if isa(t, TypeVar) || isa(t, Type) || isa(t, Core.TypeofVararg)
         return rewrap_unionall(t, u)
     end
     return t
