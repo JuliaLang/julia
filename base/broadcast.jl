@@ -9,8 +9,9 @@ module Broadcast
 
 using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, @pure,
-             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
-import .Base: copy, copyto!, axes
+             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias,
+             AbstractFill, Fill
+  import .Base: copy, copyto!, axes, getindex_value
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d, BroadcastFunction
 
 ## Computing the result's axes: deprecated name
@@ -669,14 +670,14 @@ julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already s
  3
 
 julia> Broadcast.broadcastable(Int) # Types don't support axes, indexing, or iteration but are commonly used as scalars
-Base.RefValue{Type{Int64}}(Int64)
+Fill{Type{Int64}}(Int64)
 
 julia> Broadcast.broadcastable("hello") # Strings break convention of matching iteration and act like a scalar instead
-Base.RefValue{String}("hello")
+Fill{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair}) = Ref(x)
-broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair}) = Fill(x)
+broadcastable(::Type{T}) where {T} = Fill{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
@@ -1352,5 +1353,36 @@ function Base.show(io::IO, op::BroadcastFunction)
     nothing
 end
 Base.show(io::IO, ::MIME"text/plain", op::BroadcastFunction) = show(io, op)
+
+
+# Fill Broadcasting
+function broadcasted(::DefaultArrayStyle{N}, op, r::AbstractFill{T,N}) where {T,N}
+    return Fill(op(getindex_value(r)), axes(r))
+end
+
+function broadcasted(::DefaultArrayStyle, op, a::AbstractFill, b::AbstractFill)
+    val = op(getindex_value(a), getindex_value(b))
+    return Fill(val, broadcast_shape(axes(a), axes(b)))
+end
+
+# Need to prevent array-valued fills from broadcasting over entry
+_broadcast_getindex_value(a::AbstractFill{<:Number}) = getindex_value(a)
+_broadcast_getindex_value(a::AbstractFill) = Ref(getindex_value(a))
+
+function broadcasted(::DefaultArrayStyle{1}, ::typeof(*), a::AbstractFill, b::AbstractRange)
+    broadcast_shape(axes(a), axes(b)) == axes(b) || throw(ArgumentError("Cannot broadcast $a and $b. Convert $b to a Vector first."))
+    return broadcasted(*, _broadcast_getindex_value(a), b)
+end
+
+function broadcasted(::DefaultArrayStyle{1}, ::typeof(*), a::AbstractRange, b::AbstractFill)
+    broadcast_shape(axes(a), axes(b)) == axes(a) || throw(ArgumentError("Cannot broadcast $a and $b. Convert $b to a Vector first."))
+    return broadcasted(*, a, _broadcast_getindex_value(b))
+end
+
+broadcasted(::DefaultArrayStyle{N}, op, r::AbstractFill{T,N}, x::Number) where {T,N} = Fill(op(getindex_value(r),x), axes(r))
+broadcasted(::DefaultArrayStyle{N}, op, x::Number, r::AbstractFill{T,N}) where {T,N} = Fill(op(x, getindex_value(r)), axes(r))
+broadcasted(::DefaultArrayStyle{N}, op, r::AbstractFill{T,N}, x::Ref) where {T,N} = Fill(op(getindex_value(r),x[]), axes(r))
+broadcasted(::DefaultArrayStyle{N}, op, x::Ref, r::AbstractFill{T,N}) where {T,N} = Fill(op(x[], getindex_value(r)), axes(r))
+
 
 end # module

@@ -14,6 +14,7 @@ export
 
 # Types
     AbstractChannel,
+    AbstractFill,
     AbstractIrrational,
     AbstractMatrix,
     AbstractRange,
@@ -48,6 +49,7 @@ export
     Dims,
     Enum,
     ExponentialBackOff,
+    Fill,
     IndexCartesian,
     IndexLinear,
     IndexStyle,

@@ -215,6 +215,8 @@ include("multidimensional.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
 
+include("fillarrays.jl")
+
 include("broadcast.jl")
 using .Broadcast
 using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!
