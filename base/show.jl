@@ -2640,7 +2640,7 @@ function array_summary(io::IO, a, inds)
 end
 
 ## `summary` for Function
-summary(::Function) = "Function"
+summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
 
 """
     showarg(io::IO, x, toplevel)
