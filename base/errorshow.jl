@@ -753,7 +753,17 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
+"""
+    show_backtrace(io::IO, bt::Vector)
 
+Print the given backtrace to `io`.
+
+## Example
+
+```julia
+julia> show_backtrace(stdout, backtrace())
+```
+"""
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])

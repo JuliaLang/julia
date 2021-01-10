@@ -338,6 +338,7 @@ Base.error
 Core.throw
 Base.rethrow
 Base.backtrace
+Base.show_backtrace
 Base.catch_backtrace
 Base.catch_stack
 Base.@assert
