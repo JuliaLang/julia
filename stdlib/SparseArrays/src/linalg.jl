@@ -60,8 +60,8 @@ for (T, t) in ((Adjoint, adjoint), (Transpose, transpose))
         if β != 1
             β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
         end
-        @inbounds for k in 1:size(C, 2)
-            for col in 1:size(A, 2)
+        for k in 1:size(C, 2)
+            @inbounds for col in 1:size(A, 2)
                 tmp = zero(eltype(C))
                 for j in nzrange(A, col)
                     tmp += $t(nzv[j])*B[rv[j],k]
