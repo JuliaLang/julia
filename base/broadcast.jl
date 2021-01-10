@@ -670,10 +670,12 @@ julia> Broadcast.broadcastable([1,2,3]) # like `identity` since arrays already s
  3
 
 julia> Broadcast.broadcastable(Int) # Types don't support axes, indexing, or iteration but are commonly used as scalars
-Fill{Type{Int64}}(Int64)
+0-dimensional Fill{Type{Int64}, 0, Tuple{}}:
+Int64
 
 julia> Broadcast.broadcastable("hello") # Strings break convention of matching iteration and act like a scalar instead
-Fill{String}("hello")
+0-dimensional Fill{String, 0, Tuple{}}:
+"hello"
 ```
 """
 broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair}) = Fill(x)
