@@ -7,6 +7,14 @@ isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
+f39082(x::Vararg{T}) where {T <: Number} = x[1]
+let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
+    @test ast.slottypes == Any[Const(f39082), Tuple{Vararg{Rational}}]
+end
+let ast = only(code_typed(f39082, Tuple{Rational, Vararg{Rational}}))[1]
+    @test ast.slottypes == Any[Const(f39082), Tuple{Rational, Vararg{Rational}}]
+end
+
 # demonstrate some of the type-size limits
 @test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
 @test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
