@@ -312,7 +312,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix),
+             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
              source)
 end
 
