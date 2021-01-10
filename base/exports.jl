@@ -14,7 +14,6 @@ export
 
 # Types
     AbstractChannel,
-    AbstractFill,
     AbstractIrrational,
     AbstractMatrix,
     AbstractRange,
