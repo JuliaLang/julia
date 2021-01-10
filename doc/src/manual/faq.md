@@ -750,7 +750,7 @@ julia> ]
 pkg> generate path/to/my_package_repo/MyFirstPackage
 ```
 
-The `path/to/my_package_repo` directory you should now have the following contents:
+The `path/to/my_package_repo` directory should now have the following contents:
 ```
 my_package_repo
 └── MyFirstPackage
@@ -780,10 +780,10 @@ Hello World!
 
 ### Alternative: Testing/developing your new package
 
-It is also possible to add new packages-under-development to a given project/environment using [`pkg> dev /abs/path/to/my_package_repo/MyFirstPackage`](@ref Pkg). However, beginners might want to keep to the `LOAD_PATH` solution until they get a better grasp of Julia [projects & environments](@ref man-code-loading-environments).
+It is also possible to add new packages-under-development to a given project/environment using [`pkg> dev /abs/path/to/my_package_repo/MyFirstPackage`](@ref Pkg). However, beginners might want to keep to the `LOAD_PATH` solution until Julia [projects & environments](@ref man-code-loading-environments) are well understood.
 
 ### Organizing package files
-There are no strict rules on how to organize package files, but the following is a good starting point:
+There are no strict rules on how to organize package source files, but the following is a good starting point:
 ```
 my_package_repo
 └── MyFirstPackage
@@ -798,14 +798,14 @@ my_package_repo
         ├── component4.jl
         ...
 ```
-In this example, a "component" could be anything that warrants being in a seperate file, for example:
+In this example, a "component" could be anything that warrants being in a seperate file. For example:
  - A set of functions to operate on a given type (like an "object" definition).
  - Code used to display objects of multiple types (ex: collection of [`show`](@ref) methods).
  - A collection of type definitions.
  - A given software layer (ex: the external interface intended for users of the package).
  - ...
 
-Here is a more concrete example:
+Here is a slightly more concrete example:
 ```
 my_package_repo
 └── MyFirstPackage
@@ -825,9 +825,9 @@ my_package_repo
         └── display.jl
 ```
 
-With such a file structure, `MyFirstPackage` is assembled by loading code from the individual files ([`include()`](@ref) statements).  The following illustrates how this can be done:
+With such a file structure, `MyFirstPackage` is assembled by loading code from individual files (using [`include()`](@ref) statements).  The following illustrates how this can be done:
 
-`MyFirstPackage.jl`
+`src/MyFirstPackage.jl`
 ```julia
 module MyFirstPackage
 
@@ -852,7 +852,7 @@ readBdata(filename::String) = FileFormatB.readdata(filename)
 end
 ```
 
-`FileFormatA/FileFormatA.jl`
+`src/FileFormatA/FileFormatA.jl`
 ```julia
 #Outside: Namespace is still "MyFirstPackage"
 
@@ -874,7 +874,7 @@ include("writer.jl")
 end
 ```
 
-On a conceptual basis, `FileFormatB/FileFormatB.jl` would be similar to `FileFormatA/FileFormatA.jl`.
+On a conceptual basis, `src/FileFormatB/FileFormatB.jl` would be similar to `src/FileFormatA/FileFormatA.jl`.
 
 ## Nothingness and missing values
 
