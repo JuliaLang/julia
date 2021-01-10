@@ -34,10 +34,12 @@ function mul!(C::StridedVecOrMat, A::AbstractSparseMatrixCSC, B::Union{StridedVe
     if β != 1
         β != 0 ? rmul!(C, β) : fill!(C, zero(eltype(C)))
     end
-    @inbounds for k in 1:size(C, 2), col in 1:size(A, 2)
-        αxj = B[col,k] * α
-        @simd for j in nzrange(A, col)
-            C[rv[j], k] += nzv[j] * αxj
+    for k in 1:size(C, 2)
+        @inbounds for col in 1:size(A, 2)
+            αxj = B[col,k] * α
+            for j in nzrange(A, col)
+                C[rv[j], k] += nzv[j]*αxj
+            end
         end
     end
     C
