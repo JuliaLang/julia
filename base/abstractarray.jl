@@ -173,6 +173,10 @@ For dictionary types, this will be a `Pair{KeyType,ValType}`. The definition
 instead of types. However the form that accepts a type argument should be defined for new
 types.
 
+For consistency it is generaly advised that for iterable objects `eltype` satisfies 
+`eltype(typeof(itr)) == typeof(first(itr))` and if `itr` implements `Base.getindex`, then also
+`eltype(typeof(itr)) == typeof(itr[a_valid_index])` holds.
+
 # Examples
 ```jldoctest
 julia> eltype(fill(1f0, (2,2)))
