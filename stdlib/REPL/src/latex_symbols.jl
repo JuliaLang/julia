@@ -2630,7 +2630,7 @@ duplicates = [v for v in unique(symbols) if count(==(v), symbols) > 1]
 =#
 const symbols_latex_canonical = Dict(
     "ð" => "\\dh",
-    "…" => "\\dots",
+    "…" => "\\ldots",
     "∅" => "\\emptyset",
     "ℯ" => "\\euler",
     "♀" => "\\female",
