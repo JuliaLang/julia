@@ -153,7 +153,7 @@ static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env) JL_NOTSAF
             return 0;
         if (!(egal_types(ua->var->lb, ub->var->lb, env) && egal_types(ua->var->ub, ub->var->ub, env)))
             return 0;
-        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
+        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, 0, env };
         return egal_types(ua->body, ub->body, &e);
     }
     if (dt == jl_datatype_type) {

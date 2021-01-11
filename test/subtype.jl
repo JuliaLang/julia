@@ -1854,3 +1854,8 @@ let A = Tuple{Type{T} where T<:Ref, Ref, Union{T, Union{Ref{T}, T}} where T<:Ref
     @test I == typeintersect(A,B)
     @test I == Tuple{Type{T}, Ref{T}, Union{Ref{T}, T}} where T<:Ref
 end
+
+# issue #39088
+@testintersect(Tuple{NTuple{N, Int}, NTuple{N, Int}} where N,
+               Tuple{Tuple{Int, Vararg{Any}}, NTuple{4, Int64}},
+               Tuple{NTuple{4, Int64}, NTuple{4, Int64}})
