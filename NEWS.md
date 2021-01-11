@@ -18,7 +18,7 @@ Command-line option changes
 
 Multi-threading changes
 -----------------------
-
+* If the `JULIA_NUM_THREADS` environment variable is set to `auto`, then the number of threads will be set to the number of CPU threads ([#38952])
 
 Build system changes
 --------------------
