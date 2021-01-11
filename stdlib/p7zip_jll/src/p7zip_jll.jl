@@ -21,9 +21,51 @@ else
     const p7zip_exe = "7z"
 end
 
-# These functions look a little strange, but they're mimicking the JLLWrappers signature
-p7zip(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true) = f(p7zip_path)
-p7zip(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true) = Cmd([p7zip_path])
+if Sys.iswindows()
+    const LIBPATH_env = "PATH"
+    const LIBPATH_default = ""
+    const pathsep = ';'
+elseif Sys.isapple()
+    const LIBPATH_env = "DYLD_FALLBACK_LIBRARY_PATH"
+    const LIBPATH_default = "~/lib:/usr/local/lib:/lib:/usr/lib"
+    const pathsep = ':'
+else
+    const LIBPATH_env = "LD_LIBRARY_PATH"
+    const LIBPATH_default = ""
+    const pathsep = ':'
+end
+
+function adjust_ENV!(env::Dict, PATH::String, LIBPATH::String, adjust_PATH::Bool, adjust_LIBPATH::Bool)
+    if adjust_LIBPATH
+        LIBPATH_base = get(env, LIBPATH_env, expanduser(LIBPATH_default))
+        if !isempty(LIBPATH_base)
+            env[LIBPATH_env] = string(LIBPATH, pathsep, LIBPATH_base)
+        else
+            env[LIBPATH_env] = LIBPATH
+        end
+    end
+    if adjust_PATH && (LIBPATH_env != "PATH" || !adjust_LIBPATH)
+        if adjust_PATH
+            if !isempty(get(env, "PATH", ""))
+                env["PATH"] = string(PATH, pathsep, env["PATH"])
+            else
+                env["PATH"] = PATH
+            end
+        end
+    end
+    return env
+end
+
+function p7zip(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
+    env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)
+	withenv(env...) do
+	    return f(p7zip_path)
+	end
+end
+function p7zip(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
+    env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)
+    return Cmd(Cmd([p7zip_path]); env)
+end
 
 function init_p7zip_path()
     # Prefer our own bundled p7zip, but if we don't have one, pick it up off of the PATH
