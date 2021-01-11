@@ -2043,7 +2043,7 @@ function _findr(op, A, region, Tv)
             throw(ArgumentError("array slices must be non-empty"))
         else
             ri = Base.reduced_indices0(A, region)
-            return (similar(A, ri), zeros(Ti, ri))
+            return (zeros(Tv, ri), zeros(Ti, ri))
         end
     end
 

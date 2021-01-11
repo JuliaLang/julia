@@ -1305,10 +1305,10 @@ end
 @testset "argmax, argmin, findmax, findmin" begin
     S = sprand(100,80, 0.5)
     A = Array(S)
-    @test argmax(S) == argmax(A)
-    @test argmin(S) == argmin(A)
-    @test findmin(S) == findmin(A)
-    @test findmax(S) == findmax(A)
+    @test @inferred(argmax(S)) == argmax(A)
+    @test @inferred(argmin(S)) == argmin(A)
+    @test @inferred(findmin(S)) == findmin(A)
+    @test @inferred(findmax(S)) == findmax(A)
     for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
         @test m(S, dims=region) == m(A, dims=region)
     end
