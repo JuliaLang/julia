@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-include("testhelpers/OffsetArrays.jl")
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 
 struct BitPerm_19352
     p::NTuple{8,UInt8}
