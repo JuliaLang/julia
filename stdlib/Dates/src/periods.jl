@@ -199,7 +199,7 @@ end
 """
     Dates.periods(::CompoundPeriod) -> Vector{Period}
 
-Return the `Vector` of `Period`s that comprise the given `CompoundPeriod`. 
+Return the `Vector` of `Period`s that comprise the given `CompoundPeriod`.
 """
 periods(x::CompoundPeriod) = x.periods
 
