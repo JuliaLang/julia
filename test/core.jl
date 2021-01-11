@@ -7541,3 +7541,12 @@ const RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
 
 # NTuples with non-types
 @test NTuple{3, 2} == Tuple{2, 2, 2}
+
+# issue #18621
+function f18621()
+   g = (k(i) for i in 1:5)
+   k = identity
+   return collect(g)
+end
+@test f18621() == 1:5
+@test [_ for _ in 1:5] == 1:5
