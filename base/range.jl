@@ -301,7 +301,7 @@ if isdefined(Main, :Base)
     # Constant-fold-able indexing into tuples to functionally expose Base.tail and Base.front
     function getindex(@nospecialize(t::Tuple), r::AbstractUnitRange)
         @_inline_meta
-        isempty(r) && return ()
+        require_one_based_indexing(r)
         if length(r) <= 10
             return ntuple(i -> t[i + first(r) - 1], length(r))
         elseif first(r) == 1
