@@ -138,12 +138,12 @@ divrem(x, y) = divrem(x, y, RoundToZero)
 function divrem(a, b, r::RoundingMode)
     if r === RoundToZero
         # For compat. Remove in 2.0.
-        (div(a,b), rem(a,b))
+        (div(a, b), rem(a, b))
     elseif r === RoundDown
         # For compat. Remove in 2.0.
-        (fld(a, b),mod(a,b))
+        (fld(a, b), mod(a, b))
     else
-        (div(a,b,r), rem(a,b,r))
+        (div(a, b, r), rem(a, b, r))
     end
 end
 #avoids calling rem for Integers-Integers (all modes),
@@ -159,7 +159,7 @@ function divrem(a::Integer, b::Integer, r::Union{typeof(RoundUp),
         # For compat. Remove in 2.0.
         d = fld(a, b)
         (d, a - d*b)
-    elseif r == RoundUp
+    elseif r === RoundUp
         # For compat. Remove in 2.0.
         d = div(a, b, r)
         (d, a - d*b)
