@@ -197,6 +197,13 @@ struct CompoundPeriod <: AbstractTime
 end
 
 """
+    Dates.periods(::CompoundPeriod) -> Vector{Period}
+
+Return the `Vector` of `Period`s that comprise the given `CompoundPeriod`.
+"""
+periods(x::CompoundPeriod) = x.periods
+
+"""
     CompoundPeriod(periods) -> CompoundPeriod
 
 Construct a `CompoundPeriod` from a `Vector` of `Period`s. All `Period`s of the same type

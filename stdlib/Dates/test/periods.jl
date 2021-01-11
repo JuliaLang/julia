@@ -366,6 +366,7 @@ end
     @test isequal(d - h, 2d - 2h - 1d + 1h)
     @test sprint(show, y + m) == string(y + m)
     @test convert(Dates.CompoundPeriod, y) + m == y + m
+    @test Dates.periods(convert(Dates.CompoundPeriod, y)) == convert(Dates.CompoundPeriod, y).periods
 end
 @testset "compound period simplification" begin
     # reduce compound periods into the most basic form
