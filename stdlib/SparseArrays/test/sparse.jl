@@ -162,7 +162,7 @@ end
     sz34 = spzeros(3, 4)
     se77 = sparse(1.0I, 7, 7)
     @testset "h+v concatenation" begin
-        @test [se44 sz42 sz41; sz34 se33] == se77
+        @test @inferred(hvcat((3, 2), se44, sz42, sz41, sz34, se33)) == se77 # [se44 sz42 sz41; sz34 se33]
         @test length(nonzeros([sp33 0I; 1I 0I])) == 6
     end
 
@@ -2168,7 +2168,7 @@ end
     # Test that concatenations of pairs of sparse matrices yield sparse arrays
     @test issparse(vcat(spmat, spmat))
     @test issparse(hcat(spmat, spmat))
-    @test issparse(hvcat((2,), spmat, spmat))
+    @test issparse(@inferred(hvcat((2,), spmat, spmat)))
     @test issparse(cat(spmat, spmat; dims=(1,2)))
     # Test that concatenations of a sparse matrice with a dense matrix/vector yield sparse arrays
     @test issparse(vcat(spmat, densemat))
