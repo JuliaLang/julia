@@ -14,6 +14,7 @@
         r = 4:9
         @test r === range(start=first(r), stop=last(r)                  )
         @test r === range(start=first(r),               length=length(r))
+        # the next one uses ==, because it changes the eltype
         @test r  == range(start=first(r), stop=last(r), length=length(r))
         @test r === range(                stop=last(r), length=length(r))
     end
