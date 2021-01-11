@@ -75,6 +75,7 @@ Multi-threading changes
 
 * Locks now automatically inhibit finalizers from running, to avoid deadlock ([#38487]).
 * New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption ([#34543]).
+* There is no longer a restriction on the number of threads ([#36778]).
 
 Build system changes
 --------------------
