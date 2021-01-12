@@ -181,7 +181,6 @@ struct _jl_bt_element_t;
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
 struct _jl_tls_states_t {
-    struct _jl_gcframe_t *pgcstack;
     size_t world_age;
     int16_t tid;
     uint64_t rngseed;

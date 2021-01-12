@@ -69,6 +69,7 @@ void JuliaPassContext::initAll(Module &M)
     T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
     T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
     T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+    T_pppjlvalue = PointerType::get(T_ppjlvalue, 0);
 }
 
 llvm::CallInst *JuliaPassContext::getPtls(llvm::Function &F) const

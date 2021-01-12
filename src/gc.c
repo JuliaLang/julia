@@ -342,8 +342,8 @@ static void jl_gc_push_arraylist(jl_ptls_t ptls, arraylist_t *list)
 {
     void **items = list->items;
     items[0] = (void*)JL_GC_ENCODE_PUSHARGS(list->len - 2);
-    items[1] = ptls->pgcstack;
-    ptls->pgcstack = (jl_gcframe_t*)items;
+    items[1] = jl_pgcstack;
+    jl_pgcstack = (jl_gcframe_t*)items;
 }
 
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
@@ -2630,7 +2630,7 @@ mark: {
             uintptr_t lb = 0;
             uintptr_t ub = (uintptr_t)-1;
             if (ptls2 && ta == ptls2->current_task) {
-                s = ptls2->pgcstack;
+                s = ta->gcstack;
             }
             else if (stkbuf) {
                 s = ta->gcstack;

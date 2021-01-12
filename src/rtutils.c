@@ -214,7 +214,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     jl_task_t *current_task = ptls->current_task;
     // Must have no safepoint
     eh->prev = current_task->eh;
-    eh->gcstack = ptls->pgcstack;
+    eh->gcstack = current_task->gcstack;
     eh->gc_state = ptls->gc_state;
     eh->locks_len = ptls->locks.len;
     eh->defer_signal = ptls->defer_signal;
@@ -246,7 +246,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     sig_atomic_t old_defer_signal = ptls->defer_signal;
     int8_t old_gc_state = ptls->gc_state;
     current_task->eh = eh->prev;
-    ptls->pgcstack = eh->gcstack;
+    current_task->gcstack = eh->gcstack;
     small_arraylist_t *locks = &ptls->locks;
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {

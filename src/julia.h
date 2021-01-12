@@ -735,7 +735,7 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH2(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
-#define jl_pgcstack (jl_get_ptls_states()->pgcstack)
+#define jl_pgcstack (jl_current_task->gcstack)
 
 #define JL_GC_ENCODE_PUSHARGS(n)   (((size_t)(n))<<2)
 #define JL_GC_ENCODE_PUSH(n)       ((((size_t)(n))<<2)|1)

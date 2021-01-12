@@ -189,8 +189,9 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
     if (!ptls2->safe_restore) {
         assert(exception);
-        ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
-                                           (bt_context_t*)&state, ptls2->pgcstack);
+        ptls2->bt_size =
+            rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)&state,
+                              ptls2->current_task->gcstack);
         ptls2->sig_exception = exception;
     }
     jl_call_in_state(ptls2, &state, &jl_sig_throw);

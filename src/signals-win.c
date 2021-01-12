@@ -108,7 +108,9 @@ static int have_backtrace_fiber;
 static void JL_NORETURN start_backtrace_fiber(void)
 {
     // collect the backtrace
-    stkerror_ptls->bt_size = rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx, stkerror_ptls->pgcstack);
+    stkerror_ptls->bt_size =
+        rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx,
+                          stkerror_ptls->current_task->gcstack);
     // switch back to the execution fiber
     jl_setcontext(&error_return_fiber);
     abort();
@@ -134,7 +136,8 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
         assert(excpt != NULL);
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
-            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, ptls->pgcstack);
+            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread,
+                                              ptls->current_task->gcstack);
         }
         else if (have_backtrace_fiber) {
             JL_LOCK(&backtrace_lock);

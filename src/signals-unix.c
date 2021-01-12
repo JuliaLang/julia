@@ -186,8 +186,9 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
 static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx)
 {
     if (!ptls->safe_restore)
-        ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx), ptls->pgcstack);
+        ptls->bt_size =
+            rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, jl_to_bt_context(sigctx),
+                              ptls->current_task->gcstack);
     ptls->sig_exception = e;
     jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }

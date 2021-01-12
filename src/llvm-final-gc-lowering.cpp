@@ -38,6 +38,7 @@ private:
     Function *poolAllocFunc;
     Function *bigAllocFunc;
     CallInst *ptlsStates;
+    Instruction *pgcstack;
 
     bool doInitialization(Module &M) override;
     bool doFinalization(Module &M) override;
@@ -61,7 +62,7 @@ private:
     // Lowers a `julia.queue_gc_root` intrinsic.
     Value *lowerQueueGCRoot(CallInst *target, Function &F);
 
-    Instruction *getPgcstack(Instruction *ptlsStates);
+    Instruction *getPgcstack();
 };
 
 Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
@@ -111,7 +112,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                         T_size->getPointerTo()),
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    Value *pgcstack = builder.Insert(getPgcstack(ptlsStates));
+    Value *pgcstack = getPgcstack();
     inst = builder.CreateAlignedStore(
             builder.CreateAlignedLoad(pgcstack, Align(sizeof(void*))),
             builder.CreatePointerCast(
@@ -139,7 +140,7 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     inst = builder.CreateAlignedStore(
         inst,
         builder.CreateBitCast(
-            builder.Insert(getPgcstack(ptlsStates)),
+            getPgcstack(),
             PointerType::get(T_prjlvalue, 0)),
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -171,14 +172,28 @@ Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
     return target;
 }
 
-Instruction *FinalLowerGC::getPgcstack(Instruction *ptlsStates)
+// Get `ptls->current_task->gcstack`
+Instruction *FinalLowerGC::getPgcstack()
 {
-    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
-    return GetElementPtrInst::CreateInBounds(
-        T_ppjlvalue,
-        ptlsStates,
-        ArrayRef<Value*>(offset),
-        "jl_pgcstack");
+    if (pgcstack)
+        return pgcstack;
+
+    IRBuilder<> builder(ptlsStates->getParent());
+    if (ptlsStates->getNextNode())
+        builder.SetInsertPoint(ptlsStates->getNextNode());
+    auto task_offset = ConstantInt::getSigned(
+        T_int32, offsetof(jl_tls_states_t, current_task) / sizeof(void *));
+    auto task_field = builder.CreateInBoundsGEP(
+        T_ppjlvalue, ptlsStates, ArrayRef<Value *>(task_offset), "current_task_field");
+    auto task_load =
+        builder.CreateAlignedLoad(task_field, Align(sizeof(void *)), "current_task_load");
+    auto task = builder.CreateBitCast(task_load, T_pppjlvalue, "current_task");
+    auto gcstack_offset =
+        ConstantInt::getSigned(T_int32, offsetof(jl_task_t, gcstack) / sizeof(void *));
+    pgcstack = GetElementPtrInst::CreateInBounds(T_ppjlvalue, task,
+                                                 ArrayRef<Value *>(gcstack_offset));
+    builder.Insert(pgcstack, "jl_pgcstack");
+    return pgcstack;
 }
 
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
@@ -289,6 +304,8 @@ bool FinalLowerGC::runOnFunction(Function &F)
     ptlsStates = getPtls(F);
     if (!ptlsStates)
         return true;
+
+    pgcstack = nullptr;
 
     // Acquire intrinsic functions.
     auto newGCFrameFunc = getOrNull(jl_intrinsics::newGCFrame);

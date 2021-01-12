@@ -396,14 +396,12 @@ static void ctx_switch(jl_ptls_t ptls)
         else
 #endif
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
-        lastt->gcstack = ptls->pgcstack;
+        lastt->ptls = NULL;
     }
 
     // set up global state for new task
     t->ptls = ptls;
-    ptls->pgcstack = t->gcstack;
     ptls->world_age = 0;
-    t->gcstack = NULL;
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
 #endif
