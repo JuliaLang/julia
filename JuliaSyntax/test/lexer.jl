@@ -559,3 +559,8 @@ end
 end
 
 
+@testset "comments" begin 
+    s = "#=# text=#"
+    @test length(collect(tokenize(s, Tokens.RawToken))) == 2
+end
+
