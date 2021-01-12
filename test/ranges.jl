@@ -1456,6 +1456,12 @@ end
         tt = Base.tuple_type_tail(m.sig)
         tt == Tuple{AbstractArray,Vararg{Any,N}} where N && continue
         vm = findfirst(sig->tt <: Base.tuple_type_tail(sig.sig), vmt)
+        if vmt[vm].sig == Tuple{typeof(view),AbstractArray,Vararg{Any,N}} where N
+            @show vm
+            @show vmt[vm]
+            @show sig
+            @show vmt[vm].sig
+        end
         @test vmt[vm].sig != Tuple{typeof(view),AbstractArray,Vararg{Any,N}} where N
     end
 end
