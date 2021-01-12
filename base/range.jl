@@ -323,14 +323,18 @@ be 1.
 """
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
-    OneTo{T}(stop) where {T<:Integer} = new(max(zero(T), stop))
+    function OneTo{T}(stop) where {T<:Integer}
+        throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
+        T isa Bool && throwbool(r)
+        return new(max(zero(T), stop))
+    return
     function OneTo{T}(r::AbstractRange) where {T<:Integer}
         throwstart(r) = (@_noinline_meta; throw(ArgumentError("first element must be 1, got $(first(r))")))
         throwstep(r)  = (@_noinline_meta; throw(ArgumentError("step must be 1, got $(step(r))")))
         throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
         first(r) == 1 || throwstart(r)
         step(r)  == 1 || throwstep(r)
-        r isa Bool && throwbool(r)
+        T isa Bool && throwbool(r)
         return new(max(zero(T), last(r)))
     end
 end
