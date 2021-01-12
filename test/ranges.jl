@@ -1755,10 +1755,6 @@ end
     @test r2.start == r2.stop == 3
     @test_throws BoundsError r[true:false]
     @test_throws BoundsError r[true:true]
-    r = Base.OneTo(0)
-    r2 = r[Base.OneTo(false)]
-    @test r2 isa Base.OneTo && r2.stop == 0
-    @test_throws BoundsError r[Base.OneTo(true)]
 
     r = 2:1
     r2 = r[true:true:false]
