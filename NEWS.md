@@ -4,7 +4,6 @@ Julia v1.7 Release Notes
 New language features
 ---------------------
 
-
 Language changes
 ----------------
 

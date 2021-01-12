@@ -448,6 +448,7 @@ end
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
     @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     u = i - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
@@ -455,6 +456,7 @@ function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i
 end
 
 function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Integer)
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     u = i - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
@@ -462,20 +464,34 @@ function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecisio
     TwicePrecision(x_hi, x_lo)
 end
 
-function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{<:Integer}) where T
+function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{S}) where {T, S<:Integer}
     @boundscheck checkbounds(r, s)
-    soffset = 1 + round(Int, (r.offset - first(s))/step(s))
-    soffset = clamp(soffset, 1, length(s))
-    ioffset = first(s) + (soffset-1)*step(s)
-    if step(s) == 1 || length(s) < 2
-        newstep = r.step
+    if S === Bool
+        if length(s) == 0
+            return StepRangeLen(r.ref, r.step, 0, 1)
+        elseif length(s) == 1
+            if first(s)
+                return StepRangeLen(r.ref, r.step, 1, 1)
+            else
+                return StepRangeLen(r.ref, r.step, 0, 1)
+            end
+        else # length(s) == 2
+            return StepRangeLen(r[2], step(r), 1, 1)
+        end
     else
-        newstep = twiceprecision(r.step*step(s), nbitslen(T, length(s), soffset))
-    end
-    if ioffset == r.offset
-        StepRangeLen(r.ref, newstep, length(s), max(1,soffset))
-    else
-        StepRangeLen(r.ref + (ioffset-r.offset)*r.step, newstep, length(s), max(1,soffset))
+        soffset = 1 + round(Int, (r.offset - first(s))/step(s))
+        soffset = clamp(soffset, 1, length(s))
+        ioffset = first(s) + (soffset-1)*step(s)
+        if step(s) == 1 || length(s) < 2
+            newstep = r.step
+        else
+            newstep = twiceprecision(r.step*step(s), nbitslen(T, length(s), soffset))
+        end
+        if ioffset == r.offset
+            return StepRangeLen(r.ref, newstep, length(s), max(1,soffset))
+        else
+            return StepRangeLen(r.ref + (ioffset-r.offset)*r.step, newstep, length(s), max(1,soffset))
+        end
     end
 end
 

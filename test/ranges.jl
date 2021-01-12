@@ -1824,6 +1824,25 @@ end
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
 
+    r = StepRangeLen(2, 1, 0)
+    r2 = r[true:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    @test_throws BoundsError r[false:true:false]
+
+    r = StepRangeLen(2, 1, 1)
+    r2 = r[false:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    r2 = r[true:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = StepRangeLen(1, 1, 2)
+    r2 = r[false:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
     r = LinRange(2, 1, 0)
     r2 = r[true:true:false]
     @test r2 isa LinRange && r2 == 2:1
@@ -1837,7 +1856,7 @@ end
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[false:true:true]
 
-    r = LinRange(1, 2, 1)
+    r = LinRange(1, 2, 2)
     r2 = r[false:true:true]
     @test r2 isa LinRange && r2 == 2:2
     @test_throws BoundsError r[true:true:false]
