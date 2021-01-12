@@ -1,5 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+@testset "range construction" begin
+    @testset "range(;kw...)" begin
+        @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
+        @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
+
+        r = 3.0:2:11
+        @test r == range(start=first(r), step=step(r), stop=last(r)                  )
+        @test r == range(start=first(r), step=step(r),               length=length(r))
+        @test r == range(start=first(r),               stop=last(r), length=length(r))
+        @test r == range(                step=step(r), stop=last(r), length=length(r))
+
+        r = 4:9
+        @test r === range(start=first(r), stop=last(r)                  )
+        @test r === range(start=first(r),               length=length(r))
+        # the next one uses ==, because it changes the eltype
+        @test r  == range(start=first(r), stop=last(r), length=length(r))
+        @test r === range(                stop=last(r), length=length(r))
+    end
+end
+
 using Dates, Random
 isdefined(Main, :PhysQuantities) || @eval Main include("testhelpers/PhysQuantities.jl")
 using .Main.PhysQuantities
