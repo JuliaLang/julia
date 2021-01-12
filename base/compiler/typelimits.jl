@@ -355,9 +355,10 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         return Any
     end
     typea == typeb && return typea
-    # it's always ok to form a Union of two concrete types
-    if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
-        return Union{typea, typeb}
+    # it's always ok to form a Union of two Union-free types
+    u = Union{typea, typeb}
+    if unioncomplexity(u) <= 1
+        return u
     end
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list

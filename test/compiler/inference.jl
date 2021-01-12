@@ -2041,6 +2041,16 @@ let rt = Base.return_types(splat27434, (NamedTuple{(:x,), Tuple{T}} where T,))
     @test !Base.has_free_typevars(rt[1])
 end
 
+# PR #27843
+bar27843(x, y::Bool) = fill(x, 0)
+bar27843(x, y) = fill(x, ntuple(_ -> 0, y))::Array{typeof(x)}
+foo27843(x, y) = bar27843(x, y)
+@test Core.Compiler.return_type(foo27843, Tuple{Union{Float64,Int}, Any}) == Union{Array{Float64}, Array{Int}}
+let atypes1 = Tuple{Union{IndexCartesian, IndexLinear}, Any, Union{Tuple{}, Tuple{Any,Vararg{Any,N}} where N}, Tuple},
+    atypes2 = Tuple{Union{IndexCartesian, IndexLinear}, Any, Tuple, Tuple}
+    @test Core.Compiler.return_type(SubArray, atypes1) <: Core.Compiler.return_type(SubArray, atypes2)
+end
+
 # issue #27078
 f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
 T27078 = Vector{Vector{T}} where T
