@@ -380,6 +380,78 @@ function rpad(
 end
 
 """
+    eachsplit(str::AbstractString, dlm; limit::Integer=0)
+    eachsplit(str::AbstractString; limit::Integer=0)
+
+Split `str` on occurrences of the delimiter(s) `dlm` and return an iterator over the
+substrings.  `dlm` can be any of the formats allowed by [`findnext`](@ref)'s first argument
+(i.e. as a string, regular expression or a function), or as a single character or collection
+of characters.
+
+If `dlm` is omitted, it defaults to [`isspace`](@ref).
+
+The iterator will return a maximum of `limit` results if the keyword argument is supplied.
+The default of `limit=0` implies no maximum.
+
+See also [`split`](@ref).
+
+# Examples
+```jldoctest
+julia> a = "Ma.rch"
+"Ma.rch"
+
+julia> collect(eachsplit(a, "."))
+2-element Vector{SubString}:
+ "Ma"
+ "rch"
+```
+"""
+function eachsplit end
+
+# Forcing specialization on `splitter` improves performance (roughly 30% decrease in runtime)
+# and prevents a major invalidation risk (1550 MethodInstances)
+struct SplitIterator{S<:AbstractString,F}
+    str::S
+    splitter::F
+    limit::Int
+end
+
+eltype(::Type{<:SplitIterator}) = SubString
+
+IteratorSize(::Type{<:SplitIterator}) = SizeUnknown()
+
+# i: the starting index of the substring to be extracted
+# k: the starting index of the next substring to be extracted
+# n: the number of splits returned so far; always less than iter.limit - 1 (1 for the rest)
+function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstindex(iter.str), 0))
+    i - 1 > ncodeunits(iter.str)::Int && return nothing
+    r = findnext(iter.splitter, iter.str, k)::Union{Nothing,Int,UnitRange{Int}}
+    while r !== nothing && n != iter.limit - 1 && first(r) <= lastindex(iter.str)
+        j, k = first(r), nextind(iter.str, last(r))::Int
+        k_ = ifelse(k <= j, nextind(iter.str, j), k)
+        if i < k
+            substr = @inbounds SubString(iter.str, i, prevind(iter.str, j)::Int)
+            return (substr, (max(i, k), k_, n + Int(i < j)))
+        end
+        k = k_
+        r = findnext(iter.splitter, iter.str, k)::Union{Nothing,Int,UnitRange{Int}}
+    end
+    @inbounds SubString(iter.str, i), (ncodeunits(iter.str) + 2, k, n + 1)
+end
+
+eachsplit(str::T, splitter; limit::Integer=0) where {T<:AbstractString} =
+    SplitIterator(str, splitter, limit)
+
+eachsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}; limit::Integer=0) where {T<:AbstractString} =
+    eachsplit(str, in(splitter); limit)
+
+eachsplit(str::T, splitter::AbstractChar; limit::Integer=0) where {T<:AbstractString} =
+    eachsplit(str, isequal(splitter); limit)
+
+# a bit oddball, but standard behavior in Perl, Ruby & Python:
+eachsplit(str::AbstractString; limit::Integer=0) = eachsplit(str, isspace; limit)
+
+"""
     split(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
     split(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 
@@ -408,46 +480,11 @@ julia> split(a, ".")
  "rch"
 ```
 """
-function split end
-
 function split(str::T, splitter;
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    _split(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
-end
-function split(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
-               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    _split(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
-end
-function split(str::T, splitter::AbstractChar;
-               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    _split(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
-end
-
-function _split(str::AbstractString, splitter::F, limit::Integer, keepempty::Bool, strs::Vector) where F
-    # Forcing specialization on `splitter` improves performance (roughly 30% decrease in runtime)
-    # and prevents a major invalidation risk (1550 MethodInstances)
-    i = 1 # firstindex(str)
-    n = lastindex(str)::Int
-    r = findfirst(splitter,str)::Union{Nothing,Int,UnitRange{Int}}
-    if r !== nothing
-        j, k = first(r), nextind(str,last(r))::Int
-        while 0 < j <= n && length(strs) != limit-1
-            if i < k
-                if keepempty || i < j
-                    push!(strs, @inbounds SubString(str,i,prevind(str,j)::Int))
-                end
-                i = k
-            end
-            (k <= j) && (k = nextind(str,j)::Int)
-            r = findnext(splitter,str,k)::Union{Nothing,Int,UnitRange{Int}}
-            r === nothing && break
-            j, k = first(r), nextind(str,last(r))::Int
-        end
-    end
-    if keepempty || i <= ncodeunits(str)::Int
-        push!(strs, @inbounds SubString(str,i))
-    end
-    return strs
+    itr = eachsplit(str, splitter; limit)
+    keepempty || (itr = Iterators.filter(!isempty, itr))
+    collect(T <: SubString ? T : SubString{T}, itr)
 end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
