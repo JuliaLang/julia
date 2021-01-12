@@ -325,7 +325,7 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
-        T isa Bool && throwbool(r)
+        T === Bool && throwbool(r)
         return new(max(zero(T), stop))
     end
 
@@ -335,7 +335,7 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
         throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
         first(r) == 1 || throwstart(r)
         step(r)  == 1 || throwstep(r)
-        T isa Bool && throwbool(r)
+        T === Bool && throwbool(r)
         return new(max(zero(T), last(r)))
     end
 end

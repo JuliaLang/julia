@@ -1733,6 +1733,7 @@ end
 
 @testset "Bool indexing of ranges" begin
     @test_throws ArgumentError Base.OneTo(true)
+    @test_throws ArgumentError Base.OneTo(true:true:true)
 
     @test_throws ArgumentError (1:2)[true]
     @test_throws ArgumentError (big(1):big(2))[true]
