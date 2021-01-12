@@ -928,3 +928,24 @@ end
 @testset "issue #28188" begin
     @test `$(@__FILE__)` == let file = @__FILE__; `$file` end
 end
+
+@testset "`try` scope change via. @noscope" begin
+    @assert !isdefined(@__MODULE__, :noscopevar1)
+    try noscopevar1 = 1; catch; end
+    @assert !isdefined(@__MODULE__, :noscopevar1)
+
+    @noscope try noscopevar1 = 1; catch end
+    @test noscopevar1 == 1
+
+    @noscope try noscopevar2 = 1; catch err display(err); end
+    @test noscopevar2 == 1
+
+    @noscope try noscopevar3 = 1; catch err display(err); finally 0; end
+    @test noscopevar3 == 1
+
+    @noscope try noscopevar4 = 1; catch; 0; finally 0; end
+    @test noscopevar4 == 1
+
+    @noscope try noscopevar5 = 1; finally 0; end
+    @test noscopevar5 == 1
+end

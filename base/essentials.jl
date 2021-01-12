@@ -222,6 +222,83 @@ macro eval(mod, ex)
     return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
 end
 
+"""
+    @noscope try ...
+
+Evaluate a `try` block in the local scope.
+
+```jldoctest
+julia> x
+ERROR: UndefVarError: x not defined
+
+julia> @noscope try
+            x = 1
+            error()
+        catch err
+            display(err)
+        finally
+            println("finally")
+        end
+ErrorException()
+finally
+
+julia> x
+1
+```
+"""
+macro noscope(ex)
+    !(isa(ex, Expr) && ex.head == :try) && throw(ArgumentError("@noscope only supports try blocks"))
+    if length(ex.args) == 4 # try that includes finally
+        if ex.args[2] isa Symbol # try-catch-finally with catch var
+            return Expr(:tryfinally,
+                Expr(:trycatch,
+                    :($(esc(ex.args[1]))),
+                    quote
+                        begin
+                            $(esc(ex.args[2])) = $(esc(Expr(:the_exception)))
+                            $(esc(ex.args[3]))
+                        end
+                    end
+                ),
+                :($(esc(ex.args[4])))
+            )
+        else
+            if ex.args[3] === false # try-finally
+                return Expr(:tryfinally,
+                    :($(esc(ex.args[1]))),
+                    :($(esc(ex.args[4])))
+                )
+            else # try-catch-finally with no catch var
+                return Expr(:tryfinally,
+                    Expr(:trycatch,
+                        :($(esc(ex.args[1]))),
+                        :($(esc(ex.args[3])))
+                    ),
+                    :($(esc(ex.args[4])))
+                )
+            end
+        end
+    elseif length(ex.args) == 3 # try-catch
+        if ex.args[2] isa Symbol # try-catch with catch var
+            return Expr(:trycatch,
+                :($(esc(ex.args[1]))),
+                quote
+                    begin
+                        $(esc(ex.args[2])) = $(esc(Expr(:the_exception)))
+                        $(esc(ex.args[3]))
+                    end
+                end
+            )
+        else # try-catch with no catch var
+            return Expr(:trycatch,
+                :($(esc(ex.args[1]))),
+                :($(esc(ex.args[3])))
+            )
+        end
+    end
+    error("Unrecognized `try` form")
+end
+
 argtail(x, rest...) = rest
 
 """
