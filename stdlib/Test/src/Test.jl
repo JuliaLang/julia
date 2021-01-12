@@ -284,14 +284,14 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     elseif evaluated.head === :call
         op = evaled_args[1]
-        kwargs = evaled_args[2].args  # Keyword arguments from `Expr(:parameters, ...)`
+        kwargs = (evaled_args[2]::Expr).args  # Keyword arguments from `Expr(:parameters, ...)`
         args = evaled_args[3:n]
 
         res = op(args...; kwargs...)
 
         # Create "Evaluated" expression which looks like the original call but has all of
         # the arguments evaluated
-        func_sym = quoted_args[1]
+        func_sym = quoted_args[1]::Union{Symbol,Expr}
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
         elseif func_sym === :≈ && !res
@@ -312,7 +312,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
+             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
              source)
 end
 
@@ -758,7 +758,7 @@ struct FallbackTestSet <: AbstractTestSet end
 fallback_testset = FallbackTestSet()
 
 struct FallbackTestSetException <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
@@ -785,13 +785,13 @@ are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
 mutable struct DefaultTestSet <: AbstractTestSet
-    description::AbstractString
-    results::Vector
+    description::String
+    results::Vector{Any}
     n_passed::Int
     anynonpass::Bool
     verbose::Bool
 end
-DefaultTestSet(desc; verbose = false) = DefaultTestSet(desc, [], 0, false, verbose)
+DefaultTestSet(desc::AbstractString; verbose::Bool = false) = DefaultTestSet(String(desc)::String, [], 0, false, verbose)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -1462,7 +1462,7 @@ want to set this to `false`. See [`Base.isambiguous`](@ref).
 function detect_ambiguities(mods...;
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
-    @nospecialize mods
+    @nospecialize
     ambs = Set{Tuple{Method,Method}}()
     mods = collect(mods)::Vector{Module}
     function sortdefs(m1::Method, m2::Method)
