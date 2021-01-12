@@ -327,7 +327,8 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
         throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
         T isa Bool && throwbool(r)
         return new(max(zero(T), stop))
-    return
+    end
+
     function OneTo{T}(r::AbstractRange) where {T<:Integer}
         throwstart(r) = (@_noinline_meta; throw(ArgumentError("first element must be 1, got $(first(r))")))
         throwstep(r)  = (@_noinline_meta; throw(ArgumentError("step must be 1, got $(step(r))")))
