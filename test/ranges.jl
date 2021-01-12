@@ -1760,13 +1760,6 @@ end
     @test r2 isa Base.OneTo && r2.stop == 0
     @test_throws BoundsError r[Base.OneTo(true)]
 
-    r = Base.OneTo(1)
-    r2 = r[Base.OneTo(true)]
-    @test r2 isa Base.OneTo && r2.stop == 1
-    @test_throws BoundsError r[Base.OneTo(false)]
-
-    @test_throws BoundsError Base.OneTo(2)[Base.OneTo(false)]
-    @test_throws BoundsError Base.OneTo(2)[Base.OneTo(true)]
     r = 2:1
     r2 = r[true:true:false]
     @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
