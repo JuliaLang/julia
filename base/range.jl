@@ -327,8 +327,10 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     function OneTo{T}(r::AbstractRange) where {T<:Integer}
         throwstart(r) = (@_noinline_meta; throw(ArgumentError("first element must be 1, got $(first(r))")))
         throwstep(r)  = (@_noinline_meta; throw(ArgumentError("step must be 1, got $(step(r))")))
+        throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
         first(r) == 1 || throwstart(r)
         step(r)  == 1 || throwstep(r)
+        r isa Bool && throwbool(r)
         return new(max(zero(T), last(r)))
     end
 end
@@ -773,10 +775,10 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
     end
 end
 
-function getindex(r::OneTo{T}, s::OneTo{S}) where {T, S}
+function getindex(r::OneTo{T}, s::OneTo) where T
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    S === Bool ? r : OneTo(T(s.stop))
+    OneTo(T(s.stop))
 end
 
 function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
