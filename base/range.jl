@@ -96,8 +96,11 @@ Base.OneTo(5)
 julia> range(; length = 10)
 Base.OneTo(10)
 
-julia> range(; stop = 5)
-1:5
+julia> range(; stop = 6)
+Base.OneTo(6)
+
+julia> range(; stop = 6.5)
+1.0:1.0:6.0
 ```
 If `length` is not specified and `stop - start` is not an integer multiple of `step`, a range that ends before `stop` will be produced.
 ```jldoctest
@@ -138,7 +141,7 @@ function range end
 
 range(start; stop=nothing, length::Union{Integer,Nothing}=nothing, step=nothing) =
     stop === length === step === nothing ?
-    range_stop(start) :
+    _range(nothing, nothing, start, nothing) :
     _range(start, step, stop, length)
 
 function range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing)

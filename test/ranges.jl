@@ -1459,10 +1459,8 @@ end
 end
 
 @testset "Bad range calls" begin
-    @test_throws ArgumentError range(1)
     @test_throws ArgumentError range(nothing)
     @test_throws ArgumentError range(1, step=4)
-    @test_throws ArgumentError range(nothing, length=2)
     @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
 end
 
