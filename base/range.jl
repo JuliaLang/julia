@@ -101,10 +101,8 @@ To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
     `stop` as a positional argument requires at least Julia 1.1.
 
 !!! compat "Julia 1.7"
-    `start` as a keyword argument requires at least Julia 1.7.
-
-!!! compat "Julia 1.7"
-    the versions without keyword arguments require at least Julia 1.7.
+    The versions without keyword arguments and `start` as a keyword argument
+    require at least Julia 1.7.
 """
 function range end
 

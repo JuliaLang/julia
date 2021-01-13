@@ -1628,8 +1628,6 @@ end
             end
         end
     end
-    # require a keyword arg
-    @test_throws ArgumentError range(1, 100)
 end
 
 @testset "Reverse empty ranges" begin
