@@ -802,7 +802,8 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             if invoke_api(code) == 2
                 i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                 tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                tree.code = Any[ ReturnNode(quoted(code.rettype_const)) ]
+                rettype_const = code.rettype_const
+                tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
                 nargs = Int(method.nargs)
                 tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
                 tree.slotflags = fill(0x00, nargs)
@@ -814,7 +815,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.pure = true
                 tree.inlineable = true
                 tree.parent = mi
-                tree.rettype = Core.Typeof(code.rettype_const)
+                tree.rettype = Core.Typeof(rettype_const)
                 tree.min_world = code.min_world
                 tree.max_world = code.max_world
                 return tree

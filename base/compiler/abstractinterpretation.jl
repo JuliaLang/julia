@@ -783,20 +783,28 @@ end
 function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::Union{Nothing,Vector{Any}},
         argtypes::Vector{Any}, sv::InferenceState, max_methods::Int)
     la = length(argtypes)
-    if f === ifelse && fargs isa Vector{Any} && la == 4 && argtypes[2] isa Conditional
-        # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
-        cnd = argtypes[2]::Conditional
-        tx = argtypes[3]
-        ty = argtypes[4]
-        a = ssa_def_slot(fargs[3], sv)
-        b = ssa_def_slot(fargs[4], sv)
-        if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
-            tx = typeintersect(tx, cnd.vtype)
+    if f === ifelse && fargs isa Vector{Any} && la == 4
+        cnd = argtypes[2]
+        if isa(cnd, Conditional)
+            newcnd = widenconditional(cnd)
+            if isa(newcnd, Const)
+                # if `cnd` is constant, we should just respect its constantness to keep inference accuracy
+                return newcnd.val ? tx : ty
+            else
+                # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
+                tx = argtypes[3]
+                ty = argtypes[4]
+                a = ssa_def_slot(fargs[3], sv)
+                b = ssa_def_slot(fargs[4], sv)
+                if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
+                    tx = (cnd.vtype ⊑ tx ? cnd.vtype : tmeet(tx, widenconst(cnd.vtype)))
+                end
+                if isa(b, Slot) && slot_id(cnd.var) == slot_id(b)
+                    ty = (cnd.elsetype ⊑ ty ? cnd.elsetype : tmeet(ty, widenconst(cnd.elsetype)))
+                end
+                return tmerge(tx, ty)
+            end
         end
-        if isa(b, Slot) && slot_id(cnd.var) == slot_id(b)
-            ty = typeintersect(ty, cnd.elsetype)
-        end
-        return tmerge(tx, ty)
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
     if f === getfield && isa(fargs, Vector{Any}) && la == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
@@ -1179,9 +1187,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         if length(e.args) == 2 && isconcretetype(t) && !t.mutable
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
-            if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val) &&
-                let t = t, at = at; _all(i->at.val[i] isa fieldtype(t, i), 1:n); end
-                t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
+            if isa(at, Const) && (val = at.val; isa(val, Tuple)) && n == length(val) &&
+                let t = t, val = val; _all(i->val[i] isa fieldtype(t, i), 1:n); end
+                t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, val))
             elseif isa(at, PartialStruct) && at ⊑ Tuple && n == length(at.fields) &&
                 let t = t, at = at; _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n); end
                 t = PartialStruct(t, at.fields)
