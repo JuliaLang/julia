@@ -19,7 +19,7 @@
         @test r === range(                stop=last(r), length=length(r))
 
         r = 1:5
-        o = OneTo(5)
+        o = Base.OneTo(5)
         let start=first(r), step=step(r), stop=last(r), length=length(r)
         @test o === range(                     length)
         @test o === range(;              stop        )
