@@ -75,6 +75,7 @@ clean-csl:
 	-rm -f $(build_shlibdir)/libwinpthread*$(SHLIB_EXT)*
 	-rm -f $(build_shlibdir)/libatomic*$(SHLIB_EXT)*
 	-rm -f $(build_shlibdir)/libgomp*$(SHLIB_EXT)*
+distclean-csl: clean-csl
 
 else
 $(eval $(call bb-install,csl,CSL,true))
