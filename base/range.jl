@@ -117,7 +117,6 @@ function range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing
     end
     range(start, step, stop, length)
 end
-range(start, stop) = _range(start, 1, stop, nothing)
 
 range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, step=nothing) =
     _range(start, step, stop, length)
