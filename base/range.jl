@@ -50,7 +50,7 @@ end
     range(start, stop; length, step)
     range(start; length, stop, step)
     range(;start, length, stop, step)
-    range(length::Integer)
+    range(stop)
 
 Construct a specialized array with evenly spaced elements and optimized storage (an [`AbstractRange`](@ref)) from the arguments.
 Mathematically a range is uniquely determined by any three of `start`, `step`, `stop` and `length`.
