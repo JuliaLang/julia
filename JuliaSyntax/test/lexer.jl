@@ -558,4 +558,8 @@ end
     @test tok("1.?").kind == Tokens.ERROR
 end
 
+@testset "interpolation of char within string" begin 
+    s = "\"\$('\"')\""
+    @test collect(tokenize(s))[1].kind == Tokenize.Tokens.STRING
+end
 

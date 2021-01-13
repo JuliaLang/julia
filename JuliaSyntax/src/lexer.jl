@@ -701,7 +701,7 @@ function lex_digit(l::Lexer, kind)
     return emit(l, kind)
 end
 
-function lex_prime(l)
+function lex_prime(l, doemit = true)
     if l.last_token == Tokens.IDENTIFIER ||
         l.last_token == Tokens.DOT ||
         l.last_token ==  Tokens.RPAREN ||
@@ -713,25 +713,25 @@ function lex_prime(l)
         readon(l)
         if accept(l, '\'')
             if accept(l, '\'')
-                return emit(l, Tokens.CHAR)
+                return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN(token_type(l))
             else
                 # Empty char literal
                 # Arguably this should be an error here, but we generally
                 # look at the contents of the char literal in the parser,
                 # so we defer erroring until there.
-                return emit(l, Tokens.CHAR)
+                return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN(token_type(l))
             end
         end
         while true
             c = readchar(l)
             if eof(c)
-                return emit_error(l, Tokens.EOF_CHAR)
+                return doemit ? emit_error(l, Tokens.EOF_CHAR) : EMPTY_TOKEN(token_type(l))
             elseif c == '\\'
                 if eof(readchar(l))
-                    return emit_error(l, Tokens.EOF_CHAR)
+                    return doemit ? emit_error(l, Tokens.EOF_CHAR) : EMPTY_TOKEN(token_type(l))
                 end
             elseif c == '\''
-                return emit(l, Tokens.CHAR)
+                return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN(token_type(l))
             end
         end
     end
@@ -820,6 +820,8 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                         lex_cmd(l, false)
                     elseif c == '#'
                         lex_comment(l, false)
+                    elseif c == '\''
+                        lex_prime(l, false)
                     end
                 end
             end
