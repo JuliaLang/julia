@@ -47,6 +47,7 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
+    range(start, stop, length)
     range(start, stop; length, step)
     range(start; length, stop, step)
     range(;start, length, stop, step)
@@ -97,33 +98,28 @@ Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 
 Both `start`  and `stop` may be specified as either a positional or keyword arguments.
-If both are specified as positional arguments, one of `step` or `length` must also be provided.
 
 !!! compat "Julia 1.1"
     `stop` as a positional argument requires at least Julia 1.1.
 
 !!! compat "Julia 1.7"
     `start` as a keyword argument requires at least Julia 1.7.
+
+!!! compat "Julia 1.7"
+    the versions without keyword arguments require at least Julia 1.7.
 """
 function range end
 
 range(start; stop=nothing, length::Union{Integer,Nothing}=nothing, step=nothing) =
     _range(start, step, stop, length)
-
+range(start, stop, length::Integer) = _range(start, nothing, stop, length)
 function range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing)
-    # For code clarity, the user must pass step or length
-    # See https://github.com/JuliaLang/julia/pull/28708#issuecomment-420034562
-    if step === length === nothing
-        msg = """
-        Neither `step` nor `length` was provided. To fix this do one of the following:
-        * Pass one of them
-        * Use `$(start):$(stop)`
-        * Use `range($start, stop=$stop)`
-        """
-        throw(ArgumentError(msg))
+    if length === nothing && step === nothing
+        step = 1
     end
-    _range(start, step, stop, length)
+    range(start, step, stop, length)
 end
+range(start, stop) = _range(start, 1, stop, nothing)
 
 range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, step=nothing) =
     _range(start, step, stop, length)
