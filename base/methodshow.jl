@@ -51,7 +51,7 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
 end
 
 function method_argnames(m::Method)
-    argnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), m.slot_syms)
+    argnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), m.slot_syms)
     isempty(argnames) && return argnames
     return argnames[1:m.nargs]
 end
