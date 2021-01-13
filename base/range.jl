@@ -50,6 +50,7 @@ end
     range(start, stop; length, step)
     range(start; length, stop, step)
     range(;start, length, stop, step)
+    range(length::Integer)
 
 Construct a specialized array with evenly spaced elements and optimized storage (an [`AbstractRange`](@ref)) from the arguments.
 Mathematically a range is uniquely determined by any three of `start`, `step`, `stop` and `length`.
@@ -57,6 +58,8 @@ Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
 to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
+* Call `range` with `step` and either `stop` or `length`. `start` will be assumed to be one.
+* Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be one.
 
 # Examples
 ```jldoctest
@@ -86,6 +89,15 @@ julia> range(stop=10, step=1, length=5)
 
 julia> range(start=1, step=1, stop=10)
 1:1:10
+
+julia> range(5)
+Base.OneTo(5)
+
+julia> range(; length = 10)
+Base.OneTo(10)
+
+julia> range(; stop = 5)
+1:5
 ```
 If `length` is not specified and `stop - start` is not an integer multiple of `step`, a range that ends before `stop` will be produced.
 ```jldoctest
@@ -103,11 +115,27 @@ If both are specified as positional arguments, one of `step` or `length` must al
     `stop` as a positional argument requires at least Julia 1.1.
 
 !!! compat "Julia 1.7"
-    `start` as a keyword argument requires at least Julia 1.7.
+    Assuming `start` is one when not provided,
+    `start` as a keyword argument, or
+    `length` as a positional argument requires at least Julia 1.7.
+
+# Extended Help
+
+`range` will produce a `Base.OneTo` when the arguments are Integers and
+* Only `length` is provided
+* Only `stop` is provided
+
+`range` will produce a `UnitRange` when the arguments are Integers and
+* Only `start`  and `stop` are provided
+* Only `length` and `stop` are provided
+
+A `UnitRange` is not produced if `step` is specified even if specified as one.
 """
 function range end
 
 range(start; stop=nothing, length::Union{Integer,Nothing}=nothing, step=nothing) =
+    stop === length === step === nothing ?
+    range_stop(start) :
     _range(start, step, stop, length)
 
 function range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing)
@@ -128,13 +156,15 @@ end
 range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, step=nothing) =
     _range(start, step, stop, length)
 
+range(length::Integer) = OneTo(length)
+
 _range(start::Nothing, step::Nothing, stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
-_range(start::Nothing, step::Nothing, stop::Nothing, len::Any    ) = range_error(start, step, stop, len)
-_range(start::Nothing, step::Nothing, stop::Any    , len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Nothing, stop::Nothing, len::Any    ) = OneTo(len)
+_range(start::Nothing, step::Nothing, stop::Any    , len::Nothing) = range_stop(stop)
 _range(start::Nothing, step::Nothing, stop::Any    , len::Any    ) = range_stop_length(stop, len)
 _range(start::Nothing, step::Any    , stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
-_range(start::Nothing, step::Any    , stop::Nothing, len::Any    ) = range_error(start, step, stop, len)
-_range(start::Nothing, step::Any    , stop::Any    , len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Any    , stop::Nothing, len::Any    ) = range_start_step_length(oneunit(step), step, len)
+_range(start::Nothing, step::Any    , stop::Any    , len::Nothing) = range_start_step_stop(oneunit(stop), step, stop)
 _range(start::Nothing, step::Any    , stop::Any    , len::Any    ) = range_step_stop_length(step, stop, len)
 _range(start::Any    , step::Nothing, stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
 _range(start::Any    , step::Nothing, stop::Nothing, len::Any    ) = range_start_length(start, len)
@@ -144,6 +174,9 @@ _range(start::Any    , step::Any    , stop::Nothing, len::Nothing) = range_error
 _range(start::Any    , step::Any    , stop::Nothing, len::Any    ) = range_start_step_length(start, step, len)
 _range(start::Any    , step::Any    , stop::Any    , len::Nothing) = range_start_step_stop(start, step, stop)
 _range(start::Any    , step::Any    , stop::Any    , len::Any    ) = range_error(start, step, stop, len)
+
+range_stop(stop) = oneunit(stop):stop
+range_stop(stop::Integer) = Base.OneTo(stop)
 
 range_stop_length(stop, length) = (stop-length+1):stop
 

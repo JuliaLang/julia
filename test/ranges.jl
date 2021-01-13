@@ -17,6 +17,22 @@
         # the next one uses ==, because it changes the eltype
         @test r  == range(start=first(r), stop=last(r), length=length(r))
         @test r === range(                stop=last(r), length=length(r))
+
+        r = 1:5
+        o = OneTo(5)
+        let start=first(r), step=step(r), stop=last(r), length=length(r)
+        @test o === range(                     length)
+        @test o === range(;              stop        )
+        @test o === range(;                    length)
+        @test r === range(; start,       stop        )
+        @test r === range(;              stop, length)
+        # the next four uses ==, because it changes the eltype
+        @test r ==  range(;        step, stop        )
+        @test r ==  range(;        step,       length)
+        @test r ==  range(; start,       stop, length)
+        @test r ==  range(; start, step,       length)
+        @test r ==  range(Float64(stop))
+        end
     end
 end
 
