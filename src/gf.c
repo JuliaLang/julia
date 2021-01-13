@@ -1025,7 +1025,7 @@ static jl_method_instance_t *cache_method(
         // In most cases `!jl_isa_compileable_sig(tt, definition))`,
         // although for some cases, (notably Varargs)
         // we might choose a replacement type that's preferable but not strictly better
-        cache_with_orig = !jl_subtype(compilationsig, definition->sig);
+        cache_with_orig = !jl_subtype((jl_value_t*)compilationsig, definition->sig);
     }
     // TODO: maybe assert(jl_isa_compileable_sig(compilationsig, definition));
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)compilationsig, sparams);
