@@ -409,6 +409,7 @@ function lex_comment(l::Lexer, doemit=true)
             readchar(l)
         end
     else
+        pc = '#'
         c = readchar(l) # consume the '='
         n_start, n_end = 1, 0
         while true
@@ -418,12 +419,13 @@ function lex_comment(l::Lexer, doemit=true)
             nc = readchar(l)
             if c == '#' && nc == '='
                 n_start += 1
-            elseif c == '=' && nc == '#'
+            elseif c == '=' && nc == '#' && pc != '#'
                 n_end += 1
             end
             if n_start == n_end
                 return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN(token_type(l))
             end
+            pc = c
             c = nc
         end
     end
