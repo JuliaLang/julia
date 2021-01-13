@@ -195,12 +195,11 @@ saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
 saved_active_project = Base.ACTIVE_PROJECT[]
 
-push!(empty!(LOAD_PATH), "project")
-append!(empty!(DEPOT_PATH), [mktempdir(), "depot"])
+push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
+append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
 Base.ACTIVE_PROJECT[] = nothing
 
-@test load_path() == [abspath("project","Project.toml")]
-
+@test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
 
 # locate `tail(names)` package by following the search path graph through `names` starting from `where`
 function recurse_package(where::PkgId, name::String, names::String...)
