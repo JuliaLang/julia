@@ -24,7 +24,7 @@ $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
 	# Force-enable MD4
-	sed "s|//#define MBEDTLS_MD4_C|#define MBEDTLS_MD4_C|" -i $(SRCCACHE)/$(MBEDTLS_SRC)/include/mbedtls/config.h
+	sed -i.org "s|//#define MBEDTLS_MD4_C|#define MBEDTLS_MD4_C|" $(SRCCACHE)/$(MBEDTLS_SRC)/include/mbedtls/config.h
 	touch -c $(SRCCACHE)/$(MBEDTLS_SRC)/CMakeLists.txt # old target
 	echo 1 > $@
 
@@ -37,7 +37,7 @@ $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied: $(SRCCACHE)/$(MBE
 	# are it will be included at least in their next minor release (2.26.0?).
 	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
 		patch -p1 -f < $(SRCDIR)/patches/mbedtls-cmake-findpy.patch
-	echo 1 > @$
+	echo 1 > $@
 
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: \
 	$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied
