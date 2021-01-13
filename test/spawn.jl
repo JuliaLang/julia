@@ -713,7 +713,7 @@ end
     @test strip(String(read(cmd))) == "baz bar"
 
     # Test that `addenv()` works properly with `inherit`
-    withenv("FOO" => "foo") do
+    withenv("FOO" => "foo", "BAR" => nothing) do
         cmd = Cmd(`$shcmd -c "echo \$FOO \$BAR"`)
         @test strip(String(read(cmd))) == "foo"
 
