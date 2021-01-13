@@ -56,10 +56,10 @@ Construct a specialized array with evenly spaced elements and optimized storage 
 Mathematically a range is uniquely determined by any three of `start`, `step`, `stop` and `length`.
 Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
-* Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
-* Call `range` with `step` and either `stop` or `length`. `start` will be assumed to be one.
-* Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be one.
+* Call `range` with fewer than three parameters. Either `stop` or `length` must be specified.
+If not provided, `step` and/or `start` are assumed to be one in that order of precedence.
+
+See Extended Help for additional details on the returned type.
 
 # Examples
 ```jldoctest
@@ -117,9 +117,12 @@ If both are specified as positional arguments, one of `step` or `length` must al
 !!! compat "Julia 1.7"
     Assuming `start` is one when not provided,
     `start` as a keyword argument, or
-    `length` as a positional argument requires at least Julia 1.7.
+    `stop` as a sole positional argument requires at least Julia 1.7.
 
 # Extended Help
+
+If only `length` and `stop` are provided as arguments, `step` rather than `start` is assumed
+to be one.
 
 `range` will produce a `Base.OneTo` when the arguments are Integers and
 * Only `length` is provided
@@ -129,7 +132,7 @@ If both are specified as positional arguments, one of `step` or `length` must al
 * Only `start`  and `stop` are provided
 * Only `length` and `stop` are provided
 
-A `UnitRange` is not produced if `step` is specified even if specified as one.
+A `UnitRange` is not produced if `step` is provided even if specified as one.
 """
 function range end
 
