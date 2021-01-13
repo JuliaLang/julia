@@ -737,8 +737,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // we need the `Task` type itself. We use stack-allocated "raw" `jl_task_t` struct to
     // workaround this chicken-and-egg problem. Note that this relies on GC to be turned
     // off just above as GC fails because we don't/can't allocate the type tag.
-    jl_task_t bootstrap_task;
-    bootstrap_task.gcstack = NULL;
+    jl_task_t bootstrap_task = {0};
+    assert(bootstrap_task.gcstack == NULL);
     jl_current_task = &bootstrap_task;
 
     jl_resolve_sysimg_location(rel);
