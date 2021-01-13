@@ -79,6 +79,9 @@ julia> (; t.x)
 
 !!! compat "Julia 1.5"
     Implicit names from identifiers and dot expressions are available as of Julia 1.5.
+
+!!! compat "Julia 1.7"
+    Use of `getindex` methods with multiple `Symbol`s is available as of Julia 1.7.
 """
 Core.NamedTuple
 
