@@ -261,6 +261,7 @@ end
 
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:Base.AbstractUnitRange, <:Tuple}}) = HasLength()
+EachIndexSupport(::Type{<:Pairs}) = HasEachIndex()
 
 reverse(v::Pairs) = Pairs(v.data, reverse(v.itr))
 

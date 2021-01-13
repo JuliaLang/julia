@@ -641,3 +641,6 @@ eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))
 for f in (:iterate, :getindex)
     @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)
 end
+IteratorIndexable(::Type{<:Cmd}) = IteratorIndexable(fieldtype(Cmd, :exec))
+EachIndexSupport(::Type{<:Cmd}) = EachIndexSupport(fieldtype(Cmd, :exec))
+

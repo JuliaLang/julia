@@ -235,6 +235,8 @@ struct SkipMissing{T}
 end
 IteratorSize(::Type{<:SkipMissing}) = SizeUnknown()
 IteratorEltype(::Type{SkipMissing{T}}) where {T} = IteratorEltype(T)
+IteratorIndexable(::Type{SkipMissing{T}}) where T = IteratorIndexable(T)
+EachIndexSupport(::Type{SkipMissing{T}}) where T = EachIndexSupport(T)
 eltype(::Type{SkipMissing{T}}) where {T} = nonmissingtype(eltype(T))
 
 function iterate(itr::SkipMissing, state...)

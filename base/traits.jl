@@ -60,3 +60,98 @@ struct RangeStepRegular   <: RangeStepStyle end # range with regular step
 struct RangeStepIrregular <: RangeStepStyle end # range with rounding error
 
 RangeStepStyle(instance) = RangeStepStyle(typeof(instance))
+
+# trait for objects that support eachindex
+"""
+    EachIndexSupport(T::Type) -> EachIndexSupport
+
+Given a type, return on of the following values:
+
+* `HasEachIndex()` if `eachindex(x)` returns for some `x::T`.
+* `NoEachIndex()` otherwise
+
+The default value (for types that do not define this function) is `NotEachIndex()`.
+
+```jldoctest
+julia> Base.EachIndexSupport([1,2])
+Base.HasEachIndex()
+
+julia> Base.EachIndexSupport(:x)
+Base.NoEachIndex()
+
+```
+"""
+abstract type EachIndexSupport end
+struct HasEachIndex <: EachIndexSupport end
+struct NoEachIndex <: EachIndexSupport end
+
+EachIndexSupport(x) = EachIndexSupport(typeof(x))
+EachIndexSupport(::Type) = NoEachIndex()
+EachIndexSupport(::Type{<:AbstractArray}) = HasEachIndex()
+EachIndexSupport(::Type{<:AbstractString}) = HasEachIndex()
+EachIndexSupport(::Type{<:AbstractDict}) = HasEachIndex()
+EachIndexSupport(::Type{<:Tuple}) = HasEachIndex()
+EachIndexSupport(::Type{<:NamedTuple}) = HasEachIndex()
+EachIndexSupport(::Type{<:Number}) = HasEachIndex()
+EachIndexSupport(::Type{<:IO}) = HasEachIndex()
+EachIndexSupport(::Type{<:Core.SimpleVector}) = HasEachIndex()
+EachIndexSupport(::Type{<:Generator}) = HasEachIndex()
+
+"""
+    eachindextype(x) -> Union{Type,Missing}
+
+    Given an instance `x`, return the type of `eachindex(x)` if its type's `Base.EachIndexSupport(T)` is `Base.HasEachIndex()`, otherwise return `missing`.
+
+```jldoctest
+julia> Base.eachindextype([1,2,3])
+Base.OneTo{$Int}
+
+julia> Base.eachindextype("abc")
+Base.EachStringIndex{String}
+
+julia> Base.eachindextype(Dict(1=>'a', 2=>'b'))
+Base.KeySet{$Int, Dict{$Int, Char}}
+
+julia> Base.eachindextype(:symbol)
+missing
+
+```
+"""
+eachindextype(x) = eachindextype(x, EachIndexSupport(x))
+eachindextype(x, ::HasEachIndex) = typeof(eachindex(x))
+eachindextype(x, ::NoEachIndex) = missing
+
+# trait for objects that support prevind and nextind
+abstract type AdjacentIndexSupport end
+struct NoAdjacentIndex <: AdjacentIndexSupport end
+struct HasNextInd <: AdjacentIndexSupport end
+struct HasPrevInd <: AdjacentIndexSupport end
+struct HasAdjacentIndex <: AdjacentIndexSupport end
+
+"""
+    AdjacentIndexSupport(T::Type) -> AdjacentIndexSupport
+
+Given a type, return one of the following values:
+
+* `NoAdjacentIndex()` if neither `prevind` or `nextind` are defined for `T`.
+* `HasNextInd()` if `nextind(x,i)` returns for some `x::T` and index `i`.
+* `HasPrevInd()` if `prevind(x,i)` returns for some `x::T` and index `i`.
+* `HasAdjacentIndex()` if both `prevind` and `nextind` are defined for `T`.
+
+The default value (for types that do not define this function) is `NoAdjacentIndex()`.
+
+```jldoctest
+julia> Base.AdjacentIndexSupport([1,2])
+Base.HasAdjacentIndex()
+
+julia> Base.AdjacentIndexSupport(:x)
+Base.NoAdjacentIndex()
+
+```
+"""
+AdjacentIndexSupport(x) = AdjacentIndexSupport(typeof(x))
+AdjacentIndexSupport(::Type) = NoAdjacentIndex()
+AdjacentIndexSupport(::Type{<:AbstractArray}) = HasAdjacentIndex()
+AdjacentIndexSupport(::Type{<:AbstractString}) = HasAdjacentIndex()
+AdjacentIndexSupport(::Type{<:Tuple}) = HasAdjacentIndex()
+AdjacentIndexSupport(::Type{<:NamedTuple}) = HasAdjacentIndex()
