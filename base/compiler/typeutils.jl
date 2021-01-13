@@ -5,7 +5,7 @@
 #####################
 
 function rewrap(@nospecialize(t), @nospecialize(u))
-    if isa(t, TypeVar) || isa(t, Type)
+    if isa(t, TypeVar) || isa(t, Type) || isa(t, Core.TypeofVararg)
         return rewrap_unionall(t, u)
     end
     return t
@@ -221,4 +221,22 @@ function improvable_via_constant_propagation(@nospecialize(t))
         end
     end
     return false
+end
+
+# convert a Union of Tuple types to a Tuple of Unions
+function unswitchtupleunion(u::Union)
+    ts = uniontypes(u)
+    n = -1
+    for t in ts
+        if t isa DataType && t.name === Tuple.name && !isvarargtype(t.parameters[end])
+            if n == -1
+                n = length(t.parameters)
+            elseif n != length(t.parameters)
+                return u
+            end
+        else
+            return u
+        end
+    end
+    Tuple{Any[ Union{Any[t.parameters[i] for t in ts]...} for i in 1:n ]...}
 end

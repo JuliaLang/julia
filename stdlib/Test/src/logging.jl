@@ -40,6 +40,7 @@ end
 
 function handle_message(logger::TestLogger, level, msg, _module,
                         group, id, file, line; kwargs...)
+    @nospecialize
     push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
 end
 

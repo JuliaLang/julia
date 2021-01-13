@@ -623,6 +623,8 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
+    JL_TYPECHK(jl_set_global, module, (jl_value_t*)m);
+    JL_TYPECHK(jl_set_global, symbol, (jl_value_t*)var);
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     JL_GC_PROMISE_ROOTED(bp);
     jl_checked_assignment(bp, val);

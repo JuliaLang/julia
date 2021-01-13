@@ -18,7 +18,7 @@ Command-line option changes
 
 Multi-threading changes
 -----------------------
-
+* If the `JULIA_NUM_THREADS` environment variable is set to `auto`, then the number of threads will be set to the number of CPU threads ([#38952])
 
 Build system changes
 --------------------
@@ -40,10 +40,12 @@ Standard library changes
 ------------------------
 
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
+* `range` now supports `start` as an optional keyword argument ([#38041]).
 * `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
 * `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
 * `escape_string` can now receive a collection of characters in the keyword
   `keep` that are to be kept as they are. ([#38597]).
+* `getindex` can now be used on `NamedTuple`s with multiple values ([#38878])
 * Subtypes of `AbstractRange` now correctly follow the general array indexing
   behavior when indexed by `Bool`s, erroring for scalar `Bool`s and treating
   arrays (including ranges) of `Bool` as an logical index ([#31829])
@@ -71,6 +73,7 @@ Standard library changes
 
 #### Dates
 
+* The `Dates.periods` function can be used to get the `Vector` of `Period`s that comprise a `CompoundPeriod` ([#39169]).
 
 #### Statistics
 

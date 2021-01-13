@@ -650,7 +650,7 @@ static void jl_compilation_sig(
         else if (jl_is_type_type(elt)) { // elt isa Type{T}
             if (very_general_type(decl_i)) {
                 /*
-                  here's a fairly simple heuristic: if this argument slot's
+                  Here's a fairly simple heuristic: if this argument slot's
                   declared type is general (Type or Any),
                   then don't specialize for every Type that got passed.
 
@@ -665,8 +665,9 @@ static void jl_compilation_sig(
                   x::TypeConstructor matches the first but not the second, while
                   also matching all other TypeConstructors. This means neither
                   Type{TC} nor TypeConstructor is more specific.
+
+                  But don't apply this heuristic if the argument is called (issue #36783).
                 */
-                // don't apply this heuristic if the argument is called (issue #36783)
                 int iscalled = i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)));
                 if (!iscalled) {
                     if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
@@ -676,13 +677,13 @@ static void jl_compilation_sig(
             else if (jl_is_type_type(jl_tparam0(elt)) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
                      (jl_is_type_type(jl_tparam0(jl_tparam0(elt))) || !jl_has_free_typevars(decl_i))) {
-                // TODO: this is probably solidly unsound and would corrupt the cache in many cases
                 /*
                   actual argument was Type{...}, we computed its type as
-                  Type{Type{...}}. we must avoid unbounded nesting here, so
-                  cache the signature as Type{T}, unless something more
-                  specific like Type{Type{Int32}} was actually declared.
-                  this can be determined using a type intersection.
+                  Type{Type{...}}. we like to avoid unbounded nesting here, so
+                  compile (and hopefully cache) the signature as Type{T},
+                  unless something more specific like Type{Type{Int32}} was
+                  actually declared. this can be determined using a type
+                  intersection.
                 */
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 if (i < nargs || !definition->isva) {
@@ -1024,12 +1025,12 @@ static jl_method_instance_t *cache_method(
     intptr_t nspec = (mt == NULL || mt == jl_type_type_mt || mt == jl_nonfunction_mt ? definition->nargs + 1 : mt->max_args + 2);
     jl_compilation_sig(tt, sparams, definition, nspec, &newparams);
     if (newparams) {
-        cache_with_orig = 0;
         compilationsig = jl_apply_tuple_type(newparams);
         temp2 = (jl_value_t*)compilationsig;
         // In most cases `!jl_isa_compileable_sig(tt, definition))`,
         // although for some cases, (notably Varargs)
         // we might choose a replacement type that's preferable but not strictly better
+        cache_with_orig = !jl_subtype((jl_value_t*)compilationsig, definition->sig);
     }
     // TODO: maybe assert(jl_isa_compileable_sig(compilationsig, definition));
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)compilationsig, sparams);
@@ -1038,7 +1039,6 @@ static jl_method_instance_t *cache_method(
     jl_svec_t* guardsigs = jl_emptysvec;
     if (!cache_with_orig && mt) {
         // now examine what will happen if we chose to use this sig in the cache
-        // TODO: should we first check `compilationsig <: definition`?
         size_t min_valid2 = 1;
         size_t max_valid2 = ~(size_t)0;
         temp = ml_matches(mt, 0, compilationsig, MAX_UNSPECIALIZED_CONFLICTS, 1, 1, world, 0, &min_valid2, &max_valid2, NULL);
