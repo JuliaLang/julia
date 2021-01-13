@@ -115,7 +115,7 @@ function range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing
     if length === nothing && step === nothing
         step = 1
     end
-    range(start, step, stop, length)
+    _range(start, step, stop, length)
 end
 
 range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, step=nothing) =
