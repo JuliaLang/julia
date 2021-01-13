@@ -97,8 +97,6 @@ julia> range(1, 3.5, step=2)
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 
-Both `start`  and `stop` may be specified as either a positional or keyword arguments.
-
 !!! compat "Julia 1.1"
     `stop` as a positional argument requires at least Julia 1.1.
 
