@@ -563,3 +563,8 @@ end
     @test collect(tokenize(s))[1].kind == Tokenize.Tokens.STRING
 end
 
+@testset "comments" begin 
+    s = "#=# text=#"
+    @test length(collect(tokenize(s, Tokens.RawToken))) == 2
+end
+
