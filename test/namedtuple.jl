@@ -23,9 +23,6 @@
 @test (x=4, y=5, z=6).z == 6
 @test (x=4, y=5, z=6)[(:x, :y)] == (x=4, y=5)
 @test (x=4, y=5, z=6)[(:x,)] == (x=4,)
-# If the following are included, is it worth putting in 1 line with above, eg:
-# @test (x=4, y=5, z=6)[(:x, :y)] == (x=4, y=5, z=6)[[:x, :y]] == (x=4, y=5)
-# or keep separate, eg:
 @test (x=4, y=5, z=6)[[:x, :y]] == (x=4, y=5)
 @test (x=4, y=5, z=6)[[:x]] == (x=4,)
 @test (x=4, y=5, z=6)[()] == NamedTuple()
