@@ -17,6 +17,11 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
         @test sf.Vt'sf.Vt ≊ [1]
         @test sf.U*Diagonal(sf.S)*sf.Vt' ≊ m
     end
+    F = svd(m, full=true)
+    @test size(F.Q) == (2, 2)
+    @test F.S ≊ [2, 0]
+    @test F.U'F.U ≊ Matrix(I, 2, 2)
+    @test F.Vt'*F.Vt ≊ [1]
     @test @inferred(svdvals(3:4)) ≊ [5]
 
     m1 = [2 0; 0 0]

@@ -94,9 +94,9 @@ function svd!(A::StridedMatrix{T}; full::Bool = false, alg::Algorithm = default_
     if m == 0 || n == 0
         u, s, vt = (Matrix{T}(I, m, full ? m : n), real(zeros(T,0)), Matrix{T}(I, n, n))
     else
-        u, s, vt = _svd!(A,full,alg)
+        u, s, vt = _svd!(A, full, alg)
     end
-    SVD(u,s,vt)
+    SVD(u, s, vt)
 end
 function svd!(A::StridedVector{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T<:BlasFloat}
     m = length(A)
@@ -107,7 +107,8 @@ function svd!(A::StridedVector{T}; full::Bool = false, alg::Algorithm = default_
         normalize!(A)
         return SVD(reshape(A, (m, 1)), [normA], ones(T, 1, 1))
     else
-        return _svd!(reshape(A, (m, 1)), full, alg)
+        u, s, vt = _svd!(reshape(A, (m, 1)), full, alg)
+        return SVD(u, s, vt)
     end
 end
 
