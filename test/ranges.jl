@@ -863,6 +863,7 @@ end
     @test 1:10 != 2:10 != 2:11 != Base.OneTo(11)
     @test Base.OneTo(10) != Base.OneTo(11) != 1:10
     @test Base.OneTo(0) == 5:4
+    @test oneto(5) == 1:5
 end
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
@@ -1271,6 +1272,7 @@ end
         @test isempty(r)
         @test length(r) == 0
         @test size(r) == (0,)
+        @test r === oneto(-5)
     end
     let r = Base.OneTo(3)
         @test !isempty(r)
@@ -1290,6 +1292,7 @@ end
         @test broadcast(+, r, 1) === 2:4
         @test 2*r === 2:2:6
         @test r + r === 2:2:6
+        @test r === oneto(3)
         k = 0
         for i in r
             @test i == (k += 1)
@@ -1317,6 +1320,7 @@ end
     @test Base.OneTo{Int32}(1:2) === Base.OneTo{Int32}(2)
     @test Base.OneTo(Int32(1):Int32(2)) === Base.OneTo{Int32}(2)
     @test Base.OneTo{Int16}(3.0) === Base.OneTo{Int16}(3)
+    @test oneto(9) === Base.OneTo{Int}(9)
     @test_throws InexactError(:Int16, Int16, 3.2) Base.OneTo{Int16}(3.2)
 end
 
