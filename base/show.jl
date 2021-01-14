@@ -789,15 +789,19 @@ function show_unionaliases(io::IO, x::Union)
 end
 
 function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
-    show(io, x)
-    if !print_without_params(x) && get(io, :compact, true)
+    if !print_without_params(x)
         properx = makeproper(io, x)
         if make_typealias(properx) !== nothing || (unwrap_unionall(x) isa Union && x <: make_typealiases(properx)[2])
-            print(io, " (alias for ")
-            show(IOContext(io, :compact => false), x)
-            print(io, ")")
+            show(IOContext(io, :compact => true), x)
+            if !(get(io, :compact, false)::Bool)
+                print(io, " (alias for ")
+                show(IOContext(io, :compact => false), x)
+                print(io, ")")
+            end
+            return
         end
     end
+    show(io, x)
     # give a helpful hint for function types
     if x isa DataType && x !== UnionAll && !(get(io, :compact, false)::Bool)
         tn = x.name::Core.TypeName
