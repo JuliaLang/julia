@@ -1847,3 +1847,17 @@ let A = Tuple{T, Ref{T}, T} where {T},
     @test_broken I <: A
     @test_broken I <: B
 end
+
+# issue #39218
+let A = Int, B = String, U = Union{A, B}
+    @test issub_strict(Union{Tuple{A, A}, Tuple{B, B}}, Tuple{U, U})
+    @test issub_strict(Union{Tuple{A, A}, Tuple{B, B}}, Tuple{Union{A, B}, Union{A, B}})
+end
+
+struct A39218 end
+struct B39218 end
+const AB39218 = Union{A39218,B39218}
+f39218(::T, ::T) where {T<:AB39218} = false
+g39218(a, b) = (@nospecialize; if a isa AB39218 && b isa AB39218; f39218(a, b); end;)
+@test g39218(A39218(), A39218()) === false
+@test_throws MethodError g39218(A39218(), B39218())
