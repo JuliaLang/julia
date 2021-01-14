@@ -8,6 +8,22 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
 @testset "Simple svdvals / svd tests" begin
     ≊(x,y) = isapprox(x,y,rtol=1e-15)
 
+    m = [2, 0]
+    @test @inferred(svdvals(m)) ≊ [2]
+    @test @inferred(svdvals!(float(m))) ≊ [2]
+    for sf in (@inferred(svd(m)), @inferred(svd!(float(m))))
+        @test sf.S ≊ [2]
+        @test sf.U'sf.U ≊ [1]
+        @test sf.Vt'sf.Vt ≊ [1]
+        @test sf.U*Diagonal(sf.S)*sf.Vt' ≊ m
+    end
+    F = @inferred svd(m, full=true)
+    @test size(F.U) == (2, 2)
+    @test F.S ≊ [2]
+    @test F.U'F.U ≊ Matrix(I, 2, 2)
+    @test F.Vt'*F.Vt ≊ [1]
+    @test @inferred(svdvals(3:4)) ≊ [5]
+
     m1 = [2 0; 0 0]
     m2 = [2 -2; 1 1]/sqrt(2)
     m2c = Complex.([2 -2; 1 1]/sqrt(2))
@@ -15,8 +31,8 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
     @test @inferred(svdvals(m2))  ≊ [2, 1]
     @test @inferred(svdvals(m2c)) ≊ [2, 1]
 
-    sf1 = svd(m1)
-    sf2 = svd(m2)
+    sf1 = @inferred svd(m1)
+    sf2 = @inferred svd(m2)
     @test sf1.S ≊ [2, 0]
     @test sf2.S ≊ [2, 1]
     # U & Vt are unitary
