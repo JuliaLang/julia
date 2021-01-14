@@ -290,7 +290,7 @@ rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.
 
-The default behaviour is to remove leading whitespace and delimiters: see
+The default behaviour is to remove leading and trailing whitespace and delimiters: see
 [`isspace`](@ref) for precise details.
 
 The optional `chars` argument specifies which characters to remove: it can be a single
