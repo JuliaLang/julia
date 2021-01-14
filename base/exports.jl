@@ -405,6 +405,7 @@ export
     minmax,
     ndims,
     ones,
+    oneto,
     parent,
     parentindices,
     partialsort,
