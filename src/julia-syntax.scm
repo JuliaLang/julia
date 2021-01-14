@@ -2000,7 +2000,7 @@
             (argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
                               (expand-forms `(curly (core Tuple) ,@argtypes))
                               (reverse tvars))))
-       `(opaque_closure ,argtype ,lam)))
+       `(_opaque_closure ,argtype ,lam)))
 
    'block
    (lambda (e)
@@ -3576,7 +3576,7 @@ f(x) = yt(x)
                         `(call (core isdefined) ,sym (inert contents))
                         e))
                    (else e))))
-          ((opaque_closure)
+          ((_opaque_closure)
            (let* ((lam2 (caddr e))
                   (vis  (lam:vinfo lam2))
                   (cvs  (map car (cadr vis))))

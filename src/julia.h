@@ -355,10 +355,11 @@ struct _jl_method_instance_t {
 // OpaqueClosure
 typedef struct jl_opaque_closure_t {
     JL_DATA_TYPE
-    jl_value_t *env;
+    jl_value_t *captures;
+    size_t world;
     union {
-        jl_value_t *code;
-        jl_code_info_t *source;
+        jl_value_t *source;
+        jl_code_info_t *code;
         jl_method_t *method;
     };
     jl_fptr_args_t invoke;

@@ -1,51 +1,63 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-JL_DLLEXPORT jl_value_t *jl_invoke_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs)
+JL_DLLEXPORT jl_value_t *jl_invoke_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
-    // TODO: Compiler support
-    jl_value_t *argt = jl_tparam0(jl_typeof(clos));
-    if (nargs != jl_tupletype_length(argt))
+    jl_value_t *argt = jl_tparam0(jl_typeof(oc));
+    if (!jl_tupletype_length_compat(argt, nargs))
         jl_error("Incorrect argument count for OpaqueClosure");
     argt = jl_unwrap_unionall(argt);
     assert(jl_is_datatype(argt));
-    for (int i = 0; i < nargs; ++i)
-        jl_typeassert(args[i], jl_field_type((jl_datatype_t*)argt, i));
-    jl_value_t *ret;
+    jl_svec_t *types = jl_get_fieldtypes((jl_datatype_t*)argt);
+    size_t ntypes = jl_svec_len(types);
+    for (int i = 0; i < nargs; ++i) {
+        jl_typeassert(args[i], i > ntypes ?
+            jl_unwrap_vararg(jl_svecref(types, ntypes-1)) : jl_svecref(types, i));
+    }
+    jl_value_t *ret = NULL;
     JL_GC_PUSH1(&ret);
-    if (jl_is_method(clos->source)) {
-        // args[0] is implicitly the environment, not the closure object itself.
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    ptls->world_age = oc->world;
+    if (jl_is_method(oc->source)) {
+        // args[0] is implicitly the captures, not the closure object itself.
         // N.B.: jl_interpret_opaque_closure handles this internally.
-        ret = jl_gf_invoke_by_method((jl_method_t*)clos->source, (jl_value_t*)clos->env, args, nargs + 1);
+        ret = jl_gf_invoke_by_method((jl_method_t*)oc->source, (jl_value_t*)oc->captures, args, nargs + 1);
     }
     else {
-        ret = jl_interpret_opaque_closure(clos, args, nargs);
+        ret = jl_interpret_opaque_closure(oc, args, nargs);
     }
-    jl_typeassert(ret, jl_tparam1(jl_typeof(clos)));
+    jl_typeassert(ret, jl_tparam1(jl_typeof(oc)));
+    ptls->world_age = last_age;
     JL_GC_POP();
     return ret;
 }
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub, jl_value_t *source, jl_value_t **env, size_t nenv)
 {
-    JL_TYPECHK(new_opaque_closure, type, (jl_value_t*)argt);
+    if (!jl_is_tuple_type((jl_value_t*)argt)) {
+        jl_error("OpaqueClosure argument tuple must be a tuple type");
+    }
     JL_TYPECHK(new_opaque_closure, type, rt_lb);
     JL_TYPECHK(new_opaque_closure, type, rt_ub);
     if (!jl_is_method(source) && !jl_is_code_info(source)) {
         jl_error("Invalid OpaqueClosure source");
     }
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *clos_t;
-    jl_opaque_closure_t *clos;
-    JL_GC_PUSH2(&clos_t, &clos);
-    clos_t = jl_apply_type2((jl_value_t*)jl_opaque_closure_type, (jl_value_t*)argt, rt_ub);
-    clos = (jl_opaque_closure_t*)jl_gc_alloc(ptls, sizeof(jl_opaque_closure_t), clos_t);
-    clos->source = (jl_code_info_t*)source;
-    clos->invoke = (jl_fptr_args_t)jl_invoke_opaque_closure;
-    clos->specptr = NULL;
-    clos->env = jl_f_tuple(NULL, env, nenv);
+    jl_value_t *oc_type JL_ALWAYS_LEAFTYPE;
+    oc_type = jl_apply_type2((jl_value_t*)jl_opaque_closure_type, (jl_value_t*)argt, rt_ub);
+    JL_GC_PROMISE_ROOTED(oc_type);
+    jl_value_t *captures = NULL;
+    JL_GC_PUSH1(&captures);
+    captures = jl_f_tuple(NULL, env, nenv);
+    jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ptls, sizeof(jl_opaque_closure_t), oc_type);
     JL_GC_POP();
-    return clos;
+    oc->source = source;
+    oc->invoke = (jl_fptr_args_t)jl_invoke_opaque_closure;
+    oc->specptr = NULL;
+    oc->captures = captures;
+    oc->world = jl_world_counter;
+    return oc;
 }
 
 JL_CALLABLE(jl_new_opaque_closure_jlcall)
@@ -58,6 +70,6 @@ JL_CALLABLE(jl_new_opaque_closure_jlcall)
 
 JL_CALLABLE(jl_f_opaque_closure_call)
 {
-    jl_opaque_closure_t* opaque = (jl_opaque_closure_t*)F;
-    return opaque->invoke(F, args, nargs);
+    jl_opaque_closure_t* oc = (jl_opaque_closure_t*)F;
+    return oc->invoke(F, args, nargs);
 }

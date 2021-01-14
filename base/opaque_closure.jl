@@ -9,7 +9,7 @@ function show(io::IO, ::MIME"text/plain", oc::Core.OpaqueClosure{A, R}) where {A
 end
 
 """
-    @opaque (args...)->...
+    @opaque (args...) -> body
 
 Marks a given closure as "opaque". Opaque closures capture the
 world age of their creation (as opposed to their invocation).

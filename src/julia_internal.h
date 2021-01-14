@@ -599,19 +599,23 @@ STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT
     return jl_unbox_long(len);
 }
 
-// number of fields subtypes of this tuple type are required to have or -1
-// if indeterminate
-STATIC_INLINE size_t jl_tupletype_length(jl_value_t *v) JL_NOTSAFEPOINT
+// check whether the specified number of arguments is compatible with the
+// specified number of paramters of the tuple type
+STATIC_INLINE int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTSAFEPOINT
 {
     v = jl_unwrap_unionall(v);
     assert(jl_is_tuple_type(v));
     size_t nparams = jl_nparams(v);
     if (nparams == 0)
-        return 0;
+        return nargs == 0;
     jl_value_t *va = jl_tparam(v,nparams-1);
-    if (jl_is_vararg(va))
-        return nparams - 1 + jl_vararg_length(va);
-    return nparams;
+    if (jl_is_vararg(va)) {
+        jl_value_t *len = jl_unwrap_vararg_num(v);
+        if (jl_is_long(len))
+            return nargs == nparams - 1 + jl_unbox_long(len);
+        return nargs >= nparams - 1;
+    }
+    return nparams == nargs;
 }
 
 STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t) JL_NOTSAFEPOINT

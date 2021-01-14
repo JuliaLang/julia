@@ -110,3 +110,15 @@ function uses_frontend_opaque(x)
     @opaque y->x+y
 end
 @test uses_frontend_opaque(10)(8) == 18
+
+# World age mechanism
+function test_oc_world_age end
+mk_oc_world_age() = @opaque ()->test_oc_world_age()
+g_world_age = @opaque ()->test_oc_world_age()
+h_world_age = mk_oc_world_age()
+test_oc_world_age() = 1
+@test_throws MethodError g_world_age()
+@test_throws MethodError h_world_age()
+@test mk_oc_world_age()() == 1
+g_world_age = @opaque ()->test_oc_world_age()
+@test g_world_age() == 1

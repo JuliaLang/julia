@@ -666,27 +666,27 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
 
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs)
 {
-    jl_code_info_t *source = NULL;
-    jl_value_t *code = clos->code;
-    if (jl_is_method(code)) {
-        source = (jl_code_info_t*)clos->method->source;
+    jl_code_info_t *code = NULL;
+    jl_value_t *source = clos->source;
+    if (jl_is_method(source)) {
+        code = (jl_code_info_t*)clos->method->source;
     }
     else {
-        source = clos->source;
+        code = clos->code;
     }
-    jl_array_t *stmts = source->code;
+    jl_array_t *stmts = code->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     interpreter_state *s;
-    unsigned nroots = jl_source_nslots(source) + jl_source_nssavalues(source) + 2;
+    unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
     locals[0] = (jl_value_t*)clos;
     // The analyzer has some trouble with this
     locals[1] = (jl_value_t*)stmts;
     JL_GC_PROMISE_ROOTED(stmts);
-    locals[2] = (jl_value_t*)clos->env;
+    locals[2] = (jl_value_t*)clos->captures;
     s->locals = locals + 2;
-    s->src = source;
+    s->src = code;
     s->module = NULL;
     s->sparam_vals = NULL;
     s->preevaluation = 0;
@@ -694,6 +694,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **
     s->mi = NULL;
     for (int i = 0; i < nargs; ++i)
         s->locals[1 + i] = args[i];
+    JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
     return r;
