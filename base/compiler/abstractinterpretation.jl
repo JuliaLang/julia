@@ -792,13 +792,13 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         cnd = argtypes[2]
         if isa(cnd, Conditional)
             newcnd = widenconditional(cnd)
+            tx = argtypes[3]
+            ty = argtypes[4]
             if isa(newcnd, Const)
                 # if `cnd` is constant, we should just respect its constantness to keep inference accuracy
-                return newcnd.val ? tx : ty
+                return newcnd.val::Bool ? tx : ty
             else
                 # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
-                tx = argtypes[3]
-                ty = argtypes[4]
                 a = ssa_def_slot(fargs[3], sv)
                 b = ssa_def_slot(fargs[4], sv)
                 if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
