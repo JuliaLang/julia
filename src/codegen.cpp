@@ -1376,7 +1376,7 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
     return jl_cgval_t(v, typ, NULL);
 }
 
-static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ);
+static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ, Value **skip=nullptr);
 
 // --- allocating local variables ---
 
@@ -1437,7 +1437,7 @@ static void CreateConditionalAbort(IRBuilder<> &irbuilder, Value *test)
 
 #include "cgutils.cpp"
 
-static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ)
+static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ, Value **skip)
 {
     // previous value was a split union, compute new index, or box
     Value *new_tindex = ConstantInt::get(T_int8, 0x80);
@@ -1462,6 +1462,10 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                     // new value doesn't need to be boxed
                     // since it isn't part of the new union
                     t = true;
+                    if (skip) {
+                        Value *skip1 = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, idx));
+                        *skip = *skip ? ctx.builder.CreateOr(*skip, skip1) : skip1;
+                    }
                 }
                 else {
                     // will actually need to box this element
@@ -1552,7 +1556,8 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
             if (v.V == NULL) {
                 // v.V might be NULL if it was all ghost objects before
                 return jl_cgval_t(boxv, NULL, false, typ, new_tindex);
-            } else {
+            }
+            else {
                 Value *isboxv = ctx.builder.CreateIsNotNull(boxv);
                 Value *slotv;
                 MDNode *tbaa;
@@ -1584,7 +1589,7 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
 
 // given a value marked with type `v.typ`, compute the mapping and/or boxing to return a value of type `typ`
 // TODO: should this set TIndex when trivial (such as 0x80 or concrete types) ?
-static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ)
+static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ, Value **skip)
 {
     if (typ == (jl_value_t*)jl_typeofbottom_type)
         return ghostValue(typ); // normalize TypeofBottom to Type{Union{}}
@@ -1595,6 +1600,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
         return ghostValue(typ);
     Value *new_tindex = NULL;
     if (jl_is_concrete_type(typ)) {
+        assert(skip == nullptr && "skip only valid for union type return");
         if (v.TIndex && !jl_is_pointerfree(typ)) {
             // discovered that this union-split type must actually be isboxed
             if (v.Vboxed) {
@@ -1617,7 +1623,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     else {
         bool makeboxed = false;
         if (v.TIndex) {
-            return convert_julia_type_union(ctx, v, typ);
+            return convert_julia_type_union(ctx, v, typ, skip);
         }
         else if (!v.isboxed && jl_is_uniontype(typ)) {
             // previous value was unboxed (leaftype), statically compute union tindex
@@ -1636,6 +1642,11 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
             }
             else if (jl_subtype(v.typ, typ)) {
                 makeboxed = true;
+            }
+            else if (skip) {
+                // undef
+                *skip = ConstantInt::get(T_int1, 1);
+                return jl_cgval_t();
             }
             else {
                 // unreachable
@@ -6919,12 +6930,16 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                         V = boxed(ctx, val);
                     }
                     else {
+                        // XXX: must emit undef here (rather than a bitcast or
+                        //      load of val) if the runtime type of val isn't phiType
                         V = emit_unbox(ctx, VN->getType(), val, phiType);
                     }
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());
                     assert(!TindexN);
                 }
                 else if (dest && val.typ != (jl_value_t*)jl_bottom_type) {
+                    // XXX: must emit undef here (rather than a bitcast or
+                    //      load of val) if the runtime type of val isn't phiType
                     assert(lty != T_prjlvalue);
                     (void)emit_unbox(ctx, lty, val, phiType, maybe_decay_tracked(ctx, dest));
                 }
@@ -6957,7 +6972,10 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     }
                 }
                 else {
-                    jl_cgval_t new_union = convert_julia_type(ctx, val, phiType);
+                    Value *skip = NULL;
+                    // must compute skip here, since the runtime type of val might not be in phiType
+                    // caution: only Phi and PhiC are allowed to do this (and maybe sometimes Pi)
+                    jl_cgval_t new_union = convert_julia_type(ctx, val, phiType, &skip);
                     RTindex = new_union.TIndex;
                     if (!RTindex) {
                         assert(new_union.isboxed && new_union.Vboxed && "convert_julia_type failed");
@@ -6972,11 +6990,12 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     if (VN)
                         V = new_union.Vboxed ? new_union.Vboxed : V_rnull;
                     if (dest) { // basically, if !ghost union
-                        Value *skip = NULL;
-                        if (new_union.Vboxed != nullptr)
-                            skip = ctx.builder.CreateICmpNE( // if 0x80 is set, we won't select this slot anyways
+                        if (new_union.Vboxed != nullptr) {
+                            Value *isboxed = ctx.builder.CreateICmpNE( // if 0x80 is set, we won't select this slot anyways
                                     ctx.builder.CreateAnd(RTindex, ConstantInt::get(T_int8, 0x80)),
                                     ConstantInt::get(T_int8, 0));
+                            skip = skip ? ctx.builder.CreateOr(isboxed, skip) : isboxed;
+                        }
                         emit_unionmove(ctx, dest, tbaa_arraybuf, new_union, skip);
                     }
                 }
