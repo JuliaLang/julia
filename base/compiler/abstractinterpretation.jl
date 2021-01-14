@@ -549,8 +549,8 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
         if _any(t -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
             return Any[Vararg{Any}], nothing
         end
-        result = Any[rewrap_unionall(p, tti0) for p in utis[1].parameters]
-        for t in utis[2:end]
+        result = Any[rewrap_unionall(p, tti0) for p in (utis[1]::DataType).parameters]
+        for t::DataType in utis[2:end]
             if length(t.parameters) != length(result)
                 return Any[Vararg{Any}], nothing
             end
@@ -782,8 +782,9 @@ end
 
 function argtype_by_index(argtypes::Vector{Any}, i::Int)
     n = length(argtypes)
-    if isvarargtype(argtypes[n])
-        return i >= n ? unwrapva(argtypes[n]) : argtypes[i]
+    na = argtypes[n]
+    if isvarargtype(na)
+        return i >= n ? unwrapva(na) : argtypes[i]
     else
         return i > n ? Bottom : argtypes[i]
     end
@@ -826,7 +827,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
     if f === getfield && isa(fargs, Vector{Any}) && la == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
         cti, _ = precise_container_type(interp, nothing, argtypes[2], sv)
-        idx = argtypes[3].val
+        idx = argtypes[3].val::Int
         if 1 <= idx <= length(cti)
             rt = unwrapva(cti[idx])
         end
@@ -904,10 +905,11 @@ end
 function abstract_call_unionall(argtypes::Vector{Any})
     if length(argtypes) == 3
         canconst = true
-        if isa(argtypes[3], Const)
-            body = argtypes[3].val
-        elseif isType(argtypes[3])
-            body = argtypes[3].parameters[1]
+        a3 = argtypes[3]
+        if isa(a3, Const)
+            body = a3.val
+        elseif isType(a3)
+            body = a3.parameters[1]
             canconst = false
         else
             return Any
@@ -916,11 +918,11 @@ function abstract_call_unionall(argtypes::Vector{Any})
             return Any
         end
         if has_free_typevars(body)
-            if isa(argtypes[2], Const)
-                tv = argtypes[2].val
-            elseif isa(argtypes[2], PartialTypeVar)
-                ptv = argtypes[2]
-                tv = ptv.tv
+            a2 = argtypes[2]
+            if isa(a2, Const)
+                tv = a2.val
+            elseif isa(a2, PartialTypeVar)
+                tv = a2.tv
                 canconst = false
             else
                 return Any
@@ -1110,7 +1112,7 @@ end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::VarTable, sv::InferenceState)
     if e.head === :static_parameter
-        n = e.args[1]
+        n = e.args[1]::Int
         t = Any
         if 1 <= n <= length(sv.sptypes)
             t = sv.sptypes[n]
@@ -1129,7 +1131,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
     elseif isa(e, Slot)
-        return vtypes[slot_id(e)].typ
+        return (vtypes[slot_id(e)]::VarState).typ
     elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name)
     end
