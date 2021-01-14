@@ -513,7 +513,9 @@ $(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLV
 endif # LLVM_VER 10.0
 
 ifeq ($(LLVM_VER_SHORT),11.0)
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1)) # remove for LLVM 12
+endif # LLVM_VER 11.0.0
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # replaced by D90969 for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS)) # Needs upstreaming
@@ -523,13 +525,17 @@ $(eval $(call LLVM_PATCH,llvm-11-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 $(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
+endif # LLVM_VER 11.0.0
 $(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa)) # Needs upstreaming
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
 endif
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D90722-rtdyld-absolute-relocs)) # remove for LLVM 12
+endif # LLVM_VER 11.0.0
 $(eval $(call LLVM_PATCH,llvm-invalid-addrspacecast-sink)) # upstreamed as D92210
 $(eval $(call LLVM_PATCH,llvm-11-D92906-ppc-setjmp)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-PR48458-X86ISelDAGToDAG)) # remove for LLVM 12
@@ -538,6 +544,8 @@ $(eval $(call LLVM_PATCH,llvm-11-D93154-globalisel-as))
 $(eval $(call LLVM_PATCH,llvm-11-ppc-half-ctr)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-ppc-sp-from-bp)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D94828-ppc-half-fpconv))
+$(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps.patch))
 endif # LLVM_VER 11.0
 
 
