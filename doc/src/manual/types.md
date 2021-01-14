@@ -916,10 +916,11 @@ julia> isa(("1",1,2,3.0), mytupletype)
 false
 ```
 
-Notice that `Vararg{T}` corresponds to zero or more elements of type `T`. Vararg tuple types are
+Moreover `Vararg{T}` corresponds to zero or more elements of type `T`. Vararg tuple types are
 used to represent the arguments accepted by varargs methods (see [Varargs Functions](@ref)).
 
-The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
+The special value `Vararg{T,N}` (when used as the last parameter of a tuple type)
+corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
 alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` elements of type `T`.
 
 ### Named Tuple Types
