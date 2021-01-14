@@ -421,7 +421,7 @@ OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
 
 Create an `AbstractRange` that behaves like to `1:n`. The returned
 range may be more efficient than using `1:n` since the lower limit
-is guaranteed to be one by the type system. The definition in `Base`
+is guaranteed to be 1 by the type system. The definition in `Base`
 requires that `n` be an `Integer`.
 
 See also [`Base.OneTo`](@ref).
