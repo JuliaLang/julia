@@ -443,7 +443,7 @@ julia> collect( oneto(6) )
 julia> oneto(5.5)
 ERROR: MethodError: no method matching Base.OneTo(::Float64)
 ...
-````
+```
 """
 oneto(r) = OneTo(r)
 
