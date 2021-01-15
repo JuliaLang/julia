@@ -417,14 +417,11 @@ OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
 
 """
-    oneto(n)
+    oneto(n::Integer)
 
-Create an `AbstractRange` that behaves like to `1:n`. The returned
-range may be more efficient than using `1:n` since the lower limit
-is guaranteed to be one by the type system. The definition in `Base`
-requires that `n` be an `Integer`.
-
-See also [`Base.OneTo`](@ref).
+Create an [`AbstractRange`](@ref) that behaves like to `1:n`
+where `n` must be an Integer. The returned `AbstractRange`
+may be more efficient than `1:n`. See also [`range`](@ref).
 
 # Examples
 ```jldoctest
@@ -440,9 +437,11 @@ julia> collect( oneto(6) )
  5
  6
 
+julia> oneto(3) == range(1; stop = 3)
+true
+
 julia> oneto(5.5)
 ERROR: MethodError: no method matching Base.OneTo(::Float64)
-...
 ```
 """
 oneto(r) = OneTo(r)

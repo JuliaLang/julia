@@ -41,7 +41,7 @@ Standard library changes
 
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 * `range` now supports `start` as an optional keyword argument ([#38041]).
-* `oneto` is exported and allows access to `Base.OneTo`, an optimized version of `1:n` where `n` is an `Integer` ([#39242]).
+* `oneto` is exported and returns the equivalen to `1:n` where `n` is an `Integer` ([#39242]).
 * `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
 * `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
 * `escape_string` can now receive a collection of characters in the keyword
