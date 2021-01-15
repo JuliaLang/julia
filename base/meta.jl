@@ -243,7 +243,7 @@ julia> Meta.parse("x = 3")
 :(x = 3)
 
 julia> Meta.parse("x = ")
-:($(Expr(:incomplete, "incomplete: premature end of input")))
+Expr(:incomplete, "incomplete: premature end of input")
 
 julia> Meta.parse("1.0.2")
 ERROR: Base.Meta.ParseError("invalid numeric constant \\\"1.0.\\\"")
@@ -251,7 +251,7 @@ Stacktrace:
 [...]
 
 julia> Meta.parse("1.0.2"; raise = false)
-:($(Expr(:error, "invalid numeric constant \"1.0.\"")))
+Expr(:error, "invalid numeric constant \\"1.0.\\"")
 ```
 """
 function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
