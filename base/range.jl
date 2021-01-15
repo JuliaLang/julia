@@ -421,7 +421,8 @@ OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
 
 Create an [`AbstractRange`](@ref) that behaves like to `1:n`
 where `n` must be an Integer. The returned `AbstractRange`
-may be more efficient than `1:n`. See also [`range`](@ref).
+may be more efficient than `1:n`. See also [`:`](@ref) and
+[`range`](@ref).
 
 # Examples
 ```jldoctest
