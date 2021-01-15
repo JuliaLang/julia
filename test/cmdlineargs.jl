@@ -719,3 +719,6 @@ for yn in ("no", "yes")
     end
     @test v[2]
 end
+
+# issue #39259, shadowing `ARGS`
+@test success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
