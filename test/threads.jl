@@ -100,6 +100,10 @@ function Base.uvfinalize(t::UvTestIdle)
     nothing
 end
 
+function Base.close(idle::UvTestIdle)
+    Base.uvfinalize(idle)
+end
+
 function Base.wait(idle::UvTestIdle)
     Base.iolock_begin()
     Base.preserve_handle(idle)
@@ -129,12 +133,14 @@ proc = open(pipeline(`$(Base.julia_cmd()) -e $cmd`; stderr=stderr); write=true)
 
 let idle=UvTestIdle()
     wait(idle)
+    close(idle)
 end
 
 using Base.Threads
 @threads for i = 1:1
     let idle=UvTestIdle()
         wait(idle)
+        close(idle)
     end
 end
 
