@@ -334,7 +334,11 @@ function symbol_latex(s::String)
                                         REPLCompletions.emoji_symbols))
             symbols_latex[v] = k
         end
+
+        # Overwrite with canonical mapping when a symbol has several completions (#39148)
+        merge!(symbols_latex, REPLCompletions.symbols_latex_canonical)
     end
+
     return get(symbols_latex, s, "")
 end
 function repl_latex(io::IO, s::String)
