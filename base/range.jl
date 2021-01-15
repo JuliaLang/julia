@@ -430,7 +430,7 @@ julia> oneto(5)
 Base.OneTo(5)
 
 julia> collect( oneto(6) )
-6-element Array{Int64,1}:
+6-element Vector{Int64}:
  1
  2
  3
