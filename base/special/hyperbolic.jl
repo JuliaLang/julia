@@ -263,5 +263,6 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     else
         # in b)
         t = log((T(1)+absx)/(T(1)-absx))
+    end
     return T(0.5)*copysign(t, x)
 end
