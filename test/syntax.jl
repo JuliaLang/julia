@@ -2649,3 +2649,32 @@ end
 
 # issue #38501
 @test :"a $b $("str") c" == Expr(:string, "a ", :b, " ", Expr(:string, "str"), " c")
+
+@testset "property destructuring" begin
+    res = begin (; num, den) = 1 // 2 end
+    @test res == 1 // 2
+    @test num == 1
+    @test den == 2
+
+    res = begin (; b, a) = (a=1, b=2, c=3) end
+    @test res == (a=1, b=2, c=3)
+    @test b == 2
+    @test a == 1
+
+    # could make this an error instead, but I think this is reasonable
+    res = begin (; a, b, a) = (a=5, b=6) end
+    @test res == (a=5, b=6)
+    @test a == 5
+    @test b == 6
+
+    @test_throws ErrorException (; a, b) = (x=1,)
+
+    @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x end), :error)
+    @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x, y end), :error)
+    @test Meta.isexpr(Meta.@lower(begin (; c, a.b) = x end), :error)
+
+    f((; a, b)) = a, b
+    @test f((b=3, a=4)) == (4, 3)
+    @test f((b=3, c=2, a=4)) == (4, 3)
+    @test_throws ErrorException f((;))
+end

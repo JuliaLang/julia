@@ -1950,6 +1950,66 @@
                ,@(map expand-forms (cddr e))))
         (cons (car e) (map expand-forms (cdr e))))))
 
+(define (expand-tuple-destruct lhss x)
+  (define (sides-match? l r)
+    ;; l and r either have equal lengths, or r has a trailing ...
+    (cond ((null? l)          (null? r))
+          ((vararg? (car l))  #t)
+          ((null? r)          #f)
+          ((vararg? (car r))  (null? (cdr r)))
+          (else               (sides-match? (cdr l) (cdr r)))))
+  (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple) (not (any assignment? (cdr x)))
+           (not (has-parameters? (cdr x)))
+           (sides-match? lhss (cdr x)))
+      ;; (a, b, ...) = (x, y, ...)
+      (expand-forms
+       (tuple-to-assignments lhss x))
+      ;; (a, b, ...) = other
+      (begin
+        ;; like memq, but if last element of lhss is (... sym),
+        ;; check against sym instead
+        (define (in-lhs? x lhss)
+          (if (null? lhss)
+              #f
+              (let ((l (car lhss)))
+                (cond ((and (pair? l) (eq? (car l) '|...|))
+                       (if (null? (cdr lhss))
+                           (eq? (cadr l) x)
+                           (error (string "invalid \"...\" on non-final assignment location \""
+                                          (cadr l) "\""))))
+                      ((eq? l x) #t)
+                      (else (in-lhs? x (cdr lhss)))))))
+        ;; in-lhs? also checks for invalid syntax, so always call it first
+        (let* ((xx  (if (or (and (not (in-lhs? x lhss)) (symbol? x))
+                            (ssavalue? x))
+                        x (make-ssavalue)))
+               (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
+               (n   (length lhss))
+               ;; skip last assignment if it is an all-underscore vararg
+               (n   (if (> n 0)
+                        (let ((l (last lhss)))
+                          (if (and (vararg? l) (underscore-symbol? (cadr l)))
+                              (- n 1)
+                              n))
+                        n))
+               (st  (gensy)))
+          `(block
+            ,@(if (> n 0) `((local ,st)) '())
+            ,@ini
+            ,@(map (lambda (i lhs)
+                     (expand-forms
+                       (if (vararg? lhs)
+                           `(= ,(cadr lhs) (call (top rest) ,xx ,@(if (eq? i 0) '() `(,st))))
+                           (lower-tuple-assignment
+                             (if (= i (- n 1))
+                                 (list lhs)
+                                 (list lhs st))
+                             `(call (top indexed_iterate)
+                                    ,xx ,(+ i 1) ,@(if (eq? i 0) '() `(,st)))))))
+                   (iota n)
+                   lhss)
+            (unnecessary ,xx))))))
+
 ;; move an assignment into the last statement of a block to keep more statements at top level
 (define (sink-assignment lhs rhs)
   (if (and (pair? rhs) (eq? (car rhs) 'block))
@@ -2102,67 +2162,24 @@
                 (call (top setproperty!) ,aa ,bb ,rr)
                 (unnecessary ,rr)))))
          ((tuple)
-          ;; multiple assignment
           (let ((lhss (cdr lhs))
                 (x    (caddr e)))
-            (define (sides-match? l r)
-              ;; l and r either have equal lengths, or r has a trailing ...
-              (cond ((null? l)          (null? r))
-                    ((vararg? (car l))  #t)
-                    ((null? r)          #f)
-                    ((vararg? (car r))  (null? (cdr r)))
-                    (else               (sides-match? (cdr l) (cdr r)))))
-            (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple) (not (any assignment? (cdr x)))
-                     (not (has-parameters? (cdr x)))
-                     (sides-match? lhss (cdr x)))
-                ;; (a, b, ...) = (x, y, ...)
-                (expand-forms
-                 (tuple-to-assignments lhss x))
-                ;; (a, b, ...) = other
-                (begin
-                  ;; like memq, but if last element of lhss is (... sym),
-                  ;; check against sym instead
-                  (define (in-lhs? x lhss)
-                    (if (null? lhss)
-                        #f
-                        (let ((l (car lhss)))
-                          (cond ((and (pair? l) (eq? (car l) '|...|))
-                                 (if (null? (cdr lhss))
-                                     (eq? (cadr l) x)
-                                     (error (string "invalid \"...\" on non-final assignment location \""
-                                                    (cadr l) "\""))))
-                                ((eq? l x) #t)
-                                (else (in-lhs? x (cdr lhss)))))))
-                  ;; in-lhs? also checks for invalid syntax, so always call it first
-                  (let* ((xx  (if (or (and (not (in-lhs? x lhss)) (symbol? x))
-                                      (ssavalue? x))
-                                  x (make-ssavalue)))
-                         (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
-                         (n   (length lhss))
-                         ;; skip last assignment if it is an all-underscore vararg
-                         (n   (if (> n 0)
-                                  (let ((l (last lhss)))
-                                    (if (and (vararg? l) (underscore-symbol? (cadr l)))
-                                        (- n 1)
-                                        n))
-                                  n))
-                         (st  (gensy)))
-                    `(block
-                      ,@(if (> n 0) `((local ,st)) '())
-                      ,@ini
-                      ,@(map (lambda (i lhs)
-                               (expand-forms
-                                 (if (vararg? lhs)
-                                     `(= ,(cadr lhs) (call (top rest) ,xx ,@(if (eq? i 0) '() `(,st))))
-                                     (lower-tuple-assignment
-                                       (if (= i (- n 1))
-                                           (list lhs)
-                                           (list lhs st))
-                                       `(call (top indexed_iterate)
-                                              ,xx ,(+ i 1) ,@(if (eq? i 0) '() `(,st)))))))
-                             (iota n)
-                             lhss)
-                      (unnecessary ,xx)))))))
+            (if (has-parameters? lhss)
+                ;; property destructuring
+                (if (length= lhss 1)
+                    (let* ((xx (if (symbol-like? x) x (make-ssavalue)))
+                           (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x))))))
+                      `(block
+                         ,@ini
+                         ,@(map (lambda (field)
+                                  (if (not (symbol? field))
+                                      (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+                                  (expand-forms `(= ,field (call (top getproperty) ,xx (quote ,field)))))
+                             (cdar lhss))
+                         (unnecessary ,xx)))
+                    (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+                ;; multiple assignment
+                (expand-tuple-destruct lhss x))))
          ((typed_hcat)
           (error "invalid spacing in left side of indexed assignment"))
          ((typed_vcat)
