@@ -13,7 +13,7 @@ end
 @generated foo(x)=:(ccall("extern foo", llvmcall, $x, ($x,), x))
 bar(x) = ntuple(i -> VecElement{Float16}(x[i]), 2)
 
-# CHECK: call half @foo(half zeroext %{{[0-9]+}})
+# CHECK: call half @foo(half %{{[0-9]+}})
 emit(foo, Float16)
 
 # CHECK: call [2 x half] @foo([2 x half] %{{[0-9]+}})
