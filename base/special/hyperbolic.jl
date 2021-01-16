@@ -244,7 +244,7 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     # 1.Reduced x to positive by atanh(-x) = -atanh(x)
     # 2. Find the branch and the expression to calculate and return it
     #     a) 0 <= x < 0.5
-    #         return 0.5*log1p(2x+2x*x/(1-x))
+    #         return 0.5*log1p(2x/(1-x))
     #     b) 0.5 <= x <= 1
     #         return 0.5*log((x+1)/(1-x))
     # Special cases:
@@ -258,8 +258,7 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     end
     if absx < T(0.5)
         # in a)
-        t = absx+absx
-        t = log1p(t+t*absx/(T(1)-absx))
+        t = log1p(T(2)*absx/(T(1)-absx))
     else
         # in b)
         t = log((T(1)+absx)/(T(1)-absx))
