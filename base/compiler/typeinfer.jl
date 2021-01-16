@@ -298,6 +298,9 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::An
         elseif isa(result_type, PartialStruct)
             rettype_const = result_type.fields
             const_flags = 0x2
+        elseif isa(result_type, InterConditional)
+            rettype_const = result_type
+            const_flags = 0x2
         else
             rettype_const = nothing
             const_flags = 0x00
@@ -773,16 +776,20 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
         update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
+        rettype = code.rettype
         if isdefined(code, :rettype_const)
-            if isa(code.rettype_const, Vector{Any}) && !(Vector{Any} <: code.rettype)
-                return PartialStruct(code.rettype, code.rettype_const), mi
-            elseif code.rettype <: Core.OpaqueClosure && isa(code.rettype_const, PartialOpaque)
-                return code.rettype_const, mi
+            rettype_const = code.rettype_const
+            if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+                return PartialStruct(rettype, rettype_const), mi
+            elseif rettype <: Core.OpaqueClosure && isa(rettype_const, PartialOpaque)
+                return rettype_const, mi
+            elseif isa(rettype_const, InterConditional)
+                return rettype_const, mi
             else
-                return Const(code.rettype_const), mi
+                return Const(rettype_const), mi
             end
         else
-            return code.rettype, mi
+            return rettype, mi
         end
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
