@@ -109,6 +109,7 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) == Vector
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
+@test Core.Compiler.tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
 
 struct SomethingBits
     x::Base.BitIntegerType
@@ -1255,7 +1256,17 @@ end
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
 
-test_const_return((x)->isdefined(x, :re), Tuple{ComplexF64}, true)
+let
+    f = x->isdefined(x, :re)
+    t = Tuple{ComplexF64}
+    interp = Core.Compiler.NativeInterpreter()
+    linfo = get_linfo(f, t)
+    ci = Core.Compiler.getindex(Core.Compiler.code_cache(interp), get_linfo(f, t))
+    rc = ci.rettype_const
+    @test isa(rc, Core.InterConditional)
+    @test rc.vtype === ComplexF64 && rc.elsetype === Union{}
+end
+
 isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]), isdefined, 3)
@@ -1721,6 +1732,66 @@ for expr25261 in opt25261[i:end]
     end
 end
 @test foundslot
+
+@testset "inter-procedural conditional constraint propagation" begin
+    # simple cases
+    isaint(a) = isa(a, Int)
+    @test Base.return_types((Any,)) do a
+        isaint(a) && return a # a::Int
+        return 0
+    end == Any[Int]
+    eqnothing(a) = a === nothing
+    @test Base.return_types((Union{Nothing,Int},)) do a
+        eqnothing(a) && return 0
+        return a # a::Int
+    end == Any[Int]
+
+    # more complicated cases
+    ispositive(a) = isa(a, Int) && a > 0
+    @test Base.return_types((Any,)) do a
+        ispositive(a) && return a # a::Int
+        return 0
+    end == Any[Int]
+    global isaint2
+    isaint2(a::Int)           = true
+    isaint2(@nospecialize(_)) = false
+    @test Base.return_types((Any,)) do a
+        isaint2(a) && return a # a::Int
+        return 0
+    end == Any[Int]
+    global ispositive2
+    ispositive2(a::Int)           = a > 0
+    ispositive2(@nospecialize(_)) = false
+    @test Base.return_types((Any,)) do a
+        ispositive2(a) && return a # a::Int
+        return 0
+    end == Any[Int]
+
+    # type constraints from multiple constant boolean return types
+    function f(x)
+        isa(x, Int) && return true
+        isa(x, Symbol) && return true
+        return false
+    end
+    @test Base.return_types((Any,)) do x
+        f(x) && return x # x::Union{Int,Symbol}
+        return nothing
+    end == Any[Union{Int,Symbol,Nothing}]
+
+    # with Base functions
+    @test Base.return_types((Any,)) do a
+        Base.Fix2(isa, Int)(a) && return sin(a) # a::Float64
+        return 0.0
+    end == Any[Float64]
+    @test Base.return_types((Union{Nothing,Int},)) do a
+        isnothing(a) && return 0
+        return a # a::Int
+    end == Any[Int]
+    @test_broken Base.return_types((Any,)) do x
+        Meta.isexpr(x, :call) && return x # x::Expr, ideally
+        return nothing
+    end == Any[Union{Nothing,Expr}]
+end
 
 function f25579(g)
     h = g[]
