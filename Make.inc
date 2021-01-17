@@ -1043,7 +1043,7 @@ endif # SYSTEM_LLVM
 # Windows builds need a little help finding the LLVM libraries for llvm-config
 LLVM_CONFIG_PATH_FIX :=
 ifeq ($(OS),WINNT)
-LLVM_CONFIG_PATH_FIX := PATH="$(PATH):$(build_bindir)"
+LLVM_CONFIG_PATH_FIX := PATH="$(build_bindir):$(PATH)"
 endif
 
 ifeq ($(BUILD_OS),$(OS))
