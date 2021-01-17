@@ -1580,6 +1580,7 @@ cat_indices(A::AbstractArray, d) = axes(A, d)
 cat_similar(A, T, shape) = Array{T}(undef, shape)
 cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
 
+# These are for backwards compatiblity (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
 function cat_shape(dims, shapes::Tuple)
     out_shape = ()
@@ -1588,6 +1589,11 @@ function cat_shape(dims, shapes::Tuple)
     end
     return out_shape
 end
+# The new way to compute the shape (more inferrable than combining cat_size & cat_shape, due to Varargs + issue#36454)
+cat_size_shape(dims) = ntuple(zero, Val(length(dims)))
+@inline cat_size_shape(dims, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, (), cat_size(X)), tail...)
+_cat_size_shape(dims, shape) = shape
+@inline _cat_size_shape(dims, shape, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, shape, cat_size(X)), tail...)
 
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
@@ -1631,7 +1637,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, map(cat_size, X))
+    shape = cat_size_shape(catdims, X...)
     A = cat_similar(X[1], T, shape)
     if count(!iszero, catdims)::Int > 1
         fill!(A, zero(T))
