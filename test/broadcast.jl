@@ -995,9 +995,6 @@ end
     struct Cyclotomic <: Number
     end
 
-    Base.getindex(x::Cyclotomic, i::Integer) = i
-
-    Base.length(x::Cyclotomic) = 1
     Base.eltype(::Type{<:Cyclotomic}) = Tuple{Int,Int}
 
     Base.:*(c::T, x::Cyclotomic) where {T<:Real} = [1, 2]
