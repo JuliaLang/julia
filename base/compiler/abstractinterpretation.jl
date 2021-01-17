@@ -994,14 +994,16 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
         return CallMeta(abstract_call_known(interp, <:, fargs, argtypes, sv).rt, false)
-    elseif la == 2 && isa(argtypes[2], Const) && isa(argtypes[2].val, SimpleVector) && istopfunction(f, :length)
+    elseif la == 2 &&
+           (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
+           istopfunction(f, :length)
         # mark length(::SimpleVector) as @pure
-        return CallMeta(Const(length(argtypes[2].val)), MethodResultPure())
-    elseif la == 3 && isa(argtypes[2], Const) && isa(argtypes[3], Const) &&
-            isa(argtypes[2].val, SimpleVector) && isa(argtypes[3].val, Int) && istopfunction(f, :getindex)
+        return CallMeta(Const(length(svecval)), MethodResultPure())
+    elseif la == 3 &&
+           (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
+           (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
+           istopfunction(f, :getindex)
         # mark getindex(::SimpleVector, i::Int) as @pure
-        svecval = argtypes[2].val::SimpleVector
-        idx = argtypes[3].val::Int
         if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
             return CallMeta(Const(getindex(svecval, idx)), MethodResultPure())
         end
@@ -1012,6 +1014,14 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif la == 3 && istopfunction(f, :typejoin)
         val = pure_eval_call(f, argtypes)
         return CallMeta(val === false ? Type : val, MethodResultPure())
+    elseif la ≥ 3 &&
+           (a3 = argtypes[3]; isa(a3, Const) && isa(a3.val, Int)) &&
+           (a2 = argtypes[2]; a2 ⊑ Tuple && isa(a2, Union)) &&
+           (istopfunction(f, :getindex) || istopfunction(f, :indexed_iterate))
+        # special case tuple indexing functions when it's indexing into union of tuples
+        # so that `unswitchtupleunion` here will convert union call signature into single
+        # call signature and then constant prop' can reveal more precise return type
+        argtypes[2] = unswitchtupleunion(a2)
     end
     atype = argtypes_to_type(argtypes)
     return abstract_call_gf_by_type(interp, f, argtypes, atype, sv, max_methods)

@@ -3008,3 +3008,25 @@ f38888() = S38888(Base.inferencebarrier(3))
 @test f38888() isa S38888
 g38888() = S38888(Base.inferencebarrier(3), nothing)
 @test g38888() isa S38888
+
+@testset "indexing into union of tuples" begin
+    tt = (Union{Tuple{Int,String},Tuple{Int,Char}},)
+
+    # `getindex`
+    @test Base.return_types(tt) do t
+        getindex(t, 1)
+    end == Any[Int]
+    @test Base.return_types(tt) do t
+        getindex(t, 2)
+    end == Any[Union{String,Char}]
+
+    # `indexed_iterate`
+    @test Base.return_types(tt) do t
+        a, b = t
+        a
+    end == Any[Int]
+    @test Base.return_types(tt) do t
+        a, b = t
+        b
+    end == Any[Union{String,Char}]
+end
