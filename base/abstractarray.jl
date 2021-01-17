@@ -1481,7 +1481,7 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-_typed_vcat_similar(V, T, n) = similar(V[1], T, n)
+_typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
 _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
     _typed_vcat!(_typed_vcat_similar(V, T, mapreduce(length, +, V)), V)
 
@@ -1577,8 +1577,8 @@ cat_size(A::AbstractArray, d) = size(A, d)
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
 
-cat_similar(A, T, shape) = Array{T}(undef, shape)
-cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
+cat_similar(A, ::Type{T}, shape) where T = Array{T}(undef, shape)
+cat_similar(A::AbstractArray, ::Type{T}, shape) where T = similar(A, T, shape)
 
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
 function cat_shape(dims, shapes::Tuple)
