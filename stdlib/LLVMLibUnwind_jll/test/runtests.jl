@@ -7,6 +7,7 @@ using LLVMLibUnwind_jll: llvmlibunwind_handle
     if Sys.isapple()
         @test dlsym(llvmlibunwind_handle, :unw_getcontext; throw_error=false) !== nothing
         @test dlsym(llvmlibunwind_handle, :unw_init_local; throw_error=false) !== nothing
+        @test dlsym(llvmlibunwind_handle, :unw_init_local_dwarf; throw_error=false) !== nothing
         @test dlsym(llvmlibunwind_handle, :unw_step; throw_error=false) !== nothing
         @test dlsym(llvmlibunwind_handle, :unw_get_reg; throw_error=false) !== nothing
         @test dlsym(llvmlibunwind_handle, :unw_set_reg; throw_error=false) !== nothing
