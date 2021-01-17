@@ -417,8 +417,8 @@ StrangeType18623(x,y) = (x,y)
 let
     f(A, n) = broadcast(x -> +(x, n), A)
     @test @inferred(f([1.0], 1)) == [2.0]
-    g() = (a = 1; Broadcast.combine_eltypes(x -> x + a, (1.0,)))
-    @test @inferred(g()) === Float64
+    g() = (a = 1; x -> x + a)
+    @test @inferred(broadcast(g(), 1.0)) === 2.0
 end
 
 # Ref as 0-dimensional array for broadcast
@@ -576,8 +576,9 @@ end
 
 # Test that broadcast's promotion mechanism handles closures accepting more than one argument.
 # (See issue #19641 and referenced issues and pull requests.)
-let f() = (a = 1; Broadcast.combine_eltypes((x, y) -> x + y + a, (1.0, 1.0)))
-    @test @inferred(f()) == Float64
+let
+    f() = (a = 1; (x, y) -> x + y + a)
+    @test @inferred(broadcast(f(), 1.0, 1.0)) === 3.0
 end
 
 @testset "broadcast resulting in BitArray" begin
