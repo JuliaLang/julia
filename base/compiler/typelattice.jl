@@ -126,12 +126,7 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     @assert !isa(b, TypeVar) "invalid lattice item"
     if isa(a, Conditional)
         if isa(b, Conditional)
-            issubconditional(a, b) && return true
-            b = maybe_extract_const_bool(b)
-            if b isa Bool && maybe_extract_const_bool(a) === b
-                return true
-            end
-            return false
+            return issubconditional(a, b)
         elseif isa(b, Const) && isa(b.val, Bool)
             return maybe_extract_const_bool(a) === b.val
         end
