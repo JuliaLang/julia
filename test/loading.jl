@@ -46,7 +46,7 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
 @test !endswith(@__DIR__, Base.Filesystem.path_separator)
-let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
+let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no --color=no`,
     wd = sprint(show, pwd())
     s_dir = sprint(show, realpath(tempdir()))
     @test wd != s_dir
