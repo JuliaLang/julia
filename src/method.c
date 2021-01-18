@@ -18,6 +18,9 @@ extern "C" {
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
+
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
@@ -150,14 +153,24 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 i++;
             }
             if (e->head == new_opaque_closure_sym) {
-                JL_NARGSV(opaque closure definition, 4);
-                for (; i < 3; i++) {
+                JL_NARGSV(opaque closure definition, 5);
+                for (; i < 4; i++) {
                     // TODO: this should be making a copy, not mutating the source
                     jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals, binding_effects, eager_resolve));
                 }
-                jl_value_t *ci = jl_exprarg(e, 3);
-                if (jl_is_code_info(ci)) {
+                jl_value_t *source = jl_exprarg(e, 4);
+                if (jl_is_expr(source) && strcmp(jl_symbol_name(((jl_expr_t*)source)->head), "opaque_closure_method") == 0) {
+                    if (jl_expr_nargs(source) != 3) {
+                        jl_error("opaque_closure_method: invalid syntax");
+                    }
+                    jl_value_t *nargs = jl_exprarg(source, 0);
+                    jl_value_t *functionloc = jl_exprarg(source, 1);
+                    jl_value_t *ci = jl_exprarg(source, 2);
+                    if (!jl_is_code_info(ci)) {
+                        jl_error("opaque_closure_method: lambda should be a CodeInfo");
+                    }
                     jl_resolve_globals_in_ir((jl_array_t*)((jl_code_info_t*)ci)->code, module, NULL, binding_effects);
+                    jl_exprargset(e, i, jl_make_opaque_closure_method(module, nargs, functionloc, (jl_code_info_t*)ci));
                     i++;
                 }
             }
@@ -642,6 +655,26 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 }
 
 // method definition ----------------------------------------------------------
+
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
+{
+    jl_method_t *m = jl_new_method_uninit(module);
+    JL_GC_PUSH1(&m);
+    // TODO: Maybe have a signature of (parent method, stmt#)?
+    m->sig = (jl_value_t*)jl_anytuple_type;
+    // Unused for opaque closures. va-ness is determined on construction
+    m->isva = 0;
+    m->name = jl_symbol("opaque closure");
+    m->nargs = jl_unbox_long(nargs) + 1;
+    assert(jl_is_linenode(functionloc));
+    jl_value_t *file = jl_linenode_file(functionloc);
+    m->file = jl_is_symbol(file) ? (jl_sym_t*)file : empty_sym;
+    m->line = jl_linenode_line(functionloc);
+    jl_method_set_source(m, ci);
+    JL_GC_POP();
+    return m;
+}
 
 // empty generic function def
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,

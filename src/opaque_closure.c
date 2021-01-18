@@ -19,30 +19,23 @@ JL_DLLEXPORT jl_value_t *jl_invoke_opaque_closure(jl_opaque_closure_t *oc, jl_va
     jl_ptls_t ptls = jl_get_ptls_states();
     size_t last_age = ptls->world_age;
     ptls->world_age = oc->world;
-    if (jl_is_method(oc->source)) {
-        // args[0] is implicitly the captures, not the closure object itself.
-        // N.B.: jl_interpret_opaque_closure handles this internally.
-        ret = jl_gf_invoke_by_method((jl_method_t*)oc->source, (jl_value_t*)oc->captures, args, nargs + 1);
-    }
-    else {
-        ret = jl_interpret_opaque_closure(oc, args, nargs);
-    }
+    ret = jl_interpret_opaque_closure(oc, args, nargs);
     jl_typeassert(ret, jl_tparam1(jl_typeof(oc)));
     ptls->world_age = last_age;
     JL_GC_POP();
     return ret;
 }
 
-jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub, jl_value_t *source, jl_value_t **env, size_t nenv)
+jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva,
+    jl_value_t *rt_lb, jl_value_t *rt_ub, jl_method_t *source, jl_value_t **env, size_t nenv)
 {
     if (!jl_is_tuple_type((jl_value_t*)argt)) {
         jl_error("OpaqueClosure argument tuple must be a tuple type");
     }
+    JL_TYPECHK(new_opaque_closure, bool, isva);
     JL_TYPECHK(new_opaque_closure, type, rt_lb);
     JL_TYPECHK(new_opaque_closure, type, rt_ub);
-    if (!jl_is_method(source) && !jl_is_code_info(source)) {
-        jl_error("Invalid OpaqueClosure source");
-    }
+    JL_TYPECHK(new_opaque_closure, method, source);
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *oc_type JL_ALWAYS_LEAFTYPE;
     oc_type = jl_apply_type2((jl_value_t*)jl_opaque_closure_type, (jl_value_t*)argt, rt_ub);
@@ -53,6 +46,7 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ptls, sizeof(jl_opaque_closure_t), oc_type);
     JL_GC_POP();
     oc->source = source;
+    oc->isva = jl_unbox_bool(isva);
     oc->invoke = (jl_fptr_args_t)jl_invoke_opaque_closure;
     oc->specptr = NULL;
     oc->captures = captures;
@@ -62,10 +56,10 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
 
 JL_CALLABLE(jl_new_opaque_closure_jlcall)
 {
-    if (nargs < 4)
+    if (nargs < 5)
         jl_error("new_opaque_closure: Not enough arguments");
     return (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)args[0],
-        args[1], args[2], args[3], &args[4], nargs-4);
+        args[1], args[2], args[3], (jl_method_t*)args[4], &args[5], nargs-5);
 }
 
 JL_CALLABLE(jl_f_opaque_closure_call)

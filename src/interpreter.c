@@ -275,9 +275,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
             argv[i] = eval_value(args[i], s);
-        JL_NARGSV(new_opaque_closure, 4);
+        JL_NARGSV(new_opaque_closure, 5);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], argv+4, nargs-4);
+            argv[3], (jl_method_t*)argv[4], argv+5, nargs-5);
         JL_GC_POP();
         return ret;
     }
@@ -664,38 +664,38 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     return r;
 }
 
-jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs)
+jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
-    jl_code_info_t *code = NULL;
-    jl_value_t *source = clos->source;
-    if (jl_is_method(source)) {
-        code = (jl_code_info_t*)clos->method->source;
-    }
-    else {
-        code = clos->code;
-    }
-    jl_array_t *stmts = code->code;
-    assert(jl_typeis(stmts, jl_array_any_type));
+    jl_method_t *source = oc->source;
+    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_array_t*)source->source);
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
-    locals[0] = (jl_value_t*)clos;
+    locals[0] = (jl_value_t*)oc;
     // The analyzer has some trouble with this
-    locals[1] = (jl_value_t*)stmts;
-    JL_GC_PROMISE_ROOTED(stmts);
-    locals[2] = (jl_value_t*)clos->captures;
+    locals[1] = (jl_value_t*)code;
+    JL_GC_PROMISE_ROOTED(code);
+    locals[2] = (jl_value_t*)oc->captures;
     s->locals = locals + 2;
     s->src = code;
-    s->module = NULL;
+    s->module = source->module;
     s->sparam_vals = NULL;
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = NULL;
-    for (int i = 0; i < nargs; ++i)
-        s->locals[1 + i] = args[i];
+
+    size_t defargs = source->nargs;
+    int isva = !!oc->isva;
+    assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
+    for (size_t i = 1; i < defargs - isva; i++)
+        s->locals[i] = args[i - 1];
+    if (isva) {
+        assert(defargs >= 2);
+        s->locals[defargs - 1] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
+    }
     JL_GC_ENABLEFRAME(s);
-    jl_value_t *r = eval_body(stmts, s, 0, 0);
+    jl_value_t *r = eval_body(code->code, s, 0, 0);
     JL_GC_POP();
     return r;
 }

@@ -356,12 +356,9 @@ struct _jl_method_instance_t {
 typedef struct jl_opaque_closure_t {
     JL_DATA_TYPE
     jl_value_t *captures;
+    uint8_t isva;
     size_t world;
-    union {
-        jl_value_t *source;
-        jl_code_info_t *code;
-        jl_method_t *method;
-    };
+    jl_method_t *source;
     jl_fptr_args_t invoke;
     void *specptr;
 } jl_opaque_closure_t;
@@ -1597,9 +1594,9 @@ JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 #define JL_NARGSV(fname, min)                           \
     if (nargs < min) jl_too_few_args(#fname, min);
 
-#define JL_TYPECHK(fname, type, v)                                      \
-    if (!jl_is_##type(v)) {                                             \
-        jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (v));      \
+#define JL_TYPECHK(fname, type, v)                                              \
+    if (!jl_is_##type(v)) {                                                     \
+        jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (jl_value_t*)(v)); \
     }
 #define JL_TYPECHKS(fname, type, v)                                     \
     if (!jl_is_##type(v)) {                                             \
