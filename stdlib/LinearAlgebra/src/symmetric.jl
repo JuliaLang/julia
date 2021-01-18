@@ -837,6 +837,13 @@ function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Not
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
+function eigen!(A::RealHermSymComplexHerm{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
+    U = cholesky(B).U
+    vals, w = eigen!(Hermitian(U' \ A / U))
+    vecs = U \ w
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
+end
+
 eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix} =
     LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
 eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix} =
