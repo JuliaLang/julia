@@ -26,6 +26,15 @@ import Markdown
     @test all(duplicates .∈ Ref(keys(REPLCompletions.symbols_latex_canonical)))
 end
 
+@testset "quoting in doc search" begin
+    str = let buf = IOBuffer()
+        Core.eval(Main, REPL.helpmode(buf, "mutable s"))
+        String(take!(buf))
+    end
+    @test occursin("'mutable struct'", str)
+    @test occursin("Couldn't find 'mutable s'", str)
+end
+
 @testset "Non-Markdown" begin
     # https://github.com/JuliaLang/julia/issues/37765
     @test isa(REPL.insert_hlines(IOBuffer(), Markdown.Text("foo")), Markdown.Text)
