@@ -790,12 +790,19 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
     else
         root = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur)
     end
+    count_hidden = root.count - sum([last(x).count for x in root.down])
     if isempty(root.down)
-        warning_empty()
+        warning_empty(count_hidden)
         return
     end
     print_tree(io, root, cols, fmt)
-    Base.println(io, "Total snapshots: ", root.count)
+    if count_hidden == 0
+        Base.println(io, "Total snapshots: ", root.count)
+    else
+        Base.println(io, "Total snapshots: ", root.count - count_hidden,
+        " (An additional ", count_hidden,
+        " low-level calls were hidden. Use `Profile.print(C=true)` to show all snapshots)")
+    end
     nothing
 end
 
@@ -860,9 +867,19 @@ function liperm(lilist::Vector{StackFrame})
     return sortperm(lilist, lt = lt)
 end
 
-warning_empty() = @warn """
+function warning_empty(count_hidden::Int = 0)
+    if count_hidden > 0
+        @warn """
+            There were $count_hidden samples collected, but they are all attributed to
+            low-level calls and have been hidden. Run `Profile.print(C=true)` to show these.
+            Also, you may want to try running your program longer (perhaps by running it multiple times),
+            or adjust the delay between samples with `Profile.init()`."""
+    else
+        @warn """
             There were no samples collected. Run your program longer (perhaps by
             running it multiple times), or adjust the delay between samples with
             `Profile.init()`."""
+    end
+end
 
 end # module
