@@ -3933,7 +3933,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     ctx.builder.SetInsertPoint(b0);
     FunctionCallee theFunc;
     Value *theFarg;
-    if (codeinst->invoke != NULL) {
+    if (params.cache && codeinst->invoke != NULL) {
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->invoke, codeinst);
         theFunc = M->getOrInsertFunction(theFptrName, jlinvoke_func->getFunctionType());
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
