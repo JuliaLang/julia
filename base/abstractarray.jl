@@ -1580,7 +1580,7 @@ cat_indices(A::AbstractArray, d) = axes(A, d)
 cat_similar(A, T, shape) = Array{T}(undef, shape)
 cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
 
-# These are for backwards compatiblity (even though internal)
+# These are for backwards compatibility (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
 function cat_shape(dims, shapes::Tuple)
     out_shape = ()
