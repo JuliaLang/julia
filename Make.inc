@@ -454,10 +454,6 @@ CXX_DISABLE_ASSERTION := -DJL_NDEBUG
 DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
-ifeq ($(LLVM_ASSERTIONS),0)
-CXX_DISABLE_ASSERTION += -DNDEBUG
-endif
-
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)
@@ -1198,12 +1194,6 @@ endif
 endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
-
-
-
-# Use the Assertions build
-BINARYBUILDER_LLVM_ASSERTS ?= 0
-
 
 
 # OS specific stuff
