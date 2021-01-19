@@ -181,6 +181,7 @@ bigval_t *big_objects_marked = NULL;
 // `to_finalize` should not have tagged pointers.
 arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
+int jl_gc_have_pending_finalizers = 0;
 
 NOINLINE uintptr_t gc_get_stack_ptr(void)
 {
@@ -261,6 +262,7 @@ static void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
 {
     arraylist_push(&to_finalize, o);
     arraylist_push(&to_finalize, f);
+    jl_gc_have_pending_finalizers = 1;
 }
 
 static void run_finalizer(jl_ptls_t ptls, jl_value_t *o, jl_value_t *ff)
@@ -386,10 +388,22 @@ static void run_finalizers(jl_ptls_t ptls)
     if (to_finalize.items == to_finalize._space) {
         copied_list.items = copied_list._space;
     }
+    jl_gc_have_pending_finalizers = 0;
     arraylist_new(&to_finalize, 0);
     // This releases the finalizers lock.
     jl_gc_run_finalizers_in_list(ptls, &copied_list);
     arraylist_free(&copied_list);
+}
+
+JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_ptls_t ptls)
+{
+    if (ptls == NULL)
+        ptls = jl_get_ptls_states();
+    if (!ptls->in_finalizer && ptls->locks.len == 0 && ptls->finalizers_inhibited == 0) {
+        ptls->in_finalizer = 1;
+        run_finalizers(ptls);
+        ptls->in_finalizer = 0;
+    }
 }
 
 JL_DLLEXPORT int jl_gc_get_finalizers_inhibited(jl_ptls_t ptls)
@@ -397,6 +411,22 @@ JL_DLLEXPORT int jl_gc_get_finalizers_inhibited(jl_ptls_t ptls)
     if (ptls == NULL)
         ptls = jl_get_ptls_states();
     return ptls->finalizers_inhibited;
+}
+
+JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->finalizers_inhibited++;
+}
+
+JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+#ifdef NDEBUG
+    ptls->finalizers_inhibited--;
+#else
+    jl_gc_enable_finalizers(ptls, 1);
+#endif
 }
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on)
@@ -421,10 +451,8 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on)
         return;
     }
     ptls->finalizers_inhibited = new_val;
-    if (!new_val && old_val && !ptls->in_finalizer && ptls->locks.len == 0) {
-        ptls->in_finalizer = 1;
-        run_finalizers(ptls);
-        ptls->in_finalizer = 0;
+    if (jl_gc_have_pending_finalizers) {
+        jl_gc_run_pending_finalizers(ptls);
     }
 }
 
