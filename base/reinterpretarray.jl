@@ -278,7 +278,8 @@ eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A
 
 parent(a::ReinterpretArray) = a.parent
 dataids(a::ReinterpretArray) = dataids(a.parent)
-unaliascopy(a::ReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))
+unaliascopy(a::NonReshapedReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))
+unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, unaliascopy(a.parent))
 
 function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
