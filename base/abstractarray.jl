@@ -1643,6 +1643,13 @@ end
 __cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(zero, length(shape)), X...)
 
 function __cat_offset!(A, shape, catdims, offsets, x, X...)
+    # splitting the "work" on x from X... may reduce latency (fewer costly specializations)
+    newoffsets = __cat_offset1!(A, shape, catdims, offsets, x)
+    return __cat_offset!(A, shape, catdims, newoffsets, X...)
+end
+__cat_offset!(A, shape, catdims, offsets) = A
+
+function __cat_offset1!(A, shape, catdims, offsets, x)
     inds = ntuple(length(offsets)) do i
         (i <= length(catdims) && catdims[i]) ? offsets[i] .+ cat_indices(x, i) : 1:shape[i]
     end
@@ -1654,9 +1661,8 @@ function __cat_offset!(A, shape, catdims, offsets, x, X...)
     newoffsets = ntuple(length(offsets)) do i
         (i <= length(catdims) && catdims[i]) ? offsets[i] + cat_size(x, i) : offsets[i]
     end
-    return __cat_offset!(A, shape, catdims, newoffsets, X...)
+    return newoffsets
 end
-__cat_offset!(A, shape, catdims, offsets) = return A
 
 """
     vcat(A...)
