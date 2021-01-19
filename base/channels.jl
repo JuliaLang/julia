@@ -425,6 +425,16 @@ lock(c::Channel) = lock(c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
 trylock(c::Channel) = trylock(c.cond_take)
 
+
+function lock(f, c::Channel)
+    lock(c)
+    try
+        return f()
+    finally
+        unlock(c)
+    end
+end
+
 function wait(c::Channel)
     isready(c) && return
     lock(c)
