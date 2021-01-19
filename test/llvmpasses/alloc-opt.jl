@@ -5,6 +5,8 @@
 isz = sizeof(UInt) == 8 ? "i64" : "i32"
 
 println("""
+target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
+
 @tag = external addrspace(10) global {}
 """)
 
@@ -167,7 +169,7 @@ define void @object_field({} addrspace(10)* %field) {
 # CHECK-LABEL: }{{$}}
 
 # CHECK-LABEL: @memcpy_opt
-# CHECK: alloca i128, align 16
+# CHECK: alloca [16 x i8], align 16
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
