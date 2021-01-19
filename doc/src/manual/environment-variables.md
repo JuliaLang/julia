@@ -190,19 +190,23 @@ a master process to establish a connection before dying.
 ### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
 An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
-available to Julia. If `$JULIA_NUM_THREADS` exceeds the number of available
-CPU threads (logical cores), then the number of threads is set to the number of CPU threads. If
-`$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
-threads cannot be determined through system calls, then the number of threads is
-set to `1`.
+available to Julia.  If `$JULIA_NUM_THREADS` is not positive or is not set, or
+if the number of CPU threads cannot be determined through system calls, then the
+number of threads is set to `1`.
+
+If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
+to the number of CPU threads.
 
 !!! note
-
-    `JULIA_NUM_THREADS` must be defined before starting julia; defining it in `startup.jl` is too late in the startup process.
+    `JULIA_NUM_THREADS` must be defined before starting julia; defining it in
+    `startup.jl` is too late in the startup process.
 
 !!! compat "Julia 1.5"
     In Julia 1.5 and above the number of threads can also be specified on startup
     using the `-t`/`--threads` command line argument.
+
+!!! compat "Julia 1.7"
+    The `auto` value for `$JULIA_NUM_THREADS` requires Julia 1.7 or above.
 
 ### `JULIA_THREAD_SLEEP_THRESHOLD`
 

@@ -1714,12 +1714,14 @@
      ((eq? expr argname)
       ;; use `identity` for x->x
       `(top identity))
+      ;; TODO: deprecate this (#18621):
      ((and (null? splat)
            (length= expr 3) (eq? (car expr) 'call)
            (eq? (caddr expr) argname)
+           (underscore-symbol? argname)
            (not (dotop-named? (cadr expr)))
            (not (expr-contains-eq argname (cadr expr))))
-      ;; eta reduce `x->f(x)` => `f`
+      ;; eta reduce `_->f(_)` => `f`
       (cadr expr))
      (else
       (let ((expr (cond ((and flat (pair? expr) (eq? (car expr) 'generator))

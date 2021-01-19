@@ -537,8 +537,8 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
         if _any(t -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
             return Any[Vararg{Any}], nothing
         end
-        result = Any[rewrap_unionall(p, tti0) for p in utis[1].parameters]
-        for t in utis[2:end]
+        result = Any[rewrap_unionall(p, tti0) for p in (utis[1]::DataType).parameters]
+        for t::DataType in utis[2:end]
             if length(t.parameters) != length(result)
                 return Any[Vararg{Any}], nothing
             end
@@ -577,13 +577,7 @@ end
 
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(itertype), sv::InferenceState)
-    if !isdefined(Main, :Base) || !isdefined(Main.Base, :iterate) || !isconst(Main.Base, :iterate)
-        return Any[Vararg{Any}], nothing
-    end
-    if itft === nothing
-        iteratef = getfield(Main.Base, :iterate)
-        itft = Const(iteratef)
-    elseif isa(itft, Const)
+    if isa(itft, Const)
         iteratef = itft.val
     else
         return Any[Vararg{Any}], nothing
@@ -595,6 +589,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
+    # TODO: this doesn't realize that Array, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
     stateordonet === Bottom && return Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, info)])
     valtype = statetype = Bottom
     ret = Any[]
@@ -658,7 +653,7 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
     aftw = widenconst(aft)
     if !isa(aft, Const) && (!isType(aftw) || has_free_typevars(aftw))
         if !isconcretetype(aftw) || (aftw <: Builtin)
-            add_remark!(interp, sv, "Core._apply called on a function of a non-concrete type")
+            add_remark!(interp, sv, "Core._apply_iterate called on a function of a non-concrete type")
             # bail now, since it seems unlikely that abstract_call will be able to do any better after splitting
             # this also ensures we don't call abstract_call_gf_by_type below on an IntrinsicFunction or Builtin
             return CallMeta(Any, false)
@@ -770,8 +765,9 @@ end
 
 function argtype_by_index(argtypes::Vector{Any}, i::Int)
     n = length(argtypes)
-    if isvarargtype(argtypes[n])
-        return i >= n ? unwrapva(argtypes[n]) : argtypes[i]
+    na = argtypes[n]
+    if isvarargtype(na)
+        return i >= n ? unwrapva(na) : argtypes[i]
     else
         return i > n ? Bottom : argtypes[i]
     end
@@ -788,25 +784,34 @@ end
 function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::Union{Nothing,Vector{Any}},
         argtypes::Vector{Any}, sv::InferenceState, max_methods::Int)
     la = length(argtypes)
-    if f === ifelse && fargs isa Vector{Any} && la == 4 && argtypes[2] isa Conditional
-        # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
-        cnd = argtypes[2]::Conditional
-        tx = argtypes[3]
-        ty = argtypes[4]
-        a = ssa_def_slot(fargs[3], sv)
-        b = ssa_def_slot(fargs[4], sv)
-        if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
-            tx = typeintersect(tx, cnd.vtype)
+    if f === ifelse && fargs isa Vector{Any} && la == 4
+        cnd = argtypes[2]
+        if isa(cnd, Conditional)
+            newcnd = widenconditional(cnd)
+            tx = argtypes[3]
+            ty = argtypes[4]
+            if isa(newcnd, Const)
+                # if `cnd` is constant, we should just respect its constantness to keep inference accuracy
+                return newcnd.val::Bool ? tx : ty
+            else
+                # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
+                a = ssa_def_slot(fargs[3], sv)
+                b = ssa_def_slot(fargs[4], sv)
+                if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
+                    tx = (cnd.vtype ⊑ tx ? cnd.vtype : tmeet(tx, widenconst(cnd.vtype)))
+                end
+                if isa(b, Slot) && slot_id(cnd.var) == slot_id(b)
+                    ty = (cnd.elsetype ⊑ ty ? cnd.elsetype : tmeet(ty, widenconst(cnd.elsetype)))
+                end
+                return tmerge(tx, ty)
+            end
         end
-        if isa(b, Slot) && slot_id(cnd.var) == slot_id(b)
-            ty = typeintersect(ty, cnd.elsetype)
-        end
-        return tmerge(tx, ty)
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
     if f === getfield && isa(fargs, Vector{Any}) && la == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
-        cti, _ = precise_container_type(interp, nothing, argtypes[2], sv)
-        idx = argtypes[3].val
+        # TODO: why doesn't this use the getfield_tfunc?
+        cti, _ = precise_container_type(interp, iterate, argtypes[2], sv)
+        idx = argtypes[3].val::Int
         if 1 <= idx <= length(cti)
             rt = unwrapva(cti[idx])
         end
@@ -884,10 +889,11 @@ end
 function abstract_call_unionall(argtypes::Vector{Any})
     if length(argtypes) == 3
         canconst = true
-        if isa(argtypes[3], Const)
-            body = argtypes[3].val
-        elseif isType(argtypes[3])
-            body = argtypes[3].parameters[1]
+        a3 = argtypes[3]
+        if isa(a3, Const)
+            body = a3.val
+        elseif isType(a3)
+            body = a3.parameters[1]
             canconst = false
         else
             return Any
@@ -896,11 +902,11 @@ function abstract_call_unionall(argtypes::Vector{Any})
             return Any
         end
         if has_free_typevars(body)
-            if isa(argtypes[2], Const)
-                tv = argtypes[2].val
-            elseif isa(argtypes[2], PartialTypeVar)
-                ptv = argtypes[2]
-                tv = ptv.tv
+            a2 = argtypes[2]
+            if isa(a2, Const)
+                tv = a2.val
+            elseif isa(a2, PartialTypeVar)
+                tv = a2.tv
                 canconst = false
             else
                 return Any
@@ -923,11 +929,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     la = length(argtypes)
 
     if isa(f, Builtin)
-        if f === _apply
-            ft = argtype_by_index(argtypes, 2)
-            ft === Bottom && return CallMeta(Bottom, false)
-            return abstract_apply(interp, nothing, ft, argtype_tail(argtypes, 3), sv, max_methods)
-        elseif f === _apply_iterate
+        if f === _apply_iterate
             itft = argtype_by_index(argtypes, 2)
             ft = argtype_by_index(argtypes, 3)
             (itft === Bottom || ft === Bottom) && return CallMeta(Bottom, false)
@@ -1091,7 +1093,7 @@ end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::VarTable, sv::InferenceState)
     if e.head === :static_parameter
-        n = e.args[1]
+        n = e.args[1]::Int
         t = Any
         if 1 <= n <= length(sv.sptypes)
             t = sv.sptypes[n]
@@ -1110,7 +1112,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
     elseif isa(e, Slot)
-        return vtypes[slot_id(e)].typ
+        return (vtypes[slot_id(e)]::VarState).typ
     elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name)
     end
@@ -1187,9 +1189,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         if length(e.args) == 2 && isconcretetype(t) && !t.mutable
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
-            if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val) &&
-                let t = t, at = at; _all(i->at.val[i] isa fieldtype(t, i), 1:n); end
-                t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
+            if isa(at, Const) && (val = at.val; isa(val, Tuple)) && n == length(val) &&
+                let t = t, val = val; _all(i->val[i] isa fieldtype(t, i), 1:n); end
+                t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, val))
             elseif isa(at, PartialStruct) && at ⊑ Tuple && n == length(at.fields) &&
                 let t = t, at = at; _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n); end
                 t = PartialStruct(t, at.fields)
@@ -1364,7 +1366,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 frame.cur_hand = Pair{Any,Any}(l, frame.cur_hand)
                 # propagate type info to exception handler
                 old = s[l]
-                new = s[pc]::Array{Any,1}
+                new = s[pc]::VarTable
                 newstate_catch = stupdate!(old, new)
                 if newstate_catch !== false
                     if l < frame.pc´´

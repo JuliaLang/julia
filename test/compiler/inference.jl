@@ -7,6 +7,14 @@ isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
+f39082(x::Vararg{T}) where {T <: Number} = x[1]
+let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
+    @test ast.slottypes == Any[Const(f39082), Tuple{Vararg{Rational}}]
+end
+let ast = only(code_typed(f39082, Tuple{Rational, Vararg{Rational}}))[1]
+    @test ast.slottypes == Any[Const(f39082), Tuple{Rational, Vararg{Rational}}]
+end
+
 # demonstrate some of the type-size limits
 @test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
 @test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
@@ -855,7 +863,7 @@ end
 aa20704(x) = x(nothing)
 @test code_typed(aa20704, (typeof(a20704),))[1][1].pure
 
-#issue #21065, elision of _apply when splatted expression is not effect_free
+#issue #21065, elision of _apply_iterate when splatted expression is not effect_free
 function f21065(x,y)
     println("x=$x, y=$y")
     return x, y
@@ -865,7 +873,7 @@ function test_no_apply(expr::Expr)
     return all(test_no_apply, expr.args)
 end
 function test_no_apply(ref::GlobalRef)
-    return ref.mod != Core || ref.name !== :_apply
+    return ref.mod != Core || ref.name !== :_apply_iterate
 end
 test_no_apply(::Any) = true
 @test all(test_no_apply, code_typed(g21065, Tuple{Int,Int})[1].first.code)
@@ -2033,6 +2041,16 @@ let rt = Base.return_types(splat27434, (NamedTuple{(:x,), Tuple{T}} where T,))
     @test !Base.has_free_typevars(rt[1])
 end
 
+# PR #27843
+bar27843(x, y::Bool) = fill(x, 0)
+bar27843(x, y) = fill(x, ntuple(_ -> 0, y))::Array{typeof(x)}
+foo27843(x, y) = bar27843(x, y)
+@test Core.Compiler.return_type(foo27843, Tuple{Union{Float64,Int}, Any}) == Union{Array{Float64}, Array{Int}}
+let atypes1 = Tuple{Union{IndexCartesian, IndexLinear}, Any, Union{Tuple{}, Tuple{Any,Vararg{Any,N}} where N}, Tuple},
+    atypes2 = Tuple{Union{IndexCartesian, IndexLinear}, Any, Tuple, Tuple}
+    @test Core.Compiler.return_type(SubArray, atypes1) <: Core.Compiler.return_type(SubArray, atypes2)
+end
+
 # issue #27078
 f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
 T27078 = Vector{Vector{T}} where T
@@ -2041,6 +2059,7 @@ T27078 = Vector{Vector{T}} where T
 # issue #28070
 g28070(f, args...) = f(args...)
 @test @inferred g28070(Core._apply, Base.:/, (1.0, 1.0)) == 1.0
+@test @inferred g28070(Core._apply_iterate, Base.iterate, Base.:/, (1.0, 1.0)) == 1.0
 
 # issue #28079
 struct Foo28079 end
@@ -2298,9 +2317,9 @@ end
 
 @test @inferred(g28955((1,), 1.0)) === Bool
 
-# Test that inlining can look through repeated _applys
+# Test that inlining can look through repeated _apply_iterates
 foo_inlining_apply(args...) = ccall(:jl_, Nothing, (Any,), args[1])
-bar_inlining_apply() = Core._apply(Core._apply, (foo_inlining_apply,), ((1,),))
+bar_inlining_apply() = Core._apply_iterate(iterate, Core._apply_iterate, (iterate,), (foo_inlining_apply,), ((1,),))
 let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
     @test ci.code[1].head == :foreigncall

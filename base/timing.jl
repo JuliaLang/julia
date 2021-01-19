@@ -115,41 +115,44 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
-    length(timestr) < 10 && print(" "^(10 - length(timestr)))
-    print(timestr, " seconds")
-    parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
-    parens && print(" (")
-    if bytes != 0 || allocs != 0
-        allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
-        if ma == 1
-            print(Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
-        else
-            print(Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
-        end
-        print(format_bytes(bytes))
-    end
-    if gctime > 0
+    str = sprint() do io
+        print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        print(io, timestr, " seconds")
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+        parens && print(io, " (")
         if bytes != 0 || allocs != 0
-            print(", ")
+            allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
+            if ma == 1
+                print(io, Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
+            else
+                print(io, Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
+            end
+            print(io, format_bytes(bytes))
         end
-        print(Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
-    end
-    if compile_time > 0
-        if bytes != 0 || allocs != 0 || gctime > 0
-            print(", ")
+        if gctime > 0
+            if bytes != 0 || allocs != 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
-        print(Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        if compile_time > 0
+            if bytes != 0 || allocs != 0 || gctime > 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        end
+        parens && print(io, ")")
     end
-    parens && print(")")
+    newline ? println(str) : print(str)
     nothing
 end
 
 function timev_print(elapsedtime, diff::GC_Diff, compile_time)
     allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time)
-    print("\nelapsed time (ns): $elapsedtime\n")
+    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true)
+    print("elapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
@@ -204,9 +207,7 @@ macro time(ex)
         elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        time_print(elapsedtime, diff.allocd, diff.total_time,
-                   gc_alloc_count(diff), compile_elapsedtime)
-        println()
+        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
         val
     end
 end
@@ -251,7 +252,8 @@ macro timev(ex)
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
-        timev_print(elapsedtime, GC_Diff(gc_num(), stats), compile_elapsedtime)
+        local diff = GC_Diff(gc_num(), stats)
+        timev_print(elapsedtime, diff, compile_elapsedtime)
         val
     end
 end

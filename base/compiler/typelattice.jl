@@ -118,10 +118,12 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     end
     isa(a, MaybeUndef) && (a = a.typ)
     isa(b, MaybeUndef) && (b = b.typ)
-    (a === NOT_FOUND || b === Any) && return true
-    (a === Any || b === NOT_FOUND) && return false
+    b === Any && return true
+    a === Any && return false
     a === Union{} && return true
     b === Union{} && return false
+    @assert !isa(a, TypeVar) "invalid lattice item"
+    @assert !isa(b, TypeVar) "invalid lattice item"
     if isa(a, Conditional)
         if isa(b, Conditional)
             return issubconditional(a, b)
@@ -177,11 +179,10 @@ function ⊑(@nospecialize(a), @nospecialize(b))
         return false
     elseif isa(a, PartialTypeVar) && b === TypeVar
         return true
-    elseif !(isa(a, Type) || isa(a, TypeVar)) ||
-           !(isa(b, Type) || isa(b, TypeVar))
-        return a === b
-    else
+    elseif isa(a, Type) && isa(b, Type)
         return a <: b
+    else # handle this conservatively in the remaining cases
+        return a === b
     end
 end
 

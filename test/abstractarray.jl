@@ -1234,6 +1234,11 @@ end
     @test Base.rest(a, st) == [3, 2, 4]
 end
 
+@testset "issue #37741, non-int cat" begin
+    @test [1; 1:BigInt(5)] == [1; 1:5]
+    @test [1:BigInt(5); 1] == [1:5; 1]
+end
+
 @testset "Base.isstored" begin
     a = rand(3, 4, 5)
     @test Base.isstored(a, 1, 2, 3)
@@ -1257,14 +1262,4 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
-end
-
-@testset "copyto! with tuple" begin
-    randtype(n) = rand(Bool) ? 1.0 : 2
-    @test copyto!(fill(0.0, 100), ntuple(randtype, 100))[end] != 0.0
-    @test copyto!(fill(0.0, 100), ntuple(x->1.0, 100))[end] != 0.0
-    @test copyto!(fill(0.0, 100), ntuple(randtype, 50))[end] == 0.0
-    @test_throws BoundsError copyto!(fill(0.0, 50), ntuple(randtype, 100))
-    @test_throws BoundsError copyto!(fill(0.0, 50), ntuple(x->1.0, 100))
-    @test_throws ArgumentError copyto!(fill(0.0, 5), ntuple(randtype, 7))
 end

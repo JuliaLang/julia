@@ -523,9 +523,7 @@ STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
     *n_alloc = newalloc;
 }
 
-static jl_function_t *jl_iterate_func JL_GLOBALLY_ROOTED;
-
-static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
+static jl_value_t *do_apply( jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
 {
     jl_function_t *f = args[0];
     if (nargs == 2) {
@@ -567,12 +565,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
         }
     }
     if (extra && iterate == NULL) {
-        if (jl_iterate_func == NULL) {
-            jl_iterate_func = jl_get_function(jl_top_module, "iterate");
-            if (jl_iterate_func == NULL)
-                jl_undefined_var_error(jl_symbol("iterate"));
-        }
-        iterate = jl_iterate_func;
+        jl_undefined_var_error(jl_symbol("iterate"));
     }
     // allocate space for the argument array and gc roots for it
     // based on our previous estimates
@@ -696,13 +689,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
 JL_CALLABLE(jl_f__apply_iterate)
 {
     JL_NARGSV(_apply_iterate, 2);
-    return do_apply(F, args+1, nargs-1, args[0]);
-}
-
-JL_CALLABLE(jl_f__apply)
-{
-    JL_NARGSV(_apply, 1);
-    return do_apply(F, args, nargs, NULL);
+    return do_apply(args + 1, nargs - 1, args[0]);
 }
 
 // this is like `_apply`, but with quasi-exact checks to make sure it is pure
@@ -720,7 +707,7 @@ JL_CALLABLE(jl_f__apply_pure)
         // and `promote` works better this way
         size_t last_age = ptls->world_age;
         ptls->world_age = jl_world_counter;
-        ret = jl_f__apply(NULL, args, nargs);
+        ret = do_apply(args, nargs, NULL);
         ptls->world_age = last_age;
         ptls->in_pure_callback = last_in;
     }
@@ -1578,7 +1565,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     // internal functions
     jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);
-    jl_builtin__apply = add_builtin_func("_apply", jl_f__apply);
     jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);

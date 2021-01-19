@@ -432,7 +432,7 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
     nothing
 end
 
-function store_backedges(caller::MethodInstance, edges::Vector)
+function store_backedges(caller::MethodInstance, edges::Vector{Any})
     i = 1
     while i <= length(edges)
         to = edges[i]
@@ -568,7 +568,7 @@ function type_annotate!(sv::InferenceState)
     src = sv.src
     states = sv.stmt_types
     nargs = sv.nargs
-    nslots = length(states[1]::Array{Any,1})
+    nslots = length(states[1]::VarTable)
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
     nexpr = length(body)
@@ -802,7 +802,8 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             if invoke_api(code) == 2
                 i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                 tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                tree.code = Any[ ReturnNode(quoted(code.rettype_const)) ]
+                rettype_const = code.rettype_const
+                tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
                 nargs = Int(method.nargs)
                 tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
                 tree.slotflags = fill(0x00, nargs)
@@ -814,7 +815,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.pure = true
                 tree.inlineable = true
                 tree.parent = mi
-                tree.rettype = Core.Typeof(code.rettype_const)
+                tree.rettype = Core.Typeof(rettype_const)
                 tree.min_world = code.min_world
                 tree.max_world = code.max_world
                 return tree

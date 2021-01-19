@@ -554,7 +554,7 @@ function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     nb = min(length(buffer.data), buffer.maxsize) - ptr + 1
-    return (pointer(buffer.data, ptr), nb)
+    return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
 notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Cvoid}, len::UInt) = notify_filled(buffer, nread)
@@ -1127,105 +1127,119 @@ function _fd(x::Union{LibuvStream, LibuvServer})
     return fd[]
 end
 
-for (x, writable, unix_fd, c_symbol) in
-        ((:stdin, false, 0, :jl_uv_stdin),
-         (:stdout, true, 1, :jl_uv_stdout),
-         (:stderr, true, 2, :jl_uv_stderr))
-    f = Symbol("redirect_", lowercase(string(x)))
-    _f = Symbol("_", f)
-    @eval begin
-        function ($_f)(stream)
-            global $x
-            posix_fd = _fd(stream)
-            @static if Sys.iswindows()
-                ccall(:SetStdHandle, stdcall, Int32, (Int32, OS_HANDLE),
-                    $(-10 - unix_fd), Libc._get_osfhandle(posix_fd))
-            end
-            dup(posix_fd, RawFD($unix_fd))
-            $x = stream
-            nothing
-        end
-        function ($f)(handle::Union{LibuvStream, IOStream})
-            $(_f)(handle)
-            unsafe_store!(cglobal($(Expr(:quote, c_symbol)), Ptr{Cvoid}),
-                handle.handle)
-            return handle
-        end
-        function ($f)()
-            p = link_pipe!(Pipe())
-            read, write = p.out, p.in
-            ($f)($(writable ? :write : :read))
-            return (read, write)
-        end
-        function ($f)(::DevNull)
-            global $x
-            nulldev = @static Sys.iswindows() ? "NUL" : "/dev/null"
-            handle = open(nulldev, write=$writable)
-            $(_f)(handle)
-            close(handle) # handle has been dup'ed in $(_f)
-            $x = devnull
-            return devnull
-        end
-        function ($f)(io::IOContext)
-            io2, _dict = unwrapcontext(io)
-            ($f)(io2)
-            global $x = io
-            return io
+struct redirect_stdio <: Function
+    unix_fd::Int
+    writable::Bool
+end
+for (f, writable, unix_fd) in
+        ((:redirect_stdin, false, 0),
+         (:redirect_stdout, true, 1),
+         (:redirect_stderr, true, 2))
+    @eval const ($f) = redirect_stdio($unix_fd, $writable)
+end
+function _redirect_io_libc(stream, unix_fd::Int)
+    posix_fd = _fd(stream)
+    @static if Sys.iswindows()
+        if 0 <= unix_fd <= 2
+            ccall(:SetStdHandle, stdcall, Int32, (Int32, OS_HANDLE),
+                -10 - unix_fd, Libc._get_osfhandle(posix_fd))
         end
     end
+    dup(posix_fd, RawFD(unix_fd))
+    nothing
 end
+function _redirect_io_global(io, unix_fd::Int)
+    unix_fd == 0 && (global stdin = io)
+    unix_fd == 1 && (global stdout = io)
+    unix_fd == 2 && (global stderr = io)
+    nothing
+end
+function (f::redirect_stdio)(handle::Union{LibuvStream, IOStream})
+    _redirect_io_libc(handle, f.unix_fd)
+    c_sym = f.unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
+            f.unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
+            f.unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
+            C_NULL
+    c_sym == C_NULL || unsafe_store!(c_sym, handle.handle)
+    _redirect_io_global(handle, f.unix_fd)
+    return handle
+end
+function (f::redirect_stdio)(::DevNull)
+    nulldev = @static Sys.iswindows() ? "NUL" : "/dev/null"
+    handle = open(nulldev, write=f.writable)
+    _redirect_io_libc(handle, f.unix_fd)
+    close(handle) # handle has been dup'ed in _redirect_io_libc
+    _redirect_io_global(devnull, f.unix_fd)
+    return devnull
+end
+function (f::redirect_stdio)(io::AbstractPipe)
+    io2 = (f.writable ? pipe_writer : pipe_reader)(io)
+    f(io2)
+    _redirect_io_global(io, f.unix_fd)
+    return io
+end
+function (f::redirect_stdio)(p::Pipe)
+    if p.in.status == StatusInit && p.out.status == StatusInit
+        link_pipe!(p)
+    end
+    io2 = getfield(p, f.writable ? :in : :out)
+    f(io2)
+    return p
+end
+(f::redirect_stdio)() = f(Pipe())
+
+# Deprecate these in v2 (redirect_stdio support)
+iterate(p::Pipe) = (p.out, 1)
+iterate(p::Pipe, i::Int) = i == 1 ? (p.in, 2) : nothing
+getindex(p::Pipe, key::Int) = key == 1 ? p.out : key == 2 ? p.in : throw(KeyError(key))
 
 """
-    redirect_stdout([stream]) -> (rd, wr)
+    redirect_stdout([stream]) -> stream
 
 Create a pipe to which all C and Julia level [`stdout`](@ref) output
-will be redirected.
-Returns a tuple `(rd, wr)` representing the pipe ends.
+will be redirected. Return a stream representing the pipe ends.
 Data written to [`stdout`](@ref) may now be read from the `rd` end of
-the pipe. The `wr` end is given for convenience in case the old
-[`stdout`](@ref) object was cached by the user and needs to be replaced
-elsewhere.
-
-If called with the optional `stream` argument, then returns `stream` itself.
+the pipe.
 
 !!! note
-    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
+    `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
+    `Pipe`, socket, or `devnull`.
 """
 redirect_stdout
 
 """
-    redirect_stderr([stream]) -> (rd, wr)
+    redirect_stderr([stream]) -> stream
 
 Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
 
 !!! note
-    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
+    `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
+    `Pipe`, socket, or `devnull`.
 """
 redirect_stderr
 
 """
-    redirect_stdin([stream]) -> (rd, wr)
+    redirect_stdin([stream]) -> stream
 
 Like [`redirect_stdout`](@ref), but for [`stdin`](@ref).
-Note that the order of the return tuple is still `(rd, wr)`,
-i.e. data to be read from [`stdin`](@ref) may be written to `wr`.
+Note that the direction of the stream is reversed.
 
 !!! note
-    `stream` must be an `IOStream`, a `TTY`, a `Pipe`, a socket, or `devnull`.
+    `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
+    `Pipe`, socket, or `devnull`.
 """
 redirect_stdin
 
-for (F,S) in ((:redirect_stdin, :stdin), (:redirect_stdout, :stdout), (:redirect_stderr, :stderr))
-    @eval function $F(f::Function, stream)
-        STDOLD = $S
-        local ret
-        $F(stream)
-        try
-            ret = f()
-        finally
-            $F(STDOLD)
-        end
-        ret
+function (f::redirect_stdio)(thunk::Function, stream)
+    stdold = f.unix_fd == 0 ? stdin :
+             f.unix_fd == 1 ? stdout :
+             f.unix_fd == 2 ? stderr :
+             throw(ArgumentError("Not implemented to get old handle of fd except for stdio"))
+    f(stream)
+    try
+        return thunk()
+    finally
+        f(stdold)
     end
 end
 
@@ -1234,9 +1248,6 @@ end
 
 Run the function `f` while redirecting [`stdout`](@ref) to `stream`.
 Upon completion, [`stdout`](@ref) is restored to its prior setting.
-
-!!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
 """
 redirect_stdout(f::Function, stream)
 
@@ -1245,9 +1256,6 @@ redirect_stdout(f::Function, stream)
 
 Run the function `f` while redirecting [`stderr`](@ref) to `stream`.
 Upon completion, [`stderr`](@ref) is restored to its prior setting.
-
-!!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
 """
 redirect_stderr(f::Function, stream)
 
@@ -1256,9 +1264,6 @@ redirect_stderr(f::Function, stream)
 
 Run the function `f` while redirecting [`stdin`](@ref) to `stream`.
 Upon completion, [`stdin`](@ref) is restored to its prior setting.
-
-!!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
 """
 redirect_stdin(f::Function, stream)
 

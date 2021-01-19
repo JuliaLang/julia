@@ -4,7 +4,8 @@ using Artifacts, Test, Base.BinaryPlatforms
 using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform
 
 # prepare for the package tests by ensuring the required artifacts are downloaded now
-run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl"))`, "TERM"=>"dumb"))
+artifacts_dir = mktempdir()
+run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl")) $(artifacts_dir)`, "TERM"=>"dumb"))
 
 @testset "Artifact Paths" begin
     mktempdir() do tempdir
@@ -81,8 +82,7 @@ end
 end
 
 @testset "Artifact Slash-indexing" begin
-    tempdir = joinpath(@__DIR__, "artifacts")
-    with_artifacts_directory(tempdir) do
+    with_artifacts_directory(artifacts_dir) do
         exeext = Sys.iswindows() ? ".exe" : ""
 
         # simple lookup, gives us the directory for `c_simple` for the current architecture
@@ -112,8 +112,7 @@ end
 end
 
 @testset "@artifact_str Platform passing" begin
-    tempdir = joinpath(@__DIR__, "artifacts")
-    with_artifacts_directory(tempdir) do
+    with_artifacts_directory(artifacts_dir) do
         win64 = Platform("x86_64", "windows")
         mac64 = Platform("x86_64", "macos")
         @test basename(@artifact_str("c_simple", win64)) == "444cecb70ff39e8961dd33e230e151775d959f37"
@@ -134,12 +133,27 @@ end
 end
 
 @testset "@artifact_str install errors" begin
-    mktempdir() do tempdir
-        with_artifacts_directory(tempdir) do
-            ex = @test_throws ErrorException artifact"c_simple"
-            @test startswith(ex.value.msg, "Artifact \"c_simple\" was not installed correctly. ")
-            ex = @test_throws ErrorException artifact"socrates"
-            @test startswith(ex.value.msg, "Artifact \"socrates\" is a lazy artifact; ")
+    for imports in ("Artifacts, Pkg", "Pkg, Pkg.Artifacts", "Pkg.Artifacts")
+        mktempdir() do tempdir
+            with_artifacts_directory(tempdir) do
+                ex = @test_throws ErrorException artifact"c_simple"
+                @test startswith(ex.value.msg, "Artifact \"c_simple\" was not installed correctly. ")
+                ex = @test_throws ErrorException artifact"socrates"
+                @test startswith(ex.value.msg, "Artifact \"socrates\" is a lazy artifact; ")
+
+                # Can install if we load `Pkg` or `Pkg.Artifacts`
+                anon = Module(:__anon__)
+                Core.eval(anon, Meta.parse("using $(imports), Test"))
+                # Ensure that we get the expected exception, since this test runs with --depwarn=error
+                Core.eval(anon, quote
+                    try
+                        artifact"socrates"
+                        @assert false "this @artifact_str macro invocation should have failed!"
+                    catch e
+                        @test startswith("using Pkg instead of using LazyArtifacts is deprecated", e.msg)
+                    end
+                end)
+            end
         end
     end
 end

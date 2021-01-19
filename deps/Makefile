@@ -164,7 +164,10 @@ DEP_LIBS += libwhich
 endif
 
 # unlist targets that have not been converted to use the staged-install
-DEP_LIBS_STAGED := $(filter-out suitesparse-wrapper,$(DEP_LIBS))
+DEP_LIBS_STAGED := $(DEP_LIBS)
+DEP_LIBS_STAGED := $(filter-out csl,$(DEP_LIBS_STAGED))
+DEP_LIBS_STAGED := $(filter-out suitesparse,$(DEP_LIBS_STAGED))
+DEP_LIBS_STAGED := $(filter-out suitesparse-wrapper,$(DEP_LIBS_STAGED))
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
 DEP_LIBS_STAGED := $(filter-out osxunwind,$(DEP_LIBS_STAGED))
 endif

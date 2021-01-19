@@ -355,9 +355,10 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         return Any
     end
     typea == typeb && return typea
-    # it's always ok to form a Union of two concrete types
-    if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
-        return Union{typea, typeb}
+    # it's always ok to form a Union of two Union-free types
+    u = Union{typea, typeb}
+    if unioncomplexity(u) <= 1
+        return u
     end
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list
@@ -518,4 +519,44 @@ function tuplemerge(a::DataType, b::DataType)
         p[lt + 1] = Vararg{tail}
     end
     return Tuple{p...}
+end
+
+# compute typeintersect over the extended inference lattice
+# where v is in the extended lattice, and t is a Type
+function tmeet(@nospecialize(v), @nospecialize(t))
+    if isa(v, Const)
+        if !has_free_typevars(t) && !isa(v.val, t)
+            return Bottom
+        end
+        return v
+    elseif isa(v, PartialStruct)
+        has_free_typevars(t) && return v
+        widev = widenconst(v)
+        if widev <: t
+            return v
+        end
+        ti = typeintersect(widev, t)
+        if ti === Bottom
+            return Bottom
+        end
+        @assert widev <: Tuple
+        new_fields = Vector{Any}(undef, length(v.fields))
+        for i = 1:length(new_fields)
+            if isa(v.fields[i], Core.TypeofVararg)
+                new_fields[i] = v.fields[i]
+            else
+                new_fields[i] = tmeet(v.fields[i], widenconst(getfield_tfunc(t, Const(i))))
+                if new_fields[i] === Bottom
+                    return Bottom
+                end
+            end
+        end
+        return tuple_tfunc(new_fields)
+    elseif isa(v, Conditional)
+        if !(Bool <: t)
+            return Bottom
+        end
+        return v
+    end
+    return typeintersect(widenconst(v), t)
 end

@@ -284,14 +284,14 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     elseif evaluated.head === :call
         op = evaled_args[1]
-        kwargs = evaled_args[2].args  # Keyword arguments from `Expr(:parameters, ...)`
+        kwargs = (evaled_args[2]::Expr).args  # Keyword arguments from `Expr(:parameters, ...)`
         args = evaled_args[3:n]
 
         res = op(args...; kwargs...)
 
         # Create "Evaluated" expression which looks like the original call but has all of
         # the arguments evaluated
-        func_sym = quoted_args[1]
+        func_sym = quoted_args[1]::Union{Symbol,Expr}
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
         elseif func_sym === :≈ && !res
@@ -312,7 +312,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
+             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
              source)
 end
 
@@ -487,6 +487,10 @@ function get_test_result(ex, source)
                     push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
                 elseif isa(a, Expr) && a.head === :...
                     push!(escaped_kwargs, Expr(:..., esc(a.args[1])))
+                elseif isa(a, Expr) && a.head === :.
+                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[2].value), esc(Expr(:., a.args[1], QuoteNode(a.args[2].value)))))
+                elseif isa(a, Symbol)
+                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a), esc(a)))
                 end
             end
         end
@@ -754,7 +758,7 @@ struct FallbackTestSet <: AbstractTestSet end
 fallback_testset = FallbackTestSet()
 
 struct FallbackTestSetException <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
@@ -781,13 +785,13 @@ are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
 mutable struct DefaultTestSet <: AbstractTestSet
-    description::AbstractString
-    results::Vector
+    description::String
+    results::Vector{Any}
     n_passed::Int
     anynonpass::Bool
     verbose::Bool
 end
-DefaultTestSet(desc; verbose = false) = DefaultTestSet(desc, [], 0, false, verbose)
+DefaultTestSet(desc::AbstractString; verbose::Bool = false) = DefaultTestSet(String(desc)::String, [], 0, false, verbose)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -1298,7 +1302,7 @@ end
 """
     push_testset(ts::AbstractTestSet)
 
-Adds the test set to the task_local_storage.
+Adds the test set to the `task_local_storage`.
 """
 function push_testset(ts::AbstractTestSet)
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
@@ -1309,7 +1313,7 @@ end
 """
     pop_testset()
 
-Pops the last test set added to the task_local_storage. If there are no
+Pops the last test set added to the `task_local_storage`. If there are no
 active test sets, returns the fallback default test set.
 """
 function pop_testset()
@@ -1455,10 +1459,10 @@ Use `recursive=true` to test in all submodules.
 `Union{}` type parameters are included; in most cases you probably
 want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
-function detect_ambiguities(mods...;
+function detect_ambiguities(mods::Module...;
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
-    @nospecialize mods
+    @nospecialize
     ambs = Set{Tuple{Method,Method}}()
     mods = collect(mods)::Vector{Module}
     function sortdefs(m1::Method, m2::Method)

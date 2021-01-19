@@ -178,18 +178,89 @@ const PAGES = [
 ]
 end
 
+const use_revise = "revise=true" in ARGS
+if use_revise
+    let revise_env = joinpath(@__DIR__, "deps", "revise")
+        Pkg.activate(revise_env)
+        Pkg.add("Revise"; preserve=Pkg.PRESERVE_NONE)
+        Base.ACTIVE_PROJECT[] = nothing
+        pushfirst!(LOAD_PATH, revise_env)
+    end
+end
+function maybe_revise(ex)
+    use_revise || return ex
+    STDLIB_DIR = Sys.STDLIB
+    STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
+    return quote
+        $ex
+        using Revise
+        const STDLIBS = $STDLIBS
+        union!(Revise.stdlib_names, Symbol.(STDLIBS))
+        Revise.track(Core.Compiler)
+        Revise.track(Base)
+        for (id, mod) in Base.loaded_modules
+            if id.name in STDLIBS
+                Revise.track(mod)
+            end
+        end
+        Revise.revise()
+    end
+end
+
 for stdlib in STDLIB_DOCS
     @eval using $(stdlib.stdlib)
     # All standard library modules get `using $STDLIB` as their global
-    DocMeta.setdocmeta!(Base.root_module(Base, stdlib.stdlib), :DocTestSetup, :(using $(stdlib.stdlib)), recursive=true)
+    DocMeta.setdocmeta!(
+        Base.root_module(Base, stdlib.stdlib),
+        :DocTestSetup,
+        maybe_revise(:(using $(stdlib.stdlib)));
+        recursive=true,
+    )
 end
 # A few standard libraries need more than just the module itself in the DocTestSetup.
 # This overwrites the existing ones from above though, hence the warn=false.
-DocMeta.setdocmeta!(SparseArrays, :DocTestSetup, :(using SparseArrays, LinearAlgebra), recursive=true, warn=false)
-DocMeta.setdocmeta!(SuiteSparse, :DocTestSetup, :(using SparseArrays, LinearAlgebra, SuiteSparse), recursive=true, warn=false)
-DocMeta.setdocmeta!(UUIDs, :DocTestSetup, :(using UUIDs, Random), recursive=true, warn=false)
-DocMeta.setdocmeta!(Pkg, :DocTestSetup, :(using Pkg, Pkg.Artifacts), recursive=true, warn=false)
-DocMeta.setdocmeta!(Base.BinaryPlatforms, :DocTestSetup, :(using Base.BinaryPlatforms), recursive=true, warn=false)
+DocMeta.setdocmeta!(
+    SparseArrays,
+    :DocTestSetup,
+    maybe_revise(:(using SparseArrays, LinearAlgebra));
+    recursive=true, warn=false,
+)
+DocMeta.setdocmeta!(
+    SuiteSparse,
+    :DocTestSetup,
+    maybe_revise(:(using SparseArrays, LinearAlgebra, SuiteSparse));
+    recursive=true, warn=false,
+)
+DocMeta.setdocmeta!(
+    UUIDs,
+    :DocTestSetup,
+    maybe_revise(:(using UUIDs, Random));
+    recursive=true, warn=false,
+)
+DocMeta.setdocmeta!(
+    Pkg,
+    :DocTestSetup,
+    maybe_revise(:(using Pkg, Pkg.Artifacts));
+    recursive=true, warn=false,
+)
+DocMeta.setdocmeta!(
+    Base,
+    :DocTestSetup,
+    maybe_revise(:(;;));
+    recursive=true,
+)
+DocMeta.setdocmeta!(
+    Base.BinaryPlatforms,
+    :DocTestSetup,
+    maybe_revise(:(using Base.BinaryPlatforms));
+    recursive=true, warn=false,
+)
+DocMeta.setdocmeta!(
+    Pkg.LazilyInitializedFields,
+    :DocTestSetup,
+    maybe_revise(:(using Pkg.LazilyInitializedFields));
+    recursive=true, warn=false,
+)
 
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
     global const buildroot = i === nothing ? (@__DIR__) : first(match(r, ARGS[i]).captures)

@@ -278,13 +278,35 @@ function -(x::Rational{T}) where T<:Unsigned
     x
 end
 
-for (op,chop) in ((:+,:checked_add), (:-,:checked_sub), (:rem,:rem), (:mod,:mod))
+function +(x::Rational, y::Rational)
+    xp, yp = promote(x, y)
+    if isinf(x) && x == y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(checked_add(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+end
+
+function -(x::Rational, y::Rational)
+    xp, yp = promote(x, y)
+    if isinf(x) && x == -y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(checked_sub(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+end
+
+for (op,chop) in ((:rem,:rem), (:mod,:mod))
     @eval begin
         function ($op)(x::Rational, y::Rational)
             xd, yd = divgcd(promote(x.den, y.den)...)
             Rational(($chop)(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
         end
+    end
+end
 
+for (op,chop) in ((:+,:checked_add), (:-,:checked_sub), (:rem,:rem), (:mod,:mod))
+    @eval begin
         function ($op)(x::Rational, y::Integer)
             unsafe_rational(($chop)(x.num, checked_mul(x.den, y)), x.den)
         end
