@@ -247,7 +247,8 @@ const libllvm_version = if endswith(libllvm_version_string, "jl")
     # (LLVM does never report a prerelease version anyway)
     VersionNumber(libllvm_version_string[1:end-2])
 else
-    VersionNumber(libllvm_version_string)
+    # VersionNumber(libllvm_version_string)
+    VersionNumber("1")
 end
 
 libllvm_path() = ccall(:jl_get_libllvm, Any, ())

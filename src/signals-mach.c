@@ -279,8 +279,8 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         }
 #endif
         else {
-            if (!(exc_state.__err & WRITE_FAULT))
-                return KERN_INVALID_ARGUMENT; // rethrow the SEGV since it wasn't an error with writing to read-only memory
+            // if (!(exc_state.__err & WRITE_FAULT))
+            //     return KERN_INVALID_ARGUMENT; // rethrow the SEGV since it wasn't an error with writing to read-only memory
             excpt = jl_readonlymemory_exception;
         }
         jl_throw_in_thread(tid, thread, excpt);

@@ -160,6 +160,7 @@ $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG))
+LLVM_CXXFLAGS += --std=c++14
 
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)

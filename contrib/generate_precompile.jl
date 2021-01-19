@@ -390,7 +390,7 @@ function generate_precompile_statements()
     return
 end
 
-generate_precompile_statements()
+# generate_precompile_statements()
 
 # As a last step in system image generation,
 # remove some references to build time environment for a more reproducible build.

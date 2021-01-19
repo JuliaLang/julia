@@ -552,7 +552,8 @@ NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize
 {
     size_t bt_size = 0;
     bt_cursor_t cursor;
-    if (unw_init_local_dwarf(&cursor, context) != UNW_ESUCCESS)
+    // if (unw_init_local_dwarf(&cursor, context) != UNW_ESUCCESS)
+    if (unw_init_local(&cursor, context) != UNW_ESUCCESS)
         return 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
     return bt_size;
