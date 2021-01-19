@@ -350,3 +350,10 @@ ars = reinterpret(reshape, Int, a)
 a = [(k,k+1,k+2) for k = 1:3:4000]
 ars = reinterpret(reshape, Int, a)
 @test sum(ars) == 8010003
+
+@testset "aliasing" begin
+    a = reinterpret(NTuple{2,Float64}, rand(Float64, 4, 4))
+    @test typeof(Base.unaliascopy(a)) === typeof(a)
+    a = reinterpret(reshape, NTuple{4,Float64}, rand(Float64, 4, 4))
+    @test typeof(Base.unaliascopy(a)) === typeof(a)
+end
