@@ -79,12 +79,30 @@ L3:
 """)
 # CHECK-LABEL: }{{$}}
 
+# CHECK-LABEL: @legal_int_types
+# CHECK: alloca [12 x i8]
+# CHECK-NOT: alloca i96
+# CHECK: ret void
+println("""
+define void @legal_int_types() {
+  %ptls = call {}*** @julia.ptls_states()
+  %ptls_i8 = bitcast {}*** %ptls to i8*
+  %var1 = call {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 12, {} addrspace(10)* @tag)
+  %var2 = addrspacecast {} addrspace(10)* %var1 to {} addrspace(11)*
+  %var3 = call {}* @julia.pointer_from_objref({} addrspace(11)* %var2)
+  ret void
+}
+""")
+# CHECK-LABEL: }{{$}}
+
+
+
 println("""
 declare void @external_function()
 declare {} addrspace(10)* @external_function2()
 declare {}*** @julia.ptls_states()
 declare noalias {} addrspace(10)* @julia.gc_alloc_obj(i8*, $isz, {} addrspace(10)*)
-declare i64 @julia.pointer_from_objref({} addrspace(11)*)
+declare {}* @julia.pointer_from_objref({} addrspace(11)*)
 declare void @llvm.memcpy.p11i8.p0i8.i64(i8 addrspace(11)* nocapture writeonly, i8* nocapture readonly, i64, i32, i1)
 declare token @llvm.julia.gc_preserve_begin(...)
 declare void @llvm.julia.gc_preserve_end(token)
