@@ -644,48 +644,75 @@ rank(C::CholeskyPivoted) = C.rank
 
 """
     lowrankupdate!(C::Cholesky, v::AbstractVector) -> CC::Cholesky
+    lowrankupdate!(U::UpperTriangular, v::AbstractVector) -> UU::UpperTriangular
+    lowrankupdate!(L::LowerTriangular, v::AbstractVector) -> LL::LowerTriangular
 
-Update a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U` then
-`CC = cholesky(C.U'C.U + v*v')` but the computation of `CC` only uses `O(n^2)`
-operations. The input factorization `C` is updated in place such that on exit `C == CC`.
-The vector `v` is destroyed during the computation.
+Update a Cholesky factorization `C` with the vector `v`.
+
+If `A = C.U'C.U` then `CC = cholesky(C.U'C.U + v*v')` but the computation of
+`CC` only uses `O(n^2)` operations. The input factorization `C` is updated in
+place such that on exit `C == CC`. If a triangular matrix `U` or `L` is given
+instead of `C`, the matrix is considered as a Cholesky factor of the matrix
+`A` (i.e., `A = U'U = L*L'`) and updated in place. The vector `v` is
+destroyed during the computation.
 """
 function lowrankupdate!(C::Cholesky, v::AbstractVector)
     A = C.factors
-    n = length(v)
-    if size(C, 1) != n
-        throw(DimensionMismatch("updating vector must fit size of factorization"))
-    end
     if C.uplo == 'U'
-        conj!(v)
-    end
-
-    for i = 1:n
-
-        # Compute Givens rotation
-        c, s, r = givensAlgorithm(A[i,i], v[i])
-
-        # Store new diagonal element
-        A[i,i] = r
-
-        # Update remaining elements in row/column
-        if C.uplo == 'U'
-            for j = i + 1:n
-                Aij = A[i,j]
-                vj  = v[j]
-                A[i,j]  =   c*Aij + s*vj
-                v[j]    = -s'*Aij + c*vj
-            end
-        else
-            for j = i + 1:n
-                Aji = A[j,i]
-                vj  = v[j]
-                A[j,i]  =   c*Aji + s*vj
-                v[j]    = -s'*Aji + c*vj
-            end
-        end
+        lowrankupdateupper!(A, v)
+    else
+        lowrankupdatelower!(A, v)
     end
     return C
+end
+
+function lowrankupdate!(U::UpperTriangular, v::AbstractVector)
+    lowrankupdateupper!(U.data, v)
+    return U
+end
+
+function lowrankupdate!(L::LowerTriangular, v::AbstractVector)
+    lowrankupdatelower!(L.data, v)
+    return L
+end
+
+function lowrankupdateupper!(A::AbstractMatrix, v::AbstractVector)
+    n = checksquare(A)
+    n == length(v) || throw(DimensionMismatch("updating vector must fit size of factorization"))
+    conj!(v)
+    for i = 1:n
+        # Compute Givens rotation
+        c, s, r = givensAlgorithm(A[i,i], v[i])
+        # Store new diagonal element
+        A[i,i] = r
+        # Update remaining elements in row
+        for j = i + 1:n
+            Aij = A[i,j]
+            vj  = v[j]
+            A[i,j]  =   c*Aij + s*vj
+            v[j]    = -s'*Aij + c*vj
+        end
+    end
+    return A
+end
+
+function lowrankupdatelower!(A::AbstractMatrix, v::AbstractVector)
+    n = checksquare(A)
+    n == length(v) || throw(DimensionMismatch("updating vector must fit size of factorization"))
+    for i = 1:n
+        # Compute Givens rotation
+        c, s, r = givensAlgorithm(A[i,i], v[i])
+        # Store new diagonal element
+        A[i,i] = r
+        # Update remaining elements in column
+        for j = i + 1:n
+            Aji = A[j,i]
+            vj  = v[j]
+            A[j,i]  =   c*Aji + s*vj
+            v[j]    = -s'*Aji + c*vj
+        end
+    end
+    return A
 end
 
 """
@@ -743,12 +770,20 @@ end
 
 """
     lowrankupdate(C::Cholesky, v::AbstractVector) -> CC::Cholesky
+    lowrankupdate(U::UpperTriangular, v::AbstractVector) -> UU::UpperTriangular
+    lowrankupdate(L::LowerTriangular, v::AbstractVector) -> LL::LowerTriangular
 
-Update a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U`
-then `CC = cholesky(C.U'C.U + v*v')` but the computation of `CC` only uses
-`O(n^2)` operations.
+Update a Cholesky factorization `C` with the vector `v`.
+
+If `A = C.U'C.U` then `CC = cholesky(C.U'C.U + v*v')` but the computation of
+`CC` only uses `O(n^2)` operations. If a triangular matrix `U` or `L` is
+given instead of `C`, the matrix is considered as a Cholesky factor of the
+matrix `A` (i.e., `A = U'U = L*L'`) and returns an updated triangular matrix
+of the same type.
 """
 lowrankupdate(C::Cholesky, v::AbstractVector) = lowrankupdate!(copy(C), copy(v))
+lowrankupdate(U::UpperTriangular, v::AbstractVector) = lowrankupdate!(copy(U), copy(v))
+lowrankupdate(L::LowerTriangular, v::AbstractVector) = lowrankupdate!(copy(L), copy(v))
 
 """
     lowrankdowndate(C::Cholesky, v::AbstractVector) -> CC::Cholesky
