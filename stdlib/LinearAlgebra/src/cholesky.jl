@@ -718,56 +718,81 @@ end
 """
     lowrankdowndate!(C::Cholesky, v::AbstractVector) -> CC::Cholesky
 
-Downdate a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U` then
-`CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses `O(n^2)`
-operations. The input factorization `C` is updated in place such that on exit `C == CC`.
-The vector `v` is destroyed during the computation.
+Downdate a Cholesky factorization `C` with the vector `v`.
+
+If `A = C.U'C.U` then `CC = cholesky(C.U'C.U - v*v')` but the computation of
+`CC` only uses `O(n^2)` operations. The input factorization `C` is updated in
+place such that on exit `C == CC`. If a triangular matrix `U` or `L` is given
+instead of `C`, the matrix is considered as a Cholesky factor of the matrix
+`A` (i.e., `A = U'U = L*L'`) and updated in place. The vector `v` is
+destroyed during the computation.
 """
 function lowrankdowndate!(C::Cholesky, v::AbstractVector)
     A = C.factors
-    n = length(v)
-    if size(C, 1) != n
-        throw(DimensionMismatch("updating vector must fit size of factorization"))
-    end
     if C.uplo == 'U'
-        conj!(v)
-    end
-
-    for i = 1:n
-
-        Aii = A[i,i]
-
-        # Compute Givens rotation
-        s = conj(v[i]/Aii)
-        s2 = abs2(s)
-        if s2 > 1
-            throw(LinearAlgebra.PosDefException(i))
-        end
-        c = sqrt(1 - abs2(s))
-
-        # Store new diagonal element
-        A[i,i] = c*Aii
-
-        # Update remaining elements in row/column
-        if C.uplo == 'U'
-            for j = i + 1:n
-                vj = v[j]
-                Aij = (A[i,j] - s*vj)/c
-                A[i,j] = Aij
-                v[j] = -s'*Aij + c*vj
-            end
-        else
-            for j = i + 1:n
-                vj = v[j]
-                Aji = (A[j,i] - s*vj)/c
-                A[j,i] = Aji
-                v[j] = -s'*Aji + c*vj
-            end
-        end
+        lowrankdowndateupper!(A, v)
+    else
+        lowrankdowndatelower!(A, v)
     end
     return C
 end
 
+function lowrankdowndate!(U::UpperTriangular, v::AbstractVector)
+    lowrankdowndateupper!(U.data, v)
+    return U
+end
+
+function lowrankdowndate!(L::LowerTriangular, v::AbstractVector)
+    lowrankdowndatelower!(L.data, v)
+    return L
+end
+
+function lowrankdowndateupper!(A::AbstractMatrix, v::AbstractVector)
+    n = checksquare(A)
+    n == length(v) || throw(DimensionMismatch("updating vector must fit size of factorization"))
+    conj!(v)
+    for i = 1:n
+        Aii = A[i,i]
+        # Compute Givens rotation
+        s = conj(v[i]/Aii)
+        s2 = abs2(s)
+        s2 > 1 && throw(PosDefException(i))
+        c = sqrt(1 - s2)
+        # Store new diagonal element
+        A[i,i] = c*Aii
+        # Update remaining elements in row
+        for j = i + 1:n
+            vj = v[j]
+            Aij = (A[i,j] - s*vj)/c
+            A[i,j] = Aij
+            v[j] = -s'*Aij + c*vj
+        end
+    end
+    return A
+end
+
+function lowrankdowndatelower!(A::AbstractMatrix, v::AbstractVector)
+    n = checksquare(A)
+    n == length(v) || throw(DimensionMismatch("updating vector must fit size of factorization"))
+    for i = 1:n
+        Aii = A[i,i]
+        # Compute Givens rotation
+        s = conj(v[i]/Aii)
+        s2 = abs2(s)
+        s2 > 1 && throw(PosDefException(i))
+        c = sqrt(1 - s2)
+        # Store new diagonal element
+        A[i,i] = c*Aii
+        # Update remaining elements in column
+        for j = i + 1:n
+            vj = v[j]
+            Aji = (A[j,i] - s*vj)/c
+            A[j,i] = Aji
+            v[j] = -s'*Aji + c*vj
+        end
+    end
+    return A
+end
 """
     lowrankupdate(C::Cholesky, v::AbstractVector) -> CC::Cholesky
     lowrankupdate(U::UpperTriangular, v::AbstractVector) -> UU::UpperTriangular
@@ -787,9 +812,17 @@ lowrankupdate(L::LowerTriangular, v::AbstractVector) = lowrankupdate!(copy(L), c
 
 """
     lowrankdowndate(C::Cholesky, v::AbstractVector) -> CC::Cholesky
+    lowrankdowndate(U::UpperTriangular, v::AbstractVector) -> UU::UpperTriangular
+    lowrankdowndate(L::LowerTriangular, v::AbstractVector) -> LL::LowerTriangular
 
-Downdate a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U`
-then `CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses
-`O(n^2)` operations.
+Downdate a Cholesky factorization `C` with the vector `v`.
+
+If `A = C.U'C.U` then `CC = cholesky(C.U'C.U - v*v')` but the computation of
+`CC` only uses `O(n^2)` operations. If a triangular matrix `U` or `L` is
+given instead of `C`, the matrix is considered as a Cholesky factor of the
+matrix `A` (i.e., `A = U'U = L*L'`) and returns an updated triangular matrix
+of the same type.
 """
 lowrankdowndate(C::Cholesky, v::AbstractVector) = lowrankdowndate!(copy(C), copy(v))
+lowrankdowndate(U::UpperTriangular, v::AbstractVector) = lowrankdowndate!(copy(U), copy(v))
+lowrankdowndate(L::LowerTriangular, v::AbstractVector) = lowrankdowndate!(copy(L), copy(v))
