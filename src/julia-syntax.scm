@@ -1998,17 +1998,15 @@
             (tvars     (cddr (cadddr sig-svec)))
             (argtypes  (cdddr typ-svec))
             (functionloc (cadr (caddddr sig-svec))))
-       (if (length= argtypes 0) `(_opaque_closure ,(expand-forms `(curly (core Tuple))) (false) 0 ,functionloc ,lam)
+       (if (length= argtypes 0)
+        `(_opaque_closure ,(expand-forms `(curly (core Tuple))) (false) 0 ,functionloc ,lam)
          (let* ((vssa (make-ssavalue))
                 (vval (expand-forms (last argtypes)))
-                (argtypes (append (butlast argtypes) (list vssa)))
+                (argtypes (append (butlast argtypes) (list `(block (= ,vssa ,vval)))))
                 (argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
                                   (expand-forms `(curly (core Tuple) ,@argtypes))
                                   (reverse tvars))))
-            `(block
-               (= ,vssa ,vval)
-               (_opaque_closure ,argtype (call (core isa) ,vssa (core TypeofVararg)) ,(length argtypes) ,functionloc ,lam))))))
-
+              `(_opaque_closure ,argtype (call (core isa) ,vssa (core TypeofVararg)) ,(length argtypes) ,functionloc ,lam)))))
    'block
    (lambda (e)
      (cond ((null? (cdr e)) '(null))

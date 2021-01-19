@@ -1189,13 +1189,13 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function code_typed_opaque_closure(closure::Core.OpaqueClosure, @nospecialize(types=Tuple);
+function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @nospecialize(types=Tuple);
         optimize=true,
         debuginfo::Symbol=:default,
         interp = Core.Compiler.NativeInterpreter(closure.world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    if isa(closure.ci, CodeInfo)
-        code = copy(closure.ci)
+    if isa(closure.source, Method)
+        code = _uncompressed_ir(closure.source, closure.source.source)
         debuginfo === :none && remove_linenums!(code)
         return Any[Pair{CodeInfo,Any}(code, code.rettype)]
     else

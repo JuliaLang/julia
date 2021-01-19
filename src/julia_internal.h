@@ -539,7 +539,7 @@ extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 int jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva, jl_value_t *rt_lb,
-    jl_value_t *rt_ub, jl_method_t *source,  jl_value_t **env, size_t nenv);
+    jl_value_t *rt_ub, jl_value_t *source,  jl_value_t **env, size_t nenv);
 
 // Each tuple can exist in one of 4 Vararg states:
 //   NONE: no vararg                            Tuple{Int,Float32}
@@ -598,25 +598,6 @@ STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT
     jl_value_t *len = jl_unwrap_vararg_num(v);
     assert(jl_is_long(len));
     return jl_unbox_long(len);
-}
-
-// check whether the specified number of arguments is compatible with the
-// specified number of paramters of the tuple type
-STATIC_INLINE int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTSAFEPOINT
-{
-    v = jl_unwrap_unionall(v);
-    assert(jl_is_tuple_type(v));
-    size_t nparams = jl_nparams(v);
-    if (nparams == 0)
-        return nargs == 0;
-    jl_value_t *va = jl_tparam(v,nparams-1);
-    if (jl_is_vararg(va)) {
-        jl_value_t *len = jl_unwrap_vararg_num(v);
-        if (jl_is_long(len))
-            return nargs == nparams - 1 + jl_unbox_long(len);
-        return nargs >= nparams - 1;
-    }
-    return nparams == nargs;
 }
 
 STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t) JL_NOTSAFEPOINT
@@ -1292,6 +1273,7 @@ extern jl_sym_t *exc_sym;     extern jl_sym_t *error_sym;
 extern jl_sym_t *new_sym;     extern jl_sym_t *using_sym;
 extern jl_sym_t *splatnew_sym;
 extern jl_sym_t *new_opaque_closure_sym;
+extern jl_sym_t *opaque_closure_method_sym;
 extern jl_sym_t *pop_exception_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *foreigncall_sym; extern jl_sym_t *as_sym;

@@ -327,6 +327,7 @@ typedef struct _jl_method_t {
                            // of another method.
     uint8_t isva;
     uint8_t pure;
+    uint8_t is_for_opaque_closure;
 
 // hidden fields:
     // lock for modifications to the method
@@ -1594,9 +1595,9 @@ JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 #define JL_NARGSV(fname, min)                           \
     if (nargs < min) jl_too_few_args(#fname, min);
 
-#define JL_TYPECHK(fname, type, v)                                              \
-    if (!jl_is_##type(v)) {                                                     \
-        jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (jl_value_t*)(v)); \
+#define JL_TYPECHK(fname, type, v)                                 \
+    if (!jl_is_##type(v)) {                                        \
+        jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (v)); \
     }
 #define JL_TYPECHKS(fname, type, v)                                     \
     if (!jl_is_##type(v)) {                                             \

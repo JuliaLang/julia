@@ -570,7 +570,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_uint8(s->s, TAG_METHOD);
         jl_method_t *m = (jl_method_t*)v;
         int internal = 1;
-        internal = module_in_worklist(m->module);
+        internal = m->is_for_opaque_closure || module_in_worklist(m->module);
         if (!internal) {
             // flag this in the backref table as special
             uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, v);
@@ -593,6 +593,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int32(s->s, m->nkw);
         write_int8(s->s, m->isva);
         write_int8(s->s, m->pure);
+        write_int8(s->s, m->is_for_opaque_closure);
         jl_serialize_value(s, (jl_value_t*)m->slot_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
         jl_serialize_value(s, (jl_value_t*)m->ccallable);
@@ -1440,6 +1441,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->nkw = read_int32(s->s);
     m->isva = read_int8(s->s);
     m->pure = read_int8(s->s);
+    m->is_for_opaque_closure = read_int8(s->s);
     m->slot_syms = jl_deserialize_value(s, (jl_value_t**)&m->slot_syms);
     jl_gc_wb(m, m->slot_syms);
     m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
@@ -1848,6 +1850,7 @@ static void jl_insert_methods(jl_array_t *list)
     size_t i, l = jl_array_len(list);
     for (i = 0; i < l; i += 2) {
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(list, i);
+        assert(!meth->is_for_opaque_closure);
         jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_array_ptr_ref(list, i + 1);
         assert(jl_is_method(meth));
         jl_methtable_t *mt = jl_method_table_for((jl_value_t*)meth->sig);

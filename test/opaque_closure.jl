@@ -114,7 +114,7 @@ let A = [1 2]
     end
 end
 
-using Base: @opaque
+using Base.Experimental: @opaque
 
 @test @opaque(x->2x)(8) == 16
 let f = @opaque (x::Int, y::Float64)->(2x, 3y)

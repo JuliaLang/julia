@@ -4547,7 +4547,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
 
             li = jl_new_method_instance_uninit();
             li->def.method = closure_method;
-            li->uninferred = (jl_value_t*)closure_src;
             jl_tupletype_t *argt_typ = (jl_tupletype_t *)argt.constant;
 
             closure_t = jl_apply_type2((jl_value_t*)jl_opaque_closure_type, (jl_value_t*)argt_typ, ub.constant);
@@ -4595,15 +4594,16 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             }
 
             jl_cgval_t jlcall_ptr;
-            if (closure_decls.functionObject == "jl_fptr_args" ||
-                closure_decls.functionObject == "jl_fptr_sparam") {
+            assert(closure_decls.functionObject != "jl_fptr_sparam");
+            if (closure_decls.functionObject == "jl_fptr_args") {
                 jlcall_ptr = fptr;
             }
             else {
                 Function *F = NULL;
                 if (GlobalValue *V = jl_Module->getNamedValue(closure_decls.functionObject)) {
                     F = cast<Function>(V);
-                } else {
+                }
+                else {
                     F = Function::Create(get_func_sig(jl_LLVMContext),
                                     Function::ExternalLinkage,
                                     closure_decls.functionObject, jl_Module);
@@ -5914,11 +5914,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     int va = 0;
     if (jl_is_method(lam->def.method)) {
         ctx.nargs = nreq = lam->def.method->nargs;
-        jl_datatype_t *closure = jl_first_argument_datatype(lam->specTypes);
-        if (closure && jl_is_opaque_closure_type(closure)) {
-            // This is an opaque closure
-            ctx.is_opaque_closure = true;
-        }
+        ctx.is_opaque_closure = lam->def.method->is_for_opaque_closure;
         if (vaOverride ||
             (nreq > 0 && jl_is_method(lam->def.value) && lam->def.method->isva)) {
             assert(nreq > 0 && (ctx.is_opaque_closure || !vaOverride));
@@ -6467,7 +6463,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             else {
                 if (i == 0) {
                     // first (function) arg is separate in jlcall
-                    theArg = mark_julia_type(ctx, fArg, true, vi.value.typ);
+                    theArg = mark_julia_type(ctx, fArg, true, ctx.is_opaque_closure ?
+                        argType : vi.value.typ);
                 }
                 else {
                     Value *argPtr = ctx.builder.CreateInBoundsGEP(T_prjlvalue, argArray, ConstantInt::get(T_size, i-1));
