@@ -26,8 +26,8 @@ end
 
 Files and file names are mostly unrelated to modules; modules are associated only with module
 expressions. One can have multiple files per module, and multiple modules per file. `include`
-behaves as if the contents of the source file were evaluated in its place. In this chapter, we use
-short and simplified examples, so we won't use `include`.
+behaves as if the contents of the source file were evaluated in the global scope of the
+including module. In this chapter, we use short and simplified examples, so we won't use `include`.
 
 The recommended style is not to indent the body of the module, since that would typically lead to
 whole files being indented. Also, it is common to use `UpperCamelCase` for module names (just like
