@@ -1639,29 +1639,24 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
     return __cat(A, shape, catdims, X...)
 end
 
-function __cat(A, shape::NTuple{M}, catdims, X...) where M
-    N = M::Int
-    offsets = zeros(Int, N)
-    inds = Vector{UnitRange{Int}}(undef, N)
-    concat = copyto!(zeros(Bool, N), catdims)
-    for x in X
-        for i = 1:N
-            if concat[i]
-                inds[i] = offsets[i] .+ cat_indices(x, i)
-                offsets[i] += cat_size(x, i)
-            else
-                inds[i] = 1:shape[i]
-            end
-        end
-        I::NTuple{N, UnitRange{Int}} = (inds...,)
-        if x isa AbstractArray
-            A[I...] = x
-        else
-            fill!(view(A, I...), x)
-        end
+# Why isn't this called `__cat!`?
+__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(zero, length(shape)), X...)
+
+function __cat_offset!(A, shape, catdims, offsets, x, X...)
+    inds = ntuple(length(offsets)) do i
+        (i <= length(catdims) && catdims[i]) ? offsets[i] .+ cat_indices(x, i) : 1:shape[i]
     end
-    return A
+    if x isa AbstractArray
+        A[inds...] = x
+    else
+        fill!(view(A, inds...), x)
+    end
+    newoffsets = ntuple(length(offsets)) do i
+        (i <= length(catdims) && catdims[i]) ? offsets[i] + cat_size(x, i) : offsets[i]
+    end
+    return __cat_offset!(A, shape, catdims, newoffsets, X...)
 end
+__cat_offset!(A, shape, catdims, offsets) = return A
 
 """
     vcat(A...)
