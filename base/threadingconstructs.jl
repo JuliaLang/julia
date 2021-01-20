@@ -146,9 +146,9 @@ end
 """
     Threads.@spawn expr
 
-Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available thread. 
-The task is allocated to a thread after it becomes available. To wait for the task 
-to finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref) to 
+Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available thread.
+The task is allocated to a thread after it becomes available. To wait for the task
+to finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref) to
 wait and then obtain its return value.
 
 Values can be interpolated into `@spawn` via `\$`, which copies the value directly into the
