@@ -608,3 +608,6 @@ x = [j+7 for j in i]
         Iterators.flatten((1:2, 3:4)),
     ) == (1, 4)
 end
+
+# issue #39281
+@test @inferred(extrema(rand(2), dims=1)) isa Vector{Tuple{Float64,Float64}}
