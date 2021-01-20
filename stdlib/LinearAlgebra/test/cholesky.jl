@@ -299,17 +299,18 @@ Base.setindex!(v::WrappedVector, val, i::Integer) = setindex!(v.data, val, i)
     A = complex.(randn(10,5), randn(10, 5))
     v = complex.(randn(5), randn(5))
     w = WrappedVector(v)
+    AcA = A'A
+    BcB = AcA + v*v'
     for uplo in (:U, :L)
-        AcA = A'*A
-        BcB = AcA + v*v'
-        BcB = (BcB + BcB')/2
         F = cholesky(Hermitian(AcA, uplo))
         G = cholesky(Hermitian(BcB, uplo))
         @test getproperty(lowrankupdate(F, v), uplo) ≈ getproperty(G, uplo)
         @test getproperty(lowrankupdate(F, w), uplo) ≈ getproperty(G, uplo)
+        @test lowrankupdate(getproperty(F, uplo), v) ≈ getproperty(G, uplo)
         @test_throws DimensionMismatch lowrankupdate(F, Vector{eltype(v)}(undef,length(v)+1))
         @test getproperty(lowrankdowndate(G, v), uplo) ≈ getproperty(F, uplo)
         @test getproperty(lowrankdowndate(G, w), uplo) ≈ getproperty(F, uplo)
+        @test lowrankdowndate(getproperty(G, uplo), v) ≈ getproperty(F, uplo)
         @test_throws DimensionMismatch lowrankdowndate(G, Vector{eltype(v)}(undef,length(v)+1))
     end
 end
