@@ -413,6 +413,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.slot_syms)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
+    serialize(s, meth.is_for_opaque_closure)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
@@ -986,7 +987,14 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     end
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
-    template = deserialize(s)
+    is_for_opaque_closure = false
+    template_or_is_opaque = deserialize(s)
+    if isa(template_or_is_opaque, Bool)
+        is_for_opaque_closure = template_or_is_opaque
+        template = deserialize(s)
+    else
+        template = template_or_is_opaque
+    end
     generator = deserialize(s)
     if makenew
         meth.module = mod
@@ -996,6 +1004,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.sig = sig
         meth.nargs = nargs
         meth.isva = isva
+        meth.is_for_opaque_closure = is_for_opaque_closure
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -1012,9 +1021,11 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             linfo.def = meth
             meth.generator = linfo
         end
-        mt = ccall(:jl_method_table_for, Any, (Any,), sig)
-        if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
+        if !is_for_opaque_closure
+            mt = ccall(:jl_method_table_for, Any, (Any,), sig)
+            if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
+                ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
+            end
         end
         remember_object(s, meth, lnumber)
     end
