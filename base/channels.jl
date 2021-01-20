@@ -422,18 +422,9 @@ n_avail(c::Channel) = isbuffered(c) ? length(c.data) : length(c.cond_put.waitq)
 isempty(c::Channel) = isbuffered(c) ? isempty(c.data) : isempty(c.cond_put.waitq)
 
 lock(c::Channel) = lock(c.cond_take)
+lock(f, c::Channel) = lock(f, c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
 trylock(c::Channel) = trylock(c.cond_take)
-
-
-function lock(f, c::Channel)
-    lock(c)
-    try
-        return f()
-    finally
-        unlock(c)
-    end
-end
 
 function wait(c::Channel)
     isready(c) && return
