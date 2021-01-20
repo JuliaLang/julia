@@ -988,6 +988,8 @@ retained. When called with a file name, the file is opened once at the beginning
 iteration and closed at the end. If iteration is interrupted, the file will be
 closed when the `EachLine` object is garbage collected.
 
+To iterate over each line of a `String`, `eachline(IOBuffer(str))` can be used.
+
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
@@ -1156,6 +1158,8 @@ Read `io` until the end of the stream/file and count the number of lines. To spe
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
 passing them as the second argument.  The last non-empty line of `io` is counted even if it does not
 end with the EOL, matching the length returned by [`eachline`](@ref) and [`readlines`](@ref).
+
+To count lines of a `String`, `countlines(IOBuffer(str))` can be used.
 
 # Examples
 ```jldoctest
