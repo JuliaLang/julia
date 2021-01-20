@@ -1503,6 +1503,9 @@ void jl_init_intrinsic_functions(void) JL_GC_DISABLED
     inm->parent = jl_core_module;
     jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
     jl_mk_builtin_func(jl_intrinsic_type, "IntrinsicFunction", jl_f_intrinsic_call);
+    jl_mk_builtin_func(
+        (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type),
+        "OpaqueClosure", jl_f_opaque_closure_call);
 
 #define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
 #define ADD_HIDDEN(name, nargs)
@@ -1618,6 +1621,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
+    add_builtin("OpaqueClosure", (jl_value_t*)jl_opaque_closure_type);
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
     add_builtin("DenseArray", (jl_value_t*)jl_densearray_type);

@@ -30,7 +30,8 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :thunk => 1:1,
     :throw_undef_if_not => 2:2,
     :aliasscope => 0:0,
-    :popaliasscope => 0:0
+    :popaliasscope => 0:0,
+    :new_opaque_closure => 4:typemax(Int)
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this

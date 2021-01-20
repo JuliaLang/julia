@@ -375,7 +375,8 @@ function is_relevant_expr(e::Expr)
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
-                      :cfunction, :method, :pop_exception)
+                      :cfunction, :method, :pop_exception,
+                      :new_opaque_closure)
 end
 
 function setindex!(x::UseRef, @nospecialize(v))

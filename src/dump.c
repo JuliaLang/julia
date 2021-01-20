@@ -570,7 +570,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_uint8(s->s, TAG_METHOD);
         jl_method_t *m = (jl_method_t*)v;
         int internal = 1;
-        internal = module_in_worklist(m->module);
+        internal = m->is_for_opaque_closure || module_in_worklist(m->module);
         if (!internal) {
             // flag this in the backref table as special
             uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, v);
@@ -593,6 +593,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int32(s->s, m->nkw);
         write_int8(s->s, m->isva);
         write_int8(s->s, m->pure);
+        write_int8(s->s, m->is_for_opaque_closure);
         jl_serialize_value(s, (jl_value_t*)m->slot_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
         jl_serialize_value(s, (jl_value_t*)m->ccallable);
@@ -675,6 +676,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     }
     else if (jl_typeis(v, jl_task_type)) {
         jl_error("Task cannot be serialized");
+    }
+    else if (jl_typeis(v, jl_opaque_closure_type)) {
+        jl_error("Live opaque closures cannot be serialized");
     }
     else if (jl_typeis(v, jl_string_type)) {
         write_uint8(s->s, TAG_STRING);
@@ -1437,6 +1441,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->nkw = read_int32(s->s);
     m->isva = read_int8(s->s);
     m->pure = read_int8(s->s);
+    m->is_for_opaque_closure = read_int8(s->s);
     m->slot_syms = jl_deserialize_value(s, (jl_value_t**)&m->slot_syms);
     jl_gc_wb(m, m->slot_syms);
     m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
@@ -1845,6 +1850,7 @@ static void jl_insert_methods(jl_array_t *list)
     size_t i, l = jl_array_len(list);
     for (i = 0; i < l; i += 2) {
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(list, i);
+        assert(!meth->is_for_opaque_closure);
         jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_array_ptr_ref(list, i + 1);
         assert(jl_is_method(meth));
         jl_methtable_t *mt = jl_method_table_for((jl_value_t*)meth->sig);
@@ -2635,7 +2641,6 @@ void jl_init_serializer(void)
                      jl_box_int64(12), jl_box_int64(13), jl_box_int64(14),
                      jl_box_int64(15), jl_box_int64(16), jl_box_int64(17),
                      jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
-                     jl_box_int64(21),
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
@@ -2652,6 +2657,7 @@ void jl_init_serializer(void)
                      jl_namedtuple_type, jl_array_int32_type,
                      jl_typedslot_type, jl_uint32_type, jl_uint64_type,
                      jl_type_type_mt, jl_nonfunction_mt,
+                     jl_opaque_closure_type,
 
                      ptls->root_task,
 

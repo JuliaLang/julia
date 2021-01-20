@@ -327,6 +327,7 @@ typedef struct _jl_method_t {
                            // of another method.
     uint8_t isva;
     uint8_t pure;
+    uint8_t is_for_opaque_closure;
 
 // hidden fields:
     // lock for modifications to the method
@@ -351,6 +352,17 @@ struct _jl_method_instance_t {
     struct _jl_code_instance_t *cache;
     uint8_t inInference; // flags to tell if inference is running on this object
 };
+
+// OpaqueClosure
+typedef struct jl_opaque_closure_t {
+    JL_DATA_TYPE
+    jl_value_t *captures;
+    uint8_t isva;
+    size_t world;
+    jl_method_t *source;
+    jl_fptr_args_t invoke;
+    void *specptr;
+} jl_opaque_closure_t;
 
 // This type represents an executable operation
 typedef struct _jl_code_instance_t {
@@ -630,6 +642,8 @@ extern JL_DLLIMPORT jl_unionall_t *jl_anytuple_type_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_vararg_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_function_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_builtin_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_unionall_t *jl_opaque_closure_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_typename_t *jl_opaque_closure_typename JL_GLOBALLY_ROOTED;
 
 extern JL_DLLIMPORT jl_value_t *jl_bottom_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_instance_type JL_GLOBALLY_ROOTED;
@@ -1213,6 +1227,19 @@ STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
     return jl_is_array_type(t);
 }
 
+
+STATIC_INLINE int jl_is_opaque_closure_type(void *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_opaque_closure_typename);
+}
+
+STATIC_INLINE int jl_is_opaque_closure(void *v) JL_NOTSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(v);
+    return jl_is_opaque_closure_type(t);
+}
+
 STATIC_INLINE int jl_is_cpointer_type(jl_value_t *t) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(t) &&
@@ -1568,9 +1595,9 @@ JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 #define JL_NARGSV(fname, min)                           \
     if (nargs < min) jl_too_few_args(#fname, min);
 
-#define JL_TYPECHK(fname, type, v)                                      \
-    if (!jl_is_##type(v)) {                                             \
-        jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (v));      \
+#define JL_TYPECHK(fname, type, v)                                 \
+    if (!jl_is_##type(v)) {                                        \
+        jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (v)); \
     }
 #define JL_TYPECHKS(fname, type, v)                                     \
     if (!jl_is_##type(v)) {                                             \

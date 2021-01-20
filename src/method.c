@@ -18,6 +18,9 @@ extern "C" {
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
+
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
@@ -63,6 +66,18 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         }
         else {
             size_t i = 0, nargs = jl_array_len(e->args);
+            if (e->head == opaque_closure_method_sym) {
+                if (nargs != 3) {
+                    jl_error("opaque_closure_method: invalid syntax");
+                }
+                jl_value_t *nargs = jl_exprarg(e, 0);
+                jl_value_t *functionloc = jl_exprarg(e, 1);
+                jl_value_t *ci = jl_exprarg(e, 2);
+                if (!jl_is_code_info(ci)) {
+                    jl_error("opaque_closure_method: lambda should be a CodeInfo");
+                }
+                return (jl_value_t*)jl_make_opaque_closure_method(module, nargs, functionloc, (jl_code_info_t*)ci);
+            }
             if (e->head == cfunction_sym) {
                 JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
                 jl_value_t *typ = jl_exprarg(e, 0);
@@ -625,11 +640,33 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->nargs = 0;
     m->primary_world = 1;
     m->deleted_world = ~(size_t)0;
+    m->is_for_opaque_closure = 0;
     JL_MUTEX_INIT(&m->writelock);
     return m;
 }
 
 // method definition ----------------------------------------------------------
+
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
+{
+    jl_method_t *m = jl_new_method_uninit(module);
+    JL_GC_PUSH1(&m);
+    // TODO: Maybe have a signature of (parent method, stmt#)?
+    m->sig = (jl_value_t*)jl_anytuple_type;
+    // Unused for opaque closures. va-ness is determined on construction
+    m->isva = 0;
+    m->is_for_opaque_closure = 1;
+    m->name = jl_symbol("opaque closure");
+    m->nargs = jl_unbox_long(nargs) + 1;
+    assert(jl_is_linenode(functionloc));
+    jl_value_t *file = jl_linenode_file(functionloc);
+    m->file = jl_is_symbol(file) ? (jl_sym_t*)file : empty_sym;
+    m->line = jl_linenode_line(functionloc);
+    jl_method_set_source(m, ci);
+    JL_GC_POP();
+    return m;
+}
 
 // empty generic function def
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
