@@ -1155,7 +1155,7 @@ end
 
 function (==)(A::BitArray, B::BitArray)
     size(A) != size(B) && return false
-    A.chunks == B.chunks && return true
+    A.chunks == B.chunks || return false
 
     # clean up remainder
     n_rem = length(A) - 64*(length(A.chunks) - 1)
