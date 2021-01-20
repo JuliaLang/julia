@@ -307,7 +307,7 @@ function open_flags(;
 end
 
 """
-    open(f::Function, args...; kwargs....)
+    open(f::Function, args...; kwargs...)
 
 Apply the function `f` to the result of `open(args...; kwargs...)` and close the resulting file
 descriptor upon completion.
