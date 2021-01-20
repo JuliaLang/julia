@@ -515,11 +515,8 @@ function LinRange(start, stop, len::Integer)
     LinRange{T}(start, stop, len)
 end
 
-function range_start_stop_length(start::T, stop::S, len::Integer) where {T,S}
-    a, b = promote(start, stop)
-    range_start_stop_length(a, b, len)
-end
-range_start_stop_length(start::T, stop::T, len::Integer) where {T<:Real} = LinRange{T}(start, stop, len)
+range_start_stop_length(start, stop, len::Integer) =
+    range_start_stop_length(promote(start, stop)..., len)
 range_start_stop_length(start::T, stop::T, len::Integer) where {T} = LinRange{T}(start, stop, len)
 range_start_stop_length(start::T, stop::T, len::Integer) where {T<:Integer} =
     _linspace(float(T), start, stop, len)
