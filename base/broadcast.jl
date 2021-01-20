@@ -977,8 +977,10 @@ preprocess_args(dest, args::Tuple{}) = ()
         end
     end
     bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
-        @inbounds dest[I] = bc′[I]
+    # Performance may vary depending on whether `@inounds` is placed outside the
+    # for loop or not. (cf. https://github.com/JuliaLang/julia/issues/38086)
+    @inbounds @simd for I in eachindex(bc′)
+        dest[I] = bc′[I]
     end
     return dest
 end
