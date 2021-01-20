@@ -12,9 +12,11 @@ const _REF_NAME = Ref.body.name
 # logic #
 #########
 
-# see if the inference result might affect the final answer
-call_result_unused(frame::InferenceState, pc::LineNum=frame.currpc) =
-    isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[pc])
+# See if the inference result of the current statement's result value might affect
+# the final answer for the method (aside from optimization potential and exceptions).
+# To do that, we need to check both for slot assignment and SSA usage.
+call_result_unused(frame::InferenceState) =
+    isexpr(frame.src.code[frame.currpc], :call) && isempty(frame.ssavalue_uses[frame.currpc])
 
 # check if this return type is improvable (i.e. whether it's possible that with
 # more information, we might get a more precise type)
@@ -192,6 +194,16 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
     end
     #print("=> ", rettype, "\n")
+    if rettype isa LimitedAccuracy
+        union!(sv.pclimitations, rettype.causes)
+        rettype = rettype.typ
+    end
+    if !isempty(sv.pclimitations) # remove self, if present
+        delete!(sv.pclimitations, sv)
+        for caller in sv.callers_in_cycle
+            delete!(sv.pclimitations, caller)
+        end
+    end
     return CallMeta(rettype, info)
 end
 
@@ -313,7 +325,6 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
         inf_result = InferenceResult(mi, argtypes)
         frame = InferenceState(inf_result, #=cache=#false, interp)
         frame === nothing && return Any # this is probably a bad generated function (unsound), but just ignore it
-        frame.limited = true
         frame.parent = sv
         push!(inf_cache, inf_result)
         typeinf(interp, frame) || return Any
@@ -394,7 +405,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                             parent = parent::InferenceState
                             parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
                             parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                            if (parent.cached || parent.limited) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+                            if (parent.cached || parent.parent !== nothing) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                                 topmost = infstate
                                 edgecycle = true
                             end
@@ -443,7 +454,8 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return Any, true, nothing
             end
-            poison_callstack(sv, topmost::InferenceState, true)
+            topmost = topmost::InferenceState
+            poison_callstack(sv, topmost.parent === nothing ? topmost : topmost.parent)
             sig = newsig
             sparams = svec()
         end
@@ -1124,7 +1136,12 @@ function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtyp
     if isa(e, Expr)
         return abstract_eval_value_expr(interp, e, vtypes, sv)
     else
-        return abstract_eval_special_value(interp, e, vtypes, sv)
+        typ = abstract_eval_special_value(interp, e, vtypes, sv)
+        if typ isa LimitedAccuracy
+            union!(sv.pclimitations, typ.causes)
+            typ = typ.typ
+        end
+        return typ
     end
 end
 
@@ -1247,12 +1264,20 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             end
         end
     else
-        return abstract_eval_value_expr(interp, e, vtypes, sv)
+        t = abstract_eval_value_expr(interp, e, vtypes, sv)
     end
     @assert !isa(t, TypeVar)
     if isa(t, DataType) && isdefined(t, :instance)
         # replace singleton types with their equivalent Const object
         t = Const(t.instance)
+    end
+    if !isempty(sv.pclimitations)
+        if t isa Const || t === Union{}
+            empty!(sv.pclimitations)
+        else
+            t = LimitedAccuracy(t, sv.pclimitations)
+            sv.pclimitations = IdSet{InferenceState}()
+        end
     end
     return t
 end
@@ -1308,10 +1333,18 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             elseif isa(stmt, GotoIfNot)
                 condt = abstract_eval_value(interp, stmt.cond, s[pc], frame)
                 if condt === Bottom
+                    empty!(frame.pclimitations)
                     break
                 end
                 condval = maybe_extract_const_bool(condt)
                 l = stmt.dest::Int
+                if !isempty(frame.pclimitations)
+                    # we can't model the possible effect of control
+                    # dependencies on the return value, so we propagate it
+                    # directly to all the return values (unless we error first)
+                    condval isa Bool || union!(frame.limitations, frame.pclimitations)
+                    empty!(frame.pclimitations)
+                end
                 # constant conditions
                 if condval === true
                 elseif condval === false
@@ -1345,6 +1378,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)
+                end
+                # copy limitations to return value
+                if !isempty(frame.pclimitations)
+                    union!(frame.limitations, frame.pclimitations)
+                    empty!(frame.pclimitations)
+                end
+                if !isempty(frame.limitations)
+                    rt = LimitedAccuracy(rt, copy(frame.limitations))
                 end
                 if tchanged(rt, frame.bestguess)
                     # new (wider) return type for frame
@@ -1419,6 +1460,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     end
                 end
             end
+
+            @assert isempty(frame.pclimitations) "unhandled LimitedAccuracy"
 
             if t === nothing
                 # mark other reached expressions as `Any` to indicate they don't throw

@@ -276,7 +276,9 @@ union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstrac
 union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
-    return unionlen(t)+union_count_abstract(t) <= MAX_TYPEUNION_LENGTH && unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
+    t = ignorelimited(t)
+    return unionlen(t) + union_count_abstract(t) <= MAX_TYPEUNION_LENGTH &&
+           unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
 
 # pick a wider type that contains both typea and typeb,
@@ -292,6 +294,24 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     suba && subb && return typea
     subb && issimpleenoughtype(typea) && return typea
 
+    # type-lattice for LimitedAccuracy wrapper
+    # the merge create a slightly narrower type than needed, but we can't
+    # represent the precise intersection of causes and don't attempt to
+    # enumerate some of these cases where we could
+    if isa(typea, LimitedAccuracy) && isa(typeb, LimitedAccuracy)
+        if typea.causes ⊆ typeb.causes
+            causes = typeb.causes
+        elseif typeb.causes ⊆ typea.causes
+            causes = typea.causes
+        else
+            causes = union!(copy(typea.causes), typeb.causes)
+        end
+        return LimitedAccuracy(tmerge(typea.typ, typeb.typ), causes)
+    elseif isa(typea, LimitedAccuracy)
+        return LimitedAccuracy(tmerge(typea.typ, typeb), typea.causes)
+    elseif isa(typeb, LimitedAccuracy)
+        return LimitedAccuracy(tmerge(typea, typeb.typ), typeb.causes)
+    end
     # type-lattice for MaybeUndef wrapper
     if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
         return MaybeUndef(tmerge(

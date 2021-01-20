@@ -1620,10 +1620,14 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                         # output was computed to be constant
                         return Const(typeof(rt.val))
                     else
+                        inaccurate = nothing
+                        rt isa LimitedAccuracy && (inaccurate = rt.causes; rt = rt.typ)
                         rt = widenconst(rt)
                         if hasuniquerep(rt) || rt === Bottom
                             # output type was known for certain
                             return Const(rt)
+                        elseif inaccurate !== nothing
+                            return LimitedAccuracy(Type{<:rt}, inaccurate)
                         elseif (isa(tt, Const) || isconstType(tt)) &&
                             (isa(aft, Const) || isconstType(aft))
                             # input arguments were known for certain
