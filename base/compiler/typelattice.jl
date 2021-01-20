@@ -124,8 +124,11 @@ function issubconditional(a::C, b::C) where {C<:AnyConditional}
     end
     return false
 end
+
 is_same_conditionals(a::Conditional,      b::Conditional)      = slot_id(a.var) === slot_id(b.var)
 is_same_conditionals(a::InterConditional, b::InterConditional) = a.slot === b.slot
+
+is_lattice_bool(@nospecialize(typ)) = typ !== Bottom && typ ⊑ Bool
 
 maybe_extract_const_bool(c::Const) = (val = c.val; isa(val, Bool)) ? val : nothing
 function maybe_extract_const_bool(c::AnyConditional)
