@@ -1155,9 +1155,14 @@ end
 
 function (==)(A::BitArray, B::BitArray)
     size(A) != size(B) && return false
-    return A.chunks == B.chunks
-end
+    A.chunks == B.chunks && return true
 
+    # clean up remainder
+    n_rem = length(A) - 64*(length(A.chunks) - 1)
+    a, b = A.chunks[end], B.chunks[end]
+    c = (UInt64(1) << n_rem) - 1
+    (a & c) == (b & c)
+end
 
 ## Data movement ##
 
