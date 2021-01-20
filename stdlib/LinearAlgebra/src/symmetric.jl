@@ -839,9 +839,97 @@ end
 
 function eigen!(A::RealHermSymComplexHerm{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
     U = cholesky(B).U
-    vals, w = eigen!(Hermitian(U' \ A / U))
+    vals, w = eigen!(UtiAUi!(A, U))
     vecs = U \ w
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
+end
+
+# Perform U' \ A / U in-place.
+UtiAUi!(As::Symmetric, Utr::UpperTriangular) = Symmetric(_UtiAsymUi!(As.uplo, parent(As), parent(Utr)), sym_uplo(As.uplo))
+UtiAUi!(As::Hermitian, Utr::UpperTriangular) = Hermitian(_UtiAsymUi!(As.uplo, parent(As), parent(Utr)), sym_uplo(As.uplo))
+UtiAUi!(As::Symmetric, Udi::Diagonal) = Symmetric(_UtiAsymUi_diag!(As.uplo, parent(As), Udi), sym_uplo(As.uplo))
+UtiAUi!(As::Hermitian, Udi::Diagonal) = Hermitian(_UtiAsymUi_diag!(As.uplo, parent(As), Udi), sym_uplo(As.uplo))
+
+# U is upper triangular
+function _UtiAsymUi!(uplo, A, U)
+    n = size(A, 1)
+    μ⁻¹ = 1 / U[1, 1]
+    αμ⁻² = A[1, 1] * μ⁻¹^2
+
+    # Update (1, 1) element
+    A[1, 1] = αμ⁻²
+    if n > 1
+        Unext = view(U, 2:n, 2:n)
+
+        if uplo === 'U'
+            # Update lower submatrix
+            for j in 2:n, i in 2:j
+                A[i, j] = A[i, j] -
+                    μ⁻¹ * (U[1, i] * A[1, j]' + A[1, i] * U[1, j]') +
+                    αμ⁻² * U[1, i] * U[1, j]'
+            end
+
+            # Update vector
+            for j in 2:n
+                A[1, j] = A[1, j] * μ⁻¹ - U[1, j] * αμ⁻²
+            end
+            ldiv!(view(A', 2:n, 1), UpperTriangular(Unext)', view(A', 2:n, 1))
+        else
+            # Update lower submatrix
+            for j in 2:n, i in 2:j
+                A[j, i] = A[j, i] -
+                    μ⁻¹ * (U[1, i] * A[j, 1]' + A[i, 1] * U[1, j]') +
+                    αμ⁻² * U[1, i] * U[1, j]'
+            end
+
+            # Update vector
+            for j in 2:n
+                A[j, 1] = A[j, 1] * μ⁻¹ - U[1, j] * αμ⁻²
+            end
+            ldiv!(view(A, 2:n, 1), UpperTriangular(Unext)', view(A, 2:n, 1))
+        end
+
+        # Recurse
+        _UtiAsymUi!(uplo, view(A, 2:n, 2:n), Unext)
+    end
+
+    return A
+end
+
+# U is diagonal
+function _UtiAsymUi_diag!(uplo, A, U)
+    n = size(A, 1)
+    μ⁻¹ = 1 / U[1, 1]
+    αμ⁻² = A[1, 1] * μ⁻¹^2
+
+    # Update (1, 1) element
+    A[1, 1] = αμ⁻²
+    if n > 1
+        Unext = view(U, 2:n, 2:n)
+
+        if uplo === 'U'
+            # No need to update lower submatrix when U is diagonal
+
+            # Update vector
+            for j in 2:n
+                A[1, j] = A[1, j] * μ⁻¹
+            end
+            ldiv!(view(A', 2:n, 1), Diagonal(Unext)', view(A', 2:n, 1))
+        else
+            # No need to update lower submatrix when U is diagonal
+
+            # Update vector
+            for j in 2:n
+                A[j, 1] = A[j, 1] * μ⁻¹
+            end
+            ldiv!(view(A, 2:n, 1), Diagonal(Unext)', view(A, 2:n, 1))
+        end
+
+        # Recurse
+        _UtiAsymUi!(uplo, view(A, 2:n, 2:n), Unext)
+    end
+
+    return A
 end
 
 eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix} =

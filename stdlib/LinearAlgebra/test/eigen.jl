@@ -77,10 +77,10 @@ aimg  = randn(n,n)/2
             # matrices of different types (#14896)
             fs = eigen(Symmetric(asym_sg), a_sg'a_sg)
             @test fs.values ≈ f.values
-            @test fs.vectors ≈ f.vectors
+            @test abs.(fs.vectors) ≈ abs.(f.vectors)  # may change sign
             fh = eigen(Hermitian(asym_sg), a_sg'a_sg)
             @test fh.values ≈ f.values
-            @test fh.vectors ≈ f.vectors
+            @test abs.(fh.vectors) ≈ abs.(f.vectors)  # may change sign
             g = eigen(Symmetric(asym_sg), Diagonal(a_sg'a_sg))
             @test Symmetric(asym_sg)*g.vectors ≈ (Diagonal(a_sg'a_sg)*g.vectors) * Diagonal(g.values)
         end
