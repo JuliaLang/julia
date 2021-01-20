@@ -1256,16 +1256,7 @@ end
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
 
-let
-    f = x->isdefined(x, :re)
-    t = Tuple{ComplexF64}
-    interp = Core.Compiler.NativeInterpreter()
-    linfo = get_linfo(f, t)
-    ci = Core.Compiler.getindex(Core.Compiler.code_cache(interp), get_linfo(f, t))
-    rc = ci.rettype_const
-    @test isa(rc, Core.InterConditional)
-    @test rc.vtype === ComplexF64 && rc.elsetype === Union{}
-end
+test_const_return(x->isdefined(x, :re), Tuple{ComplexF64}, true)
 
 isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
@@ -1778,17 +1769,28 @@ end
         return nothing
     end == Any[Union{Int,Symbol,Nothing}]
 
+    # constraint on non-vararg argument of `isva` method
+    isaint_isvapositive(a, va...) = isa(a, Int) && sum(va) > 0
+    @test Base.return_types((Any,Int,Int)) do a, b, c
+        isaint_isvapositive(a, b, c) && return a # a::Int
+        0
+    end == Any[Int]
+
     # with Base functions
     @test Base.return_types((Any,)) do a
-        Base.Fix2(isa, Int)(a) && return sin(a) # a::Float64
-        return 0.0
-    end == Any[Float64]
+        Base.Fix2(isa, Int)(a) && return a # a::Int
+        return 0
+    end == Any[Int]
     @test Base.return_types((Union{Nothing,Int},)) do a
         isnothing(a) && return 0
         return a # a::Int
     end == Any[Int]
-    @test_broken Base.return_types((Any,)) do x
-        Meta.isexpr(x, :call) && return x # x::Expr, ideally
+    @test Base.return_types((Union{Missing,Int},)) do a
+        ismissing(a) && return 0
+        return a # a::Int
+    end == Any[Int]
+    @test Base.return_types((Any,)) do x
+        Meta.isexpr(x, :call) && return x # x::Expr
         return nothing
     end == Any[Union{Nothing,Expr}]
 end
