@@ -50,7 +50,7 @@ let
     @test format_filename("%a%%b") == "a%b"
 end
 
-let exename = `$(Base.julia_cmd()) --startup-file=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # tests for handling of ENV errors
     let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
                 setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
@@ -94,7 +94,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
 end
 
-let exename = `$(Base.julia_cmd()) --startup-file=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --version
     let v = split(read(`$exename -v`, String), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
@@ -673,7 +673,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 end
 
 # issue #6310
-let exename = `$(Base.julia_cmd()) --startup-file=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test writereadpipeline("2+2", exename) == ("4\n", true)
     @test writereadpipeline("2+2\n3+3\n4+4", exename) == ("4\n6\n8\n", true)
     @test writereadpipeline("", exename) == ("", true)
@@ -698,7 +698,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 end
 
 # incomplete inputs to stream REPL
-let exename = `$(Base.julia_cmd()) --startup-file=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     in = Pipe(); out = Pipe(); err = Pipe()
     proc = run(pipeline(exename, stdin = in, stdout = out, stderr = err), wait=false)
     write(in, "f(\n")
@@ -710,7 +710,7 @@ end
 
 # Issue #29855
 for yn in ("no", "yes")
-    exename = `$(Base.julia_cmd()) --inline=no --startup-file=no --inline=$yn`
+    exename = `$(Base.julia_cmd()) --inline=no --startup-file=no --color=no --inline=$yn`
     v = writereadpipeline("Base.julia_cmd()", exename)
     if yn == "no"
         @test occursin(r" --inline=no", v[1])
@@ -719,3 +719,6 @@ for yn in ("no", "yes")
     end
     @test v[2]
 end
+
+# issue #39259, shadowing `ARGS`
+@test success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)

@@ -46,6 +46,8 @@ Standard library changes
 * `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
 * `escape_string` can now receive a collection of characters in the keyword
   `keep` that are to be kept as they are. ([#38597]).
+* `getindex` can now be used on `NamedTuple`s with multiple values ([#38878])
+* `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
 
 #### Package Manager
 

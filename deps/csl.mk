@@ -44,6 +44,7 @@ $(eval $(call copy_csl,$(call gen_libname,quadmath,0)))
 $(eval $(call copy_csl,$(call gen_libname,stdc++,6)))
 $(eval $(call copy_csl,$(call gen_libname,ssp,0)))
 $(eval $(call copy_csl,$(call gen_libname,atomic,1)))
+$(eval $(call copy_csl,$(call gen_libname,gomp,1)))
 
 ifeq ($(OS),WINNT)
 # Windwos has special gcc_s names
@@ -73,6 +74,8 @@ clean-csl:
 	-rm -f $(build_shlibdir)/libpthread*$(SHLIB_EXT)*
 	-rm -f $(build_shlibdir)/libwinpthread*$(SHLIB_EXT)*
 	-rm -f $(build_shlibdir)/libatomic*$(SHLIB_EXT)*
+	-rm -f $(build_shlibdir)/libgomp*$(SHLIB_EXT)*
+distclean-csl: clean-csl
 
 else
 $(eval $(call bb-install,csl,CSL,true))

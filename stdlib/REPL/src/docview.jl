@@ -247,7 +247,8 @@ function summarize(binding::Binding, sig)
     if defined(binding)
         summarize(io, resolve(binding), binding)
     else
-        println(io, "Binding `", binding, "` does not exist.")
+        quot = any(isspace, sprint(print, binding)) ? "'" : ""
+        println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
     end
     md = Markdown.parse(seekstart(io))
     # Save metadata in the generated markdown.
@@ -311,17 +312,23 @@ end
 
 # repl search and completions for help
 
+
+quote_spaces(x) = any(isspace, x) ? "'" * x * "'" : x
+
 function repl_search(io::IO, s::Union{Symbol,String})
     pre = "search:"
     print(io, pre)
-    printmatches(io, s, doc_completions(s), cols = _displaysize(io)[2] - length(pre))
+    printmatches(io, s, map(quote_spaces, doc_completions(s)), cols = _displaysize(io)[2] - length(pre))
     println(io, "\n")
 end
 repl_search(s) = repl_search(stdout, s)
 
 function repl_corrections(io::IO, s)
     print(io, "Couldn't find ")
-    printstyled(io, s, '\n', color=:cyan)
+    quot = any(isspace, s) ? "'" : ""
+    print(io, quot)
+    printstyled(io, s, color=:cyan)
+    print(io, quot, '\n')
     print_correction(io, s)
 end
 repl_corrections(s) = repl_corrections(stdout, s)
@@ -334,7 +341,11 @@ function symbol_latex(s::String)
                                         REPLCompletions.emoji_symbols))
             symbols_latex[v] = k
         end
+
+        # Overwrite with canonical mapping when a symbol has several completions (#39148)
+        merge!(symbols_latex, REPLCompletions.symbols_latex_canonical)
     end
+
     return get(symbols_latex, s, "")
 end
 function repl_latex(io::IO, s::String)
@@ -623,7 +634,7 @@ end
 print_joined_cols(args...; cols::Int = _displaysize(stdout)[2]) = print_joined_cols(stdout, args...; cols=cols)
 
 function print_correction(io::IO, word::String)
-    cors = levsort(word, accessible(Main))
+    cors = map(quote_spaces, levsort(word, accessible(Main)))
     pre = "Perhaps you meant "
     print(io, pre)
     print_joined_cols(io, cors, ", ", " or "; cols = _displaysize(io)[2] - length(pre))

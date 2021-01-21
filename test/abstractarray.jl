@@ -692,6 +692,12 @@ function test_cat(::Type{TestAbstractArray})
     # 36041
     @test_throws MethodError cat(["a"], ["b"], dims=[1, 2])
     @test cat([1], [1], dims=[1, 2]) == I(2)
+
+    # inferrability
+    As = [zeros(2, 2) for _ = 1:2]
+    @test @inferred(cat(As...; dims=Val(3))) == zeros(2, 2, 2)
+    cat3v(As) = cat(As...; dims=Val(3))
+    @test @inferred(cat3v(As)) == zeros(2, 2, 2)
 end
 
 function test_ind2sub(::Type{TestAbstractArray})

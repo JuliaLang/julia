@@ -1698,9 +1698,9 @@ extrema(f, A::AbstractArray; dims=:) = _extrema_dims(f, A, dims)
 _extrema_dims(f, A::AbstractArray, ::Colon) = _extrema_itr(f, A)
 
 function _extrema_dims(f, A::AbstractArray, dims)
-    sz = [size(A)...]
+    sz = size(A)
     for d in dims
-        sz[d] = 1
+        sz = setindex(sz, 1, d)
     end
     T = promote_op(f, eltype(A))
     B = Array{Tuple{T,T}}(undef, sz...)

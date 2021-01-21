@@ -368,3 +368,11 @@ ars = reinterpret(reshape, Int, a)
     @test as isa TSlow{NTuple{4,Float64},1}
     @test size(as) == (4,)
 end
+
+
+@testset "aliasing" begin
+    a = reinterpret(NTuple{2,Float64}, rand(Float64, 4, 4))
+    @test typeof(Base.unaliascopy(a)) === typeof(a)
+    a = reinterpret(reshape, NTuple{4,Float64}, rand(Float64, 4, 4))
+    @test typeof(Base.unaliascopy(a)) === typeof(a)
+end

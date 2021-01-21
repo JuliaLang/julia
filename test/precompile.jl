@@ -846,3 +846,16 @@ precompile_test_harness("Issue #38312") do load_path
           pointer_from_objref(eval(Meta.parse(TheType))) ===
           pointer_from_objref((@eval (using Bar38312; Bar38312)).TheType)
 end
+
+precompile_test_harness("Opaque Closure") do load_path
+    write(joinpath(load_path, "OCPrecompile.jl"),
+        """
+        module OCPrecompile
+        using Base.Experimental: @opaque
+        f(x) = @opaque y->x+y
+        end
+        """)
+    Base.compilecache(Base.PkgId("OCPrecompile"))
+    f = (@eval (using OCPrecompile; OCPrecompile)).f
+    @test Base.invokelatest(f, 1)(2) == 3
+end

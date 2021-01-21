@@ -34,7 +34,9 @@ end
 
 function has_nontrivial_const_info(@nospecialize t)
     isa(t, PartialStruct) && return true
-    return isa(t, Const) && !isdefined(typeof(t.val), :instance) && !(isa(t.val, Type) && hasuniquerep(t.val))
+    isa(t, Const) || return false
+    val = t.val
+    return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
 end
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For

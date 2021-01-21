@@ -18,6 +18,10 @@
     # the next ones use ==, because it changes the eltype
     @test r ==  range(first(r),       last(r),      length(r)       )
     @test r ==  range(start=first(r), stop=last(r), length=length(r))
+
+    for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
+        @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
+    end
 end
 
 using Dates, Random

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-import REPL
+import REPL, REPL.REPLCompletions
 import Markdown
 
 @testset "symbol completion" begin
@@ -19,6 +19,20 @@ import Markdown
             Core.eval(Main, REPL.helpmode(buf, "ᵞ₁₂₃¹²³α"))
             String(take!(buf))
         end, "\"ᵞ₁₂₃¹²³α\" can be typed by \\^gamma<tab>\\_123<tab>\\^123<tab>\\alpha<tab>\n")
+
+    # Check that all symbols with several completions have a canonical mapping (#39148)
+    symbols = values(REPLCompletions.latex_symbols)
+    duplicates = [v for v in unique(symbols) if count(==(v), symbols) > 1]
+    @test all(duplicates .∈ Ref(keys(REPLCompletions.symbols_latex_canonical)))
+end
+
+@testset "quoting in doc search" begin
+    str = let buf = IOBuffer()
+        Core.eval(Main, REPL.helpmode(buf, "mutable s"))
+        String(take!(buf))
+    end
+    @test occursin("'mutable struct'", str)
+    @test occursin("Couldn't find 'mutable s'", str)
 end
 
 @testset "Non-Markdown" begin
