@@ -4580,37 +4580,39 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 env = mark_julia_type(ctx, env_val, true, env_t);
             }
 
-            Function *specptr = closure_m->getFunction(closure_decls.specFunctionObject);
-            jl_cgval_t fptr;
-            if (specptr) {
-                jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module,
-                    closure_decls.specFunctionObject, li->specTypes, ub.constant);
-                fptr = mark_julia_type(ctx, returninfo.decl, false, jl_voidpointer_type);
-            }
-            else {
-                fptr = mark_julia_type(ctx,
-                    (llvm::Value*)Constant::getNullValue(T_size),
-                    false, jl_voidpointer_type);
-            }
-
-            jl_cgval_t jlcall_ptr;
             assert(closure_decls.functionObject != "jl_fptr_sparam");
-            if (closure_decls.functionObject == "jl_fptr_args") {
-                jlcall_ptr = fptr;
+            bool isspecsig = closure_decls.functionObject != "jl_fptr_args";
+
+            Function *F = NULL;
+            std::string fname = isspecsig ?
+                closure_decls.functionObject :
+                closure_decls.specFunctionObject;
+            if (GlobalValue *V = jl_Module->getNamedValue(fname)) {
+                F = cast<Function>(V);
             }
             else {
-                Function *F = NULL;
-                if (GlobalValue *V = jl_Module->getNamedValue(closure_decls.functionObject)) {
-                    F = cast<Function>(V);
+                F = Function::Create(get_func_sig(jl_LLVMContext),
+                                Function::ExternalLinkage,
+                                fname, jl_Module);
+                F->setAttributes(get_func_attrs(jl_LLVMContext));
+            }
+            jl_cgval_t jlcall_ptr = mark_julia_type(ctx,
+                F, false, jl_voidpointer_type);
+
+            jl_cgval_t fptr;
+            if (!isspecsig) {
+                fptr = jlcall_ptr;
+            } else {
+                Function *specptr = closure_m->getFunction(closure_decls.specFunctionObject);
+                if (specptr) {
+                    jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module,
+                        closure_decls.specFunctionObject, li->specTypes, ub.constant);
+                    fptr = mark_julia_type(ctx, returninfo.decl, false, jl_voidpointer_type);
+                } else {
+                    fptr = mark_julia_type(ctx,
+                        (llvm::Value*)Constant::getNullValue(T_size),
+                        false, jl_voidpointer_type);
                 }
-                else {
-                    F = Function::Create(get_func_sig(jl_LLVMContext),
-                                    Function::ExternalLinkage,
-                                    closure_decls.functionObject, jl_Module);
-                    F->setAttributes(get_func_attrs(jl_LLVMContext));
-                }
-                jlcall_ptr = mark_julia_type(ctx,
-                    F, false, jl_voidpointer_type);
             }
 
             jl_cgval_t world_age = mark_julia_type(ctx,
