@@ -4,6 +4,9 @@ Julia v1.7 Release Notes
 New language features
 ---------------------
 
+* `(; a, b) = x` can now be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
+  and similarly for `b`. ([#39285])
+
 Language changes
 ----------------
 
