@@ -979,8 +979,14 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             end
         else
             # Dual-iterator implementation
-            for (idx, idy) in zip(iterdest, itersrc)
-                @inbounds dest[idx] = src[idy]
+#             for (idx, idy) in zip(iterdest, itersrc)
+#                 @inbounds dest[idx] = src[idy]
+#             end
+            ret = iterate(iterdest)
+            @inbounds for a in src
+                idx, state = ret	
+                dest[idx] = a	
+                ret = iterate(iterdest, state)	
             end
         end
     end
