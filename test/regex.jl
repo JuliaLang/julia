@@ -98,6 +98,7 @@
         @test !haskey(m, "foo")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
         @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
+        @test keys(m) == ["a", 2, "b"]
     end
 
     # Backcapture reference in substitution string

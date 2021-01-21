@@ -149,16 +149,21 @@ struct RegexMatch <: AbstractMatch
     regex::Regex
 end
 
+function keys(m::RegexMatch)
+    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
+    return map(eachindex(m.captures)) do i
+        # If the capture group is named, return it's name, else return it's index
+        get(idx_to_capture_name, i, i)
+    end
+end
+
 function show(io::IO, m::RegexMatch)
     print(io, "RegexMatch(")
     show(io, m.match)
-    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
-    if !isempty(m.captures)
+    capture_keys = keys(m)
+    if !isempty(capture_keys)
         print(io, ", ")
-        for i = 1:length(m.captures)
-            # If the capture group is named, show the name.
-            # Otherwise show its index.
-            capture_name = get(idx_to_capture_name, i, i)
+        for (i, capture_name) in enumerate(capture_keys)
             print(io, capture_name, "=")
             show(io, m.captures[i])
             if i < length(m.captures)
