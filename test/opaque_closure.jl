@@ -150,3 +150,6 @@ end
 mk_va_opaque() = @opaque (x...)->x
 @test mk_va_opaque()(1) == (1,)
 @test mk_va_opaque()(1,2) == (1,2)
+
+# OpaqueClosure show method
+@test repr(@opaque x->1) == "(::Any)::Any->◌"
