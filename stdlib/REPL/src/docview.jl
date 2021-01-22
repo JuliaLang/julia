@@ -291,7 +291,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
             println(io, "# Subtypes")
             println(io, "```")
             for t in subt
-                println(io, t)
+                println(io, Base.unwrap_unionall(t))
             end
             println(io, "```")
         end

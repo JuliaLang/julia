@@ -599,39 +599,50 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
     return true
 end
 
-function show_typeparams(io::IO, env::SimpleVector, wheres::Vector)
+function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector)
     n = length(env)
-    print(io, "{")
     elide = length(wheres)
+    function egal_var(p::TypeVar, @nospecialize o)
+        return o isa TypeVar &&
+            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
+            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
+    end
     for i = n:-1:1
         p = env[i]
         if p isa TypeVar
-            if p.lb === Union{} && show_can_elide(p, wheres, elide, env, i)
+            if i == n && egal_var(p, orig[i]) && show_can_elide(p, wheres, elide, env, i)
+                n -= 1
+                elide -= 1
+            elseif p.lb === Union{} && show_can_elide(p, wheres, elide, env, i)
                 elide -= 1
             elseif p.ub === Any && show_can_elide(p, wheres, elide, env, i)
                 elide -= 1
             end
         end
     end
-    for i = 1:n
-        p = env[i]
-        if p isa TypeVar
-            if p.lb === Union{} && something(findfirst(w -> w === p, wheres), 0) > elide
-                print(io, "<:")
-                show(io, p.ub)
-            elseif p.ub === Any && something(findfirst(w -> w === p, wheres), 0) > elide
-                print(io, ">:")
-                show(io, p.lb)
+    if n > 0
+        print(io, "{")
+        for i = 1:n
+            p = env[i]
+            if p isa TypeVar
+                if p.lb === Union{} && something(findfirst(w -> w === p, wheres), 0) > elide
+                    print(io, "<:")
+                    show(io, p.ub)
+                elseif p.ub === Any && something(findfirst(w -> w === p, wheres), 0) > elide
+                    print(io, ">:")
+                    show(io, p.lb)
+                else
+                    show(io, p)
+                end
             else
                 show(io, p)
             end
-        else
-            show(io, p)
+            i < n && print(io, ", ")
         end
-        i < n && print(io, ", ")
+        print(io, "}")
     end
-    print(io, "}")
-    return elide
+    resize!(wheres, elide)
+    nothing
 end
 
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
@@ -651,8 +662,13 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
     for p in wheres
         io = IOContext(io, :unionall_env => p)
     end
-    elide = show_typeparams(io, env, wheres)
-    resize!(wheres, elide)
+    orig = getfield(name.mod, name.name)
+    vars = TypeVar[]
+    while orig isa UnionAll
+        push!(vars, orig.var)
+        orig = orig.body
+    end
+    show_typeparams(io, env, Core.svec(vars...), wheres)
     nothing
 end
 
@@ -973,18 +989,17 @@ function show_datatype(io::IO, @nospecialize(x::DataType), wheres::Vector=TypeVa
     n = length(parameters)
 
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
-    if istuple && n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
-        print(io, "NTuple{", n, ", ", parameters[1], "}")
+    if istuple
+        if n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
+            print(io, "NTuple{", n, ", ", parameters[1], "}")
+        else
+            print(io, "Tuple{")
+            join(io, parameters, ", ")
+            print(io, "}")
+        end
     else
         show_type_name(io, x.name)
-        if (n > 0 || istuple) && x !== Tuple
-            # Do not print the type parameters for the primary type if we are
-            # printing a method signature or type parameter.
-            # Always print the type parameter if we are printing the type directly
-            # since this information is still useful.
-            elide = show_typeparams(io, parameters, wheres)
-            resize!(wheres, elide)
-        end
+        show_typeparams(io, parameters, unwrap_unionall(x.name.wrapper).parameters, wheres)
     end
 end
 
