@@ -568,3 +568,7 @@ end
     @test length(collect(tokenize(s, Tokens.RawToken))) == 2
 end
 
+@testset "circ arrow right op" begin 
+    s = "↻"
+    @test collect(tokenize(s, Tokens.RawToken))[1].kind == Tokens.CIRCLE_ARROW_RIGHT
+end
