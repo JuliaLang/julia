@@ -126,6 +126,47 @@ let cfg = CFG(BasicBlock[
     @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
 end
 
+# Make sure that we can collapse Goto chains
+let cfg = CFG(BasicBlock[
+        make_bb([]        , [2]),
+        make_bb([1]       , [3]), # should be removed
+        make_bb([2]       , []), # should be removed
+    ], Int[])
+    insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
+    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], [], [])
+    compact = Compiler.IncrementalCompact(code, true)
+    @test length(compact.result_bbs) == 1
+end
+
+let ci = make_ci([
+        # Block 1
+        Core.Compiler.GotoNode(2),
+        # Block 2 (no predecessors)
+        Core.Compiler.GotoNode(3),
+        # Block 3
+        Core.Compiler.ReturnNode(Core.Compiler.Argument(1))
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    @test Core.Compiler.verify_ir(ir) == nothing
+    @test length(ir.cfg.blocks) == 1
+end
+
+let ci = make_ci([
+        # Block 1
+        Core.Compiler.GotoIfNot(false, 3),
+        # Block 2 (no predecessors)
+        Core.Compiler.GotoNode(3),
+        # Block 3
+        Core.Compiler.ReturnNode(Core.Compiler.Argument(1))
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    ir = Core.Compiler.compact!(ir, true)
+    ir = Core.Compiler.compact!(ir, true)
+    @test Core.Compiler.verify_ir(ir) == nothing
+    @test length(ir.cfg.blocks) == 1
+end
+
 # Issue #32579 - Optimizer bug involving type constraints
 function f32579(x::Int, b::Bool)
     if b

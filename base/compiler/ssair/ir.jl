@@ -546,30 +546,58 @@ mutable struct IncrementalCompact
             domtree = construct_domtree(blocks)
             for i = 1:length(bb_rename)
                 if bb_unreachable(domtree, i)
-                    bb_rename[i] = -1
+                    bb_rename[i] = -1 # Dead block
                 else
-                    bb_rename[i] = cur_bb
-                    cur_bb += 1
+                    preds = blocks[i].preds
+                    # Is this block the sole successor of it's sole predecessor?
+                    # If yes we can merge them.
+                    if length(preds) == 1 && length(blocks[first(preds)].succs) == 1
+                        bb_rename[i] = -2 # Merged into predecessor
+                    else
+                        bb_rename[i] = cur_bb
+                        cur_bb += 1
+                    end
                 end
             end
             for i = 1:length(bb_rename)
-                bb_rename[i] == -1 && continue
+                bb_rename[i] < 0 && continue
                 preds, succs = blocks[i].preds, blocks[i].succs
+
                 # Rename preds
+                new_preds = Int[]
                 for j = 1:length(preds)
                     if preds[j] != 0
-                        preds[j] = bb_rename[preds[j]]
+                        pred = preds[j]
+                        # Walk up the chain of singular predecessors
+                        while bb_rename[pred] == -2
+                            preds′ = blocks[pred].preds
+                            @assert length(preds) == 1
+                            pred = first(preds′)
+                        end
+                        preds[j] = bb_rename[pred]
                     end
                 end
                 # Dead blocks get removed from the predecessor list
-                filter!(x->x !== -1, preds)
+                filter!(x->x >= 0, preds)
+                # If succs is -2, walk down the chain
+                if length(succs) == 1 && bb_rename[first(succs)] == -2
+                    succ = first(succs)
+                    succs′ = blocks[succ].succs
+                    while length(succs′) == 1 && bb_rename[first(succs′)] == -2
+                        succ = first(succs′)
+                        succs′ = blocks[succ].succs
+                    end
+                    empty!(succs)
+                    append!(succs, succs′)
+                end
                 # Rename succs
                 for j = 1:length(succs)
+                    succ = succs[j]
                     succs[j] = bb_rename[succs[j]]
                 end
             end
             let blocks = blocks, bb_rename = bb_rename
-                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] >= 0]
             end
         else
             bb_rename = Vector{Int}()
@@ -949,8 +977,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
     elseif isa(stmt, GotoNode) && compact.cfg_transforms_enabled
-        result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.label])
-        result_idx += 1
+        target = compact.bb_rename_succ[stmt.label]
+        if target == -2
+            # Don't increment result_idx => Drop this statement
+        else
+            result[result_idx][:inst] = GotoNode(target)
+            result_idx += 1
+        end
     elseif isa(stmt, GlobalRef) || isa(stmt, GotoNode)
         result[result_idx][:inst] = stmt
         result_idx += 1
