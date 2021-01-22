@@ -3008,3 +3008,6 @@ f38888() = S38888(Base.inferencebarrier(3))
 @test f38888() isa S38888
 g38888() = S38888(Base.inferencebarrier(3), nothing)
 @test g38888() isa S38888
+
+f_inf_error_bottom(x::Vector) = isempty(x) ? error(x[1]) : x
+@test Core.Compiler.return_type(f_inf_error_bottom, Tuple{Vector{Any}}) == Vector{Any}
