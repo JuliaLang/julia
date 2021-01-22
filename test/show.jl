@@ -2070,15 +2070,21 @@ end
 end
 
 module M37012
+export AValue, B2
 struct AnInteger{S<:Integer} end
 struct AStruct{N} end
 const AValue{S} = Union{AStruct{S}, AnInteger{S}}
+struct BStruct{T,S} end
+const B2{S,T} = BStruct{T,S}
 end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
 @test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector{T} where T}"
 @test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat{T} where T}"
+@test string(M37012.BStruct{T, T} where T) == "$(curmod_prefix)M37012.B2{T, T} where T"
+@test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Unsigned, S<:Signed}"
+@test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Signed, S<:T}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
