@@ -103,21 +103,6 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
         # Load the toml file
         depot_override_dict = parse_toml(override_file)
 
-        function parse_mapping(mapping::String, name::String)
-            if !isabspath(mapping) && !isempty(mapping)
-                mapping = tryparse(Base.SHA1, mapping)
-                if mapping === nothing
-                    @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
-                end
-            end
-            return mapping
-        end
-        function parse_mapping(mapping::Dict, name::String)
-            return Dict(k => parse_mapping(v, name) for (k, v) in mapping)
-        end
-        # Fallthrough for invalid Overrides.toml files
-        parse_mapping(mapping, name::String) = nothing
-
         for (k, mapping) in depot_override_dict
             # First, parse the mapping. Is it an absolute path, a valid SHA1-hash, or neither?
             mapping = parse_mapping(mapping, k)
@@ -175,6 +160,23 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
     ARTIFACT_OVERRIDES[] = overrides
     return overrides
 end
+
+# These could be inner functions in load_overrides, except the `parse_mapping(v, name) for (k,v) in mapping` closure
+# below triggers #15276, specifically the #23618 flavor
+function parse_mapping(mapping::String, name::String)
+    if !isabspath(mapping) && !isempty(mapping)
+        mapping = tryparse(Base.SHA1, mapping)
+        if mapping === nothing
+            @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
+        end
+    end
+    return mapping
+end
+function parse_mapping(mapping::Dict, name::String)
+    return Dict(k => parse_mapping(v, name) for (k, v) in mapping)
+end
+# Fallthrough for invalid Overrides.toml files
+parse_mapping(mapping, name::String) = nothing
 
 # Helpers to map an override to an actual path
 map_override_path(x::AbstractString) = String(x)::String
