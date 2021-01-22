@@ -794,6 +794,8 @@ let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
 
 module Undocumented
 
+export A, B, C, at0, pt2
+
 abstract type A end
 abstract type B <: A end
 
@@ -811,7 +813,14 @@ undocumented() = 1
 undocumented(x) = 2
 undocumented(x,y) = 3
 
-end
+end # module
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+No docstring found for module `$(curmod_prefix)Undocumented`.
+""")
+@test docstrings_equal(@doc(Undocumented), doc"$doc_str")
 
 doc_str = Markdown.parse("""
 No documentation found.

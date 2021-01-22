@@ -302,6 +302,15 @@ end
 
 function summarize(io::IO, m::Module, binding::Binding)
     println(io, "No docstring found for module `", m, "`.\n")
+    exports = filter!(!=(nameof(m)), names(m))
+    if isempty(exports)
+        println(io, "Module does not export any names.")
+    else
+        println(io, "# Exported names:")
+        print(io, "  `")
+        join(io, exports, "`, `")
+        println(io, "`")
+    end
 end
 
 function summarize(io::IO, @nospecialize(T), binding::Binding)
