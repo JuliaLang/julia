@@ -407,7 +407,7 @@ for itype in UmfpackIndexTypes
             complex(mx[], mz[])
         end
 
-        function logabsdet(F::UmfpackLU{Float64, $itype})  # return log(abs(det)) and sign(det)
+        function logabsdet(F::UmfpackLU{T, $itype}) where T  # return log(abs(det)) and sign(det)
             n = checksquare(F)
             issuccess(F) || return log(zero(real(T))), log(one(T))
             L, U, p, q, Rs = SuiteSparse.UMFPACK.umf_extract(F)
