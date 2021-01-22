@@ -9,9 +9,11 @@ DA:11,1
 DA:12,1
 DA:14,0
 DA:17,1
+DA:18,0
 DA:19,1
 DA:20,1
 DA:22,1
-LH:10
-LF:13
+DA:1234,0
+LH:11
+LF:15
 end_of_record
