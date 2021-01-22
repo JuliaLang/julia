@@ -583,6 +583,56 @@ function make_typealias(@nospecialize(x::Type))
     end
 end
 
+function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVector, skip::Int)
+    elide == 0 && return false
+    wheres[elide] === p || return false
+    for i = (elide + 1):length(wheres)
+        v = wheres[i]::TypeVar
+        has_typevar(v.lb, p) && return false
+        has_typevar(v.ub, p) && return false
+    end
+    for i = 1:length(env)
+        i == skip && continue
+        has_typevar(env[i], p) && return false
+    end
+    return true
+end
+
+function show_typeparams(io::IO, env::SimpleVector, wheres::Vector)
+    n = length(env)
+    print(io, "{")
+    elide = length(wheres)
+    for i = n:-1:1
+        p = env[i]
+        if p isa TypeVar
+            if p.lb === Union{} && show_can_elide(p, wheres, elide, env, i)
+                elide -= 1
+            elseif p.ub === Any && show_can_elide(p, wheres, elide, env, i)
+                elide -= 1
+            end
+        end
+    end
+    for i = 1:n
+        p = env[i]
+        if p isa TypeVar
+            if p.lb === Union{} && something(findfirst(w -> w === p, wheres), 0) > elide
+                print(io, "<:")
+                show(io, p.ub)
+            elseif p.ub === Any && something(findfirst(w -> w === p, wheres), 0) > elide
+                print(io, ">:")
+                show(io, p.lb)
+            else
+                show(io, p)
+            end
+        else
+            show(io, p)
+        end
+        i < n && print(io, ", ")
+    end
+    print(io, "}")
+    return elide
+end
+
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
@@ -595,21 +645,14 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
         end
     end
     print(io, name.name)
-    n = length(env)
-    n == 0 && return
-
-    print(io, "{")
-    param_io = IOContext(io)
-    for i = 1:length(wheres)
-        p = wheres[i]::TypeVar
-        param_io = IOContext(param_io, :unionall_env => p)
+    isempty(env) && return
+    io = IOContext(io)
+    for p in wheres
+        io = IOContext(io, :unionall_env => p)
     end
-    for i = 1:n
-        p = env[i]
-        show(param_io, p)
-        i < n && print(io, ", ")
-    end
-    print(io, "}")
+    elide = show_typeparams(io, env, wheres)
+    resize!(wheres, elide)
+    nothing
 end
 
 function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
@@ -642,12 +685,12 @@ function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
     return wheres
 end
 
-function show_wheres(io::IO, env::Vector)
-    isempty(env) && return
+function show_wheres(io::IO, wheres::Vector)
+    isempty(wheres) && return
     io = IOContext(io)
-    n = length(env)
+    n = length(wheres)
     for i = 1:n
-        p = env[i]::TypeVar
+        p = wheres[i]::TypeVar
         print(io, n == 1 ? " where " : i == 1 ? " where {" : ", ")
         show(io, p)
         io = IOContext(io, :unionall_env => p)
@@ -857,7 +900,11 @@ function _show_type(io::IO, @nospecialize(x::Type))
             push!(wheres, var)
             io = IOContext(io, :unionall_env => var)
         end
-        show(io, x)
+        if x isa DataType
+            show_datatype(io, x, wheres)
+        else
+            show(io, x)
+        end
     end
     show_wheres(io, wheres)
 end
@@ -919,13 +966,13 @@ function show_type_name(io::IO, tn::Core.TypeName)
     nothing
 end
 
-function show_datatype(io::IO, @nospecialize(x::DataType))
+function show_datatype(io::IO, @nospecialize(x::DataType), wheres::Vector=TypeVar[])
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
     n = length(parameters)
 
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
-    if istuple && n > 3 && all(i -> (parameters[1] === i), parameters)
+    if istuple && n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
         print(io, "NTuple{", n, ", ", parameters[1], "}")
     else
         show_type_name(io, x.name)
@@ -934,13 +981,8 @@ function show_datatype(io::IO, @nospecialize(x::DataType))
             # printing a method signature or type parameter.
             # Always print the type parameter if we are printing the type directly
             # since this information is still useful.
-            print(io, '{')
-            for i = 1:n
-                p = parameters[i]
-                show(io, p)
-                i < n && print(io, ", ")
-            end
-            print(io, '}')
+            elide = show_typeparams(io, parameters, wheres)
+            resize!(wheres, elide)
         end
     end
 end
