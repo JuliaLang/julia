@@ -233,6 +233,7 @@
             RIGHTWARDS_ARROW_ABOVE_REVERSE_TILDE_OPERATOR, # ⭌
             HALFWIDTH_LEFTWARDS_ARROW, # ￩
             HALFWIDTH_RIGHTWARDS_ARROW, # ￫
+            CIRCLE_ARROW_RIGHT,
         end_arrow,
 
         # Level 4
@@ -1329,7 +1330,8 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '⋮' => VDOTS, 
 '⋱' => DDOTS,
 '⋰' => ADOTS,
-'⋯' => CDOTS)
+'⋯' => CDOTS,
+'↻' => CIRCLE_ARROW_RIGHT)
 
 
 const UNICODE_OPS_REVERSE = Dict{Kind,Symbol}()
