@@ -75,14 +75,18 @@ aimg  = randn(n,n)/2
             @test v == f.vectors
 
             # matrices of different types (#14896)
-            fs = eigen(Symmetric(asym_sg), a_sg'a_sg)
-            @test fs.values ≈ f.values
-            @test abs.(fs.vectors) ≈ abs.(f.vectors)  # may change sign
+            if eltya <: Real
+                fs = eigen(Symmetric(asym_sg), a_sg'a_sg)
+                @test fs.values ≈ f.values
+                @test abs.(fs.vectors) ≈ abs.(f.vectors)  # may change sign
+                gs = eigen(Symmetric(asym_sg), Diagonal(a_sg'a_sg))
+                @test Symmetric(asym_sg)*gs.vectors ≈ (Diagonal(a_sg'a_sg)*gs.vectors) * Diagonal(gs.values)
+            end
             fh = eigen(Hermitian(asym_sg), a_sg'a_sg)
             @test fh.values ≈ f.values
             @test abs.(fh.vectors) ≈ abs.(f.vectors)  # may change sign
-            g = eigen(Symmetric(asym_sg), Diagonal(a_sg'a_sg))
-            @test Symmetric(asym_sg)*g.vectors ≈ (Diagonal(a_sg'a_sg)*g.vectors) * Diagonal(g.values)
+            gh = eigen(Hermitian(asym_sg), Diagonal(a_sg'a_sg))
+            @test Hermitian(asym_sg)*gh.vectors ≈ (Diagonal(a_sg'a_sg)*gh.vectors) * Diagonal(gh.values)
         end
         @testset "Non-symmetric generalized eigenproblem" begin
             if isa(a, Array)
