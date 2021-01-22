@@ -532,8 +532,9 @@ function makeproper(io::IO, x::Type)
                 push!(y, typ)
             end
         end
-        normal || (x = Union{y...})
-        properx = rewrap_unionall(x, properx)
+        if !normal
+            properx = rewrap_unionall(Union{y...}, properx)
+        end
     end
     has_free_typevars(properx) && return Any
     return properx
@@ -580,8 +581,8 @@ function make_typealias(@nospecialize(x::Type))
                             applied = rewrap_unionall(applied, p)
                         end
                         has_free_typevars(applied) && continue
-                        applied == x || continue # it couldn't figure out the parameter matching
-                    elseif alias <: x
+                        applied === x || continue # it couldn't figure out the parameter matching
+                    elseif alias === x
                         env = Core.svec()
                     else
                         continue # not a complete match
@@ -596,7 +597,7 @@ function make_typealias(@nospecialize(x::Type))
     end
 end
 
-function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector)
+function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
         # IOContext. If :module is not set, default to Main. nothing can be used
@@ -612,34 +613,70 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector)
     n == 0 && return
 
     print(io, "{")
-    let io = IOContext(io)
-        for i = n:-1:1
-            p = env[i]
-            if p isa TypeVar
-                io = IOContext(io, :unionall_env => p)
-            end
-        end
-        for i = 1:n
-            p = env[i]
-            show(io, p)
-            i < n && print(io, ", ")
-        end
+    param_io = IOContext(io)
+    for i = 1:length(wheres)
+        p = wheres[i]::TypeVar
+        param_io = IOContext(param_io, :unionall_env => p)
+    end
+    for i = 1:n
+        p = env[i]
+        show(param_io, p)
+        i < n && print(io, ", ")
     end
     print(io, "}")
-    for i = n:-1:1
-        p = env[i]
-        if p isa TypeVar && !io_has_tvar_name(io, p.name, x)
-            print(io, " where ")
-            show(io, p)
+end
+
+function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
+    seen = IdSet()
+    wheres = []
+    # record things printed by the context
+    if io isa IOContext
+        for (key, val) in io.dict
+            if key === :unionall_env && val isa TypeVar && has_typevar(x, val)
+                push!(seen, val)
+            end
         end
     end
+    # record things in x to print outermost
+    while x isa UnionAll
+        if !(x.var in seen)
+            push!(seen, x.var)
+            push!(wheres, x.var)
+        end
+        x = x.body
+    end
+    # record remaining things in env to print innermost
+    for i = length(env):-1:1
+        p = env[i]
+        if p isa TypeVar && !(p in seen)
+            push!(seen, p)
+            pushfirst!(wheres, p)
+        end
+    end
+    return wheres
+end
+
+function show_wheres(io::IO, env::Vector)
+    isempty(env) && return
+    io = IOContext(io)
+    n = length(env)
+    for i = 1:n
+        p = env[i]::TypeVar
+        print(io, n == 1 ? " where " : i == 1 ? " where {" : ", ")
+        show(io, p)
+        io = IOContext(io, :unionall_env => p)
+    end
+    n > 1 && print(io, "}")
+    nothing
 end
 
 function show_typealias(io::IO, x::Type)
     properx = makeproper(io, x)
     alias = make_typealias(properx)
     alias === nothing && return false
-    show_typealias(io, alias[1], x, alias[2])
+    wheres = make_wheres(io, alias[2], x)
+    show_typealias(io, alias[1], x, alias[2], wheres)
+    show_wheres(io, wheres)
     return true
 end
 
@@ -735,13 +772,17 @@ function show_unionaliases(io::IO, x::Union)
     end
     if first && length(aliases) == 1
         alias = aliases[1]
-        show_typealias(io, alias[1], x, alias[2])
+        wheres = make_wheres(io, alias[2], x)
+        show_typealias(io, alias[1], x, alias[2], wheres)
+        show_wheres(io, wheres)
     else
         for alias in aliases
             print(io, first ? "Union{" : ", ")
             first = false
             env = alias[2]
-            show_typealias(io, alias[1], x, alias[2])
+            wheres = make_wheres(io, alias[2], x)
+            show_typealias(io, alias[1], x, alias[2], wheres)
+            show_wheres(io, wheres)
         end
         print(io, "}")
     end
