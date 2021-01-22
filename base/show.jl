@@ -628,7 +628,7 @@ end
 
 function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
     seen = IdSet()
-    wheres = []
+    wheres = TypeVar[]
     # record things printed by the context
     if io isa IOContext
         for (key, val) in io.dict
@@ -827,22 +827,30 @@ function show(io::IO, @nospecialize(x::Type))
     end
 
     x = x::UnionAll
-    if x.var.name === :_ || io_has_tvar_name(io, x.var.name, x)
-        counter = 1
-        while true
-            newname = Symbol(x.var.name, counter)
-            if !io_has_tvar_name(io, newname, x)
-                newtv = TypeVar(newname, x.var.lb, x.var.ub)
-                x = UnionAll(newtv, x{newtv})
-                break
+    wheres = TypeVar[]
+    let io = IOContext(io)
+        while x isa UnionAll
+            var = x.var
+            if var.name === :_ || io_has_tvar_name(io, var.name, x)
+                counter = 1
+                while true
+                    newname = Symbol(var.name, counter)
+                    if !io_has_tvar_name(io, newname, x)
+                        var = TypeVar(newname, var.lb, var.ub)
+                        x = x{var}
+                        break
+                    end
+                    counter += 1
+                end
+            else
+                x = x.body
             end
-            counter += 1
+            push!(wheres, var)
+            io = IOContext(io, :unionall_env => var)
         end
+        show(io, x)
     end
-
-    show(IOContext(io, :unionall_env => x.var), x.body)
-    print(io, " where ")
-    show(io, x.var)
+    show_wheres(io, wheres)
 end
 
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'
