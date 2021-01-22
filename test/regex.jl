@@ -167,6 +167,24 @@
         @test r"this|that"^2 == r"(?:this|that){2}"
     end
 
+    @testset "iterate" begin
+        m = match(r"(.) test (.+)", "a test 123")
+        @test first(m) == "a"
+        @test collect(m) == ["a", "123"]
+        for (i, capture) in enumerate(m)
+            i == 1 && @test capture == "a"
+            i == 2 && @test capture == "123"
+        end
+    end
+
+    @testset "Destructuring dispatch" begin
+        handle(::Nothing) = "not found"
+        handle((capture,)::RegexMatch) = "found $capture"
+
+        @test handle(match(r"a (\d)", "xyz")) == "not found"
+        @test handle(match(r"a (\d)", "a 1")) == "found 1"
+    end
+
     # Test that PCRE throws the correct kind of error
     # TODO: Uncomment this once the corresponding change has propagated to CI
     #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
