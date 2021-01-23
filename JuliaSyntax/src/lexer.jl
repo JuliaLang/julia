@@ -677,16 +677,20 @@ function lex_digit(l::Lexer, kind)
         kind == Tokens.INTEGER
         if pc == 'x'
             kind = Tokens.HEX_INT
+            isfloat = false
             readchar(l)
             !(ishex(ppc) || ppc =='.') && return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
             accept_number(l, ishex)
             if accept(l, '.')
                 accept_number(l, ishex)
+                isfloat = true
             end
             if accept(l, "pP")
                 kind = Tokens.FLOAT
                 accept(l, "+-")
                 accept_number(l, isdigit)
+            elseif isfloat
+                return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
             end
         elseif pc == 'b'
             !isbinary(ppc) && return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
