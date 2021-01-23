@@ -454,10 +454,6 @@ CXX_DISABLE_ASSERTION := -DJL_NDEBUG
 DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
-ifeq ($(LLVM_ASSERTIONS),0)
-CXX_DISABLE_ASSERTION += -DNDEBUG
-endif
-
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)
@@ -1043,7 +1039,7 @@ endif # SYSTEM_LLVM
 # Windows builds need a little help finding the LLVM libraries for llvm-config
 LLVM_CONFIG_PATH_FIX :=
 ifeq ($(OS),WINNT)
-LLVM_CONFIG_PATH_FIX := PATH="$(PATH):$(build_bindir)"
+LLVM_CONFIG_PATH_FIX := PATH="$(build_bindir):$(PATH)"
 endif
 
 ifeq ($(BUILD_OS),$(OS))
@@ -1198,12 +1194,6 @@ endif
 endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
-
-
-
-# Use the Assertions build
-BINARYBUILDER_LLVM_ASSERTS ?= 0
-
 
 
 # OS specific stuff

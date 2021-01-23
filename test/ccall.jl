@@ -1578,7 +1578,8 @@ end
 
 # issue #34061
 let o_file = tempname(), err = Base.PipeEndpoint()
-    run(pipeline(Cmd(`$(Base.julia_cmd()) --output-o=$o_file -e 'Base.reinit_stdio();
+    run(pipeline(Cmd(`$(Base.julia_cmd()) --color=no --output-o=$o_file -e '
+        Base.reinit_stdio();
         f() = ccall((:dne, :does_not_exist), Cvoid, ());
         f()'`; ignorestatus=true), stderr=err), wait=false)
     output = read(err, String)

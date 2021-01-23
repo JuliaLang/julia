@@ -98,6 +98,7 @@
         @test !haskey(m, "foo")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
         @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
+        @test keys(m) == ["a", 2, "b"]
     end
 
     # Backcapture reference in substitution string
@@ -164,6 +165,24 @@
         @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS, Base.DEFAULT_MATCH_OPTS & ~Base.PCRE.NO_UTF_CHECK)
 
         @test r"this|that"^2 == r"(?:this|that){2}"
+    end
+
+    @testset "iterate" begin
+        m = match(r"(.) test (.+)", "a test 123")
+        @test first(m) == "a"
+        @test collect(m) == ["a", "123"]
+        for (i, capture) in enumerate(m)
+            i == 1 && @test capture == "a"
+            i == 2 && @test capture == "123"
+        end
+    end
+
+    @testset "Destructuring dispatch" begin
+        handle(::Nothing) = "not found"
+        handle((capture,)::RegexMatch) = "found $capture"
+
+        @test handle(match(r"a (\d)", "xyz")) == "not found"
+        @test handle(match(r"a (\d)", "a 1")) == "found 1"
     end
 
     # Test that PCRE throws the correct kind of error

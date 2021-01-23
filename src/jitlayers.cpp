@@ -726,7 +726,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
         static void *atomic_hdl = jl_load_dynamic_library(libatomic, JL_RTLD_LOCAL, 0);
         if (atomic_hdl != NULL) {
             GlobalJD.addGenerator(
-              std::move(*orc::DynamicLibrarySearchGenerator::Load(
+              cantFail(orc::DynamicLibrarySearchGenerator::Load(
                   libatomic,
                   DL.getGlobalPrefix(),
                   [&](const orc::SymbolStringPtr &S) {
@@ -814,13 +814,21 @@ JL_JITSymbol JuliaOJIT::findUnmangledSymbol(StringRef Name)
 uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 {
     auto addr = findSymbol(getMangledName(Name), false);
-    return addr ? cantFail(addr.getAddress()) : 0;
+    if (!addr) {
+        consumeError(addr.takeError());
+        return 0;
+    }
+    return cantFail(addr.getAddress());
 }
 
 uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 {
     auto addr = findSymbol(getMangledName(Name), false);
-    return addr ? cantFail(addr.getAddress()) : 0;
+    if (!addr) {
+        consumeError(addr.takeError());
+        return 0;
+    }
+    return cantFail(addr.getAddress());
 }
 
 static int globalUniqueGeneratedNames;

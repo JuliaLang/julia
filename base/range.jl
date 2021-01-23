@@ -145,7 +145,9 @@ _range(start::Any    , step::Any    , stop::Nothing, len::Any    ) = range_start
 _range(start::Any    , step::Any    , stop::Any    , len::Nothing) = range_start_step_stop(start, step, stop)
 _range(start::Any    , step::Any    , stop::Any    , len::Any    ) = range_error(start, step, stop, len)
 
-range_stop_length(stop, length) = (stop-length+1):stop
+range_stop_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(oftype(a, a-len+1), a)
+range_stop_length(a::AbstractFloat, len::Integer) = range_step_stop_length(oftype(a, 1), a, len)
+range_stop_length(a,                len::Integer) = range_step_stop_length(oftype(a-a, 1), a, len)
 
 range_step_stop_length(step, stop, length) = reverse(range_start_step_length(stop, -step, length))
 
@@ -520,11 +522,8 @@ function LinRange(start, stop, len::Integer)
     LinRange{T}(start, stop, len)
 end
 
-function range_start_stop_length(start::T, stop::S, len::Integer) where {T,S}
-    a, b = promote(start, stop)
-    range_start_stop_length(a, b, len)
-end
-range_start_stop_length(start::T, stop::T, len::Integer) where {T<:Real} = LinRange{T}(start, stop, len)
+range_start_stop_length(start, stop, len::Integer) =
+    range_start_stop_length(promote(start, stop)..., len)
 range_start_stop_length(start::T, stop::T, len::Integer) where {T} = LinRange{T}(start, stop, len)
 range_start_stop_length(start::T, stop::T, len::Integer) where {T<:Integer} =
     _linspace(float(T), start, stop, len)

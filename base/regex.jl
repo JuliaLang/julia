@@ -149,19 +149,24 @@ struct RegexMatch <: AbstractMatch
     regex::Regex
 end
 
+function keys(m::RegexMatch)
+    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
+    return map(eachindex(m.captures)) do i
+        # If the capture group is named, return it's name, else return it's index
+        get(idx_to_capture_name, i, i)
+    end
+end
+
 function show(io::IO, m::RegexMatch)
     print(io, "RegexMatch(")
     show(io, m.match)
-    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
-    if !isempty(m.captures)
+    capture_keys = keys(m)
+    if !isempty(capture_keys)
         print(io, ", ")
-        for i = 1:length(m.captures)
-            # If the capture group is named, show the name.
-            # Otherwise show its index.
-            capture_name = get(idx_to_capture_name, i, i)
+        for (i, capture_name) in enumerate(capture_keys)
             print(io, capture_name, "=")
             show(io, m.captures[i])
-            if i < length(m.captures)
+            if i < length(m)
                 print(io, ", ")
             end
         end
@@ -184,6 +189,10 @@ function haskey(m::RegexMatch, name::Symbol)
     return idx > 0
 end
 haskey(m::RegexMatch, name::AbstractString) = haskey(m, Symbol(name))
+
+iterate(m::RegexMatch, args...) = iterate(m.captures, args...)
+length(m::RegexMatch) = length(m.captures)
+eltype(m::RegexMatch) = eltype(m.captures)
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)

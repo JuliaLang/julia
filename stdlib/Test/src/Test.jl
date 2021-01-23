@@ -1302,7 +1302,7 @@ end
 """
     push_testset(ts::AbstractTestSet)
 
-Adds the test set to the task_local_storage.
+Adds the test set to the `task_local_storage`.
 """
 function push_testset(ts::AbstractTestSet)
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
@@ -1313,7 +1313,7 @@ end
 """
     pop_testset()
 
-Pops the last test set added to the task_local_storage. If there are no
+Pops the last test set added to the `task_local_storage`. If there are no
 active test sets, returns the fallback default test set.
 """
 function pop_testset()
@@ -1459,7 +1459,7 @@ Use `recursive=true` to test in all submodules.
 `Union{}` type parameters are included; in most cases you probably
 want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
-function detect_ambiguities(mods...;
+function detect_ambiguities(mods::Module...;
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
     @nospecialize

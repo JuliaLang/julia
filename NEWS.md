@@ -49,6 +49,8 @@ Standard library changes
 * Subtypes of `AbstractRange` now correctly follow the general array indexing
   behavior when indexed by `Bool`s, erroring for scalar `Bool`s and treating
   arrays (including ranges) of `Bool` as an logical index ([#31829])
+* `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
+* `RegexMatch` now iterate to give their captures. ([#34355]).
 
 #### Package Manager
 
