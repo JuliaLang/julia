@@ -553,6 +553,8 @@ julia> exp(A)
 """
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
+exp(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(exp(parent(A)))
+exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
 
 """
     ^(b::Number, A::AbstractMatrix)
@@ -734,6 +736,9 @@ function log(A::StridedMatrix)
     end
 end
 
+log(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(log(parent(A)))
+log(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(log(parent(A)))
+
 """
     sqrt(A::AbstractMatrix)
 
@@ -799,6 +804,9 @@ function sqrt(A::StridedMatrix{<:Complex})
         return SchurF.vectors * R * SchurF.vectors'
     end
 end
+
+sqrt(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(sqrt(parent(A)))
+sqrt(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
