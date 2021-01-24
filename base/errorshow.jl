@@ -570,17 +570,17 @@ stacktrace_linebreaks()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
-    n = length(trace)
-    ndigits_max = ndigits(n)
+    num_frames = length(trace)
+    ndigits_max = ndigits(num_frames)
 
     modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     println(io, "\nStacktrace:")
 
-    for (i, frame) in enumerate(trace)
-        print_stackframe(io, i, frame, 1, ndigits_max, modulecolordict, modulecolorcycler)
-        if i < n
+    for (i, (frame, n)) in enumerate(trace)
+        print_stackframe(io, i, frame, n, ndigits_max, modulecolordict, modulecolorcycler)
+        if i < num_frames
             println(io)
             print_linebreaks && println(io)
         end
@@ -779,8 +779,7 @@ function show_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    frames = map(x->first(x)::StackFrame, filtered)
-    show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
+    show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     return
 end
 
