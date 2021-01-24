@@ -83,10 +83,11 @@ Everything written to this I/O stream is returned as a string.
 or a `Pair` specifying a property and its value. `sizehint` suggests the capacity
 of the buffer (in bytes).
 
-The optional keyword argument `context` can be set to `:key=>value` pair
-or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
-stream passed to `f`.  The optional `sizehint` is a suggested size (in bytes)
-to allocate for the buffer used to write the string.
+The optional keyword argument `context` can be set to `:key=>value` pair, a
+tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
+attributes are used for the I/O stream passed to `f`.  The optional `sizehint`
+is a suggested size (in bytes) to allocate for the buffer used to write the
+string.
 
 # Examples
 ```jldoctest
@@ -99,7 +100,9 @@ julia> sprint(showerror, BoundsError([1], 100))
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     s = IOBuffer(sizehint=sizehint)
-    if context !== nothing
+    if context isa Tuple
+        f(IOContext(s, context...), args...)
+    elseif context !== nothing
         f(IOContext(s, context), args...)
     else
         f(s, args...)
