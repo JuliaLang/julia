@@ -394,6 +394,7 @@ LinearAlgebra.diagind
 LinearAlgebra.diag
 LinearAlgebra.diagm
 LinearAlgebra.rank
+LinearAlgebra.rref
 LinearAlgebra.norm
 LinearAlgebra.opnorm
 LinearAlgebra.normalize!

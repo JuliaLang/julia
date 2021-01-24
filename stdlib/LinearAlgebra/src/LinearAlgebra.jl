@@ -20,7 +20,7 @@ using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
 using Base.Broadcast: Broadcasted, broadcasted
 
 export
-# Modules
+# Modules 
     LAPACK,
     BLAS,
 
@@ -126,6 +126,8 @@ export
     rdiv!,
     reflect!,
     rotate!,
+    rref,
+    rref!,
     schur,
     schur!,
     svd,
@@ -194,7 +196,7 @@ julia> LinearAlgebra.stride1(B)
 2
 ```
 """
-stride1(x) = stride(x,1)
+stride1(x) = stride(x, 1)
 stride1(x::Array) = 1
 stride1(x::DenseArray) = stride(x, 1)::Int
 
@@ -219,7 +221,7 @@ julia> LinearAlgebra.checksquare(A, B)
 ```
 """
 function checksquare(A)
-    m,n = size(A)
+    m, n = size(A)
     m == n || throw(DimensionMismatch("matrix is not square: dimensions are $(size(A))"))
     m
 end
@@ -227,8 +229,8 @@ end
 function checksquare(A...)
     sizes = Int[]
     for a in A
-        size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
-        push!(sizes, size(a,1))
+        size(a, 1) == size(a, 2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
+        push!(sizes, size(a, 1))
     end
     return sizes
 end
@@ -375,6 +377,7 @@ include("bunchkaufman.jl")
 include("diagonal.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
+include("rref.jl")
 include("hessenberg.jl")
 include("givens.jl")
 include("special.jl")
@@ -407,10 +410,10 @@ of the problem that is solved on each processor.
     the standard library `InteractiveUtils`.
 """
 function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = fill(1.,100,100)
-    t = @elapsed a2 = a*a
-    a = fill(1.,n,n)
-    t = @elapsed a2 = a*a
+    a = fill(1., 100, 100)
+    t = @elapsed a2 = a * a
+    a = fill(1., n, n)
+    t = @elapsed a2 = a * a
     @assert a2[1,1] == n
     if parallel
         let Distributed = Base.require(Base.PkgId(
@@ -418,8 +421,8 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
             return sum(Distributed.pmap(peakflops, fill(n, Distributed.nworkers())))
         end
     else
-        return 2*Float64(n)^3 / t
-    end
+        return 2 * Float64(n)^3 / t
+end
 end
 
 
@@ -428,9 +431,9 @@ function versioninfo(io::IO=stdout)
         openblas_config = BLAS.openblas_get_config()
         println(io, "BLAS: libopenblas (", openblas_config, ")")
     else
-        println(io, "BLAS: ",Base.libblas_name)
+        println(io, "BLAS: ", Base.libblas_name)
     end
-    println(io, "LAPACK: ",Base.liblapack_name)
+    println(io, "LAPACK: ", Base.liblapack_name)
 end
 
 function __init__()
