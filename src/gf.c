@@ -1666,21 +1666,33 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
                 jl_value_t *backedgetyp = backedges[i - 1];
+                int missing = 0;
                 if (jl_type_intersection2(backedgetyp, (jl_value_t*)type, &isect, &isect2)) {
-                    // see if the intersection was actually already fully
-                    // covered by anything (method or ambiguity is okay)
+                    // See if the intersection was actually already fully
+                    // covered, but that the new method is ambiguous.
+                    //  -> no previous method: now there is one, need to update the missing edge
+                    //  -> one+ previously matching method(s):
+                    //    -> more specific then all of them: need to update the missing edge
+                    //      -> some may have been ambiguous: now there is a replacement
+                    //      -> some may have been called: now there is a replacement (also will be detected in the loop later)
+                    //    -> less specific or ambiguous with any one of them: can ignore the missing edge (not missing)
+                    //      -> some may have been ambiguous: still are
+                    //      -> some may have been called: they may be partly replaced (will be detected in the loop later)
+                    missing = 1;
                     size_t j;
                     for (j = 0; j < n; j++) {
                         jl_method_t *m = d[j];
-                        if (jl_subtype(isect, m->sig))
-                            break;
-                        if (isect2 && jl_subtype(isect2, m->sig))
-                            break;
+                        if (jl_subtype(isect, m->sig) || (isect2 && jl_subtype(isect2, m->sig))) {
+                            // We now know that there actually was a previous
+                            // method for this part of the type intersection.
+                            if (!jl_type_morespecific(type, m->sig)) {
+                                missing = 0;
+                                break;
+                            }
+                        }
                     }
-                    if (j != n)
-                        isect = jl_bottom_type;
                 }
-                if (isect != jl_bottom_type) {
+                if (missing) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_external(backedge, max_world);
                     invalidate_method_instance(backedge, max_world, 0);
@@ -1722,7 +1734,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                     isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
                     if (jl_type_intersection2(type, isect3, &isect, &isect2)) {
                         if (morespec[j] == (char)morespec_unknown)
-                            morespec[j] = (char)jl_type_morespecific(m->sig, type) ? morespec_is : morespec_isnot;
+                            morespec[j] = (char)(jl_type_morespecific(m->sig, type) ? morespec_is : morespec_isnot);
                         if (morespec[j] == (char)morespec_is)
                             // not actually shadowing--the existing method is still better
                             break;
@@ -1737,7 +1749,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                 if (m == m2 || !(jl_subtype(isect, m2->sig) || (isect && jl_subtype(isect, m2->sig))))
                                     continue;
                                 if (morespec[k] == (char)morespec_unknown)
-                                    morespec[k] = (char)jl_type_morespecific(m2->sig, type) ? morespec_is : morespec_isnot;
+                                    morespec[k] = (char)(jl_type_morespecific(m2->sig, type) ? morespec_is : morespec_isnot);
                                 if (morespec[k] == (char)morespec_is)
                                     // not actually shadowing this--m2 will still be better
                                     break;
