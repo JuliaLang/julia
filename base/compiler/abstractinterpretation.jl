@@ -4,8 +4,6 @@
 # constants #
 #############
 
-const CoreNumType = Union{Int32, Int64, Float32, Float64}
-
 const _REF_NAME = Ref.body.name
 
 #########
@@ -215,11 +213,11 @@ function const_prop_profitable(@nospecialize(arg))
             isconstType(b) && return true
             const_prop_profitable(b) && return true
         end
-    elseif !isa(arg, Const) || (isa(arg.val, Symbol) || isa(arg.val, Type) || (!isa(arg.val, String) && !ismutable(arg.val)))
-        # don't consider mutable values or Strings useful constants
-        return true
     end
-    return false
+    isa(arg, Const) || return true
+    val = arg.val
+    # don't consider mutable values or Strings useful constants
+    return isa(val, Symbol) || isa(val, Type) || (!isa(val, String) && !ismutable(val))
 end
 
 # This is a heuristic to avoid trying to const prop through complicated functions
@@ -455,7 +453,8 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 return Any, true, nothing
             end
             topmost = topmost::InferenceState
-            poison_callstack(sv, topmost.parent === nothing ? topmost : topmost.parent)
+            parentframe = topmost.parent
+            poison_callstack(sv, parentframe === nothing ? topmost : parentframe)
             sig = newsig
             sparams = svec()
         end
@@ -820,10 +819,11 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         end
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
-    if f === getfield && isa(fargs, Vector{Any}) && la == 3 && isa(argtypes[3], Const) && isa(argtypes[3].val, Int) && argtypes[2] ⊑ Tuple
+    if f === getfield && isa(fargs, Vector{Any}) && la == 3 &&
+       (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
+       (a2 = argtypes[2]; a2 ⊑ Tuple)
         # TODO: why doesn't this use the getfield_tfunc?
-        cti, _ = precise_container_type(interp, iterate, argtypes[2], sv)
-        idx = argtypes[3].val::Int
+        cti, _ = precise_container_type(interp, iterate, a2, sv)
         if 1 <= idx <= length(cti)
             rt = unwrapva(cti[idx])
         end
@@ -1006,14 +1006,16 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
         return CallMeta(abstract_call_known(interp, <:, fargs, argtypes, sv).rt, false)
-    elseif la == 2 && isa(argtypes[2], Const) && isa(argtypes[2].val, SimpleVector) && istopfunction(f, :length)
+    elseif la == 2 &&
+           (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
+           istopfunction(f, :length)
         # mark length(::SimpleVector) as @pure
-        return CallMeta(Const(length(argtypes[2].val)), MethodResultPure())
-    elseif la == 3 && isa(argtypes[2], Const) && isa(argtypes[3], Const) &&
-            isa(argtypes[2].val, SimpleVector) && isa(argtypes[3].val, Int) && istopfunction(f, :getindex)
+        return CallMeta(Const(length(svecval)), MethodResultPure())
+    elseif la == 3 &&
+           (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
+           (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
+           istopfunction(f, :getindex)
         # mark getindex(::SimpleVector, i::Int) as @pure
-        svecval = argtypes[2].val::SimpleVector
-        idx = argtypes[3].val::Int
         if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
             return CallMeta(Const(getindex(svecval, idx)), MethodResultPure())
         end
