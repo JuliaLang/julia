@@ -719,7 +719,6 @@ end
     @test OffsetArray([6], 2:2)[] == 6
     @test OffsetArray(fill(6, 1, 1), 2:2, 3:3)[] == 6
     @test OffsetArray(fill(6))[] == 6
-    
     @test_throws BoundsError OffsetArray([6,7], 2:3)[]
     @test_throws BoundsError OffsetArray([6 7], 2:2, 2:3)[]
     @test_throws BoundsError OffsetArray([], 2:1)[]
