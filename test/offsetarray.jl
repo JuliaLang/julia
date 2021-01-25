@@ -715,6 +715,16 @@ end
     @test axes(S) == (OffsetArrays.IdOffsetRange(0:1), Base.OneTo(2), OffsetArrays.IdOffsetRange(2:5))
 end
 
+@testset "Zero-index indexing" begin
+    @test OffsetArray([6], 2:2)[] == 6
+    @test OffsetArray(fill(6, 1, 1), 2:2, 3:3)[] == 6
+    @test OffsetArray(fill(6))[] == 6
+    
+    @test_throws BoundsError OffsetArray([6,7], 2:3)[]
+    @test_throws BoundsError OffsetArray([6 7], 2:2, 2:3)[]
+    @test_throws BoundsError OffsetArray([], 2:1)[]
+end
+
 @testset "IdentityUnitRange indexing" begin
     a = OffsetVector(3:4, 2:3)
     ax = IdentityUnitRange(2:3)
