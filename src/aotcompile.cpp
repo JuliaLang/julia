@@ -404,7 +404,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
-    if (policy != CompilationPolicy::Extern) {
+    if (policy == CompilationPolicy::Default) {
         for (GlobalObject &G : clone->global_objects()) {
             if (!G.isDeclaration()) {
                 G.setLinkage(Function::InternalLinkage);
