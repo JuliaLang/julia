@@ -1585,25 +1585,25 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))
+                    end
+                    rt = widenconst(rt)
+                    if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
+                        # output cannot be improved so it is known for certain
+                        return Const(rt)
+                    elseif !isempty(sv.pclimitations)
+                        # conservatively express uncertainty of this result
+                        # in two ways: both as being a subtype of this, and
+                        # because of LimitedAccuracy causes
+                        return Type{<:rt}
+                    elseif (isa(tt, Const) || isconstType(tt)) &&
+                        (isa(aft, Const) || isconstType(aft))
+                        # input arguments were known for certain
+                        # XXX: this doesn't imply we know anything about rt
+                        return Const(rt)
+                    elseif isType(rt)
+                        return Type{rt}
                     else
-                        inaccurate = nothing
-                        rt isa LimitedAccuracy && (inaccurate = rt.causes; rt = rt.typ)
-                        rt = widenconst(rt)
-                        if hasuniquerep(rt) || rt === Bottom
-                            # output type was known for certain
-                            return Const(rt)
-                        elseif inaccurate !== nothing
-                            return LimitedAccuracy(Type{<:rt}, inaccurate)
-                        elseif (isa(tt, Const) || isconstType(tt)) &&
-                            (isa(aft, Const) || isconstType(aft))
-                            # input arguments were known for certain
-                            # XXX: this doesn't imply we know anything about rt
-                            return Const(rt)
-                        elseif isType(rt)
-                            return Type{rt}
-                        else
-                            return Type{<:rt}
-                        end
+                        return Type{<:rt}
                     end
                 end
             end
