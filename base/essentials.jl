@@ -540,7 +540,7 @@ element `i` of array `A` is skipped to improve performance.
 ```julia
 function sum(A::AbstractArray)
     r = zero(eltype(A))
-    for i = 1:length(A)
+    for i in eachindex(A)
         @inbounds r += A[i]
     end
     return r
