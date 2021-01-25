@@ -763,3 +763,5 @@ let err = nothing
         @test !occursin("2d", err_str)
     end
 end
+
+@test contains(sprint(Base.showerror, UndefVarError(:UTF16String)), "LegacyStrings")

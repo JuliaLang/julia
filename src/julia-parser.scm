@@ -27,7 +27,7 @@
 ;; `where`
 ;; implicit multiplication (juxtaposition)
 ;; unary
-(define prec-power       (add-dots '(^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬)))
+(define prec-power       (add-dots '(^ ** ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬)))
 (define prec-decl        '(|::|))
 ;; `where` occurring after `::`
 (define prec-dot         '(|.|))
@@ -97,19 +97,19 @@
                                       0))
 
 (define unary-ops (append! '(|<:| |>:|)
-                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓))))
+                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓ **))))
 
 (define unary-op? (Set unary-ops))
 
 ; operators that are both unary and binary
 (define unary-and-binary-ops (append! '($ & ~)
-                                      (add-dots '(+ - ⋆ ± ∓))))
+                                      (add-dots '(+ - ⋆ ± ∓ **))))
 
 (define unary-and-binary-op? (Set unary-and-binary-ops))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
-  (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
+  (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= **=))
            '(:= $= && |\|\|| |.| ... ->)))
 (define syntactic-unary-operators '($ & |::|))
 
@@ -229,8 +229,6 @@
 (define (op-or-sufchar? c) (or (op-suffix-char? c) (opchar? c)))
 
 (define (read-operator port c0 (postfix? #f))
-  (if (and (eqv? c0 #\*) (eqv? (peek-char port) #\*))
-      (error "use \"x^y\" instead of \"x**y\" for exponentiation, and \"x...\" instead of \"**x\" for splatting."))
   (if (or (eof-object? (peek-char port)) (not (op-or-sufchar? (peek-char port))))
       (symbol (string c0)) ; 1-char operator
       (let ((str (let loop ((str (string c0))
