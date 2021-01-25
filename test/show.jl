@@ -634,7 +634,7 @@ end
 # `where` syntax
 @test_repr "A where T<:B"
 @test_repr "A where T<:(Array{T} where T<:Real)"
-@test_repr "Array{T} where T<:Array{S} where S<:Real"
+@test_repr "Array{T} where {S<:Real, T<:Array{S}}"
 @test_repr "x::Array{T} where T"
 @test_repr "(a::b) where T"
 @test_repr "a::b where T"
@@ -1568,12 +1568,12 @@ end
 end
 
 let x = TypeVar(:_), y = TypeVar(:_)
-    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where _2 where _1"
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where {_1, _2}"
     @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1, _1} where _1"
     x = TypeVar(:a)
     y = TypeVar(:a)
     z = TypeVar(:a)
-    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1, a2, a} where a2 where a1 where a"
+    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1, a2, a} where {a, a1, a2}"
 end
 
 @testset "showarg" begin
@@ -2070,15 +2070,21 @@ end
 end
 
 module M37012
+export AValue, B2
 struct AnInteger{S<:Integer} end
 struct AStruct{N} end
 const AValue{S} = Union{AStruct{S}, AnInteger{S}}
+struct BStruct{T,S} end
+const B2{S,T} = BStruct{T,S}
 end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
 @test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector{T} where T}"
 @test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat{T} where T}"
+@test string(M37012.BStruct{T, T} where T) == "$(curmod_prefix)M37012.B2{T, T} where T"
+@test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Unsigned, S<:Signed}"
+@test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Signed, S<:T}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
