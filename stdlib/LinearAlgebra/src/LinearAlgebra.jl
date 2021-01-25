@@ -20,7 +20,7 @@ using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
 using Base.Broadcast: Broadcasted, broadcasted
 
 export
-# Modules 
+# Modules
     LAPACK,
     BLAS,
 
