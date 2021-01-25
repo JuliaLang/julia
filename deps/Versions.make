@@ -91,7 +91,7 @@ P7ZIP_VER := 16.2.0
 P7ZIP_JLL_NAME := p7zip
 
 # PCRE
-PCRE_VER := 10.35
+PCRE_VER := 10.36
 PCRE_JLL_NAME := PCRE2
 
 # SuiteSparse
