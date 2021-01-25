@@ -1,6 +1,6 @@
 name = "PCRE2_jll"
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
-version = "10.35.0+0"
+version = "10.36.0+0"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
