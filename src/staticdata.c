@@ -387,9 +387,10 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     jl_serialize_value(s, m->parent);
     size_t i;
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_serialize_value(s, (jl_value_t*)table[i]);
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
             jl_serialize_value(s, b->name);
             jl_serialize_value(s, b->value);
             jl_serialize_value(s, b->globalref);
@@ -629,9 +630,11 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     size_t count = 0;
     size_t i;
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
+            write_pointerfield(s, (jl_value_t*)table[i]);
+            tot += sizeof(void*);
             write_gctaggedfield(s, (uintptr_t)BindingRef << RELOC_TAG_OFFSET);
             tot += sizeof(void*);
             size_t binding_reloc_offset = ios_pos(s->s);
@@ -1383,12 +1386,13 @@ static void jl_reinit_item(jl_value_t *v, int how) JL_GC_DISABLED
             size_t nbindings = mod->bindings.size;
             htable_new(&mod->bindings, nbindings);
             struct binding {
+                jl_sym_t *asname;
                 uintptr_t tag;
                 jl_binding_t b;
             } *b;
             b = (struct binding*)&mod[1];
             while (nbindings > 0) {
-                ptrhash_put(&mod->bindings, (char*)b->b.name, &b->b);
+                ptrhash_put(&mod->bindings, b->asname, &b->b);
                 b += 1;
                 nbindings -= 1;
             }
