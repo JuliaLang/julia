@@ -2627,7 +2627,7 @@ const latex_symbols = Dict(
 
 # Canonical reverse mapping for symbols that have several completions (#39148).
 #
-# These duplicate mappings can be investigated with the folllowing commands:
+# These duplicate mappings can be investigated with the following commands:
 #=
 ls = REPL.REPLCompletions.latex_symbols; symbols = values(ls)
 duplicates = [v for v in unique(symbols) if count(==(v), symbols) > 1]
