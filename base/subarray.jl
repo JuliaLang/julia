@@ -392,7 +392,7 @@ compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
 function compute_linindex(parent, I::NTuple{N,Any}) where N
     @_inline_meta
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
-    compute_linindex(1, 1, IP, I)
+    compute_linindex(first(LinearIndices(parent)), 1, IP, I)
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
     @_inline_meta
