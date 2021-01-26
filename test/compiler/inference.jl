@@ -2980,3 +2980,13 @@ f38888() = S38888(Base.inferencebarrier(3))
 @test f38888() isa S38888
 g38888() = S38888(Base.inferencebarrier(3), nothing)
 @test g38888() isa S38888
+
+# issue #38971
+f28971() = (1, [2,3]...)::Tuple{Int,Int,Int}
+@test @inferred(f28971()) == (1, 2, 3)
+g28971_1() = (1, [2,3]...)::Tuple{Vararg{Int}}
+@test @inferred(Tuple{Int, Vararg{Int}}, g28971_1()) == (1, 2, 3)
+g28971_2() = (1, [2,3]...)::Tuple{Int, Vararg{Int}}
+@test @inferred(Tuple{Int, Vararg{Int}}, g28971_2()) == (1, 2, 3)
+g28971_3() = (1, [2,3]...)::Tuple{Int, Int, Vararg{Int}}
+@test @inferred(Tuple{Int, Int, Vararg{Int}}, g28971_3()) == (1, 2, 3)

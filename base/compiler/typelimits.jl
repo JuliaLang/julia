@@ -561,12 +561,18 @@ function tmeet(@nospecialize(v), @nospecialize(t))
             return Bottom
         end
         @assert widev <: Tuple
-        new_fields = Vector{Any}(undef, length(v.fields))
+        if !(ti <: Tuple)
+            ti = widev
+        end
+        new_fields = Vector{Any}(undef, length(ti.parameters))
         for i = 1:length(new_fields)
-            new_fields[i] = tmeet(v.fields[i], widenconst(getfield_tfunc(t, Const(i))))
+            new_fields[i] = tmeet(getfield_tfunc(v, Const(i)), widenconst(getfield_tfunc(t, Const(i))))
             if new_fields[i] === Bottom
                 return Bottom
             end
+        end
+        if isvatuple(ti)
+            new_fields[end] = Vararg{new_fields[end]}
         end
         return tuple_tfunc(new_fields)
     elseif isa(v, Conditional)
