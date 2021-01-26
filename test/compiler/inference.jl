@@ -3023,3 +3023,11 @@ f_aggressive(x) = g_aggressive(x, 1)
 # render the annotation effectless.
 @test Base.return_types(f_nonaggressive, Tuple{Int})[1] == Val
 @test Base.return_types(f_aggressive, Tuple{Int})[1] == Val{1}
+
+function splat_lotta_unions()
+    a = Union{Tuple{Int},Tuple{String,Vararg{Int}},Tuple{Int,Vararg{Int}}}[(2,)][1]
+    b = Union{Int8,Int16,Int32,Int64,Int128}[1][1]
+    c = Union{Int8,Int16,Int32,Int64,Int128}[1][1]
+    (a...,b...,c...)
+end
+@test Core.Compiler.return_type(splat_lotta_unions, Tuple{}) >: Tuple{Int,Int,Int}
