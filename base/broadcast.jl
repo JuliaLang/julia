@@ -1309,14 +1309,14 @@ macro __dot__(x)
     esc(__dot__(x))
 end
 
-@inline function broadcasted_kwsyntax(f, args...; kwargs...)
+@inline function broadcasted_kwsyntax(f::F, args...; kwargs...) where {F}
     if isempty(kwargs) # some BroadcastStyles dispatch on `f`, so try to preserve its type
         return broadcasted(f, args...)
     else
         return broadcasted((args...) -> f(args...; kwargs...), args...)
     end
 end
-@inline function broadcasted(f, args...)
+@inline function broadcasted(f::F, args...) where {F}
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(args′...), f, args′...)
 end
@@ -1324,18 +1324,18 @@ end
 # the totally generic varargs broadcasted(f, args...) method above loses Type{T}s in
 # mapping broadcastable across the args. These additional methods with explicit
 # arguments ensure we preserve Type{T}s in the first or second argument position.
-@inline function broadcasted(f, arg1, args...)
+@inline function broadcasted(f::F, arg1::T1, args...) where {F, T1}
     arg1′ = broadcastable(arg1)
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(arg1′, args′...), f, arg1′, args′...)
 end
-@inline function broadcasted(f, arg1, arg2, args...)
+@inline function broadcasted(f::F, arg1::T1, arg2::T2, args...) where {F, T1, T2}
     arg1′ = broadcastable(arg1)
     arg2′ = broadcastable(arg2)
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(arg1′, arg2′, args′...), f, arg1′, arg2′, args′...)
 end
-@inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
+@inline broadcasted(::S, f::F, args...) where {S<:BroadcastStyle, F} = Broadcasted{S}(f, args)
 
 """
     BroadcastFunction{F} <: Function
