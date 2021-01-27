@@ -602,16 +602,23 @@ function tmeet(@nospecialize(v), @nospecialize(t))
             return Bottom
         end
         @assert widev <: Tuple
-        new_fields = Vector{Any}(undef, length(v.fields))
-        for i = 1:length(new_fields)
-            if isa(v.fields[i], Core.TypeofVararg)
-                new_fields[i] = v.fields[i]
-            else
-                new_fields[i] = tmeet(v.fields[i], widenconst(getfield_tfunc(t, Const(i))))
-                if new_fields[i] === Bottom
-                    return Bottom
-                end
+        if isa(ti, DataType) && ti.name === Tuple.name
+            num_fields = length(ti.parameters)
+            isva = isvatuple(ti)
+        else
+            nfields_ti = nfields_tfunc(ti)
+            isva = !isa(nfields_ti, Const)
+            num_fields = isva ? length(v.fields) : (nfields_ti::Const).val
+        end
+        new_fields = Vector{Any}(undef, num_fields)
+        for i = 1:num_fields
+            new_fields[i] = tmeet(getfield_tfunc(v, Const(i)), widenconst(getfield_tfunc(ti, Const(i))))
+            if new_fields[i] === Bottom
+                return Bottom
             end
+        end
+        if isva && isvarargtype(v.fields[end])
+            new_fields[end] = Vararg{new_fields[end]}
         end
         return tuple_tfunc(new_fields)
     elseif isa(v, Conditional)
