@@ -859,3 +859,16 @@ precompile_test_harness("Opaque Closure") do load_path
     f = (@eval (using OCPrecompile; OCPrecompile)).f
     @test Base.invokelatest(f, 1)(2) == 3
 end
+
+# issue #39405
+precompile_test_harness("Renamed Imports") do load_path
+    write(joinpath(load_path, "RenameImports.jl"),
+          """
+          module RenameImports
+          import Base.Experimental as ex
+          test() = ex
+          end
+          """)
+    Base.compilecache(Base.PkgId("RenameImports"))
+    @test (@eval (using RenameImports; RenameImports.test())) isa Module
+end
