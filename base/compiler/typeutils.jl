@@ -49,7 +49,8 @@ argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...
 
 function isknownlength(t::DataType)
     isvatuple(t) || return true
-    return length(t.parameters) > 0 && isa(unwrap_unionall(t.parameters[end]).parameters[2], Int)
+    va = t.parameters[end]
+    return isdefined(va, :N) && va.N isa Int
 end
 
 # test if non-Type, non-TypeVar `x` can be used to parameterize a type
