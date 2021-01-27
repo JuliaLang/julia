@@ -174,6 +174,7 @@ end
 @test_repr "a => b in c"
 @test_repr "*(a..., b)"
 @test_repr "+(a, b, c...)"
+@test_repr "f((x...)...)"
 
 # precedence tie resolution
 @test_repr "(a * b) * (c * d)"
@@ -237,6 +238,7 @@ end
 @test repr(:(;)) == ":((;))"
 @test repr(:(-(;x))) == ":(-(; x))"
 @test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
+@test repr(:(1:2...)) == ":(1:2...)"
 for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:ref, :f, Expr(:(=), :x, 1)),
            Expr(:vect, 1, 2, Expr(:kw, :x, 1)),

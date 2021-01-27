@@ -1941,8 +1941,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # var-arg declaration or expansion
     # (i.e. "function f(L...) end" or "f(B...)")
     elseif head === :(...) && nargs == 1
-        show_unquoted(io, args[1], indent, 0, quote_level)
+        dotsprec = operator_precedence(:(:)) - 1
+        parens = dotsprec <= prec
+        parens && print(io, "(")
+        show_unquoted(io, args[1], indent, dotsprec, quote_level)
         print(io, "...")
+        parens && print(io, ")")
 
     elseif (nargs == 0 && head in (:break, :continue))
         print(io, head)
