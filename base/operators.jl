@@ -602,7 +602,7 @@ function afoldl(op, a, bs...)
     i = 13; y = op(y, bs[i]); l == i && return y
     i = 14; y = op(y, bs[i]); l == i && return y
     i = 15; y = op(y, bs[i]); l == i && return y
-    for i in (i + 1):length(bs)
+    for i in (i + 1):l
         y = op(y, bs[i])
     end
     return y
