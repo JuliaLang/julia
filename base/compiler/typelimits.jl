@@ -563,9 +563,13 @@ function tmeet(@nospecialize(v), @nospecialize(t))
         @assert widev <: Tuple
         new_fields = Vector{Any}(undef, length(v.fields))
         for i = 1:length(new_fields)
-            new_fields[i] = tmeet(v.fields[i], widenconst(getfield_tfunc(t, Const(i))))
-            if new_fields[i] === Bottom
-                return Bottom
+            if isvarargtype(v.fields[i])
+                new_fields[i] = v.fields[i]
+            else
+                new_fields[i] = tmeet(v.fields[i], widenconst(getfield_tfunc(t, Const(i))))
+                if new_fields[i] === Bottom
+                    return Bottom
+                end
             end
         end
         return tuple_tfunc(new_fields)
