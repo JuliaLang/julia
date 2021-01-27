@@ -21,15 +21,6 @@ MIN_EXP(n::Val{:ℯ}, ::Type{Float64}) = -745.1332191019412
 MIN_EXP(n::Val{10}, ::Type{Float32}) = -45.1545f0
 MIN_EXP(n::Val{10}, ::Type{Float64}) = -323.60724533877976
 
-# subnorm_exp = abs(log(base, floatmin(T)))
-# these vals are positive since it's easier to take abs(x) than -abs(x)
-SUBNORM_EXP(n::Val{2}, ::Type{Float32}) = 126.00001f0
-SUBNORM_EXP(n::Val{2}, ::Type{Float64}) = 1022.0
-SUBNORM_EXP(n::Val{:ℯ}, ::Type{Float32}) = 87.33655f0
-SUBNORM_EXP(n::Val{:ℯ}, ::Type{Float64}) = 708.3964185322641
-SUBNORM_EXP(n::Val{10}, ::Type{Float32}) = 37.92978f0
-SUBNORM_EXP(n::Val{10}, ::Type{Float64}) = 307.6526555685887
-
 # 256/log(base, 2) (For Float64 reductions)
 LogBo256INV(::Val{2}, ::Type{Float64}) = 256.0
 LogBo256INV(::Val{:ℯ}, ::Type{Float64}) = 369.3299304675746
@@ -196,14 +187,19 @@ end
 
 # For both, a little extra care needs to be taken if b^r is subnormal.
 # The solution is to do the scaling back in 2 steps as just messing with the exponent wouldn't work.
-for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
+for (func, unsafe_func, base) in ((:exp2, :unsafe_exp2, Val(2)), (:exp, :unsafe_exp, Val(:ℯ)), (:exp10, :unsafe_exp10, Val(10)))
     @eval begin
-        function ($func)(x::Real)
-            xf = float(x)
-            x === xf && throw(MethodError($func, (x,)))
-            return ($func)(xf)
+        ($func)(x::Real) = ($func)(float(x))
+
+        function ($func)(x::T) where T<:Union{Float32,Float64}
+            if !(abs(x) <= MAX_EXP($base, T))
+                x >= MAX_EXP($base, T) && return Inf
+                x <= MIN_EXP($base, T) && return 0.0
+            end
+            return ($unsafe_func)(x)
         end
-        @inline function ($func)(x::T) where T<:Float64
+
+        @inline function ($unsafe_func)(x::T) where T<:Float64
             N_float = muladd(x, LogBo256INV($base, T), MAGIC_ROUND_CONST(T))
             N = reinterpret(uinttype(T), N_float) % Int32
             N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV($base, T))
@@ -212,35 +208,27 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
             k = N >> 8
             jU, jL = table_unpack(N&255 +1)
             small_part =  muladd(jU, expm1b_kernel($base, r), jL) + jU
-
-            if !(abs(x) <= SUBNORM_EXP($base, T))
-                x >= MAX_EXP($base, T) && return Inf
-                x <= MIN_EXP($base, T) && return 0.0
-                if k <= -53
-                    # The UInt64 forces promotion. (Only matters for 32 bit systems.)
-                    twopk = (k + UInt64(53)) << 52
-                    return reinterpret(T, twopk + reinterpret(UInt64, small_part))*(2.0^-53)
-                end
+        
+            if k <= -53
+                # The UInt64 forces promotion. (Only matters for 32 bit systems.)
+                twopk = (k + UInt64(53)) << 52
+                return reinterpret(T, twopk + reinterpret(UInt64, small_part))*(2.0^-53)
             end
             twopk = Int64(k) << 52
             return reinterpret(T, twopk + reinterpret(Int64, small_part))
         end
 
-        @inline function ($func)(x::T) where T<:Float32
+        @inline function ($unsafe_func)(x::T) where T<:Float32
             N_float = round(x*LogBINV($base, T))
             N = unsafe_trunc(Int32, N_float)
             r = muladd(N_float, LogBU($base, T), x)
             r = muladd(N_float, LogBL($base, T), r)
             small_part = expb_kernel($base, r)
-            if !(abs(x) <= SUBNORM_EXP($base, T))
-                x > MAX_EXP($base, T) && return Inf32
-                x < MIN_EXP($base, T) && return 0.0f0
-                if N<=Int32(-24)
-                    twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
-                    return (twopk*small_part)*(2f0^(-24))
-                end
-                N == (exponent_max(T)+1) && return small_part * T(2.0) * T(2.0)^exponent_max(T)
+            if N<=Int32(-24)
+                twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
+                return (twopk*small_part)*(2f0^(-24))
             end
+            N == exponent_max(T) && return small_part * T(2.0) * T(2.0)^(exponent_max(T) - 1)
             twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
             return twopk*small_part
         end
