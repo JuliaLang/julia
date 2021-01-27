@@ -119,8 +119,9 @@ function show(io::IO, re::Regex)
     imsxa = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED|PCRE.UCP
     opts = re.compile_options
     if (opts & ~imsxa) == (DEFAULT_COMPILER_OPTS & ~imsxa)
-        print(io, 'r')
-        print_quoted_literal(io, re.pattern)
+        print(io, "r\"")
+        escape_raw_string(io, re.pattern)
+        print(io, "\"")
         if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
         if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
         if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
@@ -485,8 +486,9 @@ isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)::Bool
 iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)::Union{Nothing,Tuple{AbstractChar,Int}}
 
 function show(io::IO, s::SubstitutionString)
-    print(io, "s")
-    print_quoted_literal(io, s.string)
+    print(io, "s\"")
+    escape_raw_string(io, s.string)
+    print(io, "\"")
 end
 
 """
