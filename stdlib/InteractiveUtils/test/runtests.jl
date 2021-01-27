@@ -106,6 +106,7 @@ end # module ImportIntrinsics15819
 foo11122(x) = @fastmath x - 1.0
 
 # issue #11122, #13568 and #15819
+tag = "ANY"
 @test !warntype_hastag(+, Tuple{Int,Int}, tag)
 @test !warntype_hastag(-, Tuple{Int,Int}, tag)
 @test !warntype_hastag(*, Tuple{Int,Int}, tag)
