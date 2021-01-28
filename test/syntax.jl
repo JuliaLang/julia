@@ -2677,4 +2677,19 @@ end
     @test f((b=3, a=4)) == (4, 3)
     @test f((b=3, c=2, a=4)) == (4, 3)
     @test_throws ErrorException f((;))
+
+    # with type annotation
+    let num, den, a, b
+        res = begin (; num::UInt8, den::Float64) = 1 // 2 end
+        @test res === 1 // 2
+        @test num === 0x01
+        @test den === 2.0
+
+        res = begin (; b, a::Bool) = (a=1.0, b=2, c=0x03) end
+        @test res === (a=1.0, b=2, c=0x03)
+        @test b === 2
+        @test a === true
+    end
+
+    @test Meta.isexpr(Meta.@lower(f((; a, b::Int)) = a + b), :error)
 end
