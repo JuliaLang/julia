@@ -1404,14 +1404,14 @@ let fname = tempname()
     end
 end
 
-struct f_with_params{t} <: Function
+module ModFWithParams
+struct f_with_params{t} <: Function end
+(::f_with_params)(x) = 2x
 end
 
-(::f_with_params)(x) = 2x
-
 let io = IOBuffer()
-    show(io, MIME"text/html"(), f_with_params.body.name.mt)
-    @test occursin("f_with_params", String(take!(io)))
+    show(io, MIME"text/html"(), ModFWithParams.f_with_params.body.name.mt)
+    @test occursin("ModFWithParams.f_with_params", String(take!(io)))
 end
 
 @testset "printing of Val's" begin
@@ -2130,4 +2130,17 @@ end
     @test sprint(show, :(::)) == ":(::)"
     @test sprint(show, :?) == ":?"
     @test sprint(show, :(var"?" + var"::" + var"'")) == ":(var\"?\" + var\"::\" + var\"'\")"
+end
+
+@testset "printing of function types" begin
+    s = sprint(show, MIME("text/plain"), typeof(sin))
+    @test s == "typeof(sin) (singleton type of function sin, subtype of Function)"
+    s = sprint(show, MIME("text/plain"), ModFWithParams.f_with_params)
+    @test endswith(s, "ModFWithParams.f_with_params")
+    s = sprint(show, MIME("text/plain"), ModFWithParams.f_with_params{2})
+    @test endswith(s, "ModFWithParams.f_with_params{2}")
+    s = sprint(show, MIME("text/plain"), UnionAll)
+    @test s == "UnionAll"
+    s = sprint(show, MIME("text/plain"), Function)
+    @test s == "Function"
 end
