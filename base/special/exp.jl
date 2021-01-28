@@ -244,6 +244,21 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
             twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
             return twopk*small_part
         end
+        
+        function ($func)(a::Float16)
+            T = Float32
+            x = T(a)
+            N_float = round(x*LogBINV($base, T))
+            N = unsafe_trunc(Int32, N_float)
+            r = muladd(N_float, LogBU($base, T), x)
+            small_part = expb_kernel($base, r)
+            if !(abs(x) <= SUBNORM_EXP($base, T))
+                x > MAX_EXP($base, T) && return Inf16
+                N<=Int32(-24) && return zero(Float16)
+            end
+            twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
+            return Float16(twopk*small_part)
+        end
     end
 end
 @doc """
