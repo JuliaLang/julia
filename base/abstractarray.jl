@@ -1193,7 +1193,7 @@ function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
 end
 _to_linear_index(A::AbstractArray, i::Integer) = i
 _to_linear_index(A::AbstractVector, i::Integer, I::Integer...) = i
-_to_linear_index(A::AbstractArray) = 1
+_to_linear_index(A::AbstractArray) = first(LinearIndices(A))
 _to_linear_index(A::AbstractArray, I::Integer...) = (@_inline_meta; _sub2ind(A, I...))
 
 ## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
