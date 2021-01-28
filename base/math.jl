@@ -1177,9 +1177,14 @@ muladd(x,y,z) = x*y+z
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:exp2,:exp10,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
+             :atanh,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
+        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
+    end
+end
+for func in (:exp,:exp2,:exp10)
+    @eval begin
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
     end
 end
