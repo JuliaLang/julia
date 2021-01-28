@@ -1972,11 +1972,11 @@
                ;; in case there is splatting inside `hvcat`, collect each row as a
                ;; separate tuple and pass those to `hvcat_rows` instead (ref #38844)
                (if (any (lambda (row) (any vararg? row)) rows)
-                   `(call ,.hvcat_rows ,.(map (lambda (x) `(tuple ,.x)) rows))
-                   `(call ,.hvcat
-                          (tuple ,.(map length rows))
-                          ,.(apply append rows))))
-             `(call ,.vcat ,.a))))))
+                   `(call ,@hvcat_rows ,@(map (lambda (x) `(tuple ,@x)) rows))
+                   `(call ,@hvcat
+                          (tuple ,@(map length rows))
+                          ,@(apply append rows))))
+             `(call ,@vcat ,@a))))))
 
 (define (expand-tuple-destruct lhss x)
   (define (sides-match? l r)
