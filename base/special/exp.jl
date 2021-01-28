@@ -62,7 +62,6 @@ LogBL(::Val{2}, ::Type{Float32}) = 0.0f0
 LogBL(::Val{:ℯ}, ::Type{Float32}) = -1.4286068f-6
 LogBL(::Val{10}, ::Type{Float32}) = -4.605039f-6
 
-
 # -log(base, 2) as a Float32 for Float16 version.
 LogB(::Val{2}, ::Type{Float16}) = -1.0f0
 LogB(::Val{:ℯ}, ::Type{Float16}) = -0.6931472f0
@@ -250,7 +249,7 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
             twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
             return twopk*small_part
         end
-        
+
         function ($func)(a::Float16)
             T = Float32
             x = T(a)
