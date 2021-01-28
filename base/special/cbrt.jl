@@ -148,7 +148,7 @@ function cbrt(x::Union{Float32,Float64})
     return _improve_cbrt(x, t)
 end
 
-function Base.cbrt(a::Float16)
+function cbrt(a::Float16)
     if !isfinite(a) || iszero(a)
         return a
     end
