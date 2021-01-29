@@ -2,7 +2,7 @@
 
 mutable struct MD
     content::Vector{Any}
-    meta::Dict{Any, Any}
+    meta::Dict{Symbol, Any}
 
     MD(content::AbstractVector, meta::Dict = Dict()) =
         new(content, meta)

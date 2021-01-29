@@ -291,14 +291,15 @@ end
 
 uncurly(@nospecialize ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
-namify(@nospecialize x) = astname(x, isexpr(x, :macro))
+namify(@nospecialize x) = astname(x, isexpr(x, :macro))::Union{Symbol,Expr,GlobalRef}
 
 function astname(x::Expr, ismacro::Bool)
-    if isexpr(x, :.)
+    head = x.head
+    if head === :.
         ismacro ? macroname(x) : x
     # Call overloading, e.g. `(a::A)(b) = b` or `function (a::A)(b) b end` should document `A(b)`
-    elseif (isexpr(x, :function) || isexpr(x, :(=))) && isexpr(x.args[1], :call) && isexpr(x.args[1].args[1], :(::))
-        return astname(x.args[1].args[1].args[end], ismacro)
+    elseif (head === :function || head === :(=)) && isexpr(x.args[1], :call) && isexpr((x.args[1]::Expr).args[1], :(::))
+        return astname(((x.args[1]::Expr).args[1]::Expr).args[end], ismacro)
     else
         n = isexpr(x, (:module, :struct)) ? 2 : 1
         astname(x.args[n], ismacro)
@@ -347,11 +348,11 @@ function metadata(__source__, __module__, expr, ismodule)
         P = Pair{Symbol,Any}
         fields = P[]
         last_docstr = nothing
-        for each in expr.args[3].args
+        for each in (expr.args[3]::Expr).args
             if isa(each, Symbol) || isexpr(each, :(::))
                 # a field declaration
                 if last_docstr !== nothing
-                    push!(fields, P(namify(each), last_docstr))
+                    push!(fields, P(namify(each::Union{Symbol,Expr}), last_docstr))
                     last_docstr = nothing
                 end
             elseif isexpr(each, :function) || isexpr(each, :(=))
@@ -359,7 +360,7 @@ function metadata(__source__, __module__, expr, ismodule)
             elseif isa(each, String) || isexpr(each, :string) || isexpr(each, :call) ||
                 (isexpr(each, :macrocall) && each.args[1] === Symbol("@doc_str"))
                 # forms that might be doc strings
-                last_docstr = each
+                last_docstr = each::Union{String,Expr}
             end
         end
         dict = :($(Dict{Symbol,Any})($([(:($(P)($(quot(f)), $d)))::Expr for (f, d) in fields]...)))
