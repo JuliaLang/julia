@@ -91,29 +91,15 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
             cred.user = unsafe_string(username_ptr)
         end
 
-        cred.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
-            default = joinpath(homedir(), ".ssh", "id_rsa")
-            if isempty(cred.prvkey) && isfile(default)
-                default
-            else
-                cred.prvkey
-            end
-        end
-
-        cred.pubkey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
-            default = cred.prvkey * ".pub"
-            if isempty(cred.pubkey) && isfile(default)
-                default
-            else
-                cred.pubkey
-            end
-        end
-
-        cred.pass = Base.get(ENV, "SSH_KEY_PASS", cred.pass)
+        cred.prvkey = something(NetworkOptions.ssh_key_path(), cred.prvkey)
+        cred.pass   = something(NetworkOptions.ssh_key_pass(), cred.pass)
+        cred.pubkey = something(NetworkOptions.ssh_pub_key_path(), cred.pubkey)
 
         revised = true
         p.use_env = false
     end
+
+    @show cred
 
     if p.remaining_prompts > 0 && (!revised || !isfilled(cred))
         if isempty(cred.user) || username_ptr == Cstring(C_NULL)
