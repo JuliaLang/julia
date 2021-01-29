@@ -990,3 +990,19 @@ p0 = copy(p)
     @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
                   [[1, 2],[missing, 1]])
 end
+
+# test the dimension promotion provided by the generic
+# BroadcastStyle(::AbstractArrayStyle, ::AbstractArrayStyle)
+struct CustomStyle{T,N} <: Broadcast.AbstractArrayStyle{N} end
+Broadcast.BroadcastStyle(::CustomStyle{:A,N}, ::CustomStyle{:B,N}) where {N} = CustomStyle{:A,N}()
+CustomStyle{T,N}(::Val{M}) where {T,N,M} = CustomStyle{T,M}()
+# test this isn't spoiled:
+@test @inferred(Broadcast.result_style(CustomStyle{:A,1}(), CustomStyle{:B,1}())) ==
+      @inferred(Broadcast.result_style(CustomStyle{:B,1}(), CustomStyle{:A,1}())) == CustomStyle{:A,1}()
+# test dimension promotion works here:
+@test @inferred(Broadcast.result_style(CustomStyle{:A,1}(), CustomStyle{:A,2}())) == CustomStyle{:A,2}()
+# here the user would need to specify a custom rule:
+@test @inferred(Broadcast.result_style(CustomStyle{:A,1}(), CustomStyle{:B,2}())) ==
+      @inferred(Broadcast.result_style(CustomStyle{:B,2}(), CustomStyle{:A,1}())) ==
+      @inferred(Broadcast.result_style(CustomStyle{:A,2}(), CustomStyle{:B,1}())) ==
+      @inferred(Broadcast.result_style(CustomStyle{:B,1}(), CustomStyle{:A,2}())) == Broadcast.ArrayConflict()

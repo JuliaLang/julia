@@ -137,11 +137,12 @@ BroadcastStyle(a::AbstractArrayStyle, ::Style{Tuple})    = a
 BroadcastStyle(::A, ::A) where A<:ArrayStyle             = A()
 BroadcastStyle(::ArrayStyle, ::ArrayStyle)               = Unknown()
 BroadcastStyle(::A, ::A) where A<:AbstractArrayStyle     = A()
-Base.@pure function BroadcastStyle(a::A, b::B) where {A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}} where {M,N}
-    if Base.typename(A) === Base.typename(B)
-        return A(Val(max(M, N)))
+function BroadcastStyle(::A, ::B) where {M,N,A<:AbstractArrayStyle{M},B<:AbstractArrayStyle{N}}
+    if M!=N && M!=Any && N!=Any && A(Val(max(M,N)))==B(Val(max(M,N)))
+        A(Val(max(M,N)))
+    else
+        Unknown()
     end
-    return Unknown()
 end
 # Any specific array type beats DefaultArrayStyle
 BroadcastStyle(a::AbstractArrayStyle{Any}, ::DefaultArrayStyle) = a
