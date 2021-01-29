@@ -111,7 +111,7 @@ function lookup(pointer::Ptr{Cvoid})
     for i in 1:length(infos)
         info = infos[i]::Core.SimpleVector
         @assert(length(info) == 6)
-        res[i] = StackFrame(info[1], info[2], info[3], info[4], info[5], info[6], pointer)
+        res[i] = StackFrame(info[1]::Symbol, info[2]::Symbol, info[3]::Int, info[4], info[5]::Bool, info[6]::Bool, pointer)
     end
     return res
 end
@@ -126,10 +126,10 @@ function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
     end
     codeinfo = (code isa MethodInstance ? code.uninferred : code)::CodeInfo
     # prepare approximate code info
-    if code isa MethodInstance && code.def isa Method
-        func = code.def.name
-        file = code.def.file
-        line = code.def.line
+    if code isa MethodInstance && (meth = code.def; meth isa Method)
+        func = meth.name
+        file = meth.file
+        line = meth.line
     else
         func = top_level_scope_sym
         file = empty_sym
@@ -139,13 +139,13 @@ function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
     if i > length(codeinfo.codelocs) || codeinfo.codelocs[i] == 0
         return [StackFrame(func, file, line, code, false, false, 0)]
     end
-    lineinfo = codeinfo.linetable[codeinfo.codelocs[i]]
+    lineinfo = codeinfo.linetable[codeinfo.codelocs[i]]::Core.LineInfoNode
     scopes = StackFrame[]
     while true
         inlined = lineinfo.inlined_at != 0
-        push!(scopes, StackFrame(lineinfo.method, lineinfo.file, lineinfo.line, inlined ? nothing : code, false, inlined, 0))
+        push!(scopes, StackFrame(Base.IRShow.method_name(lineinfo)::Symbol, lineinfo.file, lineinfo.line, inlined ? nothing : code, false, inlined, 0))
         inlined || break
-        lineinfo = codeinfo.linetable[lineinfo.inlined_at]
+        lineinfo = codeinfo.linetable[lineinfo.inlined_at]::Core.LineInfoNode
     end
     return scopes
 end

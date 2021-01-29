@@ -281,14 +281,11 @@ function showerror(io::IO, ex::MethodError)
         if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
             any(x -> x <: Number, arg_types_param)
 
-            nouns = Dict{Any,String}(
-                Base.:+ => "addition",
-                Base.:- => "subtraction",
-            )
+            nounf = f === Base.:+ ? "addition" : "subtraction"
             varnames = ("scalar", "array")
             first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
             fstring = f === Base.:+ ? "+" : "-"  # avoid depending on show_default for functions (invalidation)
-            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$fstring $second")
+            print(io, "\nFor element-wise $nounf, use broadcasting with dot syntax: $first .$fstring $second")
         end
     end
     if ft <: AbstractArray

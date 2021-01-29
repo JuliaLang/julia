@@ -318,8 +318,8 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
     end
 end
 
-function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                          follow_symlinks::Bool=false)
+function cptree(src::String, dst::String; force::Bool=false,
+                                          follow_symlinks::Bool=false)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
@@ -335,6 +335,8 @@ function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
         end
     end
 end
+cptree(src::AbstractString, dst::AbstractString; kwargs...) =
+    cptree(String(src)::String, String(dst)::String; kwargs...)
 
 """
     cp(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)

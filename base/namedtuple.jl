@@ -286,7 +286,8 @@ function merge(a::NamedTuple, itr)
     names = Symbol[]
     vals = Any[]
     inds = IdDict{Symbol,Int}()
-    for (k::Symbol, v) in itr
+    for (k, v) in itr
+        k = k::Symbol
         oldind = get(inds, k, 0)
         if oldind > 0
             vals[oldind] = v
