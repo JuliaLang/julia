@@ -99,8 +99,6 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
         p.use_env = false
     end
 
-    @show cred
-
     if p.remaining_prompts > 0 && (!revised || !isfilled(cred))
         if isempty(cred.user) || username_ptr == Cstring(C_NULL)
             url = git_url(scheme=p.scheme, host=p.host)
