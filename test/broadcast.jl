@@ -990,3 +990,15 @@ p0 = copy(p)
     @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
                   [[1, 2],[missing, 1]])
 end
+
+@testset "Issue #28382: eltype inconsistent with getindex" begin
+    struct Cyclotomic <: Number
+    end
+
+    Base.eltype(::Type{<:Cyclotomic}) = Tuple{Int,Int}
+
+    Base.:*(c::T, x::Cyclotomic) where {T<:Real} = [1, 2]
+    Base.:*(x::Cyclotomic, c::T) where {T<:Real} = [1, 2]
+
+    @test Cyclotomic() .* [2, 3] == [[1, 2], [1, 2]]
+end
