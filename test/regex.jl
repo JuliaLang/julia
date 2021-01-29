@@ -34,11 +34,6 @@
     @test map(m -> m.match, eachmatch(r"(\p{L}+)", "Tú lees.")) == ["Tú", "lees"]
     @test map(m -> m.match, eachmatch(r"(\p{L}+)", "¿Cuál es tu pregunta?")) == ["Cuál", "es", "tu", "pregunta"]
 
-    # Issue 9545 (32 bit)
-    buf = PipeBuffer()
-    show(buf, r"")
-    @test read(buf, String) == "r\"\""
-
     # see #10994, #11447: PCRE2 allows NUL chars in the pattern
     @test occursin(Regex("^a\0b\$"), "a\0b")
 
@@ -52,12 +47,17 @@
     subst = s"FROM: \g<name>\n MESSAGE: \1"
     @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
 
+    # Issue #9545 (32 bit)
+    @test repr(r"") == "r\"\""
     # Issue #36550
-    @test repr(s"\x") == "s\"\\x\""
-    @test repr(s"\\x") == "s\"\\\\x\""
-    @test repr(s"\\\x") == "s\"\\\\\\x\""
-    @test repr(s"x\\") == "s\"x\\\""
-    @test repr(s"a\1b") == "s\"a\\1b\""
+    @test repr(s"\x") == raw"s\"\x\""
+    @test repr(s"\\x") == raw"s\"\\x\""
+    @test repr(s"\\\x") == raw"s\"\\\x\""
+    @test repr(s"x\\") == raw"s\"x\\\\\""
+    @test repr(s"a\1b") == raw"s\"a\1b\""
+    # Issue #29580
+    @test repr(r"\\\"") == raw"r\"\\\\\\\"\""
+    @test repr(s"\\\"\\") == raw"s\"\\\\\\\"\\\\\""
 
     # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
