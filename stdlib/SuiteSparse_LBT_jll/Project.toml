@@ -1,0 +1,14 @@
+name = "SuiteSparse_LBT_jll"
+uuid = "8a7bcfce-81ee-5a07-a07c-c8520ac69669"
+version = "5.4.1+0"
+
+[deps]
+JLLWrappers = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
+libblastrampoline_jll = "8e850b90-86db-534c-a0d3-1478176c7d93"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[compat]
+JLLWrappers = "1.2.0"
+julia = "1.6"

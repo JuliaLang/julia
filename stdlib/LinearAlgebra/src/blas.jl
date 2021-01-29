@@ -6,7 +6,7 @@ Interface to BLAS subroutines.
 module BLAS
 
 import ..axpy!, ..axpby!
-import Base: copyto!
+import Base: copyto!, USE_BLAS64
 using Base: require_one_based_indexing
 
 export
@@ -63,8 +63,8 @@ export
     trsm
 
 
-const libblas = Base.libblas_name
-const liblapack = Base.liblapack_name
+const libblas = "libblastrampoline"
+const liblapack = "libblastrampoline"
 
 import LinearAlgebra
 import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1, axpy!
@@ -72,29 +72,17 @@ import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismat
 import Libdl
 
 # utility routines
-let lib = C_NULL
-global function determine_vendor()
-    if lib == C_NULL
-        lib = something(Libdl.dlopen(libblas; throw_error=false), C_NULL)
-    end
-    vend = :unknown
-    if lib != C_NULL
-        if Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false) !== nothing
-            vend = :openblas
-        elseif Libdl.dlsym(lib, :openblas_set_num_threads64_; throw_error=false) !== nothing
-            vend = :openblas64
-        elseif Libdl.dlsym(lib, :MKL_Set_Num_Threads; throw_error=false) !== nothing
-            vend = :mkl
-        end
-    end
-    return vend
-end
-end
 
-const _vendor = determine_vendor()
+_vendor = :unknown
+
 vendor() = _vendor
 
-if vendor() === :openblas64
+function set_vendor!(v)
+    global _vendor
+    _vendor = v
+end
+
+if USE_BLAS64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
@@ -107,8 +95,6 @@ end
 openblas_get_config() = strip(unsafe_string(ccall((@blasfunc(openblas_get_config), libblas), Ptr{UInt8}, () )))
 
 function guess_vendor()
-    # like determine_vendor, but guesses blas in some cases
-    # where determine_vendor returns :unknown
     ret = vendor()
     if Sys.isapple() && (ret == :unknown)
         ret = :osxblas
@@ -150,7 +136,7 @@ function _set_num_threads(n::Integer; _blas = guess_vendor())
         return ccall((@blasfunc(openblas_set_num_threads), libblas), Cvoid, (Cint,), n)
     elseif _blas === :mkl
         # MKL may let us set the number of threads in several ways
-        return ccall((:MKL_Set_Num_Threads, libblas), Cvoid, (Cint,), n)
+        return ccall((@blasfunc(MKL_Set_Num_Threads), libblas), Cvoid, (Cint,), n)
     elseif _blas === :osxblas
         # OSX BLAS looks at an environment variable
         ENV["VECLIB_MAXIMUM_THREADS"] = n
@@ -188,7 +174,7 @@ function _get_num_threads(; _blas = guess_vendor())::Union{Int, Nothing}
     if _blas === :openblas || _blas === :openblas64
         return Int(ccall((@blasfunc(openblas_get_num_threads), libblas), Cint, ()))
     elseif _blas === :mkl
-        return Int(ccall((:mkl_get_max_threads, libblas), Cint, ()))
+        return Int(ccall((@blasfunc(mkl_get_max_threads), libblas), Cint, ()))
     elseif _blas === :osxblas
         key = "VECLIB_MAXIMUM_THREADS"
         nt = _tryparse_env_int(key)

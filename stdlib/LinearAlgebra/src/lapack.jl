@@ -5,7 +5,7 @@ module LAPACK
 Interfaces to LAPACK subroutines.
 """ LAPACK
 
-const liblapack = Base.liblapack_name
+const liblapack = "libblastrampoline"
 
 import ..LinearAlgebra.BLAS.@blasfunc
 
