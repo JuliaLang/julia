@@ -1358,10 +1358,11 @@ julia> typeof(f(2))
 Int64
 
 julia> @code_warntype f(2)
-Variables
+MethodInstance for f(::Int64)
+  from f(a) in Main at none:1
+Arguments
   #self#::Core.Const(f)
   a::Int64
-
 Body::UNION{FLOAT64, INT64}
 1 ─ %1 = (a > 1)::Bool
 └──      goto #3 if not %1

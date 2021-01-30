@@ -4,7 +4,7 @@
 
 const empty_sym = Symbol("")
 function strip_gensym(sym)
-    if sym === Symbol("#self#") || sym === Symbol("#unused#")
+    if sym === :var"#self#" || sym === :var"#unused#"
         return empty_sym
     end
     return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
