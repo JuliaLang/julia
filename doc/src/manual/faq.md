@@ -207,12 +207,12 @@ have two options:
 
 ### What does the `...` operator do?
 
-### The two uses of the `...` operator: slurping and splatting
+#### The two uses of the `...` operator: slurping and splatting
 
 Many newcomers to Julia find the use of `...` operator confusing. Part of what makes the `...`
 operator confusing is that it means two different things depending on context.
 
-### `...` combines many arguments into one argument in function definitions
+#### `...` combines many arguments into one argument in function definitions
 
 In the context of function definitions, the `...` operator is used to combine many different arguments
 into a single argument. This use of `...` for combining many different arguments into a single
@@ -237,7 +237,7 @@ Arg #3 = 3
 If Julia were a language that made more liberal use of ASCII characters, the slurping operator
 might have been written as `<-...` instead of `...`.
 
-### `...` splits one argument into many different arguments in function calls
+#### `...` splits one argument into many different arguments in function calls
 
 In contrast to the use of the `...` operator to denote slurping many different arguments into
 one argument when defining a function, the `...` operator is also used to cause a single function
