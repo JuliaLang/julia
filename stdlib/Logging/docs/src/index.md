@@ -60,15 +60,15 @@ automatically extracted. Let's examine the user-defined data first:
   user-defined levels are also possible.
   Each is distinct in purpose:
   - `Debug` is information intended for the developer of the program.
-  These events are disabled by default.
+    These events are disabled by default.
   - `Info` is for general information to the user.
-  Think of it as an alternative to using `println` directly.
+    Think of it as an alternative to using `println` directly.
   - `Warn` means something is wrong and action is likely required
-  but that for now the program is still working.
+    but that for now the program is still working.
   - `Error` means something is wrong and it is unlikely to be recovered,
-  at least by this part of the code.
-  Often this log-level is unneeded as throwing an exception can convey
-  all the required information.
+    at least by this part of the code.
+    Often this log-level is unneeded as throwing an exception can convey
+    all the required information.
 
 * The *message*  is an object describing the event. By convention
   `AbstractString`s passed as messages are assumed to be in markdown format.
