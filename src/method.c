@@ -361,6 +361,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->propagate_inbounds = 0;
     src->pure = 0;
     src->edges = jl_nothing;
+    src->aggressive_constprop = 0;
     return src;
 }
 
@@ -644,6 +645,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->primary_world = 1;
     m->deleted_world = ~(size_t)0;
     m->is_for_opaque_closure = 0;
+    m->aggressive_constprop = 0;
     JL_MUTEX_INIT(&m->writelock);
     return m;
 }
