@@ -208,11 +208,12 @@ end
 
 """
     edit(function, [types])
+    edit(function, [index])
     edit(module)
 
-Edit the definition of a function, optionally specifying a tuple of types to indicate which
-method to edit. For modules, open the main source file. The module needs to be loaded with
-`using` or `import` first.
+Edit the definition of a function, optionally specifying a tuple of types, or method
+index, to indicate which method to edit. For modules, open the main source file.
+The module needs to be loaded with `using` or `import` first.
 
 !!! compat "Julia 1.1"
     `edit` on modules requires at least Julia 1.1.
@@ -222,6 +223,7 @@ To ensure that the file can be opened at the given line, you may need to call
 """
 edit(f)                   = edit(functionloc(f)...)
 edit(f, @nospecialize t)  = edit(functionloc(f,t)...)
+edit(f::Function, index::Integer)  = edit(methods(f).ms[index])
 edit(file, line::Integer) = error("could not find source file for function")
 edit(m::Module) = edit(pathof(m))
 
