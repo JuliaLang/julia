@@ -104,9 +104,20 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
     let cmd = "\"Hello REPL\""
         write(stdin_write, "$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
     end
-    inc = true
-    notify(b)
-    wait(c)
+    let t = @async begin
+            inc = true
+            notify(b)
+            wait(c)
+        end
+        while (d = readline(stdout_read)) != ""
+            # first line [optional]: until 80th char of input
+            # second line: until end of input
+            # third line: "Hello REPL"
+            # last line: blank
+            # last+1 line: next prompt
+        end
+        wait(t)
+    end
 
     # Latex completions
     write(stdin_write, "\x32\\alpha\t")
