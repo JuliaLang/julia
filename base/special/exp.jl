@@ -205,7 +205,7 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
     @eval begin
         function ($func)(x::T) where T<:Float64
             N_float = muladd(x, LogBo256INV($base, T), MAGIC_ROUND_CONST(T))
-            N = reinterpret(uinttype(T), N_float) % Int32
+            N = reinterpret(UInt64, N_float) % Int32
             N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV($base, T))
             r = muladd(N_float, LogBo256U($base, T), x)
             r = muladd(N_float, LogBo256L($base, T), r)
@@ -272,7 +272,6 @@ julia> exp(1.0)
 2.718281828459045
 """ exp(x::Real)
 
-
 """
     exp2(x)
 
@@ -312,4 +311,71 @@ exp10(x)
         # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
         reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64) % UInt))
     end
+end
+
+# min and max arguments by base and type
+MAX_EXP(::Type{Float64}) =  709.7827128933845   # log 2^1023*(2-2^-52)
+MIN_EXP(::Type{Float64}) = -37.42994775023705   # log 2^-54
+MAX_EXP(::Type{Float32}) =  88.72284f0          # log 2^127 *(2-2^-23)
+MIN_EXP(::Type{Float32}) = -17.32868f0          # log 2^-25
+
+Ln2INV(::Type{Float64}) = 1.4426950408889634
+Ln2(::Type{Float64}) = -0.6931471805599453
+
+# log(.75) <= x <= log(1.25)
+function expm1_small(x::Float32)
+    p = evalpoly(x, (0.16666666f0, 0.041666627f0, 0.008333682f0,
+                     0.0013908712f0, 0.0001933096f0))
+    p2 = exthorner(x, (1f0, .5f0, p))
+    return fma(x, p2[1], x*p2[2])
+end
+@inline function expm1_small(x::Float64)
+    p = evalpoly(x, (0.16666666666666632, 0.04166666666666556, 0.008333333333401227,
+                     0.001388888889068783, 0.00019841269447671544, 2.480157691845342e-5,
+                     2.7558212415361945e-6, 2.758218402815439e-7, 2.4360682937111612e-8))
+    p2 = exthorner(x, (1.0, .5, p))
+    return fma(x, p2[1], x*p2[2])
+end
+
+expm1(x::Real) = expm1(float(x))
+@inline function expm1(x::Float64)
+    T=Float64
+    if -0.2876820724517809 <= x <= 0.22314355131420976
+        return expm1_small(x)
+    elseif !(abs(x)<=MIN_EXP(Float64))
+        isnan(x) && return x
+        x > MAX_EXP(Float64) && return Inf
+        x < MIN_EXP(Float64) && return -1.0
+    end
+
+    N_float = muladd(x, LogBo256INV(Val(:ℯ), T), MAGIC_ROUND_CONST(T))
+    N = reinterpret(UInt64, N_float) % Int32
+    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(Val(:ℯ), T))
+    r = muladd(N_float, LogBo256U(Val(:ℯ), T), x)
+    r = muladd(N_float, LogBo256L(Val(:ℯ), T), r)
+    k = N >> 8
+    jU, jL = table_unpack(N&255 +1)
+    p = expm1b_kernel(Val(:ℯ), r)
+    twopk  = reinterpret(Float64, (1023+k) << 52)
+    twopnk = reinterpret(Float64, (1023-k) << 52)
+    k>=106 && return reinterpret(Float64, (1022+k) << 52)*(jU + muladd(jU, p, jL))*2
+    k>=53 && return twopk*(jU + muladd(jU, p, (jL-twopnk)))
+    k<=-2 && return twopk*(jU + muladd(jU, p, jL))-1
+    return twopk*((jU-twopnk) + fma(jU, p, jL))
+end
+
+@inline function expm1(x::T) where T<:Float32
+    if -0.2876821f0 <=x <= 0.22314355f0
+        return expm1_small(x)
+    end
+    x = Float64(x)
+    N_float = round(x*Ln2INV(Float64))
+    N = unsafe_trunc(UInt64, N_float)
+    r = muladd(N_float, Ln2(Float64), x)
+    hi = evalpoly(r, (1.0, .5, 0.16666667546642386, 0.041666183019487026,
+              0.008332997481506921, 0.0013966479175977883, 0.0002004037059220124))
+    small_part = r*hi
+    twopk = reinterpret(Float64, (N+1023) << 52)
+    x > MAX_EXP(T) && return T(Inf)
+    return Float32(muladd(twopk, small_part, twopk-1.0))
 end

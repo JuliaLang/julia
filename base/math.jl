@@ -241,6 +241,20 @@ macro evalpoly(z, p...)
     :(evalpoly($zesc, ($(pesc...),)))
 end
 
+# polynomial evaluation using compensated summation.
+# much more accurate, especially when lo can be combined with other rounding errors
+@inline function exthorner(x, p::Tuple)
+    hi, lo = p[end], zero(x)
+    for i in length(p)-1:-1:1
+        pi = p[i]
+        prod = hi*x
+        err = fma(hi, x, -prod)
+        hi = pi+prod
+        lo = fma(lo, x, prod - (hi - pi) + err)
+    end
+    return hi, lo
+end
+
 """
     rad2deg(x)
 
@@ -534,6 +548,7 @@ for f in (:log2, :log10)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
+        @inline ($f)(x::Real) = ($f)(float(x))
     end
 end
 
@@ -564,7 +579,6 @@ julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
 ```
 """
-sqrt(x)
 
 """
     hypot(x, y)
@@ -1124,6 +1138,19 @@ julia> 3 * 2 + 1
 """
 muladd(x,y,z) = x*y+z
 
+# Float16 definitions
+
+for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
+             :atanh,:exp,:exp2,:exp10,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
+    @eval begin
+        $func(a::Float16) = Float16($func(Float32(a)))
+        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
+    end
+end
+
+atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
+cbrt(a::Float16) = Float16(cbrt(Float32(a)))
+sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 # helper functions for Libm functionality
 
