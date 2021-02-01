@@ -1138,7 +1138,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
         return Const((e::QuoteNode).value)
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
-    elseif isa(e, Slot)
+    elseif isa(e, Slot) || isa(e, Argument)
         return (vtypes[slot_id(e)]::VarState).typ
     elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name)
