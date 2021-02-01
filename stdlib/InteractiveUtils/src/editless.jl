@@ -220,7 +220,7 @@ method to edit. For modules, open the main source file. The module needs to be l
 To ensure that the file can be opened at the given line, you may need to call
 `define_editor` first.
 """
-edit(f)                   = edit(functionloc(f)...)
+edit(f)                   = length(methods(f)) > 1 ? methods(f) : edit(functionloc(f)...)
 edit(f, @nospecialize t)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
 edit(m::Module) = edit(pathof(m))
