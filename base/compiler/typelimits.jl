@@ -586,21 +586,19 @@ end
 # compute typeintersect over the extended inference lattice
 # where v is in the extended lattice, and t is a Type
 function tmeet(@nospecialize(v), @nospecialize(t))
-    if isa(v, Const)
-        if !has_free_typevars(t) && !isa(v.val, t)
-            return Bottom
-        end
+    if isa(v, Type)
+        return typeintersect(v, t)
+    end
+    has_free_typevars(t) && return v
+    widev = widenconst(v)
+    if widev <: t
         return v
-    elseif isa(v, PartialStruct)
-        has_free_typevars(t) && return v
-        widev = widenconst(v)
-        if widev <: t
-            return v
-        end
-        ti = typeintersect(widev, t)
-        if ti === Bottom
-            return Bottom
-        end
+    end
+    ti = typeintersect(widev, t)
+    if ti === Bottom
+        return Bottom
+    end
+    if isa(v, PartialStruct)
         @assert widev <: Tuple
         if isa(ti, DataType) && ti.name === Tuple.name
             num_fields = length(ti.parameters)
@@ -612,7 +610,7 @@ function tmeet(@nospecialize(v), @nospecialize(t))
         end
         new_fields = Vector{Any}(undef, num_fields)
         for i = 1:num_fields
-            new_fields[i] = tmeet(getfield_tfunc(v, Const(i)), widenconst(getfield_tfunc(ti, Const(i))))
+            new_fields[i] = tmeet(unwrapva(v.fields[min(i, end)]), widenconst(getfield_tfunc(ti, Const(i))))
             if new_fields[i] === Bottom
                 return Bottom
             end
@@ -621,11 +619,7 @@ function tmeet(@nospecialize(v), @nospecialize(t))
             new_fields[end] = Vararg{new_fields[end]}
         end
         return tuple_tfunc(new_fields)
-    elseif isa(v, Conditional)
-        if !(Bool <: t)
-            return Bottom
-        end
-        return v
     end
-    return typeintersect(widenconst(v), t)
+    # v is a Const or Conditional and its type is compatible with t
+    return v
 end
