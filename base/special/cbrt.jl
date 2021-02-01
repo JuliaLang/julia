@@ -153,12 +153,12 @@ function cbrt(a::Float16)
         return a
     end
     x=Float32(a)
-    
+
     # 5 bit approximation. Simpler than _approx_cbrt since subnormals can not appear
     u = highword(x) & 0x7fff_ffff
     v = div(u, UInt32(3)) + 0x2a5119f2
     t = copysign(fromhighword(Float32, v), x)
-    
+
     # 2 newton iterations
     t = 0.33333334f0 * (2f0*t + x/(t*t))
     t = 0.33333334f0 * (2f0*t + x/(t*t))
