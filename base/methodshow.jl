@@ -176,7 +176,7 @@ function functionloc(@nospecialize(f))
         end
     end
     if length(mt) > 1
-        error("function has multiple methods; please specify a type signature")
+        error("function has multiple methods; please specify a type signature:\n" * string(mt))
     end
     return functionloc(first(mt))
 end
