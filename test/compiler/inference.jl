@@ -3021,3 +3021,15 @@ function splat_lotta_unions()
     (a...,b...,c...)
 end
 @test Core.Compiler.return_type(splat_lotta_unions, Tuple{}) >: Tuple{Int,Int,Int}
+
+# issue #38971 and related precision issues
+f28971() = (1, [2,3]...)::Tuple{Int,Int,Int}
+@test @inferred(f28971()) == (1, 2, 3)
+g28971(::Type{T}) where {T} = (1, Number[2,3]...)::T
+@test Base.return_types(g28971, Tuple{Type{Tuple{Vararg{Int}}}})[1] == Tuple{Int,Vararg{Int}}
+@test Base.return_types(g28971, Tuple{Type{Tuple{Int,Vararg{Int}}}})[1] == Tuple{Int,Vararg{Int}}
+@test Base.return_types(g28971, Tuple{Type{Tuple{Int,Int,Vararg{Int}}}})[1] == Tuple{Int,Int,Vararg{Int}}
+@test Base.return_types(g28971, Tuple{Type{Union{Tuple{Int,Int,Int},Tuple{Vararg{Float64}}}}})[1] == Tuple{Int,Int,Int}
+let T = Union{Tuple{Int,Int,Int},Tuple{Int,Vararg{Float64}}}
+    @test T <: Base.return_types(g28971, Tuple{Type{T}})[1] <: Tuple{Int,Vararg{Union{Int,Float64}}}
+end
