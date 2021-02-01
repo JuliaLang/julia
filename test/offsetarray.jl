@@ -110,6 +110,15 @@ let a1 = [11,12,13], a2 = [1 2; 3 4]
     @test_throws BoundsError i2[1:2:5]
 end
 
+# issue #37274
+let a = 1:3
+    oa = OffsetArray(a, 0:2)
+    b = @view oa[0]
+    @test b[] == b[1] == b[1,1] == 1
+    @test_throws BoundsError b[0]
+    @test_throws BoundsError b[2]
+end
+
 # logical indexing
 @test A[A .> 2] == [3,4]
 @test_throws BoundsError h[trues(2)]
