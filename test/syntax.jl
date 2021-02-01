@@ -2678,3 +2678,17 @@ end
     @test f((b=3, c=2, a=4)) == (4, 3)
     @test_throws ErrorException f((;))
 end
+
+struct A x end
+Base.dotgetproperty(::A) = (a, x) -> [0, 0, 0]
+
+@testset "dotgetproperty" begin
+    a = (x = [1, 2, 3],)
+    @test @inferred((a -> a.x .+= 1)(a)) == [2, 3, 4]
+
+    b = [1, 2, 3]
+    @test A(b).x === b
+    @test begin A(b).x .= 1 end == [1, 1, 1]
+    @test begin A(b).x .+= 1 end == [2, 3, 4]
+    @test b == [1, 2, 3]
+end
