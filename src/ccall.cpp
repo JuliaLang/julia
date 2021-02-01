@@ -1053,7 +1053,7 @@ std::string generate_func_sig(const char *fname)
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
-                if (jl_datatype_size(bt) < 4) {
+                if (jl_datatype_size(bt) < 4 && bt != jl_float16_type) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type))
                         ab.addAttribute(Attribute::SExt);
                     else
@@ -1480,6 +1480,28 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         LoadInst *tid = ctx.builder.CreateAlignedLoad(ptid, Align(sizeof(int16_t)));
         tbaa_decorate(tbaa_const, tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_gc_disable_finalizers_internal)
+#ifdef NDEBUG
+             || is_libjulia_func(jl_gc_enable_finalizers_internal)
+#endif
+             ) {
+        JL_GC_POP();
+        Value *ptls_i32 = emit_bitcast(ctx, ctx.ptlsStates, T_pint32);
+        const int finh_offset = offsetof(jl_tls_states_t, finalizers_inhibited);
+        Value *pfinh = ctx.builder.CreateInBoundsGEP(ptls_i32, ConstantInt::get(T_size, finh_offset / 4));
+        LoadInst *finh = ctx.builder.CreateAlignedLoad(pfinh, Align(sizeof(int32_t)));
+        Value *newval;
+        if (is_libjulia_func(jl_gc_disable_finalizers_internal)) {
+            newval = ctx.builder.CreateAdd(finh, ConstantInt::get(T_int32, 1));
+        }
+        else {
+            newval = ctx.builder.CreateSelect(ctx.builder.CreateICmpEQ(finh, ConstantInt::get(T_int32, 0)),
+                                              ConstantInt::get(T_int32, 0),
+                                              ctx.builder.CreateSub(finh, ConstantInt::get(T_int32, 1)));
+        }
+        ctx.builder.CreateStore(newval, pfinh);
+        return ghostValue(jl_nothing_type);
     }
     else if (is_libjulia_func(jl_get_current_task)) {
         assert(lrt == T_prjlvalue);

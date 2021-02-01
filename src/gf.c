@@ -104,7 +104,9 @@ static int speccache_eq(size_t idx, const void *ty, jl_svec_t *data, uint_t hv)
 // get or create the MethodInstance for a specialization
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams)
 {
-    uint_t hv = ((jl_datatype_t*)(jl_is_unionall(type) ? jl_unwrap_unionall(type) : type))->hash;
+    jl_value_t *ut = jl_is_unionall(type) ? jl_unwrap_unionall(type) : type;
+    JL_TYPECHK(specializations, datatype, ut);
+    uint_t hv = ((jl_datatype_t*)ut)->hash;
     for (int locked = 0; ; locked++) {
         jl_array_t *speckeyset = jl_atomic_load_acquire(&m->speckeyset);
         jl_svec_t *specializations = jl_atomic_load_acquire(&m->specializations);
@@ -646,7 +648,7 @@ static void jl_compilation_sig(
         else if (jl_is_type_type(elt)) { // elt isa Type{T}
             if (very_general_type(decl_i)) {
                 /*
-                  here's a fairly simple heuristic: if this argument slot's
+                  Here's a fairly simple heuristic: if this argument slot's
                   declared type is general (Type or Any),
                   then don't specialize for every Type that got passed.
 
@@ -661,8 +663,9 @@ static void jl_compilation_sig(
                   x::TypeConstructor matches the first but not the second, while
                   also matching all other TypeConstructors. This means neither
                   Type{TC} nor TypeConstructor is more specific.
+
+                  But don't apply this heuristic if the argument is called (issue #36783).
                 */
-                // don't apply this heuristic if the argument is called (issue #36783)
                 int iscalled = i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)));
                 if (!iscalled) {
                     if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
@@ -672,13 +675,13 @@ static void jl_compilation_sig(
             else if (jl_is_type_type(jl_tparam0(elt)) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
                      (jl_is_type_type(jl_tparam0(jl_tparam0(elt))) || !jl_has_free_typevars(decl_i))) {
-                // TODO: this is probably solidly unsound and would corrupt the cache in many cases
                 /*
                   actual argument was Type{...}, we computed its type as
-                  Type{Type{...}}. we must avoid unbounded nesting here, so
-                  cache the signature as Type{T}, unless something more
-                  specific like Type{Type{Int32}} was actually declared.
-                  this can be determined using a type intersection.
+                  Type{Type{...}}. we like to avoid unbounded nesting here, so
+                  compile (and hopefully cache) the signature as Type{T},
+                  unless something more specific like Type{Type{Int32}} was
+                  actually declared. this can be determined using a type
+                  intersection.
                 */
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 if (i < nargs || !definition->isva) {
@@ -1017,12 +1020,12 @@ static jl_method_instance_t *cache_method(
     intptr_t nspec = (mt == NULL || mt == jl_type_type_mt || mt == jl_nonfunction_mt ? definition->nargs + 1 : mt->max_args + 2);
     jl_compilation_sig(tt, sparams, definition, nspec, &newparams);
     if (newparams) {
-        cache_with_orig = 0;
         compilationsig = jl_apply_tuple_type(newparams);
         temp2 = (jl_value_t*)compilationsig;
         // In most cases `!jl_isa_compileable_sig(tt, definition))`,
         // although for some cases, (notably Varargs)
         // we might choose a replacement type that's preferable but not strictly better
+        cache_with_orig = !jl_subtype(compilationsig, definition->sig);
     }
     // TODO: maybe assert(jl_isa_compileable_sig(compilationsig, definition));
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)compilationsig, sparams);
@@ -1031,7 +1034,6 @@ static jl_method_instance_t *cache_method(
     jl_svec_t* guardsigs = jl_emptysvec;
     if (!cache_with_orig && mt) {
         // now examine what will happen if we chose to use this sig in the cache
-        // TODO: should we first check `compilationsig <: definition`?
         size_t min_valid2 = 1;
         size_t max_valid2 = ~(size_t)0;
         temp = ml_matches(mt, 0, compilationsig, MAX_UNSPECIALIZED_CONFLICTS, 1, 1, world, 0, &min_valid2, &max_valid2, NULL);
@@ -1659,21 +1661,33 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
                 jl_value_t *backedgetyp = backedges[i - 1];
+                int missing = 0;
                 if (jl_type_intersection2(backedgetyp, (jl_value_t*)type, &isect, &isect2)) {
-                    // see if the intersection was actually already fully
-                    // covered by anything (method or ambiguity is okay)
+                    // See if the intersection was actually already fully
+                    // covered, but that the new method is ambiguous.
+                    //  -> no previous method: now there is one, need to update the missing edge
+                    //  -> one+ previously matching method(s):
+                    //    -> more specific then all of them: need to update the missing edge
+                    //      -> some may have been ambiguous: now there is a replacement
+                    //      -> some may have been called: now there is a replacement (also will be detected in the loop later)
+                    //    -> less specific or ambiguous with any one of them: can ignore the missing edge (not missing)
+                    //      -> some may have been ambiguous: still are
+                    //      -> some may have been called: they may be partly replaced (will be detected in the loop later)
+                    missing = 1;
                     size_t j;
                     for (j = 0; j < n; j++) {
                         jl_method_t *m = d[j];
-                        if (jl_subtype(isect, m->sig))
-                            break;
-                        if (isect2 && jl_subtype(isect2, m->sig))
-                            break;
+                        if (jl_subtype(isect, m->sig) || (isect2 && jl_subtype(isect2, m->sig))) {
+                            // We now know that there actually was a previous
+                            // method for this part of the type intersection.
+                            if (!jl_type_morespecific(type, m->sig)) {
+                                missing = 0;
+                                break;
+                            }
+                        }
                     }
-                    if (j != n)
-                        isect = jl_bottom_type;
                 }
-                if (isect != jl_bottom_type) {
+                if (missing) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_external(backedge, max_world);
                     invalidate_method_instance(backedge, max_world, 0);
@@ -1715,7 +1729,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                     isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
                     if (jl_type_intersection2(type, isect3, &isect, &isect2)) {
                         if (morespec[j] == (char)morespec_unknown)
-                            morespec[j] = (char)jl_type_morespecific(m->sig, type) ? morespec_is : morespec_isnot;
+                            morespec[j] = (char)(jl_type_morespecific(m->sig, type) ? morespec_is : morespec_isnot);
                         if (morespec[j] == (char)morespec_is)
                             // not actually shadowing--the existing method is still better
                             break;
@@ -1730,7 +1744,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                 if (m == m2 || !(jl_subtype(isect, m2->sig) || (isect && jl_subtype(isect, m2->sig))))
                                     continue;
                                 if (morespec[k] == (char)morespec_unknown)
-                                    morespec[k] = (char)jl_type_morespecific(m2->sig, type) ? morespec_is : morespec_isnot;
+                                    morespec[k] = (char)(jl_type_morespecific(m2->sig, type) ? morespec_is : morespec_isnot);
                                 if (morespec[k] == (char)morespec_is)
                                     // not actually shadowing this--m2 will still be better
                                     break;

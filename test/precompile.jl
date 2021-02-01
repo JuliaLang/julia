@@ -846,3 +846,16 @@ precompile_test_harness("Issue #38312") do load_path
           pointer_from_objref(eval(Meta.parse(TheType))) ===
           pointer_from_objref((@eval (using Bar38312; Bar38312)).TheType)
 end
+
+# issue #39405
+precompile_test_harness("Renamed Imports") do load_path
+    write(joinpath(load_path, "RenameImports.jl"),
+          """
+          module RenameImports
+          import Base.Experimental as ex
+          test() = ex
+          end
+          """)
+    Base.compilecache(Base.PkgId("RenameImports"))
+    @test (@eval (using RenameImports; RenameImports.test())) isa Module
+end

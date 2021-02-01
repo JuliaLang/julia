@@ -1072,7 +1072,7 @@ loop: // while (i <= lx) {
             // an identical type on the left doesn't need to be compared to a Vararg
             // element type on the right more than twice.
         }
-        else if (x_same &&
+        else if (x_same && e->Runions.depth == 0 &&
             ((yi == env->lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
              (yi == env->lasty && !env->vx && env->vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements

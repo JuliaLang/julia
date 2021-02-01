@@ -541,7 +541,9 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     meta = artifact_meta(name, artifact_dict, artifacts_toml; platform)
     if meta !== nothing && get(meta, "lazy", false)
         if lazyartifacts isa Module && isdefined(lazyartifacts, :ensure_artifact_installed)
-            nameof(lazyartifacts) === :Pkg && Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
+            if nameof(lazyartifacts) in (:Pkg, :Artifacts)
+                Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
+            end
             return jointail(lazyartifacts.ensure_artifact_installed(string(name), artifacts_toml; platform), path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
@@ -549,7 +551,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     error("Artifact $(repr(name)) was not installed correctly. Try `using Pkg; Pkg.instantiate()` to re-install all missing resources.")
 end
 
-"""
+raw"""
     split_artifact_slash(name::String)
 
 Splits an artifact indexing string by path deliminters, isolates the first path element,
@@ -557,7 +559,7 @@ returning that and the `joinpath()` of the remaining arguments.  This normalizes
 separators to the native path separator for the current platform.  Examples:
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using Artifacts: split_artifact_slash)
 julia> split_artifact_slash("Foo")
 ("Foo", "")
 
@@ -659,9 +661,13 @@ macro artifact_str(name, platform=nothing)
     Base.include_dependency(artifacts_toml)
 
     # Check if the user has provided `LazyArtifacts`, and thus supports lazy artifacts
-    lazyartifacts = isdefined(__module__, :LazyArtifacts) ? GlobalRef(__module__, :LazyArtifacts) : nothing
-    if lazyartifacts === nothing && isdefined(__module__, :Pkg)
-        lazyartifacts = GlobalRef(__module__, :Pkg) # deprecated
+    # If not, check to see if `Pkg` or `Pkg.Artifacts` has been imported.
+    lazyartifacts = nothing
+    for module_name in (:LazyArtifacts, :Pkg, :Artifacts)
+        if isdefined(__module__, module_name)
+            lazyartifacts = GlobalRef(__module__, module_name)
+            break
+        end
     end
 
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load

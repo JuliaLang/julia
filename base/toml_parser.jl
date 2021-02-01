@@ -657,10 +657,20 @@ end
 #########
 
 function push!!(v::Vector, el)
+    # Since these types are typically non-inferrable, they are a big invalidation risk,
+    # and since it's used by the package-loading infrastructure the cost of invalidation
+    # is high. Therefore, this is written to reduce the "exposed surface area": e.g., rather
+    # than writing `T[el]` we write it as `push!(Vector{T}(undef, 1), el)` so that there
+    # is no ambiguity about what types of objects will be created.
     T = eltype(v)
-    if el isa T || typeof(el) === T
+    t = typeof(el)
+    if el isa T || t === T
         push!(v, el::T)
         return v
+    elseif T === Union{}
+        out = Vector{t}(undef, 1)
+        out[1] = el
+        return out
     else
         if typeof(T) === Union
             newT = Any

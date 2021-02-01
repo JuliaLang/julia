@@ -348,9 +348,10 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_int8(s->s, 0);
     jl_serialize_value(s, m->parent);
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_serialize_value(s, (jl_value_t*)table[i]);
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
             jl_serialize_value(s, b->name);
             jl_value_t *e = b->value;
             if (!b->constp && e && jl_is_cpointer(e) && jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
@@ -1551,12 +1552,12 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     jl_gc_wb(m, m->parent);
 
     while (1) {
-        jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
-        if (name == NULL)
+        jl_sym_t *asname = (jl_sym_t*)jl_deserialize_value(s, NULL);
+        if (asname == NULL)
             break;
-        jl_binding_t *b = jl_get_binding_wr(m, name, 1);
+        jl_binding_t *b = jl_get_binding_wr(m, asname, 1);
+        b->name = (jl_sym_t*)jl_deserialize_value(s, (jl_value_t**)&b->name);
         b->value = jl_deserialize_value(s, &b->value);
-        jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
         if (b->value != NULL) jl_gc_wb(m, b->value);
         b->globalref = jl_deserialize_value(s, &b->globalref);
         if (b->globalref != NULL) jl_gc_wb(m, b->globalref);

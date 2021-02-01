@@ -1193,7 +1193,7 @@ function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
 end
 _to_linear_index(A::AbstractArray, i::Integer) = i
 _to_linear_index(A::AbstractVector, i::Integer, I::Integer...) = i
-_to_linear_index(A::AbstractArray) = 1
+_to_linear_index(A::AbstractArray) = first(LinearIndices(A))
 _to_linear_index(A::AbstractArray, I::Integer...) = (@_inline_meta; _sub2ind(A, I...))
 
 ## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
@@ -1481,7 +1481,7 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-_typed_vcat_similar(V, T, n) = similar(V[1], T, n)
+_typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
 _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
     _typed_vcat!(_typed_vcat_similar(V, T, mapreduce(length, +, V)), V)
 
@@ -1577,9 +1577,10 @@ cat_size(A::AbstractArray, d) = size(A, d)
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
 
-cat_similar(A, T, shape) = Array{T}(undef, shape)
-cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
+cat_similar(A, ::Type{T}, shape) where T = Array{T}(undef, shape)
+cat_similar(A::AbstractArray, ::Type{T}, shape) where T = similar(A, T, shape)
 
+# These are for backwards compatibility (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
 function cat_shape(dims, shapes::Tuple)
     out_shape = ()
@@ -1588,6 +1589,11 @@ function cat_shape(dims, shapes::Tuple)
     end
     return out_shape
 end
+# The new way to compute the shape (more inferrable than combining cat_size & cat_shape, due to Varargs + issue#36454)
+cat_size_shape(dims) = ntuple(zero, Val(length(dims)))
+@inline cat_size_shape(dims, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, (), cat_size(X)), tail...)
+_cat_size_shape(dims, shape) = shape
+@inline _cat_size_shape(dims, shape, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, shape, cat_size(X)), tail...)
 
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
@@ -1631,7 +1637,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, map(cat_size, X))
+    shape = cat_size_shape(catdims, X...)
     A = cat_similar(X[1], T, shape)
     if count(!iszero, catdims)::Int > 1
         fill!(A, zero(T))
@@ -1639,28 +1645,29 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
     return __cat(A, shape, catdims, X...)
 end
 
-function __cat(A, shape::NTuple{M}, catdims, X...) where M
-    N = M::Int
-    offsets = zeros(Int, N)
-    inds = Vector{UnitRange{Int}}(undef, N)
-    concat = copyto!(zeros(Bool, N), catdims)
-    for x in X
-        for i = 1:N
-            if concat[i]
-                inds[i] = offsets[i] .+ cat_indices(x, i)
-                offsets[i] += cat_size(x, i)
-            else
-                inds[i] = 1:shape[i]
-            end
-        end
-        I::NTuple{N, UnitRange{Int}} = (inds...,)
-        if x isa AbstractArray
-            A[I...] = x
-        else
-            fill!(view(A, I...), x)
-        end
+# Why isn't this called `__cat!`?
+__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(zero, length(shape)), X...)
+
+function __cat_offset!(A, shape, catdims, offsets, x, X...)
+    # splitting the "work" on x from X... may reduce latency (fewer costly specializations)
+    newoffsets = __cat_offset1!(A, shape, catdims, offsets, x)
+    return __cat_offset!(A, shape, catdims, newoffsets, X...)
+end
+__cat_offset!(A, shape, catdims, offsets) = A
+
+function __cat_offset1!(A, shape, catdims, offsets, x)
+    inds = ntuple(length(offsets)) do i
+        (i <= length(catdims) && catdims[i]) ? offsets[i] .+ cat_indices(x, i) : 1:shape[i]
     end
-    return A
+    if x isa AbstractArray
+        A[inds...] = x
+    else
+        fill!(view(A, inds...), x)
+    end
+    newoffsets = ntuple(length(offsets)) do i
+        (i <= length(catdims) && catdims[i]) ? offsets[i] + cat_size(x, i) : offsets[i]
+    end
+    return newoffsets
 end
 
 """

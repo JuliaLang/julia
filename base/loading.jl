@@ -1645,9 +1645,10 @@ function get_preferences(uuid::UUID)
 end
 
 function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{String})
-    # Start from the "null" hash
-    h = UInt64(0x6e65726566657250)
-    uuid === nothing && return h
+    # Start from a predictable hash point to ensure that the same preferences always
+    # hash to the same value, modulo changes in how Dictionaries are hashed.
+    h = UInt(0)
+    uuid === nothing && return UInt64(h)
 
     # Load the preferences
     prefs = get_preferences(uuid)
@@ -1659,7 +1660,8 @@ function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{Str
             h = hash(prefs_name, h)
         end
     end
-    return h
+    # We always return a `UInt64` so that our serialization format is stable
+    return UInt64(h)
 end
 
 get_preferences_hash(m::Module, prefs_list::Vector{String}) = get_preferences_hash(PkgId(m).uuid, prefs_list)

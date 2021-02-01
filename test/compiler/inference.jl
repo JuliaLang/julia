@@ -2980,3 +2980,7 @@ f38888() = S38888(Base.inferencebarrier(3))
 @test f38888() isa S38888
 g38888() = S38888(Base.inferencebarrier(3), nothing)
 @test g38888() isa S38888
+
+# issue #38971
+f28971() = (1, [2,3]...)::Tuple{Int,Int,Int}
+@test @inferred(Tuple{Int,Vararg{Int}}, f28971()) == (1, 2, 3)

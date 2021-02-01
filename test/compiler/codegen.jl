@@ -512,3 +512,13 @@ let a = Core.Intrinsics.trunc_int(UInt24, 3),
     @test sizeof(Union{UInt8,UInt24}) == 3
     @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
 end
+
+# issue #39232
+function f39232(a)
+    z = Any[]
+    for (i, ai) in enumerate(a)
+        push!(z, ai)
+    end
+    return z
+end
+@test f39232((+, -)) == Any[+, -]
