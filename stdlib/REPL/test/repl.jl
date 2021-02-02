@@ -120,6 +120,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
     end
 
     # Latex completions
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "\x32\\alpha\t")
     readuntil(stdout_read, "α")
     # Bracketed paste in search mode
@@ -1038,13 +1039,16 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "TestShowTypeREPL.TypeA\n")
     @test endswith(readline(stdout_read), "\r\e[7CTestShowTypeREPL.TypeA\r\e[29C")
     readline(stdout_read)
-    readline(stdout_read)
+    @test readline(stdout_read) == ""
     @eval Main using .TestShowTypeREPL
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "TypeA\n")
     @test endswith(readline(stdout_read), "\r\e[7CTypeA\r\e[12C")
     readline(stdout_read)
+    @test readline(stdout_read) == ""
 
     # Close REPL ^D
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
@@ -1163,10 +1167,13 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "Expr(:call, GlobalRef(Base.Math, :float), Core.SlotNumber(1))\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
+    @test readline(stdout_read) == ""
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "ans\n")
     readline(stdout_read)
-    readline(stdout_read)
     @test readline(stdout_read) == "\e[0m:(Base.Math.float(_1))"
+    @test readline(stdout_read) == ""
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
@@ -1179,10 +1186,15 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "struct Errs end\n")
     readline(stdout_read)
     readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "Base.show(io::IO, ::Errs) = throw(Errs())\n")
     readline(stdout_read)
     readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "Errs()\n")
+    readline(stdout_read)
+    readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     wait(repltask)
     @test istaskdone(repltask)
@@ -1195,7 +1207,8 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     write(stdin_write, "?;\n")
     readline(stdout_read)
-    @test endswith(readline(stdout_read),";")
+    @test endswith(readline(stdout_read), "search: ;")
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
@@ -1208,6 +1221,7 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "global x\n")
     readline(stdout_read)
     @test !occursin("ERROR", readline(stdout_read))
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
