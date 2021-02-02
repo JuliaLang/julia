@@ -165,9 +165,8 @@ precompile_test_harness(false) do dir
 
               let some_method = which(Base.include, (Module, String,))
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
-                  global const some_linfo =
-                      ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                          some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
+                  global const some_linfo = Core.Compiler.specialize_method(some_method,
+                      Tuple{typeof(Base.include), Module, String}, Core.svec())
               end
 
               g() = override(1.0)
@@ -347,9 +346,7 @@ precompile_test_harness(false) do dir
                 Val{nothing}},
             0:25)
         some_method = which(Base.include, (Module, String,))
-        some_linfo =
-                ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                    some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
+        some_linfo = Core.Compiler.specialize_method(some_method, Tuple{typeof(Base.include), Module, String}, Core.svec())
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
         ft = Base.datatype_fieldtypes
