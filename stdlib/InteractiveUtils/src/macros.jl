@@ -42,7 +42,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
-        if ex0.head === :. || (ex0.head === :call && string(ex0.args[1])[1] == '.')
+        if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
             codemacro = startswith(string(fcn), "code_")
             if codemacro && ex0.args[2] isa Expr
                 # Manually wrap a dot call in a function
