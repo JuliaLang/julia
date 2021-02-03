@@ -88,7 +88,7 @@ end
 ## unit tests of project parsing ##
 
 import Base: SHA1, PkgId, load_path, identify_package, locate_package, version_slug,
-            dummy_uuid, modulnamehint
+            dummy_uuid, modulenamehint
 import UUIDs: UUID, uuid4, uuid_version
 import Random: shuffle, randstring
 using Test
@@ -269,27 +269,27 @@ end
 
 module NotPkgModule; end
 
-@testset "modulnamehint()" begin
-    @test modulnamehint("Fooo") == "Foo"
-    @test modulnamehint("fooo") == "Foo"
-    @test modulnamehint("foo") == "Foo"
-    @test modulnamehint("xfooo") == "Foo"
-    @test modulnamehint("UUID") == "UUIDs"
-    @test modulnamehint("uuid") == "UUIDs"
-    @test modulnamehint("Rand") == "Random"
-    @test isnothing(modulnamehint("ran"))
-    @test isnothing(modulnamehint("infoodrest"))
-    @test isnothing(modulnamehint("fo"))
-    @test isnothing(modulnamehint("xfoxox"))
+@testset "modulenamehint()" begin
+    @test modulenamehint("Fooo") == "Foo"
+    @test modulenamehint("fooo") == "Foo"
+    @test modulenamehint("foo") == "Foo"
+    @test modulenamehint("xfooo") == "Foo"
+    @test modulenamehint("UUID") == "UUIDs"
+    @test modulenamehint("uuid") == "UUIDs"
+    @test modulenamehint("Rand") == "Random"
+    @test isnothing(modulenamehint("ran"))
+    @test isnothing(modulenamehint("infoodrest"))
+    @test isnothing(modulenamehint("fo"))
+    @test isnothing(modulenamehint("xfoxox"))
 
-    # using/import foo - Error with modulmamehint = "Foo"
+    # using/import foo - Error with modulemamehint = "Foo"
     @test_throws ArgumentError("""Did you mean Foo? Your entry foo is
     not found in current path. Correct your entry and try again, or run
     `import Pkg; Pkg.add("foo")` to install the foo package.
     """) using foo
     @test_throws ArgumentError import foo
 
-    # using/import xfoxox - Error with modulnamehint = nothing
+    # using/import xfoxox - Error with modulenamehint = nothing
     @test_throws ArgumentError("""Package xfoxox not found in current path:
     - Run `import Pkg; Pkg.add("xfoxox")` to install the xfoxox package.
     """) using xfoxox
