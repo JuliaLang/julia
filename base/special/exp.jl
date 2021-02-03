@@ -239,7 +239,7 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
                     twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
                     return (twopk*small_part)*(2f0^(-24))
                 end
-                N == (exponent_max(T)+1) && return small_part * T(2.0) * T(2.0)^exponent_max(T)
+                N == exponent_max(T) && return small_part * T(2.0) * T(2.0)^(exponent_max(T) - 1)
             end
             twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
             return twopk*small_part
@@ -364,7 +364,7 @@ expm1(x::Real) = expm1(float(x))
     return twopk*((jU-twopnk) + fma(jU, p, jL))
 end
 
-@inline function expm1(x::T) where T<:Float32
+@inline function expm1(x::Float32)
     if -0.2876821f0 <=x <= 0.22314355f0
         return expm1_small(x)
     end
@@ -373,9 +373,9 @@ end
     N = unsafe_trunc(UInt64, N_float)
     r = muladd(N_float, Ln2(Float64), x)
     hi = evalpoly(r, (1.0, .5, 0.16666667546642386, 0.041666183019487026,
-              0.008332997481506921, 0.0013966479175977883, 0.0002004037059220124))
+                      0.008332997481506921, 0.0013966479175977883, 0.0002004037059220124))
     small_part = r*hi
     twopk = reinterpret(Float64, (N+1023) << 52)
-    x > MAX_EXP(T) && return T(Inf)
+    x > MAX_EXP(Float32) && return Inf32
     return Float32(muladd(twopk, small_part, twopk-1.0))
 end
