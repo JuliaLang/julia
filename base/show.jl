@@ -1068,7 +1068,7 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
         # to print a little more identifying information.
         if !from_stackframe
             linetable = l.uninferred.linetable
-            line = isempty(linetable) ? "unknown" : (lt = linetable[1]::Union{LineNumberNode,Core.LineInfoNode}; string(lt.file) * ':' * string(lt.line))
+            line = isempty(linetable) ? "unknown" : (lt = linetable[1]::Union{LineNumberNode,Core.LineInfoNode}; string(lt.file, ':', lt.line))
             print(io, " from ", def, " starting at ", line)
         end
     end
@@ -1092,7 +1092,7 @@ function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
         end
     else
         linetable = mi.uninferred.linetable
-        line = isempty(linetable) ? "" : (lt = linetable[1]; string(lt.file) * ':' * string(lt.line))
+        line = isempty(linetable) ? "" : (lt = linetable[1]; string(lt.file, ':', lt.line))
         print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
     end
 end
