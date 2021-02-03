@@ -48,44 +48,71 @@ end
 
 # supported options for different use cases
 
+# arguments to pcre2_compile
 const COMPILE_MASK      =
+      ALT_BSUX          |
+      ALT_CIRCUMFLEX    |
+      ALT_VERBNAMES     |
       ANCHORED          |
+      # AUTO_CALLOUT    |
       CASELESS          |
       DOLLAR_ENDONLY    |
       DOTALL            |
+      # DUPNAMES        |
       ENDANCHORED       |
       EXTENDED          |
+      EXTENDED_MORE     |
       FIRSTLINE         |
+      LITERAL           |
+      MATCH_INVALID_UTF |
+      MATCH_UNSET_BACKREF |
       MULTILINE         |
-      NEWLINE_ANY       |
-      NEWLINE_ANYCRLF   |
-      NEWLINE_CR        |
-      NEWLINE_CRLF      |
-      NEWLINE_LF        |
+      NEVER_BACKSLASH_C |
+      NEVER_UCP         |
+      NEVER_UTF         |
       NO_AUTO_CAPTURE   |
+      NO_AUTO_POSSESS   |
+      NO_DOTSTAR_ANCHOR |
       NO_START_OPTIMIZE |
       NO_UTF_CHECK      |
+      UCP               |
       UNGREEDY          |
-      UTF               |
-      UCP
+      USE_OFFSET_LIMIT  |
+      UTF
 
+# arguments to pcre2_set_newline
+const COMPILE_NEWLINE_MASK = (
+      NEWLINE_CR,
+      NEWLINE_LF,
+      NEWLINE_CRLF,
+      NEWLINE_ANY,
+      NEWLINE_ANYCRLF,
+      NEWLINE_NUL)
+
+# arguments to pcre2_set_compile_extra_options
+const COMPILE_EXTRA_MASK            =
+      EXTRA_ALLOW_SURROGATE_ESCAPES |
+      EXTRA_ALT_BSUX                |
+      EXTRA_BAD_ESCAPE_IS_LITERAL   |
+      EXTRA_ESCAPED_CR_IS_LF        |
+      EXTRA_MATCH_LINE              |
+      EXTRA_MATCH_WORD
+
+# arguments to match
 const EXECUTE_MASK      =
-      NEWLINE_ANY       |
-      NEWLINE_ANYCRLF   |
-      NEWLINE_CR        |
-      NEWLINE_CRLF      |
-      NEWLINE_LF        |
+      # ANCHORED        |
+      # COPY_MATCHED_SUBJECT |
+      # ENDANCHORED     |
       NOTBOL            |
       NOTEMPTY          |
       NOTEMPTY_ATSTART  |
       NOTEOL            |
+      # NO_JIT          |
       NO_START_OPTIMIZE |
       NO_UTF_CHECK      |
       PARTIAL_HARD      |
       PARTIAL_SOFT
 
-
-const OPTIONS_MASK = COMPILE_MASK | EXECUTE_MASK
 
 const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
