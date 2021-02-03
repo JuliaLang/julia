@@ -577,3 +577,8 @@ end
     s = "↻"
     @test collect(tokenize(s, Tokens.RawToken))[1].kind == Tokens.CIRCLE_ARROW_RIGHT
 end
+
+@testset "invalid float" begin
+    s = ".0."
+    @test collect(tokenize(s, Tokens.RawToken))[1].kind == Tokens.ERROR
+end

@@ -611,7 +611,11 @@ function lex_digit(l::Lexer, kind)
     accept_number(l, isdigit)
     pc,ppc = dpeekchar(l)
     if pc == '.'
-        if ppc == '.'
+        if kind === Tokens.FLOAT
+            # If we enter the function with kind == FLOAT then a '.' has been parsed.
+            readchar(l)
+            return emit_error(l, Tokens.INVALID_NUMERIC_CONSTANT)
+        elseif ppc == '.'
             return emit(l, kind)
         elseif is_operator_start_char(ppc) && ppc !== ':'
             readchar(l)
