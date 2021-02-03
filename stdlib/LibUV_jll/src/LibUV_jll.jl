@@ -29,6 +29,7 @@ end
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
+    push!(LIBPATH_list, LIBPATH[])
     global libuv_handle = dlopen(libuv)
     global libuv_path = dlpath(libuv_handle)
 end

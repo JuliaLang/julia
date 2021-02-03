@@ -50,6 +50,7 @@ end
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
+    push!(LIBPATH_list, LIBPATH[])
     global libgcc_s_handle = dlopen(libgcc_s)
     global libgcc_s_path = dlpath(libgcc_s_handle)
     global libgfortran_handle = dlopen(libgfortran)
