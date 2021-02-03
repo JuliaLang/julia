@@ -3,7 +3,7 @@
 module TestEigen
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
+using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted, UtiAUi!
 
 n = 10
 
@@ -73,6 +73,17 @@ aimg  = randn(n,n)/2
             d,v = eigen(asym_sg, a_sg'a_sg)
             @test d == f.values
             @test v == f.vectors
+
+            # solver for in-place U' \ A / U (#14896)
+            if !(eltya <: Integer)
+                for atyp in (eltya <: Real ? (Symmetric, Hermitian) : (Hermitian,))
+                    for utyp in (UpperTriangular, Diagonal)
+                        A = atyp(asym_sg)
+                        U = utyp(a_sg'a_sg)
+                        @test UtiAUi!(copy(A), U) ≈ U' \ A / U
+                    end
+                end
+            end
 
             # matrices of different types (#14896)
             if eltya <: Real
