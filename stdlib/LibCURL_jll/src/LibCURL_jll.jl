@@ -29,6 +29,7 @@ end
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
+    push!(LIBPATH_list, LIBPATH[])
     global libcurl_handle = dlopen(libcurl)
     global libcurl_path = dlpath(libcurl_handle)
 end

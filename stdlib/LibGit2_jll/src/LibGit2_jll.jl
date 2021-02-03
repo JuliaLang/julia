@@ -29,6 +29,7 @@ end
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
+    push!(LIBPATH_list, LIBPATH[])
     global libgit2_handle = dlopen(libgit2)
     global libgit2_path = dlpath(libgit2_handle)
 end

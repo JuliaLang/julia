@@ -89,6 +89,7 @@ end
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
+    push!(LIBPATH_list, LIBPATH[])
     global libamd_handle = dlopen(libamd)
     global libamd_path = dlpath(libamd_handle)
     global libbtf_handle = dlopen(libbtf)

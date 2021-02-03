@@ -28,6 +28,7 @@ end
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
+    push!(LIBPATH_list, LIBPATH[])
     global libmpfr_handle = dlopen(libmpfr)
     global libmpfr_path = dlpath(libmpfr_handle)
 end

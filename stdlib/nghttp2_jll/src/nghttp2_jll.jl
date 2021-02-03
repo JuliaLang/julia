@@ -28,6 +28,7 @@ end
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
+    push!(LIBPATH_list, LIBPATH[])
     global libnghttp2_handle = dlopen(libnghttp2)
     global libnghttp2_path = dlpath(libnghttp2_handle)
 end
