@@ -337,7 +337,11 @@ end
     return fma(x, p2[1], x*p2[2])
 end
 
-expm1(x::Real) = expm1(float(x))
+function expm1(x::Real)
+    xf = float(x)
+    x === xf && throw(MethodError(expm1, (x,)))
+    return expm1(xf)
+end
 @inline function expm1(x::Float64)
     T=Float64
     if -0.2876820724517809 <= x <= 0.22314355131420976
