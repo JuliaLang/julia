@@ -39,6 +39,7 @@ end
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
+    push!(LIBPATH_list, LIBPATH[])
     global libmbedcrypto_handle = dlopen(libmbedcrypto)
     global libmbedcrypto_path = dlpath(libmbedcrypto_handle)
     global libmbedtls_handle = dlopen(libmbedtls)
