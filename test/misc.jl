@@ -86,18 +86,25 @@ let
         $redir_err
         module A; f() = 1; end; A.f() = 1
         A.f() = 1
-        outer() = (g() = 1; g() = 2; g)
         """
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
     @test warning_str == """
         WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
         WARNING: Method definition f() in module Main at none:2 overwritten at none:3.
-        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
         """
     warning_str = read(`$exename --startup-file=no -e $script`, String)
-    @test warning_str == """
-        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
-        """
+    @test warning_str == ""
+end
+
+# Overriding closure methods is an error (#15602)
+let g_line = (@__LINE__) + 3,
+    closure_method_overwrite =
+        :(function closure_method_overrwrite_g()
+              g() = 1
+              g() = 2
+          end)
+    @test_throws ErrorException("Method definition g() in module $(nameof(@__MODULE__)) at $(@__FILE__):$g_line overwritten at $(@__FILE__):$(g_line+1).") #=
+        =# eval(closure_method_overwrite)
 end
 
 # Debugging tool: return the current state of the enable_finalizers counter.

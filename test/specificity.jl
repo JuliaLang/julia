@@ -81,19 +81,15 @@ _bound_vararg_specificity_1(::Type{Array{T,1}}, d::Int) where {T} = 1
 @test args_morespecific(Tuple{Matrix}, Tuple{AbstractVector})
 
 # Method specificity
-begin
-    local f, A
-    f(dims::Tuple{}, A::AbstractArray{T,0}) where {T} = 1
-    f(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 2
-    f(dims::NTuple{M,Int}, A::AbstractArray{T,N}) where {T,M,N} = 3
-    A = zeros(2,2)
-    @test f((1,2,3), A) == 3
-    @test f((1,2), A) == 2
-    @test f((), reshape([1])) == 1
-    f(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 4
-    @test f((1,2), A) == 4
-    @test f((1,2,3), A) == 3
-end
+f22162(dims::Tuple{}, A::AbstractArray{T,0}) where {T} = 1
+f22162(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 2
+f22162(dims::NTuple{M,Int}, A::AbstractArray{T,N}) where {T,M,N} = 3
+@test f22162((1,2,3), zeros(2,2)) == 3
+@test f22162((1,2), zeros(2,2)) == 2
+@test f22162((), reshape([1])) == 1
+f22162(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 4
+@test f22162((1,2), zeros(2,2)) == 4
+@test f22162((1,2,3), zeros(2,2)) == 3
 
 # a method specificity issue
 c99991(::Type{T},x::T) where {T} = 0

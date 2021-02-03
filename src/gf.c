@@ -1276,7 +1276,15 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
     if ((jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_ON) ||
         (jl_options.incremental && jl_generating_output()) || anon) {
         JL_STREAM *s = JL_STDERR;
-        jl_printf(s, "WARNING: Method definition ");
+        ios_t memstream;
+        if (anon) {
+            ios_mem(&memstream, 300);
+            s = (JL_STREAM*)&memstream;
+        }
+        else {
+            jl_printf(s, "WARNING: ");
+        }
+        jl_printf(s, "Method definition ");
         jl_static_show_func_sig(s, (jl_value_t*)newentry->sig);
         jl_printf(s, " in module %s", jl_symbol_name(oldmod->name));
         print_func_loc(s, oldvalue);
@@ -1287,7 +1295,13 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
             jl_printf(s, anon ? " on the same line" : " on the same line (check for duplicate calls to `include`)");
         else
             print_func_loc(s, method);
-        jl_printf(s, ".\n");
+        jl_printf(s, ".");
+        if (anon) {
+            jl_value_t *msg = jl_pchar_to_string(memstream.buf, memstream.size);
+            JL_GC_PUSH1(&msg);
+            jl_throw(jl_new_struct(jl_errorexception_type, msg));
+        }
+        jl_printf(s, "\n");
         jl_uv_flush(s);
     }
     if (jl_options.incremental && jl_generating_output())
