@@ -357,7 +357,7 @@ end
     N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(Val(:ℯ), T))
     r = muladd(N_float, LogBo256U(Val(:ℯ), T), x)
     r = muladd(N_float, LogBo256L(Val(:ℯ), T), r)
-    k = N >> 8
+    k = Int64(N >> 8)
     jU, jL = table_unpack(N&255 +1)
     p = expm1b_kernel(Val(:ℯ), r)
     twopk  = reinterpret(Float64, (1023+k) << 52)
