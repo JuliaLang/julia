@@ -75,7 +75,7 @@ mutable struct Timer
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
         interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
         timeout = UInt64(round(timeout * 1000)) + 1
-        interval = UInt64(round(interval * 1000))
+        interval = UInt64(ceil(interval * 1000))
         loop = eventloop()
 
         this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false)
