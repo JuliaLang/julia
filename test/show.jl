@@ -1321,8 +1321,7 @@ end
 (::T20332{T})(x) where T = 0
 
 let m = which(T20332{Int}(), (Int,)),
-    mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-               m, Tuple{T20332{T}, Int} where T, Core.svec(), typemax(UInt))
+    mi = Core.Compiler.specialize_method(m, Tuple{T20332{T}, Int} where T, Core.svec())
     # test that this doesn't throw an error
     @test occursin("MethodInstance for", repr(mi))
 end
