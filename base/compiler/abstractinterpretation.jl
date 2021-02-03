@@ -227,6 +227,7 @@ function const_prop_profitable(@nospecialize(arg))
             const_prop_profitable(b) && return true
         end
     end
+    isa(arg, PartialOpaque) && return true
     isa(arg, Const) || return true
     val = arg.val
     # don't consider mutable values or Strings useful constants
@@ -268,7 +269,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     # see if any or all of the arguments are constant and propagating constants may be worthwhile
     for a in argtypes
         a = widenconditional(a)
-        if allconst && !isa(a, Const) && !isconstType(a) && !isa(a, PartialStruct)
+        if allconst && !isa(a, Const) && !isconstType(a) && !isa(a, PartialStruct) && !isa(a, PartialOpaque)
             allconst = false
         end
         if !haveconst && has_nontrivial_const_info(a) && const_prop_profitable(a)
@@ -1057,6 +1058,31 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     return abstract_call_gf_by_type(interp, f, argtypes, atype, sv, max_methods)
 end
 
+function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::PartialOpaque, argtypes::Vector{Any}, sv::InferenceState)
+    return CallMeta(Any, nothing)
+end
+
+function most_general_argtypes(closure::PartialOpaque)
+    ret = Any[]
+    cc = widenconst(closure)
+    argt = unwrap_unionall(cc).parameters[1]
+    @assert isa(argt, DataType) && argt.name === typename(Tuple)
+    params = argt.parameters
+    for i = 2:closure.source.nargs
+        rt = unwrapva(params[max(i-1, length(params))])
+        if closure.isva
+            if length(params) > i-1
+                for j = (i):length(params)
+                    rt = tmerge(rt, unwrapva(params[j]))
+                end
+            end
+            rt = Vararg{rt}
+        end
+        push!(ret, rt)
+    end
+    ret
+end
+
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any},
                        sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
@@ -1068,10 +1094,14 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
         f = ft.parameters[1]
     elseif isa(ft, DataType) && isdefined(ft, :instance)
         f = ft.instance
+    elseif isa(ft, PartialOpaque)
+        return abstract_call_opaque_closure(interp, ft, argtypes, sv)
+    elseif isa(ft, DataType) && unwrap_unionall(ft).name === typename(Core.OpaqueClosure)
+        return CallMeta(rewrap_unionall(unwrap_unionall(ft).parameters[2], ft), false)
     else
         # non-constant function, but the number of arguments is known
         # and the ft is not a Builtin or IntrinsicFunction
-        if typeintersect(widenconst(ft), Builtin) != Union{}
+        if typeintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure}) != Union{}
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end
@@ -1173,6 +1203,19 @@ function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtyp
     end
 end
 
+function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+    n = length(ea)
+    argtypes = Vector{Any}(undef, n)
+    @inbounds for i = 1:n
+        ai = abstract_eval_value(interp, ea[i], vtypes, sv)
+        if bail_out_statement(interp, ai, sv)
+            return Bottom
+        end
+        argtypes[i] = ai
+    end
+    return argtypes
+end
+
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         return abstract_eval_special_value(interp, e, vtypes, sv)
@@ -1180,18 +1223,14 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     e = e::Expr
     if e.head === :call
         ea = e.args
-        n = length(ea)
-        argtypes = Vector{Any}(undef, n)
-        @inbounds for i = 1:n
-            ai = abstract_eval_value(interp, ea[i], vtypes, sv)
-            if bail_out_statement(interp, ai, sv)
-                return Bottom
-            end
-            argtypes[i] = ai
+        argtypes = collect_argtypes(interp, ea, vtypes, sv)
+        if argtypes === Bottom
+            t = Bottom
+        else
+            callinfo = abstract_call(interp, ea, argtypes, sv)
+            sv.stmt_info[sv.currpc] = callinfo.info
+            t = callinfo.rt
         end
-        callinfo = abstract_call(interp, ea, argtypes, sv)
-        sv.stmt_info[sv.currpc] = callinfo.info
-        t = callinfo.rt
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
         if isconcretetype(t) && !t.mutable
@@ -1240,6 +1279,24 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             elseif isa(at, PartialStruct) && at ⊑ Tuple && n == length(at.fields) &&
                 let t = t, at = at; _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n); end
                 t = PartialStruct(t, at.fields)
+            end
+        end
+    elseif e.head === :new_opaque_closure
+        t = Union{}
+        if length(e.args) >= 5
+            ea = e.args
+            argtypes = collect_argtypes(interp, ea, vtypes, sv)
+            if argtypes === Bottom
+                t = Bottom
+            else
+                t = _opaque_closure_tfunc(argtypes[1], argtypes[2], argtypes[3],
+                    argtypes[4], argtypes[5], argtypes[6:end], sv.linfo)
+                if isa(t, PartialOpaque)
+                    # Infer this now so that the specialization is available to
+                    # optimization.
+                    abstract_call_opaque_closure(interp, t,
+                        most_general_argtypes(t), sv)
+                end
             end
         end
     elseif e.head === :foreigncall
@@ -1404,7 +1461,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             elseif isa(stmt, ReturnNode)
                 pc´ = n + 1
                 rt = widenconditional(abstract_eval_value(interp, stmt.val, s[pc], frame))
-                if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct)
+                if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct) && !isa(rt, PartialOpaque)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
                     rt = widenconst(rt)

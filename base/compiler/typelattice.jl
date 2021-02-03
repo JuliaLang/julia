@@ -185,6 +185,14 @@ function ⊑(@nospecialize(a), @nospecialize(b))
         end
         return false
     end
+    if isa(a, PartialOpaque)
+        if isa(b, PartialOpaque)
+            (a.parent === b.parent && a.source === b.source) || return false
+            return (widenconst(a) <: widenconst(b)) &&
+                ⊑(a.env, b.env)
+        end
+        return widenconst(a) <: widenconst(b)
+    end
     if isa(a, Const)
         if isa(b, Const)
             return a.val === b.val
@@ -240,6 +248,7 @@ end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
+widenconst(t::PartialOpaque) = t.t
 widenconst(t::Type) = t
 widenconst(t::TypeVar) = t
 widenconst(t::Core.TypeofVararg) = t

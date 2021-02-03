@@ -114,12 +114,29 @@ function get_staged(li::MethodInstance)
     end
 end
 
+function has_opaque_closure(c::CodeInfo)
+    for i = 1:length(c.code)
+        stmt = c.code[i]
+        (isa(stmt, Expr) && stmt.head === :new_opaque_closure) && return true
+    end
+    return false
+end
+
 function retrieve_code_info(linfo::MethodInstance)
     m = linfo.def::Method
     c = nothing
     if isdefined(m, :generator)
-        # user code might throw errors – ignore them
-        c = get_staged(linfo)
+        if isdefined(linfo, :uninferred)
+            c = copy(linfo.uninferred::CodeInfo)
+        else
+            # user code might throw errors – ignore them
+            c = get_staged(linfo)
+            # For opaque closures, cache the generated code info to make sure
+            # that Opaque Closure method identity remains stable.
+            if c !== nothing && has_opaque_closure(c)
+                linfo.uninferred = copy(c)
+            end
+        end
     end
     if c === nothing && isdefined(m, :source)
         src = m.source

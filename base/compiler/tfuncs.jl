@@ -1362,6 +1362,27 @@ add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
 add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
 add_tfunc(arrayset, 4, INT_INF, (@nospecialize(boundscheck), @nospecialize(a), @nospecialize(v), @nospecialize i...)->a, 20)
 
+function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
+        @nospecialize(lb), @nospecialize(ub), @nospecialize(source), env::Vector{Any},
+        linfo::MethodInstance)
+
+    argt, argt_exact = instanceof_tfunc(arg)
+    lbt, lb_exact = instanceof_tfunc(lb)
+    if !lb_exact
+        lbt = Union{}
+    end
+
+    ubt, ub_exact = instanceof_tfunc(ub)
+
+    t = argt_exact ? Core.OpaqueClosure{argt} : Core.OpaqueClosure{<:argt}
+    t = lbt == ubt ? t{ubt} : (t{T} where lbt <: T <: ubt)
+
+    (isa(source, Const) && isa(source, Method)) || return t
+    (isa(isva, Const) && isa(isva.val, Bool)) || return t
+
+    return PartialOpaque(t, tuple_tfunc(env), isva.val, linfo, source.val)
+end
+
 function array_type_undefable(@nospecialize(a))
     if isa(a, Union)
         return array_type_undefable(a.a) || array_type_undefable(a.b)
