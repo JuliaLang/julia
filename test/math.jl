@@ -532,6 +532,25 @@ end
     end
 end
 
+@testset "half-integer and nan/infs for sincospi" begin
+    @testset for T in (ComplexF32, ComplexF64)
+        @test sincospi(T(0.5, 0.0)) == (T(1.0,0.0), T(0.0, -0.0))
+        @test sincospi(T(1.5, 0.0)) == (T(-1.0,0.0), T(0.0, 0.0))
+        s, c = sincospi(T(Inf64, 0.0))
+        @test isnan(real(s)) && imag(s) == zero(real(T))
+        @test isnan(real(c)) && imag(c) == -zero(real(T))
+        s, c = sincospi(T(NaN, 0.0))
+        @test isnan(real(s)) && imag(s) == zero(real(T))
+        @test isnan(real(c)) && imag(c) == zero(real(T))
+        s, c = sincospi(T(NaN, Inf64))
+        @test isnan(real(s)) && isinf(imag(s))
+        @test isinf(real(c)) && isnan(imag(c))
+        s, c = sincospi(T(NaN, 2))
+        @test isnan(real(s)) && isnan(imag(s))
+        @test isnan(real(c)) && isnan(imag(c))
+    end
+end
+
 @testset "trig function type stability" begin
     @testset "$T $f" for T = (Float32,Float64,BigFloat,Rational{Int16},Complex{Int32},ComplexF16), f = (sind,cosd,sinpi,cospi)
         @test Base.return_types(f,Tuple{T}) == [float(T)]
@@ -720,6 +739,8 @@ end
     @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
     @test sincos(NaN) === (NaN, NaN)
     @test sincos(NaN32) === (NaN32, NaN32)
+    @test_throws DomainError sincos(Inf32)
+    @test_throws DomainError sincos(Inf64)
 end
 
 @testset "test fallback definitions" begin
