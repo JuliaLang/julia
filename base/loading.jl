@@ -863,7 +863,7 @@ function require(into::Module, mod::Symbol)
     if uuidkey === nothing
         where = PkgId(into)
         if where.uuid === nothing
-            hint = modulnamehint(String(mod))
+            hint = modulenamehint(String(mod))
             if isnothing(hint)
                 throw(ArgumentError("""
                 Package $mod not found in current path:
@@ -905,8 +905,8 @@ function require(into::Module, mod::Symbol)
     return require(uuidkey)
 end
 
-# return hint for modul name (from project deps / stdlib) or return nothing
-function modulnamehint(tn::AbstractString)
+# return hint for module name (from project deps / stdlib) or return nothing
+function modulenamehint(tn::AbstractString)
     length(tn) < 3 && return nothing
     hns = Vector{String}()
     for env in load_path()
