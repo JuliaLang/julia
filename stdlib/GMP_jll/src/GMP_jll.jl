@@ -33,6 +33,7 @@ end
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
+    push!(LIBPATH_list, LIBPATH[])
     global libgmp_handle = dlopen(libgmp)
     global libgmp_path = dlpath(libgmp_handle)
     global libgmpxx_handle = dlopen(libgmpxx)
