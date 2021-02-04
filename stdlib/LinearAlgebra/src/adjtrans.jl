@@ -308,7 +308,7 @@ Base.mapreducedim!(f, op, B::AbstractArray, A::AdjointAbsMat) =
 
 _sandwich(adj::Function, fun) = (xs...,) -> adj(fun(map(adj, xs)...))
 for fun in [:identity, :add_sum, :mul_prod] #, :max, :min]
-    @eval _sandwich(::Function, ::typeof(Base.$op)) = Base.$fun
+    @eval _sandwich(::Function, ::typeof(Base.$fun)) = Base.$fun
 end
 
 
