@@ -195,7 +195,9 @@ end
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
 const AdjointAbsVec{T} = Adjoint{T,<:AbstractVector}
+const AdjointAbsMat{T} = Adjoint{T,<:AbstractMatrix}
 const TransposeAbsVec{T} = Transpose{T,<:AbstractVector}
+const TransposeAbsMat{T} = Transpose{T,<:AbstractMatrix}
 const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
 const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
@@ -284,6 +286,19 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 Broadcast.broadcast_preserving_zero_d(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
 # TODO unify and allow mixed combinations with a broadcast style
+
+### reductions
+
+Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Transpose, dims::Colon) =
+    transpose(Base._mapreduce_dim(transpose ∘ f ∘ transpose, op, init, parent(A), dims))
+Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Adjoint, dims::Colon) =
+    adjoint(Base._mapreduce_dim(adjoint ∘ f ∘ adjoint, op, init, parent(A), dims))
+
+Base.mapreducedim!(f, op, B::AbstractArray, A::TransposeAbsMat) =
+    adjoint(Base.mapreducedim!(transpose ∘ f ∘ transpose, op, adjoint(B), adjoint(A)))
+Base.mapreducedim!(f, op, B::AbstractArray, A::AdjointAbsMat) =
+    adjoint(Base.mapreducedim!(adjoint ∘ f ∘ adjoint, op, adjoint(B), adjoint(A)))
+
 
 ### linear algebra
 

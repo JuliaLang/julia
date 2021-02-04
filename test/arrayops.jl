@@ -701,6 +701,10 @@ end
         perm = randperm(4)
         @test isequal(A,permutedims(permutedims(A,perm),invperm(perm)))
         @test isequal(A,permutedims(permutedims(A,invperm(perm)),perm))
+
+        @test sum(permutedims(A,perm)) ≈ sum(PermutedDimsArray(A,perm))
+        @test sum(permutedims(A,perm), dims=2) ≈ sum(PermutedDimsArray(A,perm), dims=2)
+        @test sum(permutedims(A,perm), dims=(2,4)) ≈ sum(PermutedDimsArray(A,perm), dims=(2,4))
     end
 
     m = [1 2; 3 4]

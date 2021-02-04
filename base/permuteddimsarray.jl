@@ -253,6 +253,16 @@ end
     P
 end
 
+function Base._mapreduce_dim(f, op, init::Base._InitialValue, A::PermutedDimsArray, dims::Colon)
+    Base._mapreduce_dim(f, op, init, parent(A), dims)
+end
+
+function Base.mapreducedim!(f, op, B::AbstractArray{T,N}, A::PermutedDimsArray{T,N,P,Q}) where {T,N,P,Q}
+    C = PermutedDimsArray{T,N,Q,P,typeof(B)}(B)
+    Base.mapreducedim!(f, op, C, parent(A))
+    B
+end
+
 function Base.showarg(io::IO, A::PermutedDimsArray{T,N,perm}, toplevel) where {T,N,perm}
     print(io, "PermutedDimsArray(")
     Base.showarg(io, parent(A), false)
