@@ -103,6 +103,7 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
         return undef_token
     end
     if !isa(ssa, Argument) && !(ssa === nothing) && ((ci.slotflags[slot] & SLOT_USEDUNDEF) != 0)
+        # insert a temporary node. type_lift_pass! will remove it
         insert_node!(ir, idx, Any, Expr(:undefcheck, ci.slotnames[slot], ssa))
     end
     if isa(stmt, SlotNumber)
@@ -147,6 +148,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
                     return true
                 end
             end
+            # temporarily corrupt the isdefined node. type_lift_pass! will fix it
             stmt.args[1] = ssa
         end
         return stmt
