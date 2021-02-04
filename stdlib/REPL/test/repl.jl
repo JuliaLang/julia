@@ -453,6 +453,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # In the future if we want we can add a test that the right object
         # gets displayed by intercepting the display
         repl.specialdisplay = REPL.REPLDisplay(repl)
+        @async write(devnull, stdout_read) # redirect stdout to devnull so we drain the output pipe
 
         repl.interface = REPL.setup_interface(repl)
         repl_mode = repl.interface.modes[1]
