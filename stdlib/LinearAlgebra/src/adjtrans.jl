@@ -296,14 +296,17 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 ### reductions
 
 Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Transpose, dims::Colon) =
-    transpose(Base._mapreduce_dim(transpose ∘ f ∘ transpose, op, init, parent(A), dims))
+    transpose(Base._mapreduce_dim(_sandwich(transpose, f), _sandwich(transpose, op), init, parent(A), dims))
 Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Adjoint, dims::Colon) =
-    adjoint(Base._mapreduce_dim(adjoint ∘ f ∘ adjoint, op, init, parent(A), dims))
-
+    adjoint(Base._mapreduce_dim(_sandwich(adjoint, f), _sandwich(adjoint, op), init, parent(A), dims))
 Base.mapreducedim!(f, op, B::AbstractArray, A::TransposeAbsMat) =
-    transpose(Base.mapreducedim!(transpose ∘ f ∘ transpose, op, transpose(B), parent(A)))
+    transpose(Base.mapreducedim!(_sandwich(transpose, f), _sandwich(transpose, op), transpose(B), parent(A)))
 Base.mapreducedim!(f, op, B::AbstractArray, A::AdjointAbsMat) =
-    adjoint(Base.mapreducedim!(adjoint ∘ f ∘ adjoint, op, adjoint(B), parent(A)))
+    adjoint(Base.mapreducedim!(_sandwich(adjoint, f), _sandwich(adjoint, op), adjoint(B), parent(A)))
+
+for adj in [:transpose, :adjoint] #, :conj]
+    @eval _sandwich(::typeof($adj), fun) = (xs...,) -> $adj(fun(map($adj, xs)...))
+end
 
 
 ### linear algebra
