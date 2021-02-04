@@ -4693,7 +4693,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             if (ai.isboxed) {
                 vals.push_back(ai.Vboxed);
             }
-            else if (!jl_is_pointerfree(ai.typ)) {
+            else if (jl_is_concrete_immutable(ai.typ) && !jl_is_pointerfree(ai.typ)) {
                 Type *at = julia_type_to_llvm(ctx, ai.typ);
                 vals.push_back(emit_unbox(ctx, at, ai, ai.typ));
             }
