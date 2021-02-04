@@ -453,7 +453,8 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # In the future if we want we can add a test that the right object
         # gets displayed by intercepting the display
         repl.specialdisplay = REPL.REPLDisplay(repl)
-        @async write(devnull, stdout_read) # redirect stdout to devnull so we drain the output pipe
+
+        errormonitor(@async write(devnull, stdout_read)) # redirect stdout to devnull so we drain the output pipe
 
         repl.interface = REPL.setup_interface(repl)
         repl_mode = repl.interface.modes[1]
@@ -1252,7 +1253,7 @@ end
 # AST transformations (softscope, Revise, OhMyREPL, etc.)
 @testset "AST Transformation" begin
     backend = REPL.REPLBackend()
-    @async REPL.start_repl_backend(backend)
+    errormonitor(@async REPL.start_repl_backend(backend))
     put!(backend.repl_channel, (:(1+1), false))
     reply = take!(backend.response_channel)
     @test reply == Pair{Any, Bool}(2, false)
