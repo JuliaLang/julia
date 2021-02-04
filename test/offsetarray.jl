@@ -769,10 +769,10 @@ end
     strY = String(take!(io))
     @test strX == strY
 
-    io2 = IOContext(io, :limit => true)
-    show(io2, X)
-    strX = String(take!(io2))
-    show(io2, Y)
-    strY = String(take!(io2))
+    io_limit = IOContext(io, :limit => true)
+    show(io_limit, X)
+    strX = String(take!(io))
+    show(io_limit, Y)
+    strY = String(take!(io))
     @test strX == strY
 end
