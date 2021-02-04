@@ -417,6 +417,43 @@ macro async(expr)
     end
 end
 
+"""
+    errormonitor(t::Task)
+
+Print an error log to `stderr` if task `t` fails.
+"""
+function errormonitor(t::Task)
+    t2 = Task() do
+        if istaskfailed(t)
+            local errs = stderr
+            try # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Unhandled Task ")
+                display_error(errio, catch_stack(t))
+                write(errs, errio)
+            catch
+                try # try to display the secondary error atomically
+                    errio = IOContext(PipeBuffer(), errs::IO)
+                    print(errio, "\nSYSTEM: caught exception while trying to print a failed Task notice: ")
+                    display_error(errio, catch_stack())
+                    write(errs, errio)
+                    flush(errs)
+                    # and then the actual error, as best we can
+                    Core.print(Core.stderr, "while handling: ")
+                    Core.println(Core.stderr, catch_stack(t)[end][1])
+                catch e
+                    # give up
+                    Core.print(Core.stderr, "\nSYSTEM: caught exception of type ", typeof(e).name.name,
+                            " while trying to print a failed Task notice; giving up\n")
+                end
+            end
+        end
+        nothing
+    end
+    _wait2(t, t2)
+    return t
+end
+
 # Capture interpolated variables in $() and move them to let-block
 function _lift_one_interp!(e)
     letargs = Any[]  # store the new gensymed arguments
