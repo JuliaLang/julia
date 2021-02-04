@@ -564,7 +564,7 @@ end
     @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
 
     @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
-    @test_skip sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
+    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
 
     mat = [rand(ComplexF64,2,2) for _ in 1:3, _ in 1:5]
     @test sum(adjtrans(mat)) ≈ sum(collect(adjtrans(mat)))
@@ -572,7 +572,8 @@ end
     @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
 
     @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
-    @test_skip sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
+    @test sum(x -> x[1,2], adjtrans(mat)) ≈ sum(x -> x[1,2], collect(adjtrans(mat)))
+    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
     @test sum(x -> x[1,2], adjtrans(mat), dims=1) ≈ sum(x -> x[1,2], collect(adjtrans(mat)), dims=1)
 end
 

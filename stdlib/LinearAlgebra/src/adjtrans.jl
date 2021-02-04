@@ -301,9 +301,9 @@ Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Adjoint, dims::Colon) =
     adjoint(Base._mapreduce_dim(adjoint ∘ f ∘ adjoint, op, init, parent(A), dims))
 
 Base.mapreducedim!(f, op, B::AbstractArray, A::TransposeAbsMat) =
-    adjoint(Base.mapreducedim!(transpose ∘ f ∘ transpose, op, adjoint(B), adjoint(A)))
+    transpose(Base.mapreducedim!(transpose ∘ f ∘ transpose, op, transpose(B), parent(A)))
 Base.mapreducedim!(f, op, B::AbstractArray, A::AdjointAbsMat) =
-    adjoint(Base.mapreducedim!(adjoint ∘ f ∘ adjoint, op, adjoint(B), adjoint(A)))
+    adjoint(Base.mapreducedim!(adjoint ∘ f ∘ adjoint, op, adjoint(B), parent(A)))
 
 
 ### linear algebra
