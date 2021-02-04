@@ -532,10 +532,12 @@ end
     end
 end
 
-@testset "half-integer and nan/infs for sincospi" begin
+@testset "half-integer and nan/infs for sincospi,sinpi,cospi" begin
     @testset for T in (ComplexF32, ComplexF64)
         @test sincospi(T(0.5, 0.0)) == (T(1.0,0.0), T(0.0, -0.0))
         @test sincospi(T(1.5, 0.0)) == (T(-1.0,0.0), T(0.0, 0.0))
+        @test sinpi(T(1.5, 1.5)) ≈ T(-cosh(3*π/2), 0.0)
+        @test cospi(T(0.5, 0.5)) ≈ T(0.0, -sinh(π/2))
         s, c = sincospi(T(Inf64, 0.0))
         @test isnan(real(s)) && imag(s) == zero(real(T))
         @test isnan(real(c)) && imag(c) == -zero(real(T))
