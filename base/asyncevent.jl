@@ -43,10 +43,13 @@ the async condition object itself.
 """
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
-    @async while _trywait(async)
-            cb(async)
-            isopen(async) || return
-        end
+    t = @task while _trywait(async)
+        cb(async)
+        isopen(async) || return
+    end
+    lock(async.cond)
+    _wait2(async.cond, t)
+    unlock(async.cond)
     return async
 end
 
@@ -248,10 +251,13 @@ julia> begin
 """
 function Timer(cb::Function, timeout::Real; interval::Real=0.0)
     timer = Timer(timeout, interval=interval)
-    @async while _trywait(timer)
-            cb(timer)
-            isopen(timer) || return
-        end
+    t = @task while _trywait(timer)
+        cb(timer)
+        isopen(timer) || return
+    end
+    lock(timer.cond)
+    _wait2(timer.cond, t)
+    unlock(timer.cond)
     return timer
 end
 
