@@ -279,9 +279,10 @@ function preduce(reducer, f, R)
 end
 
 function pfor(f, R)
-    @async @sync for c in splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
+    t = @async @sync for c in splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
         @spawnat :any f(R, first(c), last(c))
     end
+    errormonitor(t)
 end
 
 function make_preduce_body(var, body)

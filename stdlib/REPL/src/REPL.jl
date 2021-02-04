@@ -313,10 +313,12 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
         end
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
+        errormonitor(t)
         Base._wait2(t, cleanup)
         start_repl_backend(backend, consumer)
     else
         t = @async start_repl_backend(backend, consumer)
+        errormonitor(t)
         Base._wait2(t, cleanup)
         run_frontend(repl, backend_ref)
     end

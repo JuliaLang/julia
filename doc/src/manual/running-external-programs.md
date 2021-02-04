@@ -326,6 +326,8 @@ wait(writer)
 fetch(reader)
 ```
 
+(commonly also, reader is not a separate task, since we immediately `fetch` it anyways).
+
 ### Complex Example
 
 The combination of a high-level programming language, a first-class command abstraction, and automatic

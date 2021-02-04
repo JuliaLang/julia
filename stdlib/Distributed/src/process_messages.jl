@@ -78,7 +78,7 @@ function schedule_call(rid, thunk)
         rv = RemoteValue(def_rv_channel())
         (PGRP::ProcessGroup).refs[rid] = rv
         push!(rv.clientset, rid.whence)
-        @async run_work_thunk(rv, thunk)
+        errormonitor(@async run_work_thunk(rv, thunk))
         return rv
     end
 end
@@ -111,7 +111,7 @@ end
 
 ## message event handlers ##
 function process_messages(r_stream::TCPSocket, w_stream::TCPSocket, incoming::Bool=true)
-    @async process_tcp_streams(r_stream, w_stream, incoming)
+    errormonitor(@async process_tcp_streams(r_stream, w_stream, incoming))
 end
 
 function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, incoming::Bool)
@@ -141,7 +141,7 @@ Julia version number to perform the authentication handshake.
 See also [`cluster_cookie`](@ref).
 """
 function process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
-    @async message_handler_loop(r_stream, w_stream, incoming)
+    errormonitor(@async message_handler_loop(r_stream, w_stream, incoming))
 end
 
 function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
@@ -274,7 +274,7 @@ function handle_msg(msg::CallMsg{:call}, header, r_stream, w_stream, version)
     schedule_call(header.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
 end
 function handle_msg(msg::CallMsg{:call_fetch}, header, r_stream, w_stream, version)
-    @async begin
+    errormonitor(@async begin
         v = run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), false)
         if isa(v, SyncTake)
             try
@@ -285,18 +285,20 @@ function handle_msg(msg::CallMsg{:call_fetch}, header, r_stream, w_stream, versi
         else
             deliver_result(w_stream, :call_fetch, header.notify_oid, v)
         end
-    end
+        nothing
+    end)
 end
 
 function handle_msg(msg::CallWaitMsg, header, r_stream, w_stream, version)
-    @async begin
+    errormonitor(@async begin
         rv = schedule_call(header.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
         deliver_result(w_stream, :call_wait, header.notify_oid, fetch(rv.c))
-    end
+        nothing
+    end)
 end
 
 function handle_msg(msg::RemoteDoMsg, header, r_stream, w_stream, version)
-    @async run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), true)
+    errormonitor(@async run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), true))
 end
 
 function handle_msg(msg::ResultMsg, header, r_stream, w_stream, version)
@@ -330,8 +332,7 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     lazy = msg.lazy
     PGRP.lazy = lazy
 
-    wait_tasks = Task[]
-    for (connect_at, rpid) in msg.other_workers
+    @sync for (connect_at, rpid) in msg.other_workers
         wconfig = WorkerConfig()
         wconfig.connect_at = connect_at
 
@@ -340,13 +341,10 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
                 # The constructor registers the object with a global registry.
                 Worker(rpid, ()->connect_to_peer(cluster_manager, rpid, wconfig))
             else
-                t = @async connect_to_peer(cluster_manager, rpid, wconfig)
-                push!(wait_tasks, t)
+                @async connect_to_peer(cluster_manager, rpid, wconfig)
             end
         end
     end
-
-    for wt in wait_tasks; Base.wait(wt); end
 
     send_connection_hdr(controller, false)
     send_msg_now(controller, MsgHeader(RRID(0,0), header.notify_oid), JoinCompleteMsg(Sys.CPU_THREADS, getpid()))
