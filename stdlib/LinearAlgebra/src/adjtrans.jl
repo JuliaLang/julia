@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: @propagate_inbounds, @_inline_meta
-import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
+import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar, ∘
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
 
@@ -177,6 +177,12 @@ adjoint(A::Adjoint) = A.parent
 transpose(A::Transpose) = A.parent
 adjoint(A::Transpose{<:Real}) = A.parent
 transpose(A::Adjoint{<:Real}) = A.parent
+
+# composition
+∘(::typeof(adjoint), ::typeof(adjoint)) = identity
+∘(::typeof(transpose), ::typeof(transpose)) = identity
+∘(::typeof(adjoint), ::typeof(transpose)) = conj
+∘(::typeof(transpose), ::typeof(adjoint)) = conj
 
 # printing
 function Base.showarg(io::IO, v::Adjoint, toplevel)
