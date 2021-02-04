@@ -410,14 +410,14 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
                         show(io, el)
                     end
                 end
-                if last(cr) == last(indc)
+                if !isempty(cr) && last(cr) == last(indc)
                     i < last(indr) && print(io, "; ")
                 elseif cdots
                     print(io, " \u2026 ")
                 end
             end
         end
-        last(rr) != nr && rdots && print(io, "\u2026 ; ")
+        last(rr) != last(indr) && rdots && print(io, "\u2026 ; ")
     end
     print(io, "]")
 end

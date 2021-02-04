@@ -757,3 +757,22 @@ end
         @test a[ax[i]] == a[ax][i]
     end
 end
+
+@testset "show OffsetMatrix" begin
+    Y = reshape(1:25, 5, 5)
+    X = OffsetArray(Y, -2:2, -4:0)
+
+    io = IOBuffer()
+    show(io, X)
+    strX = String(take!(io))
+    show(io, Y)
+    strY = String(take!(io))
+    @test strX == strY
+
+    io2 = IOContext(io, :limit => true)
+    show(io2, X)
+    strX = String(take!(io2))
+    show(io2, Y)
+    strY = String(take!(io2))
+    @test strX == strY
+end
