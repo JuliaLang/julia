@@ -23,6 +23,10 @@ CMAKE_CXX_ARG := $(CXX_ARG)
 CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
 CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir) -DCMAKE_INSTALL_BINDIR=$(build_bindir)
 CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
+ifeq ($(OS), Darwin)
+CMAKE_COMMON += -DCMAKE_MACOSX_RPATH=1
+endif
+
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
@@ -35,13 +39,11 @@ CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
 ifneq ($(strip $(CMAKE_CXX_ARG)),)
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
-CMAKE_COMMON += -DCMAKE_LINKER="$(LD)" -DCMAKE_AR="$(shell which $(AR))" -DCMAKE_RANLIB="$(shell which $(RANLIB))"
+CMAKE_COMMON += -DCMAKE_LINKER="$$(which $(LD))" -DCMAKE_AR="$$(which $(AR))" -DCMAKE_RANLIB="$$(which $(RANLIB))"
 
 ifeq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
-ifneq ($(BUILD_OS),WINNT)
 CMAKE_COMMON += -DCMAKE_RC_COMPILER="$$(which $(CROSS_COMPILE)windres)"
-endif
 endif
 
 # For now this is LLVM specific, but I expect it won't be in the future

@@ -173,11 +173,11 @@ Random.seed!(1)
             @test Array(D*a) ≈ DM*a
             @test Array(D/a) ≈ DM/a
             if relty <: BlasFloat
-                b = rand(elty,n,n)
-                b = sparse(b)
-                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+                    @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                    @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                    @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                end
             end
         end
 
@@ -361,6 +361,8 @@ Random.seed!(1)
         d2, s2 = logabsdet(lM)
         @test d1 ≈ d2
         @test s1 == s2
+        @test logdet(Diagonal(relty[-1,-2])) ≈ log(2)
+        @test_throws DomainError logdet(Diagonal(relty[-1,-2,-3]))
     end
 
     @testset "similar" begin
@@ -466,7 +468,7 @@ end
 @test all(Diagonal(range(1, stop=3, length=3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
-for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
+for t in (Float32, Float64, Int, ComplexF64, Rational{Int})
     @test Diagonal(Matrix{t}[fill(t(1), 2, 2), fill(t(1), 3, 3)])[2,1] == zeros(t, 3, 2)
 end
 
@@ -571,6 +573,13 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
+
+    # sparse matrix block diagonals
+    s = SparseArrays.sparse([1 2; 3 4])
+    D = Diagonal([s, s])
+    @test D[1, 1] == s
+    @test D[1, 2] == zero(s)
+    @test isa(D[2, 1], SparseMatrixCSC)
 end
 
 @testset "linear solve for block diagonal matrices" begin
@@ -600,7 +609,7 @@ end
 end
 
 @testset "multiplication of transposes of Diagonal (#22428)" begin
-    for T in (Float64, Complex{Float64})
+    for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, 5, 5))
         B = Diagonal(randn(T, 5, 5))
         DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
@@ -642,6 +651,15 @@ end
     yt = transpose(y)
     @test y'*D*y == (y'*D)*y == (y'*A)*y
     @test yt*D*y == (yt*D)*y == (yt*A)*y
+end
+
+@testset "Multiplication of single element Diagonal (#36746)" begin
+    @test_throws DimensionMismatch Diagonal(randn(1)) * randn(5)
+    @test_throws DimensionMismatch Diagonal(randn(1)) * Diagonal(randn(3, 3))
+    A = [1 0; 0 2]
+    v = [3, 4]
+    @test Diagonal(A) * v == A * v
+    @test Diagonal(A) * Diagonal(A) == A * A
 end
 
 @testset "Triangular division by Diagonal #27989" begin
@@ -709,6 +727,12 @@ end
     d1, s1 = logabsdet(D)
     @test d1 ≈ sum(log ∘ abs, d)
     @test s1 == prod(sign, d)
+end
+
+@testset "Empty (#35424)" begin
+    @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
+    @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
+    @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
 end
 
 end # module TestDiagonal

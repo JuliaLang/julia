@@ -21,7 +21,7 @@ julia> for x in g
 25
 
 julia> collect(g)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   4
  16
@@ -51,6 +51,7 @@ length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
 axes(g::Generator) = axes(g.iter)
 ndims(g::Generator) = ndims(g.iter)
+keys(g::Generator) = keys(g.iter)
 
 
 ## iterator traits
@@ -90,6 +91,7 @@ Base.HasLength()
 IteratorSize(x) = IteratorSize(typeof(x))
 IteratorSize(::Type) = HasLength()  # HasLength is the default
 
+IteratorSize(::Type{<:Tuple}) = HasLength()
 IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
 IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
 

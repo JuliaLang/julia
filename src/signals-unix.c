@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+// Note that this file is `#include`d by "signal-handling.c"
+
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -41,6 +43,7 @@
 
 #include "julia_assert.h"
 
+// helper function for returning the unw_context_t inside a ucontext_t
 static bt_context_t *jl_to_bt_context(void *sigctx)
 {
 #ifdef __APPLE__
@@ -72,9 +75,12 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.arm_sp;
-#elif defined(_OS_DARWIN_)
+#elif defined(_OS_DARWIN_) && defined(_CPU_X86_64_)
     const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
     return ctx->uc_mcontext64->__ss.__rsp;
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
+    return ctx->uc_mcontext64->__ss.__sp;
 #else
     // TODO Add support for FreeBSD and PowerPC(64)?
     return 0;
@@ -150,7 +156,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ctx->uc_mcontext.arm_sp = rsp;
     ctx->uc_mcontext.arm_lr = 0; // Clear link register
     ctx->uc_mcontext.arm_pc = target;
-#elif defined(_OS_DARWIN_)
+#elif defined(_OS_DARWIN_) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
     // Only used for SIGFPE.
     // This doesn't seems to be reliable when the SIGFPE is generated
     // from a divide-by-zero exception, which is now handled by
@@ -159,8 +165,13 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ucontext64_t *ctx = (ucontext64_t*)_ctx;
     rsp -= sizeof(void*);
     *(void**)rsp = NULL;
+#if defined(_CPU_X86_64_)
     ctx->uc_mcontext64->__ss.__rsp = rsp;
     ctx->uc_mcontext64->__ss.__rip = (uintptr_t)fptr;
+#else
+    ctx->uc_mcontext64->__ss.__sp = rsp;
+    ctx->uc_mcontext64->__ss.__pc = (uintptr_t)fptr;
+#endif
 #else
 #warning "julia: throw-in-context not supported on this platform"
     // TODO Add support for PowerPC(64)?
@@ -176,7 +187,7 @@ static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx
 {
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx), ptls->pgcstack, 0);
+                                          jl_to_bt_context(sigctx), ptls->pgcstack);
     ptls->sig_exception = e;
     jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }
@@ -215,7 +226,7 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
 }
 
 #if defined(HAVE_MACH)
-#include <signals-mach.c>
+#include "signals-mach.c"
 #else
 
 static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
@@ -422,13 +433,12 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
         return -2;
 
     // Start the timer
-    itsprof.it_interval.tv_sec = nsecprof/GIGA;
-    itsprof.it_interval.tv_nsec = nsecprof%GIGA;
-    itsprof.it_value.tv_sec = nsecprof/GIGA;
-    itsprof.it_value.tv_nsec = nsecprof%GIGA;
+    itsprof.it_interval.tv_sec = 0;
+    itsprof.it_interval.tv_nsec = 0;
+    itsprof.it_value.tv_sec = nsecprof / GIGA;
+    itsprof.it_value.tv_nsec = nsecprof % GIGA;
     if (timer_settime(timerprof, 0, &itsprof, NULL) == -1)
         return -3;
-
     running = 1;
     return 0;
 }
@@ -448,25 +458,23 @@ struct itimerval timerprof;
 
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
-    timerprof.it_interval.tv_sec = nsecprof/GIGA;
-    timerprof.it_interval.tv_usec = (nsecprof%GIGA)/1000;
-    timerprof.it_value.tv_sec = nsecprof/GIGA;
-    timerprof.it_value.tv_usec = (nsecprof%GIGA)/1000;
-    if (setitimer(ITIMER_PROF, &timerprof, 0) == -1)
+    timerprof.it_interval.tv_sec = 0;
+    timerprof.it_interval.tv_usec = 0;
+    timerprof.it_value.tv_sec = nsecprof / GIGA;
+    timerprof.it_value.tv_usec = ((nsecprof % GIGA) + 999) / 1000;
+    if (setitimer(ITIMER_PROF, &timerprof, NULL) == -1)
         return -3;
-
     running = 1;
-
     return 0;
 }
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running) {
+        running = 0;
         memset(&timerprof, 0, sizeof(timerprof));
-        setitimer(ITIMER_PROF, &timerprof, 0);
+        setitimer(ITIMER_PROF, &timerprof, NULL);
     }
-    running = 0;
 }
 
 #else
@@ -558,6 +566,9 @@ static void *signal_listener(void *arg)
     sigset_t sset;
     int sig, critical, profile;
     jl_sigsetset(&sset);
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+    siginfo_t info;
+#endif
 #ifdef HAVE_KEVENT
     struct kevent ev;
     int sigqueue = kqueue();
@@ -602,7 +613,6 @@ static void *signal_listener(void *arg)
         else
 #endif
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
-        siginfo_t info;
         sig = sigwaitinfo(&sset, &info);
 #else
         if (sigwait(&sset, &sig))
@@ -613,6 +623,7 @@ static void *signal_listener(void *arg)
                 continue;
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
+        profile = 0;
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
         profile = (sig == SIGUSR1);
@@ -665,6 +676,8 @@ static void *signal_listener(void *arg)
         unw_context_t *signal_context;
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
+        if (critical || profile)
+            jl_lock_profile();
         for (int i = jl_n_threads; i-- > 0; ) {
             // notify thread to stop
             jl_thread_suspend_and_get_state(i, &signal_context);
@@ -674,13 +687,17 @@ static void *signal_listener(void *arg)
             if (critical) {
                 bt_size += rec_backtrace_ctx(bt_data + bt_size,
                         JL_MAX_BT_SIZE / jl_n_threads - 1,
-                        signal_context, NULL, 1);
+                        signal_context, NULL);
                 bt_data[bt_size++].uintptr = 0;
             }
 
             // do backtrace for profiler
             if (profile && running) {
-                if (bt_size_cur < bt_size_max - 1) {
+                if (jl_profile_is_buffer_full()) {
+                    // Buffer full: Delete the timer
+                    jl_profile_stop_timer();
+                }
+                else {
                     // unwinding can fail, so keep track of the current state
                     // and restore from the SEGV handler if anything happens.
                     jl_ptls_t ptls = jl_get_ptls_states();
@@ -693,22 +710,29 @@ static void *signal_listener(void *arg)
                     } else {
                         // Get backtrace data
                         bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                                bt_size_max - bt_size_cur - 1, signal_context, NULL, 1);
+                                bt_size_max - bt_size_cur - 1, signal_context, NULL);
                     }
                     ptls->safe_restore = old_buf;
 
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++].uintptr = 0;
                 }
-                if (bt_size_cur >= bt_size_max - 1) {
-                    // Buffer full: Delete the timer
-                    jl_profile_stop_timer();
-                }
             }
 
             // notify thread to resume
             jl_thread_resume(i, sig);
         }
+        if (critical || profile)
+            jl_unlock_profile();
+#ifndef HAVE_MACH
+        if (profile && running) {
+#if defined(HAVE_TIMER)
+            timer_settime(timerprof, 0, &itsprof, NULL);
+#elif defined(HAVE_ITIMER)
+            setitimer(ITIMER_PROF, &timerprof, NULL);
+#endif
+        }
+#endif
 #endif
 
         // this part is async with the running of the rest of the program

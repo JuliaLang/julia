@@ -143,8 +143,9 @@ using Distributed
 
     # Error exception in task
     c = Channel(N)
-    bind(c, @async (GC.gc(); yield(); error("foo")))
-    @test_throws ErrorException take!(c)
+    task = @async (GC.gc(); yield(); error("foo"))
+    bind(c, task)
+    @test_throws TaskFailedException(task) take!(c)
     @test !isopen(c)
 
     # Multiple channels closed by the same bound task
@@ -170,10 +171,11 @@ using Distributed
         while isopen(cs[i])
             yield()
         end
-        @test_throws ErrorException wait(cs[i])
-        @test_throws ErrorException take!(cs[i])
-        @test_throws ErrorException put!(cs[i], 1)
-        @test_throws ErrorException fetch(cs[i])
+        @test_throws TaskFailedException(task) wait(cs[i])
+        @test_throws TaskFailedException(task) take!(cs[i])
+        @test_throws TaskFailedException(task) put!(cs[i], 1)
+        N == 0 || @test_throws TaskFailedException(task) fetch(cs[i])
+        N == 0 && @test_throws ErrorException fetch(cs[i])
     end
 
     # Multiple tasks, first one to terminate closes the channel
@@ -245,20 +247,22 @@ using Distributed
         chnl = Channel{T}(tf6, N, taskref=taskref)
         put!(chnl, 2)
         yield()
-        @test_throws ErrorException wait(chnl)
+        @test_throws TaskFailedException(taskref[]) wait(chnl)
         @test istaskdone(taskref[])
         @test !isopen(chnl)
-        @test_throws ErrorException take!(chnl)
+        @test_throws TaskFailedException(taskref[]) take!(chnl)
     end
 end
 
 @testset "timedwait" begin
-    @test timedwait(() -> true, 0) === :ok
-    @test timedwait(() -> false, 0) === :timed_out
-    @test_throws ArgumentError timedwait(() -> true, 0; pollint=0)
+    alwaystrue() = true
+    alwaysfalse() = false
+    @test timedwait(alwaystrue, 0) === :ok
+    @test timedwait(alwaysfalse, 0) === :timed_out
+    @test_throws ArgumentError timedwait(alwaystrue, 0; pollint=0)
 
     # Allowing a smaller positive `pollint` results in `timewait` hanging
-    @test_throws ArgumentError timedwait(() -> true, 0, pollint=1e-4)
+    @test_throws ArgumentError timedwait(alwaystrue, 0, pollint=1e-4)
 
     # Callback passed in raises an exception
     failure_cb = function (fail_on_call=1)
@@ -286,10 +290,10 @@ end
         @test e.ex isa ErrorException
     end
 
-    duration = @elapsed timedwait(() -> false, 1)  # Using default pollint of 0.1
+    duration = @elapsed timedwait(alwaysfalse, 1)  # Using default pollint of 0.1
     @test duration ≈ 1 atol=0.4
 
-    duration = @elapsed timedwait(() -> false, 0; pollint=1)
+    duration = @elapsed timedwait(alwaysfalse, 0; pollint=1)
     @test duration ≈ 1 atol=0.4
 end
 
@@ -351,14 +355,12 @@ end
     @test istaskdone(t)
     @test fetch(t)
     @test run[] == 3
-    @test fetch(errstream) == """
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        """
+    output = fetch(errstream)
+    @test 3 == length(findall(
+        """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
-    t.state = :invalid
+    t._state = 66
     newstderr = redirect_stderr()
     try
         errstream = @async read(newstderr[1], String)
@@ -388,6 +390,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
         @test !isopen(t)
@@ -400,6 +403,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
         @test !isopen(t)
@@ -466,6 +470,45 @@ end
     @test_throws InvalidStateException Base.check_channel_state(c)
 end
 
+# PR #36641
+# Ensure that `isempty()` does not mutate a Channel's state:
+@testset "isempty(::Channel) mutation" begin
+    function isempty_timeout(c::Channel)
+        inner_c = Channel{Union{Bool,Nothing}}()
+        @async put!(inner_c, isempty(c))
+        @async begin
+            sleep(0.01)
+            if isopen(inner_c)
+                put!(inner_c, nothing)
+            end
+        end
+        result = take!(inner_c)
+        if result === nothing
+            error("isempty() timed out!")
+        end
+        return result
+    end
+    # First, with a non-buffered channel
+    c = Channel()
+    @test isempty_timeout(c)
+    t_put = @async put!(c, 1)
+    @test !isempty_timeout(c)
+    # check a second time to ensure `isempty(c)` didn't just consume the element.
+    @test !isempty_timeout(c)
+    @test take!(c) == 1
+    @test isempty_timeout(c)
+    wait(t_put)
+
+    # Next, with a buffered channel:
+    c = Channel(2)
+    @test isempty_timeout(c)
+    t_put = put!(c, 1)
+    @test !isempty_timeout(c)
+    @test !isempty_timeout(c)
+    @test take!(c) == 1
+    @test isempty_timeout(c)
+end
+
 # issue #12473
 # make sure 1-shot timers work
 let a = []
@@ -496,4 +539,21 @@ end
 let t = @async nothing
     wait(t)
     @test_throws ErrorException("schedule: Task not runnable") schedule(t, nothing)
+end
+
+@testset "push!(c, v) -> c" begin
+    c = Channel(Inf)
+    @test push!(c, nothing) === c
+end
+
+# Channel `show`
+let c = Channel(3)
+    @test repr(c) == "Channel{Any}(3)"
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (empty)"
+    put!(c, 0)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (1 item available)"
+    put!(c, 1)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (2 items available)"
+    close(c)
+    @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (closed)"
 end

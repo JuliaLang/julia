@@ -1,4 +1,5 @@
 ## OpenBLAS ##
+ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
 # LAPACK is built into OpenBLAS by default
 OPENBLAS_GIT_URL := git://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
@@ -46,7 +47,7 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(BUILDDIR)/objconv/build-comp
 endif
 endif
 
-OPENBLAS_FFLAGS := $(JFFLAGS)
+OPENBLAS_FFLAGS := $(JFFLAGS) $(USE_BLAS_FFLAGS)
 OPENBLAS_CFLAGS := -O2
 
 # Decide whether to build for 32-bit or 64-bit arch
@@ -92,14 +93,17 @@ endif
 # Do not overwrite the "-j" flag
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
-ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
-
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
 		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-ofast-power.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured
@@ -150,7 +154,7 @@ LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS) -O0" \
     LOADER="$(FC)" BLASLIB="$(RPATH_ESCAPED_ORIGIN) $(LIBBLAS)"
 
 $(SRCCACHE)/lapack-$(LAPACK_VER).tgz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$(notdir $@)
+	$(JLDOWNLOAD) $@ https://www.netlib.org/lapack/$(notdir $@)
 
 $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 	$(JLCHECKSUM) $<
@@ -158,6 +162,9 @@ $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_V
 	cd $(BUILDDIR) && $(TAR) -zxf $<
 	cp $(dir $@)INSTALL/make.inc.gfortran $(dir $@)make.inc
 	echo 1 > $@
+
+checksum-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
+	$(JLCHECKSUM) $<
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0: | $(build_prefix)/manifest/openblas
@@ -202,10 +209,6 @@ fastcheck-lapack: check-lapack
 check-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-checked
 
 else # USE_BINARYBUILDER_OPENBLAS
-
-
-OPENBLAS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl/releases/download/OpenBLAS-v$(OPENBLAS_VER)+$(OPENBLAS_BB_REL)
-OPENBLAS_BB_NAME := OpenBLAS.v$(OPENBLAS_VER)
 
 $(eval $(call bb-install,openblas,OPENBLAS,true))
 get-lapack: get-openblas

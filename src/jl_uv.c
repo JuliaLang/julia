@@ -392,6 +392,14 @@ JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
     return ret;
 }
 
+JL_DLLEXPORT int jl_fs_access(char *path, int mode)
+{
+    uv_fs_t req;
+    int ret = uv_fs_access(unused_uv_loop_arg, &req, path, mode, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
                              int64_t offset) JL_NOTSAFEPOINT
 {
@@ -625,7 +633,7 @@ JL_DLLEXPORT void jl_exit(int exitcode)
     exit(exitcode);
 }
 
-JL_DLLEXPORT int jl_getpid(void)
+JL_DLLEXPORT int jl_getpid(void) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     return GetCurrentProcessId();
@@ -853,7 +861,7 @@ JL_DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
 
 JL_DLLEXPORT int jl_has_so_reuseport(void)
 {
-#if defined(SO_REUSEPORT)
+#if defined(SO_REUSEPORT) && !defined(_OS_DARWIN_)
     return 1;
 #else
     return 0;

@@ -14,8 +14,11 @@
 
 #include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/Attributes.h>
+#if JL_LLVM_VERSION < 110000
 #include <llvm/IR/CallSite.h>
+#endif
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalValue.h>
@@ -24,6 +27,12 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Vectorize.h>
+#if JL_LLVM_VERSION < 120000
+#include <llvm/Transforms/Scalar/InstSimplifyPass.h>
+#endif
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 
 #include "julia.h"
 
@@ -86,12 +95,42 @@ extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeDisassembler()
     return InitializeNativeTargetDisassembler();
 }
 
-// Exporting the Barrier LLVM pass
+// Various missing passes (being upstreamed)
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddBarrierNoopPass(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createBarrierNoopPass());
 }
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddDivRemPairsPass(LLVMPassManagerRef PM) {
+    unwrap(PM)->add(createDivRemPairsPass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLoopDistributePass(LLVMPassManagerRef PM) {
+    unwrap(PM)->add(createLoopDistributePass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLoopFusePass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createLoopFusePass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraLoopLoadEliminationPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createLoopLoadEliminationPass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLoadStoreVectorizerPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createLoadStoreVectorizerPass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddVectorCombinePass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createVectorCombinePass());
+}
+
+// Can be removed in LLVM 12
+extern "C" JL_DLLEXPORT void LLVMExtraAddInstructionSimplifyPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createInstSimplifyLegacyPass());
+}
+
 
 // Infrastructure for writing LLVM passes in Julia
 
@@ -103,6 +142,8 @@ LLVMExtraAddPass(LLVMPassManagerRef PM, LLVMPassRef P)
 {
     unwrap(PM)->add(unwrap(P));
 }
+
+typedef LLVMBool (*LLVMPassCallback)(void* Ref, void* Data);
 
 StringMap<char *> PassIDs;
 char &CreatePassID(const char *Name)
@@ -116,64 +157,52 @@ char &CreatePassID(const char *Name)
 
 class JuliaModulePass : public ModulePass {
 public:
-    JuliaModulePass(const char *Name, jl_value_t *Callback)
-        : ModulePass(CreatePassID(Name)), Callback(Callback)
+    JuliaModulePass(const char *Name, LLVMPassCallback Callback, void* Data)
+        : ModulePass(CreatePassID(Name)), Callback(Callback), Data(Data)
     {
     }
 
     bool runOnModule(Module &M)
     {
-        jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 2);
-        argv[0] = Callback;
-        argv[1] = jl_box_voidpointer(wrap(&M));
-
-        jl_value_t *ret = jl_apply(argv, 2);
-        bool changed = jl_unbox_bool(ret);
-
-        JL_GC_POP();
-        return changed;
+        void *Ref = (void*)wrap(&M);
+        bool Changed = Callback(Ref, Data);
+        return Changed;
     }
 
 private:
-    jl_value_t *Callback;
+    LLVMPassCallback Callback;
+    void* Data;
 };
 
 extern "C" JL_DLLEXPORT LLVMPassRef
-LLVMExtraCreateModulePass(const char *Name, jl_value_t *Callback)
+LLVMExtraCreateModulePass2(const char *Name, LLVMPassCallback Callback, void *Data)
 {
-    return wrap(new JuliaModulePass(Name, Callback));
+    return wrap(new JuliaModulePass(Name, Callback, Data));
 }
 
 class JuliaFunctionPass : public FunctionPass {
 public:
-    JuliaFunctionPass(const char *Name, jl_value_t *Callback)
-        : FunctionPass(CreatePassID(Name)), Callback(Callback)
+    JuliaFunctionPass(const char *Name, LLVMPassCallback Callback, void* Data)
+        : FunctionPass(CreatePassID(Name)), Callback(Callback), Data(Data)
     {
     }
 
     bool runOnFunction(Function &Fn)
     {
-        jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 2);
-        argv[0] = Callback;
-        argv[1] = jl_box_voidpointer(wrap(&Fn));
-
-        jl_value_t *ret = jl_apply(argv, 2);
-        bool changed = jl_unbox_bool(ret);
-
-        JL_GC_POP();
-        return changed;
+        void *Ref = (void*)wrap(&Fn);
+        bool Changed = Callback(Ref, Data);
+        return Changed;
     }
 
 private:
-    jl_value_t *Callback;
+    LLVMPassCallback Callback;
+    void* Data;
 };
 
 extern "C" JL_DLLEXPORT LLVMPassRef
-LLVMExtraCreateFunctionPass(const char *Name, jl_value_t *Callback)
+LLVMExtraCreateFunctionPass2(const char *Name, LLVMPassCallback Callback, void *Data)
 {
-    return wrap(new JuliaFunctionPass(Name, Callback));
+    return wrap(new JuliaFunctionPass(Name, Callback, Data));
 }
 
 
@@ -206,6 +235,28 @@ extern "C" JL_DLLEXPORT void LLVMExtraAddInternalizePassWithExportList(
         return false;
     };
     unwrap(PM)->add(createInternalizePass(PreserveFobj));
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAppendToUsed(LLVMModuleRef Mod,
+                                                   LLVMValueRef* Values,
+                                                   size_t Count) {
+    SmallVector<GlobalValue *, 1> GlobalValues;
+    for (auto *Value : makeArrayRef(Values, Count))
+        GlobalValues.push_back(cast<GlobalValue>(unwrap(Value)));
+    appendToUsed(*unwrap(Mod), GlobalValues);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAppendToCompilerUsed(LLVMModuleRef Mod,
+                                                           LLVMValueRef* Values,
+                                                           size_t Count) {
+    SmallVector<GlobalValue *, 1> GlobalValues;
+    for (auto *Value : makeArrayRef(Values, Count))
+        GlobalValues.push_back(cast<GlobalValue>(unwrap(Value)));
+    appendToCompilerUsed(*unwrap(Mod), GlobalValues);
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddGenericAnalysisPasses(LLVMPassManagerRef PM) {
+    unwrap(PM)->add(createTargetTransformInfoWrapperPass(TargetIRAnalysis()));
 }
 
 

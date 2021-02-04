@@ -10,7 +10,7 @@ nn = 100
 
 @test size(qr(sprandn(m, n, 0.1)).Q) == (m, m)
 
-@testset "element type of A: $eltyA" for eltyA in (Float64, Complex{Float64})
+@testset "element type of A: $eltyA" for eltyA in (Float64, ComplexF64)
     if eltyA <: Real
         A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], randn(nn), m, n)
     else
@@ -49,7 +49,7 @@ nn = 100
         @test_throws DimensionMismatch rmul!(offsizeA, adjoint(Q))
     end
 
-    @testset "element type of B: $eltyB" for eltyB in (Int, Float64, Complex{Float64})
+    @testset "element type of B: $eltyB" for eltyB in (Int, Float64, ComplexF64)
         if eltyB == Int
             B = rand(1:10, m, 2)
         elseif eltyB <: Real
@@ -90,6 +90,30 @@ end
     A = sparse([0.0 1 0 0; 0 0 0 0])
     F = qr(A)
     @test F.Q*F.R == A[F.prow,F.pcol]
+end
+
+@testset "select ordering overdetermined" begin
+     A = sparse([1:n; rand(1:m, nn - n)], [1:n; rand(1:n, nn - n)], randn(nn), m, n)
+     b = randn(m)
+     xref = Array(A) \ b
+     for ordering ∈ SuiteSparse.SPQR.ORDERINGS
+         QR = qr(A, ordering=ordering)
+         x = QR \ b
+         @test x ≈ xref
+     end
+     @test_throws ErrorException qr(A, ordering=Int32(10))
+end
+
+@testset "select ordering underdetermined" begin
+     A = sparse([1:n; rand(1:n, nn - n)], [1:n; rand(1:m, nn - n)], randn(nn), n, m)
+     b = A * ones(m)
+     for ordering ∈ SuiteSparse.SPQR.ORDERINGS
+         QR = qr(A, ordering=ordering)
+         x = QR \ b
+         # x ≂̸ Array(A) \ b; LAPACK returns a min-norm x while SPQR returns a basic x
+         @test A * x ≈ b
+     end
+     @test_throws ErrorException qr(A, ordering=Int32(10))
 end
 
 @testset "propertynames of QRSparse" begin

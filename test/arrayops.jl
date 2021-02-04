@@ -467,17 +467,18 @@ end
     @test_throws BoundsError insert!(v, 5, 5)
 end
 
-@testset "pop!(::Vector, i, [default])" begin
+@testset "popat!(::Vector, i, [default])" begin
     a = [1, 2, 3, 4]
-    @test_throws BoundsError pop!(a, 0)
-    @test pop!(a, 0, "default") == "default"
+    @test_throws BoundsError popat!(a, 0)
+    @test popat!(a, 0, "default") == "default"
     @test a == 1:4
-    @test_throws BoundsError pop!(a, 5)
-    @test pop!(a, 1) == 1
+    @test_throws BoundsError popat!(a, 5)
+    @test popat!(a, 1) == 1
     @test a == [2, 3, 4]
-    @test pop!(a, 2) == 3
+    @test popat!(a, 2) == 3
     @test a == [2, 4]
-    badpop() = @inbounds pop!([1], 2)
+    @test popat!(a, 1, "default") == 2
+    badpop() = @inbounds popat!([1], 2)
     @test_throws BoundsError badpop()
 end
 
@@ -553,6 +554,7 @@ end
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
     @test findfirst(Dict(1=>false, 2=>true)) == 2
+    @test findfirst(Dict(1=>false)) == nothing
     @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
@@ -579,6 +581,18 @@ end
     @test findlast(isequal(0x00), [0x01, 0x00]) == 2
     @test findnext(isequal(0x00), [0x00, 0x01, 0x00], 2) == 3
     @test findprev(isequal(0x00), [0x00, 0x01, 0x00], 2) == 1
+
+    @testset "issue 32568" for T = (UInt, BigInt)
+        @test findnext(!iszero, a, T(1)) isa keytype(a)
+        @test findnext(!iszero, a, T(2)) isa keytype(a)
+        @test findprev(!iszero, a, T(4)) isa keytype(a)
+        @test findprev(!iszero, a, T(5)) isa keytype(a)
+        b = [true, false, true]
+        @test findnext(b, T(2)) isa keytype(b)
+        @test findnext(b, T(3)) isa keytype(b)
+        @test findprev(b, T(1)) isa keytype(b)
+        @test findprev(b, T(2)) isa keytype(b)
+    end
 end
 @testset "find with Matrix" begin
     A = [1 2 0; 3 4 0]
@@ -716,9 +730,27 @@ end
     a = [1:5;]
     @test_throws ArgumentError Base.circshift!(a, a, 1)
     b = copy(a)
-    @test Base.circshift!(b, a, 1) == [5,1,2,3,4]
+    @test @inferred(Base.circshift!(b, a, 1) == [5,1,2,3,4])
+    src=rand(3,4,5)
+    dst=similar(src)
+    s=(1,2,3)
+    @inferred Base.circshift!(dst,src,s)
+
+    src = [1 2 3; 4 5 6]
+    dst = similar(src)
+    @test circshift(src, (3, 2)) == [5 6 4; 2 3 1]
+    @test circshift(src, (3.0, 2.0)) == [5 6 4; 2 3 1]
+    res = circshift!(dst, src, (3, 2))
+    @test res === dst == [5 6 4; 2 3 1]
+    res = circshift!(dst, src, (3.0, 2.0))
+    @test res === dst == [5 6 4; 2 3 1]
 end
 
+@testset "circcopy" begin
+    src=rand(3,4,5)
+    dst=similar(src)
+    @inferred Base.circcopy!(dst,src)
+end
 # unique across dim
 
 # With hash collisions
@@ -952,6 +984,8 @@ end
     @test_throws ArgumentError repeat([1 2;
                                         3 4], inner=(2, 2), outer=(2,))
     @test_throws ArgumentError repeat([1, 2], inner=(1, -1), outer=(1, -1))
+
+    @test_throws ArgumentError repeat(OffsetArray(rand(2), 1), inner=(2,))
 
     A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
@@ -1217,6 +1251,12 @@ end
     R = reshape(A, 2, 2)
     A[R] .= reshape((1:4) .+ 2^30, 2, 2)
     @test A == [2,1,4,3] .+ 2^30
+
+    # unequal dimensionality (see comment in #35714)
+    a = [1 3; 2 4]
+    b = [3, 1, 4, 2]
+    copyto!(view(a, b), a)
+    @test a == [2 1; 4 3]
 end
 
 @testset "Base.mightalias unit tests" begin
@@ -1257,6 +1297,9 @@ end
     @test cmp([1, 2], [1, 1]) == 1
     @test cmp([1], [1, 1]) == -1
     @test cmp([1, 1], [1]) == 1
+    @test cmp([UInt8(1), UInt8(0)], [UInt8(0), UInt8(0)]) == 1
+    @test cmp([UInt8(1), UInt8(0)], [UInt8(1), UInt8(0)]) == 0
+    @test cmp([UInt8(0), UInt8(0)], [UInt8(1), UInt8(1)]) == -1
 end
 
 @testset "sort on arrays" begin
@@ -1390,8 +1433,8 @@ end
 
     # non-1-indexed array
     oa = OffsetArray(Vector(1:10), -5)
-    filter!(x -> x > 5, oa)
-    @test oa == OffsetArray(Vector(6:10), -5)
+    oa = oa[oa.>5] # deleteat! is not supported for OffsetArrays
+    @test oa == Vector(6:10)
 
     # empty non-1-indexed array
     eoa = OffsetArray([], -5)
@@ -1419,11 +1462,15 @@ end
     @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
     @test_throws BoundsError deleteat!(a, 13)
     @test_throws BoundsError deleteat!(a, [1,13])
-    @test_throws ArgumentError deleteat!(a, [5,3])
+    @test_throws ArgumentError deleteat!(a, [3,2]) # not sorted
     @test_throws BoundsError deleteat!(a, 5:20)
     @test_throws BoundsError deleteat!(a, Bool[])
     @test_throws BoundsError deleteat!(a, [true])
     @test_throws BoundsError deleteat!(a, falses(11))
+    @test_throws BoundsError deleteat!(a, [0])
+    @test_throws BoundsError deleteat!(a, [4])
+    @test_throws BoundsError deleteat!(a, [5])
+    @test_throws BoundsError deleteat!(a, [5, 3])
 
     @test_throws BoundsError deleteat!([], 1)
     @test_throws BoundsError deleteat!([], [1])
@@ -1490,6 +1537,7 @@ end
     @test reverse!([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
     @test reverse!([1:10;], 11) == [1:10;]
     @test_throws BoundsError reverse!([1:10;], 1, 11)
+    @test_throws BoundsError reverse!([1:10;], 0, 10)
     @test reverse!(Any[]) == Any[]
 end
 
@@ -1511,6 +1559,28 @@ end
     # a lower dimension is not a singleton
     # eltype not allocated inline
     @test reverse(["a" "b"; "c" "d"], dims = 2) == ["b" "a"; "d" "c"]
+end
+
+@testset "reverse multiple dims" begin
+    for A in (zeros(2,4), zeros(3,5))
+        A[:] .= 1:length(A) # unique-ify elements
+        @test reverse(A) == reverse!(reverse(A, dims=1), dims=2) ==
+              reverse(A, dims=(1,2)) == reverse(A, dims=(2,1))
+        @test_throws ArgumentError reverse(A, dims=(1,2,3))
+        @test_throws ArgumentError reverse(A, dims=(1,2,2))
+    end
+    for A in (zeros(2,4,6), zeros(3,5,7))
+        A[:] .= 1:length(A) # unique-ify elements
+        @test reverse(A) == reverse(A, dims=:) == reverse!(copy(A)) == reverse!(copy(A), dims=:) ==
+              reverse!(reverse!(reverse(A, dims=1), dims=2), dims=3) ==
+              reverse!(reverse(A, dims=(1,2)), dims=3) ==
+              reverse!(reverse(A, dims=(2,3)), dims=1) ==
+              reverse!(reverse(A, dims=(1,3)), dims=2) ==
+              reverse(A, dims=(1,2,3)) == reverse(A, dims=(3,2,1)) == reverse(A, dims=(2,1,3))
+        @test reverse(A, dims=(1,2)) == reverse!(reverse(A, dims=1), dims=2)
+        @test reverse(A, dims=(1,3)) == reverse!(reverse(A, dims=1), dims=3)
+        @test reverse(A, dims=(2,3)) == reverse!(reverse(A, dims=2), dims=3)
+    end
 end
 
 @testset "isdiag, istril, istriu" begin
@@ -1548,6 +1618,14 @@ end
     g = (i for i = 1:2:10 if iseven(i)) # isempty(g) == true
     @test append!([1,2], g) == [1,2] == push!([1,2], g...)
     @test prepend!([1,2], g) == [1,2] == pushfirst!([1,2], g...)
+
+    # multiple items
+    A = [1]
+    @test append!(A, [2, 3], [4], [5, 6]) === A
+    @test A == [1, 2, 3, 4, 5, 6]
+    A = [1]
+    @test prepend!(A, [2, 3], [4], [5, 6]) === A
+    @test A == [2, 3, 4, 5, 6, 1]
 
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
@@ -2460,6 +2538,14 @@ end
     arr = randn(4)
     @test accumulate(*, arr; init=1) ≈ accumulate(*, arr)
 
+    # bad kwarg
+    arr_B = similar(arr)
+    @test_throws ArgumentError accumulate(*, arr; bad_init=1)
+    @test_throws ArgumentError accumulate!(*, arr_B, arr; bad_init=1)
+    # must provide dims
+    md_arr = randn(4, 5)
+    @test_throws ArgumentError accumulate!(*, similar(md_arr), md_arr)
+
     N = 5
     for arr in [rand(Float64, N), rand(Bool, N), rand(-2:2, N)]
         for (op, cumop) in [(+, cumsum), (*, cumprod)]
@@ -2755,4 +2841,60 @@ let n = 12000000, k = 257000000
         sizehint!(v, n)
         v[end] == (n, 0.5)
     end
+end
+
+@testset "BoundsError printing" begin
+    x = rand(2, 2)
+
+    err = try x[10, :]; catch err; err; end
+    b = IOBuffer()
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 1:2]"
+
+    err = try x[10, trues(2)]; catch err; err; end
+    b = IOBuffer()
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 2-element BitVector]"
+
+    # Also test : directly for custom types for which it may appear as-is
+    err = BoundsError(x, (10, :))
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, :]"
+
+    err = BoundsError(x, "bad index")
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [\"bad index\"]"
+
+    err = BoundsError(x, (10, "bad index"))
+    showerror(b, err)
+    @test String(take!(b)) ==
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
+end
+
+@testset "inference of Union{T,Nothing} arrays 26771" begin
+    f(a) = (v = [1, nothing]; [v[x] for x in a])
+    @test only(Base.return_types(f, (Int,))) === Union{Array{Int,0}, Array{Nothing,0}}
+    @test only(Base.return_types(f, (UnitRange{Int},))) <: Vector
+end
+
+@testset "hcat error checking" begin
+    a = [2 for i in 1:4]
+    b = [2 for i in 1:5]
+    @test_throws DimensionMismatch hcat(a, b)
+end
+
+@testset "similar(::ReshapedArray)" begin
+    a = reshape(TSlow(rand(Float64, 4, 4)), 2, :)
+
+    as = similar(a)
+    @test as isa TSlow{Float64,2}
+    @test size(as) == (2, 8)
+
+    as = similar(a, Int, (3, 5, 1))
+    @test as isa TSlow{Int,3}
+    @test size(as) == (3, 5, 1)
 end

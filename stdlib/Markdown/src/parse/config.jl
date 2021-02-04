@@ -12,15 +12,13 @@ Config() = Config(Function[], Function[], InnerConfig())
 
 const META = IdDict{Function, Dict{Symbol, Any}}()
 
-getset(coll, key, default) = coll[key] = get(coll, key, default)
-
-meta(f) = getset(META, f, Dict{Symbol, Any}())
+meta(f) = get!(Dict{Symbol,Any}, META, f)
 
 breaking!(f) = meta(f)[:breaking] = true
-breaking(f) = get(meta(f), :breaking, false)
+breaking(f) = get(meta(f), :breaking, false)::Bool
 
 triggers!(f, ts) = meta(f)[:triggers] = Set{Char}(ts)
-triggers(f) = get(meta(f), :triggers, Set{Char}())
+triggers(f) = get!(Set{Char}, meta(f), :triggers)::Set{Char}
 
 # Macros
 
@@ -61,7 +59,7 @@ function config(parsers::Function...)
             push!(c.breaking, parser)
         elseif !isempty(ts)
             for t in ts
-                push!(getset(c.inner, t, Function[]), parser)
+                push!(get!(Vector{Function}, c.inner, t), parser)
             end
         else
             push!(c.regular, parser)
@@ -76,7 +74,7 @@ const flavors = Dict{Symbol, Config}()
 
 macro flavor(name, features)
     quote
-        const $(esc(name)) = config($(map(esc,features.args)...))
+        const $(esc(name)) = config($(mapany(esc,features.args)...))
         flavors[$(Expr(:quote, name))] = $(esc(name))
     end
 end

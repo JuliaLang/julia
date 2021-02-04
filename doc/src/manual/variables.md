@@ -54,8 +54,8 @@ julia> 안녕하세요 = "Hello"
 
 In the Julia REPL and several other Julia editing environments, you can type many Unicode math
 symbols by typing the backslashed LaTeX symbol name followed by tab. For example, the variable
-name `δ` can be entered by typing `\delta`-*tab*, or even `α̂₂` by `\alpha`-*tab*-`\hat`-
-*tab*-`\_2`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
+name `δ` can be entered by typing `\delta`-*tab*, or even `α̂⁽²⁾` by `\alpha`-*tab*-`\hat`-
+*tab*-`\^(2)`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
 that you don't know how to type, the REPL help will tell you: just type `?` and
 then paste the symbol.)
 
@@ -106,6 +106,9 @@ will reassign it. Most of the Unicode infix operators (in category Sm), such as 
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
 to define `⊗` as an infix Kronecker product).  Operators can also be suffixed with modifying marks,
 primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator with the same precedence as `+`.
+A space is required between an operator that ends with a subscript/superscript letter and a subsequent
+variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
+it from `+ ᵃx` where `ᵃx` is the variable name.
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
 

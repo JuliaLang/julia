@@ -4,13 +4,13 @@
 ##             and REPL
 
 have_color = nothing
-default_color_warn = :yellow
-default_color_error = :light_red
-default_color_info = :cyan
-default_color_debug = :blue
-default_color_input = :normal
-default_color_answer = :normal
-color_normal = text_colors[:normal]
+const default_color_warn = :yellow
+const default_color_error = :light_red
+const default_color_info = :cyan
+const default_color_debug = :blue
+const default_color_input = :normal
+const default_color_answer = :normal
+const color_normal = text_colors[:normal]
 
 function repl_color(key, default)
     env_str = get(ENV, key, "")
@@ -102,6 +102,7 @@ function display_error(io::IO, stack::Vector)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
     show_exception_stack(IOContext(io, :limit => true), bt)
+    println(io)
 end
 display_error(stack::Vector) = display_error(stderr, stack)
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
@@ -109,7 +110,7 @@ display_error(er, bt=nothing) = display_error(stderr, er, bt)
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
-    have_color = get(stdout, :color, false)
+    have_color = get(stdout, :color, false)::Bool
     while true
         try
             if have_color
@@ -154,8 +155,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
 end
 
 function _parse_input_line_core(s::String, filename::String)
-    ex = ccall(:jl_parse_all, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-               s, sizeof(s), filename, sizeof(filename))
+    ex = Meta.parseall(s, filename=filename)
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -182,17 +182,6 @@ function parse_input_line(s::String; filename::String="none", depwarn=true)
     return ex
 end
 parse_input_line(s::AbstractString) = parse_input_line(String(s))
-
-function parse_input_line(io::IO)
-    s = ""
-    while !eof(io)
-        s *= readline(io, keep=true)
-        e = parse_input_line(s)
-        if !(isa(e,Expr) && e.head === :incomplete)
-            return e
-        end
-    end
-end
 
 # detect the reason which caused an :incomplete expression
 # from the error message
@@ -264,7 +253,14 @@ function exec_options(opts)
     end
 
     # load ~/.julia/config/startup.jl file
-    startup && load_julia_startup()
+    if startup
+        try
+            load_julia_startup()
+        catch
+            invokelatest(display_error, catch_stack())
+            !(repl || is_interactive) && exit(1)
+        end
+    end
 
     # process cmds list
     for (cmd, arg) in cmds
@@ -289,19 +285,19 @@ function exec_options(opts)
     # load file
     if arg_is_program
         # program
-        if !is_interactive
-            ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
+        if !is_interactive::Bool
+            exit_on_sigint(true)
         end
         try
             include(Main, PROGRAM_FILE)
         catch
             invokelatest(display_error, catch_stack())
-            if !is_interactive
+            if !is_interactive::Bool
                 exit(1)
             end
         end
     end
-    repl |= is_interactive
+    repl |= is_interactive::Bool
     if repl
         interactiveinput = isa(stdin, TTY)
         if interactiveinput
@@ -383,13 +379,12 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            color_set || (global have_color = REPL.Terminals.hascolor(term))
             banner && Base.banner(term)
             if term.term_type == "dumb"
                 active_repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
             else
-                active_repl = REPL.LineEditREPL(term, have_color, true)
+                active_repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
                 active_repl.history_file = history_file
             end
             # Make sure any displays pushed in .julia/config/startup.jl ends up above the
@@ -425,7 +420,16 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                         flush(stdout)
                     end
                     try
-                        eval_user_input(stderr, parse_input_line(input), true)
+                        line = ""
+                        ex = nothing
+                        while !eof(input)
+                            line *= readline(input, keep=true)
+                            ex = parse_input_line(line)
+                            if !(isa(ex, Expr) && ex.head === :incomplete)
+                                break
+                            end
+                        end
+                        eval_user_input(stderr, ex, true)
                     catch err
                         isa(err, InterruptException) ? print("\n\n") : rethrow()
                     end
@@ -439,30 +443,12 @@ end
 # MainInclude exists to hide Main.include and eval from `names(Main)`.
 baremodule MainInclude
 using ..Base
-include(mapexpr::Function, fname::AbstractString) = Base.include(mapexpr, Main, fname)
-# We inline the definition of include from loading.jl/include_relative to get one-frame stacktraces
-# for the common case of include(fname).  Otherwise we would use:
-#    include(fname::AbstractString) = Base.include(Main, fname)
+# These definitions calls Base._include rather than Base.include to get
+# one-frame stacktraces for the common case of using include(fname) in Main.
+include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
 function include(fname::AbstractString)
-    mod = Main
     isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    path, prev = Base._include_dependency(mod, fname)
-    for callback in Base.include_callbacks # to preserve order, must come before Core.include
-        Base.invokelatest(callback, mod, path)
-    end
-    tls = Base.task_local_storage()
-    tls[:SOURCE_PATH] = path
-    local result
-    try
-        result = ccall(:jl_load, Any, (Any, Cstring), mod, path)
-    finally
-        if prev === nothing
-            Base.delete!(tls, :SOURCE_PATH)
-        else
-            tls[:SOURCE_PATH] = prev
-        end
-    end
-    return result
+    Base._include(identity, Main, fname)
 end
 eval(x) = Core.eval(Main, x)
 end
@@ -508,7 +494,7 @@ function _start()
         invokelatest(display_error, catch_stack())
         exit(1)
     end
-    if is_interactive && have_color === true
+    if is_interactive && get(stdout, :color, false)
         print(color_normal)
     end
 end

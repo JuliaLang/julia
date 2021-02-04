@@ -45,12 +45,13 @@ const disable_text_style = Dict{Symbol,String}(
 
 # Create a docstring with an automatically generated list
 # of colors.
-available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
-const possible_formatting_symbols = [:normal, :bold, :default]
-available_text_colors = cat(
-    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
-    dims=1)
+let color_syms = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors))),
+    formatting_syms = [:normal, :bold, :default]
+    global const available_text_colors = cat(
+        sort!(intersect(color_syms, formatting_syms), rev=true),
+        sort!(setdiff(  color_syms, formatting_syms));
+        dims=1)
+end
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")
@@ -66,9 +67,9 @@ Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
-function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
+function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
-    iscolor = get(io, :color, false)
+    iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)
     finally
         str = String(take!(buf))
@@ -305,7 +306,13 @@ if Sys.iswindows()
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
              CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
-        @assert succeeded
+        if !succeeded
+            credbuf = resize!(credbuf, credbufsize[])
+            succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
+                (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
+                 CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
+            @assert succeeded
+        end
 
         # Step 2: Create the actual dialog
         #      2.1: Set up the window
@@ -363,6 +370,8 @@ end
 
 unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
 
+_crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
+    unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
 _crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
     unsafe_crc32c(a, length(a) % Csize_t, crc)
 
@@ -384,6 +393,8 @@ _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
 _crc32c(uuid::UUID, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+_crc32c(x::UInt64, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt64}, Csize_t), crc, x, 8)
 
 """
     @kwdef typedef
@@ -422,6 +433,7 @@ Stacktrace:
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
     expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
+    expr = expr::Expr
     T = expr.args[2]
     if T isa Expr && T.head === :<:
         T = T.args[1]
@@ -437,12 +449,13 @@ macro kwdef(expr)
         if T isa Symbol
             kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
         elseif T isa Expr && T.head === :curly
+            T = T::Expr
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = [U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
+            Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
             kwdefs = quote
                 ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
@@ -502,6 +515,54 @@ function _kwdef!(blk, params_args, call_args)
     blk
 end
 
+"""
+    @invoke f(arg::T, ...; kwargs...)
+
+Provides a convenient way to call [`invoke`](@ref);
+`@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
+When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
+`@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
+"""
+macro invoke(ex)
+    f, args, kwargs = destructure_callex(ex)
+    arg2typs = map(args) do x
+        is_expr(x, :(::)) ? (x.args...,) : (x, GlobalRef(Core, :Any))
+    end
+    args, argtypes = first.(arg2typs), last.(arg2typs)
+    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(argtypes...)}, $(args...); $(kwargs...))))
+end
+
+"""
+    @invokelatest f(args...; kwargs...)
+
+Provides a convenient way to call [`Base.invokelatest`](@ref).
+`@invokelatest f(args...; kwargs...)` will simply be expanded into
+`Base.invokelatest(f, args...; kwargs...)`.
+"""
+macro invokelatest(ex)
+    f, args, kwargs = destructure_callex(ex)
+    return esc(:($(GlobalRef(Base, :invokelatest))($(f), $(args...); $(kwargs...))))
+end
+
+function destructure_callex(ex)
+    is_expr(ex, :call) || throw(ArgumentError("a call expression f(args...; kwargs...) should be given"))
+
+    f = first(ex.args)
+    args = []
+    kwargs = []
+    for x in ex.args[2:end]
+        if is_expr(x, :parameters)
+            append!(kwargs, x.args)
+        elseif is_expr(x, :kw)
+            push!(kwargs, x)
+        else
+            push!(args, x)
+        end
+    end
+
+    return f, args, kwargs
+end
+
 # testing
 
 """
@@ -517,7 +578,7 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)

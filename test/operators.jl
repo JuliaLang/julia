@@ -83,6 +83,28 @@ import Base.<
 
 @test isless('a','b')
 
+@testset "isgreater" begin
+    # isgreater should be compatible with min.
+    min1(a, b) = Base.isgreater(a, b) ? b : a
+    # min promotes numerical arguments to the same type, but our quick min1
+    # doesn't, so use float test values instead of ints.
+    values = (1.0, 5.0, NaN, missing, Inf)
+    for a in values, b in values
+        @test min(a, b) === min1(a, b)
+        @test min((a,), (b,)) === min1((a,), (b,))
+        @test all(min([a], [b]) .=== min1([a], [b]))
+    end
+end
+
+@testset "isunordered" begin
+    @test  isunordered(NaN)
+    @test  isunordered(NaN32)
+    @test  isunordered(missing)
+    @test !isunordered(1)
+    @test !isunordered([NaN, 1])
+    @test !isunordered([1.0, missing])
+end
+
 @testset "vectorized comparisons between numbers" begin
     @test 1 .!= 2
     @test 1 .== 1
@@ -133,6 +155,11 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test ∘(FreeMagma(1), FreeMagma(2)) === FreeMagma((1,2))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((1,2), 3))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((1,2), 3), 4))
+
+    @test fieldtypes(typeof(Float64 ∘ Int)) == (Type{Float64}, Type{Int})
+
+    @test repr(uppercase ∘ first) == "uppercase ∘ first"
+    @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
 end
 
 @testset "function negation" begin
@@ -238,3 +265,17 @@ end
     @test gt5(6) && !gt5(5)
     @test lt5(4) && !lt5(5)
 end
+
+@testset "ni" begin
+    @test ∋([1,5,10,11], 5)
+    @test !∋([1,10,11], 5)
+    @test ∋(5)([5,1])
+    @test !∋(42)([0,1,100])
+    @test ∌(0)(1:10)
+    @test ∋(0)(-2:2)
+end
+
+a = rand(3, 3)
+@test transpose(a) === a'ᵀ
+
+@test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]

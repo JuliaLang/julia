@@ -70,6 +70,7 @@ julia> signed(UInt64)
 Int64
 ```
 """
+signed(::Type{Bool}) = Int
 signed(::Type{UInt8}) = Int8
 signed(::Type{UInt16}) = Int16
 signed(::Type{UInt32}) = Int32
@@ -92,9 +93,9 @@ inv(x::Integer) = float(one(x)) / float(x)
 (/)(x::BitInteger, y::BitInteger) = float(x) / float(y)
 
 """
-    isodd(x::Integer) -> Bool
+    isodd(x::Number) -> Bool
 
-Return `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
+Return `true` if `x` is an odd integer (that is, an integer not divisible by 2), and `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -105,12 +106,13 @@ julia> isodd(10)
 false
 ```
 """
-isodd(n::Integer) = rem(n, 2) != 0
+isodd(n::Number) = isreal(n) && isodd(real(n))
+isodd(n::Real) = isinteger(n) && !iszero(rem(Integer(n), 2))
 
 """
-    iseven(x::Integer) -> Bool
+    iseven(x::Number) -> Bool
 
-Return `true` if `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` if `x` is an even integer (that is, an integer divisible by 2), and `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -121,7 +123,8 @@ julia> iseven(10)
 true
 ```
 """
-iseven(n::Integer) = !isodd(n)
+iseven(n::Number) = isreal(n) && iseven(real(n))
+iseven(n::Real) = isinteger(n) && iszero(rem(Integer(n), 2))
 
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
@@ -287,7 +290,8 @@ false
     x & y
 
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-returning [`missing`](@ref) if one operand is `missing` and the other is `true`.
+returning [`missing`](@ref) if one operand is `missing` and the other is `true`. Add parentheses for
+function application form: `(&)(x, y)`.
 
 # Examples
 ```jldoctest
@@ -367,7 +371,7 @@ julia> count_ones(7)
 3
 ```
 """
-count_ones(x::BitInteger) = ctpop_int(x) % Int
+count_ones(x::BitInteger) = (ctpop_int(x) % Int)::Int
 
 """
     leading_zeros(x::Integer) -> Integer
@@ -380,7 +384,7 @@ julia> leading_zeros(Int32(1))
 31
 ```
 """
-leading_zeros(x::BitInteger) = ctlz_int(x) % Int
+leading_zeros(x::BitInteger) = (ctlz_int(x) % Int)::Int
 
 """
     trailing_zeros(x::Integer) -> Integer
@@ -393,7 +397,7 @@ julia> trailing_zeros(2)
 1
 ```
 """
-trailing_zeros(x::BitInteger) = cttz_int(x) % Int
+trailing_zeros(x::BitInteger) = (cttz_int(x) % Int)::Int
 
 """
     count_zeros(x::Integer) -> Integer

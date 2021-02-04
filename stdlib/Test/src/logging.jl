@@ -40,6 +40,7 @@ end
 
 function handle_message(logger::TestLogger, level, msg, _module,
                         group, id, file, line; kwargs...)
+    @nospecialize
     push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
 end
 
@@ -83,7 +84,7 @@ function record(::FallbackTestSet, t::LogTestFailure)
 end
 
 function record(ts::DefaultTestSet, t::LogTestFailure)
-    if myid() == 1
+    if TESTSET_PRINT_ENABLE[]
         printstyled(ts.description, ": ", color=:white)
         print(t)
         Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
