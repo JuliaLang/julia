@@ -998,9 +998,6 @@ end
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
 ∘(f, g, h...) = ∘(f ∘ g, h...)
-∘(f, ::typeof(identity)) = f
-∘(::typeof(identity), g) = g
-∘(::typeof(identity), ::typeof(identity)) = identity
 
 function show(io::IO, c::ComposedFunction)
     show(io, c.outer)

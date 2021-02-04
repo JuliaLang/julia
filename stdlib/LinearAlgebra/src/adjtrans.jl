@@ -178,12 +178,6 @@ transpose(A::Transpose) = A.parent
 adjoint(A::Transpose{<:Real}) = A.parent
 transpose(A::Adjoint{<:Real}) = A.parent
 
-# composition
-∘(::typeof(adjoint), ::typeof(adjoint)) = identity
-∘(::typeof(transpose), ::typeof(transpose)) = identity
-∘(::typeof(adjoint), ::typeof(transpose)) = conj
-∘(::typeof(transpose), ::typeof(adjoint)) = conj
-
 # printing
 function Base.showarg(io::IO, v::Adjoint, toplevel)
     print(io, "adjoint(")
