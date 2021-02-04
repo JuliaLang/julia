@@ -9,13 +9,9 @@ the type of the underlying data stored by the constituent components of a comple
 abstract type AbstractComplex{T} <: Number end
 AbstractComplex(z::AbstractComplex) = z
 AbstractComplex(x::Real)    = Complex(x, zero(x))
-AbstractComplex{T}(x::Real) = Complex(T{x}, zero(T))
-AbstractComplex{T}
-Complex{T}(z::AbstractComplex) where  {T<:Real} = Complex{T}(real(z),imag(z))
+AbstractComplex{T}(x::Real) where {T} = Complex(T(x), zero(T))
 (::Type{T})(z::AbstractComplex) where {T<:Real} = isreal(z) ? T(real(z))::T : throw(InexactError(nameof(T), T, z))
 
-Complex(z::AbstractComplex)    = Complex(real(z), imag(z))
-Complex{T}(z::AbstractComplex) = Complex{T}(real(z), imag(z))
 """
     Complex{T<:Real} <: Number
 
@@ -30,6 +26,8 @@ struct Complex{T<:Real} <: AbstractComplex{T}
 end
 Complex(x::Real, y::Real) = Complex(promote(x,y)...)
 Complex(x::Real) = Complex(x, zero(x))
+Complex{T}(z::AbstractComplex) where {T<:Real} = Complex{T}(real(z), imag(z))
+Complex(z::AbstractComplex) = Complex(real(z), imag(z))
 
 """
     im
@@ -48,7 +46,7 @@ const ComplexF64  = Complex{Float64}
 const ComplexF32  = Complex{Float32}
 const ComplexF16  = Complex{Float16}
 
-Complex{T}(x::Real) where {T<:Real} = Complex{T}(x,0)
+Complex{T}(x::Real) where {T<:Real} = Complex{T}(x, zero(T))
 Complex(z::Complex) = z
 
 promote_rule(::Type{Complex{T}}, ::Type{S}) where {T<:Real,S<:Real} =
@@ -121,7 +119,6 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
-real(::Type{AbstractComplex}) = Real
 
 """
     isreal(x) -> Bool
@@ -188,7 +185,6 @@ Complex{Int64}
 ```
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
-complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
 complex(::Type{T}) where {T<:AbstractComplex} = T
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
