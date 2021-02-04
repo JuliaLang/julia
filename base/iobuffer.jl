@@ -410,7 +410,7 @@ function write(to::IO, from::GenericIOBuffer)
         from.ptr = from.size + 1
         return 0
     end
-    written::Int = GC.@preserve unsafe_write(to, pointer(from.data, from.ptr), UInt(bytesavailable(from)))
+    written::Int = GC.@preserve from unsafe_write(to, pointer(from.data, from.ptr), UInt(bytesavailable(from)))
     from.ptr += written
     return written
 end
