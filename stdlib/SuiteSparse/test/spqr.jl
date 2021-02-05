@@ -2,7 +2,9 @@
 
 using SuiteSparse.SPQR
 using SuiteSparse.CHOLMOD
-using LinearAlgebra: rmul!, lmul!, Adjoint, Transpose
+using SuiteSparse
+using LinearAlgebra: I, istriu, norm, qr, rank, rmul!, lmul!, Adjoint, Transpose
+using SparseArrays: sparse, sprandn, spzeros, SparseMatrixCSC
 
 @testset "Sparse QR" begin
 m, n = 100, 10
