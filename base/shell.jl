@@ -285,11 +285,11 @@ This function may be useful in concert with the `windows_verbatim` flag to
 
 ```julia
 wincmd(c::String) =
-   run(Cmd(Cmd(["cmd.exe", "/s /c \" \$c \""]);
+   run(Cmd(Cmd(["cmd.exe", "/s /c \\" \$c \\""]);
            windows_verbatim=true))
 wincmd_echo(s::String) =
    wincmd("echo " * Base.shell_escape_wincmd(s))
-wincmd_echo("hello \$(ENV["USERNAME"]) & the \"whole\" world! (=^I^=)")
+wincmd_echo("hello \$(ENV["USERNAME"]) & the \\"whole\\" world! (=^I^=)")
 ```
 
 But take note that if the input string `s` contains a `%`, the argument list
@@ -316,7 +316,7 @@ run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
     ```julia
     to_print = "All for 1 & 1 for all!"
     to_print_esc = Base.shell_escape_wincmd(Base.shell_escape_wincmd(to_print))
-    run(Cmd(Cmd(["cmd", "/S /C \" break | echo \$(to_print_esc) \""]), windows_verbatim=true))
+    run(Cmd(Cmd(["cmd", "/S /C \\" break | echo \$(to_print_esc) \\""]), windows_verbatim=true))
     ```
 
 With an I/O stream parameter `io`, the result will be written there,
