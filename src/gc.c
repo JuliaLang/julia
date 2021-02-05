@@ -3226,19 +3226,61 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check
     // or wait for finalizers on other threads without dead lock).
-    if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
-        int8_t was_in_finalizer = ptls->in_finalizer;
-        ptls->in_finalizer = 1;
-        run_finalizers(ptls);
-        ptls->in_finalizer = was_in_finalizer;
-    }
-    gc_invoke_callbacks(jl_gc_cb_post_gc_t,
-        gc_cblist_post_gc, (collection));
+    // or wait for finalizers on other threads without dead lock).
+    // or wait for finalizers on other threads without dead lock).
+    //    int8_t was_in_finalizer = ptls->in_finalizer;
+    //    ptls->in_finalizer = 1;
+    //    run_finalizers(ptls);
+    //    ptls->in_finalizer = was_in_finalizer;
+    //}
+
+    // signal conditions for finalizer thread
+    if (!ptls->finalizers_inhibited && ptls->locks.len == 0)
+        jl_gc_thread_finalizer_wait_cond(ptls);
+
+    //
+    //
+    gc_invoke_callbacks(jl_gc_cb_post_gc_t, gc_cblist_post_gc, (collection));
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
     errno = last_errno;
 }
+
+void jl_gc_threadfun_finalizer(void *arg)
+{
+    jl_threadarg_t *targ = (jl_threadarg_t *)arg;
+
+    // initialize this thread (set tid, create heap, set up root task)
+    jl_init_threadtls(targ->tid);
+    void *stack_lo, *stack_hi;
+    jl_init_stack_limits(0, &stack_lo, &stack_hi);
+    jl_init_root_task(stack_lo, stack_hi);
+
+    jl_ptls_t ptls = jl_get_ptls_states();
+
+    // set up sleep mechanism for this thread
+    uv_mutex_init(&ptls->sleep_lock);
+    uv_cond_init(&ptls->wake_signal);
+
+    // wait for all threads
+    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
+    uv_barrier_wait(targ->barrier);
+
+    // free the thread argument here
+    free(targ);
+
+    (void)jl_gc_unsafe_enter(ptls);
+    jl_finish_task(jl_current_task); // noreturn
+}
+
+void jl_gc_thread_finalizer_wait_cond(jl_ptls_t ptls)
+{
+    int8_t was_in_finalizer = ptls->in_finalizer;
+    ptls->in_finalizer = 1;
+    ptls->in_finalizer = 1;
+    run_finalizers(ptls);
+    ptls->in_finalizer = was_in_finalizer;
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_mark_sp_t *sp)
 {

@@ -449,11 +449,19 @@ void jl_start_threads(void)
     // create threads
     uv_barrier_init(&thread_init_done, nthreads);
 
-    for (i = 1; i < nthreads; ++i) {
-        jl_threadarg_t *t = (jl_threadarg_t*)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
+    for (i = 1; i <= nthreads; ++i) {
+        jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(
+            sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;
-        uv_thread_create(&uvtid, jl_threadfun, t);
+
+        // spawn last thread as a finalizer
+        if (i < nthreads) {
+            uv_thread_create(&uvtid, jl_threadfun, t);
+        }
+        else {
+            uv_thread_create(&uvtid, jl_gc_threadfun_finalizer, t);
+        }
         if (exclusive) {
             mask[i] = 1;
             uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
