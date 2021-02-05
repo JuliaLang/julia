@@ -1868,3 +1868,7 @@ f39218(::T, ::T) where {T<:AB39218} = false
 g39218(a, b) = (@nospecialize; if a isa AB39218 && b isa AB39218; f39218(a, b); end;)
 @test g39218(A39218(), A39218()) === false
 @test_throws MethodError g39218(A39218(), B39218())
+
+# issue #39521
+@test Tuple{Type{Tuple{A}} where A, DataType, DataType} <: Tuple{Vararg{B}} where B
+@test Tuple{DataType, Type{Tuple{A}} where A, DataType} <: Tuple{Vararg{B}} where B
