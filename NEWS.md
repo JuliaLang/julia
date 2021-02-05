@@ -95,6 +95,7 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
+- Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in a future release.
 
 
 External dependencies
