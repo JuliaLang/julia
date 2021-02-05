@@ -78,8 +78,9 @@ end
     @view A[inds...]
 
 Creates a `SubArray` from an indexing expression. This can only be applied directly to a
-reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the target of
-an assignment (e.g. `@view(A[1,2:end]) = ...`).  See also [`@views`](@ref)
+reference expression (e.g. `@view A[1, 2:end]`). It should *not* be used as the target of
+a regular assignment (e.g. `@view(A[1, 2:end]) = ...`), although it can still be useful for
+broadcasted assignment (e.g. `@view(A[1, 2:end] .*= 2`).  See also [`@views`](@ref)
 to switch an entire block of code to use views for slicing.
 
 !!! compat "Julia 1.5"
