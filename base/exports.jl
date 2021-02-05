@@ -528,6 +528,7 @@ export
     mapfoldl,
     mapfoldr,
     mapreduce,
+    mask!,
     merge!,
     mergewith!,
     merge,

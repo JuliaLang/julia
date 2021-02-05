@@ -1442,6 +1442,32 @@ end
     @test isempty(eoa)
 end
 
+@testset "mask!" begin
+    # base case w/ Vector
+    a = Vector(1:10)
+    mask!(a, [falses(5); trues(5)])
+    @test a == 6:10
+
+    # different subtype of AbstractVector
+    ba = rand(10) .> 0.5 #
+    @test isa(ba, BitArray)
+    mask!(ba, ba)
+    @test all(ba)
+
+    # empty array
+    ea = []
+    mask!(ea, Bool[])
+    @test isempty(ea)
+
+    # non-1-indexed array
+    # deleteat! is not supported for OffsetArrays
+
+    # empty non-1-indexed array
+    eoa = OffsetArray([], -5)
+    mask!(eoa, Bool[])
+    @test isempty(eoa)
+end
+
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]

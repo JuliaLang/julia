@@ -2436,6 +2436,26 @@ function filter!(f, a::AbstractVector)
     return a
 end
 
+function mask!(a::AbstractVector, m::AbstractVector{Bool})
+    j = firstindex(a)
+    for i in eachindex(a, m)
+        @inbounds begin
+            ai = a[i]
+            mi = m[i]
+            a[j] = ai
+        end
+        j = ifelse(mi, nextind(a, j), j)
+    end
+    j > lastindex(a) && return a
+    if a isa Vector
+        resize!(a, j-1)
+        sizehint!(a, j-1)
+    else
+        deleteat!(a, j:lastindex(a))
+    end
+    return a
+end
+
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
