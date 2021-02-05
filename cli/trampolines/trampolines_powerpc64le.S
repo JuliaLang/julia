@@ -15,8 +15,8 @@ CNAME(name)##: ; \
     addis 2, 12, .TOC.-CNAME(name)##@ha; \
     addi 2, 2, .TOC.-CNAME(name)##@l; \
     .localentry CNAME(name)##,.-CNAME(name)##; \
-    addis 9,2,CNAMEADDR(name)##@toc@ha; \
-    ld 12,CNAMEADDR(name)##@toc@l(9); \
+    addis 12,2,CNAMEADDR(name)##@toc@ha; \
+    ld 12,CNAMEADDR(name)##@toc@l(12); \
     mtctr 12; \
     bctr; \
 .cfi_endproc; \
