@@ -10,8 +10,8 @@ const PATH_list = String[]
 const LIBPATH_list = String[]
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 cacert = ""
 

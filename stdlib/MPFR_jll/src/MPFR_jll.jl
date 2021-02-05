@@ -11,8 +11,8 @@ const LIBPATH_list = String[]
 export libmpfr
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libmpfr_handle = C_NULL
 libmpfr_path = ""
@@ -29,7 +29,7 @@ function __init__()
     global libmpfr_handle = dlopen(libmpfr)
     global libmpfr_path = dlpath(libmpfr_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = dirname(libmpfr_path)
+    LIBPATH[] = dirname(libmpfr_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 

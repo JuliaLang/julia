@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libosxunwind
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libosxunwind_handle = C_NULL
 libosxunwind_path = ""
@@ -26,7 +26,7 @@ function __init__()
         global libosxunwind_handle = dlopen(libosxunwind)
         global libosxunwind_path = dlpath(libosxunwind_handle)
         global artifact_dir = dirname(Sys.BINDIR)
-        global LIBPATH[] = dirname(libosxunwind_path)
+        LIBPATH[] = dirname(libosxunwind_path)
         push!(LIBPATH_list, LIBPATH[])
     end
 end

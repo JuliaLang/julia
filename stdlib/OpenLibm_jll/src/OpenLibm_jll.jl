@@ -11,8 +11,8 @@ const LIBPATH_list = String[]
 export libopenlibm
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libopenlibm_handle = C_NULL
 libopenlibm_path = ""
@@ -29,7 +29,7 @@ function __init__()
     global libopenlibm_handle = dlopen(libopenlibm)
     global libopenlibm_path = dlpath(libopenlibm_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = dirname(libopenlibm_path)
+    LIBPATH[] = dirname(libopenlibm_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 
