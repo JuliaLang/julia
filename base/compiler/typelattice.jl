@@ -191,7 +191,7 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             return (widenconst(a) <: widenconst(b)) &&
                 ⊑(a.env, b.env)
         end
-        return widenconst(a) <: widenconst(b)
+        return widenconst(a) ⊑ b
     end
     if isa(a, Const)
         if isa(b, Const)

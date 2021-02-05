@@ -657,8 +657,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->invokes);
     }
     else if (jl_is_method_instance(v)) {
-        write_uint8(s->s, TAG_METHOD_INSTANCE);
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
+        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
+            jl_error("Cannot serialize MethodInstances for OpaqueClosure");
+        }
+        write_uint8(s->s, TAG_METHOD_INSTANCE);
         int internal = 0;
         if (!jl_is_method(mi->def.method))
             internal = 1;
