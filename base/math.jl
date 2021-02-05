@@ -383,55 +383,6 @@ expm1(x)
 expm1(x::Float64) = ccall((:expm1,libm), Float64, (Float64,), x)
 expm1(x::Float32) = ccall((:expm1f,libm), Float32, (Float32,), x)
 
-"""
-    exp2(x)
-
-Compute the base 2 exponential of `x`, in other words ``2^x``.
-
-# Examples
-```jldoctest
-julia> exp2(5)
-32.0
-```
-"""
-exp2(x::AbstractFloat) = 2^x
-
-"""
-    exp10(x)
-
-Compute the base 10 exponential of `x`, in other words ``10^x``.
-
-# Examples
-```jldoctest
-julia> exp10(2)
-100.0
-```
-"""
-exp10(x::AbstractFloat) = 10^x
-
-for f in (:sin, :cos, :tan,  :sinh, :cosh, :tanh, :atan, :acos, :asin, :asinh, :acosh, :atanh, :expm1, :log, :log1p)
-    @eval function ($f)(x::Real)
-        xf = float(x)
-        x === xf && throw(MethodError($f, (x,)))
-        return ($f)(xf)
-    end
-end
-
-# functions with special cases for integer arguments
-@inline function exp2(x::Base.BitInteger)
-    if x > 1023
-        Inf64
-    elseif x <= -1023
-        # if -1073 < x <= -1023 then Result will be a subnormal number
-        # Hex literal with padding must be used to work on 32bit machine
-        reinterpret(Float64, 0x0000_0000_0000_0001 << ((x + 1074) % UInt))
-    else
-        # We will cast everything to Int64 to avoid errors in case of Int128
-        # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
-        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64) % UInt))
-    end
-end
-
 # utility for converting NaN return to DomainError
 # the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
 # until the heuristics can be improved
@@ -1174,24 +1125,6 @@ julia> 3 * 2 + 1
 """
 muladd(x,y,z) = x*y+z
 
-# Float16 definitions
-
-for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
-    @eval begin
-        $func(a::Float16) = Float16($func(Float32(a)))
-        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
-    end
-end
-for func in (:exp,:exp2,:exp10)
-    @eval begin
-        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
-    end
-end
-
-atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
-cbrt(a::Float16) = Float16(cbrt(Float32(a)))
-sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 # helper functions for Libm functionality
 
@@ -1226,13 +1159,40 @@ include("special/trig.jl")
 include("special/rem_pio2.jl")
 include("special/log.jl")
 
-# `missing` definitions for functions in this module
-for f in (:(acos), :(acosh), :(asin), :(asinh), :(atan), :(atanh),
-          :(sin), :(sinh), :(cos), :(cosh), :(tan), :(tanh),
-          :(exp), :(exp2), :(expm1), :(log), :(log10), :(log1p),
-          :(log2), :(exponent), :(sqrt))
+
+# Float16 definitions
+
+for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
+             :atanh,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
+    @eval begin
+        $func(a::Float16) = Float16($func(Float32(a)))
+        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
+    end
+end
+
+for func in (:exp,:exp2,:exp10)
+        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
+end
+
+
+atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
+cbrt(a::Float16) = Float16(cbrt(Float32(a)))
+sincos(a::Float16) = Float16.(sincos(Float32(a)))
+
+for f in (:sin, :cos, :tan, :asin, :atan, :acos,
+          :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
+          :exp, :exp2, :exp10, :expm1, :log, :log2, :log10, :log1p,
+          :exponent, :sqrt, :cbrt)
+    @eval function ($f)(x::Real)
+        xf = float(x)
+        x === xf && throw(MethodError($f, (x,)))
+        return ($f)(xf)
+    end
     @eval $(f)(::Missing) = missing
 end
+
+exp2(x::AbstractFloat) = 2^x
+exp10(x::AbstractFloat) = 10^x
 clamp(::Missing, lo, hi) = missing
 
 end # module

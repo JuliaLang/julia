@@ -203,11 +203,6 @@ end
 # The solution is to do the scaling back in 2 steps as just messing with the exponent wouldn't work.
 for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
     @eval begin
-        function ($func)(x::Real)
-            xf = float(x)
-            x === xf && throw(MethodError($func, (x,)))
-            return ($func)(xf)
-        end
         function ($func)(x::T) where T<:Float64
             N_float = muladd(x, LogBo256INV($base, T), MAGIC_ROUND_CONST(T))
             N = reinterpret(uinttype(T), N_float) % Int32
@@ -276,3 +271,45 @@ Compute the natural base exponential of `x`, in other words ``e^x``.
 julia> exp(1.0)
 2.718281828459045
 """ exp(x::Real)
+
+
+"""
+    exp2(x)
+
+Compute the base 2 exponential of `x`, in other words ``2^x``.
+
+# Examples
+```jldoctest
+julia> exp2(5)
+32.0
+```
+"""
+exp2(x)
+
+"""
+    exp10(x)
+
+Compute the base 10 exponential of `x`, in other words ``10^x``.
+
+# Examples
+```jldoctest
+julia> exp10(2)
+100.0
+```
+"""
+exp10(x)
+
+# functions with special cases for integer arguments
+@inline function exp2(x::Base.BitInteger)
+    if x > 1023
+        Inf64
+    elseif x <= -1023
+        # if -1073 < x <= -1023 then Result will be a subnormal number
+        # Hex literal with padding must be used to work on 32bit machine
+        reinterpret(Float64, 0x0000_0000_0000_0001 << ((x + 1074) % UInt))
+    else
+        # We will cast everything to Int64 to avoid errors in case of Int128
+        # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
+        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64) % UInt))
+    end
+end
