@@ -345,7 +345,7 @@ end
         n = 5
         Q, R = qr(randn(T,n,n))
         Qmat = Matrix(Q)
-        D = Diagonal(randn(n))
+        D = Diagonal(randn(T,n))
         @test Q * D ≈ Qmat * D
         @test D * Q ≈ D * Qmat
         J = 2*I
