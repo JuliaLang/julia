@@ -1793,6 +1793,10 @@ typed_hcat(T::Type, A::AbstractArray...) = cat_t(T, A...; dims=Val(2))
 
 # 2d horizontal and vertical concatenation
 
+# these are produced in lowering if splatting occurs inside hvcat
+hvcat_rows(rows::Tuple...) = hvcat(map(length, rows), (rows...)...)
+typed_hvcat_rows(T::Type, rows::Tuple...) = typed_hvcat(T, map(length, rows), (rows...)...)
+
 function hvcat(nbc::Integer, as...)
     # nbc = # of block columns
     n = length(as)
