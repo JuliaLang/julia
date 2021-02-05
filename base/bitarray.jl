@@ -1063,6 +1063,9 @@ function deleteat!(B::BitVector, inds::AbstractVector{Bool})
     return B
 end
 
+keepat!(B::BitVector, inds) = _keepat!(B, inds)
+keepat!(B::BitVector, inds::AbstractVector{Bool}) = _keepat!(B, inds)
+
 function splice!(B::BitVector, i::Integer)
     # TODO: after deprecation remove the four lines below
     #       as v = B[i] is enough to do both bounds checking

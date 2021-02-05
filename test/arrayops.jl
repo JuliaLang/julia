@@ -1457,6 +1457,26 @@ end
     @test isempty(eoa)
 end
 
+@testset "logical keepat!" begin
+    # Vector
+    a = Vector(1:10)
+    keepat!(a, [falses(5); trues(5)])
+    @test a == 6:10
+    @test_throws BoundsError keepat!(a, trues(1))
+    @test_throws BoundsError keepat!(a, trues(11))
+
+    # BitVector
+    ba = rand(10) .> 0.5
+    @test isa(ba, BitArray)
+    keepat!(ba, ba)
+    @test all(ba)
+
+    # empty array
+    ea = []
+    keepat!(ea, Bool[])
+    @test isempty(ea)
+end
+
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
