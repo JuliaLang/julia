@@ -517,6 +517,13 @@ let a = []
     @test a == [1]
 end
 
+# make sure that we don't accidentally create a one-shot timer
+let
+    t = Timer(t->nothing, 10, interval=0.00001)
+    @test ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 1
+    close(t)
+end
+
 # make sure repeating timers work
 @noinline function make_unrooted_timer(a)
     t = Timer(0.0, interval = 0.1)
