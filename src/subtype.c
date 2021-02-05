@@ -1739,17 +1739,19 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     *subtype = 0;
                     return 1;
                 }
-                if (jl_is_type_type(a1) && jl_is_type(jl_tparam0(a1))) {
-                    a1 = jl_typeof(jl_tparam0(a1));
+                jl_value_t *a1u = jl_unwrap_unionall(a1);
+                if (jl_is_type_type(a1u) && jl_is_type(jl_tparam0(a1u))) {
+                    a1 = jl_typeof(jl_tparam0(a1u));
                 }
                 for (; i < nparams_expanded_x; i++) {
                     jl_value_t *a = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
                     if (i > npy && jl_is_typevar(b)) { // i == npy implies a == a1
                         // diagonal rule: all the later parameters are also constrained to be type-equal to the first
                         jl_value_t *a2 = a;
-                        if (jl_is_type_type(a) && jl_is_type(jl_tparam0(a))) {
+                        jl_value_t *au = jl_unwrap_unionall(a);
+                        if (jl_is_type_type(au) && jl_is_type(jl_tparam0(au))) {
                             // if a is exactly Type{T}, then use the concrete typeof(T) instead here
-                            a2 = jl_typeof(jl_tparam0(a));
+                            a2 = jl_typeof(jl_tparam0(au));
                         }
                         if (!obviously_egal(a1, a2)) {
                             if (obvious_subtype(a2, a1, y0, subtype)) {
