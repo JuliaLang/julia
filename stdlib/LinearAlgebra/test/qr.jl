@@ -354,4 +354,21 @@ end
     end
 end
 
+@testset "copyto! for Q" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        n = 5
+        Q, R = qr(randn(T,n,n))
+        Qmat = Matrix(Q)
+        dest1 = similar(Q)
+        copyto!(dest1, Q)
+        @test dest1 ≈ Qmat
+        dest2 = PermutedDimsArray(similar(Q), (1, 2))
+        copyto!(dest2, Q)
+        @test dest2 ≈ Qmat
+        dest3 = PermutedDimsArray(similar(Q), (2, 1))
+        copyto!(dest3, Q)
+        @test dest3 ≈ Qmat
+    end
+end
+
 end # module TestQR

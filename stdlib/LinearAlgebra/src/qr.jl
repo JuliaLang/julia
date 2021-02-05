@@ -534,9 +534,28 @@ function getindex(Q::AbstractQ, i::Integer, j::Integer)
 end
 
 # specialization avoiding the fallback using slow `getindex`
-function copyto!(dest::AbstractMatrix, src::LinearAlgebra.AbstractQ)
+function copyto!(dest::AbstractMatrix, src::AbstractQ)
     copyto!(dest, I)
     lmul!(src, dest)
+end
+# needed to resolve method ambiguities
+function copyto!(dest::PermutedDimsArray{T,2,perm}, src::AbstractQ) where {T,perm}
+    if perm == (1, 2)
+        copyto!(parent(dest), src)
+    else
+        @assert perm == (2, 1) # there are no other permutations of two indices
+        if T <: Real
+            copyto!(parent(dest), I)
+            lmul!(src', parent(dest))
+        else
+            # LAPACK does not offer inplace lmul!(transpose(Q), B) for complex Q
+            tmp = similar(parent(dest))
+            copyto!(tmp, I)
+            rmul!(tmp, src)
+            permutedims!(parent(dest), tmp, (2, 1))
+        end
+    end
+    return dest
 end
 
 ## Multiplication by Q
