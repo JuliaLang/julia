@@ -33,19 +33,23 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
     }
     else if (jl_is_returnnode(expr)) {
         jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
-        JL_GC_PUSH1(&val);
-        expr = jl_new_struct(jl_returnnode_type, val);
-        JL_GC_POP();
+        if (val != jl_returnnode_value(expr)) {
+            JL_GC_PUSH1(&val);
+            expr = jl_new_struct(jl_returnnode_type, val);
+            JL_GC_POP();
+        }
         return expr;
     }
     else if (jl_is_gotoifnot(expr)) {
         jl_value_t *cond = resolve_globals(jl_gotoifnot_cond(expr), module, sparam_vals, binding_effects, eager_resolve);
-        intptr_t label = jl_gotoifnot_label(expr);
-        JL_GC_PUSH1(&cond);
-        expr = jl_new_struct_uninit(jl_gotoifnot_type);
-        set_nth_field(jl_gotoifnot_type, expr, 0, cond);
-        jl_gotoifnot_label(expr) = label;
-        JL_GC_POP();
+        if (cond != jl_gotoifnot_cond(expr)) {
+            intptr_t label = jl_gotoifnot_label(expr);
+            JL_GC_PUSH1(&cond);
+            expr = jl_new_struct_uninit(jl_gotoifnot_type);
+            set_nth_field(jl_gotoifnot_type, expr, 0, cond);
+            jl_gotoifnot_label(expr) = label;
+            JL_GC_POP();
+        }
         return expr;
     }
     else if (jl_is_expr(expr)) {
@@ -461,6 +465,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
+            jl_array_t *stmts = (jl_array_t*)func->code;
+            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
         }
         else {
             // Lower the user's expression and resolve references to the type parameters
