@@ -15,8 +15,8 @@
 # ====================================================
 
 @inline function exthorner(x, p::Tuple)
-	# polynomial evaluation using compensated summation.
-	# much more accurate, especially when lo can be combined with other rounding errors
+    # polynomial evaluation using compensated summation.
+    # much more accurate, especially when lo can be combined with other rounding errors
     hi, lo = p[end], zero(x)
     for i in length(p)-1:-1:1
         pi = p[i]
@@ -112,7 +112,7 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     #               return cosh(x) = = (exp(x) + exp(-x))/2
     #      e)   H_LARGE_X  <= x
     #               return cosh(x) = exp(x/2)/2 * exp(x/2)
-    #      			Note that this branch automatically deals with Infs and NaNs
+    #                  Note that this branch automatically deals with Infs and NaNs
 
     absx = abs(x)
     if absx <= COSH_SMALL_X(T)

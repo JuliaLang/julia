@@ -221,8 +221,8 @@ end
 
 # check that div can be fully eliminated
 function f_div(x)
-	div(x, 1)
-	return x
+    div(x, 1)
+    return x
 end
 @test fully_eliminated(f_div, (Int,)) == 1
 # ...unless we div by an unknown amount

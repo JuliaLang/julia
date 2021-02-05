@@ -410,7 +410,7 @@ function foo23996(xs...)
     bar(::AbstractFloat) = push!(rets, 2)
     bar(::Bool) = foobar()
     for x in xs
-	bar(x)
+        bar(x)
     end
     rets
 end

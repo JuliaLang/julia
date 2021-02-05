@@ -58,9 +58,9 @@ end
 
 function p7zip(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
     env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)
-	withenv(env...) do
-	    return f(p7zip_path)
-	end
+    withenv(env...) do
+        return f(p7zip_path)
+    end
 end
 function p7zip(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
     env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)

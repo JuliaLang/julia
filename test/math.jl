@@ -1196,7 +1196,7 @@ end
         @test (@inferred hypot(T(1e10), T(1e10), T(1e10), T(1e10))) ≈ 2e10
         @test isnan_type(T, hypot(T(3), T(3//4), T(NaN)))
         @test hypot(T(1), T(0)) === T(1)
-	    @test hypot(T(1), T(0), T(0)) === T(1)
+        @test hypot(T(1), T(0), T(0)) === T(1)
         @test (@inferred hypot(T(Inf), T(Inf), T(Inf))) == T(Inf)
         for s in (zero(T), floatmin(T)*1e3, floatmax(T)*1e-3, T(Inf))
             @test hypot(1s, 2s)     ≈ s * hypot(1, 2)   rtol=8eps(T)
