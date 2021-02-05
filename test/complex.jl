@@ -1214,3 +1214,55 @@ end
     @test !iseven(7+0im) && isodd(7+0im)
     @test !iseven(6+1im) && !isodd(7+1im)
 end
+
+# AbstractComplex
+
+struct PolarComplex{T} <: Base.AbstractComplex{T}
+    mod::T
+    angle::T
+end
+
+Base.real(z::PolarComplex) = z.mod * cos(z.angle)
+Base.imag(z::PolarComplex) = z.mod * sin(z.angle)
+PolarComplex(z::Complex) = PolarComplex(abs(z), angle(z))
+
+Base.promote_rule(::Type{PolarComplex{T}}, ::Type{U}) where {T<:Real, U<:Real} = PolarComplex{Base.promote_type(T, U)}
+Base.promote_rule(::Type{PolarComplex{T}}, ::Type{Complex{U}}) where {T<:Real, U<:Real} = Complex{Base.promote_type(T, U)}
+
+@testset "PolarComplex Unary" begin
+    for f ∈ (conj, inv, +, -, sqrt, cis, log, cispi, angle, log10, log2, exp, expm1, log1p, exp2, exp10,
+             sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, float, big)
+        @testset "$f" begin
+            @test f(PolarComplex(1.0, π/2)) isa PolarComplex
+            @test f(100-20im) ≈ f(PolarComplex(100-20im))
+        end
+    end
+end
+
+@testset "PolarComplex Binary" begin
+    for f ∈ (+, -, *, /, ^)
+        @testset "$f" begin
+            @test f(PolarComplex(1.0, π/2), 2) isa PolarComplex
+            @test f(1 + 1e-5im, 5im) ≈ f(PolarComplex(1 + 1e-5im), PolarComplex(5im))
+            @test f(1 + 1e-5im, 5im) ≈ f(PolarComplex(1 + 1e-5im), 5im)
+            @test f(1 + 1e-5im, 5im) ≈ f(1 + 1e-5im, PolarComplex(5im))
+        end
+    end
+end
+
+@testset "PolarComplex Ternary" begin
+    for f ∈ (muladd,)
+        @testset "$f" begin
+            @test f(PolarComplex(1.0, π/2), 2, 2) isa PolarComplex
+            @test f(1 + 1e-5im, 5im, 1-im) ≈ f(PolarComplex(1 + 1e-5im), PolarComplex(5im), PolarComplex(1-im))
+
+            @test f(1 + 1e-5im, 5im, 1) ≈ f(PolarComplex(1 + 1e-5im), PolarComplex(5im), 1)
+            @test f(1 + 1e-5im, 5im, 1-im) ≈ f(PolarComplex(1 + 1e-5im), (5im), PolarComplex(1-im))
+            @test f(1 + 1e-5im, 5im, 1-im) ≈ f((1 + 1e-5im), PolarComplex(5im), PolarComplex(1-im))
+
+            @test f(1 + 1e-5im, 5im, 1) ≈ f(PolarComplex(1 + 1e-5im), (5im), 1)
+            @test f(1 + 1e-5im, 5im, 1-im) ≈ f((1 + 1e-5im), (5im), PolarComplex(1-im))
+            @test f(1 + 1e-5im, 5im, 1-im) ≈ f((1 + 1e-5im), PolarComplex(5im), (1-im))
+        end
+    end
+end
