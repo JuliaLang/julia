@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libunwind
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libunwind_handle = C_NULL
 libunwind_path = ""
@@ -26,7 +26,7 @@ function __init__()
         global libunwind_handle = dlopen(libunwind)
         global libunwind_path = dlpath(libunwind_handle)
         global artifact_dir = dirname(Sys.BINDIR)
-        global LIBPATH[] = dirname(libunwind_path)
+        LIBPATH[] = dirname(libunwind_path)
         push!(LIBPATH_list, LIBPATH[])
     end
 end

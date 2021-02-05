@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libmbedcrypto, libmbedtls, libmbedx509
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libmbedcrypto_handle = C_NULL
 libmbedcrypto_path = ""
@@ -44,7 +44,7 @@ function __init__()
     global libmbedx509_handle = dlopen(libmbedx509)
     global libmbedx509_path = dlpath(libmbedx509_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = dirname(libmbedtls_path)
+    LIBPATH[] = dirname(libmbedtls_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 

@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libgfortran, libstdcxx, libgomp
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libgfortran_handle = C_NULL
 libgfortran_path = ""
@@ -57,7 +57,7 @@ function __init__()
     global libgomp_handle = dlopen(libgomp)
     global libgomp_path = dlpath(libgomp_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = dirname(libgcc_s_path)
+    LIBPATH[] = dirname(libgcc_s_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 

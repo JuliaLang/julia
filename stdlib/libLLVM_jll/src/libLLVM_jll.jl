@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libLLVM
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libLLVM_handle = C_NULL
 libLLVM_path = ""
@@ -30,7 +30,7 @@ function __init__()
     global libLLVM_handle = dlopen(libLLVM)
     global libLLVM_path = dlpath(libLLVM_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = dirname(libLLVM_path)
+    LIBPATH[] = dirname(libLLVM_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 
