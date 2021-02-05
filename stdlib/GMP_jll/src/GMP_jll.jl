@@ -31,12 +31,13 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libgmp_handle = dlopen(libgmp)
     global libgmp_path = dlpath(libgmp_handle)
     global libgmpxx_handle = dlopen(libgmpxx)
     global libgmpxx_path = dlpath(libgmpxx_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    global LIBPATH[] = dirname(libgmp_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

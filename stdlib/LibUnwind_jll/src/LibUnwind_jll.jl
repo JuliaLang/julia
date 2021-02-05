@@ -21,12 +21,13 @@ libunwind_path = ""
 const libunwind = "libunwind.so.8"
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     # We only do something on Linux/FreeBSD
     @static if Sys.islinux() || Sys.isfreebsd()
         global libunwind_handle = dlopen(libunwind)
         global libunwind_path = dlpath(libunwind_handle)
+        global artifact_dir = dirname(Sys.BINDIR)
+        global LIBPATH[] = dirname(libunwind_path)
+        push!(LIBPATH_list, LIBPATH[])
     end
 end
 

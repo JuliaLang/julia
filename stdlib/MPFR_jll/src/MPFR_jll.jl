@@ -26,10 +26,11 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libmpfr_handle = dlopen(libmpfr)
     global libmpfr_path = dlpath(libmpfr_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    global LIBPATH[] = dirname(libmpfr_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

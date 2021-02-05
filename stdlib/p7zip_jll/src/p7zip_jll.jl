@@ -82,8 +82,9 @@ end
 
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     init_p7zip_path()
+    global PATH[] = dirname(p7zip_path)
+    push!(PATH_list, PATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

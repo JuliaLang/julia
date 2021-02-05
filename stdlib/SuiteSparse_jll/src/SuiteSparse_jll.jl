@@ -87,8 +87,6 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libamd_handle = dlopen(libamd)
     global libamd_path = dlpath(libamd_handle)
     global libbtf_handle = dlopen(libbtf)
@@ -115,6 +113,9 @@ function __init__()
     global libsuitesparseconfig_path = dlpath(libsuitesparseconfig_handle)
     global libumfpack_handle = dlopen(libumfpack)
     global libumfpack_path = dlpath(libumfpack_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    global LIBPATH[] = dirname(libsuitesparse_wrapper_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

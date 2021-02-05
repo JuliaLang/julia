@@ -26,10 +26,11 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libnghttp2_handle = dlopen(libnghttp2)
     global libnghttp2_path = dlpath(libnghttp2_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    global LIBPATH[] = dirname(libnghttp2_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

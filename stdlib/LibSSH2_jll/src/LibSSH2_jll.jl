@@ -27,10 +27,11 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libssh2_handle = dlopen(libssh2)
     global libssh2_path = dlpath(libssh2_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    global LIBPATH[] = dirname(libssh2_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 

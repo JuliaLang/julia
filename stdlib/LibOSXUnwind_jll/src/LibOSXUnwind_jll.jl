@@ -21,12 +21,13 @@ libosxunwind_path = ""
 const libosxunwind = "@rpath/libosxunwind.dylib"
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     # We only dlopen something on MacOS
     @static if Sys.isapple()
         global libosxunwind_handle = dlopen(libosxunwind)
         global libosxunwind_path = dlpath(libosxunwind_handle)
+        global artifact_dir = dirname(Sys.BINDIR)
+        global LIBPATH[] = dirname(libosxunwind_path)
+        push!(LIBPATH_list, LIBPATH[])
     end
 end
 
