@@ -386,7 +386,7 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
     nr, nc = length(indr), length(indc)
     rdots, cdots = false, false
     rr1, rr2 = UnitRange{Int}(indr), 1:0
-    cr1, cr2 = UnitRange{Int}(indc), 1:0
+    cr1, cr2 = UnitRange{Int}(indc), first(indc) .+ (0:-1)
     if limit
         if nr > 4
             rr1, rr2 = rr1[1:2], rr1[nr-1:nr]
@@ -410,7 +410,7 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
                         show(io, el)
                     end
                 end
-                if !isempty(cr) && last(cr) == last(indc)
+                if last(cr) == last(indc)
                     i < last(indr) && print(io, "; ")
                 elseif cdots
                     print(io, " \u2026 ")
