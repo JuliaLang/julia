@@ -83,7 +83,7 @@ void JL_UV_LOCK(void);
 extern "C" {
 #endif
 
-int jl_running_under_rr(int recheck);
+int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 
 //--------------------------------------------------
 // timers
