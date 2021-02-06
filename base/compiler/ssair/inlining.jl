@@ -680,7 +680,7 @@ function resolve_todo(todo::InliningTodo, et::Union{EdgeTracker, Nothing}, cache
     spec = todo.spec::DelayedInliningSpec
     isconst, src = find_inferred(todo.mi, spec.atypes, caches, spec.stmttype)
 
-    if isconst
+    if isconst && et !== nothing
         push!(et, todo.mi)
         return ConstantCase(src)
     end

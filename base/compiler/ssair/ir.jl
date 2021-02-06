@@ -895,7 +895,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
     # Check if the block is now dead
     if length(preds) == 0
         for succ in copy(compact.result_bbs[compact.bb_rename_succ[to]].succs)
-            kill_edge!(compact, active_bb, to, findfirst(x->x === succ, compact.bb_rename_pred))
+            kill_edge!(compact, active_bb, to, findfirst(x->x === succ, compact.bb_rename_pred)::Int)
         end
         if to < active_bb
             # Kill all statements in the block
