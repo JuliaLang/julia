@@ -139,6 +139,7 @@ function compute_basic_blocks(stmts::Vector{Any})
     return CFG(blocks, basic_block_index)
 end
 
+# this function assumes insert position exists
 function first_insert_for_bb(code, cfg::CFG, block::Int)
     for idx in cfg.blocks[block].stmts
         stmt = code[idx]
@@ -146,6 +147,7 @@ function first_insert_for_bb(code, cfg::CFG, block::Int)
             return idx
         end
     end
+    error("any insert position isn't found")
 end
 
 # SSA-indexed nodes

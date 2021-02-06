@@ -371,7 +371,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
         end
         a = ex.args[2]
         if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, slottypes, params, error_path))
+            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, slottypes, union_penalties, params, error_path))
         end
         return cost
     elseif head === :copyast
@@ -392,7 +392,7 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::CodeInfo,
     thiscost = 0
     if stmt isa Expr
         thiscost = statement_cost(stmt, line, src, sptypes, slottypes, union_penalties, params,
-                                  params.unoptimize_throw_blocks && line in throw_blocks)::Int
+                                  throw_blocks !== nothing && line in throw_blocks)::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from

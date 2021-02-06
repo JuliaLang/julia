@@ -712,6 +712,7 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     while true
+        parent = parent::InferenceState
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
         child = parent
