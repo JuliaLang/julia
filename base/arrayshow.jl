@@ -386,7 +386,8 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
     nr, nc = length(indr), length(indc)
     rdots, cdots = false, false
     rr1, rr2 = UnitRange{Int}(indr), 1:0
-    cr1, cr2 = UnitRange{Int}(indc), first(indc) .+ (0:-1)
+    cr1 = UnitRange{Int}(indc)
+    cr2 = first(cr1) .+ (0:-1)
     if limit
         if nr > 4
             rr1, rr2 = rr1[1:2], rr1[nr-1:nr]
