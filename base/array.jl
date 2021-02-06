@@ -2436,6 +2436,28 @@ function filter!(f, a::AbstractVector)
     return a
 end
 
+"""
+     mask!(a::AbstractVector, m::AbstractVector{Bool})
+
+The inplace version of logical indexing `a = a[m]`. That is, `mask!(a, m)` on
+vectors of equal length `a` and `m` will remove all elements from `a` for which
+`m` at the corresponding index is `false`.
+
+# Examples
+```jldoctest
+julia> a = [:a, :b, :c];
+
+julia> mask!(a, [true, false, true])
+2-element Vector{Symbol}:
+ :a
+ :c
+
+julia> a
+2-element Vector{Symbol}:
+ :a
+ :c
+```
+"""
 function mask!(a::AbstractVector, m::AbstractVector{Bool})
     j = firstindex(a)
     for i in eachindex(a, m)

@@ -34,6 +34,7 @@ New library functions
 * `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}; kwargs...)` ([#38438])
+* New function `mask!(a::AbstractVector, m::AbstractVector{Bool})` which provides an in-place equivalent to the logical indexing expression `a = a[m]`
 
 New library features
 --------------------
