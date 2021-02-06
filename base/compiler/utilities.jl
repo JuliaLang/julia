@@ -104,16 +104,6 @@ function invoke_api(li::CodeInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)
 end
 
-function get_staged(li::MethodInstance)
-    may_invoke_generator(li) || return nothing
-    try
-        # user code might throw errors – ignore them
-        return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
-    catch
-        return nothing
-    end
-end
-
 function has_opaque_closure(c::CodeInfo)
     for i = 1:length(c.code)
         stmt = c.code[i]
@@ -122,21 +112,31 @@ function has_opaque_closure(c::CodeInfo)
     return false
 end
 
+function get_staged(mi::MethodInstance)
+    may_invoke_generator(mi) || return nothing
+    if isdefined(mi, :uninferred)
+        return copy(mi.uninferred::CodeInfo)
+    end
+    try
+        # user code might throw errors – ignore them
+        ci = ccall(:jl_code_for_staged, Any, (Any,), mi)::CodeInfo
+        if has_opaque_closure(ci)
+            # For opaque closures, cache the generated code info to make sure
+            # that OpaqueClosure method identity is stable
+            mi.uninferred = copy(ci)
+        end
+        return ci
+    catch
+        return nothing
+    end
+end
+
 function retrieve_code_info(linfo::MethodInstance)
     m = linfo.def::Method
     c = nothing
     if isdefined(m, :generator)
-        if isdefined(linfo, :uninferred)
-            c = copy(linfo.uninferred::CodeInfo)
-        else
-            # user code might throw errors – ignore them
-            c = get_staged(linfo)
-            # For opaque closures, cache the generated code info to make sure
-            # that Opaque Closure method identity remains stable.
-            if c !== nothing && has_opaque_closure(c)
-                linfo.uninferred = copy(c)
-            end
-        end
+        # user code might throw errors – ignore them
+        c = get_staged(linfo)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source

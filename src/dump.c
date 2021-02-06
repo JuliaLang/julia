@@ -380,7 +380,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint8(s->s, m->infer);
 }
 
-static inline int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
+static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     if (v == NULL) {
         write_uint8(s->s, TAG_NULL);

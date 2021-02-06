@@ -255,7 +255,7 @@ end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
-widenconst(t::PartialOpaque) = t.t
+widenconst(t::PartialOpaque) = t.typ
 widenconst(t::Type) = t
 widenconst(t::TypeVar) = t
 widenconst(t::Core.TypeofVararg) = t
