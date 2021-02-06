@@ -1171,7 +1171,7 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
 end
 
 for func in (:exp,:exp2,:exp10)
-        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
+     @eval $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
 end
 
 
