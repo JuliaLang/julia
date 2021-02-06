@@ -111,6 +111,11 @@ This behavior was chosen so that it would be possible to set an empty load path 
 the environment variable. If you want the default load path, either unset the
 environment variable or if it must have a value, set it to the string `:`.
 
+!!! note
+
+    On Windows, path elements are separated by the `;` character, as is the case with
+    most path lists on Windows. Replace `:` with `;` in the above paragraph.
+
 ### `JULIA_DEPOT_PATH`
 
 The `JULIA_DEPOT_PATH` environment variable is used to populate the global Julia
@@ -140,7 +145,7 @@ or if it must have a value, set it to the string `:`.
 !!! note
 
     On Windows, path elements are separated by the `;` character, as is the case with
-    most path lists on Windows.
+    most path lists on Windows. Replace `:` with `;` in the above paragraph.
 
 ### `JULIA_HISTORY`
 
