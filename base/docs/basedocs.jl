@@ -2452,6 +2452,14 @@ typeassert
 
 The syntax `a.b` calls `getproperty(a, :b)`.
 
+!!! warning
+
+    Using the dot operator in a custom implementation of `getproperty` invokes
+    `getproperty` recursively, which hampers type inference and can cause
+    [type-instability](@ref man-type-stability). To minimize the risk of type
+    instability, implement `getproperty` in terms of [`getfield`](@ref). For
+    example, replace `a.b` with `getfield(a, :b)`.
+
 # Examples
 ```jldoctest
 julia> struct MyType
