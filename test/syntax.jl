@@ -2680,7 +2680,7 @@ end
 end
 
 struct A x end
-Base.dotgetproperty(::A) = (a, x) -> [0, 0, 0]
+Base.dotgetproperty(::A, ::Symbol) = [0, 0, 0]
 
 @testset "dotgetproperty" begin
     a = (x = [1, 2, 3],)

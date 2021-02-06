@@ -1767,14 +1767,7 @@
                 (nuref `(call (top dotview) ,(caddr refex) ,@(cdddr refex))))
            `(block ,@stmts ,nuref)))
         ((and (length= expr 3) (eq? (car expr) '|.|))
-         (let* ((x (cadr expr))
-                (xx (if (symbol-like? x) x (make-ssavalue)))
-                (ini  (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
-                (getprop (make-ssavalue)))
-           `(block
-              ,@ini
-              (= ,getprop (call (top dotgetproperty) ,xx))
-              (call ,getprop ,xx ,(expand-forms (caddr expr))))))
+         `(call (top dotgetproperty) ,(cadr expr) ,(caddr expr)))
         (else expr)))
 
 ; lazily fuse nested calls to expr == f.(args...) into a single broadcast call,
