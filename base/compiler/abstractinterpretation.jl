@@ -689,7 +689,7 @@ end
 function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(aft), aargtypes::Vector{Any}, sv::InferenceState,
                         max_methods::Int = InferenceParams(interp).MAX_METHODS)
     aftw = widenconst(aft)
-    if !isa(aft, Const) && (!isType(aftw) || has_free_typevars(aftw))
+    if !isa(aft, Const) && !isa(aft, PartialOpaque) && (!isType(aftw) || has_free_typevars(aftw))
         if !isconcretetype(aftw) || (aftw <: Builtin)
             add_remark!(interp, sv, "Core._apply_iterate called on a function of a non-concrete type")
             # bail now, since it seems unlikely that abstract_call will be able to do any better after splitting
@@ -1096,7 +1096,7 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
         f = ft.instance
     elseif isa(ft, PartialOpaque)
         return abstract_call_opaque_closure(interp, ft, argtypes, sv)
-    elseif isa(ft, DataType) && unwrap_unionall(ft).name === typename(Core.OpaqueClosure)
+    elseif isa(unwrap_unionall(ft), DataType) && unwrap_unionall(ft).name === typename(Core.OpaqueClosure)
         return CallMeta(rewrap_unionall(unwrap_unionall(ft).parameters[2], ft), false)
     else
         # non-constant function, but the number of arguments is known

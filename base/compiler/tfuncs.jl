@@ -1377,7 +1377,7 @@ function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
     t = argt_exact ? Core.OpaqueClosure{argt} : Core.OpaqueClosure{<:argt}
     t = lbt == ubt ? t{ubt} : (t{T} where lbt <: T <: ubt)
 
-    (isa(source, Const) && isa(source, Method)) || return t
+    (isa(source, Const) && isa(source.val, Method)) || return t
     (isa(isva, Const) && isa(isva.val, Bool)) || return t
 
     return PartialOpaque(t, tuple_tfunc(env), isva.val, linfo, source.val)
