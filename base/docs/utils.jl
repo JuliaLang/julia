@@ -88,7 +88,7 @@ Create a `Text` object from a literal string.
 
 # Examples
 ```jldoctest
-julia> @text_str "Julia"
+julia> text"Julia"
 Julia
 ```
 """
