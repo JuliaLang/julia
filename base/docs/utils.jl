@@ -41,7 +41,7 @@ Create an `HTML` object from a literal string.
 
 # Examples
 ```jldoctest
-julia> @html_str "Julia"
+julia> html"Julia"
 HTML{String}("Julia")
 ```
 """
