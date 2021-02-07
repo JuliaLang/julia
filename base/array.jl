@@ -68,7 +68,7 @@ const Matrix{T} = Array{T,2}
 """
     VecOrMat{T}
 
-Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref).
+Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref) which allows functions to accept either a Matrix or a Vector.
 
 # Examples
 ```jldoctest
