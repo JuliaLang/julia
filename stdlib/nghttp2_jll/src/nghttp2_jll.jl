@@ -11,8 +11,8 @@ const LIBPATH_list = String[]
 export libnghttp2
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libnghttp2_handle = C_NULL
 libnghttp2_path = ""
@@ -29,7 +29,7 @@ function __init__()
     global libnghttp2_handle = dlopen(libnghttp2)
     global libnghttp2_path = dlpath(libnghttp2_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = dirname(libnghttp2_path)
+    LIBPATH[] = dirname(libnghttp2_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 

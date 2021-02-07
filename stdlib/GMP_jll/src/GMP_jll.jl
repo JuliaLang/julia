@@ -11,8 +11,8 @@ const LIBPATH_list = String[]
 export libgmp, libgmpxx
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libgmp_handle = C_NULL
 libgmp_path = ""
@@ -36,7 +36,7 @@ function __init__()
     global libgmpxx_handle = dlopen(libgmpxx)
     global libgmpxx_path = dlpath(libgmpxx_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = dirname(libgmp_path)
+    LIBPATH[] = dirname(libgmp_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 

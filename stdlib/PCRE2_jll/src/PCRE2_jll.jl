@@ -11,8 +11,8 @@ const LIBPATH_list = String[]
 export libpcre2_8
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libpcre2_8_handle = C_NULL
 libpcre2_8_path = ""
@@ -29,7 +29,7 @@ function __init__()
     global libpcre2_8_handle = dlopen(libpcre2_8)
     global libpcre2_8_path = dlpath(libpcre2_8_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = dirname(libpcre2_8_path)
+    LIBPATH[] = dirname(libpcre2_8_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 

@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libcurl
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libcurl_handle = C_NULL
 libcurl_path = ""
@@ -30,7 +30,7 @@ function __init__()
     global libcurl_handle = dlopen(libcurl)
     global libcurl_path = dlpath(libcurl_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = dirname(libcurl_path)
+    LIBPATH[] = dirname(libcurl_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 
