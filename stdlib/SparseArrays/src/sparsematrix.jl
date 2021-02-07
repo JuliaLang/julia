@@ -132,7 +132,6 @@ modifications to the returned vector will mutate `A` as well. See
 
 # Examples
 ```jldoctest
-
 julia> using LinearAlgebra
 
 julia> A = sparse(2I, 3, 3)
