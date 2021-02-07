@@ -678,6 +678,17 @@ end
         @test isnan_type(T, log1p(T(NaN)))
         @test_throws DomainError log1p(-2*one(T))
     end
+    @testset "log of subnormals" begin
+        # checked results with WolframAlpha
+        for (T, lr) in ((Float32, LinRange(2.f0^(-129), 2.f0^(-128), 1000)),
+                        (Float64, LinRange(2.0^(-1025), 2.0^(-1024), 1000)))
+            for x in lr
+                @test log(x)   ≈ T(log(widen(x))) rtol=2eps(T)
+                @test log2(x)  ≈ T(log2(widen(x))) rtol=2eps(T)
+                @test log10(x) ≈ T(log10(widen(x))) rtol=2eps(T)
+            end
+        end
+    end
 end
 
 @testset "vectorization of 2-arg functions" begin
