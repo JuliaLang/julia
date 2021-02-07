@@ -670,7 +670,6 @@ Convert an AbstractMatrix `A` into a sparse matrix.
 
 # Examples
 ```jldoctest
-
 julia> using LinearAlgebra
 
 julia> A = Matrix(1.0I, 3, 3)
