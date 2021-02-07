@@ -162,7 +162,6 @@ nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 
 # Examples
 ```jldoctest
-
 julia> using LinearAlgebra
 
 julia> A = sparse(2I, 3, 3)
