@@ -296,7 +296,7 @@ for (func, base) in (:log2=>Val(2), :log=>Val(:ℯ), :log10=>Val(10))
             elseif isnan(x)
                 NaN
             else
-                throw_complex_domainerror(:log, x)
+                throw_complex_domainerror(Symbol($func), x)
             end
         end
 
@@ -332,7 +332,7 @@ for (func, base) in (:log2=>Val(2), :log=>Val(:ℯ), :log10=>Val(10))
             elseif isnan(x)
                 NaN32
             else
-                throw_complex_domainerror(:log, x)
+                throw_complex_domainerror(Symbol($func), x)
             end
         end
     end
