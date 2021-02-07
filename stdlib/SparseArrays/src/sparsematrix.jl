@@ -98,7 +98,6 @@ Returns the number of stored (filled) elements in a sparse array.
 
 # Examples
 ```jldoctest
-
 julia> using LinearAlgebra
 
 julia> A = sparse(2I, 3, 3)
