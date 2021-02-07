@@ -60,6 +60,19 @@ without any intermediate rounding.
   `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
 
+# Examples:
+```jldoctest
+julia> x = 9; y = 4;
+
+julia> x % y  # same as rem(x, y)
+1
+
+julia> x ÷ y  # same as div(x, y)
+2
+
+julia> x == div(x, y) * y + rem(x, y)
+true
+```
 """
 rem(x, y, r::RoundingMode)
 
