@@ -345,7 +345,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 - The typical Julia workflow for prototyping also uses continuous manipulation of the image, implemented with the [Revise.jl](https://github.com/timholy/Revise.jl) package.
 
-- For performance, Julia prefers that operations have [type stability](@ref man-type-stability-1). This means that, where Common Lisp numeric operations feel like math, Julia numeric operations feel more like "computer arithmetic". For example:
+- For performance, Julia prefers that operations have [type stability](@ref man-type-stability-1). Where Common Lisp abstracts away from the underlying machine operations, Julia cleaves closer to them. For example:
   - Integer division using `/` always returns a floating-point result, even if the computation is exact.
     - `//` always returns a rational result
     - `÷` always returns a (truncated) integer result
