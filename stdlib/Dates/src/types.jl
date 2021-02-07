@@ -19,7 +19,34 @@ abstract type AbstractTime end
 `Period` types represent discrete, human representations of time.
 """
 abstract type Period     <: AbstractTime end
+
+"""
+    DatePeriod
+    Year
+    Quarter
+    Month
+    Week
+    Day
+
+Intervals of time greater than or equal to a day.
+Conventional comparisons between `DatePeriod`s are not all valid.
+(eg `Week(1) == Day(7)`, but `Year(1) != Day(365)`)
+"""
 abstract type DatePeriod <: Period end
+
+"""
+    TimePeriod
+    Hour
+    Minute
+    Second
+    Millisecond
+    Microsecond
+    Nanosecond
+
+Intervals of time less than a day.
+Conversions between all `TimePeriod`s are permissible.
+(eg `Hour(1) == Minute(60) == Second(3600)`)
+"""
 abstract type TimePeriod <: Period end
 
 for T in (:Year, :Quarter, :Month, :Week, :Day)
