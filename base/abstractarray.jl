@@ -2314,7 +2314,7 @@ julia> a
 julia> map!(x -> x * 2, a, a);  # in-place use
 
 julia> a
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   4.0
   8.0
  12.0
