@@ -3331,7 +3331,6 @@ Concatenate matrices block-diagonally. Currently only implemented for sparse mat
 
 # Examples
 ```jldoctest
-
 julia> using LinearAlgebra
 
 julia> blockdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
