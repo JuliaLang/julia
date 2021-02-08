@@ -1138,19 +1138,6 @@ julia> 3 * 2 + 1
 """
 muladd(x,y,z) = x*y+z
 
-# Float16 definitions
-
-for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:exp2,:exp10,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
-    @eval begin
-        $func(a::Float16) = Float16($func(Float32(a)))
-        $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
-    end
-end
-
-atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
-cbrt(a::Float16) = Float16(cbrt(Float32(a)))
-sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 # helper functions for Libm functionality
 
