@@ -1002,15 +1002,19 @@ RegexMatch("Day 10")
 julia> name = "Jon"
 "Jon"
 
-julia> regex_name = Regex("[\"( ]$name[\") ]")  # interpolate value of name
+julia> regex_name = Regex("[\"( ]\\Q$name\\E[\") ]")  # interpolate value of name
 r"[\"( ]Jon[\") ]"
 
-julia> match(regex_name," Jon ")
+julia> match(regex_name, " Jon ")
 RegexMatch(" Jon ")
 
-julia> match(regex_name,"[Jon]") === nothing
+julia> match(regex_name, "[Jon]") === nothing
 true
 ```
+
+Note the use of the `\Q...\E` escape sequence. All characters between the `\Q` and the `\E`
+are interpreted as literal characters (after string interpolation). This escape sequence can
+be useful when interpolating, possibly malicious, user input.
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 
