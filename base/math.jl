@@ -579,6 +579,7 @@ julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
 ```
 """
+sqrt(x)
 
 """
     hypot(x, y)
@@ -1201,7 +1202,6 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
         x === xf && throw(MethodError($f, (x,)))
         return ($f)(xf)
     end
-    @eval $(f)(::Missing) = missing
 end
 
 exp2(x::AbstractFloat) = 2^x
