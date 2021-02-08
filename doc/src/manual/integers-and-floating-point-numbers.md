@@ -370,20 +370,6 @@ the real number line:
 | `NaN16`   | `NaN32`   | `NaN`     | not a number      | a value not `==` to any floating-point value (including itself) |
 
 
-```jldoctest
-julia> NaN == NaN
-false
-
-julia> NaN != NaN
-true
-
-julia> NaN < NaN
-false
-
-julia> NaN > NaN
-false
-```
-
 For further discussion of how these non-finite floating-point values are ordered with respect
 to each other and other floats, see [Numeric Comparisons](@ref). By the [IEEE 754 standard](https://en.wikipedia.org/wiki/IEEE_754-2008),
 these floating-point values are the results of certain arithmetic operations:
@@ -424,6 +410,18 @@ NaN
 
 julia> 0 * Inf
 NaN
+
+julia> NaN == NaN
+false
+
+julia> NaN != NaN
+true
+
+julia> NaN < NaN
+false
+
+julia> NaN > NaN
+false
 ```
 
 The [`typemin`](@ref) and [`typemax`](@ref) functions also apply to floating-point types:
