@@ -344,16 +344,16 @@ else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	done
 endif
 
-	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
-	if [ $(DARWIN_FRAMEWORK) = 0 ]; then \
-		RELEASE_TARGET=$(DESTDIR)$(libdir)/libjulia.$(SHLIB_EXT); \
-		DEBUG_TARGET=$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT); \
+	# Overwrite JL_SYSTEM_IMAGE_PATH in libjulia-internal
+	if [ "$(DARWIN_FRAMEWORK)" = "0" ]; then \
+		RELEASE_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT); \
+		DEBUG_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT); \
 	else \
 		RELEASE_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib); \
 		DEBUG_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib)_debug; \
 	fi; \
 	$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
-	if [ $(BUNDLE_DEBUG_LIBS) = 1 ]; then \
+	if [ "$(BUNDLE_DEBUG_LIBS)" = "1" ]; then \
 		$(call stringreplace,$${DEBUG_TARGET},sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT)); \
 	fi;
 endif
