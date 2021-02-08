@@ -55,8 +55,8 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
-# Test for SIGPIPE being treated as normal termination (throws an error if broken)
-Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
+# Test for SIGPIPE being a failure condition
+@test_throws ProcessFailedException run(pipeline(yescmd, `head`, devnull))
 
 let p = run(pipeline(yescmd, devnull), wait=false)
     t = @async kill(p)
