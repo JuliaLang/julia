@@ -978,7 +978,8 @@ function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospeciali
             rt = widenconst(rt)
         end
     else
-        for match in _methods(f, t, -1, get_world_counter(interp))
+        for match in _methods(f, t, -1, get_world_counter(interp))::Vector
+            match = match::Core.MethodMatch
             ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
             rt = tmerge(rt, ty)

@@ -1480,7 +1480,9 @@ function detect_ambiguities(mods::Module...;
             ambig = Int32[0]
             ms = Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
             ambig[1] == 0 && continue
+            isa(ms, Bool) && continue
             for match2 in ms
+                match2 = match2::Core.MethodMatch
                 m2 = match2.method
                  if !(m === m2 || Base.morespecific(m2.sig, m.sig))
                     if Base.isambiguous(m, m2; ambiguous_bottom)

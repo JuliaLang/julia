@@ -937,8 +937,8 @@ function methods(@nospecialize(f), @nospecialize(t),
     world = typemax(UInt)
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
-    for m in _methods(f, t, -1, world)
-        m::Core.MethodMatch
+    for m in _methods(f, t, -1, world)::Vector
+        m = m::Core.MethodMatch
         (mod === nothing || m.method.module ∈ mod) && push!(ms, m.method)
     end
     MethodList(ms, typeof(f).name.mt)
@@ -1186,7 +1186,8 @@ function code_typed_by_type(@nospecialize(tt::Type);
         error("signature does not correspond to a generic function")
     end
     asts = []
-    for match in matches
+    for match in matches::Vector
+        match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
         (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, optimize)
         code === nothing && error("inference not successful") # inference disabled?
@@ -1218,7 +1219,8 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.
     types = to_tuple_type(types)
     rt = []
     world = get_world_counter()
-    for match in _methods(f, types, -1, world)
+    for match in _methods(f, types, -1, world)::Vector
+        match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
         ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
         ty === nothing && error("inference not successful") # inference disabled?
@@ -1250,7 +1252,8 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     end
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
-    for match in matches
+    for match in matches::Vector
+        match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
         (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
         code === nothing && error("inference not successful") # inference disabled?
@@ -1508,7 +1511,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         ms = _methods_by_ftype(ti, -1, typemax(UInt), true, min, max, has_ambig)::Vector
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
-            filter!(ms) do m
+            filter!(ms) do m::Core.MethodMatch
                 return !has_bottom_parameter(m.spec_types)
             end
         end
@@ -1516,6 +1519,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         # intersection, see if both m1 and m2 may be involved in it
         have_m1 = have_m2 = false
         for match in ms
+            match = match::Core.MethodMatch
             m = match.method
             m === m1 && (have_m1 = true)
             m === m2 && (have_m2 = true)

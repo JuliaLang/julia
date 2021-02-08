@@ -413,9 +413,9 @@ function get_type_call(expr::Expr)
     end
     # use _methods_by_ftype as the function is supplied as a type
     world = Base.get_world_counter()
-    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
+    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)::Vector
     length(matches) == 1 || return (Any, false)
-    match = first(matches)
+    match = first(matches)::Core.MethodMatch
     # Typeinference
     interp = Core.Compiler.NativeInterpreter()
     return_type = Core.Compiler.typeinf_type(interp, match.method, match.spec_types, match.sparams)
