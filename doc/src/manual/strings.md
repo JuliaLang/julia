@@ -1003,7 +1003,7 @@ julia> name = "Jon"
 "Jon"
 
 julia> regex_name = Regex("[\"( ]\\Q$name\\E[\") ]")  # interpolate value of name
-r"[\"( ]Jon[\") ]"
+r"[\"( ]\QJon\E[\") ]"
 
 julia> match(regex_name, " Jon ")
 RegexMatch(" Jon ")
