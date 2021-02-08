@@ -617,3 +617,12 @@ let p = Pipe()
     wait(t)
     close(p)
 end
+
+@testset "issue #27412" begin
+    itr = eachline(IOBuffer("a"))
+    @test !isempty(itr)
+    # check that the earlier isempty did not consume the iterator
+    @test !isempty(itr)
+    first(itr) # consume the iterator
+    @test  isempty(itr) # now it is empty
+end

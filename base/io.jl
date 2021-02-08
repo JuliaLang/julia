@@ -1023,6 +1023,8 @@ eltype(::Type{<:EachLine}) = String
 
 IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
+isdone(itr::EachLine, state...) = eof(itr.stream)
+
 struct ReadEachIterator{T, IOT <: IO}
     stream::IOT
 end
