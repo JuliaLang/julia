@@ -394,6 +394,9 @@ end
 Get the first `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
 long enough.
 
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+
 # Examples
 ```jldoctest
 julia> first(["foo", "bar", "qux"], 2)
@@ -438,6 +441,9 @@ last(a) = a[end]
 
 Get the last `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
 long enough.
+
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
