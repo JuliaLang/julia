@@ -444,7 +444,7 @@ long enough.
 
 !!! compat "Julia 1.6"
     This method requires at least Julia 1.6.
-        
+
 # Examples
 ```jldoctest
 julia> last(["foo", "bar", "qux"], 2)
