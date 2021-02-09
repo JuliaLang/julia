@@ -376,5 +376,6 @@ end
     small_part = r*hi
     twopk = reinterpret(Float64, (N+1023) << 52)
     x > MAX_EXP(Float32) && return Inf32
+    N == exponent_max(T) && return small_part * T(2.0) * T(2.0)^(exponent_max(T) - 1)
     return Float32(muladd(twopk, small_part, twopk-1.0))
 end
