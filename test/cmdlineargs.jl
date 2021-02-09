@@ -71,6 +71,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
     let v = readchomperrors(`$exename -i -e '
             empty!(LOAD_PATH)
+            @eval Sys STDLIB=mktempdir()
             Base.unreference_module(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
             '`)
         # simulate not having a working version of InteractiveUtils,
