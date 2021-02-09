@@ -2678,3 +2678,21 @@ end
     @test f((b=3, c=2, a=4)) == (4, 3)
     @test_throws ErrorException f((;))
 end
+
+# issue #25652
+x25652 = 1
+x25652_2 = let (x25652, _) = (x25652, nothing)
+    x25652 = x25652 + 1
+    x25652
+end
+@test x25652_2 == 2
+@test x25652 == 1
+
+@test let x = x25652
+    x25652 = x+3
+    x25652
+end == 4
+@test let (x,) = (x25652,)
+    x25652 = x+3
+    x25652
+end == 4

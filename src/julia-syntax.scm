@@ -1221,41 +1221,25 @@
                     (decl?   (cadar binds)))
                 (let ((vname (decl-var (cadar binds))))
                   (loop (cdr binds)
-                        (if (expr-contains-eq vname (caddar binds))
-                            (let ((tmp (make-ssavalue)))
-                              `(scope-block
-                                (block ,@hs
-                                       (= ,tmp ,(caddar binds))
-                                       (scope-block
-                                        (block
-                                         (local-def ,(cadar binds))
-                                         (= ,vname ,tmp)
-                                         ,blk)))))
-                            `(scope-block
-                              (block ,@hs
-                               (local-def ,(cadar binds))
-                               (= ,vname ,(caddar binds))
-                               ,blk))))))
+                        (let ((tmp (make-ssavalue)))
+                          `(block (= ,tmp ,(caddar binds))
+                                  (scope-block
+                                   (block ,@hs
+                                          (local-def ,(cadar binds))
+                                          (= ,vname ,tmp)
+                                          ,blk)))))))
                ;; (a, b, c, ...) = rhs
                ((and (pair? (cadar binds))
                      (eq? (caadar binds) 'tuple))
                 (let ((vars (lhs-vars (cadar binds))))
                   (loop (cdr binds)
-                        (if (expr-contains-p (lambda (x) (memq x vars)) (caddr (car binds)))
-                            ;; use more careful lowering if there are name conflicts. issue #25652
-                            (let ((temp (make-ssavalue)))
-                              `(block
-                                (= ,temp ,(caddr (car binds)))
-                                (scope-block
-                                 (block ,@hs
-                                  ,@(map (lambda (v) `(local-def ,v)) vars)
-                                  (= ,(cadr (car binds)) ,temp)
-                                  ,blk))))
-                            `(scope-block
-                              (block ,@hs
-                               ,@(map (lambda (v) `(local-def ,v)) vars)
-                               ,(car binds)
-                               ,blk))))))
+                        (let ((tmp (make-ssavalue)))
+                          `(block (= ,tmp ,(caddar binds))
+                                  (scope-block
+                                   (block ,@hs
+                                          ,@(map (lambda (v) `(local-def ,v)) vars)
+                                          (= ,(cadar binds) ,tmp)
+                                          ,blk)))))))
                (else (error "invalid let syntax"))))
              (else (error "invalid let syntax")))))))))
 
