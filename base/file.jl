@@ -977,19 +977,44 @@ function sendfile(src::AbstractString, dst::AbstractString)
 end
 
 if Sys.iswindows()
+    const UV_FS_SYMLINK_DIR      = 0x0001
     const UV_FS_SYMLINK_JUNCTION = 0x0002
+    const UV__EPERM              = -4048
 end
 
 """
-    symlink(target::AbstractString, link::AbstractString)
+    symlink(target::AbstractString, link::AbstractString; dir_target = false)
 
 Creates a symbolic link to `target` with the name `link`.
+
+On Windows, symlinks must be explicitly declared as referring to a directory
+or not.  If `target` already exists, by default the type of `link` will be auto-
+detected, however if `target` does not exist, this function defaults to creating
+a file symlink unless `dir_target` is set to `true`.  Note that if the user
+sets `dir_target` but `target` exists and is a file, a directory symlink will
+still be created, but dereferencing the symlink will fail, just as if the user
+creates a file symlink (by calling `symlink()` with `dir_target` set to `false`
+before the directory is created) and tries to dereference it to a directory.
+
+Additionally, there are two methods of making a link on Windows; symbolic links
+and junction points.  Junction points are slightly more efficient, but do not
+support relative paths, so if a relative directory symlink is requested (as
+denoted by `isabspath(target)` returning `false`) a symlink will be used, else
+a junction point will be used.  Best practice for creating symlinks on Windows
+is to create them only after the files/directories they reference are already
+created.
 
 !!! note
     This function raises an error under operating systems that do not support
     soft symbolic links, such as Windows XP.
+
+!!! compat "Julia 1.6"
+    The `dir_target` keyword argument was added in Julia 1.6.  Prior to this,
+    symlinks to nonexistant paths on windows would always be file symlinks, and
+    relative symlinks to directories were not supported.
 """
-function symlink(p::AbstractString, np::AbstractString)
+function symlink(target::AbstractString, link::AbstractString;
+                 dir_target::Bool = false)
     @static if Sys.iswindows()
         if Sys.windows_version() < Sys.WINDOWS_VISTA_VER
             error("Windows XP does not support soft symlinks")
@@ -997,16 +1022,32 @@ function symlink(p::AbstractString, np::AbstractString)
     end
     flags = 0
     @static if Sys.iswindows()
-        if isdir(p)
-            flags |= UV_FS_SYMLINK_JUNCTION
-            p = abspath(p)
+        # If we're going to create a directory link, we need to know beforehand.
+        # First, if `target` is not an absolute path, let's immediately resolve
+        # it so that we can peek and see if it's a directory.
+        resolved_target = target
+        if !isabspath(target)
+            resolved_target = joinpath(dirname(link), target)
+        end
+
+        # If it is a directory (or `dir_target` is set), we'll need to add one
+        # of `UV_FS_SYMLINK_{DIR,JUNCTION}` to the flags, depending on whether
+        # `target` is an absolute path or not.
+        if (ispath(resolved_target) && isdir(resolved_target)) || dir_target
+            if isabspath(target)
+                flags |= UV_FS_SYMLINK_JUNCTION
+            else
+                flags |= UV_FS_SYMLINK_DIR
+            end
         end
     end
-    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
+    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), target, link, flags)
     if err < 0
-        msg = "symlink($(repr(p)), $(repr(np)))"
+        msg = "symlink($(repr(target)), $(repr(link)))"
         @static if Sys.iswindows()
-            if !isdir(p)
+            # creating file/directory symlinks requires Administrator privileges
+            # while junction points apparently do not
+            if !(flags & UV_FS_SYMLINK_JUNCTION) && err == UV__EPERM
                 msg = "On Windows, creating symlinks requires Administrator privileges.\n$msg"
             end
         end
