@@ -4,13 +4,6 @@ using Test
 
 f = Float16(2.)
 g = Float16(1.)
-
-struct FloatIterator{T} end
-function Base.iterate(it::FloatIterator{T}, el=T(-Inf)) where T
-    return el == T(Inf) ? nothing : (el, nextfloat(el))
-end
-Base.length(::FloatIterator{Float16}) = 2^16 - 2^11
-
 @testset "comparisons" begin
     @test f >= g
     @test f > g
@@ -81,12 +74,12 @@ end
 @testset "unary ops" begin
     @test -f === Float16(-2.)
     @test Float16(0.5f0)^2 ≈ Float16(0.5f0^2)
-    for func in (sin,cos,tan,asin,acos,atan,sinh,cosh,tanh,asinh,acosh,atanh,
-                 exp,exp2,exp10,expm1,log,log2,log10,log1p,sqrt,cbrt)
-        for x in FloatIterator{Float16}()
-            @test try func(x) === Float16(func(widen(x))) catch; true end
-        end
-    end
+    @test sin(f) ≈ sin(2f0)
+    @test log10(Float16(100)) == Float16(2.0)
+    @test sin(ComplexF16(f)) ≈ sin(complex(2f0))
+
+    # no domain error is thrown for negative values
+    @test cbrt(Float16(-1.0)) == -1.0
 end
 @testset "binary ops" begin
     @test f+g === Float16(3f0)
