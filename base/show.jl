@@ -396,7 +396,7 @@ show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
 
 function _show_default(io::IO, @nospecialize(x))
     t = typeof(x)
-    show(io, inferencebarrier(t))
+    show(io, inferencebarrier(t)::DataType)
     print(io, '(')
     nf = nfields(x)
     nb = sizeof(x)::Int
@@ -814,7 +814,8 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-function show(io::IO, @nospecialize(x::Type))
+show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
+function _show_type(io::IO, @nospecialize(x::Type))
     if print_without_params(x)
         show_type_name(io, unwrap_unionall(x).name)
         return
