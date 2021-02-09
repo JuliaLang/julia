@@ -11,7 +11,7 @@ using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, @pure,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
-export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d, BroadcastFunction
+export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d, BroadcastFunction, andand, oror
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
@@ -177,6 +177,17 @@ Broadcasted(f::F, args::Args, axes=nothing) where {F, Args<:Tuple} =
 function Broadcasted{Style}(f::F, args::Args, axes=nothing) where {Style, F, Args<:Tuple}
     # using Core.Typeof rather than F preserves inferrability when f is a type
     Broadcasted{Style, typeof(axes), Core.Typeof(f), Args}(f, args, axes)
+end
+
+andand(a, b) = a && b
+function broadcasted(::typeof(andand), a, bc::Broadcasted)
+    bcf = flatten(bc)
+    broadcasted((a, args...) -> a && bcf.f(args...), a, bcf.args...)
+end
+oror(a, b) = a || b
+function broadcasted(::typeof(oror), a, bc::Broadcasted)
+    bcf = flatten(bc)
+    broadcasted((a, args...) -> a || bcf.f(args...), a, bcf.args...)
 end
 
 Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{Style,Axes,F,Args}) where {NewStyle,Style,Axes,F,Args} =
@@ -1250,15 +1261,11 @@ function __dot__(x::Expr)
         tmp = x.head === :(<:) ? :.<: : :.>:
         Expr(:call, tmp, dotargs...)
     else
-        if x.head === :&& || x.head === :||
-            error("""
-                Using `&&` and `||` is disallowed in `@.` expressions.
-                Use `&` or `|` for elementwise logical operations.
-                """)
-        end
         head = string(x.head)
         if last(head) == '=' && first(head) != '.'
             Expr(Symbol('.',head), dotargs...)
+        elseif head == "&&" || head == "||"
+            Expr(:call, Symbol('.', head), dotargs...)
         else
             Expr(x.head, dotargs...)
         end

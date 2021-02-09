@@ -951,6 +951,44 @@ p0 = copy(p)
 @test repr(.!) == "Base.Broadcast.BroadcastFunction(!)"
 @test eval(:(.+)) == Base.BroadcastFunction(+)
 
+@testset "Issue #5187: Broadcasting of short-circuiting ops" begin
+    ex = Meta.parse("A .< 1 .|| A .> 2")
+    @test ex == :((A .< 1) .|| (A .> 2))
+    @test ex.head == Symbol(".||")
+    ex = Meta.parse("A .< 1 .&& A .> 2")
+    @test ex == :((A .< 1) .&& (A .> 2))
+    @test ex.head == Symbol(".&&")
+
+    A = -1:4
+    @test (A .< 1 .|| A .> 2) == [true, true, false, false, true, true]
+    @test (A .>= 1 .&& A .<= 2) == [false, false, true, true, false, false]
+
+    mutable struct F5187; x; end
+    (f::F5187)(x) = (f.x += x)
+    @test (iseven.(1:4) .&& (F5187(0)).(ones(4))) == [false, 1, false, 2]
+    @test (iseven.(1:4) .|| (F5187(0)).(ones(4))) == [1, true, 2, true]
+    @test (.&&)(iseven.(1:4), (F5187(0)).(ones(4))) == [false, 1, false, 2]
+    @test (.||)(iseven.(1:4), (F5187(0)).(ones(4))) == [1, true, 2, true]
+    r = 1:4; o = ones(4); f = F5187(0);
+    @test (@. iseven(r) && f(o)) == [false, 1, false, 2]
+    @test (@. iseven(r) || f(o)) == [3, true, 4, true]
+
+    @test (iseven.(1:8) .&& iseven.((F5187(0)).(ones(8))) .&& (F5187(0)).(ones(8))) == [false,false,false,1,false,false,false,2]
+    @test (iseven.(1:8) .|| iseven.((F5187(0)).(ones(8))) .|| (F5187(0)).(ones(8))) == [1,true,true,true,2,true,true,true]
+    r = 1:8; o = ones(8); f1 = F5187(0); f2 = F5187(0)
+    @test (@. iseven(r) && iseven(f1(o)) && f2(o)) == [false,false,false,1,false,false,false,2]
+    @test (@. iseven(r) || iseven(f1(o)) || f2(o)) == [3,true,true,true,4,true,true,true]
+    @test (.&&)(iseven.(1:8), (.&&)(iseven.((F5187(0)).(ones(8))), (F5187(0)).(ones(8)))) == [false,false,false,1,false,false,false,2]
+    @test (.||)(iseven.(1:8), (.||)(iseven.((F5187(0)).(ones(8))), (F5187(0)).(ones(8)))) == [1,true,true,true,2,true,true,true]
+    @test (iseven.(1:8) .&& (.&&)(iseven.((F5187(0)).(ones(8))), (F5187(0)).(ones(8)))) == [false,false,false,1,false,false,false,2]
+    @test (iseven.(1:8) .|| (.||)(iseven.((F5187(0)).(ones(8))), (F5187(0)).(ones(8)))) == [1,true,true,true,2,true,true,true]
+    @test (.&&)(iseven.(1:8), iseven.((F5187(0)).(ones(8))) .&& (F5187(0)).(ones(8))) == [false,false,false,1,false,false,false,2]
+    @test (.||)(iseven.(1:8), iseven.((F5187(0)).(ones(8))) .|| (F5187(0)).(ones(8))) == [1,true,true,true,2,true,true,true]
+
+    @test map(.&&, iseven.(1:4), 1:4) == map((x,y)->x&&y, iseven.(1:4), 1:4) == [false, 2, false, 4]
+    @test map(.||, iseven.(1:4), 1:4) == map((x,y)->x||y, iseven.(1:4), 1:4) == [1, true, 3, true]
+end
+
 @testset "Issue #28382: inferrability of broadcast with Union eltype" begin
     @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
     @test_broken Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
