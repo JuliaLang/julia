@@ -29,23 +29,49 @@ end
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
+    @test stat(dirlink) == stat(subdir)
+    @test readdir(dirlink) == readdir(subdir)
+
     # relative link
-    cd(subdir)
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
     reldir = joinpath("..", "adir2")
     symlink(reldir, relsubdirlink)
-    cd(pwd_)
+    @test stat(relsubdirlink) == stat(subdir2)
+    @test readdir(relsubdirlink) == readdir(subdir2)
+
+    # creation of symlink to directory that does not yet exist
+    new_dir = joinpath(subdir, "new_dir")
+    foo_file = joinpath(subdir, "new_dir", "foo")
+    nedlink = joinpath(subdir, "non_existant_dirlink")
+    symlink("new_dir", nedlink; dir_target=true)
+    try
+        readdir(nedlink)
+        @test false
+    catch e
+        @test isa(e, Base.IOError)
+        # It's surprisingly difficult to know what numeric value this will be across platforms
+        # so we'll just check the string representation instead. :(
+        @test endswith(e.msg, "(ENOENT)")
+    end
+    mkdir(new_dir)
+    touch(foo_file)
+    @test readdir(new_dir) == readdir(nedlink)
+
+    rm(foo_file)
+    rm(new_dir)
+    rm(nedlink)
 end
 
-if !Sys.iswindows()
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     link = joinpath(dir, "afilelink.txt")
     symlink(file, link)
+    @test stat(file) == stat(link)
+
     # relative link
-    cd(subdir)
     rellink = joinpath(subdir, "rel_afilelink.txt")
     relfile = joinpath("..", "afile.txt")
     symlink(relfile, rellink)
-    cd(pwd_)
+    @test stat(rellink) == stat(file)
 end
 
 using Random
@@ -1350,11 +1376,9 @@ end
 ############
 # Clean up #
 ############
-if !Sys.iswindows()
+if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     rm(link)
     rm(rellink)
-end
-if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     rm(dirlink)
     rm(relsubdirlink)
 end
