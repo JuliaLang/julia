@@ -156,6 +156,15 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 $(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
+### `JULIA_PKG_SERVER`
+
+Used by `Pkg.jl`, for loading packages. By default, `Pkg` uses https://pkg.julialang.org to
+host julia packages. You can use this environment variable to disable the use of this
+package server, and instead access the packages hosted by GitHub, by setting:
+```
+export JULIA_PKG_SERVER=""
+```
+
 ## External applications
 
 ### `JULIA_SHELL`
