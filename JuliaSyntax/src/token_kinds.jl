@@ -123,12 +123,17 @@
             LEFT_RIGHT_ARROW, # ↔
             LEFTWARDS_ARROW_WITH_STROKE, # ↚
             RIGHTWARDS_ARROW_WITH_STROKE, # ↛
+            LEFTWARDS_TWO_HEADED_ARROW,# ↞
             RIGHTWARDS_TWO_HEADED_ARROW, # ↠
+            LEFTWARDS_ARROW_WITH_TAIL, # ↢
             RIGHTWARDS_ARROW_WITH_TAIL, # ↣
+            LEFTWARDS_ARROW_FROM_BAR,# ↤
             RIGHTWARDS_ARROW_FROM_BAR, # ↦
             LEFT_RIGHT_ARROW_WITH_STROKE, # ↮
             LEFT_RIGHT_DOUBLE_ARROW_WITH_STROKE, # ⇎
+            LEFTWARDS_DOUBLE_ARROW_WITH_STROKE, # ⇍
             RIGHTWARDS_DOUBLE_ARROW_WITH_STROKE, # ⇏
+            LEFTWARDS_DOUBLE_ARROW, # ⇐
             RIGHTWARDS_DOUBLE_ARROW, # ⇒
             LEFT_RIGHT_DOUBLE_ARROW, # ⇔
             RIGHT_ARROW_WITH_SMALL_CIRCLE, # ⇴
@@ -234,6 +239,31 @@
             HALFWIDTH_LEFTWARDS_ARROW, # ￩
             HALFWIDTH_RIGHTWARDS_ARROW, # ￫
             CIRCLE_ARROW_RIGHT,
+            LEFT_SQUIGGLE_ARROW, # ⇜
+            RIGHT_SQUIGGLE_ARROW, # ⇝
+            LEFT_WAVE_ARROW, # ↜
+            RIGHT_WAVE_ARROW, # ↝
+            LEFTWARDS_ARROW_WITH_HOOK, # ↩
+            RIGHTWARDS_ARROW_WITH_HOOK, # ↪
+            LOOP_ARROW_LEFT, # ↫
+            LOOP_ARROW_RIGHT, # ↬
+            LEFT_HARPOON_UP, # ↼
+            LEFT_HARPOON_DOWN, # ↽
+            RIGHT_HARPOON_UP, # ⇀
+            RIGHT_HARPOON_DOWN, # ⇁
+            RIGHT_LEFT_ARROWS, # ⇄
+            LEFT_RIGHT_ARROWS, # ⇆
+            LEFT_LEFT_ARROWS, # ⇇
+            RIGHT_RIGHT_ARROWS, # ⇉
+            LEFT_RIGHT_HARPOONS, # ⇋
+            RIGHT_LEFT_HARPOONS, # ⇌
+            L_LEFT_ARROW, # ⇚
+            R_RIGHT_ARROW, # ⇛
+            LEFT_DASH_ARROW, # ⇠
+            RIGHT_DASH_ARROW, # ⇢
+            CURVE_ARROW_RIGHT, # ↷
+            CURVE_ARROW_LEFT,# ↶
+            CIRCLE_ARROW_LEFT,# ↺
         end_arrow,
 
         # Level 4
@@ -615,6 +645,7 @@
             SMALL_VEE_WITH_UNDERBAR, # ⩡
             LOGICAL_OR_WITH_DOUBLE_OVERBAR, # ⩢
             LOGICAL_OR_WITH_DOUBLE_UNDERBAR, # ⩣
+            BROKEN_BAR, # ¦
         end_plus,
 
         # Level 10
@@ -702,6 +733,8 @@
             LEFT_OUTER_JOIN, # ⟕
             RIGHT_OUTER_JOIN, # ⟖
             FULL_OUTER_JOIN, # ⟗
+            NOT_SLASH, # ⌿
+            BB_SEMI, # ⨟
         end_times,
 
         # Level 12
@@ -785,12 +818,17 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '↔' => LEFT_RIGHT_ARROW,
 '↚' => LEFTWARDS_ARROW_WITH_STROKE,
 '↛' => RIGHTWARDS_ARROW_WITH_STROKE,
+'↞' => LEFTWARDS_TWO_HEADED_ARROW,
 '↠' => RIGHTWARDS_TWO_HEADED_ARROW,
+'↢' => LEFTWARDS_ARROW_WITH_TAIL,
 '↣' => RIGHTWARDS_ARROW_WITH_TAIL,
+'↤' => LEFTWARDS_ARROW_FROM_BAR,
 '↦' => RIGHTWARDS_ARROW_FROM_BAR,
 '↮' => LEFT_RIGHT_ARROW_WITH_STROKE,
 '⇎' => LEFT_RIGHT_DOUBLE_ARROW_WITH_STROKE,
+'⇍' => LEFTWARDS_DOUBLE_ARROW_WITH_STROKE,
 '⇏' => RIGHTWARDS_DOUBLE_ARROW_WITH_STROKE,
+'⇐' => LEFTWARDS_DOUBLE_ARROW,
 '⇒' => RIGHTWARDS_DOUBLE_ARROW,
 '⇔' => LEFT_RIGHT_DOUBLE_ARROW,
 '⇴' => RIGHT_ARROW_WITH_SMALL_CIRCLE,
@@ -1331,7 +1369,35 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '⋱' => DDOTS,
 '⋰' => ADOTS,
 '⋯' => CDOTS,
-'↻' => CIRCLE_ARROW_RIGHT)
+'↻' => CIRCLE_ARROW_RIGHT, 
+'⇜' => LEFT_SQUIGGLE_ARROW,
+'⇝' => RIGHT_SQUIGGLE_ARROW, 
+'↜' => LEFT_WAVE_ARROW,
+'↝' => RIGHT_WAVE_ARROW,
+'↩' => LEFTWARDS_ARROW_WITH_HOOK,
+'↪' => RIGHTWARDS_ARROW_WITH_HOOK,
+'↫' => LOOP_ARROW_LEFT,
+'↬' => LOOP_ARROW_RIGHT,
+'↼' => LEFT_HARPOON_UP,
+'↽' => LEFT_HARPOON_DOWN,
+'⇀' => RIGHT_HARPOON_UP,
+'⇁' => RIGHT_HARPOON_DOWN,
+'⇄' => RIGHT_LEFT_ARROWS,
+'⇆' => LEFT_RIGHT_ARROWS,
+'⇇' => LEFT_LEFT_ARROWS,
+'⇉' => RIGHT_RIGHT_ARROWS,
+'⇋' => LEFT_RIGHT_HARPOONS,
+'⇌' => RIGHT_LEFT_HARPOONS,
+'⇚' => L_LEFT_ARROW,
+'⇛' => R_RIGHT_ARROW,
+'⇠' => LEFT_DASH_ARROW,
+'⇢' => RIGHT_DASH_ARROW,
+'↷' => CURVE_ARROW_RIGHT,
+'↶' => CURVE_ARROW_LEFT,
+'↺' => CIRCLE_ARROW_LEFT,
+'¦' => BROKEN_BAR,
+'⌿' => NOT_SLASH, 
+'⨟' => BB_SEMI)
 
 
 const UNICODE_OPS_REVERSE = Dict{Kind,Symbol}()
