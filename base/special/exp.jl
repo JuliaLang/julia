@@ -1,5 +1,3 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
-
 # magic rounding constant: 1.5*2^52 Adding, then subtracting it from a float rounds it to an Int.
 # This works because eps(MAGIC_ROUND_CONST(T)) == one(T), so adding it to a smaller number aligns the lsb to the 1s place.
 # Values for which this trick doesn't work are going to have outputs of 0 or Inf.
@@ -11,7 +9,7 @@ MAGIC_ROUND_CONST(::Type{Float32}) = 1.048576f7
 MAX_EXP(n::Val{2}, ::Type{Float32}) = 128.0f0
 MAX_EXP(n::Val{2}, ::Type{Float64}) = 1024.0
 MAX_EXP(n::Val{:ℯ}, ::Type{Float32}) = 88.72284f0
-MAX_EXP(n::Val{:ℯ}, ::Type{Float64}) = 709.7827128933841
+MAX_EXP(n::Val{:ℯ}, ::Type{Float64}) = 709.782712893384
 MAX_EXP(n::Val{10}, ::Type{Float32}) = 38.53184f0
 MAX_EXP(n::Val{10}, ::Type{Float64}) = 308.25471555991675
 
@@ -63,11 +61,6 @@ LogBU(::Val{10}, ::Type{Float32}) = -0.3010254f0
 LogBL(::Val{2}, ::Type{Float32}) = 0.0f0
 LogBL(::Val{:ℯ}, ::Type{Float32}) = -1.4286068f-6
 LogBL(::Val{10}, ::Type{Float32}) = -4.605039f-6
-
-# -log(base, 2) as a Float32 for Float16 version.
-LogB(::Val{2}, ::Type{Float16}) = -1.0f0
-LogB(::Val{:ℯ}, ::Type{Float16}) = -0.6931472f0
-LogB(::Val{10}, ::Type{Float16}) = -0.30103f0
 
 # Range reduced kernels
 @inline function expm1b_kernel(::Val{2}, x::Float64)
@@ -306,7 +299,8 @@ end
     x = T(a)
     N_float = round(x*LogBINV(base, T))
     N = unsafe_trunc(Int32, N_float)
-    r = muladd(N_float, LogB(base, Float16), x)
+    r = muladd(N_float, LogB(base, T), x)
+    r = muladd(N_float, LogBL(base, T), r)
     small_part = expb_kernel(base, r)
     if !(abs(x) <= 25)
         x > 16 && return Inf16
@@ -341,6 +335,7 @@ julia> exp(im * pi) ≈ cis(pi)
 true
 ```
 """ exp(x::Real)
+
 
 """
     exp2(x)
