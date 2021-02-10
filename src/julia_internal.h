@@ -473,6 +473,7 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty);
 jl_value_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
 int jl_subtype_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
+JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b);
 // specificity comparison assuming !(a <: b) and !(b <: a)
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
