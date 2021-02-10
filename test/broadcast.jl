@@ -954,10 +954,12 @@ p0 = copy(p)
 @testset "Issue #5187: Broadcasting of short-circuiting ops" begin
     ex = Meta.parse("A .< 1 .|| A .> 2")
     @test ex == :((A .< 1) .|| (A .> 2))
-    @test ex.head == Symbol(".||")
+    @test ex.head == :call
+    @test ex.args[1] == Symbol(".||")
     ex = Meta.parse("A .< 1 .&& A .> 2")
     @test ex == :((A .< 1) .&& (A .> 2))
-    @test ex.head == Symbol(".&&")
+    @test ex.head == :call
+    @test ex.args[1] == Symbol(".&&")
 
     A = -1:4
     @test (A .< 1 .|| A .> 2) == [true, true, false, false, true, true]
