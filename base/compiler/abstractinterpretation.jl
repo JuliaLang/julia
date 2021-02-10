@@ -1202,8 +1202,8 @@ function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, vtypes::
     argtypes = Vector{Any}(undef, n)
     @inbounds for i = 1:n
         ai = abstract_eval_value(interp, ea[i], vtypes, sv)
-        if bail_out_statement(interp, ai, sv)
-            return Bottom
+        if ai === Bottom
+            return nothing
         end
         argtypes[i] = ai
     end
@@ -1218,7 +1218,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     if e.head === :call
         ea = e.args
         argtypes = collect_argtypes(interp, ea, vtypes, sv)
-        if argtypes === Bottom
+        if argtypes === nothing
             t = Bottom
         else
             callinfo = abstract_call(interp, ea, argtypes, sv)
@@ -1280,7 +1280,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         if length(e.args) >= 5
             ea = e.args
             argtypes = collect_argtypes(interp, ea, vtypes, sv)
-            if argtypes === Bottom
+            if argtypes === nothing
                 t = Bottom
             else
                 t = _opaque_closure_tfunc(argtypes[1], argtypes[2], argtypes[3],
@@ -1415,7 +1415,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 if condt === Bottom
                     empty!(frame.pclimitations)
                 end
-                if bail_out_local(interp, condt, frame)
+                if condt === Bottom
                     break
                 end
                 condval = maybe_extract_const_bool(condt)
@@ -1506,7 +1506,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             else
                 if hd === :(=)
                     t = abstract_eval_statement(interp, stmt.args[2], changes, frame)
-                    if bail_out_local(interp, t, frame)
+                    if t === Bottom
                         break
                     end
                     frame.src.ssavaluetypes[pc] = t
@@ -1523,7 +1523,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # these do not generate code
                 else
                     t = abstract_eval_statement(interp, stmt, changes, frame)
-                    if bail_out_local(interp, t, frame)
+                    if t === Bottom
                         break
                     end
                     if !isempty(frame.ssavalue_uses[pc])
