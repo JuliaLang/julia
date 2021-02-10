@@ -506,7 +506,7 @@ static int exec_program(char *program)
         int shown_err = 0;
         jl_printf(JL_STDERR, "error during bootstrap:\n");
         jl_value_t *exc = jl_current_exception();
-        jl_value_t *showf = jl_get_function(jl_base_module, "show");
+        jl_value_t *showf = jl_base_module ? jl_get_function(jl_base_module, "show") : NULL;
         if (showf) {
             jl_value_t *errs = jl_stderr_obj();
             if (errs) {
