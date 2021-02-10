@@ -390,6 +390,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        cb = first(t.cond.waitq)
         Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
@@ -397,29 +398,35 @@ end
         @test tc[] == 0
         yield()
         @test tc[] == 1
+        @test istaskdone(cb)
     end
 
     let tc = Ref(0)
         t = Timer(0) do t
             tc[] += 1
         end
+        cb = first(t.cond.waitq)
         Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
         @test !isopen(t)
-        sleep(0.1)
+        wait(cb)
         @test tc[] == 0
+        @test t.handle === C_NULL
     end
 
     let tc = Ref(0)
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
+        cb = first(async.cond.waitq)
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        @test isempty(Base.Workqueue)
         Base.process_events() # schedule event
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
+        @test length(Base.Workqueue) == 1
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         @test tc[] == 0
         yield() # consume event
@@ -440,13 +447,16 @@ end
         yield() # consume event & then close
         @test tc[] == 3
         sleep(0.1) # no further events
+        wait(cb)
         @test tc[] == 3
+        @test async.handle === C_NULL
     end
 
     let tc = Ref(0)
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
+        cb = first(async.cond.waitq)
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -457,8 +467,10 @@ end
         @test tc[] == 0
         yield() # consume event & then close
         @test tc[] == 1
-        sleep(0.1)
+        sleep(0.1) # no further events
+        wait(cb)
         @test tc[] == 1
+        @test async.handle === C_NULL
     end
 end
 

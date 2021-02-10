@@ -534,7 +534,6 @@ for f in (:log2, :log10)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
-        @inline ($f)(x::Real) = ($f)(float(x))
     end
 end
 
@@ -565,7 +564,7 @@ julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
 ```
 """
-sqrt(x::Real) = sqrt(float(x))
+sqrt(x)
 
 """
     hypot(x, y)
@@ -1153,7 +1152,6 @@ Return positive part of the high word of `x` as a `UInt32`.
 # More special functions
 include("special/cbrt.jl")
 include("special/exp.jl")
-include("special/ldexp_exp.jl")
 include("special/hyperbolic.jl")
 include("special/trig.jl")
 include("special/rem_pio2.jl")
