@@ -2696,3 +2696,14 @@ end == 4
     x25652 = x+3
     x25652
 end == 4
+
+@testset "issue #39600" begin
+    A = 1:.5:2
+    @test (!).(1 .< A .< 2) == [true, false, true]
+    @test .!(1 .< A .< 2) == [true, false, true]
+    @test (.!)(1 .< A .< 2) == [true, false, true]
+
+    @test ncalls_in_lowered(:((!).(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:(.!(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:((.!)(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
+end
