@@ -1329,8 +1329,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             delete!(W, pc)
             frame.currpc = pc
             frame.cur_hand = frame.handler_at[pc]
-            edges = frame.stmt_edges[pc]
-            edges === nothing || empty!(edges)
+            frame.stmt_edges[pc] === nothing || empty!(frame.stmt_edges[pc])
+            frame.stmt_info[pc] = nothing
             stmt = frame.src.code[pc]
             changes = s[pc]::VarTable
             t = nothing
