@@ -39,6 +39,8 @@ function has_nontrivial_const_info(@nospecialize t)
     return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
 end
 
+has_const_info(@nospecialize x) = !isa(x, Type) || isType(x)
+
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for

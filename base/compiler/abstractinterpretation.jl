@@ -1308,6 +1308,28 @@ function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     return typ
 end
 
+function widenreturn(@nospecialize rt)
+    # only propagate information we know we can store
+    # and is valid and good inter-procedurally
+    rt = widenconditional(rt)
+    isa(rt, Const) && return rt
+    isa(rt, Type) && return rt
+    if isa(rt, PartialStruct)
+        fields = copy(rt.fields)
+        haveconst = false
+        for i in 1:length(fields)
+            a = widenreturn(fields[i])
+            if !haveconst && has_const_info(a)
+                # TODO: consider adding && const_prop_profitable(a) here?
+                haveconst = true
+            end
+            fields[i] = a
+        end
+        haveconst && return PartialStruct(rt.typ, fields)
+    end
+    return widenconst(rt)
+end
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
@@ -1385,12 +1407,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
             elseif isa(stmt, ReturnNode)
                 pc´ = n + 1
-                rt = widenconditional(abstract_eval_value(interp, stmt.val, changes, frame))
-                if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct)
-                    # only propagate information we know we can store
-                    # and is valid inter-procedurally
-                    rt = widenconst(rt)
-                end
+                rt = widenreturn(abstract_eval_value(interp, stmt.val, changes, frame))
                 # copy limitations to return value
                 if !isempty(frame.pclimitations)
                     union!(frame.limitations, frame.pclimitations)
