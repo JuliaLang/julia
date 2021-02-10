@@ -239,7 +239,7 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
                     twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
                     return (twopk*small_part)*(2f0^(-24))
                 end
-                N == exponent_max(T) && return small_part * T(2.0) * T(2.0)^(exponent_max(T) - 1)
+                N == (exponent_max(T)+1) && return small_part * T(2.0) * T(2.0)^exponent_max(T)
             end
             twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
             return twopk*small_part
@@ -376,6 +376,22 @@ end
     small_part = r*hi
     twopk = reinterpret(Float64, (N+1023) << 52)
     x > MAX_EXP(Float32) && return Inf32
-    N == exponent_max(T) && return small_part * T(2.0) * T(2.0)^(exponent_max(T) - 1)
+    N == exponent_max(Float32) && return small_part * T(2.0) * T(2.0)^(exponent_max(T) - 1)
     return Float32(muladd(twopk, small_part, twopk-1.0))
 end
+
+"""
+    expm1(x)
+
+Accurately compute ``e^x-1``. It avoids the loss of precision involved in the direct
+evaluation of exp(x)-1 for small values of x.
+# Examples
+```jldoctest
+julia> expm1(1e-16)
+1.0e-16
+
+julia> exp(1e-16) - 1
+0.0
+```
+"""
+expm1(x)
