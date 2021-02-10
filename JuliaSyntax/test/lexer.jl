@@ -583,6 +583,10 @@ end
     @test collect(tokenize(s, Tokens.RawToken))[1].kind == Tokens.ERROR
 end
 
+@testset "allow prime after end" begin
+    @test tok("begin end'", 4).kind === Tokens.PRIME
+end
+
 @testset "new ops" begin
     ops = [raw"= += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= |= &= ⊻= ≔ ⩴ ≕ ~ := $="
     raw"=>"
@@ -605,3 +609,4 @@ end
     allops = split(join(ops, " "), " ")
     @test all(s->Base.isoperator(Symbol(s)) == Tokens.isoperator(first(collect(tokenize(s))).kind), allops)
 end
+

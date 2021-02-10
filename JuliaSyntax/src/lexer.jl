@@ -717,7 +717,8 @@ function lex_prime(l, doemit = true)
         l.last_token ==  Tokens.RPAREN ||
         l.last_token ==  Tokens.RSQUARE ||
         l.last_token ==  Tokens.RBRACE ||
-        l.last_token == Tokens.PRIME || isliteral(l.last_token)
+        l.last_token == Tokens.PRIME || 
+        l.last_token == Tokens.END || isliteral(l.last_token)
         return emit(l, Tokens.PRIME)
     else
         readon(l)
