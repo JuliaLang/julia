@@ -97,10 +97,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     napplicable = length(applicable)
     rettype = Bottom
     edgecycle = false
-    edges = Any[]
+    edges = MethodInstance[]
     nonbot = 0  # the index of the only non-Bottom inference result if > 0
     seen = 0    # number of signatures actually inferred
-    istoplevel = sv.linfo.def isa Module
     multiple_matches = napplicable > 1
 
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
@@ -115,7 +114,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         match = applicable[i]::MethodMatch
         method = match.method
         sig = match.spec_types
-        if istoplevel && !isdispatchtuple(sig)
+        if bail_out_toplevel_call(interp, sig, sv)
             # only infer concrete call sites in top-level expressions
             add_remark!(interp, sv, "Refusing to infer non-concrete call site in top-level expression")
             rettype = Any
@@ -135,7 +134,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
                 edgecycle |= edgecycle1::Bool
                 this_rt = tmerge(this_rt, rt)
-                this_rt === Any && break
+                if bail_out_call(interp, this_rt, sv)
+                    break
+                end
             end
         else
             this_rt, edgecycle1, edge = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
@@ -153,7 +154,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
         seen += 1
         rettype = tmerge(rettype, this_rt)
-        rettype === Any && break
+        if bail_out_call(interp, rettype, sv)
+            break
+        end
     end
     # try constant propagation if only 1 method is inferred to non-Bottom
     # this is in preparation for inlining, or improving the return result
@@ -179,18 +182,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # and avoid keeping track of a more complex result type.
         rettype = Any
     end
-    if !(rettype === Any) # adding a new method couldn't refine (widen) this type
-        for edge in edges
-            add_backedge!(edge::MethodInstance, sv)
-        end
-        for (thisfullmatch, mt) in zip(fullmatch, mts)
-            if !thisfullmatch
-                # also need an edge to the method table in case something gets
-                # added that did not intersect with any existing method
-                add_mt_backedge!(mt, atype, sv)
-            end
-        end
-    end
+    add_call_backedges!(interp, rettype, edges, fullmatch, mts, atype, sv)
     #print("=> ", rettype, "\n")
     if rettype isa LimitedAccuracy
         union!(sv.pclimitations, rettype.causes)
@@ -205,6 +197,27 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     return CallMeta(rettype, info)
 end
 
+function add_call_backedges!(interp::AbstractInterpreter,
+                             @nospecialize(rettype),
+                             edges::Vector{MethodInstance},
+                             fullmatch::Vector{Bool}, mts::Vector{Core.MethodTable}, @nospecialize(atype),
+                             sv::InferenceState)
+    if rettype === Any
+        # for `NativeInterpreter`, we don't add backedges when a new method couldn't refine
+        # (widen) this type
+        return
+    end
+    for edge in edges
+        add_backedge!(edge, sv)
+    end
+    for (thisfullmatch, mt) in zip(fullmatch, mts)
+        if !thisfullmatch
+            # also need an edge to the method table in case something gets
+            # added that did not intersect with any existing method
+            add_mt_backedge!(mt, atype, sv)
+        end
+    end
+end
 
 function const_prop_profitable(@nospecialize(arg))
     # have new information from argtypes that wasn't available from the signature
@@ -746,7 +759,7 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
         call = abstract_call(interp, nothing, ct, sv, max_methods)
         push!(retinfos, ApplyCallInfo(call.info, arginfo))
         res = tmerge(res, call.rt)
-        if res === Any
+        if bail_out_apply(interp, res, sv)
             # No point carrying forward the info, we're not gonna inline it anyway
             retinfo = nothing
             break
@@ -1171,7 +1184,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         argtypes = Vector{Any}(undef, n)
         @inbounds for i = 1:n
             ai = abstract_eval_value(interp, ea[i], vtypes, sv)
-            if ai === Bottom
+            if bail_out_statement(interp, ai, sv)
                 return Bottom
             end
             argtypes[i] = ai
@@ -1349,6 +1362,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 condt = abstract_eval_value(interp, stmt.cond, s[pc], frame)
                 if condt === Bottom
                     empty!(frame.pclimitations)
+                end
+                if bail_out_local(interp, condt, frame)
                     break
                 end
                 condval = maybe_extract_const_bool(condt)
@@ -1440,7 +1455,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             else
                 if hd === :(=)
                     t = abstract_eval_statement(interp, stmt.args[2], changes, frame)
-                    t === Bottom && break
+                    if bail_out_local(interp, t, frame)
+                        break
+                    end
                     frame.src.ssavaluetypes[pc] = t
                     lhs = stmt.args[1]
                     if isa(lhs, Slot)
@@ -1455,7 +1472,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # these do not generate code
                 else
                     t = abstract_eval_statement(interp, stmt, changes, frame)
-                    t === Bottom && break
+                    if bail_out_local(interp, t, frame)
+                        break
+                    end
                     if !isempty(frame.ssavalue_uses[pc])
                         record_ssa_assign(pc, t, frame)
                     else
