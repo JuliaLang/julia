@@ -89,6 +89,9 @@ attributes are used for the I/O stream passed to `f`.  The optional `sizehint`
 is a suggested size (in bytes) to allocate for the buffer used to write the
 string.
 
+!!! compat "Julia 1.7"
+    Passing a tuple to keyword `context` requires Julia 1.7 or later.
+
 # Examples
 ```jldoctest
 julia> sprint(show, 66.66666; context=:compact => true)
