@@ -156,6 +156,15 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 $(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
+### `JULIA_PKG_SERVER`
+
+Used by `Pkg.jl`, for downloading packages and updating the registry. By default, `Pkg` uses `https://pkg.julialang.org` to
+fetch Julia packages. You can use this environment variable to select a different server. In addition, you can disable the use of the
+PkgServer protocol, and instead access the packages directly from their hosts (GitHub, GitLab, etc.) by setting:
+```
+export JULIA_PKG_SERVER=""
+```
+
 ## External applications
 
 ### `JULIA_SHELL`
@@ -339,5 +348,4 @@ On debug builds of Julia this is always enabled. Recommended to use with `-g 2`.
 ### `JULIA_LLVM_ARGS`
 
 Arguments to be passed to the LLVM backend.
-
 
