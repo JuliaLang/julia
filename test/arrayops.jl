@@ -2898,3 +2898,9 @@ end
     @test as isa TSlow{Int,3}
     @test size(as) == (3, 5, 1)
 end
+
+@testset "0-dimensional shape checking #39608" begin
+    @test [fill(1); [2; 2]] == [1; 2; 2]
+    @test [fill(1); fill(2, (2,1,1))] == reshape([1; 2; 2], (3, 1, 1))
+    @test_throws DimensionMismatch [fill(1); rand(2, 2, 2)]
+end
