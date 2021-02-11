@@ -4,7 +4,7 @@ on:
     types: [opened]
   pull_request_target:
     branches:
-      - main
+      - master
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
