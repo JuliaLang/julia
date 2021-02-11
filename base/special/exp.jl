@@ -270,6 +270,7 @@ Compute the natural base exponential of `x`, in other words ``e^x``.
 ```jldoctest
 julia> exp(1.0)
 2.718281828459045
+```
 """ exp(x::Real)
 
 
