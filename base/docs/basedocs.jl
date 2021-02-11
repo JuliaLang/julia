@@ -277,6 +277,19 @@ julia> z
 kw"global"
 
 """
+    ' '
+
+the single-quote character delimits Char (that is, character) literals.
+
+# Examples
+```jldoctest
+julia> println('j')
+j
+```
+"""
+kw"' '"
+
+"""
     =
 
 `=` is the assignment operator.
