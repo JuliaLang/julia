@@ -1,0 +1,16 @@
+name: Welcome first time contributors
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    branches:
+      - main
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/first-interaction@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-message: "Hey, thank you for bringing this issue up and welcome to the Julia Community. We will review this and comment here. Welcome and thanks again!"
+        pr-message: "Thank you for opening your first pull request to this repo! The Julia Language is community driven and relies on updates from folks like you. Welcome and thanks again."
