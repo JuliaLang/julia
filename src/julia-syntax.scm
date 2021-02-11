@@ -1926,13 +1926,24 @@
          (blk? (and (pair? test) (eq? (car test) 'block)))
          (stmts (if blk? (cdr (butlast test)) '()))
          (test  (if blk? (last test) test)))
-    (if (and (pair? test) (eq? (car test) '&&))
-        (let ((clauses `(&& ,@(map expand-forms (cdr (flatten-ex '&& test))))))
-          `(if ,(if blk?
-                    `(block ,@(map expand-forms stmts) ,clauses)
-                    clauses)
-               ,@(map expand-forms (cddr e))))
-        (cons (car e) (map expand-forms (cdr e))))))
+    (cond ((and (pair? test) (eq? (car test) '&&))
+           (let ((clauses `(&& ,@(map expand-forms (cdr (flatten-ex '&& test))))))
+             `(if ,(if blk?
+                       `(block ,@(map expand-forms stmts) ,clauses)
+                       clauses)
+                  ,@(map expand-forms (cddr e)))))
+          ((and (pair? test) (eq? (car test) '|\|\||))
+           (let ((clauses (cdr (flatten-ex '|\|\|| test)))
+                 (label (gensym)))
+             (define (nest-if conds)
+               (if (length= conds 1)
+                   `(if ,(car conds) (block (symboliclabel ,label) ,(caddr e)) ,@(cdddr e))
+                   `(if ,(car conds) (symbolicgoto ,label) ,(nest-if (cdr conds)))))
+             (expand-forms
+               (if blk?
+                   (nest-if `((block ,@stmts ,(car clauses)) ,@(cdr clauses)))
+                   (nest-if clauses)))))
+          (else (cons (car e) (map expand-forms (cdr e)))))))
 
 (define (expand-vcat e
                      (vcat '((top vcat)))
