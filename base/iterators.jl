@@ -556,6 +556,8 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
+If the iterator is empty, returns `nothing` (like `iterate`).
+
 # Examples
 ```jldoctest
 julia> (a, rest) = Iterators.peel("abc");
@@ -571,7 +573,7 @@ julia> collect(rest)
 """
 function peel(itr)
     y = iterate(itr)
-    y === nothing && throw(BoundsError())
+    y === nothing && return y
     val, s = y
     val, rest(itr, s)
 end

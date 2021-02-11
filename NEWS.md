@@ -10,6 +10,7 @@ New language features
 Language changes
 ----------------
 
+* `Iterators.peel(itr)` now returns `nothing` when `itr` is empty rather than throwing a `BoundsError`. ([#39569])
 
 Compiler/Runtime improvements
 -----------------------------
