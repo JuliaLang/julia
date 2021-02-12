@@ -192,7 +192,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_worker,
            opt_bind_to,
            opt_handle_signals,
-           opt_optlevel_modmin,
+           opt_optlevel_min,
            opt_output_o,
            opt_output_asm,
            opt_output_ji,
@@ -239,7 +239,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
-        { "min-optlevel", optional_argument, 0, opt_optlevel_modmin },
+        { "min-optlevel", optional_argument, 0, opt_optlevel_min },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },
@@ -540,7 +540,7 @@ restart_switch:
                 jl_options.opt_level = 3;
             }
             break;
-        case opt_optlevel_modmin: // minimum module optimize level
+        case opt_optlevel_min: // minimum module optimize level
             if (optarg != NULL) {
                 if (!strcmp(optarg,"0"))
                     jl_options.opt_level_min = 0;

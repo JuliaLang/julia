@@ -588,13 +588,13 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
     JL_TIMING(LLVM_OPT);
 
     int optlevel;
-    int optlevel_modmin;
+    int optlevel_min;
     if (jl_generating_output()) {
         optlevel = 0;
     }
     else {
         optlevel = jl_options.opt_level;
-        optlevel_modmin = jl_options.opt_level_min;
+        optlevel_min = jl_options.opt_level_min;
         for (auto &F : M.functions()) {
             if (!F.getBasicBlockList().empty()) {
                 Attribute attr = F.getFnAttribute("julia-optimization-level");
@@ -602,7 +602,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
                 if (val != "") {
                     int ol = (int)val[0] - '0';
                     if (ol >= 0 && ol < optlevel)
-                        optlevel = std::max(ol, optlevel_modmin);
+                        optlevel = std::max(ol, optlevel_min);
                 }
             }
         }
