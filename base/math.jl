@@ -303,7 +303,8 @@ Stacktrace:
 ```
 
 !!! note
-    If `b` is a power of 2 or 10, [`log2`](@ref) or [`log10`](@ref) should be used, as these will
+    If `b` is a power of 2 or 10, [`
+`](@ref) or [`log10`](@ref) should be used, as these will
     typically be faster and more accurate. For example,
 
     ```jldoctest
@@ -475,9 +476,9 @@ julia> log2(10)
 
 julia> log2(-2)
 ERROR: DomainError with -2.0:
-NaN result for non-NaN input.
+log2 will only return a complex result if called with a complex argument. Try log2(Complex(x)).
 Stacktrace:
- [1] nan_dom_err at ./math.jl:325 [inlined]
+ [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
 ```
 """
@@ -499,9 +500,9 @@ julia> log10(2)
 
 julia> log10(-2)
 ERROR: DomainError with -2.0:
-NaN result for non-NaN input.
+log10 will only return a complex result if called with a complex argument. Try log10(Complex(x)).
 Stacktrace:
- [1] nan_dom_err at ./math.jl:325 [inlined]
+ [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
 ```
 """
