@@ -2325,10 +2325,11 @@ julia> map(+, [1, 2, 3], [10, 20, 30])
  33
 ```
 """
-map(f, A) = collect(Generator(f,A))
+map(f, A) = collect(Generator(f, _map_check(A)))
 
-map(f, ::AbstractDict) = error("map is not defined on dictionaries")
-map(f, ::AbstractSet) = error("map is not defined on sets")
+_map_check(c) = c
+_map_check(::AbstractDict) = error("map is not defined on dictionaries")
+_map_check(::AbstractSet) = error("map is not defined on sets")
 
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
