@@ -313,7 +313,7 @@ precompile_test_harness(false) do dir
                  :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils,
                  :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :Pkg, :Printf,
-                 :Profile, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
+                 :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
                  :SparseArrays, :Statistics, :SuiteSparse, :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),
