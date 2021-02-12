@@ -988,9 +988,12 @@ end
 
 @testset "map on Dicts/Sets is forbidden" begin
     s = Set([1,2,3])
-    d = Dict("a"=>"b")
+    d = Dict(:a=>10, :b=>20, :c=>30)
     @test_throws ErrorException map(string, s)
     @test_throws ErrorException map(string, d)
+    @test_throws ErrorException map(string, s, s)
+    @test_throws ErrorException map(string, d, d)
+    @test_throws ErrorException map(string, s, d)
 end
 
 @testset "Issue 30145" begin

@@ -2331,6 +2331,9 @@ _map_check(c) = c
 _map_check(::AbstractDict) = error("map is not defined on dictionaries")
 _map_check(::AbstractSet) = error("map is not defined on sets")
 
+_map_zip_check() = ()
+_map_zip_check(c, cs...) = (_map_check(c), _map_zip_check(cs...)...)
+
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
     for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
@@ -2386,7 +2389,7 @@ function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
 end
 
 map(f) = f()
-map(f, iters...) = collect(Generator(f, iters...))
+map(f, iters...) = collect(Generator(f, _map_zip_check(iters...)...))
 
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
