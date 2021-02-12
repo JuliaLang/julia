@@ -1860,7 +1860,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     if (x == y ||
         (jl_typeof(x) == jl_typeof(y) &&
          (jl_is_unionall(y) || jl_is_uniontype(y)) &&
-         jl_egal(x, y))) {
+         jl_types_egal(x, y))) {
         if (envsz != 0) { // quickly copy env from x
             jl_unionall_t *ua = (jl_unionall_t*)x;
             int i;
@@ -1926,7 +1926,9 @@ JL_DLLEXPORT int jl_subtype(jl_value_t *x, jl_value_t *y)
 
 JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
 {
-    if (obviously_egal(a, b))
+    if (a == b)
+        return 1;
+    if (jl_typeof(a) == jl_typeof(b) && jl_types_egal(a, b))
         return 1;
     if (obviously_unequal(a, b))
         return 0;
@@ -1945,11 +1947,6 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type) {
         subtype_ab = 1;
     }
-    else if (jl_typeof(a) == jl_typeof(b) &&
-        (jl_is_unionall(b) || jl_is_uniontype(b)) &&
-        jl_egal(a, b)) {
-        subtype_ab = 1;
-    }
     else if (jl_obvious_subtype(a, b, &subtype_ab)) {
 #ifdef NDEBUG
         if (subtype_ab == 0)
@@ -1962,11 +1959,6 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
     // next check if b <: a has an obvious answer
     int subtype_ba = 2;
     if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type) {
-        subtype_ba = 1;
-    }
-    else if (jl_typeof(b) == jl_typeof(a) &&
-        (jl_is_unionall(a) || jl_is_uniontype(a)) &&
-        jl_egal(b, a)) {
         subtype_ba = 1;
     }
     else if (jl_obvious_subtype(b, a, &subtype_ba)) {
