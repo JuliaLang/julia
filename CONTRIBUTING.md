@@ -246,6 +246,18 @@ process before running the corresponding test. This can be useful as a shortcut
 on the command line (since tests aren't always designed to be run outside the
 runtest harness).
 
+#### Bumping version of dependencies
+Some Julia standard libraries (stdlib) are developed in their own repositories.
+The version of, e.g. `Pkg`, is determined by e.g. `stdlib/Pkg.version`.
+`make -C stdlib` will create new files in `deps/checksums`.
+The old checksum files should be removed from the repository.
+For a script to perform these steps, see `contrib/bump-stdlib.jl`, e.g.
+
+```
+$ cd $JULIAHOME
+$ contrib/bump-stdlib.jl Pkg 47105aaefb7eb8bda5c002315ccf1a28be8fdabb
+```
+
 ### Code Formatting Guidelines
 
 #### General Formatting Guidelines for Julia code contributions
