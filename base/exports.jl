@@ -1002,6 +1002,9 @@ export
     @specialize,
     @polly,
 
+    # scope manipulation
+    @noscope,
+
     @assert,
     @__dot__,
     @enum,
