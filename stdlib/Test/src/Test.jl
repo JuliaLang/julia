@@ -553,6 +553,7 @@ function do_test(result::ExecutionResult, orig_expr)
         @assert isa(result, Threw)
         testres = Error(:test_error, orig_expr, result.exception, result.backtrace, result.source)
     end
+    isa(testres, Pass) || ccall(:jl_breakpoint, Cvoid, (Any,), result)
     record(get_testset(), testres)
 end
 
