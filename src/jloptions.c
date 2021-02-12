@@ -123,7 +123,7 @@ static const char opts[]  =
     // code generation options
     " -C, --cpu-target <target> Limit usage of CPU features up to <target>; set to \"help\" to see the available options\n"
     " -O, --optimize={0,1,2,3}  Set the optimization level (default level is 2 if unspecified or 3 if used without a level)\n"
-    " --min-optlevel={0,1,2,3}  Set the lower bound on per-module optimization (default is 0)\n"
+    " --min-optlevel={0,1,2,3}  Set a lower bound on the optimization level (default is 0)\n"
     " -g, -g <level>            Enable / Set the level of debug info generation"
 #ifdef JL_DEBUG_BUILD
         " (default level for julia-debug is 2 if unspecified or if used without a level)\n"
@@ -239,7 +239,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
-        { "min-optlevel", optional_argument, 0, opt_optlevel_min },
+        { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },

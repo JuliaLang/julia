@@ -602,10 +602,11 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
                 if (val != "") {
                     int ol = (int)val[0] - '0';
                     if (ol >= 0 && ol < optlevel)
-                        optlevel = std::max(ol, optlevel_min);
+                        optlevel = ol;
                 }
             }
         }
+        optlevel = std::max(optlevel, optlevel_min);
     }
     if (optlevel == 0)
         jit.PM0.run(M);
