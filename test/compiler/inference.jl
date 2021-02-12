@@ -2994,3 +2994,11 @@ end
 # issue #40804
 @test Base.return_types(()) do; ===(); end == Any[Union{}]
 @test Base.return_types(()) do; typeassert(); end == Any[Union{}]
+
+# issue #39611
+Base.return_types((Union{Int,Nothing},)) do x
+    if x === nothing || x < 0
+        return 0
+    end
+    x
+end == [Int]
