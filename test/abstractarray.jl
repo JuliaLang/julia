@@ -994,6 +994,12 @@ end
     @test_throws ErrorException map(string, s, s)
     @test_throws ErrorException map(string, d, d)
     @test_throws ErrorException map(string, s, d)
+
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), s)
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), d)
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), s, s)
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), d, d)
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), s, d)
 end
 
 @testset "Issue 30145" begin
