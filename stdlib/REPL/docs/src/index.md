@@ -76,6 +76,8 @@ julia> rand(2, 2)
  0.6244375177790158  0.9777957560761545
 ```
 
+As a shorthand, `repl_compact()` exists to toggle, set or unset `Base.active_repl.options.iocontext[:compact]`.
+
 In order to define automatically the values of this dictionary at startup time, one can use the
 [`atreplinit`](@ref) function in the `~/.julia/config/startup.jl` file, for example:
 ```julia

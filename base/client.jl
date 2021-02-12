@@ -369,6 +369,28 @@ function load_InteractiveUtils()
     return getfield(Main, :InteractiveUtils)
 end
 
+# REPL options helpers
+
+"""
+    repl_compact()
+    repl_compact(::Nothing)
+    repl_compact(b::Bool)
+
+Shorthand for toggling or setting `Base.active_repl.options.iocontext[:compact]` to control whether and how the repl
+specifies a `:compact` option in the IOContext, allowing `show` methods to customize level of detail and formatting.
+
+e.g.
+`repl_compact()`: toggles compact setting, starting with true if unset
+`repl_compact(nothing)`: removes the compact setting, to allow show methods to assume default behavior
+`repl_compact(true)`: sets the compact setting
+"""
+function repl_compact(b::Bool)
+    Base.active_repl.options.iocontext[:compact] = b
+    return Base.active_repl.options.iocontext
+end
+repl_compact(::Nothing) = delete!(Base.active_repl.options.iocontext, :compact)
+repl_compact() = repl_compact(!get(Base.active_repl.options.iocontext, :compact, false))
+
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
     global active_repl

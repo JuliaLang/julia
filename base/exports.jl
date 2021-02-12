@@ -784,6 +784,7 @@ export
 # misc
     atexit,
     atreplinit,
+    repl_compact,
     exit,
     ntuple,
 
