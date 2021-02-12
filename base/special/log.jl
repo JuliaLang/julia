@@ -305,7 +305,7 @@ function _log(x::Float64, base, func)
     end
 end
 
-function $func(x::Float32, base, func)
+function _log(x::Float32, base, func)
     if x > 0f0
         x == Inf32 && return x
 
