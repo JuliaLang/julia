@@ -262,79 +262,82 @@ end
     Float32(logb(Float32, base)*(u64 + q))
 end
 
-for (func, base) in (:log2=>Val(2), :log=>Val(:ℯ), :log10=>Val(10))
-    @eval begin
-        function $func(x::Float64)
-            if x > 0.0
-                x == Inf && return x
+log2(x::Float32)  = _log(x, Val(2),  :log2)
+log(x::Float32)   = _log(x, Val(:ℯ), :log)
+log10(x::Float32) = _log(x, Val(10), :log10)
+log2(x::Float64)  = _log(x, Val(2),  :log2)
+log(x::Float64)   = _log(x, Val(:ℯ), :log)
+log10(x::Float64) = _log(x, Val(10), :log10)
 
-                # Step 2
-                if 0.9394130628134757 < x < 1.0644944589178595
-                    f = x-1.0
-                    return log_proc2(f, $base)
-                end
+function _log(x::Float64, base, func)
+    if x > 0.0
+        x == Inf && return x
 
-                # Step 3
-                xu = reinterpret(UInt64,x)
-                m = Int(xu >> 52) & 0x07ff
-                if m == 0 # x is subnormal
-                    x *= 1.8014398509481984e16 # 0x1p54, normalise significand
-                    xu = reinterpret(UInt64,x)
-                    m = Int(xu >> 52) & 0x07ff - 54
-                end
-                m -= 1023
-                y = reinterpret(Float64,(xu & 0x000f_ffff_ffff_ffff) | 0x3ff0_0000_0000_0000)
-
-                mf = Float64(m)
-                F = (y + 3.5184372088832e13) - 3.5184372088832e13 # 0x1p-7*round(0x1p7*y)
-                f = y-F
-                jp = unsafe_trunc(Int,128.0*F)-127
-
-                return log_proc1(y,mf,F,f,jp,$base)
-            elseif x == 0.0
-                -Inf
-            elseif isnan(x)
-                NaN
-            else
-                throw_complex_domainerror(Symbol($func), x)
-            end
+        # Step 2
+        if 0.9394130628134757 < x < 1.0644944589178595
+            f = x-1.0
+            return log_proc2(f, base)
         end
 
-        function $func(x::Float32)
-            if x > 0f0
-                x == Inf32 && return x
-
-                # Step 2
-                if 0.939413f0 < x < 1.0644945f0
-                    f = x-1f0
-                    return log_proc2(f,$base)
-                end
-
-                # Step 3
-                xu = reinterpret(UInt32,x)
-                m = Int(xu >> 23) & 0x00ff
-                if m == 0 # x is subnormal
-                    x *= 3.3554432f7 # 0x1p25, normalise significand
-                    xu = reinterpret(UInt32,x)
-                    m = Int(xu >> 23) & 0x00ff - 25
-                end
-                m -= 127
-                y = reinterpret(Float32,(xu & 0x007f_ffff) | 0x3f80_0000)
-
-                mf = Float32(m)
-                F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)
-                f = y-F
-                jp = unsafe_trunc(Int,128.0f0*F)-127
-
-                log_proc1(y,mf,F,f,jp,$base)
-            elseif x == 0f0
-                -Inf32
-            elseif isnan(x)
-                NaN32
-            else
-                throw_complex_domainerror(Symbol($func), x)
-            end
+        # Step 3
+        xu = reinterpret(UInt64,x)
+        m = Int(xu >> 52) & 0x07ff
+        if m == 0 # x is subnormal
+            x *= 1.8014398509481984e16 # 0x1p54, normalise significand
+            xu = reinterpret(UInt64,x)
+            m = Int(xu >> 52) & 0x07ff - 54
         end
+        m -= 1023
+        y = reinterpret(Float64,(xu & 0x000f_ffff_ffff_ffff) | 0x3ff0_0000_0000_0000)
+
+        mf = Float64(m)
+        F = (y + 3.5184372088832e13) - 3.5184372088832e13 # 0x1p-7*round(0x1p7*y)
+        f = y-F
+        jp = unsafe_trunc(Int,128.0*F)-127
+
+        return log_proc1(y,mf,F,f,jp,base)
+    elseif x == 0.0
+        -Inf
+    elseif isnan(x)
+        NaN
+    else
+        throw_complex_domainerror(func, x)
+    end
+end
+
+function $func(x::Float32, base, func)
+    if x > 0f0
+        x == Inf32 && return x
+
+        # Step 2
+        if 0.939413f0 < x < 1.0644945f0
+            f = x-1f0
+            return log_proc2(f, base)
+        end
+
+        # Step 3
+        xu = reinterpret(UInt32,x)
+        m = Int(xu >> 23) & 0x00ff
+        if m == 0 # x is subnormal
+            x *= 3.3554432f7 # 0x1p25, normalise significand
+            xu = reinterpret(UInt32,x)
+            m = Int(xu >> 23) & 0x00ff - 25
+        end
+        m -= 127
+        y = reinterpret(Float32,(xu & 0x007f_ffff) | 0x3f80_0000)
+
+        mf = Float32(m)
+        F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)
+        f = y-F
+        jp = unsafe_trunc(Int,128.0f0*F)-127
+
+        log_proc1(y,mf,F,f,jp,base)
+    elseif x == 0f0
+        -Inf32
+    elseif isnan(x)
+        NaN32
+    else
+        throw_complex_domainerror(func, x)
     end
 end
 
