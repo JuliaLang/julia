@@ -303,8 +303,7 @@ Stacktrace:
 ```
 
 !!! note
-    If `b` is a power of 2 or 10, [`
-`](@ref) or [`log10`](@ref) should be used, as these will
+    If `b` is a power of 2 or 10, [`log2`](@ref) or [`log10`](@ref) should be used, as these will
     typically be faster and more accurate. For example,
 
     ```jldoctest
