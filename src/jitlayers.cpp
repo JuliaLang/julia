@@ -594,7 +594,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
     }
     else {
         optlevel = jl_options.opt_level;
-        optlevel_modmin = jl_options.opt_level_module_min;
+        optlevel_modmin = jl_options.opt_level_min;
         for (auto &F : M.functions()) {
             if (!F.getBasicBlockList().empty()) {
                 Attribute attr = F.getFnAttribute("julia-optimization-level");

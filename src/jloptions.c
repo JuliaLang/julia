@@ -47,7 +47,7 @@ jl_options_t jl_options = { 0,    // quiet
                             0,    // code_coverage
                             0,    // malloc_log
                             2,    // opt_level
-                            0,    // opt_level_module_min
+                            0,    // opt_level_min
 #ifdef JL_DEBUG_BUILD
                             2,    // debug_level [debug build]
 #else
@@ -123,7 +123,7 @@ static const char opts[]  =
     // code generation options
     " -C, --cpu-target <target> Limit usage of CPU features up to <target>; set to \"help\" to see the available options\n"
     " -O, --optimize={0,1,2,3}  Set the optimization level (default level is 2 if unspecified or 3 if used without a level)\n"
-    " --optlevel-modmin={0,1,2,3}  Set the lower bound on per-module optimization (default is 0)\n"
+    " --min-optlevel={0,1,2,3}  Set the lower bound on per-module optimization (default is 0)\n"
     " -g, -g <level>            Enable / Set the level of debug info generation"
 #ifdef JL_DEBUG_BUILD
         " (default level for julia-debug is 2 if unspecified or if used without a level)\n"
@@ -239,7 +239,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
-        { "optlevel-modmin", optional_argument, 0, opt_optlevel_modmin },
+        { "min-optlevel", optional_argument, 0, opt_optlevel_modmin },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },
@@ -543,19 +543,19 @@ restart_switch:
         case opt_optlevel_modmin: // minimum module optimize level
             if (optarg != NULL) {
                 if (!strcmp(optarg,"0"))
-                    jl_options.opt_level_module_min = 0;
+                    jl_options.opt_level_min = 0;
                 else if (!strcmp(optarg,"1"))
-                    jl_options.opt_level_module_min = 1;
+                    jl_options.opt_level_min = 1;
                 else if (!strcmp(optarg,"2"))
-                    jl_options.opt_level_module_min = 2;
+                    jl_options.opt_level_min = 2;
                 else if (!strcmp(optarg,"3"))
-                    jl_options.opt_level_module_min = 3;
+                    jl_options.opt_level_min = 3;
                 else
-                    jl_errorf("julia: invalid argument to --optlevel-modmin (%s)", optarg);
+                    jl_errorf("julia: invalid argument to --min-optlevel (%s)", optarg);
                 break;
             }
             else {
-                jl_options.opt_level_module_min = 0;
+                jl_options.opt_level_min = 0;
             }
             break;
         case 'i': // isinteractive

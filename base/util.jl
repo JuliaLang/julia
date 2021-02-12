@@ -161,7 +161,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
-    opts.opt_level_module_min == 0 || push!(addflags, "--optlevel-modmin=$(opts.opt_level_module_min)")
+    opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
     push!(addflags, "-g$(opts.debug_level)")
     if opts.code_coverage != 0
         # Forward the code-coverage flag only if applicable (if the filename is pid-dependent)

@@ -339,8 +339,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" --optimize`) == "3"
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O0`) == "0"
 
-    @test readchomp(`$exename -E "Base.JLOptions().opt_level_module_min"`) == "0"
-    @test readchomp(`$exename -E "Base.JLOptions().opt_level_module_min" --optlevel-modmin=2`) == "2"
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level_min"`) == "0"
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level_min" --min-optlevel=2`) == "2"
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
