@@ -90,7 +90,7 @@ are complete, or at least one of them has errored. The first exception is immedi
 rethrown. It is the responsibility of the user to cancel any still-running operations
 during error handling.
 
-!!! Note
+!!! warning
     This interface is experimental and subject to change or removal without notice.
 """
 macro sync(block)
