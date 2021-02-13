@@ -471,7 +471,6 @@ end
 
 function test_thread_cfunction()
     # ensure a runtime call to `get_trampoline` will be created
-    # TODO: get_trampoline is not thread-safe (as this test shows)
     fs = [ Core.Box() for i in 1:1000 ]
     @noinline cf(f) = @cfunction $f Float64 ()
     cfs = Vector{Base.CFunction}(undef, length(fs))
@@ -494,11 +493,7 @@ function test_thread_cfunction()
     @test sum(ok) == 10000
 end
 if cfunction_closure
-    if nthreads() == 1
-        test_thread_cfunction()
-    else
-        @test_broken "cfunction trampoline code not thread-safe"
-    end
+    test_thread_cfunction()
 end
 
 # Compare the two ways of checking if threading is enabled.
