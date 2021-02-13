@@ -33,6 +33,9 @@ x1_full[SparseArrays.nonzeroinds(spv_x1)] = nonzeros(spv_x1)
     @test SparseArrays.nonzeroinds(x) == [2, 5, 6]
     @test nonzeros(x) == [1.25, -0.75, 3.5]
     @test count(SparseVector(8, [2, 5, 6], [true,false,true])) == 2
+    y = SparseVector(typemax(Int128), Int128[4], [5])
+    @test y isa SparseVector{Int,Int128}
+    @test @inferred size(y) == (@inferred(length(y)),)
 end
 
 @testset "isstored" begin
