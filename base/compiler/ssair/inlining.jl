@@ -1076,12 +1076,9 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
     for i in 1:length(infos)
         info = infos[i]
         meth = info.results
-        if meth === missing
+        if meth === missing || meth.ambig
             # Too many applicable methods
-            too_many = true
-            break
-        elseif meth.ambig
-            # there is a (partial?) ambiguity
+            # Or there is a (partial?) ambiguity
             too_many = true
             break
         elseif length(meth) == 0
