@@ -389,6 +389,7 @@ Base.AsyncCondition(::Function)
 Base.nameof(::Module)
 Base.parentmodule
 Base.pathof(::Module)
+Base.pkgdir(::Module)
 Base.moduleroot
 __module__
 __source__
