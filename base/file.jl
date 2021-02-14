@@ -367,12 +367,16 @@ function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
     if !follow_symlinks && islink(src)
         symlink(readlink(src), dst)
     elseif isdir(src)
-        task_sema = Base.Semaphore(ntasks)
-        cptree(src, dst; force=force, follow_symlinks=follow_symlinks, task_sema=task_sema)
-        while task_sema.curr_cnt > 0 # wait until all copy tasks are done
-            lock(task_sema.cond_wait) do
-                wait(task_sema.cond_wait)
+        if ntasks > 1
+            task_sema = Base.Semaphore(ntasks)
+            cptree(src, dst; force=force, follow_symlinks=follow_symlinks, task_sema=task_sema)
+            while task_sema.curr_cnt > 0 # wait until all copy tasks are done
+                lock(task_sema.cond_wait) do
+                    wait(task_sema.cond_wait)
+                end
             end
+        else
+            cptree(src, dst; force=force, follow_symlinks=follow_symlinks, task_sema=nothing)
         end
     else
         sendfile(src, dst)
