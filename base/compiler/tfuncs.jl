@@ -1374,7 +1374,7 @@ function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
 
     ubt, ub_exact = instanceof_tfunc(ub)
 
-    t = argt_exact ? Core.OpaqueClosure{argt} : Core.OpaqueClosure{<:argt}
+    t = (argt_exact ? Core.OpaqueClosure{argt, T} : Core.OpaqueClosure{<:argt, T}) where T
     t = lbt == ubt ? t{ubt} : (t{T} where lbt <: T <: ubt)
 
     (isa(source, Const) && isa(source.val, Method)) || return t

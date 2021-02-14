@@ -368,6 +368,15 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
        return anyconst ? PartialStruct(widenconst(typea), fields) :
             widenconst(typea)
     end
+    if isa(typea, PartialOpaque) && isa(typeb, PartialOpaque) && widenconst(typea) == widenconst(typeb)
+        if !(typea.source === typeb.source &&
+             typea.isva === typeb.isva &&
+             typea.parent === typeb.parent)
+            return widenconst(typea)
+        end
+        return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
+            typea.isva, typea.parent, typea.source)
+    end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
     if !isa(typea, Type) || !isa(typeb, Type)

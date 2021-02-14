@@ -114,17 +114,9 @@ end
 
 function get_staged(mi::MethodInstance)
     may_invoke_generator(mi) || return nothing
-    if isdefined(mi, :uninferred)
-        return copy(mi.uninferred::CodeInfo)
-    end
     try
         # user code might throw errors – ignore them
         ci = ccall(:jl_code_for_staged, Any, (Any,), mi)::CodeInfo
-        if has_opaque_closure(ci)
-            # For opaque closures, cache the generated code info to make sure
-            # that OpaqueClosure method identity is stable
-            mi.uninferred = copy(ci)
-        end
         return ci
     catch
         return nothing

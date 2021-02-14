@@ -472,12 +472,17 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
     if (codeinst->precompile)
         flags |= 1 << 3;
 
+    // CodeInstances with PartialOpaque return type are currently not allowed
+    // to be cached. We skip them in serialization here, forcing them to
+    // be re-infered on reload.
     int write_ret_type = validate || codeinst->min_world == 0;
     if (write_ret_type && codeinst->rettype_const &&
             jl_typeis(codeinst->rettype_const, jl_partial_opaque_type)) {
         if (skip_partial_opaque) {
             jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
-        } else {
+            return;
+        }
+        else {
             jl_error("Cannot serialize CodeInstance with PartialOpaque rettype");
         }
     }
@@ -659,7 +664,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
         if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
-            jl_error("Cannot serialize MethodInstances for OpaqueClosure");
+            jl_error("unimplemented: serialization of MethodInstances for OpaqueClosure");
         }
         write_uint8(s->s, TAG_METHOD_INSTANCE);
         int internal = 0;

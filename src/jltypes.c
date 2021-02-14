@@ -2397,8 +2397,9 @@ void jl_init_types(void) JL_GC_DISABLED
 
 
     jl_partial_opaque_type = jl_new_datatype(jl_symbol("PartialOpaque"), core, jl_any_type, jl_emptysvec,
-                                       jl_perm_symsvec(5, "typ", "env", "isva", "parent", "source"),
-                                       jl_svec(5, jl_type_type, jl_any_type, jl_bool_type, jl_method_instance_type, jl_method_type), 0, 0, 5);
+        jl_perm_symsvec(5, "typ", "env", "isva", "parent", "source"),
+        jl_svec(5, jl_type_type, jl_any_type, jl_bool_type, jl_method_instance_type, jl_method_type),
+        0, 0, 5);
 
     // complete builtin type metadata
     jl_voidpointer_type = (jl_datatype_t*)pointer_void;

@@ -1066,21 +1066,10 @@ function most_general_argtypes(closure::PartialOpaque)
     ret = Any[]
     cc = widenconst(closure)
     argt = unwrap_unionall(cc).parameters[1]
-    @assert isa(argt, DataType) && argt.name === typename(Tuple)
-    params = argt.parameters
-    for i = 2:closure.source.nargs
-        rt = unwrapva(params[max(i-1, length(params))])
-        if closure.isva
-            if length(params) > i-1
-                for j = (i):length(params)
-                    rt = tmerge(rt, unwrapva(params[j]))
-                end
-            end
-            rt = Vararg{rt}
-        end
-        push!(ret, rt)
+    if !isa(argt, DataType) || argt.name !== typename(Tuple)
+        argt = Tuple
     end
-    ret
+    return most_general_argtypes(closure.source, argt, closure.isva)
 end
 
 # call where the function is any lattice element

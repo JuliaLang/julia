@@ -234,8 +234,8 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     if isa(a, PartialOpaque)
         isa(b, PartialOpaque) || return false
         widenconst(a) == widenconst(b) || return false
-        a.source == b.source || return false
-        a.parent == b.parent || return false
+        a.source === b.source || return false
+        a.parent === b.parent || return false
         return is_lattice_equal(a.env, b.env)
     end
     return a ⊑ b && b ⊑ a
