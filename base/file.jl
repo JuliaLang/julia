@@ -319,7 +319,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
 end
 
 function cptree(src::String, dst::String; force::Bool=false,
-                                          follow_symlinks::Bool=false)
+                            follow_symlinks::Bool=false, task_sema=nothing)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
@@ -329,9 +329,19 @@ function cptree(src::String, dst::String; force::Bool=false,
             symlink(readlink(srcname), joinpath(dst, name))
         elseif isdir(srcname)
             cptree(srcname, joinpath(dst, name); force=force,
-                                                 follow_symlinks=follow_symlinks)
+                    follow_symlinks=follow_symlinks, task_sema=task_sema)
         else
-            sendfile(srcname, joinpath(dst, name))
+            if isnothing(task_sema)
+                sendfile(srcname, joinpath(dst, name))
+            else
+                Base.acquire(task_sema)
+                task = Task(()->begin
+                    sendfile(srcname, joinpath(dst, name))
+                    Base.release(task_sema)
+                end)
+                task.sticky = false
+                schedule(task)
+            end
         end
     end
 end
@@ -339,10 +349,12 @@ cptree(src::AbstractString, dst::AbstractString; kwargs...) =
     cptree(String(src)::String, String(dst)::String; kwargs...)
 
 """
-    cp(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)
+    cp(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false, ntasks::Int=Threads.nthreads()+1)
 
 Copy the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
+
+For directories, `ntasks` concurrent copy tasks will be used across threads, defaulting to `Threads.nthreads()+1`.
 
 If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created as a
 symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` will be a copy
@@ -350,12 +362,18 @@ of the file or directory `src` refers to.
 Return `dst`.
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                      follow_symlinks::Bool=false)
+                        follow_symlinks::Bool=false, ntasks::Int=Threads.nthreads()+1)
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     if !follow_symlinks && islink(src)
         symlink(readlink(src), dst)
     elseif isdir(src)
-        cptree(src, dst; force=force, follow_symlinks=follow_symlinks)
+        task_sema = Base.Semaphore(ntasks)
+        cptree(src, dst; force=force, follow_symlinks=follow_symlinks, task_sema=task_sema)
+        while task_sema.curr_cnt > 0 # wait until all copy tasks are done
+            lock(task_sema.cond_wait) do
+                wait(task_sema.cond_wait)
+            end
+        end
     else
         sendfile(src, dst)
     end
