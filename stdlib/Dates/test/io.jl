@@ -66,6 +66,7 @@ end
     @test sprint(show, DateFormat("ddxmm").tokens[2]) == "Delim(x)"
     @test sprint(show, DateFormat("xxmmxx").tokens[2]) == "DatePart(mm)"
 end
+
 @testset "Common Parsing Patterns" begin
     #'1996-January-15'
     dt = Dates.DateTime(1996, 1, 15)
@@ -252,6 +253,7 @@ end
     @test Dates.Date(string(Dates.Date(dt))) == Dates.Date(dt)
     @test Dates.DateTime(string(dt)) == dt
 end
+
 @testset "prefix." begin
     s = "/1996/1/15"
     f = "/yyyy/m/d"
@@ -260,6 +262,7 @@ end
     @test Dates.format(dt, f) == s
     @test_throws ArgumentError Dates.DateTime("1996/1/15", f)
 end
+
 @testset "French and Chinese" begin
     # from Jiahao
     @test Dates.Date("2009年12月01日", "yyyy年mm月dd日") == Dates.Date(2009, 12, 1)
@@ -302,6 +305,7 @@ end
     # doesn't parse month name greater than 4 chars
     @test_throws ArgumentError Dates.Date("28avril2014", f; locale="french")
 end
+
 @testset "year digits parsing" begin
     # From Tony Fong
     f = "dduuuyy"
@@ -357,6 +361,7 @@ end
 
     @test typeof(Dates.Date.(dr)) == Array{Date, 1}
 end
+
 @testset "Issue 13" begin
     t = Dates.DateTime(1, 1, 1, 14, 51, 0, 118)
     @test Dates.DateTime("[14:51:00.118]", "[HH:MM:SS.sss]") == t
@@ -366,6 +371,7 @@ end
     @test Dates.DateTime("x14:51:00.118", "xHH:MM:SS.sss") == t
     @test Dates.DateTime("14:51:00.118]", "HH:MM:SS.sss]") == t
 end
+
 @testset "RFC1123Format" begin
     dt = Dates.DateTime(2014, 8, 23, 17, 22, 15)
     @test Dates.format(dt, Dates.RFC1123Format) == "Sat, 23 Aug 2014 17:22:15"
@@ -394,6 +400,7 @@ end
     @test parse(Dates.DateTime, "Mon, 12 Nov 2016 07:45:36", Dates.RFC1123Format) == dt  # Wrong day of week
     @test_throws ArgumentError parse(Date, "Foo, 12 Nov 2016 07:45:36", Dates.RFC1123Format)
 end
+
 @testset "Issue 15195" begin
     f = "YY"
     @test Dates.format(Dates.Date(1999), f) == "1999"
@@ -444,6 +451,7 @@ end
     @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd zz yyyy")
     @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd    yyyy")
 end
+
 @testset "Issue 21001" begin
     for (ms, str) in zip([0, 1, 20, 300, 450, 678], ["0", "001", "02", "3", "45", "678"])
         local dt = DateTime(2000, 1, 1, 0, 0, 0, ms)
@@ -453,6 +461,7 @@ end
         @test Dates.format(dt, "ssss") == rpad(str, 4, '0')
     end
 end
+
 # Issue #21504
 @test tryparse(Dates.Date, "0-1000") === nothing
 
@@ -543,6 +552,30 @@ end
     end
     # if am/pm is missing, defaults to 24-hour clock
     @test Time("13:24", "II:MMp") == Time("13:24", "HH:MM")
+end
+
+@testset "Issue #10561, two-digit year parsing ambiguities" begin
+    error_dates = Dict()
+    expected_error_dates = Dict()
+
+    for test_year in [0, 1, 100, 101, 1000, 1001, 1900, 1901, 2000, 2001, 2100, 2101]
+        test_date = Date(test_year, 01, 01)
+        fmt_string = "yy"
+        output_date = Date(Dates.format(test_date, fmt_string), fmt_string)
+
+        # Year dates which cannot be recovered when formatted with ambiguous year format "yy"
+        if test_date != output_date
+            error_dates[test_date] = output_date
+        end
+
+        # Dates which we expect to be unrecoverable given current implementation, e.g. all years besides the years 0001-0100
+        if test_year >= 100
+            expected_error_dates[test_date] = Date(mod(test_year, 100), 01, 01)
+        end
+    end
+
+
+    @test expected_error_dates == error_dates
 end
 
 end
