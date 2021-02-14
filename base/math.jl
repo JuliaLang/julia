@@ -475,9 +475,9 @@ julia> log2(10)
 
 julia> log2(-2)
 ERROR: DomainError with -2.0:
-NaN result for non-NaN input.
+log2 will only return a complex result if called with a complex argument. Try log2(Complex(x)).
 Stacktrace:
- [1] nan_dom_err at ./math.jl:325 [inlined]
+ [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
 ```
 """
@@ -499,9 +499,9 @@ julia> log10(2)
 
 julia> log10(-2)
 ERROR: DomainError with -2.0:
-NaN result for non-NaN input.
+log10 will only return a complex result if called with a complex argument. Try log10(Complex(x)).
 Stacktrace:
- [1] nan_dom_err at ./math.jl:325 [inlined]
+ [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
 ```
 """
@@ -530,12 +530,6 @@ Stacktrace:
 ```
 """
 log1p(x)
-for f in (:log2, :log10)
-    @eval begin
-        @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
-        @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
-    end
-end
 
 @inline function sqrt(x::Union{Float32,Float64})
     x < zero(x) && throw_complex_domainerror(:sqrt, x)
