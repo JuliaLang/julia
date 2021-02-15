@@ -424,6 +424,7 @@ eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecial
                     mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
 eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))))
 eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
+eval(Core, :(PartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :isva, :parent, :source))))
 eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
     $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
 

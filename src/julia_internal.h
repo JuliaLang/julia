@@ -1135,6 +1135,7 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
+JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
 
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;

@@ -68,6 +68,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_returnnode_type);
         INSERT_TAG(jl_const_type);
         INSERT_TAG(jl_partial_struct_type);
+        INSERT_TAG(jl_partial_opaque_type);
         INSERT_TAG(jl_method_match_type);
         INSERT_TAG(jl_pinode_type);
         INSERT_TAG(jl_phinode_type);

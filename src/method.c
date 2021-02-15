@@ -440,6 +440,10 @@ JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *
 // effectively described by the tuple (specTypes, env, Method) inside linfo
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
+    if (linfo->uninferred) {
+        return (jl_code_info_t*)jl_copy_ast((jl_value_t*)linfo->uninferred);
+    }
+
     JL_TIMING(STAGED_FUNCTION);
     jl_value_t *tt = linfo->specTypes;
     jl_method_t *def = linfo->def.method;
@@ -478,6 +482,16 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
                     jl_toplevel_eval(def->module, (jl_value_t*)func);
                 }
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
+            }
+        }
+
+        // If this generated function has an opaque closure, cache it for
+        // correctness of method identity
+        for (int i = 0; i < jl_array_len(func->code); ++i) {
+            jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
+            if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == new_opaque_closure_sym) {
+                linfo->uninferred = jl_copy_ast((jl_value_t*)func);
+                break;
             }
         }
 

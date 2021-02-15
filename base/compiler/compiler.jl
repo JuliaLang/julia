@@ -6,7 +6,7 @@ using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
-             MethodInstance, CodeInstance, MethodMatch
+             MethodInstance, CodeInstance, MethodMatch, PartialOpaque
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
