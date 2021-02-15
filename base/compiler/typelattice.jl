@@ -185,6 +185,14 @@ function ⊑(@nospecialize(a), @nospecialize(b))
         end
         return false
     end
+    if isa(a, PartialOpaque)
+        if isa(b, PartialOpaque)
+            (a.parent === b.parent && a.source === b.source) || return false
+            return (widenconst(a) <: widenconst(b)) &&
+                ⊑(a.env, b.env)
+        end
+        return widenconst(a) ⊑ b
+    end
     if isa(a, Const)
         if isa(b, Const)
             return a.val === b.val
@@ -223,6 +231,13 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     isa(b, PartialStruct) && return false
     a isa Const && return false
     b isa Const && return false
+    if isa(a, PartialOpaque)
+        isa(b, PartialOpaque) || return false
+        widenconst(a) == widenconst(b) || return false
+        a.source === b.source || return false
+        a.parent === b.parent || return false
+        return is_lattice_equal(a.env, b.env)
+    end
     return a ⊑ b && b ⊑ a
 end
 
@@ -240,6 +255,7 @@ end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
+widenconst(t::PartialOpaque) = t.typ
 widenconst(t::Type) = t
 widenconst(t::TypeVar) = t
 widenconst(t::Core.TypeofVararg) = t
