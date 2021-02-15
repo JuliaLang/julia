@@ -94,7 +94,7 @@ julia> M = [1 2 3; 4 5 6; 7 8 9]
  7  8  9
 
 julia> S = eachslice(M,dims=1)
-3-element SliceArray{1, (1, nothing), Matrix{Int64}, CartesianIndices{1, Tuple{Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+3-element Rows{Matrix{Int64}, CartesianIndices{1, Tuple{Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
@@ -119,7 +119,7 @@ end
 """
     eachrow(A::AbstractVecOrMat)
 
-Create a [`RowSliceVector`](@ref) that indexes over the rows of a vector or matrix `A`.
+Create a [`Rows`](@ref) that indexes over the rows of a vector or matrix `A`.
 
 See also [`eachcol`](@ref) and [`eachslice`](@ref).
 
@@ -138,7 +138,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> S = eachrow(a)
-2-element SliceArray{1, (1, nothing), Matrix{Int64}, CartesianIndices{1, Tuple{Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+2-element Rows{Matrix{Int64}, CartesianIndices{1, Tuple{Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2]
  [3, 4]
 
@@ -154,7 +154,7 @@ eachrow(A::AbstractVector) = eachrow(reshape(A, size(A,1), 1))
 """
     eachcol(A::AbstractVecOrMat)
 
-Create a [`ColSliceVector`](@ref) that iterates over the second dimension of matrix `A`, returning the
+Create a [`Columns`](@ref) that iterates over the second dimension of matrix `A`, returning the
 columns as `AbstractVector` views.
 
 See also [`eachrow`](@ref) and [`eachslice`](@ref).
@@ -174,7 +174,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> S = eachcol(a)
-2-element SliceArray{1, (nothing, 1), Matrix{Int64}, CartesianIndices{1, Tuple{Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
+2-element Columns{Matrix{Int64}, CartesianIndices{1, Tuple{Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
  [1, 3]
  [2, 4]
 
@@ -188,24 +188,24 @@ eachcol(A::AbstractMatrix) = _eachslice(A, (2,), true)
 eachcol(A::AbstractVector) = eachcol(reshape(A, size(A,1), 1))
 
 """
-    RowSliceVector{M,CI,S}
+    Rows{M,CI,S}
 
 A special case of [`SliceArray`](@ref) that is a vector of row slices of a matrix, as
 constructed by [`eachrow`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const RowSliceVector{P<:AbstractMatrix,CI,S<:AbstractVector} = SliceArray{1,(1,nothing),P,CI,S}
+const Rows{P<:AbstractMatrix,CI,S<:AbstractVector} = SliceArray{1,(1,nothing),P,CI,S}
 
 """
-    ColSliceVector{M,CI,S}
+    Columns{M,CI,S}
 
 A special case of [`SliceArray`](@ref) that is a vector of column slices of a matrix, as
 constructed by [`eachcol`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const ColSliceVector{P<:AbstractMatrix,CI,S<:AbstractVector} = SliceArray{1,(nothing,1),P,CI,S}
+const Columns{P<:AbstractMatrix,CI,S<:AbstractVector} = SliceArray{1,(nothing,1),P,CI,S}
 
 
 IteratorSize(::Type{SliceArray{N,L,P,CI,S}}) where {N,L,P,CI,S} = IteratorSize(CI)

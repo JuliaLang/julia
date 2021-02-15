@@ -2167,12 +2167,12 @@ end
 using Base: eachrow, eachcol
 @testset "row/column/slice iterators" begin
     # check type aliases
-    @test RowSliceVector <: AbstractVector{<:AbstractVector}
-    @test eachrow(ones(3)) isa RowSliceVector
-    @test eachrow(ones(3,3)) isa RowSliceVector
-    @test ColSliceVector <: AbstractVector{<:AbstractVector}
-    @test eachcol(ones(3)) isa ColSliceVector
-    @test eachcol(ones(3,3)) isa ColSliceVector
+    @test Rows <: AbstractVector{<:AbstractVector}
+    @test eachrow(ones(3)) isa Rows
+    @test eachrow(ones(3,3)) isa Rows
+    @test Columns <: AbstractVector{<:AbstractVector}
+    @test eachcol(ones(3)) isa Columns
+    @test eachcol(ones(3,3)) isa Columns
 
     # Simple ones
     M = [1 2 3; 4 5 6; 7 8 9]
@@ -2184,11 +2184,13 @@ using Base: eachrow, eachcol
     @test SR[2] isa eltype(SR)
     SR[2] = [14,15,16]
     @test SR[2] == M[2,:] == [14,15,16]
+    @test parent(SR) === M
 
     SC = @inferred eachcol(M)
-    @test SC[3] isa eltype(SR)
+    @test SC[3] isa eltype(SC)
     SC[3] = [23,26,29]
     @test SC[3] == M[:,3] == [23,26,29]
+    @test parent(SC) === M
 
     # Higher-dimensional cases
     M = reshape(collect(1:16), (2,2,2,2))
