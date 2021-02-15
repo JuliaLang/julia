@@ -205,7 +205,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
     # We want to test oversubscription, but on manycore machines, this can
     # actually exhaust limited PID spaces
-    cpu_threads = max(2*cpu_threads, min(200, 10*cpu_threads))
+    cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
     @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
     withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
         @test read(`$exename -e $code`, String) == string(cpu_threads)
