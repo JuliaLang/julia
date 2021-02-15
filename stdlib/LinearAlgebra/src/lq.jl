@@ -56,8 +56,8 @@ Base.iterate(S::LQ) = (S.L, Val(:Q))
 Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
 Base.iterate(S::LQ, ::Val{:done}) = nothing
 
-struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
-    factors::Matrix{T}
+struct LQPackedQ{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+    factors::S
     τ::Vector{T}
     LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
