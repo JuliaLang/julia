@@ -314,6 +314,20 @@ function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs
     end
     return Documenter.DeployDecision(; all_ok=false)
 end
+function Documenter.post_status(::BuildBotConfig; type, repo::String, subfolder=nothing, kwargs...)
+    if type == "pending"
+        @info "Documentation build in progress"
+    elseif type == "success"
+        @info "Documentation build succeeded"
+    elseif type == "error"
+        error("Documentation build errored")
+    elseif type == "failure"
+        error("Documentation build failed")
+    else
+        error("unsupported status type: $type")
+    end
+end
+
 
 const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
 
