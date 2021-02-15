@@ -198,6 +198,7 @@ function sym_to_string(sym)
 end
 
 function show(io::IO, m::Method)
+    is_opaque_closure_method(m) && return show_method_with_pointer(io, m)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
@@ -296,6 +297,17 @@ end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
 show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
+
+function is_opaque_closure_method(m::Method)
+    sig = unwrap_unionall(m.sig)
+    return sig === Tuple && m.name === Symbol("opaque closure")
+    # ASK: what is the proper way to detect opaque closure?
+end
+
+function show_method_with_pointer(io::IO, m::Method)
+    hexstr = string(UInt(pointer_from_objref(m)), base = 16, pad = Sys.WORD_SIZE>>2)
+    print(io, m.name, " @0x", hexstr, " in ", m.module)
+end
 
 function inbase(m::Module)
     if m == Base

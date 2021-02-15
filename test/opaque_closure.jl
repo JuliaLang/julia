@@ -154,6 +154,9 @@ mk_va_opaque() = @opaque (x...)->x
 # OpaqueClosure show method
 @test repr(@opaque x->1) == "(::Any)::Any->◌"
 
+# Opaque closure method show method
+@test contains(repr((@opaque x->1).source), "opaque closure @0x")
+
 # Opaque closure in CodeInfo returned from generated functions
 function mk_ocg(args...)
     ci = @code_lowered const_int()
