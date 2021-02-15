@@ -146,6 +146,10 @@ The macro may be chained with `@test` to also test the returned value:
 
     @test (@test_logs (:info,"Doing foo with n=2") foo(2)) == 42
 
+If you want to test an absence of logger messages, you can pass no log_patterns:
+
+    @test_logs min_level=Logging.Warn f()  # test `f` logs no messages when the logger level is warn.
+
 """
 macro test_logs(exs...)
     length(exs) >= 1 || throw(ArgumentError("""`@test_logs` needs at least one arguments.
