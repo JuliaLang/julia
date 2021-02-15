@@ -15,6 +15,7 @@ help:
 	@echo "Please use 'make <target>' where <target> is one of"
 	@echo "  html  to make standalone HTML files"
 	@echo "  pdf   to make standalone PDF file"
+	@echo "  epub  to make standalone EPUB file"
 	@echo
 	@echo "To run linkcheck, use 'make <target> linkcheck=true'"
 	@echo "To run doctests, use 'make <target> doctest=true'"
@@ -50,6 +51,11 @@ html: deps
 pdf: deps
 	@echo "Building PDF documentation."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- pdf $(DOCUMENTER_OPTIONS)
+	@echo "Build finished."
+
+epub: deps
+	@echo "Building EPUB documentation."
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- epub $(DOCUMENTER_OPTIONS)
 	@echo "Build finished."
 
 # The deploy target should only be called in CI builds

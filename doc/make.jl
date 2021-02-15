@@ -7,7 +7,7 @@ pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
 using Pkg
 Pkg.instantiate()
 
-using Documenter
+using Documenter, DocumenterLaTeX, DocumenterEpub
 
 baremodule GenStdLib end
 
@@ -44,6 +44,7 @@ end
 
 # Check if we are building a PDF
 const render_pdf = "pdf" in ARGS
+const render_epub = "epub" in ARGS
 
 # Generate a suitable markdown file from NEWS.md and put it in src
 str = read(joinpath(@__DIR__, "..", "NEWS.md"), String)
@@ -169,7 +170,7 @@ DevDocs = [
 ]
 
 
-if render_pdf
+if render_pdf || render_epub
 const PAGES = [
     "Manual" => ["index.md", Manual...],
     "Base" => BaseDocs,
@@ -280,6 +281,8 @@ const format = if render_pdf
     Documenter.LaTeX(
         platform = "texplatform=docker" in ARGS ? "docker" : "native"
     )
+elseif render_epub
+    EPUB(color=true)
 else
     Documenter.HTML(
         prettyurls = ("deploy" in ARGS),
@@ -294,7 +297,7 @@ else
     )
 end
 
-const output_path = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en")
+const output_path = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : render_epub ? "epub" : "html"), "en")
 makedocs(
     build     = output_path,
     modules   = [Main, Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
