@@ -290,11 +290,13 @@ end
         @test e.ex isa ErrorException
     end
 
+    # Validate that `timedwait` actually waits. Ideally we should also test that `timedwait`
+    # doesn't exceed a maximum duration but that would require guarantees from the OS.
     duration = @elapsed timedwait(alwaysfalse, 1)  # Using default pollint of 0.1
-    @test duration ≈ 1 atol=0.4
+    @test duration >= 1
 
     duration = @elapsed timedwait(alwaysfalse, 0; pollint=1)
-    @test duration ≈ 1 atol=0.4
+    @test duration >= 1
 end
 
 @testset "timedwait on multiple channels" begin
