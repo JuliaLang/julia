@@ -35,10 +35,12 @@ typedef win32_ucontext_t jl_ucontext_t;
      defined(_CPU_ARM_) || defined(_CPU_PPC64_))
 #define JL_HAVE_ASM
 #endif
-#if defined(_OS_DARWIN_)
-#define JL_HAVE_UNW_CONTEXT
+#if 0
+// very slow, but more debugging
+//#elif defined(_OS_DARWIN_)
+//#define JL_HAVE_UNW_CONTEXT
 //#elif defined(_OS_LINUX_)
-//#define JL_HAVE_UNW_CONTEXT // very slow, but more debugging
+//#define JL_HAVE_UNW_CONTEXT
 #elif defined(_OS_EMSCRIPTEN_)
 #define JL_HAVE_ASYNCIFY
 #elif !defined(JL_HAVE_ASM)
