@@ -1261,11 +1261,9 @@ function __dot__(x::Expr)
         tmp = x.head === :(<:) ? :.<: : :.>:
         Expr(:call, tmp, dotargs...)
     else
-        head = string(x.head)
-        if last(head) == '=' && first(head) != '.'
-            Expr(Symbol('.',head), dotargs...)
-        elseif head == "&&" || head == "||"
-            Expr(:call, Symbol('.', head), dotargs...)
+        head = String(x.head)::String
+        if last(head) == '=' && first(head) != '.' || head == "&&" || head == "||"
+            Expr(Symbol('.', head), dotargs...)
         else
             Expr(x.head, dotargs...)
         end

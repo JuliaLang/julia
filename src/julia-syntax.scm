@@ -1790,14 +1790,18 @@
                  (make-fuse f x)))
            (let ((f (cadr e)))
              (cond ((dotop-named? f)
-                    (make-fuse- (unshortcircuit (undotop f)) (cddr e)))
+                    (make-fuse- (undotop f) (cddr e)))
                    ;; (.+)(a, b) is parsed as (call (|.| +) a b), but we still want it to fuse
                    ((and (length= f 2) (eq? (car f) '|.|))
-                    (make-fuse- (unshortcircuit (cadr f)) (cddr e)))
+                    (make-fuse- (cadr f) (cddr e)))
                    (else
                      e))))
           ((and (pair? e) (eq? (car e) 'comparison))
            (dot-to-fuse (expand-compare-chain (cdr e)) top))
+          ((and (pair? e) (eq? (car e) '.&&))
+           (make-fuse '(top andand) (cdr e)))
+          ((and (pair? e) (eq? (car e) '|.\|\||))
+           (make-fuse '(top oror) (cdr e)))
           (else e)))
   (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
@@ -2043,12 +2047,6 @@
             (cons (car e)
                   (map expand-forms (cdr e)))))))
 
-(define (unshortcircuit op)
-  (case op
-    ((&&) `(top andand))
-    ((|\|\||) `(top oror))
-    (else op)))
-
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -2103,14 +2101,14 @@
    (lambda (e)
      (if (length= e 2)
          ;; e = (|.| op)
-         `(call (top BroadcastFunction) ,(unshortcircuit (cadr e)))
+         `(call (top BroadcastFunction) ,(cadr e))
          ;; e = (|.| f x)
          (expand-fuse-broadcast '() e)))
 
    '.&&
-   (lambda (e) (expand-fuse-broadcast '() `(|.| ,(unshortcircuit (undotop (car e))) (tuple ,@(cdr e)))))
+   (lambda (e) (expand-fuse-broadcast '() e))
    '|.\|\||
-   (lambda (e) (expand-fuse-broadcast '() `(|.| ,(unshortcircuit (undotop (car e))) (tuple ,@(cdr e)))))
+   (lambda (e) (expand-fuse-broadcast '() e))
 
    '.=
    (lambda (e)
@@ -2292,10 +2290,10 @@
      (if (length> e 2)
          (let ((f (cadr e)))
            (cond ((dotop-named? f)
-                  (expand-fuse-broadcast '() `(|.| ,(unshortcircuit (undotop f)) (tuple ,@(cddr e)))))
+                  (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
                  ;; "(.op)(...)"
                  ((and (length= f 2) (eq? (car f) '|.|))
-                  (expand-fuse-broadcast '() `(|.| ,(unshortcircuit (cadr f)) (tuple ,@(cddr e)))))
+                  (expand-fuse-broadcast '() `(|.| ,(cadr f) (tuple ,@(cddr e)))))
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
