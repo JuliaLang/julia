@@ -1765,7 +1765,7 @@ typed_vcat(::Type{T}, X...) where T = cat_t(T, X...; dims=Val(1))
 typed_hcat(::Type{T}, X...) where T = cat_t(T, X...; dims=Val(2))
 
 """
-    cat(A...; dims=dims)
+    cat(A...; dims)
 
 Concatenate the input arrays along the specified dimensions in the iterable `dims`. For
 dimensions not in `dims`, all input arrays should have the same size, which will also be the
