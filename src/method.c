@@ -750,9 +750,9 @@ JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAG
 
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
-JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
-                                jl_code_info_t *f,
-                                jl_module_t *module)
+JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
+                                        jl_code_info_t *f,
+                                        jl_module_t *module)
 {
     // argdata is svec(svec(types...), svec(typevars...), functionloc)
     jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
@@ -867,6 +867,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
     JL_GC_POP();
+
+    return m;
 }
 
 #ifdef __cplusplus
