@@ -135,6 +135,10 @@ Some immutable parent arrays (like ranges) may choose to simply
 recompute a new array in some circumstances instead of returning
 a `SubArray` if doing so is efficient and provides compatible semantics.
 
+!!! compat "Julia 1.6"
+    In Julia 1.6 or later, `view` can be called on an `AbstractString`, returning a
+    `SubString`.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]

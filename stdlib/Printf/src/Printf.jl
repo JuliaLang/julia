@@ -56,6 +56,9 @@ formatted string directly to `io`.
 
 For convenience, the `Printf.format"..."` string macro form can be used for building
 a `Printf.Format` object at macro-expansion-time.
+
+!!! compat "Julia 1.6"
+    `Printf.Format` requires Julia 1.6 or later.
 """
 struct Format{S, T}
     str::S # original full format string as CodeUnits
@@ -375,6 +378,9 @@ For arbitrary precision numerics, you might extend the method like:
 ```julia
 Printf.tofloat(x::MyArbitraryPrecisionType) = BigFloat(x)
 ```
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 tofloat(x) = Float64(x)
 tofloat(x::Base.IEEEFloat) = x
