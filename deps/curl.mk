@@ -27,6 +27,7 @@ $(SRCCACHE)/curl-$(CURL_VER).tar.bz2: | $(SRCCACHE)
 $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
+	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/curl-$(CURL_VER)/config.sub
 	touch -c $(SRCCACHE)/curl-$(CURL_VER)/configure # old target
 	echo 1 > $@
 
