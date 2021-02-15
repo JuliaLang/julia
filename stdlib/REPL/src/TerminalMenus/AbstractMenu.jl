@@ -149,6 +149,9 @@ keypress(m::AbstractMenu, i::UInt32) = false
     numoptions(m::AbstractMenu) -> Int
 
 Return the number of options in menu `m`. Defaults to `length(options(m))`.
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 numoptions(m::AbstractMenu) = length(options(m))
 
@@ -169,6 +172,9 @@ number used for the initial cursor position. `cursor` can be either an
 control of the cursor position from the outside.
 
 Returns `selected(m)`.
+
+!!! compat "Julia 1.6"
+    The `cursor` argument requires Julia 1.6 or later.
 """
 request(m::AbstractMenu; kwargs...) = request(terminal, m; kwargs...)
 
