@@ -559,7 +559,7 @@ end
     expected_error_dates = Dict()
 
     for test_year in [0, 1, 100, 101, 1000, 1001, 1900, 1901, 2000, 2001, 2100, 2101]
-        test_date = Date(test_year, 01, 01)
+        test_date = Date(test_year)
         fmt_string = dateformat"yy"
         output_date = Date(Dates.format(test_date, fmt_string), fmt_string)
 
