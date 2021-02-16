@@ -166,8 +166,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    # use invokelatest to avoid backtracing in type invalidation, ref #37741
-    invokelatest(_print_matrix, io, X, pre, sep, post, hdots, vdots, ddots, hmod, vmod, unitrange(axes(X,1)), unitrange(axes(X,2)))
+    _print_matrix(io, inferencebarrier(X), pre, sep, post, hdots, vdots, ddots, hmod, vmod, unitrange(axes(X,1)), unitrange(axes(X,2)))
 end
 
 function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, hdots, vdots, ddots, hmod, vmod, rowsA, colsA)
@@ -273,7 +272,7 @@ end
 # typeinfo agnostic
 # n-dimensional arrays
 show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices::Bool) =
-    invokelatest(_show_nd, io, a, print_matrix, label_slices, map(unitrange, axes(a)))
+    _show_nd(io, inferencebarrier(a), print_matrix, label_slices, map(unitrange, axes(a)))
 
 function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Function, label_slices::Bool, axs::Tuple{Vararg{AbstractUnitRange}})
     limit::Bool = get(io, :limit, false)
