@@ -555,27 +555,12 @@ end
 end
 
 @testset "Issue #10561, two-digit year parsing ambiguities" begin
-    error_dates = Dict()
-    expected_error_dates = Dict()
-
     for test_year in [0, 1, 100, 101, 1000, 1001, 1900, 1901, 2000, 2001, 2100, 2101]
-        test_date = Date(test_year)
         fmt_string = dateformat"yy"
-        output_date = Date(Dates.format(test_date, fmt_string), fmt_string)
 
-        # Year dates which cannot be recovered when formatted with ambiguous year format "yy"
-        if test_date != output_date
-            error_dates[test_date] = output_date
-        end
-
-        # Dates which we expect to be unrecoverable given current implementation, e.g. all years besides the years 0001-0100
-        if test_year >= 100
-            expected_error_dates[test_date] = Date(mod(test_year, 100), 01, 01)
-        end
+        # All dates encoded in two digit year format YY are parsed as year 00YY
+        @test Date(Dates.format(Date(test_year), fmt_string), fmt_string) == Date(test_year % 100)
     end
-
-
-    @test expected_error_dates == error_dates
 end
 
 end
