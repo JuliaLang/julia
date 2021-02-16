@@ -221,4 +221,4 @@ end
 getindex(s::SliceArray, I...) = view(s.parent, _slice_index(s, I...)...)
 setindex!(s::SliceArray, val, I...) = s.parent[_slice_index(s, I...)...] = val
 
-parent(s::SliceArray) = s.arr
+parent(s::SliceArray) = s.parent
