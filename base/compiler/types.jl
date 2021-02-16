@@ -220,8 +220,6 @@ method_table(ai::AbstractInterpreter) = InternalMethodTable(get_world_counter(ai
 # - inferring non-concrete toplevel call sites
 bail_out_call(interp::AbstractInterpreter, @nospecialize(t), sv)      = t === Any
 bail_out_apply(interp::AbstractInterpreter, @nospecialize(t), sv)     = t === Any
-bail_out_statement(interp::AbstractInterpreter, @nospecialize(t), sv) = t === Bottom
-bail_out_local(interp::AbstractInterpreter, @nospecialize(t), sv)     = t === Bottom
 function bail_out_toplevel_call(interp::AbstractInterpreter, @nospecialize(sig), sv)
     return isa(sv.linfo.def, Module) && !isdispatchtuple(sig)
 end

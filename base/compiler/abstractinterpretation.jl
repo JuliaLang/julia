@@ -1202,8 +1202,8 @@ function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, vtypes::
     argtypes = Vector{Any}(undef, n)
     @inbounds for i = 1:n
         ai = abstract_eval_value(interp, ea[i], vtypes, sv)
-        if bail_out_statement(interp, ai, sv)
-            return Bottom
+        if ai === Bottom
+            return nothing
         end
         argtypes[i] = ai
     end
@@ -1218,7 +1218,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     if e.head === :call
         ea = e.args
         argtypes = collect_argtypes(interp, ea, vtypes, sv)
-        if argtypes === Bottom
+        if argtypes === nothing
             t = Bottom
         else
             callinfo = abstract_call(interp, ea, argtypes, sv)
@@ -1280,7 +1280,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         if length(e.args) >= 5
             ea = e.args
             argtypes = collect_argtypes(interp, ea, vtypes, sv)
-            if argtypes === Bottom
+            if argtypes === nothing
                 t = Bottom
             else
                 t = _opaque_closure_tfunc(argtypes[1], argtypes[2], argtypes[3],
@@ -1376,6 +1376,31 @@ function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     return typ
 end
 
+function widenreturn(@nospecialize rt)
+    # only propagate information we know we can store
+    # and is valid and good inter-procedurally
+    rt = widenconditional(rt)
+    isa(rt, Const) && return rt
+    isa(rt, Type) && return rt
+    if isa(rt, PartialStruct)
+        fields = copy(rt.fields)
+        haveconst = false
+        for i in 1:length(fields)
+            a = widenreturn(fields[i])
+            if !haveconst && has_const_info(a)
+                # TODO: consider adding && const_prop_profitable(a) here?
+                haveconst = true
+            end
+            fields[i] = a
+        end
+        haveconst && return PartialStruct(rt.typ, fields)
+    end
+    if isa(rt, PartialOpaque)
+        return rt # XXX: this case was missed in #39512
+    end
+    return widenconst(rt)
+end
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
@@ -1399,6 +1424,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             frame.cur_hand = frame.handler_at[pc]
             edges = frame.stmt_edges[pc]
             edges === nothing || empty!(edges)
+            frame.stmt_info[pc] = nothing
             stmt = frame.src.code[pc]
             changes = s[pc]::VarTable
             t = nothing
@@ -1415,7 +1441,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 if condt === Bottom
                     empty!(frame.pclimitations)
                 end
-                if bail_out_local(interp, condt, frame)
+                if condt === Bottom
                     break
                 end
                 condval = maybe_extract_const_bool(condt)
@@ -1455,12 +1481,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
             elseif isa(stmt, ReturnNode)
                 pc´ = n + 1
-                rt = widenconditional(abstract_eval_value(interp, stmt.val, changes, frame))
-                if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct) && !isa(rt, PartialOpaque)
-                    # only propagate information we know we can store
-                    # and is valid inter-procedurally
-                    rt = widenconst(rt)
-                end
+                rt = widenreturn(abstract_eval_value(interp, stmt.val, changes, frame))
                 # copy limitations to return value
                 if !isempty(frame.pclimitations)
                     union!(frame.limitations, frame.pclimitations)
@@ -1506,7 +1527,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             else
                 if hd === :(=)
                     t = abstract_eval_statement(interp, stmt.args[2], changes, frame)
-                    if bail_out_local(interp, t, frame)
+                    if t === Bottom
                         break
                     end
                     frame.src.ssavaluetypes[pc] = t
@@ -1523,7 +1544,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # these do not generate code
                 else
                     t = abstract_eval_statement(interp, stmt, changes, frame)
-                    if bail_out_local(interp, t, frame)
+                    if t === Bottom
                         break
                     end
                     if !isempty(frame.ssavalue_uses[pc])
