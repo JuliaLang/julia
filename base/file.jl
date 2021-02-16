@@ -17,6 +17,7 @@ export
     rename,
     readlink,
     readdir,
+    lazyreaddir,
     rm,
     samefile,
     sendfile,
@@ -278,7 +279,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         end
     else
         if recursive
-            for p in readdir(path)
+            for p in lazyreaddir(path)
                 rm(joinpath(path, p), force=force, recursive=true)
             end
         end
@@ -323,7 +324,7 @@ function cptree(src::String, dst::String; force::Bool=false,
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
-    for name in readdir(src)
+    for name in lazyreaddir(src)
         srcname = joinpath(src, name)
         if !follow_symlinks && islink(srcname)
             symlink(readlink(srcname), joinpath(dst, name))
@@ -856,6 +857,80 @@ end
 readdir(; join::Bool=false, sort::Bool=true) =
     readdir(join ? pwd() : ".", join=join, sort=sort)
 
+mutable struct uv_dir_t
+    dirents::Ptr{uv_dirent_t}
+    nentries::Cint
+end
+
+"""
+    lazyreaddir(dir::AbstractString; chunklen=1::Int) -> Channel{String}
+
+Return a lazy and non-sorted iterable with the names in the directory `dir` or
+the current working directory if not given. When `join` is false, `readdir`
+returns just the names in the directory as is; when `join` is true, it returns
+`joinpath(dir, name)` for each `name` so that the returned strings are full
+paths. If you want to get absolute paths back, call `readdir` with an absolute
+directory path and `join` set to true. The names are read from the system in
+batches, and their maximum size set by `chunklen` may affect the performance.
+
+# Examples
+```julia-repl
+julia> cd("/home/JuliaUser/dev/julia")
+
+julia> lazyreaddir()
+Channel{String}(sz_max:0,sz_curr:1)
+
+julia> sort(collect(lazyreaddir()))
+30-element Array{String,1}:
+ ".appveyor.yml"
+ ".git"
+ ".gitattributes"
+ ⋮
+ "ui"
+ "usr"
+ "usr-staging"
+
+julia> maximum(lazyreaddir("base"; join=true))
+"base/weakkeydict.jl"
+```
+"""
+function lazyreaddir(dir::AbstractString; join::Bool=false, chunklen=1::Int)
+    # Allocate space for uv_fs_t struct
+    uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
+
+    # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
+    err = ccall(:uv_fs_opendir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Ptr{Cvoid}),
+                C_NULL, uv_readdir_req, dir, C_NULL)
+    err < 0 && throw(SystemError("unable to read directory $dir", -err))
+
+    thedirptr = ccall(:uv_fs_get_ptr, Ptr{Cvoid}, (Ptr{Cvoid},), uv_readdir_req)
+
+    buffer = zeros(UInt8, chunklen * Core.sizeof(uv_dir_t))
+
+    # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
+    ccall(:jl_uv_dir_t_set, Cvoid, (Ptr{uv_dir_t}, Ptr{Cvoid}, Cint), thedirptr, buffer, chunklen)
+
+    Channel{String}() do c
+        while true
+            read = ccall(:uv_fs_readdir, Cint,
+                         (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                         C_NULL, uv_readdir_req, thedirptr, C_NULL)
+            if read == 0
+                break
+            end
+            for n in 1:read
+                name = unsafe_string(ccall(:jl_uv_dir_t_get_name, Cstring, (Ptr{Cvoid}, Cint), thedirptr, n-1))
+                put!(c, join ? joinpath(dir, name) : name)
+            end
+        end
+
+        ccall(:uv_fs_closedir, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+              C_NULL, uv_readdir_req, thedirptr, C_NULL)
+    end
+end
+lazyreaddir(; join::Bool=false, chunklen=1::Int) =
+    lazyreaddir(join ? pwd() : ".", join=join, chunklen=chunklen)
+
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
 
@@ -1097,7 +1172,7 @@ function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
     err < 0 && uv_error("chmod($(repr(path)), 0o$(string(mode, base=8)))", err)
     if recursive && isdir(path)
-        for p in readdir(path)
+        for p in lazyreaddir(path)
             if !islink(joinpath(path, p))
                 chmod(joinpath(path, p), mode, recursive=true)
             end

@@ -115,6 +115,13 @@ JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
 JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 
+JL_DLLEXPORT void jl_uv_dir_t_set(uv_dir_t *dir, uv_dirent_t* dirents, size_t nentries ) {
+  dir->dirents=dirents; dir->nentries=nentries;
+}
+JL_DLLEXPORT const char *jl_uv_dir_t_get_name(uv_dir_t *dir, size_t entry ) {
+  return dir->dirents[entry].name;
+}
+
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
 
