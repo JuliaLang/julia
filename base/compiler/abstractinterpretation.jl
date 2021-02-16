@@ -459,7 +459,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
             # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
             comparison = sv.linfo.specTypes
-            l_comparison = length(unwrap_unionall(comparison).parameters)
+            l_comparison = length(unwrap_unionall(comparison).parameters)::Int
             spec_len = max(spec_len, l_comparison)
         else
             comparison = method.sig
@@ -700,16 +700,20 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
     res = Union{}
     nargs = length(aargtypes)
     splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).MAX_APPLY_UNION_ENUM
-    ctypes = Any[Any[aft]]
+    ctypes = [Any[aft]]
     infos = [Union{Nothing, AbstractIterationInfo}[]]
     for i = 1:nargs
-        ctypes´ = []
-        infos′ = []
+        ctypes´ = Vector{Any}[]
+        infos′ = Vector{Union{Nothing, AbstractIterationInfo}}[]
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
             if !isvarargtype(ti)
-                cti, info = precise_container_type(interp, itft, ti, sv)
+                cti_info = precise_container_type(interp, itft, ti, sv)
+                cti = cti_info[1]::Vector{Any}
+                info = cti_info[2]::Union{Nothing,AbstractIterationInfo}
             else
-                cti, info = precise_container_type(interp, itft, unwrapva(ti), sv)
+                cti_info = precise_container_type(interp, itft, unwrapva(ti), sv)
+                cti = cti_info[1]::Vector{Any}
+                info = cti_info[2]::Union{Nothing,AbstractIterationInfo}
                 # We can't represent a repeating sequence of the same types,
                 # so tmerge everything together to get one type that represents
                 # everything.
@@ -726,7 +730,7 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
                 continue
             end
             for j = 1:length(ctypes)
-                ct = ctypes[j]
+                ct = ctypes[j]::Vector{Any}
                 if isvarargtype(ct[end])
                     # This is vararg, we're not gonna be able to do any inling,
                     # drop the info
@@ -850,7 +854,8 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
        (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
        (a2 = argtypes[2]; a2 ⊑ Tuple)
         # TODO: why doesn't this use the getfield_tfunc?
-        cti, _ = precise_container_type(interp, iterate, a2, sv)
+        cti_info = precise_container_type(interp, iterate, a2, sv)
+        cti = cti_info[1]::Vector{Any}
         if 1 <= idx <= length(cti)
             rt = unwrapva(cti[idx])
         end
@@ -1392,7 +1397,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             delete!(W, pc)
             frame.currpc = pc
             frame.cur_hand = frame.handler_at[pc]
-            frame.stmt_edges[pc] === nothing || empty!(frame.stmt_edges[pc])
+            edges = frame.stmt_edges[pc]
+            edges === nothing || empty!(edges)
             stmt = frame.src.code[pc]
             changes = s[pc]::VarTable
             t = nothing
@@ -1405,7 +1411,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
             elseif isa(stmt, GotoIfNot)
-                condt = abstract_eval_value(interp, stmt.cond, s[pc], frame)
+                condt = abstract_eval_value(interp, stmt.cond, changes, frame)
                 if condt === Bottom
                     empty!(frame.pclimitations)
                 end
@@ -1438,7 +1444,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         end
                     end
                     newstate_else = stupdate!(s[l], changes_else)
-                    if newstate_else !== false
+                    if newstate_else !== nothing
                         # add else branch to active IP list
                         if l < frame.pc´´
                             frame.pc´´ = l
@@ -1449,7 +1455,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
             elseif isa(stmt, ReturnNode)
                 pc´ = n + 1
-                rt = widenconditional(abstract_eval_value(interp, stmt.val, s[pc], frame))
+                rt = widenconditional(abstract_eval_value(interp, stmt.val, changes, frame))
                 if !isa(rt, Const) && !isa(rt, Type) && !isa(rt, PartialStruct) && !isa(rt, PartialOpaque)
                     # only propagate information we know we can store
                     # and is valid inter-procedurally
@@ -1483,9 +1489,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 frame.cur_hand = Pair{Any,Any}(l, frame.cur_hand)
                 # propagate type info to exception handler
                 old = s[l]
-                new = s[pc]::VarTable
-                newstate_catch = stupdate!(old, new)
-                if newstate_catch !== false
+                newstate_catch = stupdate!(old, changes)
+                if newstate_catch !== nothing
                     if l < frame.pc´´
                         frame.pc´´ = l
                     end
@@ -1556,12 +1561,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 # (such as a terminator for a loop, if-else, or try block),
                 # consider whether we should jump to an older backedge first,
                 # to try to traverse the statements in approximate dominator order
-                if newstate !== false
+                if newstate !== nothing
                     s[pc´] = newstate
                 end
                 push!(W, pc´)
                 pc = frame.pc´´
-            elseif newstate !== false
+            elseif newstate !== nothing
                 s[pc´] = newstate
                 pc = pc´
             elseif pc´ in W

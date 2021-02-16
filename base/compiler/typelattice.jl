@@ -317,7 +317,7 @@ function stupdate!(state::VarTable, changes::StateUpdate)
     if !isa(changes.var, Slot)
         return stupdate!(state, changes.state)
     end
-    newstate = false
+    newstate = nothing
     changeid = slot_id(changes.var::Slot)
     for i = 1:length(state)
         if i == changeid
@@ -346,7 +346,7 @@ function stupdate!(state::VarTable, changes::StateUpdate)
 end
 
 function stupdate!(state::VarTable, changes::VarTable)
-    newstate = false
+    newstate = nothing
     for i = 1:length(state)
         newtype = changes[i]
         oldtype = state[i]
@@ -360,7 +360,7 @@ end
 
 stupdate!(state::Nothing, changes::VarTable) = copy(changes)
 
-stupdate!(state::Nothing, changes::Nothing) = false
+stupdate!(state::Nothing, changes::Nothing) = nothing
 
 function stupdate1!(state::VarTable, change::StateUpdate)
     if !isa(change.var, Slot)

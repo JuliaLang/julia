@@ -715,8 +715,8 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
         child = parent
-        parent = child.parent
         child === ancestor && break
+        parent = child.parent::InferenceState
     end
 end
 

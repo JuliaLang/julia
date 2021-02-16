@@ -257,10 +257,14 @@ end
 
 function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
     isdefined(t, :T) || return t
-    if !isdefined(t, :N) || t.N === u.var
-        return Vararg{rewrap_unionall(t.T, u)}
+    if !isa(u, UnionAll)
+        return t
     end
-    Vararg{rewrap_unionall(t.T, u), t.N}
+    T = rewrap_unionall(t.T, u)
+    if !isdefined(t, :N) || t.N === u.var
+        return Vararg{T}
+    end
+    return Vararg{T, t.N}
 end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars

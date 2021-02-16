@@ -630,7 +630,7 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                 call = thisarginfo.each[i]
                 new_stmt = Expr(:call, argexprs[2], def, state...)
                 state1 = insert_node!(ir, idx, call.rt, new_stmt)
-                new_sig = with_atype(call_sig(ir, new_stmt))
+                new_sig = with_atype(call_sig(ir, new_stmt)::Signature)
                 if isa(call.info, MethodMatchInfo) || isa(call.info, UnionSplitInfo)
                     info = isa(call.info, MethodMatchInfo) ?
                         MethodMatchInfo[call.info] : call.info.matches
@@ -680,7 +680,7 @@ function resolve_todo(todo::InliningTodo, et::Union{EdgeTracker, Nothing}, cache
     spec = todo.spec::DelayedInliningSpec
     isconst, src = find_inferred(todo.mi, spec.atypes, caches, spec.stmttype)
 
-    if isconst
+    if isconst && et !== nothing
         push!(et, todo.mi)
         return ConstantCase(src)
     end
@@ -988,9 +988,12 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, invoke_data::Invok
             sig.atype, method.sig)::SimpleVector
     methsp = methsp::SimpleVector
     match = MethodMatch(metharg, methsp, method, true)
-    result = analyze_method!(match, sig.atypes, state.et, state.caches, state.params, calltype)
+    et = state.et
+    result = analyze_method!(match, sig.atypes, et, state.caches, state.params, calltype)
     handle_single_case!(ir, stmt, idx, result, true, todo)
-    intersect!(state.et, WorldRange(invoke_data.min_valid, invoke_data.max_valid))
+    if et !== nothing
+        intersect!(et, WorldRange(invoke_data.min_valid, invoke_data.max_valid))
+    end
     return nothing
 end
 
@@ -1118,6 +1121,7 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
                 sig.atype, only_method.sig)::SimpleVector
             match = MethodMatch(metharg, methsp, only_method, true)
         else
+            meth = meth::MethodLookupResult
             @assert length(meth) == 1
             match = meth[1]
         end
@@ -1145,6 +1149,8 @@ end
 function assemble_inline_todo!(ir::IRCode, state::InliningState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Pair{Int, Any}[]
+    et = state.et
+    method_table = state.method_table
     for idx in 1:length(ir.stmts)
         r = process_simple!(ir, todo, idx, state)
         r === nothing && continue
@@ -1176,20 +1182,18 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         nu = unionsplitcost(sig.atypes)
         if nu == 1 || nu > state.params.MAX_UNION_SPLITTING
             if !isa(info, MethodMatchInfo)
-                if state.method_table === nothing
-                    continue
-                end
-                info = recompute_method_matches(sig.atype, state.params, state.et, state.method_table)
+                method_table === nothing && continue
+                et === nothing && continue
+                info = recompute_method_matches(sig.atype, state.params, et, method_table)
             end
             infos = MethodMatchInfo[info]
         else
             if !isa(info, UnionSplitInfo)
-                if state.method_table === nothing
-                    continue
-                end
+                method_table === nothing && continue
+                et === nothing && continue
                 infos = MethodMatchInfo[]
                 for union_sig in UnionSplitSignature(sig.atypes)
-                    push!(infos, recompute_method_matches(argtypes_to_type(union_sig), state.params, state.et, state.method_table))
+                    push!(infos, recompute_method_matches(argtypes_to_type(union_sig), state.params, et, method_table))
                 end
             else
                 infos = info.matches
