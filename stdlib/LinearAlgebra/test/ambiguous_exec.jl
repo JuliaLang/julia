@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("use_mkl.jl")
+
 using Test, LinearAlgebra, SparseArrays
 let ambig = detect_ambiguities(LinearAlgebra; recursive=true)
     @test isempty(ambig)

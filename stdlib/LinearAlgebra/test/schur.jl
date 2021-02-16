@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("use_mkl.jl")
+
 module TestSchur
 
 using Test, LinearAlgebra, Random

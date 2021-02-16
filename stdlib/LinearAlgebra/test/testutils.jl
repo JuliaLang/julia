@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("use_mkl.jl")
+
 # Test approximate equality of vectors or columns of matrices modulo floating
 # point roundoff and phase (sign) differences.
 #
