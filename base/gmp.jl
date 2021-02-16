@@ -308,21 +308,21 @@ BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
-    x == 0 && return BigInt(Culong(0))
+    # On 64-bit Windows, `Clong` is `Int32`, not `Int64`, so construction of
+    # `Int64` constants, e.g. `BigInt(3)`, uses this method.
+    isbits(x) && typemin(Clong) <= x <= typemax(Clong) && return BigInt((x % Clong)::Clong)
     nd = ndigits(x, base=2)
     z = MPZ.realloc2(nd)
-    s = sign(x)
-    s == -1 && (x = -x)
-    x = unsigned(x)
+    ux = unsigned(x < 0 ? -x : x)
     size = 0
     limbnbits = sizeof(Limb) << 3
     while nd > 0
         size += 1
-        unsafe_store!(z.d, x % Limb, size)
-        x >>>= limbnbits
+        unsafe_store!(z.d, ux % Limb, size)
+        ux >>= limbnbits
         nd -= limbnbits
     end
-    z.size = s*size
+    z.size = x < 0 ? -size : size
     z
 end
 
