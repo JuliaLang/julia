@@ -560,7 +560,7 @@ end
 
     for test_year in [0, 1, 100, 101, 1000, 1001, 1900, 1901, 2000, 2001, 2100, 2101]
         test_date = Date(test_year, 01, 01)
-        fmt_string = "yy"
+        fmt_string = dateformat"yy"
         output_date = Date(Dates.format(test_date, fmt_string), fmt_string)
 
         # Year dates which cannot be recovered when formatted with ambiguous year format "yy"
