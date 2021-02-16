@@ -2198,27 +2198,27 @@ using Base: eachrow, eachcol
     @test_throws MethodError collect(eachcol(M))
 
     S1 = eachslice(M, dims = 1)
-    @test size(S1) = (2,)
+    @test size(S1) == (2,)
     @test S1[1] == reshape(collect(1:2:16), (2,2,2))
 
     S1K = eachslice(M, dims = 1, drop=false)
-    @test size(S1K) = (2,1,1,1)
+    @test size(S1K) == (2,1,1,1)
     @test S1K[1,1,1,1] == reshape(collect(1:2:16), (2,2,2))
 
     S23 = eachslice(M, dims = (2,3))
-    @test size(S23) = (2,2)
+    @test size(S23) == (2,2)
     @test S23[2,1] == [3 11; 4 12]
 
     S23K = eachslice(M, dims = (2,3), drop=false)
-    @test size(S23K) = (1,2,2,1)
+    @test size(S23K) == (1,2,2,1)
     @test S23K[1,2,1,1] == [3 11; 4 12]
 
     S32 = eachslice(M, dims = (3,2))
-    @test size(S32) = (2,2)
+    @test size(S32) == (2,2)
     @test S23[1,2] == [3 11; 4 12]
 
     S32K = eachslice(M, dims = (3,2), drop=false)
-    @test size(S32K) = (1,2,2,1)
+    @test size(S32K) == (1,2,2,1)
     @test S32K[1,2,1,1] == [3 11; 4 12]
 end
 
