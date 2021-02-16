@@ -45,6 +45,7 @@ Standard library changes
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 * `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).
 * `range` now supports `start` as an optional keyword argument ([#38041]).
+* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
 * `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
 * `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
 * `escape_string` can now receive a collection of characters in the keyword
