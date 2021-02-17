@@ -152,7 +152,7 @@ function cbrt(a::Float16)
     if !isfinite(a) || iszero(a)
         return a
     end
-    x=Float32(a)
+    x = Float32(a)
 
     # 5 bit approximation. Simpler than _approx_cbrt since subnormals can not appear
     u = highword(x) & 0x7fff_ffff
