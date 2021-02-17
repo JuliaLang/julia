@@ -993,3 +993,6 @@ end
 
     @test Cyclotomic() .* [2, 3] == [[1, 2], [1, 2]]
 end
+
+# dottable test
+@test Broadcast.__dot__(:($(^)(t, 2))) == :($(^).(t, 2))
