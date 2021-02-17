@@ -2404,7 +2404,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
     }
 
-    if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
+    // prefer generating a fresh typevar, to avoid repeated renaming if the result
+    // is compared to one of the intersected types later.
+    if (!varval)
         newvar = jl_new_typevar(vb->var->name, vb->lb, vb->ub);
 
     // remove/replace/rewrap free occurrences of this var in the environment
@@ -3264,11 +3266,25 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 static jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
 {
     if (jl_is_unionall(a)) {
-        jl_value_t *ans = switch_union_tuple(((jl_unionall_t*)a)->body, b);
+        jl_unionall_t *ua = (jl_unionall_t*)a;
+        if (jl_is_unionall(b)) {
+            jl_unionall_t *ub = (jl_unionall_t*)b;
+            if (ub->var->lb == ua->var->lb && ub->var->ub == ua->var->ub) {
+                jl_value_t *ub2 = jl_instantiate_unionall(ub, (jl_value_t*)ua->var);
+                jl_value_t *ans = NULL;
+                JL_GC_PUSH2(&ub2, &ans);
+                ans = switch_union_tuple(ua->body, ub2);
+                if (ans != NULL)
+                    ans = jl_type_unionall(ua->var, ans);
+                JL_GC_POP();
+                return ans;
+            }
+        }
+        jl_value_t *ans = switch_union_tuple(ua->body, b);
         if (ans == NULL)
             return NULL;
         JL_GC_PUSH1(&ans);
-        ans = jl_type_unionall(((jl_unionall_t*)a)->var, ans);
+        ans = jl_type_unionall(ua->var, ans);
         JL_GC_POP();
         return ans;
     }
