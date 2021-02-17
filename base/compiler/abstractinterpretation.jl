@@ -1007,11 +1007,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
         return CallMeta(Tuple, false)
     elseif is_return_type(f)
-        rt_rt = return_type_tfunc(interp, argtypes, sv)
-        if rt_rt !== nothing
-            return CallMeta(rt_rt, nothing)
-        end
-        return CallMeta(Type, nothing)
+        return return_type_tfunc(interp, argtypes, sv)
     elseif la == 2 && istopfunction(f, :!)
         # handle Conditional propagation through !Bool
         aty = argtypes[2]
