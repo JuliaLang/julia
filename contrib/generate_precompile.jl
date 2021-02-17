@@ -292,14 +292,13 @@ function generate_precompile_statements()
                 Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
                 write(output_copy, l)
             end
-            close(output_copy)
-            close(ptm)
         catch ex
-            close(output_copy)
-            close(ptm)
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
                 rethrow() # ignore EIO on ptm after pts dies
             end
+        finally
+            close(output_copy)
+            close(ptm)
         end
         # wait for the definitive prompt before start writing to the TTY
         readuntil(output_copy, "julia>")
@@ -349,7 +348,7 @@ function generate_precompile_statements()
 
     # Execute the collected precompile statements
     n_succeeded = 0
-    include_time = @elapsed for statement in sort(collect(statements))
+    include_time = @elapsed for statement in sort!(collect(statements))
         # println(statement)
         # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
         # N with a large number seems to work around it.
