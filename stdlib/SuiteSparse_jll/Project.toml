@@ -1,6 +1,6 @@
 name = "SuiteSparse_jll"
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "5.4.1+1"
+version = "5.4.1+3"
 
 [deps]
 OpenBLAS_jll = "4536629a-c528-5b80-bd46-f80d51c5b363"
