@@ -376,6 +376,10 @@ end
         #non-hex characters
         @test_throws ArgumentError hex2bytes(b"0123456789abcdefABCDEFGH")
     end
+
+    @testset "Issue 39284" begin
+        @test "efcdabefcdab8967452301" == bytes2hex(Iterators.reverse(hex2bytes("0123456789abcdefABCDEF")))
+    end
 end
 
 # b"" should be immutable

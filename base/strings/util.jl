@@ -666,12 +666,12 @@ end
     throw(ArgumentError("byte is not an ASCII hexadecimal digit"))
 
 """
-    bytes2hex(a::AbstractArray{UInt8}) -> String
-    bytes2hex(io::IO, a::AbstractArray{UInt8})
+    bytes2hex(itr) -> String
+    bytes2hex(io::IO, itr)
 
-Convert an array `a` of bytes to its hexadecimal string representation, either
-returning a `String` via `bytes2hex(a)` or writing the string to an `io` stream
-via `bytes2hex(io, a)`.  The hexadecimal characters are all lowercase.
+Convert an iterator `itr` of bytes to its hexadecimal string representation, either
+returning a `String` via `bytes2hex(itr)` or writing the string to an `io` stream
+via `bytes2hex(io, itr)`.  The hexadecimal characters are all lowercase.
 
 # Examples
 ```jldoctest
@@ -689,17 +689,19 @@ julia> bytes2hex(b)
 """
 function bytes2hex end
 
-function bytes2hex(a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
-    b = Base.StringVector(2*length(a))
-    @inbounds for (i, x) in enumerate(a)
+function bytes2hex(itr)
+    eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
+    b = Base.StringVector(2*length(itr))
+    @inbounds for (i, x) in enumerate(itr)
         b[2i - 1] = hex_chars[1 + x >> 4]
         b[2i    ] = hex_chars[1 + x & 0xf]
     end
     return String(b)
 end
 
-function bytes2hex(io::IO, a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
-    for x in a
+function bytes2hex(io::IO, itr)
+    eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
+    for x in itr
         print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
     end
 end
