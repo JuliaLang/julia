@@ -21,7 +21,7 @@ version = "0.8.3"
 
 [[Documenter]]
 deps = ["Base64", "Dates", "DocStringExtensions", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
-git-tree-sha1 = "7fd90c5dcdfabcbe17f80854784c74a03e6fed62"
+git-tree-sha1 = "262bbc530653ccdee2a85c5a8d8c523b9cef3824"
 repo-rev = "mp/ssh-key-fingerprint"
 repo-url = "https://github.com/JuliaDocs/Documenter.jl.git"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"

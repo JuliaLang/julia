@@ -345,6 +345,7 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     return Documenter.Writers.HTMLWriter.expand_versions(dir, v.versions)
 end
 
+withenv("DOCUMENTER_PRINT_SSH_FINGERPRINT" => "true") do
 deploydocs(
     repo = "github.com/JuliaLang/docs.julialang.org.git",
     deploy_config = BuildBotConfig(),
@@ -353,3 +354,4 @@ deploydocs(
     devurl = devurl,
     versions = Versions(["v#.#", devurl => devurl]),
 )
+end
