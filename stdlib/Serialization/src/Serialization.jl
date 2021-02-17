@@ -425,7 +425,7 @@ function serialize(s::AbstractSerializer, meth::Method)
         serialize(s, nothing)
     end
     if isdefined(meth, :generator)
-        serialize(s, Base._uncompressed_ast(meth, meth.generator.inferred)) # XXX: what was this supposed to do?
+        serialize(s, meth.generator)
     else
         serialize(s, nothing)
     end
@@ -434,9 +434,12 @@ end
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
-    isa(linfo.def, Module) || error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
-    serialize(s, linfo.uninferred)
+    if isdefined(linfo, :uninferred)
+        serialize(s, linfo.uninferred)
+    else
+        writetag(s.io, UNDEFREF_TAG)
+    end
     serialize(s, nothing)  # for backwards compat
     serialize(s, linfo.sparam_vals)
     serialize(s, Any)  # for backwards compat
@@ -1027,11 +1030,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         end
         meth.slot_syms = slot_syms
         if generator !== nothing
-            linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
-            linfo.specTypes = Tuple
-            linfo.inferred = generator
-            linfo.def = meth
-            meth.generator = linfo
+            meth.generator = generator
         end
         if !is_for_opaque_closure
             mt = ccall(:jl_method_table_for, Any, (Any,), sig)
@@ -1047,7 +1046,10 @@ end
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
-    linfo.uninferred = deserialize(s)::CodeInfo
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        linfo.uninferred = handle_deserialize(s, tag)::CodeInfo
+    end
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
         # for reading files prior to v1.2
@@ -1056,7 +1058,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo.sparam_vals = deserialize(s)::SimpleVector
     _rettype = deserialize(s)  # for backwards compat
     linfo.specTypes = deserialize(s)
-    linfo.def = deserialize(s)::Module
+    linfo.def = deserialize(s)
     return linfo
 end
 

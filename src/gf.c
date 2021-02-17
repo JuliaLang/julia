@@ -125,7 +125,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m J
             JL_GC_PUSH1(&specializations); // clang-sa doesn't realize this loop uses specializations
             for (i = cl; i > 0; i--) {
                 jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i - 1]);
-                if (mi == NULL)
+                if ((jl_value_t*)mi == jl_nothing)
                     break;
                 if (jl_types_equal(mi->specTypes, type)) {
                     if (locked)
@@ -146,19 +146,20 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m J
                 jl_method_instance_t **data = (jl_method_instance_t**)jl_svec_data(specializations);
                 for (i = 0; i < cl; i++) {
                     jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
-                    if (mi == NULL)
+                    if ((jl_value_t*)mi == jl_nothing)
                         break;
                     assert(!jl_types_equal(mi->specTypes, type));
                 }
             }
             jl_method_instance_t *mi = jl_get_specialized(m, type, sparams);
             JL_GC_PUSH1(&mi);
-            if (hv ? (i + 1 >= cl || jl_svecref(specializations, i + 1) != NULL) : (i <= 1 || jl_svecref(specializations, i - 2) != NULL)) {
+            if (hv ? (i + 1 >= cl || jl_svecref(specializations, i + 1) != jl_nothing) : (i <= 1 || jl_svecref(specializations, i - 2) != jl_nothing)) {
                 size_t ncl = cl < 8 ? 8 : (cl*3)>>1;
                 jl_svec_t *nc = jl_alloc_svec_uninit(ncl);
                 if (i > 0)
                     memcpy((char*)jl_svec_data(nc), jl_svec_data(specializations), sizeof(void*) * i);
-                memset((char*)jl_svec_data(nc) + sizeof(void*) * i, 0, sizeof(void*) * (ncl - cl));
+                for(int j = 0; j < ncl - cl; j++)
+                    jl_svecset(nc, j+i, jl_nothing);
                 if (i < cl)
                     memcpy((char*)jl_svec_data(nc) + sizeof(void*) * (i + ncl - cl),
                            (char*)jl_svec_data(specializations) + sizeof(void*) * i,
@@ -171,7 +172,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m J
             }
             if (!hv)
                 i -= 1;
-            assert(jl_svecref(specializations, i) == NULL);
+            assert(jl_svecref(specializations, i) == jl_nothing);
             jl_svecset(specializations, i, mi); // jl_atomic_store_release?
             if (hv) {
                 // TODO: fuse lookup and insert steps?
@@ -416,7 +417,7 @@ static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
     size_t i, l = jl_svec_len(specializations);
     for (i = 0; i < l; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
-        if (mi) {
+        if ((jl_value_t*)mi != jl_nothing) {
             assert(jl_is_method_instance(mi));
             if (jl_rettype_inferred(mi, jl_world_counter, jl_world_counter) == jl_nothing)
                 jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
@@ -1564,7 +1565,7 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *m
     l = jl_svec_len(specializations);
     for (i = 0; i < l; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
-        if (mi) {
+        if ((jl_value_t*)mi != jl_nothing) {
             invalidated = 1;
             invalidate_external(mi, methodentry->max_world);
             invalidate_backedges(mi, methodentry->max_world, "jl_method_table_disable");
@@ -1732,7 +1733,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 enum morespec_options ambig = morespec_unknown;
                 for (i = 0; i < l; i++) {
                     jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
-                    if (mi == NULL)
+                    if ((jl_value_t*)mi == jl_nothing)
                         continue;
                     isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
                     if (jl_type_intersection2(type, isect3, &isect, &isect2)) {
