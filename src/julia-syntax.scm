@@ -1927,7 +1927,10 @@
          (stmts (if blk? (cdr (butlast test)) '()))
          (test  (if blk? (last test) test)))
     (if (and (pair? test) (memq (car test) '(&& |\|\||)))
-        (let ((clauses `(,(car test) ,@(map expand-forms (cdr (flatten-ex (car test) test))))))
+        (let* ((clauses `(,(car test) ,@(map expand-forms (cdr (flatten-ex (car test) test)))))
+               (clauses (if (null? (cdr clauses))
+                            (if (eq? (car clauses) '&&) '(true) '(false))
+                            clauses)))
           `(if ,(if blk?
                     `(block ,@(map expand-forms stmts) ,clauses)
                     clauses)
