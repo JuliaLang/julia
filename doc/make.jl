@@ -302,7 +302,10 @@ makedocs(
 # Define our own DeployConfig
 struct BuildBotConfig <: Documenter.DeployConfig end
 function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs...)
-    haskey(ENV, "DOCUMENTER_KEY") || return Documenter.DeployDecision(; all_ok=false)
+    if !haskey(ENV, "DOCUMENTER_KEY")
+        @info "Skipping docs deployment: DOCUMENTER_KEY missing"
+        return Documenter.DeployDecision(; all_ok=false)
+    end
     if Base.GIT_VERSION_INFO.tagged_commit
         # Strip extra pre-release info (1.5.0-rc2.0 -> 1.5.0-rc2)
         ver = VersionNumber(VERSION.major, VERSION.minor, VERSION.patch,
@@ -312,6 +315,7 @@ function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs
     elseif Base.GIT_VERSION_INFO.branch == "master"
         return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder=devurl)
     end
+    @info "Skipping docs deployment: neither a tag nor master branch" Base.GIT_VERSION_INFO
     return Documenter.DeployDecision(; all_ok=false)
 end
 
