@@ -277,3 +277,11 @@ for i = 1:10
     print(buf, join(s22021, "\n"))
     @test isvalid(String, take!(buf))
 end
+
+@testset "string()" begin
+    # test the Float sizehints
+    @test string(2.f0) == "2.0"
+    @test string(2.f0, 2.0) == "2.02.0"
+    # test empty args
+    @test string() == ""
+end

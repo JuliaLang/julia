@@ -43,6 +43,7 @@ Standard library changes
 ------------------------
 
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
+* `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).
 * `range` now supports `start` as an optional keyword argument ([#38041]).
 * `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
 * `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
@@ -94,6 +95,7 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
+- Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in a future release.
 
 
 External dependencies

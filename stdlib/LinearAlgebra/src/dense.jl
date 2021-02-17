@@ -347,6 +347,9 @@ overwriting the existing value of `C`.
 !!! tip
     Bounds checking can be disabled by [`@inbounds`](@ref), but you need to take care of the shape
     of `C`, `A`, `B` yourself.
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 @inline function kron!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix)
     require_one_based_indexing(A, B)

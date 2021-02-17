@@ -98,7 +98,7 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             }
             uintptr_t oldsp = thesp;
             have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
-            if (oldsp >= thesp) {
+            if (oldsp >= thesp && !jl_running_under_rr(0)) {
                 // The stack pointer is clearly bad, as it must grow downwards.
                 // But sometimes the external unwinder doesn't check that.
                 have_more_frames = 0;

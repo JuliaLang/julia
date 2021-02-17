@@ -33,19 +33,23 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
     }
     else if (jl_is_returnnode(expr)) {
         jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
-        JL_GC_PUSH1(&val);
-        expr = jl_new_struct(jl_returnnode_type, val);
-        JL_GC_POP();
+        if (val != jl_returnnode_value(expr)) {
+            JL_GC_PUSH1(&val);
+            expr = jl_new_struct(jl_returnnode_type, val);
+            JL_GC_POP();
+        }
         return expr;
     }
     else if (jl_is_gotoifnot(expr)) {
         jl_value_t *cond = resolve_globals(jl_gotoifnot_cond(expr), module, sparam_vals, binding_effects, eager_resolve);
-        intptr_t label = jl_gotoifnot_label(expr);
-        JL_GC_PUSH1(&cond);
-        expr = jl_new_struct_uninit(jl_gotoifnot_type);
-        set_nth_field(jl_gotoifnot_type, expr, 0, cond);
-        jl_gotoifnot_label(expr) = label;
-        JL_GC_POP();
+        if (cond != jl_gotoifnot_cond(expr)) {
+            intptr_t label = jl_gotoifnot_label(expr);
+            JL_GC_PUSH1(&cond);
+            expr = jl_new_struct_uninit(jl_gotoifnot_type);
+            set_nth_field(jl_gotoifnot_type, expr, 0, cond);
+            jl_gotoifnot_label(expr) = label;
+            JL_GC_POP();
+        }
         return expr;
     }
     else if (jl_is_expr(expr)) {
@@ -436,6 +440,10 @@ JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *
 // effectively described by the tuple (specTypes, env, Method) inside linfo
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
+    if (linfo->uninferred) {
+        return (jl_code_info_t*)jl_copy_ast((jl_value_t*)linfo->uninferred);
+    }
+
     JL_TIMING(STAGED_FUNCTION);
     jl_value_t *tt = linfo->specTypes;
     jl_method_t *def = linfo->def.method;
@@ -461,6 +469,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
+            jl_array_t *stmts = (jl_array_t*)func->code;
+            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
         }
         else {
             // Lower the user's expression and resolve references to the type parameters
@@ -471,7 +481,17 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
                     ptls->in_pure_callback = 0;
                     jl_toplevel_eval(def->module, (jl_value_t*)func);
                 }
-                jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension.");
+                jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
+            }
+        }
+
+        // If this generated function has an opaque closure, cache it for
+        // correctness of method identity
+        for (int i = 0; i < jl_array_len(func->code); ++i) {
+            jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
+            if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == new_opaque_closure_sym) {
+                linfo->uninferred = jl_copy_ast((jl_value_t*)func);
+                break;
             }
         }
 
@@ -744,9 +764,9 @@ JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAG
 
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
-JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
-                                jl_code_info_t *f,
-                                jl_module_t *module)
+JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
+                                        jl_code_info_t *f,
+                                        jl_module_t *module)
 {
     // argdata is svec(svec(types...), svec(typevars...), functionloc)
     jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
@@ -861,6 +881,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
     JL_GC_POP();
+
+    return m;
 }
 
 #ifdef __cplusplus

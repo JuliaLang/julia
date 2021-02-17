@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libssh2
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libssh2_handle = C_NULL
 libssh2_path = ""
@@ -27,10 +27,11 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libssh2_handle = dlopen(libssh2)
     global libssh2_path = dlpath(libssh2_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    LIBPATH[] = dirname(libssh2_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 

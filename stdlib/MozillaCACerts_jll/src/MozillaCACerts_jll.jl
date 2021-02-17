@@ -6,16 +6,18 @@ baremodule MozillaCACerts_jll
 using Base
 Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
+const PATH_list = String[]
+const LIBPATH_list = String[]
+
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 cacert = ""
 
 function __init__()
-	global artifact_dir = dirname(Sys.BINDIR)
-	global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
-	global cacert = normpath(Sys.BINDIR::String, Base.DATAROOTDIR, "julia", "cert.pem")
+    global artifact_dir = dirname(Sys.BINDIR)
+    global cacert = normpath(Sys.BINDIR::String, Base.DATAROOTDIR, "julia", "cert.pem")
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

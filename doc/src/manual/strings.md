@@ -335,7 +335,7 @@ julia> s[1:4]
 Because of variable-length encodings, the number of characters in a string (given by [`length(s)`](@ref))
 is not always the same as the last index. If you iterate through the indices 1 through [`lastindex(s)`](@ref)
 and index into `s`, the sequence of characters returned when errors aren't thrown is the sequence
-of characters comprising the string `s`. Thus we have the identity that `length(s) <= lastindex(s)`,
+of characters comprising the string `s`. Thus `length(s) <= lastindex(s)`,
 since each character in a string must have its own index. The following is an inefficient and
 verbose way to iterate through the characters of `s`:
 
@@ -1002,15 +1002,19 @@ RegexMatch("Day 10")
 julia> name = "Jon"
 "Jon"
 
-julia> regex_name = Regex("[\"( ]$name[\") ]")  # interpolate value of name
-r"[\"( ]Jon[\") ]"
+julia> regex_name = Regex("[\"( ]\\Q$name\\E[\") ]")  # interpolate value of name
+r"[\"( ]\QJon\E[\") ]"
 
-julia> match(regex_name," Jon ")
+julia> match(regex_name, " Jon ")
 RegexMatch(" Jon ")
 
-julia> match(regex_name,"[Jon]") === nothing
+julia> match(regex_name, "[Jon]") === nothing
 true
 ```
+
+Note the use of the `\Q...\E` escape sequence. All characters between the `\Q` and the `\E`
+are interpreted as literal characters (after string interpolation). This escape sequence can
+be useful when interpolating, possibly malicious, user input.
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 

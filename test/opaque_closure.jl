@@ -150,3 +150,33 @@ end
 mk_va_opaque() = @opaque (x...)->x
 @test mk_va_opaque()(1) == (1,)
 @test mk_va_opaque()(1,2) == (1,2)
+
+# OpaqueClosure show method
+@test repr(@opaque x->1) == "(::Any)::Any->◌"
+
+# Opaque closure in CodeInfo returned from generated functions
+function mk_ocg(args...)
+    ci = @code_lowered const_int()
+    cig = Meta.lower(@__MODULE__, Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
+        Expr(:opaque_closure_method, 0, lno, ci))).args[1]
+    cig.slotnames = Symbol[Symbol("#self#")]
+    cig.slottypes = Any[Any]
+    cig.slotflags = UInt8[0x00]
+    cig
+end
+
+@eval function oc_trivial_generated()
+    $(Expr(:meta, :generated_only))
+    $(Expr(:meta,
+            :generated,
+            Expr(:new,
+                Core.GeneratedFunctionStub,
+                :mk_ocg,
+                Any[:oc_trivial_generated],
+                Any[],
+                @__LINE__,
+                QuoteNode(Symbol(@__FILE__)),
+                true)))
+end
+@test isa(oc_trivial_generated(), Core.OpaqueClosure{Tuple{}, Any})
+@test oc_trivial_generated()() == 1

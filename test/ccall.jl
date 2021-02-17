@@ -8,6 +8,9 @@ import Libdl
 
 # for cfunction_closure
 include("testenv.jl")
+# for cfunction error
+isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
+using Main.MacroCalls
 
 const libccalltest = "libccalltest"
 
@@ -1677,6 +1680,10 @@ end
     @test_throws ArgumentError("interpolated function `PROGRAM_FILE` was not a Ptr{Cvoid}, but String") @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
 end
 
+@testset "check error path for @cfunction" begin
+    @test_throws ArgumentError("@cfunction argument types must be a literal tuple") @macrocall(@cfunction(identity, Cstring, Cstring))
+end
+
 # call some c functions
 @testset "run @ccall with C standard library functions" begin
     @test @ccall(sqrt(4.0::Cdouble)::Cdouble) == 2.0
@@ -1733,3 +1740,14 @@ ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,
 @test ccall_lazy_lib_name(3) == 1
 ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid},), C_NULL)
 @test_throws UndefVarError(:xx_nOt_DeFiNeD_xx) ccall_with_undefined_lib()
+
+@testset "transcode for UInt8 and UInt16" begin
+    a   = [UInt8(1), UInt8(2), UInt8(3)]
+    a16 = transcode(UInt16, a)
+    a8  = transcode(UInt8, a16)
+    @test a8 == a
+    b   = [UInt16(1), UInt16(2), UInt16(3)]
+    b8  = transcode(UInt8, b)
+    b16 = transcode(UInt16, b8)
+    @test b16 == b
+end

@@ -607,9 +607,9 @@ f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
     @test @inferred(f(Tuple(1:10))) === Tuple(3:8)
     @test @inferred(f((true, 2., 3, 4f0, 0x05, 6, 7.))) === (3, 4f0, 0x05)
 
-    f(t) = t[Base.OneTo(5)]
-    @test @inferred(f(Tuple(1:10))) === Tuple(1:5)
-    @test @inferred(f((true, 2., 3, 4f0, 0x05, 6, 7.))) === (true, 2., 3, 4f0, 0x05)
+    f2(t) = t[Base.OneTo(5)]
+    @test @inferred(f2(Tuple(1:10))) === Tuple(1:5)
+    @test @inferred(f2((true, 2., 3, 4f0, 0x05, 6, 7.))) === (true, 2., 3, 4f0, 0x05)
 
     @test @inferred((t -> t[1:end])(Tuple(1:15))) === Tuple(1:15)
     @test @inferred((t -> t[2:end])(Tuple(1:15))) === Tuple(2:15)

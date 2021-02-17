@@ -253,6 +253,9 @@ for example, in `x - y ≈ 0`, `atol=1e-9` is an absurdly small tolerance if `x`
 but an absurdly large tolerance if `x` is the
 [radius of a Hydrogen atom](https://en.wikipedia.org/wiki/Bohr_radius) in meters.
 
+!!! compat "Julia 1.6"
+    Passing the `norm` keyword argument when comparing numeric (non-array) arguments
+    requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest

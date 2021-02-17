@@ -43,13 +43,14 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
+    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     while idx <= length(code)
         codeloc = ci.codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
             # insert a side-effect instruction before the current instruction in the same basic block
             insert!(code, idx, Expr(:code_coverage_effect))
             insert!(ci.codelocs, idx, codeloc)
-            insert!(ci.ssavaluetypes, idx, Nothing)
+            insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, nothing)
             changemap[oldidx] += 1
             if oldidx < length(labelmap)
@@ -58,12 +59,12 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             idx += 1
             prevloc = codeloc
         end
-        if code[idx] isa Expr && ci.ssavaluetypes[idx] === Union{}
+        if code[idx] isa Expr && ssavaluetypes[idx] === Union{}
             if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
                 # insert unreachable in the same basic block after the current instruction (splitting it)
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
-                insert!(ci.ssavaluetypes, idx + 1, Union{})
+                insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, nothing)
                 if oldidx < length(changemap)
                     changemap[oldidx + 1] += 1
@@ -114,7 +115,7 @@ function slot2reg(ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.sptypes, sv.slottypes) # consumes `ir`
+    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.slottypes) # consumes `ir`
     return ir
 end
 

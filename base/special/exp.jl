@@ -62,6 +62,11 @@ LogBL(::Val{2}, ::Type{Float32}) = 0.0f0
 LogBL(::Val{:ℯ}, ::Type{Float32}) = -1.4286068f-6
 LogBL(::Val{10}, ::Type{Float32}) = -4.605039f-6
 
+# -log(base, 2) as a Float32 for Float16 version.
+LogB(::Val{2}, ::Type{Float16}) = -1.0f0
+LogB(::Val{:ℯ}, ::Type{Float16}) = -0.6931472f0
+LogB(::Val{10}, ::Type{Float16}) = -0.30103f0
+
 # Range reduced kernels
 @inline function expm1b_kernel(::Val{2}, x::Float64)
     return x * evalpoly(x, (0.6931471805599393, 0.24022650695910058,
@@ -198,11 +203,6 @@ end
 # The solution is to do the scaling back in 2 steps as just messing with the exponent wouldn't work.
 for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
     @eval begin
-        function ($func)(x::Real)
-            xf = float(x)
-            x === xf && throw(MethodError($func, (x,)))
-            return ($func)(xf)
-        end
         function ($func)(x::T) where T<:Float64
             N_float = muladd(x, LogBo256INV($base, T), MAGIC_ROUND_CONST(T))
             N = reinterpret(uinttype(T), N_float) % Int32
@@ -244,6 +244,21 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
             twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
             return twopk*small_part
         end
+
+        function ($func)(a::Float16)
+            T = Float32
+            x = T(a)
+            N_float = round(x*LogBINV($base, T))
+            N = unsafe_trunc(Int32, N_float)
+            r = muladd(N_float, LogB($base, Float16), x)
+            small_part = expb_kernel($base, r)
+            if !(abs(x) <= SUBNORM_EXP($base, T))
+                x > MAX_EXP($base, T) && return Inf16
+                N<=Int32(-24) && return zero(Float16)
+            end
+            twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
+            return Float16(twopk*small_part)
+        end
     end
 end
 @doc """
@@ -255,4 +270,47 @@ Compute the natural base exponential of `x`, in other words ``e^x``.
 ```jldoctest
 julia> exp(1.0)
 2.718281828459045
+```
 """ exp(x::Real)
+
+
+"""
+    exp2(x)
+
+Compute the base 2 exponential of `x`, in other words ``2^x``.
+
+# Examples
+```jldoctest
+julia> exp2(5)
+32.0
+```
+"""
+exp2(x)
+
+"""
+    exp10(x)
+
+Compute the base 10 exponential of `x`, in other words ``10^x``.
+
+# Examples
+```jldoctest
+julia> exp10(2)
+100.0
+```
+"""
+exp10(x)
+
+# functions with special cases for integer arguments
+@inline function exp2(x::Base.BitInteger)
+    if x > 1023
+        Inf64
+    elseif x <= -1023
+        # if -1073 < x <= -1023 then Result will be a subnormal number
+        # Hex literal with padding must be used to work on 32bit machine
+        reinterpret(Float64, 0x0000_0000_0000_0001 << ((x + 1074) % UInt))
+    else
+        # We will cast everything to Int64 to avoid errors in case of Int128
+        # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
+        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64) % UInt))
+    end
+end

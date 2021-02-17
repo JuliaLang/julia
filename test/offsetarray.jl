@@ -110,6 +110,15 @@ let a1 = [11,12,13], a2 = [1 2; 3 4]
     @test_throws BoundsError i2[1:2:5]
 end
 
+# issue #37274
+let a = 1:3
+    oa = OffsetArray(a, 0:2)
+    b = @view oa[0]
+    @test b[] == b[1] == b[1,1] == 1
+    @test_throws BoundsError b[0]
+    @test_throws BoundsError b[2]
+end
+
 # logical indexing
 @test A[A .> 2] == [3,4]
 @test_throws BoundsError h[trues(2)]
@@ -747,4 +756,23 @@ end
     for i in axes(ax,1)
         @test a[ax[i]] == a[ax][i]
     end
+end
+
+@testset "show OffsetMatrix" begin
+    Y = reshape(1:25, 5, 5)
+    X = OffsetArray(Y, -2:2, -4:0)
+
+    io = IOBuffer()
+    show(io, X)
+    strX = String(take!(io))
+    show(io, Y)
+    strY = String(take!(io))
+    @test strX == strY
+
+    io_limit = IOContext(io, :limit => true)
+    show(io_limit, X)
+    strX = String(take!(io))
+    show(io_limit, Y)
+    strY = String(take!(io))
+    @test strX == strY
 end

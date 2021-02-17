@@ -231,6 +231,27 @@ v11801, t11801 = @timed sin(1)
 
 @test names(@__MODULE__, all = true) == names_before_timing
 
+# PR #39133, ensure that @time evaluates in the same scope
+function time_macro_scope()
+    try # try/throw/catch bypasses printing
+        @time (time_macro_local_var = 1; throw("expected"))
+        return time_macro_local_var
+    catch ex
+        ex === "expected" || rethrow()
+    end
+end
+@test time_macro_scope() == 1
+
+function timev_macro_scope()
+    try # try/throw/catch bypasses printing
+        @timev (time_macro_local_var = 1; throw("expected"))
+        return time_macro_local_var
+    catch ex
+        ex === "expected" || rethrow()
+    end
+end
+@test timev_macro_scope() == 1
+
 # interactive utilities
 
 struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
