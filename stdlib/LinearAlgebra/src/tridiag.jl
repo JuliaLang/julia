@@ -208,6 +208,7 @@ end
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
 *(B::Number, A::SymTridiagonal) = A*B
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
+\(B::Number, A::Tridiagonal) = A/B
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
 @inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
@@ -735,6 +736,7 @@ end
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
 *(B::Number, A::Tridiagonal) = A*B
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
+\(B::Number, A::Tridiagonal) = A/B
 
 ==(A::Tridiagonal, B::Tridiagonal) = (A.dl==B.dl) && (A.d==B.d) && (A.du==B.du)
 ==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)
