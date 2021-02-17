@@ -1216,7 +1216,7 @@ Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 # broadcasting "dot" calls/assignments:
 
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
-dottable(x::Function) = dottable(nameof(x))
+dottable(x::Function) = true
 # don't add dots to dot operators
 dottable(x::Symbol) = (!isoperator(x) || first(string(x)) != '.' || x === :..) && x !== :(:)
 dottable(x::Expr) = x.head !== :$
