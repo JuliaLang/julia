@@ -373,6 +373,7 @@ end
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.uplo)
 *(B::Number, A::Bidiagonal) = A*B
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
+\(B::Number, A::Bidiagonal) = A/B
 
 function ==(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
