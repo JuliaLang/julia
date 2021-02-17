@@ -434,6 +434,9 @@ function serialize(s::AbstractSerializer, meth::Method)
     else
         serialize(s, nothing)
     end
+    if isdefined(meth, :external_mt)
+        error("cannot serialize Method objects with external method tables")
+    end
     nothing
 end
 
