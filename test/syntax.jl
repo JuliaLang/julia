@@ -2707,3 +2707,7 @@ end == 4
     @test ncalls_in_lowered(:(.!(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
     @test ncalls_in_lowered(:((.!)(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
 end
+
+# issue #39705
+@eval f39705(x) = $(Expr(:||)) && x
+@test f39705(1) === false
