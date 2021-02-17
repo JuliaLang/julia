@@ -504,6 +504,11 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
     jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
 }
 
+enum METHOD_SERIALIZATION_MODE {
+    METHOD_INTERNAL = 1,
+    METHOD_EXTERNAL_MT = 2,
+};
+
 static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
 {
     if (jl_serialize_generic(s, v)) {
@@ -627,9 +632,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_is_method(v)) {
         write_uint8(s->s, TAG_METHOD);
         jl_method_t *m = (jl_method_t*)v;
-        int internal = 1;
-        internal = m->is_for_opaque_closure || module_in_worklist(m->module);
-        if (!internal) {
+        int serialization_mode = 0;
+        if (m->is_for_opaque_closure || module_in_worklist(m->module))
+            serialization_mode |= METHOD_INTERNAL;
+        if (!(serialization_mode & METHOD_INTERNAL)) {
             // flag this in the backref table as special
             uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, v);
             assert(*bp != (uintptr_t)HT_NOTFOUND);
@@ -637,8 +643,23 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         jl_serialize_value(s, (jl_value_t*)m->sig);
         jl_serialize_value(s, (jl_value_t*)m->module);
-        write_uint8(s->s, internal);
-        if (!internal)
+        if (m->external_mt != NULL) {
+            assert(jl_typeis(m->external_mt, jl_methtable_type));
+            jl_methtable_t *mt = (jl_methtable_t*)m->external_mt;
+            if (!module_in_worklist(mt->module)) {
+                serialization_mode |= METHOD_EXTERNAL_MT;
+            }
+        }
+        write_uint8(s->s, serialization_mode);
+        if (serialization_mode & METHOD_EXTERNAL_MT) {
+            // We reference this method table by module and binding
+            jl_methtable_t *mt = (jl_methtable_t*)m->external_mt;
+            jl_serialize_value(s, mt->module);
+            jl_serialize_value(s, mt->name);
+        } else {
+            jl_serialize_value(s, (jl_value_t*)m->external_mt);
+        }
+        if (!(serialization_mode & METHOD_INTERNAL))
             return;
         jl_serialize_value(s, m->specializations);
         jl_serialize_value(s, m->speckeyset);
@@ -1014,7 +1035,7 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
                         size_t min_valid = 0;
                         size_t max_valid = ~(size_t)0;
                         int ambig = 0;
-                        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
+                        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
                         if (matches == jl_false) {
                             valid = 0;
                             break;
@@ -1457,8 +1478,18 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     jl_gc_wb(m, m->sig);
     m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);
     jl_gc_wb(m, m->module);
-    int internal = read_uint8(s->s);
-    if (!internal) {
+    int serialization_mode = read_uint8(s->s);
+    if (serialization_mode & METHOD_EXTERNAL_MT) {
+        jl_module_t *mt_mod = (jl_module_t*)jl_deserialize_value(s, NULL);
+        jl_sym_t *mt_name = (jl_sym_t*)jl_deserialize_value(s, NULL);
+        m->external_mt = jl_get_global(mt_mod, mt_name);
+        jl_gc_wb(m, m->external_mt);
+        assert(jl_typeis(m->external_mt, jl_methtable_type));
+    } else {
+        m->external_mt = jl_deserialize_value(s, &m->external_mt);
+        jl_gc_wb(m, m->external_mt);
+    }
+    if (!(serialization_mode & METHOD_INTERNAL)) {
         assert(loc != NULL && loc != HT_NOTFOUND);
         arraylist_push(&flagref_list, loc);
         arraylist_push(&flagref_list, (void*)pos);
@@ -1893,7 +1924,7 @@ static void jl_insert_methods(jl_array_t *list)
         assert(!meth->is_for_opaque_closure);
         jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_array_ptr_ref(list, i + 1);
         assert(jl_is_method(meth));
-        jl_methtable_t *mt = jl_method_table_for((jl_value_t*)meth->sig);
+        jl_methtable_t *mt = jl_method_get_table(meth);
         assert((jl_value_t*)mt != jl_nothing);
         jl_method_table_insert(mt, meth, simpletype);
     }
@@ -1923,7 +1954,7 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         size_t max_valid = ~(size_t)0;
         int ambig = 0;
         // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
-        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
+        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
         if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected)) {
             valid = 0;
         }
@@ -2461,7 +2492,7 @@ static jl_method_t *jl_recache_method(jl_method_t *m)
 {
     assert(!m->is_for_opaque_closure);
     jl_datatype_t *sig = (jl_datatype_t*)m->sig;
-    jl_methtable_t *mt = jl_method_table_for((jl_value_t*)m->sig);
+    jl_methtable_t *mt = jl_method_get_table(m);
     assert((jl_value_t*)mt != jl_nothing);
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
     jl_method_t *_new = jl_lookup_method(mt, sig, m->module->primary_world);

@@ -54,7 +54,7 @@ function findall(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable; 
     _min_val = RefValue{UInt}(typemin(UInt))
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
-    ms = _methods_by_ftype(sig, limit, table.world, false, _min_val, _max_val, _ambig)
+    ms = _methods_by_ftype(sig, nothing, limit, table.world, false, _min_val, _max_val, _ambig)
     if ms === false
         return missing
     end

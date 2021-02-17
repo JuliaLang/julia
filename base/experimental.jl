@@ -10,6 +10,7 @@
 module Experimental
 
 using Base: Threads, sync_varname
+using Base.Meta
 
 """
     Const(A::Array)
@@ -254,5 +255,31 @@ end
 
 # OpaqueClosure
 include("opaque_closure.jl")
+
+"""
+    Add a method to an overlay table
+
+@overlay mt [function def]
+"""
+macro overlay(mt, def)
+    def = macroexpand(__module__, def) # to expand @inline, @generated, etc
+    if !isexpr(def, [:function, :(=)]) || !isexpr(def.args[1], :call)
+        error("@overlay requires a function Expr")
+    end
+    def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
+    esc(def)
+end
+
+"""
+    Create a new MethodTable in the current module
+
+@MethodTable(name)
+"""
+macro MethodTable(name)
+    isa(name, Symbol) || error("name must be a symbol")
+    esc(quote
+        const $name = ccall(:jl_new_method_table, Any, (Any, Any), $(quot(name)), $(__module__))
+    end)
+end
 
 end
