@@ -2907,7 +2907,7 @@ end
 
 @testset "setindex on 1-element range" begin
     a = [1 2; 3 4]
-    @test a[1:1, 2:2] = 5
+    a[1:1, 2:2] = 5
     @test a == [1 5; 3 4]
     @test_throws ArgumentError a[1:1, 1:2] = 5
 end
