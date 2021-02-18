@@ -2904,3 +2904,10 @@ end
     @test [fill(1); fill(2, (2,1,1))] == reshape([1; 2; 2], (3, 1, 1))
     @test_throws DimensionMismatch [fill(1); rand(2, 2, 2)]
 end
+
+@testset "setindex on 1-element range" begin
+    a = [1 2; 3 4]
+    @test a[1:1, 2:2] = 5
+    @test a[1, 2] = 5
+    @test_throws ArgumentError a[1:1, 1:2] = 5
+end
