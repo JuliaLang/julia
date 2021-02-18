@@ -405,3 +405,7 @@ end
 
     @test @inferred(intersect(I, J)) == CartesianIndices((2:3, 4:5))
 end
+
+# issue #39705
+f39705() = Base.Cartesian.@nany 0 _ -> true
+@test f39705() === false

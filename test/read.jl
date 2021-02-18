@@ -618,8 +618,7 @@ let p = Pipe()
     close(p)
 end
 
-@testset "issue #27412" begin
-    itr = eachline(IOBuffer("a"))
+@testset "issue #27412" for itr in [eachline(IOBuffer("a")), readeach(IOBuffer("a"), Char)]
     @test !isempty(itr)
     # check that the earlier isempty did not consume the iterator
     @test !isempty(itr)

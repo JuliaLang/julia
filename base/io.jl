@@ -1059,6 +1059,8 @@ eltype(::Type{ReadEachIterator{T}}) where T = T
 
 IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
 
+isdone(itr::ReadEachIterator, state...) = eof(itr.stream)
+
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
 # the concrete IO type. This may not be true for IO types
@@ -1176,8 +1178,13 @@ julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 julia> countlines(io)
 1
 
+julia> eof(io) # counting lines moves the file pointer
+true
+
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
 julia> countlines(io, eol = '.')
-0
+1
 ```
 """
 function countlines(io::IO; eol::AbstractChar='\n')

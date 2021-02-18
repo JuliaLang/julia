@@ -396,7 +396,7 @@ show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
 
 function _show_default(io::IO, @nospecialize(x))
     t = typeof(x)
-    show(io, inferencebarrier(t))
+    show(io, inferencebarrier(t)::DataType)
     print(io, '(')
     nf = nfields(x)
     nb = sizeof(x)::Int
@@ -814,7 +814,8 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-function show(io::IO, @nospecialize(x::Type))
+show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
+function _show_type(io::IO, @nospecialize(x::Type))
     if print_without_params(x)
         show_type_name(io, unwrap_unionall(x).name)
         return
@@ -1068,7 +1069,7 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
         # to print a little more identifying information.
         if !from_stackframe
             linetable = l.uninferred.linetable
-            line = isempty(linetable) ? "unknown" : (lt = linetable[1]::Union{LineNumberNode,Core.LineInfoNode}; string(lt.file) * ':' * string(lt.line))
+            line = isempty(linetable) ? "unknown" : (lt = linetable[1]::Union{LineNumberNode,Core.LineInfoNode}; string(lt.file, ':', lt.line))
             print(io, " from ", def, " starting at ", line)
         end
     end
@@ -1092,7 +1093,7 @@ function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
         end
     else
         linetable = mi.uninferred.linetable
-        line = isempty(linetable) ? "" : (lt = linetable[1]; string(lt.file) * ':' * string(lt.line))
+        line = isempty(linetable) ? "" : (lt = linetable[1]; string(lt.file, ':', lt.line))
         print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
     end
 end

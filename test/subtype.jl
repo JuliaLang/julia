@@ -1057,12 +1057,18 @@ function test_intersection()
 end
 
 function test_intersection_properties()
+    approx = Tuple{Vector{Vector{T}} where T, Vector{Vector{T}} where T}
     for T in menagerie
         for S in menagerie
             I = _type_intersect(T,S)
             I2 = _type_intersect(S,T)
             @test isequal_type(I, I2)
-            @test issub(I, T) && issub(I, S)
+            if I == approx
+                # TODO: some of these cases give a conservative answer
+                @test issub(I, T) || issub(I, S)
+            else
+                @test issub(I, T) && issub(I, S)
+            end
             if issub(T, S)
                 @test isequal_type(I, T)
             end
@@ -1872,3 +1878,10 @@ g39218(a, b) = (@nospecialize; if a isa AB39218 && b isa AB39218; f39218(a, b); 
 # issue #39521
 @test Tuple{Type{Tuple{A}} where A, DataType, DataType} <: Tuple{Vararg{B}} where B
 @test Tuple{DataType, Type{Tuple{A}} where A, DataType} <: Tuple{Vararg{B}} where B
+
+let A = Tuple{Type{<:Union{Number, T}}, Ref{T}} where T,
+    B = Tuple{Type{<:Union{Number, T}}, Ref{T}} where T
+    # TODO: these are caught by the egal check, but the core algorithm gets them wrong
+    @test A == B
+    @test A <: B
+end

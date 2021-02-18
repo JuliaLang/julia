@@ -3020,3 +3020,11 @@ end
 # Bare Core.Argument in IR
 @eval f_bare_argument(x) = $(Core.Argument(2))
 @test Base.return_types(f_bare_argument, (Int,))[1] == Int
+
+# issue #39611
+Base.return_types((Union{Int,Nothing},)) do x
+    if x === nothing || x < 0
+        return 0
+    end
+    x
+end == [Int]

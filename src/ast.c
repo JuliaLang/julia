@@ -899,7 +899,44 @@ static jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *
 
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
 {
-    if (expr && jl_is_expr(expr)) {
+    if (!expr)
+        return NULL;
+    if (jl_is_code_info(expr)) {
+        jl_code_info_t *new_ci = (jl_code_info_t *)expr;
+        jl_array_t *new_code = NULL;
+        JL_GC_PUSH2(&new_ci, &new_code);
+        new_ci = jl_copy_code_info(new_ci);
+        new_code = jl_array_copy(new_ci->code);
+        size_t clen = jl_array_len(new_code);
+        for (int i = 0; i < clen; ++i) {
+            jl_array_ptr_set(new_code, i, jl_copy_ast(
+                jl_array_ptr_ref(new_code, i)
+            ));
+        }
+        new_ci->slotnames = jl_array_copy(new_ci->slotnames);
+        jl_gc_wb(new_ci, new_ci->slotnames);
+        new_ci->slotflags = jl_array_copy(new_ci->slotflags);
+        jl_gc_wb(new_ci, new_ci->slotflags);
+        new_ci->codelocs = jl_array_copy(new_ci->codelocs);
+        jl_gc_wb(new_ci, new_ci->codelocs);
+        new_ci->linetable = jl_array_copy(new_ci->linetable);
+        jl_gc_wb(new_ci, new_ci->linetable);
+        new_ci->ssaflags = jl_array_copy(new_ci->ssaflags);
+        jl_gc_wb(new_ci, new_ci->ssaflags);
+
+        if (new_ci->edges != jl_nothing) {
+            new_ci->edges = jl_array_copy(new_ci->edges);
+            jl_gc_wb(new_ci, new_ci->edges);
+        }
+
+        if (jl_is_array(new_ci->ssavaluetypes)) {
+            new_ci->ssavaluetypes = jl_array_copy(new_ci->ssavaluetypes);
+            jl_gc_wb(new_ci, new_ci->ssavaluetypes);
+        }
+        JL_GC_POP();
+        return new_ci;
+    }
+    if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         size_t i, l = jl_array_len(e->args);
         jl_expr_t *ne = jl_exprn(e->head, l);
@@ -910,6 +947,24 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         }
         JL_GC_POP();
         return (jl_value_t*)ne;
+    }
+    if (jl_is_phinode(expr)) {
+        jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(expr, 0);
+        jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(expr, 1);
+        JL_GC_PUSH2(&edges, &values);
+        edges = jl_array_copy(edges);
+        values = jl_array_copy(values);
+        jl_value_t *ret = jl_new_struct(jl_phinode_type, edges, values);
+        JL_GC_POP();
+        return ret;
+    }
+    if (jl_is_phicnode(expr)) {
+        jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(expr, 0);
+        JL_GC_PUSH1(&values);
+        values = jl_array_copy(values);
+        jl_value_t *ret = jl_new_struct(jl_phinode_type, values);
+        JL_GC_POP();
+        return ret;
     }
     return expr;
 }
