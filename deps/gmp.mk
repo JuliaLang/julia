@@ -17,6 +17,7 @@ $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -jxf $<
 	touch -c $(SRCCACHE)/gmp-$(GMP_VER)/configure # old target
+	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/gmp-$(GMP_VER)/config.sub
 	echo 1 > $@
 
 checksum-gmp: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
@@ -28,7 +29,7 @@ $(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extr
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-apple-arm64.patch
 	echo 1 > $@
 
-$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
+$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted $(SRCCACHE)/gmp-$(GMP_VER)/build-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) F77= --enable-cxx --enable-shared --disable-static $(GMP_CONFIGURE_OPTS)
