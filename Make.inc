@@ -496,18 +496,17 @@ ifeq ($(DARWINVER_GTE11),0) # Snow Leopard specific configuration
 USEGCC := 1
 USECLANG := 0
 MACOSX_VERSION_MIN := 10.6
-OPENBLAS_TARGET_ARCH:=NEHALEM
-OPENBLAS_DYNAMIC_ARCH:=0
-USE_SYSTEM_LIBUNWIND:=1
-else
-ifeq ($(DARWINVER_GTE13),0) # Lion / Mountain Lion specific configuration
+OPENBLAS_TARGET_ARCH := NEHALEM
+OPENBLAS_DYNAMIC_ARCH := 0
+USE_SYSTEM_LIBUNWIND := 1
+else ifeq ($(DARWINVER_GTE13),0) # Lion / Mountain Lion specific configuration
 USEGCC := 0
 USECLANG := 1
 MACOSX_VERSION_MIN := 10.6
 else # Newer versions
 USEGCC := 0
 USECLANG := 1
-endif
+MACOSX_VERSION_MIN := 10.9
 endif
 endif
 
@@ -539,9 +538,6 @@ JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
 DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
-ifeq ($(MACOSX_VERSION_MIN),)
-MACOSX_VERSION_MIN := 10.9
-endif
 CC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 CXX += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
