@@ -555,12 +555,12 @@ end
 end
 
 @testset "Issue #10561, two-digit year parsing ambiguities" begin
-    for test_year in [0, 1, 100, 101, 1000, 1001, 1900, 1901, 2000, 2001, 2100, 2101]
-        fmt_string = dateformat"yy"
+    # All two-digit dates (whether full or resulting from truncation, e.g. 2010 -> 10)
+    # encoded in two digit year format YY are parsed as year 00YY
 
-        # All dates encoded in two digit year format YY are parsed as year 00YY
-        @test Date(Dates.format(Date(test_year), fmt_string), fmt_string) == Date(test_year % 100)
-    end
+    for test_year in [0, 1, 99, 2021]
+        @test Date(string(test_year), dateformat"yy") == Date(test_year)
+    end    
 end
 
 end
