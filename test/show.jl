@@ -2087,9 +2087,9 @@ end
 @test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Unsigned, S<:Signed}"
 @test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Signed, S<:T}"
 @test string(Union{M37012.SimpleU, Nothing}) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU}"
-@test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, T, $(curmod_prefix)M37012.SimpleU} where T"
+@test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
-@test string(Union{AbstractVector, T} where T) == "Union{T, AbstractVector{T} where T} where T"
+@test string(Union{AbstractVector, T} where T) == "Union{AbstractVector{T} where T, T} where T"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

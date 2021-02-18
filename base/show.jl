@@ -749,16 +749,21 @@ end
 function show_unionaliases(io::IO, x::Union)
     properx = makeproper(io, x)
     aliases, applied = make_typealiases(properx)
+    isempty(aliases) && return false
     first = true
+    tvar = false
     for typ in uniontypes(x)
-        if !isa(typ, TypeVar) && rewrap_unionall(typ, properx) <: applied
+        if isa(typ, TypeVar)
+            tvar = true # sort bare TypeVars to the end
+            continue
+        elseif rewrap_unionall(typ, properx) <: applied
             continue
         end
         print(io, first ? "Union{" : ", ")
         first = false
         show(io, typ)
     end
-    if first && length(aliases) == 1
+    if first && !tvar && length(aliases) == 1
         alias = aliases[1]
         wheres = make_wheres(io, alias[2], x)
         show_typealias(io, alias[1], x, alias[2], wheres)
@@ -772,8 +777,17 @@ function show_unionaliases(io::IO, x::Union)
             show_typealias(io, alias[1], x, alias[2], wheres)
             show_wheres(io, wheres)
         end
+        if tvar
+            for typ in uniontypes(x)
+                if isa(typ, TypeVar)
+                    print(io, ", ")
+                    show(io, typ)
+                end
+            end
+        end
         print(io, "}")
     end
+    return true
 end
 
 function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
@@ -805,12 +819,11 @@ function show(io::IO, @nospecialize(x::Type))
         show_datatype(io, x)
         return
     elseif x isa Union
-        if get(io, :compact, true)
-            show_unionaliases(io, x)
-        else
-            print(io, "Union")
-            show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+        if get(io, :compact, true) && show_unionaliases(io, x)
+            return
         end
+        print(io, "Union")
+        show_delim_array(io, uniontypes(x), '{', ',', '}', false)
         return
     end
 
