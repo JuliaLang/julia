@@ -558,9 +558,9 @@ end
     # All two-digit dates (whether full or resulting from truncation, e.g. 2010 -> 10)
     # encoded in two digit year format YY are parsed as year 00YY
 
-    for test_year in [0, 1, 99, 2021]
-        @test Date(string(test_year), dateformat"yy") == Date(test_year)
-    end    
+    for test_year in ["00", "01", "99", "2021"]
+        @test Date(test_year, dateformat"yy") == Date(parse(Int, test_year))
+    end
 end
 
 end
