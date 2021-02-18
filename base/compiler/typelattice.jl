@@ -229,8 +229,18 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
         return true
     end
     isa(b, PartialStruct) && return false
-    a isa Const && return false
-    b isa Const && return false
+    if a isa Const
+        if issingletontype(b)
+            return a.val === b.instance
+        end
+        return false
+    end
+    if b isa Const
+        if issingletontype(a)
+            return a.instance === b.val
+        end
+        return false
+    end
     if isa(a, PartialOpaque)
         isa(b, PartialOpaque) || return false
         widenconst(a) == widenconst(b) || return false
