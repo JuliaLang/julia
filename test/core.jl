@@ -5298,6 +5298,16 @@ if Sys.WORD_SIZE == 64
     @test_nowarn tester20360()
 end
 
+# issue #39717
+let a = Base.StringVector(2^17)
+    b = String(a)
+    c = String(a)
+    GC.gc()
+    @test sizeof(a) == 0
+    @test sizeof(b) == 2^17
+    @test sizeof(c) == 0
+end
+
 @test_throws ArgumentError eltype(Bottom)
 
 # issue #16424, re-evaluating type definitions
