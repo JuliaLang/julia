@@ -381,5 +381,5 @@ The syntax introduced above creates objects of type [`Cmd`](@ref). Such object m
 run(Cmd(`pwd`, dir=".."))
 ```
 
-This way, they may be used to customize them with the `dir` keyword to set the working directory,
+This way, they may be customized with the `dir` keyword to set the working directory,
 `detach` keyword to run the command in a new process group, and `env` keyword to set environment variables.
