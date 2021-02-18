@@ -522,26 +522,12 @@ function makeproper(io::IO, x::Type)
             end
         end
     end
-    if x isa Union
-        y = []
-        normal = true
-        for typ in uniontypes(x)
-            if isa(typ, TypeVar)
-                normal = false
-            else
-                push!(y, typ)
-            end
-        end
-        if !normal
-            properx = rewrap_unionall(Union{y...}, properx)
-        end
-    end
     has_free_typevars(properx) && return Any
     return properx
 end
 
 function make_typealias(@nospecialize(x::Type))
-    Any <: x && return
+    Any === x && return
     x <: Tuple && return
     mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
@@ -681,7 +667,7 @@ function show_typealias(io::IO, x::Type)
 end
 
 function make_typealiases(@nospecialize(x::Type))
-    Any <: x && return Core.svec(), Union{}
+    Any === x && return Core.svec(), Union{}
     x <: Tuple && return Core.svec(), Union{}
     mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
@@ -701,7 +687,9 @@ function make_typealiases(@nospecialize(x::Type))
                 if alias isa Type && !has_free_typevars(alias) && !isvarargtype(alias) && !print_without_params(alias) && !(alias <: Tuple)
                     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
                     ti === Union{} && continue
-                    mod in modulesof!(Set{Module}(), alias) || continue # make sure this alias wasn't from an unrelated part of the Union
+                    # make sure this alias wasn't from an unrelated part of the Union
+                    mod2 = modulesof!(Set{Module}(), alias)
+                    mod in mod2 || (mod === Base && Core in mods) || continue
                     env = env::SimpleVector
                     applied = alias
                     if !isempty(env)
