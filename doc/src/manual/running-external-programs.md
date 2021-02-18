@@ -375,11 +375,12 @@ saturated throughput.
 We strongly encourage you to try all these examples to see how they work.
 
 ## `Cmd` Objects
-[`Cmd`](@ref) objects can also be used. It can customize them with the `dir` keyword to set the working directory,
-`detach` keyword to run the command in a new process group, and `env` keyword to set environment variables.
+[`Cmd`](@ref) objects can also be used directly, since the cmd syntax does also produce [`Cmd`](@ref) objects.
 
-A simple example is:
 ```julia
-Cmd(`pwd`, dir="..")
+run(Cmd(`pwd`, dir=".."))
 ```
+
+This way, they may be used to customize them with the `dir` keyword to set the working directory,
+`detach` keyword to run the command in a new process group, and `env` keyword to set environment variables.
 
