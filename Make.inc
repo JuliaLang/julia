@@ -520,7 +520,7 @@ CXX := $(CROSS_COMPILE)g++
 JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti
+JCXXFLAGS := -pipe $(fPIC) -fno-rtti -std=c++14
 ifneq ($(OS), WINNT)
 # Do not enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
@@ -535,7 +535,7 @@ CXX := $(CROSS_COMPILE)clang++
 JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
+JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic -std=c++14
 DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
@@ -559,7 +559,7 @@ CC  := icc
 CXX := icpc
 JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
 JCPPFLAGS :=
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti
+JCXXFLAGS := -pipe $(fPIC) -fno-rtti -std=c++14
 DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
 SHIPFLAGS := -O3 -g -falign-functions
 endif
