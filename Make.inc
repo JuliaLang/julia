@@ -508,6 +508,9 @@ USEGCC := 0
 USECLANG := 1
 MACOSX_VERSION_MIN := 10.9
 endif
+ifeq ($(shell uname -p),arm)  # Apple Silicon
+MACOSX_VERSION_MIN := 11.0
+endif
 endif
 
 ifeq ($(USEGCC),1)
