@@ -1890,7 +1890,7 @@ end
 let T = Type{T} where T<:(AbstractArray{I}) where I<:(Base.IteratorsMD.CartesianIndex),
     S = Type{S} where S<:(Base.IteratorsMD.CartesianIndices{A, B} where B<:Tuple{Vararg{Any, A}} where A)
     I = typeintersect(T, S)
-    @test_broken I <: T
+    @test I <: T
     @test I <: S
     @test_broken I == typeintersect(S, T)
 end

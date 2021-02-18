@@ -2510,6 +2510,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         else if (!(oldval && jl_is_typevar(oldval) && jl_is_long(varval)))
             e->envout[e->envidx] = fix_inferred_var_bound(vb->var, varval);
     }
+    vb->var = newvar;
 
     JL_GC_POP();
     return res;
@@ -2582,26 +2583,40 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     jl_savedenv_t se, se2;
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0,
                            R ? e->Rinvdepth : e->invdepth, 0, NULL, 0, e->vars };
-    JL_GC_PUSH6(&res, &save2, &vb.lb, &vb.ub, &save, &vb.innervars);
+    JL_GC_PUSH7(&res, &save2, &vb.lb, &vb.ub, &save, &vb.innervars, &vb.var);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
     if (res != jl_bottom_type) {
         if (vb.concrete || vb.occurs_inv>1 || u->var->lb != jl_bottom_type || (vb.occurs_inv && vb.occurs_cov)) {
+            jl_value_t *u2 = (jl_value_t*)u;
+            JL_GC_PUSH1(&u2);
+            // This step maintains variable bounds from the previous intersect_unionall_ call.
+            // So, if we needed to rename the variable, make sure `u` uses the same variable
+            // so we know it actually refers to the same type in the environment.
+            // This is a bit of a hack to fix #39698.
+            if (vb.var != u->var) {
+                u2 = jl_instantiate_unionall(u, (jl_value_t*)vb.var);
+                u2 = (jl_value_t*)jl_type_unionall(vb.var, u2);
+                assert(jl_is_unionall(u2));
+            }
             restore_env(e, NULL, &se);
             vb.occurs_cov = vb.occurs_inv = 0;
             vb.constraintkind = 3;
-            res = intersect_unionall_(t, u, e, R, param, &vb);
+            res = intersect_unionall_(t, (jl_unionall_t*)u2, e, R, param, &vb);
+            JL_GC_POP();
         }
         else if (vb.occurs_cov) {
             save_env(e, &save2, &se2);
             restore_env(e, save, &se);
             vb.occurs_cov = vb.occurs_inv = 0;
+            vb.var = u->var;
             vb.lb = u->var->lb; vb.ub = u->var->ub;
             vb.constraintkind = 1;
             res2 = intersect_unionall_(t, u, e, R, param, &vb);
             if (res2 == jl_bottom_type) {
                 restore_env(e, save, &se);
                 vb.occurs_cov = vb.occurs_inv = 0;
+                vb.var = u->var;
                 vb.lb = u->var->lb; vb.ub = u->var->ub;
                 vb.constraintkind = 2;
                 res2 = intersect_unionall_(t, u, e, R, param, &vb);
