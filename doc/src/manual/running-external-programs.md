@@ -373,3 +373,13 @@ stages have different latency so they use a different number of parallel workers
 saturated throughput.
 
 We strongly encourage you to try all these examples to see how they work.
+
+## `Cmd` Objects
+The syntax introduced above creates objects of type [`Cmd`](@ref). Such object may also be constructed directly:
+
+```julia
+run(Cmd(`pwd`, dir=".."))
+```
+
+This way, they may be customized with the `dir` keyword to set the working directory,
+`detach` keyword to run the command in a new process group, and `env` keyword to set environment variables.
