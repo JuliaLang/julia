@@ -1062,11 +1062,24 @@ function test_intersection_properties()
         for S in menagerie
             I = _type_intersect(T,S)
             I2 = _type_intersect(S,T)
+            if !isequal_type(I, I2)
+                println("!isequal_type:")
+                @show T
+                @show S
+                @show I
+                @show I2
+            end
             @test isequal_type(I, I2)
             if I == approx
                 # TODO: some of these cases give a conservative answer
                 @test issub(I, T) || issub(I, S)
             else
+                if !(issub(I, T) && issub(I, S))
+                    println("!issub:")
+                    @show T
+                    @show S
+                    @show I
+                end
                 @test issub(I, T) && issub(I, S)
             end
             if issub(T, S)
