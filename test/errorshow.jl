@@ -772,7 +772,6 @@ pair_repeater_b() = pair_repeater_a()
 @testset "repeated stack frames" begin
     let bt = try single_repeater()
         catch
-            println("length: ", length(catch_backtrace()))
             catch_backtrace()
         end
         bt_str = sprint(Base.show_backtrace, bt)
@@ -781,7 +780,6 @@ pair_repeater_b() = pair_repeater_a()
 
     let bt = try pair_repeater_a()
         catch
-            println("length: ", length(catch_backtrace()))
             catch_backtrace()
         end
         bt_str = sprint(Base.show_backtrace, bt)
