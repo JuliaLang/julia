@@ -553,8 +553,8 @@ end
         @test Time(tmstruct) == t
         @test uppercase(t12) ==
               Dates.format(t, "II:MMp") ==
-                                Dates.format(d, "II:MMp") ==
-                                strftime
+              Dates.format(d, "II:MMp") ==
+              strftime
     end
     for bad in ("00:24am", "00:24pm", "13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
         @test_throws ArgumentError Time(bad, "II:MMp")
