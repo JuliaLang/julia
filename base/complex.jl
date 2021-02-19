@@ -184,10 +184,10 @@ Returns a complex number whose real part and imaginary parts are old real part m
 # Examples
 ```jldoctest
 julia> mod(12+10im,5)
-2+0im
+2 + 0im
 
 julia> mod(3+11im,7)
-3+4im
+3 + 4im
 ```
 """
 mod(z::Complex,n::Real)=Complex(mod(real(z),n),mod(imag(z),n))
