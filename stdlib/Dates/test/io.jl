@@ -519,21 +519,29 @@ end
 
 @testset "midnight" begin
     # issue #28203: 24:00 is a valid ISO 8601 time
-    @test DateTime("2018-01-01 24:00","yyyy-mm-dd HH:MM") == DateTime("2018-01-02T00:00:00") ==
-          DateTime(2018, 1, 1, 24) == DateTime(2018, 1, 2)
-    @test_throws ArgumentError DateTime("2018-01-01 24:01","yyyy-mm-dd HH:MM")
+    @test DateTime("2018-01-01 24:00", "yyyy-mm-dd HH:MM") ==
+          DateTime("2018-01-02T00:00:00") ==
+          DateTime(2018, 1, 1, 24) ==
+          DateTime(2018, 1, 2)
+    @test_throws ArgumentError DateTime("2018-01-01 24:01", "yyyy-mm-dd HH:MM")
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 1)
     @test_throws ArgumentError DateTime(2018, 1, 1, 24, 0, 0, 1)
 end
 
 @testset "AM/PM" begin
-    for (t12,t24) in (("12:00am","00:00"), ("12:07am","00:07"), ("01:24AM","01:24"),
-                    ("12:00pm","12:00"), ("12:15pm","12:15"), ("11:59PM","23:59"))
+    for (t12, t24) in (
+        ("12:00am", "00:00"),
+        ("12:07am", "00:07"),
+        ("01:24AM", "01:24"),
+        ("12:00pm", "12:00"),
+        ("12:15pm", "12:15"),
+        ("11:59PM", "23:59"),
+    )
         d = DateTime("2018-01-01T$t24:00")
         t = Time("$t24:00")
-        for HH in ("HH","II")
-            @test DateTime("2018-01-01 $t12","yyyy-mm-dd $HH:MMp") == d
-            @test Time("$t12","$HH:MMp") == t
+        for HH in ("HH", "II")
+            @test DateTime("2018-01-01 $t12", "yyyy-mm-dd $HH:MMp") == d
+            @test Time("$t12", "$HH:MMp") == t
         end
         local tmstruct, strftime
         withlocales(["C"]) do
@@ -543,7 +551,8 @@ end
             nothing
         end
         @test Time(tmstruct) == t
-        @test uppercase(t12) == Dates.format(t, "II:MMp") ==
+        @test uppercase(t12) ==
+              Dates.format(t, "II:MMp") ==
                                 Dates.format(d, "II:MMp") ==
                                 strftime
     end
