@@ -142,7 +142,7 @@ SItypes = Base.BitSigned_types
         @test promote(R(3), T(3)) === (sizeof(R) < sizeof(T) ? (T(3), T(3)) : (R(3), R(3)))
     end
 
-    for i in 1:5
+    for i in 1:length(UItypes)
         @test promote(UItypes[i](3), SItypes[i](3)) === (UItypes[i](3), UItypes[i](3))
     end
 end
