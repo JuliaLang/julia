@@ -678,9 +678,14 @@ static void *signal_listener(void *arg)
         // (so that thread zero gets notified last)
         if (critical || profile)
             jl_lock_profile();
-        for (int i = jl_n_threads; i-- > 0; ) {
+        for (int tid = jl_n_threads; tid-- > 0; ) {
+            // If the threadid mask is set, skip threads that aren't enabled.
+            if (threadid_mask != 0 && ((0x1 << tid) & threadid_mask)==0) {
+                continue;
+            }
+
             // notify thread to stop
-            jl_thread_suspend_and_get_state(i, &signal_context);
+            jl_thread_suspend_and_get_state(tid, &signal_context);
 
             // do backtrace on thread contexts for critical signals
             // this part must be signal-handler safe
@@ -720,7 +725,7 @@ static void *signal_listener(void *arg)
             }
 
             // notify thread to resume
-            jl_thread_resume(i, sig);
+            jl_thread_resume(tid, sig);
         }
         if (critical || profile)
             jl_unlock_profile();

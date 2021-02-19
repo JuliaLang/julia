@@ -23,6 +23,7 @@ static volatile jl_bt_element_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
 static volatile uint64_t nsecprof = 0;
+static volatile uint64_t threadid_mask = 0;  // each bit represents a threadid to enable.
 static volatile int running = 0;
 static const    uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
@@ -256,6 +257,11 @@ void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data,
 ///////////////////////
 // Utility functions //
 ///////////////////////
+JL_DLLEXPORT void jl_profile_init_threadid_filter(uint64_t tid_mask)
+{
+    threadid_mask = tid_mask;
+}
+
 JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
     bt_size_max = maxsize;

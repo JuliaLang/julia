@@ -37,29 +37,45 @@ end
 ####
 
 """
-    init(; n::Integer, delay::Real))
+    init(; n::Integer, delay::Real, thread_ids::Vector{<:Integer}))
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of
 instruction pointers that may be stored. Each instruction pointer corresponds to a single
 line of code; backtraces generally consist of a long list of instruction pointers. Current
 settings can be obtained by calling this function with no arguments, and each can be set
-independently using keywords or in the order `(n, delay)`.
+independently using keywords or in the order `(n, delay)`. Finally, you can configure
+profiling to only profile individual threads by passing their thread ids in `thread_ids`.
 """
-function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing,
+                thread_ids::Vector{<:Integer} = Int[])
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
+        _init_threadid_filter(thread_ids)
         return Int(n_cur), delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
-    init(nnew, delaynew)
+    init(nnew, delaynew, thread_ids)
 end
 
-function init(n::Integer, delay::Real)
+function init(n::Integer, delay::Real, thread_ids::Vector = Int[])
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers")
+    end
+    _init_threadid_filter(thread_ids)
+end
+function _init_threadid_filter(thread_ids::Vector)
+    threadid_mask = UInt64(0)
+    if !isempty(thread_ids)
+        for tid in thread_ids
+            if tid > 64
+                error("Cannot enable thread id > 64 via `Profile.init(thread_ids)`: $(tid).")
+            end
+            threadid_mask |= 0x1 << (tid-1)
+        end
+        ccall(:jl_profile_init_threadid_filter, Cvoid, (UInt64,), threadid_mask)
     end
 end
 

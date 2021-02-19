@@ -474,7 +474,7 @@ static kern_return_t profiler_segv_handler
 void *mach_profile_listener(void *arg)
 {
     (void)arg;
-    int i;
+    int tid;
     const int max_size = 512;
     attach_exception_port(mach_thread_self(), 1);
 #ifdef LIBOSXUNWIND
@@ -491,15 +491,20 @@ void *mach_profile_listener(void *arg)
         jl_lock_profile();
         void *unused = NULL;
         int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
-        for (i = jl_n_threads; i-- > 0; ) {
+        for (tid = jl_n_threads; tid-- > 0; ) {
             // if there is no space left, break early
             if (jl_profile_is_buffer_full()) {
                 jl_profile_stop_timer();
                 break;
             }
 
+            // If the threadid mask is set, skip threads that aren't enabled.
+            if (threadid_mask != 0 && ((0x1 << tid) & threadid_mask)==0) {
+                continue;
+            }
+
             unw_context_t *uc;
-            jl_thread_suspend_and_get_state(i, &uc);
+            jl_thread_suspend_and_get_state(tid, &uc);
             if (running) {
 #ifdef LIBOSXUNWIND
                 /*
@@ -539,7 +544,7 @@ void *mach_profile_listener(void *arg)
                 bt_data_prof[bt_size_cur++].uintptr = 0;
             }
             // We're done! Resume the thread.
-            jl_thread_resume(i, 0);
+            jl_thread_resume(tid, 0);
         }
         if (keymgr_locked)
             _keymgr_unlock_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST);
