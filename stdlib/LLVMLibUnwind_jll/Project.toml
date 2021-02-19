@@ -1,6 +1,6 @@
-name = "LibOSXUnwind_jll"
-uuid = "a83860b7-747b-57cf-bf1f-3e79990d037f"
-version = "0.0.6+1"
+name = "LLVMLibUnwind_jll"
+uuid = "47c5dbc3-30ba-59ef-96a6-123e260183d9"
+version = "11.0.1+1"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
