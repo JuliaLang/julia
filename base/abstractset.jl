@@ -245,6 +245,7 @@ function ⊇ end
     ⊇(b, a) -> Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
+Here are some operators related to subset: [`⊊`](@ref), [`⊈`](@ref).
 
 # Examples
 ```jldoctest
@@ -305,6 +306,7 @@ function ⊋ end
     ⊋(b, a) -> Bool
 
 Determines if `a` is a subset of, but not equal to, `b`.
+Here are some operators related to subset: [`issubset`](@ref)(⊆), [`⊈`](@ref).
 
 # Examples
 ```jldoctest
@@ -328,6 +330,7 @@ function ⊉ end
     ⊉(b, a) -> Bool
 
 Negation of `⊆` and `⊇`, i.e. checks that `a` is not a subset of `b`.
+Here are some operators related to subset: [`issubset`](@ref)(⊆), [`⊊`](@ref).
 
 # Examples
 ```jldoctest
