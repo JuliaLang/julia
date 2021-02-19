@@ -16,7 +16,7 @@ $(build_datarootdir)/julia/stdlib/$(VERSDIR):
 	mkdir -p $@
 
 JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
-       OPENBLAS OPENLIBM P7ZIP PCRE SUITESPARSE ZLIB OSXUNWIND CSL \
+       OPENBLAS OPENLIBM P7ZIP PCRE SUITESPARSE ZLIB LLVMUNWIND CSL \
        UNWIND
 
 # Initialize this with JLLs that aren't in deps/Versions.make
