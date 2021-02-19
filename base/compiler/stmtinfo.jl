@@ -81,3 +81,13 @@ This info is illegal on any statement that is not an `_apply_iterate` call.
 struct UnionSplitApplyCallInfo
     infos::Vector{ApplyCallInfo}
 end
+
+# Stmt infos that are used by external consumers, but not by optimization.
+# These are not produced by default and must be explicitly opted into by
+# the AbstractInterpreter.
+
+struct ReturnTypeCallInfo
+    # The info corresponding to the call that return_type was supposed to
+    # analyze.
+    info::Any
+end
