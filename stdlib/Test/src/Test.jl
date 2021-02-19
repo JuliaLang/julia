@@ -553,6 +553,7 @@ function do_test(result::ExecutionResult, orig_expr)
         @assert isa(result, Threw)
         testres = Error(:test_error, orig_expr, result.exception, result.backtrace, result.source)
     end
+    isa(testres, Pass) || ccall(:jl_breakpoint, Cvoid, (Any,), result)
     record(get_testset(), testres)
 end
 
@@ -1358,10 +1359,11 @@ julia> typeof(f(2))
 Int64
 
 julia> @code_warntype f(2)
-Variables
+MethodInstance for f(::Int64)
+  from f(a) in Main at none:1
+Arguments
   #self#::Core.Const(f)
   a::Int64
-
 Body::UNION{FLOAT64, INT64}
 1 ─ %1 = (a > 1)::Bool
 └──      goto #3 if not %1
@@ -1405,7 +1407,7 @@ function _inferred(ex, mod, allow = :(Union{}))
     end
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
     farg = ex.args[1]
-    if isa(farg, Symbol) && first(string(farg)) == '.'
+    if isa(farg, Symbol) && farg !== :.. && first(string(farg)) == '.'
         farg = Symbol(string(farg)[2:end])
         ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
             farg, ex.args[2:end]...)

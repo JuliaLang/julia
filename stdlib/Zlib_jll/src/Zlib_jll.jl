@@ -11,8 +11,8 @@ const LIBPATH_list = String[]
 export libz
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libz_handle = C_NULL
 libz_path = ""
@@ -26,10 +26,11 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libz_handle = dlopen(libz)
     global libz_path = dlpath(libz_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    LIBPATH[] = dirname(libz_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

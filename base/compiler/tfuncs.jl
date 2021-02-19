@@ -1298,6 +1298,12 @@ function invoke_tfunc(interp::AbstractInterpreter, @nospecialize(ft), @nospecial
     return rt
 end
 
+function has_struct_const_info(x)
+    isa(x, PartialTypeVar) && return true
+    isa(x, Conditional) && return true
+    return has_nontrivial_const_info(x)
+end
+
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(atypes::Vector{Any})
@@ -1316,15 +1322,17 @@ function tuple_tfunc(atypes::Vector{Any})
     anyinfo = false
     for i in 1:length(atypes)
         x = atypes[i]
-        # TODO ignore singleton Const (don't forget to update cache logic if you implement this)
-        if !anyinfo
-            anyinfo = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
+        if has_struct_const_info(x)
+            anyinfo = true
+        else
+            atypes[i] = x = widenconst(x)
         end
         if isa(x, Const)
             params[i] = typeof(x.val)
         else
             x = widenconst(x)
             if isType(x)
+                anyinfo = true
                 xparam = x.parameters[1]
                 if hasuniquerep(xparam) || xparam === Bottom
                     params[i] = typeof(xparam)
@@ -1361,6 +1369,27 @@ end
 add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
 add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
 add_tfunc(arrayset, 4, INT_INF, (@nospecialize(boundscheck), @nospecialize(a), @nospecialize(v), @nospecialize i...)->a, 20)
+
+function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
+        @nospecialize(lb), @nospecialize(ub), @nospecialize(source), env::Vector{Any},
+        linfo::MethodInstance)
+
+    argt, argt_exact = instanceof_tfunc(arg)
+    lbt, lb_exact = instanceof_tfunc(lb)
+    if !lb_exact
+        lbt = Union{}
+    end
+
+    ubt, ub_exact = instanceof_tfunc(ub)
+
+    t = (argt_exact ? Core.OpaqueClosure{argt, T} : Core.OpaqueClosure{<:argt, T}) where T
+    t = lbt == ubt ? t{ubt} : (t{T} where lbt <: T <: ubt)
+
+    (isa(source, Const) && isa(source.val, Method)) || return t
+    (isa(isva, Const) && isa(isva.val, Bool)) || return t
+
+    return PartialOpaque(t, tuple_tfunc(env), isva.val, linfo, source.val)
+end
 
 function array_type_undefable(@nospecialize(a))
     if isa(a, Union)
@@ -1619,25 +1648,25 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))
+                    end
+                    rt = widenconst(rt)
+                    if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
+                        # output cannot be improved so it is known for certain
+                        return Const(rt)
+                    elseif !isempty(sv.pclimitations)
+                        # conservatively express uncertainty of this result
+                        # in two ways: both as being a subtype of this, and
+                        # because of LimitedAccuracy causes
+                        return Type{<:rt}
+                    elseif (isa(tt, Const) || isconstType(tt)) &&
+                        (isa(aft, Const) || isconstType(aft))
+                        # input arguments were known for certain
+                        # XXX: this doesn't imply we know anything about rt
+                        return Const(rt)
+                    elseif isType(rt)
+                        return Type{rt}
                     else
-                        inaccurate = nothing
-                        rt isa LimitedAccuracy && (inaccurate = rt.causes; rt = rt.typ)
-                        rt = widenconst(rt)
-                        if hasuniquerep(rt) || rt === Bottom
-                            # output type was known for certain
-                            return Const(rt)
-                        elseif inaccurate !== nothing
-                            return LimitedAccuracy(Type{<:rt}, inaccurate)
-                        elseif (isa(tt, Const) || isconstType(tt)) &&
-                            (isa(aft, Const) || isconstType(aft))
-                            # input arguments were known for certain
-                            # XXX: this doesn't imply we know anything about rt
-                            return Const(rt)
-                        elseif isType(rt)
-                            return Type{rt}
-                        else
-                            return Type{<:rt}
-                        end
+                        return Type{<:rt}
                     end
                 end
             end

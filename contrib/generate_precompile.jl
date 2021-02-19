@@ -292,14 +292,13 @@ function generate_precompile_statements()
                 Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
                 write(output_copy, l)
             end
-            close(output_copy)
-            close(ptm)
         catch ex
-            close(output_copy)
-            close(ptm)
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
                 rethrow() # ignore EIO on ptm after pts dies
             end
+        finally
+            close(output_copy)
+            close(ptm)
         end
         # wait for the definitive prompt before start writing to the TTY
         readuntil(output_copy, "julia>")
@@ -349,27 +348,27 @@ function generate_precompile_statements()
 
     # Execute the collected precompile statements
     n_succeeded = 0
-    include_time = @elapsed for statement in sort(collect(statements))
+    include_time = @elapsed for statement in sort!(collect(statements))
         # println(statement)
         # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
         # N with a large number seems to work around it.
-        ps = Meta.parse(statement)
-        if isexpr(ps, :call)
-            if isexpr(ps.args[end], :curly)
-                l = ps.args[end]
-                if length(l.args) == 2 && l.args[1] == :Vararg
-                    push!(l.args, 100)
+        try
+            ps = Meta.parse(statement)
+            if isexpr(ps, :call)
+                if isexpr(ps.args[end], :curly)
+                    l = ps.args[end]
+                    if length(l.args) == 2 && l.args[1] == :Vararg
+                        push!(l.args, 100)
+                    end
                 end
             end
-        end
-        try
             # println(ps)
             Core.eval(PrecompileStagingArea, ps)
             n_succeeded += 1
             print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
         catch
             # See #28808
-            @error "Failed to precompile $statement"
+            # @error "Failed to precompile $statement"
         end
     end
     println()

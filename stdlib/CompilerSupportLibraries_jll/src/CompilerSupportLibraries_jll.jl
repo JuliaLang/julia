@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libgfortran, libstdcxx, libgomp
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libgfortran_handle = C_NULL
 libgfortran_path = ""
@@ -48,8 +48,6 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libgcc_s_handle = dlopen(libgcc_s)
     global libgcc_s_path = dlpath(libgcc_s_handle)
     global libgfortran_handle = dlopen(libgfortran)
@@ -58,6 +56,9 @@ function __init__()
     global libstdcxx_path = dlpath(libstdcxx_handle)
     global libgomp_handle = dlopen(libgomp)
     global libgomp_path = dlpath(libgomp_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    LIBPATH[] = dirname(libgcc_s_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

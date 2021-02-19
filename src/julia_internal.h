@@ -83,7 +83,7 @@ void JL_UV_LOCK(void);
 extern "C" {
 #endif
 
-int jl_running_under_rr(int recheck);
+int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 
 //--------------------------------------------------
 // timers
@@ -473,6 +473,7 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty);
 jl_value_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
 int jl_subtype_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
+JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b);
 // specificity comparison assuming !(a <: b) and !(b <: a)
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
@@ -1134,6 +1135,7 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
+JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
 
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
@@ -1289,6 +1291,7 @@ extern jl_sym_t *static_parameter_sym; extern jl_sym_t *inline_sym;
 extern jl_sym_t *noinline_sym; extern jl_sym_t *generated_sym;
 extern jl_sym_t *generated_only_sym; extern jl_sym_t *isdefined_sym;
 extern jl_sym_t *propagate_inbounds_sym; extern jl_sym_t *specialize_sym;
+extern jl_sym_t *aggressive_constprop_sym;
 extern jl_sym_t *nospecialize_sym; extern jl_sym_t *macrocall_sym;
 extern jl_sym_t *colon_sym; extern jl_sym_t *hygienicscope_sym;
 extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;

@@ -565,7 +565,7 @@ static const auto jlinvoke_func = new JuliaFunction{
 };
 static const auto jlmethod_func = new JuliaFunction{
     "jl_method_def",
-    [](LLVMContext &C) { return FunctionType::get(T_void,
+    [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
                 {T_prjlvalue, T_prjlvalue, T_pjlvalue}, false); },
     nullptr,
 };
@@ -4456,8 +4456,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             /*code*/a2,
             /*module*/literal_pointer_val(ctx, (jl_value_t*)ctx.module)
         };
-        ctx.builder.CreateCall(prepare_call(jlmethod_func), makeArrayRef(mdargs));
-        return ghostValue(jl_nothing_type);
+        jl_cgval_t meth = mark_julia_type(
+            ctx,
+            ctx.builder.CreateCall(prepare_call(jlmethod_func), makeArrayRef(mdargs)),
+            true,
+            jl_method_type);
+        return meth;
     }
     else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
@@ -4693,7 +4697,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             if (ai.isboxed) {
                 vals.push_back(ai.Vboxed);
             }
-            else if (!jl_is_pointerfree(ai.typ)) {
+            else if (jl_is_concrete_immutable(ai.typ) && !jl_is_pointerfree(ai.typ)) {
                 Type *at = julia_type_to_llvm(ctx, ai.typ);
                 vals.push_back(emit_unbox(ctx, at, ai, ai.typ));
             }

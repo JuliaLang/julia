@@ -289,6 +289,9 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::An
         if isa(result_type, Const)
             rettype_const = result_type.val
             const_flags = 0x2
+        elseif isa(result_type, PartialOpaque)
+            rettype_const = result_type
+            const_flags = 0x2
         elseif isconstType(result_type)
             rettype_const = result_type.parameters[1]
             const_flags = 0x2
@@ -712,8 +715,8 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
         child = parent
-        parent = child.parent
         child === ancestor && break
+        parent = child.parent::InferenceState
     end
 end
 
@@ -773,6 +776,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         if isdefined(code, :rettype_const)
             if isa(code.rettype_const, Vector{Any}) && !(Vector{Any} <: code.rettype)
                 return PartialStruct(code.rettype, code.rettype_const), mi
+            elseif code.rettype <: Core.OpaqueClosure && isa(code.rettype_const, PartialOpaque)
+                return code.rettype_const, mi
             else
                 return Const(code.rettype_const), mi
             end

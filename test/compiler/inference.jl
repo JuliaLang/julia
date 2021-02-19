@@ -1165,14 +1165,9 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    meth = which(f, t)
-    t = Base.to_tuple_type(t)
-    ft = isa(f, Type) ? Type{f} : typeof(f)
-    tt = Tuple{ft, t.parameters...}
-    precompile(tt) # does inference (calls jl_type_infer) on this signature
-    (ti, env) = ccall(:jl_type_intersection_with_env, Ref{Core.SimpleVector}, (Any, Any), tt, meth.sig)
-    return ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
-                 (Any, Any, Any), meth, tt, env)
+    match = Base._which(Base.signature_type(f, t), typemax(UInt))
+    precompile(match.spec_types)
+    return Core.Compiler.specialize_method(match)
 end
 
 function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val))
@@ -2039,16 +2034,6 @@ Base.iterate(::Iterator27434, ::Any) = nothing
 let rt = Base.return_types(splat27434, (NamedTuple{(:x,), Tuple{T}} where T,))
     @test rt == Any[Tuple{Any}]
     @test !Base.has_free_typevars(rt[1])
-end
-
-# PR #27843
-bar27843(x, y::Bool) = fill(x, 0)
-bar27843(x, y) = fill(x, ntuple(_ -> 0, y))::Array{typeof(x)}
-foo27843(x, y) = bar27843(x, y)
-@test Core.Compiler.return_type(foo27843, Tuple{Union{Float64,Int}, Any}) == Union{Array{Float64}, Array{Int}}
-let atypes1 = Tuple{Union{IndexCartesian, IndexLinear}, Any, Union{Tuple{}, Tuple{Any,Vararg{Any,N}} where N}, Tuple},
-    atypes2 = Tuple{Union{IndexCartesian, IndexLinear}, Any, Tuple, Tuple}
-    @test Core.Compiler.return_type(SubArray, atypes1) <: Core.Compiler.return_type(SubArray, atypes2)
 end
 
 # issue #27078
@@ -3011,3 +2996,35 @@ g38888() = S38888(Base.inferencebarrier(3), nothing)
 
 f_inf_error_bottom(x::Vector) = isempty(x) ? error(x[1]) : x
 @test Core.Compiler.return_type(f_inf_error_bottom, Tuple{Vector{Any}}) == Vector{Any}
+
+# @aggressive_constprop
+@noinline g_nonaggressive(y, x) = Val{x}()
+@noinline @Base.aggressive_constprop g_aggressive(y, x) = Val{x}()
+
+f_nonaggressive(x) = g_nonaggressive(x, 1)
+f_aggressive(x) = g_aggressive(x, 1)
+
+# The first test just makes sure that improvements to the compiler don't
+# render the annotation effectless.
+@test Base.return_types(f_nonaggressive, Tuple{Int})[1] == Val
+@test Base.return_types(f_aggressive, Tuple{Int})[1] == Val{1}
+
+function splat_lotta_unions()
+    a = Union{Tuple{Int},Tuple{String,Vararg{Int}},Tuple{Int,Vararg{Int}}}[(2,)][1]
+    b = Union{Int8,Int16,Int32,Int64,Int128}[1][1]
+    c = Union{Int8,Int16,Int32,Int64,Int128}[1][1]
+    (a...,b...,c...)
+end
+@test Core.Compiler.return_type(splat_lotta_unions, Tuple{}) >: Tuple{Int,Int,Int}
+
+# Bare Core.Argument in IR
+@eval f_bare_argument(x) = $(Core.Argument(2))
+@test Base.return_types(f_bare_argument, (Int,))[1] == Int
+
+# issue #39611
+Base.return_types((Union{Int,Nothing},)) do x
+    if x === nothing || x < 0
+        return 0
+    end
+    x
+end == [Int]

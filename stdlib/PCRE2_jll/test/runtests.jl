@@ -6,5 +6,5 @@ using Test, Libdl, PCRE2_jll
     vstr = zeros(UInt8, 32)
     @test ccall((:pcre2_config_8, libpcre2_8), Cint, (UInt32, Ref{UInt8}), 11, vstr) > 0
     vn = VersionNumber(split(unsafe_string(pointer(vstr)), " ")[1])
-    @test vn == v"10.35.0"
+    @test vn == v"10.36.0"
 end

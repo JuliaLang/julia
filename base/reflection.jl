@@ -887,6 +887,14 @@ function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool,
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
 end
 
+function _method_by_ftype(args...)
+    matches = _methods_by_ftype(args...)
+    if length(matches) != 1
+        error("no unique matching method found for the specified argument types")
+    end
+    return matches[1]
+end
+
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
@@ -1019,8 +1027,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = type
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
     for match in _methods_by_ftype(tt, -1, world)::Vector
-        instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
-            (Any, Any, Any), match.method, match.spec_types, match.sparams)
+        instance = Core.Compiler.specialize_method(match)
         push!(results, instance)
     end
     return results
@@ -1253,11 +1260,23 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
         nd = ndigits(maxcost)
         println(io, meth)
         IRShow.show_ir(io, code, (io, linestart, idx) -> (print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " "); return ""))
-        println()
+        println(io)
     end
 end
 
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
+
+function _which(@nospecialize(tt::Type), world=typemax(UInt))
+    min_valid = RefValue{UInt}(typemin(UInt))
+    max_valid = RefValue{UInt}(typemax(UInt))
+    match = ccall(:jl_gf_invoke_lookup_worlds, Any,
+        (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
+        tt, typemax(UInt), min_valid, max_valid)
+    if match === nothing
+        error("no unique matching method found for the specified argument types")
+    end
+    return match::Core.MethodMatch
+end
 
 """
     which(f, types)
@@ -1281,11 +1300,7 @@ end
 Returns the method that would be called by the given type signature (as a tuple type).
 """
 function which(@nospecialize(tt::Type))
-    m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
-    if m === nothing
-        error("no unique matching method found for the specified argument types")
-    end
-    return m::Method
+    return _which(tt).method
 end
 
 """

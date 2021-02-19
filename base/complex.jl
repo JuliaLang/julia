@@ -439,29 +439,33 @@ end
 function inv(w::ComplexF64)
     c, d = reim(w)
     (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
-    half = 0.5
-    two = 2.0
-    cd = max(abs(c), abs(d))
-    ov = floatmax(c)
-    un = floatmin(c)
-    ϵ = eps(Float64)
-    bs = two/(ϵ*ϵ)
+    absc, absd = abs(c), abs(d)
+    cd = ifelse(absc>absd, absc, absd) # cheap `max`: don't need sign- and nan-checks here
+
+    ϵ  = eps(Float64)
+    bs = 2/(ϵ*ϵ)
+
+    # scaling
     s = 1.0
-    cd >= half*ov  && (c=half*c; d=half*d; s=s*half) # scale down c,d
-    cd <= un*two/ϵ && (c=c*bs; d=d*bs; s=s*bs      ) # scale up c,d
-    if abs(d)<=abs(c)
-        r = d/c
-        t = 1.0/(c+d*r)
-        p = t
-        q = -r * t
-    else
-        c, d = d, c
-        r = d/c
-        t = 1.0/(c+d*r)
-        p = r * t
-        q = -t
+    if cd >= floatmax(Float64)/2
+        c *= 0.5; d *= 0.5; s = 0.5 # scale down c, d
+    elseif cd <= 2floatmin(Float64)/ϵ
+        c *= bs;  d *= bs;  s = bs  # scale up c, d
     end
-    return ComplexF64(p*s,q*s) # undo scaling
+
+    # inversion operations
+    if absd <= absc
+        p, q = robust_cinv(c, d)
+    else
+        q, p = robust_cinv(-d, -c)
+    end
+    return ComplexF64(p*s, q*s) # undo scaling
+end
+function robust_cinv(c::Float64, d::Float64)
+    r = d/c
+    p = inv(muladd(d, r, c))
+    q = -r*p
+    return p, q
 end
 
 function ssqs(x::T, y::T) where T<:Real

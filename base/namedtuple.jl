@@ -112,6 +112,9 @@ NamedTuple{names}(itr) where {names} = NamedTuple{names}(Tuple(itr))
 
 NamedTuple(itr) = (; itr...)
 
+# avoids invalidating Union{}(...)
+NamedTuple{names, Union{}}(itr::Tuple) where {names} = throw(MethodError(NamedTuple{names, Union{}}, (itr,)))
+
 end # if Base
 
 length(t::NamedTuple) = nfields(t)
@@ -286,7 +289,8 @@ function merge(a::NamedTuple, itr)
     names = Symbol[]
     vals = Any[]
     inds = IdDict{Symbol,Int}()
-    for (k::Symbol, v) in itr
+    for (k, v) in itr
+        k = k::Symbol
         oldind = get(inds, k, 0)
         if oldind > 0
             vals[oldind] = v

@@ -15,8 +15,8 @@
 # ====================================================
 
 @inline function exthorner(x, p::Tuple)
-	# polynomial evaluation using compensated summation.
-	# much more accurate, especially when lo can be combined with other rounding errors
+    # polynomial evaluation using compensated summation.
+    # much more accurate, especially when lo can be combined with other rounding errors
     hi, lo = p[end], zero(x)
     for i in length(p)-1:-1:1
         pi = p[i]
@@ -112,7 +112,7 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     #               return cosh(x) = = (exp(x) + exp(-x))/2
     #      e)   H_LARGE_X  <= x
     #               return cosh(x) = exp(x/2)/2 * exp(x/2)
-    #      			Note that this branch automatically deals with Infs and NaNs
+    #                  Note that this branch automatically deals with Infs and NaNs
 
     absx = abs(x)
     if absx <= COSH_SMALL_X(T)
@@ -243,14 +243,10 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     # Method
     # 1.Reduced x to positive by atanh(-x) = -atanh(x)
     # 2. Find the branch and the expression to calculate and return it
-    #     a) 0 <= x < 2^-28
-    #         return x
-    #     b) 2^-28 <= x < 0.5
-    #         return 0.5*log1p(2x+2x*x/(1-x))
-    #     c) 0.5 <= x < 1
-    #         return 0.5*log1p(2x/1-x)
-    #     d) x = 1
-    #         return Inf
+    #     a) 0 <= x < 0.5
+    #         return 0.5*log1p(2x/(1-x))
+    #     b) 0.5 <= x <= 1
+    #         return 0.5*log((x+1)/(1-x))
     # Special cases:
     #    if |x| > 1 throw DomainError
     isnan(x) && return x
@@ -260,20 +256,12 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     if absx > 1
         atanh_domain_error(x)
     end
-    if absx < T(2)^-28
-        # in a)
-        return x
-    end
     if absx < T(0.5)
+        # in a)
+        t = log1p(T(2)*absx/(T(1)-absx))
+    else
         # in b)
-        t = absx+absx
-        t = T(0.5)*log1p(t+t*absx/(T(1)-absx))
-    elseif absx < T(1)
-        # in c)
-        t = T(0.5)*log1p((absx + absx)/(T(1)-absx))
-    elseif absx == T(1)
-        # in d)
-        return copysign(T(Inf), x)
+        t = log((T(1)+absx)/(T(1)-absx))
     end
-    return copysign(t, x)
+    return T(0.5)*copysign(t, x)
 end

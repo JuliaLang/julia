@@ -410,7 +410,7 @@ function foo23996(xs...)
     bar(::AbstractFloat) = push!(rets, 2)
     bar(::Bool) = foobar()
     for x in xs
-	bar(x)
+        bar(x)
     end
     rets
 end
@@ -4124,15 +4124,6 @@ let ex = quote
     @test ex.args[2] == :test
 end
 
-# issue #25652
-x25652 = 1
-x25652_2 = let (x25652, _) = (x25652, nothing)
-    x25652 = x25652 + 1
-    x25652
-end
-@test x25652_2 == 2
-@test x25652 == 1
-
 # issue #15180
 function f15180(x::T) where T
     X = Vector{T}(undef, 1)
@@ -5000,7 +4991,8 @@ gVararg(a::fVararg(Int)) = length(a)
     false
 catch e
     (e::ErrorException).msg
-end == "The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension."
+end == "The function body AST defined by this @generated function is not pure. " *
+       "This likely means it contains a closure, a comprehension or a generator."
 
 let x = 1
     global g18444
@@ -5079,19 +5071,6 @@ end
 end
 @test f17255(10000)[1]
 GC.enable(true)
-
-# PR #39133, ensure that @time evaluates in the same scope
-function time_macro_scope()
-    @time time_macro_local_var = 1
-    time_macro_local_var
-end
-@test time_macro_scope() == 1
-
-function timev_macro_scope()
-    @timev timev_macro_local_var = 1
-    timev_macro_local_var
-end
-@time timev_macro_scope() == 1
 
 # issue #18710
 bad_tvars() where {T} = 1
@@ -5318,6 +5297,16 @@ if Sys.WORD_SIZE == 64
         return
     end
     @test_nowarn tester20360()
+end
+
+# issue #39717
+let a = Base.StringVector(2^17)
+    b = String(a)
+    c = String(a)
+    GC.gc()
+    @test sizeof(a) == 0
+    @test sizeof(b) == 2^17
+    @test sizeof(c) == 0
 end
 
 @test_throws ArgumentError eltype(Bottom)

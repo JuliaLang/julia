@@ -106,19 +106,22 @@ def p(x):
 
 # If the user passes in a GCC version (like 8.2.0) use that to force a
 # "-libgfortran5" tag at the end of the triplet, but only if it has otherwise
-# not been specified
+# not been specified.
 if libgfortran_version == "blank_libgfortran":
     if len(sys.argv) >= 3:
-        libgfortran_version = {
-            "4":  "libgfortran3",
-            "5":  "libgfortran3",
-            "6":  "libgfortran3",
-            "7":  "libgfortran4",
-            "8":  "libgfortran5",
-            "9":  "libgfortran5",
-            "10": "libgfortran5",
-            "11": "libgfortran5",
-        }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1].split('.')[0]]
+        # If there was no gfortran/gcc version passed in, default to the latest libgfortran version
+        if not sys.argv[2]:
+            libgfortran_version = "libgfortran5"
+        else:
+            # Take the last thing that looks like a version number, and extract its major component
+            version_numbers = list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))
+            major_ver = int(version_numbers[-1].split('.')[0])
+            if major_ver <= 6:
+                libgfortran_version = "libgfortran3"
+            elif major_ver <= 7:
+                libgfortran_version = "libgfortran4"
+            else:
+                libgfortran_version = "libgfortran5"
 
 if cxx_abi == "blank_cxx_abi":
     if len(sys.argv) == 4:

@@ -735,7 +735,7 @@ julia> LinearIndices(A)[2, 2]
 5
 ```
 
-It's important to note that there's a very large assymmetry in the performance
+It's important to note that there's a very large asymmetry in the performance
 of these conversions. Converting a linear index to a set of cartesian indices
 requires dividing and taking the remainder, whereas going the other way is just
 multiplies and adds. In modern processors, integer division can be 10-50 times

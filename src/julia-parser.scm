@@ -1869,7 +1869,15 @@
                          (fix 'vect vec)     ; [x]   => (vect x)
                          (fix 'hcat vec))))  ; [x y] => (hcat x y)
           (case t
-            ((#\; #\newline)
+            ((#\;)
+             (take-token s)
+             (if (eqv? (peek-token s) #\;)
+               (parser-depwarn s (string "Multiple semicolons in an array concatenation expression currently have no effect, "
+                                  "but may have a new meaning in a future version of Julia.")
+                                 "Please remove extra semicolons to preserve forward compatibility e.g. [1;;3] => [1;3]."))
+             (set! gotnewline #f)
+             (loop '() (update-outer vec outer)))
+            ((#\newline)
              (or gotnewline (take-token s))
              (set! gotnewline #f)
              (loop '() (update-outer vec outer)))

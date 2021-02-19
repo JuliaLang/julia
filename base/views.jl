@@ -77,10 +77,23 @@ end
 """
     @view A[inds...]
 
-Creates a `SubArray` from an indexing expression. This can only be applied directly to a
-reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the target of
-an assignment (e.g. `@view(A[1,2:end]) = ...`).  See also [`@views`](@ref)
-to switch an entire block of code to use views for slicing.
+Transform the indexing expression `A[inds...]` into the equivalent [`view`](@ref) call.
+
+This can only be applied directly to a single indexing expression and is particularly
+helpful for expressions that include the special `begin` or `end` indexing syntaxes
+like `A[begin, 2:end-1]` (as those are not supported by the normal [`view`](@ref)
+function).
+
+Note that `@view` cannot be used as the target of a regular assignment (e.g.,
+`@view(A[1, 2:end]) = ...`), nor would the un-decorated
+[indexed assignment](@ref man-indexed-assignment) (`A[1, 2:end] = ...`)
+or broadcasted indexed assignment (`A[1, 2:end] .= ...`) make a copy.  It can be useful,
+however, for _updating_ broadcasted assignments like `@view(A[1, 2:end]) .+= 1`
+because this is a simple syntax for `@view(A[1, 2:end]) .= @view(A[1, 2:end]) + 1`,
+and the indexing expression on the right-hand side would otherwise make a
+copy without the `@view`.
+
+See also [`@views`](@ref) to switch an entire block of code to use views for non-scalar indexing.
 
 !!! compat "Julia 1.5"
     Using `begin` in an indexing expression to refer to the first index requires at least

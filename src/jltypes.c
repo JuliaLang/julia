@@ -2150,7 +2150,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(18,
+                        jl_perm_symsvec(19,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -2168,8 +2168,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inferred",
                             "inlineable",
                             "propagate_inbounds",
-                            "pure"),
-                        jl_svec(18,
+                            "pure",
+                            "aggressive_constprop"),
+                        jl_svec(19,
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
@@ -2187,13 +2188,14 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
+                            jl_bool_type,
                             jl_bool_type),
-                        0, 1, 18);
+                        0, 1, 19);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(23,
+                        jl_perm_symsvec(24,
                             "name",
                             "module",
                             "file",
@@ -2216,8 +2218,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "nkw",
                             "isva",
                             "pure",
-                            "is_for_opaque_closure"),
-                        jl_svec(23,
+                            "is_for_opaque_closure",
+                            "aggressive_constprop"),
+                        jl_svec(24,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -2238,6 +2241,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_int32_type,
                             jl_int32_type,
                             jl_int32_type,
+                            jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
@@ -2391,6 +2395,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_opaque_closure_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type))->name;
     jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type));
 
+
+    jl_partial_opaque_type = jl_new_datatype(jl_symbol("PartialOpaque"), core, jl_any_type, jl_emptysvec,
+        jl_perm_symsvec(5, "typ", "env", "isva", "parent", "source"),
+        jl_svec(5, jl_type_type, jl_any_type, jl_bool_type, jl_method_instance_type, jl_method_type),
+        0, 0, 5);
 
     // complete builtin type metadata
     jl_voidpointer_type = (jl_datatype_t*)pointer_void;

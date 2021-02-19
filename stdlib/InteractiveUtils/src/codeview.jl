@@ -29,18 +29,15 @@ end
 
 function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
     used || return
-    if ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
-        if highlighting[:warntype] && ty isa Union && Base.is_expected_union(ty)
-            Base.emphasize(io, "::$ty", Base.warn_color()) # more mild user notification
-        else
-            Base.emphasize(io, "::$ty")
-        end
+    str = "::$ty"
+    if !highlighting[:warntype]
+        print(io, str)
+    elseif ty isa Union && Base.is_expected_union(ty)
+        Base.emphasize(io, str, Base.warn_color()) # more mild user notification
+    elseif ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
+        Base.emphasize(io, str)
     else
-        if highlighting[:warntype]
-            Base.printstyled(io, "::$ty", color=:cyan) # show the "good" type
-        else
-            Base.print(io, "::$ty")
-        end
+        Base.printstyled(io, str, color=:cyan) # show the "good" type
     end
     nothing
 end
@@ -65,25 +62,73 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Sy
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
     for (src, rettype) in code_typed(f, t, optimize=optimize)
         lambda_io::IOContext = io
+        p = src.parent
+        nargs::Int = 0
+        if p isa Core.MethodInstance
+            println(io, p)
+            print(io, "  from ")
+            println(io, p.def)
+            p.def isa Method && (nargs = p.def.nargs)
+            if !isempty(p.sparam_vals)
+                println(io, "Static Parameters")
+                sig = p.def.sig
+                warn_color = Base.warn_color() # more mild user notification
+                for i = 1:length(p.sparam_vals)
+                    sig = sig::UnionAll
+                    name = sig.var.name
+                    val = p.sparam_vals[i]
+                    print_highlighted(io::IO, v::String, color::Symbol) =
+                        if highlighting[:warntype]
+                            Base.printstyled(io, v; color)
+                        else
+                            Base.print(io, v)
+                        end
+                    if val isa TypeVar
+                        if val.lb === Union{}
+                            print(io, "  ", name, " <: ")
+                            print_highlighted(io, "$(val.ub)", warn_color)
+                        elseif val.ub === Any
+                            print(io, "  ", sig.var.name, " >: ")
+                            print_highlighted(io, "$(val.lb)", warn_color)
+                        else
+                            print(io, "  ")
+                            print_highlighted(io, "$(val.lb)", warn_color)
+                            print(io, " <: ", sig.var.name, " <: ")
+                            print_highlighted(io, "$(val.ub)", warn_color)
+                        end
+                    elseif val isa typeof(Vararg)
+                        print(io, "  ", name, "::")
+                        print_highlighted(io, "Int", warn_color)
+                    else
+                        print(io, "  ", sig.var.name, " = ")
+                        print_highlighted(io, "$(val)", :cyan) # show the "good" type
+                    end
+                    println(io)
+                    sig = sig.body
+                end
+            end
+        end
         if src.slotnames !== nothing
             slotnames = Base.sourceinfo_slotnames(src)
             lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
-            println(io, "Variables")
             slottypes = src.slottypes
+            nargs > 0 && println(io, "Arguments")
             for i = 1:length(slotnames)
+                if i == nargs + 1
+                    println(io, "Locals")
+                end
                 print(io, "  ", slotnames[i])
                 if isa(slottypes, Vector{Any})
                     warntype_type_printer(io, slottypes[i], true)
                 end
                 println(io)
             end
-            println(io)
         end
         print(io, "Body")
         warntype_type_printer(io, rettype, true)
         println(io)
-        # TODO: static parameter values
         Base.IRShow.show_ir(lambda_io, src, lineprinter(src), warntype_type_printer)
+        println(io)
     end
     nothing
 end
@@ -103,12 +148,8 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     end
     # get the MethodInstance for the method match
     world = typemax(UInt)
-    meth = which(f, t)
-    t = to_tuple_type(t)
-    tt = signature_type(f, t)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::Core.SimpleVector
-    meth = Base.func_for_method_checked(meth, ti, env)
-    linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, ti, env, world)
+    match = Base._which(signature_type(f, t), world)
+    linfo = Core.Compiler.specialize_method(match)
     # get the code for it
     if native
         str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo)

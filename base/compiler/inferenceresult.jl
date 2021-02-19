@@ -45,15 +45,20 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
     return cache_argtypes, overridden_by_const
 end
 
-function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
-    toplevel = !isa(linfo.def, Method)
-    linfo_argtypes = Any[unwrap_unionall(linfo.specTypes).parameters...]
-    nargs::Int = toplevel ? 0 : linfo.def.nargs
+function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(specTypes),
+    isva::Bool)
+    toplevel = method === nothing
+    linfo_argtypes = Any[unwrap_unionall(specTypes).parameters...]
+    nargs::Int = toplevel ? 0 : method.nargs
+    if !toplevel && method.is_for_opaque_closure
+        # For opaque closure, the closure environment is processed elsewhere
+        nargs -= 1
+    end
     cache_argtypes = Vector{Any}(undef, nargs)
     # First, if we're dealing with a varargs method, then we set the last element of `args`
     # to the appropriate `Tuple` type or `PartialStruct` instance.
-    if !toplevel && linfo.def.isva
-        if linfo.specTypes == Tuple
+    if !toplevel && isva
+        if specTypes == Tuple
             if nargs > 1
                 linfo_argtypes = svec(Any[Any for i = 1:(nargs - 1)]..., Tuple.parameters[1])
             end
@@ -63,7 +68,7 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
             if nargs > linfo_argtypes_length
                 va = linfo_argtypes[linfo_argtypes_length]
                 if isvarargtype(va)
-                    new_va = rewrap_unionall(unconstrain_vararg_length(va), linfo.specTypes)
+                    new_va = rewrap_unionall(unconstrain_vararg_length(va), specTypes)
                     vargtype_elements = Any[new_va]
                     vargtype = Tuple{new_va}
                 else
@@ -74,7 +79,7 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
                 vargtype_elements = Any[]
                 for p in linfo_argtypes[nargs:linfo_argtypes_length]
                     p = isvarargtype(p) ? unconstrain_vararg_length(p) : p
-                    push!(vargtype_elements, rewrap(p, linfo.specTypes))
+                    push!(vargtype_elements, rewrap(p, specTypes))
                 end
                 for i in 1:length(vargtype_elements)
                     atyp = vargtype_elements[i]
@@ -115,7 +120,7 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
             elseif isconstType(atyp)
                 atyp = Const(atyp.parameters[1])
             else
-                atyp = rewrap(atyp, linfo.specTypes)
+                atyp = rewrap(atyp, specTypes)
             end
             i == n && (lastatype = atyp)
             cache_argtypes[i] = atyp
@@ -126,6 +131,13 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
     else
         @assert nargs == 0 "invalid specialization of method" # wrong number of arguments
     end
+    cache_argtypes
+end
+
+function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
+    mthd = isa(linfo.def, Method) ? linfo.def::Method : nothing
+    cache_argtypes = most_general_argtypes(mthd, linfo.specTypes, isa(mthd, Method) ?
+            mthd.isva : false)
     return cache_argtypes, falses(length(cache_argtypes))
 end
 

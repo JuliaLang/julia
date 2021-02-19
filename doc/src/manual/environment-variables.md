@@ -111,6 +111,11 @@ This behavior was chosen so that it would be possible to set an empty load path 
 the environment variable. If you want the default load path, either unset the
 environment variable or if it must have a value, set it to the string `:`.
 
+!!! note
+
+    On Windows, path elements are separated by the `;` character, as is the case with
+    most path lists on Windows. Replace `:` with `;` in the above paragraph.
+
 ### `JULIA_DEPOT_PATH`
 
 The `JULIA_DEPOT_PATH` environment variable is used to populate the global Julia
@@ -140,7 +145,7 @@ or if it must have a value, set it to the string `:`.
 !!! note
 
     On Windows, path elements are separated by the `;` character, as is the case with
-    most path lists on Windows.
+    most path lists on Windows. Replace `:` with `;` in the above paragraph.
 
 ### `JULIA_HISTORY`
 
@@ -149,6 +154,15 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 
 ```
 $(DEPOT_PATH[1])/logs/repl_history.jl
+```
+
+### `JULIA_PKG_SERVER`
+
+Used by `Pkg.jl`, for downloading packages and updating the registry. By default, `Pkg` uses `https://pkg.julialang.org` to
+fetch Julia packages. You can use this environment variable to select a different server. In addition, you can disable the use of the
+PkgServer protocol, and instead access the packages directly from their hosts (GitHub, GitLab, etc.) by setting:
+```
+export JULIA_PKG_SERVER=""
 ```
 
 ## External applications
@@ -334,5 +348,4 @@ On debug builds of Julia this is always enabled. Recommended to use with `-g 2`.
 ### `JULIA_LLVM_ARGS`
 
 Arguments to be passed to the LLVM backend.
-
 

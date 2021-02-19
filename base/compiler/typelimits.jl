@@ -368,6 +368,15 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
        return anyconst ? PartialStruct(widenconst(typea), fields) :
             widenconst(typea)
     end
+    if isa(typea, PartialOpaque) && isa(typeb, PartialOpaque) && widenconst(typea) == widenconst(typeb)
+        if !(typea.source === typeb.source &&
+             typea.isva === typeb.isva &&
+             typea.parent === typeb.parent)
+            return widenconst(typea)
+        end
+        return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
+            typea.isva, typea.parent, typea.source)
+    end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
     if !isa(typea, Type) || !isa(typeb, Type)
@@ -375,10 +384,9 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         return Any
     end
     typea == typeb && return typea
-    # it's always ok to form a Union of two Union-free types
-    u = Union{typea, typeb}
-    if unioncomplexity(u) <= 1
-        return u
+    # it's always ok to form a Union of two concrete types
+    if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
+        return Union{typea, typeb}
     end
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list

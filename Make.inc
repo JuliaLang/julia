@@ -488,26 +488,15 @@ USEGCC := 0
 USECLANG := 1
 endif
 
+# Note: Supporting only macOS Mavericks and above
 ifeq ($(OS), Darwin)
-DARWINVER := $(shell uname -r | cut -b 1-2)
-DARWINVER_GTE11 := $(shell expr $(DARWINVER) \>= 11)
-DARWINVER_GTE13 := $(shell expr $(DARWINVER) \>= 13)
-ifeq ($(DARWINVER_GTE11),0) # Snow Leopard specific configuration
-USEGCC := 1
-USECLANG := 0
-MACOSX_VERSION_MIN := 10.6
-OPENBLAS_TARGET_ARCH:=NEHALEM
-OPENBLAS_DYNAMIC_ARCH:=0
-USE_SYSTEM_LIBUNWIND:=1
+APPLE_ARCH := $(shell uname -m)
+USEGCC := 0
+USECLANG := 1
+ifneq ($(APPLE_ARCH),arm64)
+MACOSX_VERSION_MIN := 10.9
 else
-ifeq ($(DARWINVER_GTE13),0) # Lion / Mountain Lion specific configuration
-USEGCC := 0
-USECLANG := 1
-MACOSX_VERSION_MIN := 10.6
-else # Newer versions
-USEGCC := 0
-USECLANG := 1
-endif
+MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
@@ -520,7 +509,7 @@ CXX := $(CROSS_COMPILE)g++
 JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti
+JCXXFLAGS := -pipe $(fPIC) -fno-rtti -std=c++14
 ifneq ($(OS), WINNT)
 # Do not enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
@@ -535,13 +524,10 @@ CXX := $(CROSS_COMPILE)clang++
 JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
+JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic -std=c++14
 DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
-ifeq ($(MACOSX_VERSION_MIN),)
-MACOSX_VERSION_MIN := 10.9
-endif
 CC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 CXX += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
@@ -559,7 +545,7 @@ CC  := icc
 CXX := icpc
 JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
 JCPPFLAGS :=
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti
+JCXXFLAGS := -pipe $(fPIC) -fno-rtti -std=c++14
 DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
 SHIPFLAGS := -O3 -g -falign-functions
 endif
@@ -1173,7 +1159,9 @@ USE_BINARYBUILDER ?= 0
 endif
 
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
-BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(shell $(FC) --version | head -1)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
+FC_VERSION := $(shell $(FC) --version 2>/dev/null | head -1)
+FC_OR_CC_VERISON := $(or $(FC_VERSION),$(shell $(CC) --version 2>/dev/null | head -1))
+BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(FC_OR_CC_VERSION)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
 BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI)))))
@@ -1194,6 +1182,14 @@ endif
 endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
+
+
+# Warn if the user tries to build something that requires `gfortran` but they don't have it installed.
+ifeq ($(FC_VERSION),)
+ifneq ($(USE_BINARYBUILDER_OPENBLAS)$(USE_BINARYBUILDER_SUITESPARSE),11)
+$(error "Attempting to build OpenBLAS or SuiteSparse without a functioning fortran compiler!")
+endif
+endif
 
 
 # OS specific stuff
