@@ -775,7 +775,6 @@ pair_repeater_b() = pair_repeater_a()
             catch_backtrace()
         end
         bt_str = sprint(Base.show_backtrace, bt)
-        m = @__MODULE__
         @test occursin(r"repeats \d+ times", bt_str)
     end
 
@@ -784,7 +783,6 @@ pair_repeater_b() = pair_repeater_a()
             catch_backtrace()
         end
         bt_str = sprint(Base.show_backtrace, bt)
-        m = @__MODULE__
         @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
     end
 end
