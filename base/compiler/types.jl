@@ -210,6 +210,7 @@ add_remark!(ni::NativeInterpreter, sv, s) = nothing
 may_optimize(ni::NativeInterpreter) = true
 may_compress(ni::NativeInterpreter) = true
 may_discard_trees(ni::NativeInterpreter) = true
+verbose_stmt_info(ni::NativeInterpreter) = false
 
 method_table(ai::AbstractInterpreter) = InternalMethodTable(get_world_counter(ai))
 
