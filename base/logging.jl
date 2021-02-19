@@ -638,7 +638,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
                         filepath, line; kwargs...)
     @nospecialize
     maxlog = get(kwargs, :maxlog, nothing)
-    if maxlog isa Integer
+    if maxlog isa Core.BuiltinInts
         remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
