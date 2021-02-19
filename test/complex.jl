@@ -1110,6 +1110,19 @@ end
     @test (2+0im)^(-21//10) === (2//1+0im)^(-21//10) === 2^-2.1 - 0.0im
 end
 
+@testset "mod, issue #37376" begin
+    #Testing on zeros and ones
+    @test isequal(mod(0+0im,1),Complex(0,0))
+    @test isequal(mod(Complex(0,0),2),Complex(0,0))
+    @test isequal(mod(Complex(1,0),1),Complex(0,0))
+    @test isequal(mod(Complex(0,1),1),Complex(0,0))
+    @test isequal(mod(Complex(1,1),1),Complex(0,0))
+    #Testing on integer numerator and denominator
+    @test isequal(mod(Complex(5,6),2),Complex(1,0))
+    @test isequal(mod(Complex(11,17),7),Complex(4,3))
+    @test isequal(mod(Complex(10,12),5),Complex(0,2))
+end
+
 @testset "more cpow" begin
     # for testing signs of zeros, it is useful to convert ±0.0 to ±1e-15
     zero2small(r::Real) = iszero(r) ? copysign(1e-15, r) : r

@@ -177,6 +177,19 @@ Complex{Int64}
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
 
+"""
+    mod(z::Complex,n::Real)
+
+Returns a complex number whose real part and imaginary parts are old real part modulo n and old imaginary part modulo n respectively.
+# Examples
+```jldoctest
+julia> mod(12+10im,5)
+
+julia> mod(3+11im,7)
+```
+"""
+mod(z::Complex,n::Real)=Complex(mod(real(z),n),mod(imag(z),n))
+
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
 function show(io::IO, z::Complex)
