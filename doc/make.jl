@@ -314,7 +314,8 @@ function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs
         return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder)
     elseif Base.GIT_VERSION_INFO.branch == "master"
         return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder=devurl)
-    elseif Base.GIT_VERSION_INFO.branch == "mp/ssh-key-debug" # DEBUGGING CASE
+    else # DEBUGGING CASE
+        @warn "DEBUG DEPLOYMENT HAPPENING"
         return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder="test")
     end
     @info "Skipping docs deployment: neither a tag nor master branch" Base.GIT_VERSION_INFO
