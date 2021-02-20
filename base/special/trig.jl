@@ -1283,7 +1283,7 @@ for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
                 $($name)(x)
 
             Compute the inverse $($fn) of `x`, where the output is in $($un).
-            If `x` is a matrix, `x` needs to be a square matrix. """ ($fd)(y) = ($fu).(($f)(y))
+            If `x` is a matrix, `x` needs to be a square matrix. """ ($fd)(x) = ($fu).(($f)(x))
         end
     end
 end
