@@ -1189,6 +1189,17 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     return expr;
 }
 
+// first stage of lowering, produces an expanded AST instead of SSA form
+JL_DLLEXPORT jl_value_t *jl_expand_forms(jl_value_t *expr, jl_module_t *inmodule)
+{
+    JL_TIMING(LOWERING);
+    JL_GC_PUSH1(&expr);
+    expr = jl_copy_ast(expr);
+    expr = jl_call_scm_on_ast("expand-forms", expr, inmodule);
+    JL_GC_POP();
+    return expr;
+}
+
 // Lower an expression tree into Julia's intermediate-representation.
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
 {

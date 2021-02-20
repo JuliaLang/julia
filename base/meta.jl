@@ -178,6 +178,26 @@ macro lower(mod, code)
     return :(lower($(esc(mod)), $(QuoteNode(code))))
 end
 
+"""
+    expand_forms(m, ex)
+
+Return the unlinearized expanded form of the expression `ex` in the module `m`. This
+expands syntax like indexing expressions or broadcasting into the appropriate function
+calls.
+
+# Examples
+```jldoctest
+julia> Meta.expand_forms(Main, :(a[end]))
+:(Base.getindex(a, Base.lastindex(a)))
+
+julia> Meta.expand_forms(Main, :(a .+ f.(b, c)))
+:(Base.materialize(Base.broadcasted(+, a, Base.broadcasted(f, b, c))))
+```
+
+See also [`lower`](@ref), which returns the output after linearization.
+"""
+expand_forms(m::Module, @nospecialize(ex)) = ccall(:jl_expand_forms, Any, (Any, Any), ex, m)
+
 
 ## interface to parser ##
 

@@ -422,6 +422,7 @@ Core.QuoteNode
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1
+Meta.expand_forms
 Base.code_lowered
 Base.code_typed
 Base.precompile
