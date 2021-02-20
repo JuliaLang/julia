@@ -1261,22 +1261,30 @@ end
 sincosd(::Missing) = (missing, missing)
 
 for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan, "tangent"))
-    name = string(fd)
-    @eval begin
-        @doc """
-            $($name)(x)
-        Compute $($fn) of `x`, where `x` is in degrees. """ ($fd)(z) = ($f)(deg2rad(z))
+    for (fu, un) in ((:deg2rad, "degrees"),)
+        name = string(fd)
+        @eval begin
+            @doc """
+                $($name)(x)
+
+            Compute $($fn) of `x`, where `x` is in $($un).
+            If `x` is a matrix, `x` needs to be a square matrix. """ ($fd)(x) = ($f)(($fu).(x))
+        end
     end
 end
 
 for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
                     (:asecd, :asec, "secant"), (:acscd, :acsc, "cosecant"), (:acotd, :acot, "cotangent"))
-    name = string(fd)
-    @eval begin
-        @doc """
-            $($name)(x)
 
-        Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg(($f)(y))
+    for (fu, un) in ((:rad2deg, "degrees"),)
+        name = string(fd)
+        @eval begin
+            @doc """
+                $($name)(x)
+
+            Compute the inverse $($fn) of `x`, where the output is in $($un).
+            If `x` is a matrix, `x` needs to be a square matrix. """ ($fd)(y) = ($fu).(($f)(y))
+        end
     end
 end
 
@@ -1286,5 +1294,5 @@ end
 
 Compute the inverse tangent of `y` or `y/x`, respectively, where the output is in degrees.
 """
-atand(y)    = rad2deg(atan(y))
-atand(y, x) = rad2deg(atan(y,x))
+atand(y)    = rad2deg.(atan(y))
+atand(y, x) = rad2deg.(atan(y,x))

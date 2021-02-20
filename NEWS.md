@@ -52,6 +52,7 @@ Standard library changes
 * `getindex` can now be used on `NamedTuple`s with multiple values ([#38878])
 * `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
 * `RegexMatch` now iterate to give their captures. ([#34355]).
+* Some degree trigonometric functions, `sind`, `cosd`, `tand`, `asind`, `acosd`, `asecd`, `acsd`, `acotd` now accept an square matrix ([#?]).
 
 #### Package Manager
 
