@@ -786,6 +786,7 @@ export
     atreplinit,
     exit,
     ntuple,
+    arity,
 
 # I/O and events
     close,
