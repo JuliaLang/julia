@@ -225,9 +225,11 @@ end
 """
     isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
 
-Inexact equality comparison: `true` if `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The
-default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
-argument `nans` determines whether or not NaN values are considered equal (defaults to false).
+Inexact equality comparison. Two numbers compare equal if their relative distance *or* their
+absolute distance is within tolerance bounds: `isapprox` returns `true` if
+`norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The default `atol` is zero and the
+default `rtol` depends on the types of `x` and `y`. The keyword argument `nans` determines
+whether or not NaN values are considered equal (defaults to false).
 
 For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to
 the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
