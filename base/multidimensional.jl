@@ -888,13 +888,17 @@ function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractA
     A
 end
 
+_iterate(x::AbstractString) = iterate(Ref(x))
+_iterate(x::Any) = iterate(x)
+iterate(::AbstractString, ::Nothing) = nothing
+
 function _generate_unsafe_setindex!_body(N::Int)
     quote
         x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
-        Xy = iterate(x′)
+        Xy = _iterate(x′)
         @inbounds @nloops $N i d->I_d begin
             # This is never reached, but serves as an assumption for
             # the optimizer that it does not need to emit error paths

@@ -2910,4 +2910,15 @@ end
     a[1:1, 2:2] = 5
     @test a == [1 5; 3 4]
     @test_throws ArgumentError a[1:1, 1:2] = 5
+
+    # strings are tricky becuase they iterate chars
+    a = fill("test", 3)
+    a[2:2] = "foo"
+    @test a == ["test", "foo", "test"]
+
+    b = fill("test", 3, 3)
+    b[2:2,  2:2] = "foo"
+    @test b == ["test" "test" "test"
+                "test" "foo"  "test"
+                "test" "test" "test"]
 end
