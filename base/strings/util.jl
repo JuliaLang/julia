@@ -633,30 +633,36 @@ julia> hex2bytes(a)
 function hex2bytes end
 
 hex2bytes(s::AbstractString) = hex2bytes(String(s))
-hex2bytes(s::Union{String,AbstractVector{UInt8}}) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
-
-_firstbyteidx(s::String) = 1
-_firstbyteidx(s::AbstractVector{UInt8}) = first(eachindex(s))
-_lastbyteidx(s::String) = sizeof(s)
-_lastbyteidx(s::AbstractVector{UInt8}) = lastindex(s)
+hex2bytes(s::String) = hex2bytes(transcode(UInt8, s))
+hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
 
 """
-    hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
+    hex2bytes!(dest::AbstractVector{UInt8}, itr)
 
-Convert an array `s` of bytes representing a hexadecimal string to its binary
+Convert an iterable `itr` of bytes representing a hexadecimal string to its binary
 representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
-in `d`.   The length of `s` must be exactly twice the length of `d`.
+to `dest`. The length of `dest` must be at least half the length of `itr`.
 """
-function hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
-    if 2length(d) != sizeof(s)
-        isodd(sizeof(s)) && throw(ArgumentError("input hex array must have even length"))
-        throw(ArgumentError("output array must be half length of input array"))
+function hex2bytes!(dest::AbstractArray{UInt8}, itr)
+    isodd(length(itr)) && throw(ArgumentError("length of iterable must be even"))
+    @boundscheck 2*length(dest) < length(itr) && throw(ArgumentError("length of output array must be at least half of the length of input array"))
+    iszero(length(itr)) && return dest
+
+    # we know these iterations always work because of the checks above
+    # as a bonus, we don't have to check the result of `iterate` for `nothing`!
+    # unfortunately, we have to do them explicitly here because the first `iterate` has a different signature
+    (x,state) = iterate(itr)
+    (y,state) = iterate(itr, state)
+    dest[firstindex(dest)] = number_from_hex(x) << 4 + number_from_hex(y)
+
+    # incorporating the iterations into this loop via Iterators.partition was slower than the original function
+    @inbounds for i in Iterators.drop(eachindex(dest),1)
+        (x,state) = iterate(itr, state)
+        (y,state) = iterate(itr, state)
+        dest[i] = number_from_hex(x) << 4 + number_from_hex(y)
     end
-    j = first(eachindex(d)) - 1
-    for i = _firstbyteidx(s):2:_lastbyteidx(s)
-        @inbounds d[j += 1] = number_from_hex(_nthbyte(s,i)) << 4 + number_from_hex(_nthbyte(s,i+1))
-    end
-    return d
+
+    return dest
 end
 
 @inline number_from_hex(c) =

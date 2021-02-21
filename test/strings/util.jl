@@ -379,6 +379,7 @@ end
 
     @testset "Issue 39284" begin
         @test "efcdabefcdab8967452301" == bytes2hex(Iterators.reverse(hex2bytes("0123456789abcdefABCDEF")))
+        @test hex2bytes(Iterators.reverse(b"CE1A85EECc")) == UInt8[0xcc, 0xee, 0x58, 0xa1, 0xec]
     end
 end
 
