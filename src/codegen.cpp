@@ -2341,8 +2341,13 @@ static jl_cgval_t emit_getfield(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_s
 }
 
 template<typename Func>
-static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Func &&func)
+static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Constant *defval, Func &&func)
 {
+    if (auto Cond = dyn_cast<ConstantInt>(ifnot)) {
+        if (Cond->isZero())
+            return defval;
+        return func();
+    }
     BasicBlock *currBB = ctx.builder.GetInsertBlock();
     BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "guard_pass", ctx.f);
     BasicBlock *exitBB = BasicBlock::Create(jl_LLVMContext, "guard_exit", ctx.f);
@@ -2352,10 +2357,18 @@ static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Fu
     passBB = ctx.builder.GetInsertBlock();
     ctx.builder.CreateBr(exitBB);
     ctx.builder.SetInsertPoint(exitBB);
-    PHINode *phi = ctx.builder.CreatePHI(T_int1, 2);
-    phi->addIncoming(ConstantInt::get(T_int1, defval), currBB);
+    if (defval == nullptr)
+        return nullptr;
+    PHINode *phi = ctx.builder.CreatePHI(defval->getType(), 2);
+    phi->addIncoming(defval, currBB);
     phi->addIncoming(res, passBB);
     return phi;
+}
+
+template<typename Func>
+static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Func &&func)
+{
+    return emit_guarded_test(ctx, ifnot, ConstantInt::get(T_int1, defval), func);
 }
 
 template<typename Func>
@@ -7031,7 +7044,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     auto undef_value_for_type = [&](Type *T) {
         auto tracked = CountTrackedPointers(T);
-        Value *undef;
+        Constant *undef;
         if (tracked.count)
             // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
             undef = Constant::getNullValue(T);
@@ -7114,23 +7127,31 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     if (val.typ == (jl_value_t*)jl_bottom_type) {
                         V = undef_value_for_type(VN->getType());
                     }
-                    else if (VN && VN->getType() == T_prjlvalue) {
+                    else if (VN->getType() == T_prjlvalue) {
                         // Includes the jl_is_uniontype(phiType) && !TindexN case
+                        // TODO: if convert_julia_type says it is wasted effort and to skip it, is it worth using V_rnull (dynamically)?
                         V = boxed(ctx, val);
                     }
                     else {
-                        // XXX: must emit undef here (rather than a bitcast or
-                        //      load of val) if the runtime type of val isn't phiType
-                        V = emit_unbox(ctx, VN->getType(), val, phiType);
+                        // must be careful to emit undef here (rather than a bitcast or
+                        // load of val) if the runtime type of val isn't phiType
+                        Value *isvalid = emit_isa(ctx, val, phiType, NULL).first;
+                        V = emit_guarded_test(ctx, isvalid, undef_value_for_type(VN->getType()), [&] {
+                            return emit_unbox(ctx, VN->getType(), val, phiType);
+                        });
                     }
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());
                     assert(!TindexN);
                 }
                 else if (dest && val.typ != (jl_value_t*)jl_bottom_type) {
-                    // XXX: must emit undef here (rather than a bitcast or
-                    //      load of val) if the runtime type of val isn't phiType
+                    // must be careful to emit undef here (rather than a bitcast or
+                    // load of val) if the runtime type of val isn't phiType
                     assert(lty != T_prjlvalue);
-                    (void)emit_unbox(ctx, lty, val, phiType, maybe_decay_tracked(ctx, dest));
+                    Value *isvalid = emit_isa(ctx, val, phiType, NULL).first;
+                    emit_guarded_test(ctx, isvalid, nullptr, [&] {
+                        (void)emit_unbox(ctx, lty, val, phiType, maybe_decay_tracked(ctx, dest));
+                        return nullptr;
+                    });
                 }
             }
             else {
