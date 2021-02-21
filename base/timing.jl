@@ -115,7 +115,7 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, compile_overhead=0, newline=false)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
         print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
@@ -144,6 +144,10 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, ne
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
         end
         parens && print(io, ")")
+        if compile_overhead > 0.5 * 1e9 # report if overhead is greater than 0.5 seconds
+            timestr = Ryu.writefixed(Float64(compile_overhead/1e9), 1)
+            print(io, " + $timestr seconds of top-level compilation")
+        end
     end
     newline ? println(str) : print(str)
     nothing
@@ -198,8 +202,20 @@ julia> @time begin
 ```
 """
 macro time(ex)
+    if Threads.threadid() == 1 && latest_time_cumucomptime[] == 0 # catch the first time `@time` is interpreted
+        latest_time_cumucomptime[] = cumulative_compile_time_ns_before()
+    end
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+
+        # Given top level compilation only happens on thread 1
+        local comp_overhead = if Threads.threadid() == 1 && latest_time_cumucomptime[] != 0
+            cumulative_compile_time_ns_after() - latest_time_cumucomptime[]
+        else
+            0
+        end
+        latest_time_cumucomptime[] = 0 # reset comp overhead timer
+
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
@@ -207,10 +223,12 @@ macro time(ex)
         elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
+        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, comp_overhead, true)
         val
     end
 end
+
+const latest_time_cumucomptime = Ref{UInt64}(0)
 
 """
     @timev
