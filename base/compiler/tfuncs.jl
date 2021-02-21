@@ -1298,6 +1298,12 @@ function invoke_tfunc(interp::AbstractInterpreter, @nospecialize(ft), @nospecial
     return rt
 end
 
+function has_struct_const_info(x)
+    isa(x, PartialTypeVar) && return true
+    isa(x, Conditional) && return true
+    return has_nontrivial_const_info(x)
+end
+
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(atypes::Vector{Any})
@@ -1316,15 +1322,17 @@ function tuple_tfunc(atypes::Vector{Any})
     anyinfo = false
     for i in 1:length(atypes)
         x = atypes[i]
-        # TODO ignore singleton Const (don't forget to update cache logic if you implement this)
-        if !anyinfo
-            anyinfo = has_const_info(x)
+        if has_struct_const_info(x)
+            anyinfo = true
+        else
+            atypes[i] = x = widenconst(x)
         end
         if isa(x, Const)
             params[i] = typeof(x.val)
         else
             x = widenconst(x)
             if isType(x)
+                anyinfo = true
                 xparam = x.parameters[1]
                 if hasuniquerep(xparam) || xparam === Bottom
                     params[i] = typeof(xparam)
@@ -1634,37 +1642,39 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     if contains_is(argtypes_vec, Union{})
-                        return Const(Union{})
+                        return CallMeta(Const(Union{}), nothing)
                     end
-                    rt = widenconditional(abstract_call(interp, nothing, argtypes_vec, sv, -1).rt)
+                    call = abstract_call(interp, nothing, argtypes_vec, sv, -1)
+                    info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : nothing
+                    rt = widenconditional(call.rt)
                     if isa(rt, Const)
                         # output was computed to be constant
-                        return Const(typeof(rt.val))
+                        return CallMeta(Const(typeof(rt.val)), info)
                     end
                     rt = widenconst(rt)
                     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
                         # output cannot be improved so it is known for certain
-                        return Const(rt)
+                        return CallMeta(Const(rt), info)
                     elseif !isempty(sv.pclimitations)
                         # conservatively express uncertainty of this result
                         # in two ways: both as being a subtype of this, and
                         # because of LimitedAccuracy causes
-                        return Type{<:rt}
+                        return CallMeta(Type{<:rt}, info)
                     elseif (isa(tt, Const) || isconstType(tt)) &&
                         (isa(aft, Const) || isconstType(aft))
                         # input arguments were known for certain
                         # XXX: this doesn't imply we know anything about rt
-                        return Const(rt)
+                        return CallMeta(Const(rt), info)
                     elseif isType(rt)
-                        return Type{rt}
+                        return CallMeta(Type{rt}, info)
                     else
-                        return Type{<:rt}
+                        return CallMeta(Type{<:rt}, info)
                     end
                 end
             end
         end
     end
-    return nothing
+    return CallMeta(Type, nothing)
 end
 
 # N.B.: typename maps type equivalence classes to a single value

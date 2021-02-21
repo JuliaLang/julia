@@ -101,7 +101,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     @nospecialize
     hasmaxlog = haskey(kwargs, :maxlog) ? 1 : 0
     maxlog = get(kwargs, :maxlog, nothing)
-    if maxlog isa Integer
+    if maxlog isa Core.BuiltinInts
         remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return

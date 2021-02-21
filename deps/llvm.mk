@@ -291,7 +291,7 @@ endif
 # These libraries require unwind.h from the libunwind dependency
 ifeq ($(USE_SYSTEM_LIBUNWIND),0)
 ifeq ($(OS),Darwin)
-BUILT_UNWIND := $(build_prefix)/manifest/osxunwind
+BUILT_UNWIND := $(build_prefix)/manifest/llvmunwind
 else
 BUILT_UNWIND := $(build_prefix)/manifest/unwind
 endif # Darwin
@@ -554,6 +554,7 @@ $(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLV
 $(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps))
 $(eval $(call LLVM_PATCH,llvm-11-D94980-CTR-half))
 $(eval $(call LLVM_PATCH,llvm-11-D94058-sext-atomic-ops)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D96283-dagcombine-half)) # remove for LLVM 12
 endif # LLVM_VER 11.0
 
 
