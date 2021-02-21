@@ -2917,7 +2917,7 @@ end
     @test a == ["test", "foo", "test"]
 
     b = fill("test", 3, 3)
-    b[2:2,  2:2] = "foo"
+    b[2:2, 2:2] = "foo"
     @test b == ["test" "test" "test"
                 "test" "foo"  "test"
                 "test" "test" "test"]
