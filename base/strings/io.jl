@@ -79,9 +79,10 @@ println(io::IO, xs...) = print(io, xs..., "\n")
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
-`context` can be either an [`IOContext`](@ref) whose properties will be used,
-or a `Pair` specifying a property and its value. `sizehint` suggests the capacity
-of the buffer (in bytes).
+`context` can be an [`IOContext`](@ref) whose properties will be used, a `Pair`
+specifying a property and its value, or a tuple of `Pair` specifying multiple
+properties and their values. `sizehint` suggests the capacity of the buffer (in
+bytes).
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
 tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
