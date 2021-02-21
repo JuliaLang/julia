@@ -805,6 +805,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #if defined(JL_TSAN_ENABLED)
     PM->add(createThreadSanitizerLegacyPassPass());
 #endif
+    PM->add(createReplaceCallPass());
 }
 
 // An LLVM module pass that just runs all julia passes in order. Useful for
