@@ -51,6 +51,7 @@ Standard library changes
   `keep` that are to be kept as they are. ([#38597]).
 * `getindex` can now be used on `NamedTuple`s with multiple values ([#38878])
 * `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
+* `keys(::Generator)` is now defined to return the iterator's keys ([#34678](https://github.com/JuliaLang/julia/pull/34678))
 * `RegexMatch` now iterate to give their captures. ([#34355]).
 
 #### Package Manager
