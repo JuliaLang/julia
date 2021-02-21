@@ -3307,8 +3307,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     }
 
     if (returninfo.return_roots) {
-        AllocaInst *return_roots = emit_static_alloca(ctx, T_prjlvalue);
-        return_roots->setOperand(0, ConstantInt::get(T_int32, returninfo.return_roots));
+        AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(T_prjlvalue, returninfo.return_roots));
         argvals[idx] = return_roots;
         idx++;
     }
@@ -4708,8 +4707,11 @@ static void emit_cfunc_invalidate(
         break;
     }
     case jl_returninfo_t::SRet: {
-        if (return_roots)
-            ctx.builder.CreateStore(gf_ret, gf_thunk->arg_begin() + 1);
+        if (return_roots) {
+            Value *root1 = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
+            root1 = ctx.builder.CreateConstInBoundsGEP2_32(root1->getType()->getPointerElementType(), root1, 0, 0);
+            ctx.builder.CreateStore(gf_ret, root1);
+        }
         emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(rettype), julia_alignment(rettype));
         ctx.builder.CreateRetVoid();
         break;
@@ -5085,8 +5087,7 @@ static Function* gen_cfun_wrapper(
             args.push_back(result);
         }
         if (returninfo.return_roots) {
-            AllocaInst *return_roots = emit_static_alloca(ctx, T_prjlvalue);
-            return_roots->setOperand(0, ConstantInt::get(T_int32, returninfo.return_roots));
+            AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(T_prjlvalue, returninfo.return_roots));
             args.push_back(return_roots);
         }
         for (size_t i = 0; i < nargs + 1; i++) {
@@ -5506,8 +5507,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         break;
     }
     if (f.return_roots) {
-        AllocaInst *return_roots = emit_static_alloca(ctx, T_prjlvalue);
-        return_roots->setOperand(0, ConstantInt::get(T_int32, f.return_roots));
+        AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(T_prjlvalue, f.return_roots));
         args[idx] = return_roots;
         idx++;
     }
@@ -5654,7 +5654,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     }
 
     if (props.return_roots) {
-        fsig.push_back(T_pprjlvalue);
+        fsig.push_back(ArrayType::get(T_prjlvalue, props.return_roots)->getPointerTo(0));
         unsigned argno = fsig.size();
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoAlias);
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoCapture);
