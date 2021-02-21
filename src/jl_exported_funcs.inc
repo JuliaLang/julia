@@ -477,6 +477,7 @@
     XX(jl_new_datatype) \
     XX(jl_new_foreign_type) \
     XX(jl_new_method_instance_uninit) \
+    XX(jl_make_opaque_closure_method) \
     XX(jl_new_method_table) \
     XX(jl_new_method_uninit) \
     XX(jl_new_module) \

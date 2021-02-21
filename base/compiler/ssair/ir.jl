@@ -3,6 +3,7 @@
 @inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
+# TODO: add detach/reattach?
 isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
 
 struct CFG
@@ -50,6 +51,13 @@ function basic_blocks_starts(stmts::Vector{Any})
             # This is a fake dest to force the next stmt to start a bb
             idx < length(stmts) && push!(jump_dests, idx+1)
             push!(jump_dests, stmt.label)
+        elseif isa(stmt, DetachNode)
+            push!(jump_dests, stmt.label)
+            push!(jump_dests, stmt.reattach)
+        elseif isa(stmt, ReattachNode)
+            push!(jump_dests, stmt.label)
+        elseif isa(stmt, SyncNode)
+            push!(jump_dests, idx+1)
         elseif isa(stmt, Expr)
             if stmt.head === :leave
                 # :leave terminates a BB
@@ -100,8 +108,18 @@ function compute_basic_blocks(stmts::Vector{Any})
             # return never has any successors
             continue
         end
-        if isa(terminator, GotoNode)
+        if isa(terminator, GotoNode) || isa(terminator, ReattachNode)
             block′ = block_for_inst(basic_block_index, terminator.label)
+            push!(blocks[block′].preds, num)
+            push!(b.succs, block′)
+            continue
+        end
+        if isa(terminator, DetachNode)
+            block′ = block_for_inst(basic_block_index, terminator.label)
+            push!(blocks[block′].preds, num)
+            push!(b.succs, block′)
+
+            block′ = block_for_inst(basic_block_index, terminator.reattach)
             push!(blocks[block′].preds, num)
             push!(b.succs, block′)
             continue
@@ -290,6 +308,9 @@ function setindex!(x::IRCode, @nospecialize(repl), s::SSAValue)
     return x
 end
 
+first_insert_for_bb(ir::IRCode, block::Int) =
+    first_insert_for_bb(ir.stmts.inst, ir.cfg, block)
+
 # SSA values that need renaming
 struct OldSSAValue
     id::Int
@@ -347,6 +368,9 @@ function getindex(x::UseRef)
     elseif isa(stmt, GotoIfNot)
         x.op == 1 || return OOBToken()
         return stmt.cond
+    elseif isa(stmt, DetachNode) || isa(stmt, ReattachNode) || isa(stmt, SyncNode)
+        x.op == 1 || return OOBToken()
+        return stmt.syncregion
     elseif isa(stmt, ReturnNode)
         isdefined(stmt, :val) || return OOBToken()
         x.op == 1 || return OOBToken()
@@ -378,6 +402,7 @@ function is_relevant_expr(e::Expr)
                       :foreigncall, :isdefined, :copyast,
                       :undefcheck, :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
+                      :syncregion,
                       :new_opaque_closure)
 end
 
@@ -400,6 +425,15 @@ function setindex!(x::UseRef, @nospecialize(v))
     elseif isa(stmt, GotoIfNot)
         x.op == 1 || throw(BoundsError())
         x.stmt = GotoIfNot(v, stmt.dest)
+    elseif isa(stmt, DetachNode)
+        x.op == 1 || throw(BoundsError())
+        x.stmt = DetachNode(v, stmt.label, stmt.reattach)
+    elseif isa(stmt, ReattachNode)
+        x.op == 1 || throw(BoundsError())
+        x.stmt = ReattachNode(v, stmt.label)
+    elseif isa(stmt, SyncNode)
+        x.op == 1 || throw(BoundsError())
+        x.stmt = SyncNode(v)
     elseif isa(stmt, ReturnNode)
         x.op == 1 || throw(BoundsError())
         x.stmt = typeof(stmt)(v)
@@ -426,7 +460,8 @@ end
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
         isa(x, GotoIfNot) || isa(x, ReturnNode) ||
-        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
+        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) ||
+        isa(x, DetachNode) || isa(x, ReattachNode) || isa(x, SyncNode)
     return UseRefIterator(x, relevant)
 end
 
@@ -489,6 +524,14 @@ function foreachssa(f, @nospecialize(stmt))
     end
 end
 
+"""
+    insert_node!(ir::IRCode, postion::Int, type, statement, [attach_after=false])
+
+Insert a `statement` that results in a value of given `type` before/after
+`postion` if `attach_after` is `false`/ `true`. If called with the same
+`position` multiple times with `attach_after=false`, the order of the calls
+is reflected to the order of the statements that appear in the resulting IR.
+"""
 function insert_node!(ir::IRCode, pos::Int, @nospecialize(typ), @nospecialize(val), attach_after::Bool=false)
     line = ir.stmts[pos][:line]
     node = add!(ir.new_nodes, pos, attach_after)
@@ -954,6 +997,21 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.label])
         result_idx += 1
     elseif isa(stmt, GlobalRef) || isa(stmt, GotoNode)
+        result[result_idx][:inst] = stmt
+        result_idx += 1
+    elseif isa(stmt, DetachNode) || isa(stmt, ReattachNode) || isa(stmt, SyncNode)
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)
+        if compact.cfg_transforms_enabled
+            if isa(stmt, DetachNode)
+                stmt = DetachNode(
+                    stmt.syncregion,
+                    compact.bb_rename_succ[stmt.label],
+                    compact.bb_rename_succ[stmt.reattach],
+                )
+            elseif isa(stmt, ReattachNode)
+                stmt = ReattachNode(stmt.syncregion, compact.bb_rename_succ[stmt.label])
+            end
+        end
         result[result_idx][:inst] = stmt
         result_idx += 1
     elseif isa(stmt, GotoIfNot) && compact.cfg_transforms_enabled

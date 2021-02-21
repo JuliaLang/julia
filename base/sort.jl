@@ -12,7 +12,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
     length, resize!, fill, Missing, require_one_based_indexing, keytype
 
-using .Base: >>>, !==
+using .Base: >>>, !==, iterate, UnitRange, min, max
 
 import .Base:
     sort,

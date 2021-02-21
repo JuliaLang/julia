@@ -133,6 +133,15 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
         end
         return stmt
     end
+    if isa(stmt, DetachNode)
+        return DetachNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion), stmt.label, stmt.reattach)
+    end
+    if isa(stmt, ReattachNode)
+        return ReattachNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion), stmt.label)
+    end
+    if isa(stmt, SyncNode)
+        return SyncNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion))
+    end
     if isexpr(stmt, :isdefined)
         val = stmt.args[1]
         if isa(val, Union{SlotNumber, TypedSlot})
@@ -195,7 +204,8 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     # If the last instruction is not a terminator, add one. This can
     # happen for implicit return on dead branches.
     term = code[end]
-    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
+    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode) &&
+       !isa(term, DetachNode) && !isa(term, ReattachNode) && !isa(term, SyncNode)
         push!(code, ReturnNode())
         push!(ci.ssavaluetypes, Union{})
         push!(ci.codelocs, 0)
@@ -385,12 +395,13 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         cs = domtree.nodes[node].children
         terminator = ir.stmts[last(ir.cfg.blocks[node].stmts)][:inst]
         iscondbr = isa(terminator, GotoIfNot)
+        isspawnbr = isa(terminator, DetachNode) || isa(terminator, ReattachNode)
         let old_node = node + 1
             if length(cs) >= 1
                 # Adding the nodes in reverse sorted order attempts to retain
                 # the original source order of the nodes as much as possible.
                 # This is not required for correctness, but is easier on the humans
-                if old_node in cs
+                if !isspawnbr && old_node in cs
                     # Schedule the fall through node first,
                     # so we can retain the fall through
                     append!(stack, reverse(sort(filter(x -> (x != old_node), cs))))
@@ -406,7 +417,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                     node = pop!(stack)
                 end
             end
-            if node != old_node && !isa(terminator, Union{GotoNode, ReturnNode})
+            if node != old_node && !isa(terminator, Union{GotoNode, ReturnNode, DetachNode, ReattachNode, SyncNode})
                 if isa(terminator, GotoIfNot)
                     # Need to break the critical edge
                     ncritbreaks += 1
@@ -476,6 +487,11 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
             end
             result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
+        elseif isa(terminator, DetachNode)
+            result[inst_range[end]][:inst] = DetachNode(terminator.syncregion, bb_rename[terminator.label],
+                                                        bb_rename[terminator.reattach])
+        elseif isa(terminator, ReattachNode)
+            result[inst_range[end]][:inst] = ReattachNode(terminator.syncregion, bb_rename[terminator.label])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, Expr)
                 if terminator.head == :enter
@@ -811,6 +827,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         # Convert GotoNode/GotoIfNot/PhiNode to BB addressing
         if isa(stmt, GotoNode)
             new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
+        elseif isa(stmt, DetachNode)
+            new_code[idx] = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label),
+                                       block_for_inst(cfg, stmt.reattach))
+        elseif isa(stmt, ReattachNode)
+            new_code[idx] = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1

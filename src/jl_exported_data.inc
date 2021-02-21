@@ -28,6 +28,7 @@
     XX(jl_const_type) \
     XX(jl_datatype_type) \
     XX(jl_densearray_type) \
+    XX(jl_detachnode_type) \
     XX(jl_diverror_exception) \
     XX(jl_emptysvec) \
     XX(jl_emptytuple) \
@@ -79,6 +80,7 @@
     XX(jl_pointer_typename) \
     XX(jl_quotenode_type) \
     XX(jl_readonlymemory_exception) \
+    XX(jl_reattachnode_type) \
     XX(jl_ref_type) \
     XX(jl_returnnode_type) \
     XX(jl_signed_type) \
@@ -88,6 +90,7 @@
     XX(jl_stackovf_exception) \
     XX(jl_string_type) \
     XX(jl_symbol_type) \
+    XX(jl_syncnode_type) \
     XX(jl_task_type) \
     XX(jl_top_module) \
     XX(jl_true) \

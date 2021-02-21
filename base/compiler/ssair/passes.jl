@@ -1146,12 +1146,12 @@ function cfg_simplify!(ir::IRCode)
         # Compute (renamed) successors and predecessors given (renamed) block
         function compute_succs(i)
             orig_bb = follow_merged_succ(result_bbs[i])
-            return map(i -> bb_rename_succ[i], bbs[orig_bb].succs)
+            return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
         end
         function compute_preds(i)
             orig_bb = result_bbs[i]
             preds = bbs[orig_bb].preds
-            return map(pred -> bb_rename_pred[pred], preds)
+            return Int[bb_rename_pred[pred] for pred in preds]
         end
 
         BasicBlock[

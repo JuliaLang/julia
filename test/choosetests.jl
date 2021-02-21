@@ -33,6 +33,7 @@ in the `choices` argument:
 """
 function choosetests(choices = [])
     testnames = [
+        "tapir",  # TODO: move to the last
         "subarray", "core", "compiler", "worlds",
         "keywordargs", "numbers", "subtype",
         "char", "strings", "triplequote", "unicode", "intrinsics",

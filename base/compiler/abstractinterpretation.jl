@@ -1432,6 +1432,21 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 changes[sn] = VarState(Bottom, true)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
+            elseif isa(stmt, DetachNode)
+                # A detach node has two edges we need to add
+                # the reattach edge to the work queue
+                l = (stmt::DetachNode).reattach
+                newstate_reattach = stupdate!(s[l], changes)
+                if newstate_reattach !== nothing
+                    if l < frame.pc´´
+                        frame.pc´´ = l
+                    end
+                    push!(W, l)
+                    s[l] = newstate_reattach
+                end
+                pc´ = (stmt::DetachNode).label
+            elseif isa(stmt, ReattachNode)
+                pc´ = (stmt::ReattachNode).label
             elseif isa(stmt, GotoIfNot)
                 condt = abstract_eval_value(interp, stmt.cond, changes, frame)
                 if condt === Bottom
@@ -1536,7 +1551,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if isa(fname, Slot)
                         changes = StateUpdate(fname, VarState(Any, false), changes)
                     end
-                elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect
+                elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect ||
+                       (stmt isa SyncNode)
                     # these do not generate code
                 else
                     t = abstract_eval_statement(interp, stmt, changes, frame)

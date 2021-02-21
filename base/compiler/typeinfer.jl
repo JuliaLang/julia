@@ -258,6 +258,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
                     caller.src = nothing
                 end
                 caller.valid_worlds = opt.inlining.et.valid_worlds[]
+                remove_tapir!(opt.src)
             end
         end
     end
@@ -656,6 +657,8 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         else
             if isa(expr, Expr) && is_meta_expr_head(expr.head)
                 # keep any lexically scoped expressions
+            elseif isa(expr, DetachNode) || isa(expr, ReattachNode) || isa(expr, SyncNode)
+                # keep parallel IR constructs
             elseif run_optimizer
                 deleteat!(body, i)
                 deleteat!(states, i)

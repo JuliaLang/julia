@@ -86,6 +86,22 @@ ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
 ntuple(f, ::Val{n}) where {n} = ntuple(f, n::Int)
 ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
+all(xs) = all(identity, xs)
+function all(f, xs)
+    for x in xs
+        f(x) || return false
+    end
+    return true
+end
+
+any(xs) = any(identity, xs)
+function any(f, xs)
+    for x in xs
+        f(x) && return true
+    end
+    return false
+end
+
 # core docsystem
 include("docs/core.jl")
 
@@ -121,6 +137,7 @@ include("compiler/stmtinfo.jl")
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
+include("compiler/tapirpasses.jl")
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)

@@ -18,9 +18,6 @@ extern "C" {
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
-jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
-
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
@@ -65,7 +62,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             e->head == quote_sym || e->head == inert_sym ||
             e->head == meta_sym || e->head == inbounds_sym ||
             e->head == boundscheck_sym || e->head == loopinfo_sym ||
-            e->head == aliasscope_sym || e->head == popaliasscope_sym) {
+            e->head == aliasscope_sym || e->head == popaliasscope_sym ||
+            e->head == detach_sym || e->head == reattach_sym || e->head == sync_sym) {
             // ignore these
         }
         else {
@@ -672,7 +670,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 
 // method definition ----------------------------------------------------------
 
-jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+JL_DLLEXPORT jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
     jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
 {
     jl_method_t *m = jl_new_method_uninit(module);

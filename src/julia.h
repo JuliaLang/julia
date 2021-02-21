@@ -718,6 +718,9 @@ extern JL_DLLIMPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotoifnot_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_returnnode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_detachnode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_reattachnode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_syncnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_phinode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_pinode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_phicnode_type JL_GLOBALLY_ROOTED;
@@ -991,6 +994,10 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 #define jl_gotonode_label(x) (((intptr_t*)(x))[0])
 #define jl_gotoifnot_cond(x) (((jl_value_t**)(x))[0])
 #define jl_gotoifnot_label(x) (((intptr_t*)(x))[1])
+#define jl_detachnode_label(x) (((intptr_t*)(x))[1])
+#define jl_detachnode_reattach(x) (((intptr_t*)(x))[2])
+#define jl_reattachnode_label(x) (((intptr_t*)(x))[1])
+#define jl_syncregion(x) (((jl_value_t**)(x))[0])
 #define jl_globalref_mod(s) (*(jl_module_t**)(s))
 #define jl_globalref_name(s) (((jl_sym_t**)(s))[1])
 #define jl_quotenode_value(x) (((jl_value_t**)x)[0])
@@ -1157,6 +1164,9 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_phinode(v)     jl_typeis(v,jl_phinode_type)
 #define jl_is_phicnode(v)    jl_typeis(v,jl_phicnode_type)
 #define jl_is_upsilonnode(v) jl_typeis(v,jl_upsilonnode_type)
+#define jl_is_detachnode(v)  jl_typeis(v,jl_detachnode_type)
+#define jl_is_reattachnode(v)    jl_typeis(v,jl_reattachnode_type)
+#define jl_is_syncnode(v)    jl_typeis(v,jl_syncnode_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)
 #define jl_is_newvarnode(v)  jl_typeis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
@@ -1355,6 +1365,8 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void);
+JL_DLLEXPORT jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...) JL_MAYBE_UNROOTED;
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a);
 JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b);

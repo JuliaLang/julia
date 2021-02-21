@@ -109,6 +109,9 @@ function verify_ir(ir::IRCode, print::Bool=true)
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
                 error("")
             end
+        elseif isa(terminator, DetachNode)
+        elseif isa(terminator, ReattachNode)
+            # TODO: implement
         elseif isexpr(terminator, :enter)
             @label enter_check
             if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])

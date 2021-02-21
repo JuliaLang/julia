@@ -60,6 +60,12 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         print(io, "\$(Expr(:enter, #", (stmt::Expr).args[1]::Int, "))")
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
+    elseif stmt isa DetachNode
+        print(io, "detach within ", stmt.syncregion, ", #", stmt.label, ", #", stmt.reattach)
+    elseif stmt isa ReattachNode
+        print(io, "reattach within ", stmt.syncregion, ", #", stmt.label)
+    elseif stmt isa SyncNode
+        print(io, "sync within ", stmt.syncregion)
     elseif stmt isa PhiNode
         show_unquoted_phinode(io, stmt, indent, "#")
     elseif stmt isa GotoIfNot
@@ -146,11 +152,12 @@ end
 
 function should_print_ssa_type(@nospecialize node)
     if isa(node, Expr)
-        return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :meta, :enter, :leave))
+        return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :meta, :enter, :leave, :syncregion))
     end
     return !isa(node, PiNode)   && !isa(node, GotoIfNot) &&
            !isa(node, GotoNode) && !isa(node, ReturnNode) &&
-           !isa(node, QuoteNode)
+           !isa(node, DetachNode) && !isa(node, ReattachNode) &&
+           !isa(node, SyncNode) && !isa(node, QuoteNode)
 end
 
 function default_expr_type_printer(io::IO, @nospecialize(typ), used::Bool)
@@ -724,6 +731,10 @@ function show_ir_stmt(io::IO, code::CodeInfo, idx::Int, line_info_preprinter, li
         stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
     elseif stmt isa GotoNode
         stmt = GotoNode(block_for_inst(cfg, stmt.label))
+    elseif isa(stmt, DetachNode)
+        stmt = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label), block_for_inst(cfg, stmt.reattach))
+    elseif isa(stmt, ReattachNode)
+        stmt = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
     elseif stmt isa PhiNode
         e = stmt.edges
         stmt = PhiNode(Int32[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)

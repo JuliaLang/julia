@@ -18,6 +18,11 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
         # Translate statement edges to bb_edges
         if isa(stmt, GotoNode)
             code[i] = GotoNode(block_for_inst(cfg, stmt.label))
+        elseif isa(stmt, DetachNode)
+            code[i] = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label),
+                                                  block_for_inst(cfg, stmt.reattach))
+        elseif isa(stmt, ReattachNode)
+            code[i] = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
             code[i] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
         elseif isa(stmt, PhiNode)
@@ -56,6 +61,11 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         stmt = ci.code[i]
         if isa(stmt, GotoNode)
             stmt = GotoNode(first(ir.cfg.blocks[stmt.label].stmts))
+        elseif isa(stmt, DetachNode)
+            stmt = DetachNode(stmt.syncregion, first(ir.cfg.blocks[stmt.label].stmts),
+                              first(ir.cfg.blocks[stmt.reattach].stmts))
+        elseif isa(stmt, ReattachNode)
+            stmt = ReattachNode(stmt.syncregion, first(ir.cfg.blocks[stmt.label].stmts))
         elseif isa(stmt, GotoIfNot)
             stmt = GotoIfNot(stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
