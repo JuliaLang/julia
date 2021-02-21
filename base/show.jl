@@ -2768,7 +2768,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     showarg(io, parent(v), false)
     showindices(io, v.indices...)
     print(io, ')')
-    if toplevel 
+    if toplevel
         print(io, " with eltype ", eltype(v))
     end
 end
