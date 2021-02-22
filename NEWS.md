@@ -6,7 +6,6 @@ New language features
 
 * `(; a, b) = x` can now be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
   and similarly for `b`. ([#39285])
-* The optional keyword argument `context` of `sprint` can now be set to a tuple of `:key => value` pairs to specify multiple attributes. ([#39381])
 
 Language changes
 ----------------
@@ -39,6 +38,7 @@ New library functions
 New library features
 --------------------
 
+* The optional keyword argument `context` of `sprint` can now be set to a tuple of `:key => value` pairs to specify multiple attributes. ([#39381])
 
 Standard library changes
 ------------------------
