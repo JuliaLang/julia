@@ -2726,3 +2726,7 @@ end
 # issue #39705
 @eval f39705(x) = $(Expr(:||)) && x
 @test f39705(1) === false
+
+@test Meta.@lower((::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
+@test Meta.@lower((::T,) = x) == Expr(:error, "invalid assignment location \"::T\"")
+@test Meta.@lower((; ::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
