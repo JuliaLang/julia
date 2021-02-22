@@ -1579,6 +1579,19 @@ let
     @test arr[1] == '0'
 end
 
+# issue #38751
+let
+    function f38751!(dest::Vector{UInt8}, src::Vector{UInt8}, n::UInt)
+        d, s = pointer(dest), pointer(src)
+        GC.@preserve dest src ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), d, s, n)
+        return dest
+    end
+    dest = zeros(UInt8, 8)
+    @test f38751!(dest, collect(0x1:0x8), UInt(8)) == 0x1:0x8
+    llvm = sprint(code_llvm, f38751!, (Vector{UInt8}, Vector{UInt8}, UInt))
+    @test !occursin("call void inttoptr", llvm)
+end
+
 # issue #34061
 let o_file = tempname(), err = Base.PipeEndpoint()
     run(pipeline(Cmd(`$(Base.julia_cmd()) --color=no --output-o=$o_file -e '
