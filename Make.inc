@@ -428,10 +428,6 @@ CXX_DISABLE_ASSERTION := -DJL_NDEBUG
 DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
-ifeq ($(LLVM_ASSERTIONS),0)
-CXX_DISABLE_ASSERTION += -DNDEBUG
-endif
-
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)
@@ -1111,6 +1107,18 @@ $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 # Use the Assertions build
 BINARYBUILDER_LLVM_ASSERTS ?= 0
 
+# XXX: Ensure assertion/debug flags are properly propagated in the absence of
+# assert-enabled LLVM builds from BinaryBuilder. Note that this does not apply
+# to Julia master, which has corresponding assert-enabled LLVM builds.
+ifeq ($(USE_BINARYBUILDER_LLVM),1)
+ifeq ($(BINARYBUILDER_LLVM_ASSERTS),0)
+override LLVM_ASSERTIONS := 0
+endif
+endif
+
+ifeq ($(LLVM_ASSERTIONS),0)
+CXX_DISABLE_ASSERTION += -DNDEBUG
+endif
 
 
 # OS specific stuff
