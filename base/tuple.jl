@@ -17,14 +17,14 @@ NTuple
 # convenience function for extracting N from a Tuple (if defined)
 # else return `nothing` for anything else given (such as Vararg or other non-sized Union)
 
-"""arity(::Type{<:NTuple})
-Function
+"""
+    arity(::Type{<:Tuple})
+
 Returns the number of elements in the tuple type.
 Returns nothing for anything else.
 """
 arity(::Type{<:NTuple{N,Any}}) where {N} = N
 arity(::Type) = nothing
-const _counttuple = arity
 
 ## indexing ##
 
