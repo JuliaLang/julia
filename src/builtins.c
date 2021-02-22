@@ -1006,6 +1006,14 @@ int jl_valid_type_param(jl_value_t *v)
     return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
 }
 
+static void jl_type_param_error(const char *fname, jl_value_t *got JL_MAYBE_UNROOTED)
+{
+    jl_value_t *type_param_symbol = (jl_value_t*)jl_symbol("TypeParameter");
+    jl_value_t *type_param_type = jl_apply_type((jl_value_t*)jl_type_type,
+                                                &type_param_symbol,1);
+    jl_type_error_rt(fname, "parameter", type_param_type, got);
+}
+
 JL_CALLABLE(jl_f_apply_type)
 {
     JL_NARGSV(apply_type, 1);
@@ -1020,7 +1028,7 @@ JL_CALLABLE(jl_f_apply_type)
                     jl_type_error_rt("Tuple", "non-final parameter", (jl_value_t*)jl_type_type, pi);
             }
             else if (!jl_valid_type_param(pi)) {
-                jl_type_error_rt("Tuple", "parameter", (jl_value_t*)jl_type_type, pi);
+                jl_type_param_error("Tuple", pi);
             }
         }
         return (jl_value_t*)jl_apply_tuple_type_v(&args[1], nargs-1);
@@ -1045,10 +1053,7 @@ JL_CALLABLE(jl_f_apply_type)
         for(i=1; i < nargs; i++) {
             jl_value_t *pi = args[i];
             if (!jl_valid_type_param(pi)) {
-                jl_type_error_rt("Type", "parameter",
-                                 jl_isa(pi, (jl_value_t*)jl_number_type) ?
-                                 (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
-                                 pi);
+                jl_type_param_error("Type", pi);
             }
         }
         return jl_apply_type(args[0], &args[1], nargs-1);

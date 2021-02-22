@@ -315,6 +315,8 @@ let undefvar
     @test err_str == "TypeError: in <:, expected Type, got a value of type String"
     err_str = @except_str Type{""} TypeError
     @test err_str == "TypeError: in Type, in parameter, expected Type, got a value of type String"
+    err_str = @except_str Type{big(1)} TypeError
+    @test err_str == "TypeError: in Type, in parameter, expected isbits Number, got a value of type BigInt"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
     err_str = @except_str Type{Vararg} TypeError
