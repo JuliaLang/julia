@@ -5,6 +5,10 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 
+#ifdef _OS_WINDOWS_
+extern const char jl_crtdll_basename[];
+#endif
+
 // somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 {
@@ -1266,7 +1270,20 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     auto _is_libjulia_func = [&] (uintptr_t ptr, const char *name) {
         if ((uintptr_t)fptr == ptr)
             return true;
-        return (!f_lib || f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) && f_name && !strcmp(f_name, name);
+        if (f_lib) {
+#ifdef _OS_WINDOWS_
+            if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
+                (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+                (!strcmp(f_lib, jl_crtdll_basename))) {
+                // libjulia-like
+            }
+            else
+                return false;
+#else
+            return false;
+#endif
+        }
+        return f_name && !strcmp(f_name, name);
     };
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
 
