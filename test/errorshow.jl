@@ -765,24 +765,26 @@ let err = nothing
     end
 end
 
-single_repeater() = single_repeater()
-pair_repeater_a() = pair_repeater_b()
-pair_repeater_b() = pair_repeater_a()
+if Sys.isapple()  # The "repeated stack frames" formatting currently only works on MacOS.
+    single_repeater() = single_repeater()
+    pair_repeater_a() = pair_repeater_b()
+    pair_repeater_b() = pair_repeater_a()
 
-@testset "repeated stack frames" begin
-    let bt = try single_repeater()
-        catch
-            catch_backtrace()
+    @testset "repeated stack frames" begin
+        let bt = try single_repeater()
+            catch
+                catch_backtrace()
+            end
+            bt_str = sprint(Base.show_backtrace, bt)
+            @test occursin(r"repeats \d+ times", bt_str)
         end
-        bt_str = sprint(Base.show_backtrace, bt)
-        @test occursin(r"repeats \d+ times", bt_str)
-    end
 
-    let bt = try pair_repeater_a()
-        catch
-            catch_backtrace()
+        let bt = try pair_repeater_a()
+            catch
+                catch_backtrace()
+            end
+            bt_str = sprint(Base.show_backtrace, bt)
+            @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
         end
-        bt_str = sprint(Base.show_backtrace, bt)
-        @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
     end
-end
+end  # Sys.isapple()
