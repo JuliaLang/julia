@@ -27,3 +27,12 @@ end
     # https://github.com/JuliaLang/julia/issues/37757
     @test REPL.insert_hlines(IOBuffer(), nothing) === nothing
 end
+
+@testset "Check @var_str also completes to var\"\" in REPL.doc_completions()" begin
+    checks = ["var", "raw", "r"]
+    symbols = "@" .* checks .* "_str"
+    results = checks .* "\"\""
+    for (i,r) in zip(symbols,results)
+        @test r ∈ REPL.doc_completions(i)
+    end
+end
