@@ -127,7 +127,7 @@ static void allocate_segv_handler()
     }
 }
 
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
 volatile mach_port_t mach_profiler_thread = 0;
 static kern_return_t profiler_segv_handler
                 (mach_port_t                          exception_port,
@@ -212,7 +212,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     unsigned int exc_count = HOST_EXCEPTION_STATE_COUNT;
     host_exception_state_t exc_state;
     host_thread_state_t state;
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
     if (thread == mach_profiler_thread) {
         return profiler_segv_handler(exception_port, thread, task, exception, code, code_count);
     }
@@ -413,7 +413,7 @@ static pthread_t profiler_thread;
 clock_serv_t clk;
 static mach_port_t profile_port = 0;
 
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
 volatile static int forceDwarf = -2;
 static unw_context_t profiler_uc;
 
@@ -477,7 +477,7 @@ void *mach_profile_listener(void *arg)
     int i;
     const int max_size = 512;
     attach_exception_port(mach_thread_self(), 1);
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
     mach_profiler_thread = mach_thread_self();
 #endif
     mig_reply_error_t *bufRequest = (mig_reply_error_t*)malloc_s(max_size);
@@ -501,7 +501,7 @@ void *mach_profile_listener(void *arg)
             unw_context_t *uc;
             jl_thread_suspend_and_get_state(i, &uc);
             if (running) {
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
                 /*
                  *  Unfortunately compact unwind info is incorrectly generated for quite a number of
                  *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
