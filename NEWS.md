@@ -38,6 +38,7 @@ New library functions
 New library features
 --------------------
 
+* The optional keyword argument `context` of `sprint` can now be set to a tuple of `:key => value` pairs to specify multiple attributes. ([#39381])
 
 Standard library changes
 ------------------------
