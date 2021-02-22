@@ -2768,9 +2768,8 @@ function showarg(io::IO, v::SubArray, toplevel)
     showarg(io, parent(v), false)
     showindices(io, v.indices...)
     print(io, ')')
-    if toplevel
-        print(io, " with eltype ", eltype(v))
-    end
+    toplevel && print(io, " with eltype ", eltype(v))
+    return nothing
 end
 showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
     (print(io, ", :"); showindices(io, inds...))
@@ -2783,9 +2782,8 @@ function showarg(io::IO, r::ReshapedArray, toplevel)
     showarg(io, parent(r), false)
     print(io, ", ", join(r.dims, ", "))
     print(io, ')')
-    if toplevel
-        print(io, " with eltype ", eltype(r))
-    end
+    toplevel && print(io, " with eltype ", eltype(r))
+    return nothing
 end
 
 function showarg(io::IO, r::NonReshapedReinterpretArray{T}, toplevel) where {T}
@@ -2798,9 +2796,8 @@ function showarg(io::IO, r::ReshapedReinterpretArray{T}, toplevel) where {T}
     print(io, "reinterpret(reshape, ", T, ", ")
     showarg(io, parent(r), false)
     print(io, ')')
-    if toplevel
-        print(io, " with eltype ", eltype(r))
-    end
+    toplevel && print(io, " with eltype ", eltype(r))
+    return nothing
 end
 
 # printing iterators from Base.Iterators
