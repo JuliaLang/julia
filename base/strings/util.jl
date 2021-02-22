@@ -632,44 +632,42 @@ julia> hex2bytes(a)
 """
 function hex2bytes end
 
-hex2bytes(s::AbstractString) = hex2bytes(String(s))
 hex2bytes(s::String) = hex2bytes(transcode(UInt8, s))
 hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
+
+# special case - valid bytes are checked in the generic implementation
+hex2bytes!(dest::AbstractArray{UInt8}, s::String) = hex2bytes!(dest, transcode(UInt8, s))
 
 """
     hex2bytes!(dest::AbstractVector{UInt8}, itr)
 
 Convert an iterable `itr` of bytes representing a hexadecimal string to its binary
 representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
-to `dest`. The length of `dest` must be at least half the length of `itr`.
+to `dest`. The length of `dest` must be half the length of `itr`.
 """
 function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     isodd(length(itr)) && throw(ArgumentError("length of iterable must be even"))
-    @boundscheck 2*length(dest) < length(itr) && throw(ArgumentError("length of output array must be at least half of the length of input array"))
+    @boundscheck 2*length(dest) != length(itr) && throw(ArgumentError("length of output array must be half of the length of input iterable"))
     iszero(length(itr)) && return dest
 
-    # we know these iterations always work because of the checks above
-    # as a bonus, we don't have to check the result of `iterate` for `nothing`!
-    # unfortunately, we have to do them explicitly here because the first `iterate` has a different signature
-    (x,state) = iterate(itr)
-    (y,state) = iterate(itr, state)
-    dest[firstindex(dest)] = number_from_hex(x) << 4 + number_from_hex(y)
-
-    # incorporating the iterations into this loop via Iterators.partition was slower than the original function
-    @inbounds for i in Iterators.drop(eachindex(dest),1)
-        (x,state) = iterate(itr, state)
-        (y,state) = iterate(itr, state)
-        dest[i] = number_from_hex(x) << 4 + number_from_hex(y)
+    next = iterate(itr)
+    @inbounds for i in eachindex(dest)
+        x,state = next
+        y,state = iterate(itr, state)
+        next = iterate(itr, state)
+        dest[i] = nfh(x) << 4 + nfh(y)
     end
 
     return dest
 end
 
-@inline number_from_hex(c) =
-    (UInt8('0') <= c <= UInt8('9')) ? c - UInt8('0') :
-    (UInt8('A') <= c <= UInt8('F')) ? c - (UInt8('A') - 0x0a) :
-    (UInt8('a') <= c <= UInt8('f')) ? c - (UInt8('a') - 0x0a) :
+@inline nfh(c::Char) = nfh(UInt8(c))
+@inline function nfh(c::UInt8)
+    UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
+    c |= 0b0100000
+    UInt8('a') <= c <= UInt8('f') && return c - UInt8('a') + 0x0a
     throw(ArgumentError("byte is not an ASCII hexadecimal digit"))
+end
 
 """
     bytes2hex(itr) -> String
