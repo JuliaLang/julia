@@ -164,6 +164,10 @@ Standard library changes
   results table ([#38042]).
 * `@testset` now supports the option `verbose` to show the test result summary
   of the children even if they all pass ([#33755]).
+* In `LinearIndices(::Tuple)` and `CartesianIndices(::Tuple)`, integer elements (as opposed to ranges of integers) of the
+  argument tuple now always describe 1-based ranges, e.g, `CartesianIndices((3, 1:3))` is equivalent to
+  `CartesianIndices((1:3, 1:3))`. This is consistent with the (old and new) behavior for tuples containing only integers
+  and is considered a bugfix ([#37829], [#37928]).
 
 #### Package Manager
 
