@@ -636,7 +636,11 @@ hex2bytes(s::String) = hex2bytes(transcode(UInt8, s))
 hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
 
 # special case - valid bytes are checked in the generic implementation
-hex2bytes!(dest::AbstractArray{UInt8}, s::String) = hex2bytes!(dest, transcode(UInt8, s))
+function hex2bytes!(dest::AbstractArray{UInt8}, s::String)
+    sizeof(s) != length(s) && throw(ArgumentError("input string must consist of hexadecimal characters only"))
+    
+    hex2bytes!(dest, transcode(UInt8, s))
+end
 
 """
     hex2bytes!(dest::AbstractVector{UInt8}, itr)
