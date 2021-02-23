@@ -234,7 +234,7 @@ function unswitchtupleunion(u::Union)
     ts = uniontypes(u)
     n = -1
     for t in ts
-        if t isa DataType && t.name === Tuple.name && !isvarargtype(t.parameters[end])
+        if t isa DataType && t.name === Tuple.name && length(t.parameters) != 0 && !isvarargtype(t.parameters[end])
             if n == -1
                 n = length(t.parameters)
             elseif n != length(t.parameters)

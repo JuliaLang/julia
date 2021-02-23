@@ -166,10 +166,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
         # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
-        const_rettype = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::MethodMatch, sv, edgecycle)
+        const_rettype, result = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::MethodMatch, sv, edgecycle)
         if const_rettype ⊑ rettype
             # use the better result, if it's a refinement of rettype
             rettype = const_rettype
+        end
+        if result !== nothing
+            info = ConstCallInfo(info, result)
         end
     end
     if is_unused && !(rettype === Bottom)
@@ -263,7 +266,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     method = match.method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
-    length(argtypes) >= nargs || return Any
+    length(argtypes) >= nargs || return Any, nothing
     haveconst = false
     allconst = true
     # see if any or all of the arguments are constant and propagating constants may be worthwhile
@@ -279,21 +282,21 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
             break
         end
     end
-    haveconst || improvable_via_constant_propagation(rettype) || return Any
+    haveconst || improvable_via_constant_propagation(rettype) || return Any, nothing
     force_inference = method.aggressive_constprop || InferenceParams(interp).aggressive_constant_propagation
     if !force_inference && nargs > 1
         if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
             arrty = argtypes[2]
             # don't propagate constant index into indexing of non-constant array
             if arrty isa Type && arrty <: AbstractArray && !issingletontype(arrty)
-                return Any
+                return Any, nothing
             elseif arrty ⊑ Array
-                return Any
+                return Any, nothing
             end
         elseif istopfunction(f, :iterate)
             itrty = argtypes[2]
             if itrty ⊑ Array
-                return Any
+                return Any, nothing
             end
         end
     end
@@ -304,7 +307,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
          istopfunction(f, :<<) || istopfunction(f, :>>))
         # it is almost useless to inline the op of when all the same type,
         # but highly worthwhile to inline promote of a constant
-        length(argtypes) > 2 || return Any
+        length(argtypes) > 2 || return Any, nothing
         t1 = widenconst(argtypes[2])
         all_same = true
         for i in 3:length(argtypes)
@@ -313,18 +316,18 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
                 break
             end
         end
-        all_same && return Any
+        all_same && return Any, nothing
     end
     if istopfunction(f, :getproperty) || istopfunction(f, :setproperty!)
         force_inference = true
     end
     force_inference |= allconst
     mi = specialize_method(match, !force_inference)
-    mi === nothing && return Any
+    mi === nothing && return Any, nothing
     mi = mi::MethodInstance
     # decide if it's likely to be worthwhile
     if !force_inference && !const_prop_heuristic(interp, method, mi)
-        return Any
+        return Any, nothing
     end
     inf_cache = get_inference_cache(interp)
     inf_result = cache_lookup(mi, argtypes, inf_cache)
@@ -336,7 +339,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
             cyclei = 0
             while !(infstate === nothing)
                 if method === infstate.linfo.def && any(infstate.result.overridden_by_const)
-                    return Any
+                    return Any, nothing
                 end
                 if cyclei < length(infstate.callers_in_cycle)
                     cyclei += 1
@@ -349,16 +352,16 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
         end
         inf_result = InferenceResult(mi, argtypes)
         frame = InferenceState(inf_result, #=cache=#false, interp)
-        frame === nothing && return Any # this is probably a bad generated function (unsound), but just ignore it
+        frame === nothing && return Any, nothing # this is probably a bad generated function (unsound), but just ignore it
         frame.parent = sv
         push!(inf_cache, inf_result)
-        typeinf(interp, frame) || return Any
+        typeinf(interp, frame) || return Any, nothing
     end
     result = inf_result.result
     # if constant inference hits a cycle, just bail out
-    isa(result, InferenceState) && return Any
+    isa(result, InferenceState) && return Any, nothing
     add_backedge!(inf_result.linfo, sv)
-    return result
+    return result, inf_result
 end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
