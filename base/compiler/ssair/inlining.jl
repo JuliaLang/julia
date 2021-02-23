@@ -1016,20 +1016,23 @@ is_builtin(s::Signature) =
     isa(s.f, Builtin) ||
     s.ft ⊑ Builtin
 
-function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, invoke_data::InvokeData, state::InliningState, todo::Vector{Pair{Int, Any}})
+function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, info::InvokeCallInfo,
+        state::InliningState, todo::Vector{Pair{Int, Any}})
     stmt = ir.stmts[idx][:inst]
     calltype = ir.stmts[idx][:type]
-    method = invoke_data.entry
-    (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any),
-            sig.atype, method.sig)::SimpleVector
-    methsp = methsp::SimpleVector
-    match = MethodMatch(metharg, methsp, method, true)
-    et = state.et
-    result = analyze_method!(match, sig.atypes, et, state.caches, state.params, calltype)
-    handle_single_case!(ir, stmt, idx, result, true, todo)
-    if et !== nothing
-        intersect!(et, WorldRange(invoke_data.min_valid, invoke_data.max_valid))
+
+    if !info.match.fully_covers
+        # XXX: We could union split this
+        return nothing
     end
+
+    atypes = sig.atypes
+    atype0 = atypes[2]
+    atypes = atypes[4:end]
+    pushfirst!(atypes, atype0)
+
+    result = analyze_method!(info.match, atypes, state.et, state.caches, state.params, calltype)
+    handle_single_case!(ir, stmt, idx, result, true, todo)
     return nothing
 end
 
@@ -1061,28 +1064,18 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
         return nothing
     end
 
-    # Handle invoke
-    invoke_data = nothing
-    if sig.f === Core.invoke && length(sig.atypes) >= 3
-        res = compute_invoke_data(sig.atypes, state.method_table)
-        res === nothing && return nothing
-        (sig, invoke_data) = res
-    elseif is_builtin(sig)
-        # No inlining for builtins (other than what was previously handled)
+    if sig.f !== Core.invoke && is_builtin(sig)
+        # No inlining for builtins (other invoke/apply)
         return nothing
     end
 
     sig = with_atype(sig)
 
-    # In :invoke, make sure that the arguments we're passing are a subtype of the
-    # signature we're invoking.
-    (invoke_data === nothing || sig.atype <: invoke_data.types0) || return nothing
-
     # Special case inliners for regular functions
     if late_inline_special_case!(ir, sig, idx, stmt, state.params) || is_return_type(sig.f)
         return nothing
     end
-    return (sig, invoke_data)
+    return sig
 end
 
 # This is not currently called in the regular course, but may be needed
@@ -1210,8 +1203,8 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
     et = state.et
     method_table = state.method_table
     for idx in 1:length(ir.stmts)
-        r = process_simple!(ir, todo, idx, state)
-        r === nothing && continue
+        sig = process_simple!(ir, todo, idx, state)
+        sig === nothing && continue
 
         stmt = ir.stmts[idx][:inst]
         calltype = ir.stmts[idx][:type]
@@ -1220,8 +1213,6 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         if info === false
             continue
         end
-
-        (sig, invoke_data) = r
 
         # Check whether this call was @pure and evaluates to a constant
         if calltype isa Const && info isa MethodResultPure
@@ -1232,20 +1223,23 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         # If inference arrived at this result by using constant propagation,
-        # it'll performed a specialized analysis for just this case. Use its
+        # it'll have performed a specialized analysis for just this case. Use its
         # result.
         if isa(info, ConstCallInfo)
-            handle_const_call!(ir, idx, stmt, info, sig, calltype, state.et,
-                state.caches, invoke_data !== nothing, todo)
+            handle_const_call!(ir, idx, stmt, info, sig, calltype, state.et, state.caches,
+                sig.f === Core.invoke, todo)
+            continue
+        end
+
+        # Handle invoke
+        if sig.f === Core.invoke
+            if isa(info, InvokeCallInfo)
+                inline_invoke!(ir, idx, sig, info, state, todo)
+            end
             continue
         end
 
         # Ok, now figure out what method to call
-        if invoke_data !== nothing
-            inline_invoke!(ir, idx, sig, invoke_data, state, todo)
-            continue
-        end
-
         nu = unionsplitcost(sig.atypes)
         if nu == 1 || nu > state.params.MAX_UNION_SPLITTING
             if !isa(info, MethodMatchInfo)
@@ -1284,38 +1278,6 @@ function linear_inline_eligible(ir::IRCode)
     isa(terminator, ReturnNode) || return false
     isdefined(terminator, :val) || return false
     return true
-end
-
-function compute_invoke_data(@nospecialize(atypes), method_table)
-    ft = widenconst(atypes[2])
-    if !isdispatchelem(ft) || has_free_typevars(ft) || (ft <: Builtin)
-        # TODO: this can be rather aggressive at preventing inlining of closures
-        # but we need to check that `ft` can't have a subtype at runtime before using the supertype lookup below
-        return nothing
-    end
-    invoke_tt = widenconst(atypes[3])
-    if !isType(invoke_tt) || has_free_typevars(invoke_tt)
-        return nothing
-    end
-    invoke_tt = invoke_tt.parameters[1]
-    if !(isa(unwrap_unionall(invoke_tt), DataType) && invoke_tt <: Tuple)
-        return nothing
-    end
-    if method_table === nothing
-        # TODO: These should be forwarded in stmt_info, just like regular
-        # method lookup results
-        return nothing
-    end
-    invoke_types = rewrap_unionall(Tuple{ft, unwrap_unionall(invoke_tt).parameters...}, invoke_tt)
-    invoke_entry = findsup(invoke_types, method_table)
-    invoke_entry === nothing && return nothing
-    method, valid_worlds = invoke_entry
-    invoke_data = InvokeData(method, invoke_types, first(valid_worlds), last(valid_worlds))
-    atype0 = atypes[2]
-    atypes = atypes[4:end]
-    pushfirst!(atypes, atype0)
-    f = singleton_type(ft)
-    return (Signature(f, ft, atypes), invoke_data)
 end
 
 # Check for a number of functions known to be pure
