@@ -188,8 +188,6 @@ end
 serialize(s::AbstractSerializer, x::Bool) = x ? writetag(s.io, TRUE_TAG) :
                                                 writetag(s.io, FALSE_TAG)
 
-serialize(s::AbstractSerializer, p::Ptr) = serialize_any(s, oftype(p, C_NULL))
-
 serialize(s::AbstractSerializer, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
 
 function serialize(s::AbstractSerializer, t::Tuple)
@@ -732,8 +730,8 @@ end
 Write an arbitrary value to a stream in an opaque format, such that it can be read back by
 [`deserialize`](@ref). The read-back value will be as identical as possible to the original.
 In general, this process will not work if the reading and writing are done by different
-versions of Julia, or an instance of Julia with a different system image. `Ptr` values are
-serialized as all-zero bit patterns (`NULL`).
+versions of Julia, or an instance of Julia with a different system image. `Ptr` values
+may cause problems if deserialized in a different process.
 
 An 8-byte identifying header is written to the stream first. To avoid writing the header,
 construct a `Serializer` and use it as the first argument to `serialize` instead.
