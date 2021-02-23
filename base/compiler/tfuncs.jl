@@ -1609,10 +1609,10 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), nothing)
+                        return CallMeta(Const(Union{}), false)
                     end
                     call = abstract_call(interp, nothing, argtypes_vec, sv, -1)
-                    info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : nothing
+                    info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
                         # output was computed to be constant
@@ -1641,7 +1641,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             end
         end
     end
-    return CallMeta(Type, nothing)
+    return CallMeta(Type, false)
 end
 
 # N.B.: typename maps type equivalence classes to a single value
