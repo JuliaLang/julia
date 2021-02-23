@@ -21,6 +21,7 @@ export
     AbstractUnitRange,
     AbstractVector,
     AbstractVecOrMat,
+    Always,
     Array,
     AbstractMatch,
     AbstractPattern,

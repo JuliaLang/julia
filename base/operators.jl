@@ -915,6 +915,38 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 """
 |>(x, f) = f(x)
 
+# always
+"""
+    f = Always(value)
+
+Create a callable `f` such that `f(args...; kw...) === value` holds.
+
+# Examples
+
+```jldoctest
+julia> f = Always(42);
+
+julia> f(1)
+42
+
+julia> f("hello", x=32)
+42
+```
+
+!!! compat "Julia 1.7"
+    Always requires at least Julia 1.7.
+"""
+struct Always{V} <: Function
+    value::V
+end
+
+(obj::Always)(args...; kw...) = obj.value
+function show(io::IO, obj::Always)
+    show(io, Always)
+    print(io, "(")
+    show(io, obj.value)
+    print(io, ")")
+end
 # function composition
 
 """

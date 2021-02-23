@@ -279,3 +279,13 @@ a = rand(3, 3)
 @test transpose(a) === a'ᵀ
 
 @test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
+
+@testset "Always" begin
+    @test @inferred(Always(1)()   ) === 1
+    @test @inferred(Always(1)(23) ) === 1
+    @test @inferred(Always("a")(2,3)) == "a"
+    @test @inferred(Always(1)(x=1, y=2)) === 1
+    val = [1,2,3]
+    @test Always(val)(1) === val
+    @test sprint(show, Always(1)) == "Always(1)"
+end
