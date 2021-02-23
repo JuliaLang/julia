@@ -533,6 +533,31 @@ function getindex(Q::AbstractQ, i::Integer, j::Integer)
     return dot(x, lmul!(Q, y))
 end
 
+# specialization avoiding the fallback using slow `getindex`
+function copyto!(dest::AbstractMatrix, src::AbstractQ)
+    copyto!(dest, I)
+    lmul!(src, dest)
+end
+# needed to resolve method ambiguities
+function copyto!(dest::PermutedDimsArray{T,2,perm}, src::AbstractQ) where {T,perm}
+    if perm == (1, 2)
+        copyto!(parent(dest), src)
+    else
+        @assert perm == (2, 1) # there are no other permutations of two indices
+        if T <: Real
+            copyto!(parent(dest), I)
+            lmul!(src', parent(dest))
+        else
+            # LAPACK does not offer inplace lmul!(transpose(Q), B) for complex Q
+            tmp = similar(parent(dest))
+            copyto!(tmp, I)
+            rmul!(tmp, src)
+            permutedims!(parent(dest), tmp, (2, 1))
+        end
+    end
+    return dest
+end
+
 ## Multiplication by Q
 ### QB
 lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
@@ -588,6 +613,13 @@ function (*)(A::AbstractQ, B::StridedMatrix)
         throw(DimensionMismatch("first dimension of matrix must have size either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
     end
     lmul!(Anew, Bnew)
+end
+
+function (*)(A::AbstractQ, b::Number)
+    TAb = promote_type(eltype(A), typeof(b))
+    dest = similar(A, TAb)
+    copyto!(dest, b*I)
+    lmul!(A, dest)
 end
 
 ### QcB
@@ -681,6 +713,13 @@ function (*)(A::StridedMatrix, Q::AbstractQ)
     TAQ = promote_type(eltype(A), eltype(Q))
 
     return rmul!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
+end
+
+function (*)(a::Number, B::AbstractQ)
+    TaB = promote_type(typeof(a), eltype(B))
+    dest = similar(B, TaB)
+    copyto!(dest, a*I)
+    rmul!(dest, B)
 end
 
 ### AQc
