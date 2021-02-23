@@ -108,7 +108,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         val = pure_eval_call(f, argtypes)
         if val !== false
             # TODO: add some sort of edge(s)
-            return CallMeta(val, MethodResultPure())
+            return CallMeta(val, MethodResultPure(info))
         end
     end
 
@@ -876,7 +876,7 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
         res = tmerge(res, call.rt)
         if bail_out_apply(interp, res, sv)
             # No point carrying forward the info, we're not gonna inline it anyway
-            retinfo = nothing
+            retinfo = false
             break
         end
     end
@@ -1117,7 +1117,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             end
             return CallMeta(Any, false)
         end
-        return CallMeta(abstract_call_builtin(interp, f, fargs, argtypes, sv, max_methods), nothing)
+        return CallMeta(abstract_call_builtin(interp, f, fargs, argtypes, sv, max_methods), false)
     elseif f === Core.kwfunc
         if la == 2
             ft = widenconst(argtypes[2])
@@ -1157,11 +1157,11 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         # mark !== as exactly a negated call to ===
         rty = abstract_call_known(interp, (===), fargs, argtypes, sv).rt
         if isa(rty, Conditional)
-            return CallMeta(Conditional(rty.var, rty.elsetype, rty.vtype), nothing) # swap if-else
+            return CallMeta(Conditional(rty.var, rty.elsetype, rty.vtype), false) # swap if-else
         elseif isa(rty, Const)
-            return CallMeta(Const(rty.val === false), nothing)
+            return CallMeta(Const(rty.val === false), MethodResultPure())
         end
-        return CallMeta(rty, nothing)
+        return CallMeta(rty, false)
     elseif la == 3 && istopfunction(f, :(>:))
         # mark issupertype as a exact alias for issubtype
         # swap T1 and T2 arguments and call <:

@@ -950,14 +950,14 @@ function inline_apply!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sig::
         if isa(info, UnionSplitApplyCallInfo)
             if length(info.infos) != 1
                 # TODO: Handle union split applies?
-                new_info = info = nothing
+                new_info = info = false
             else
                 info = info.infos[1]
                 new_info = info.call
             end
         else
             @assert info === nothing || info === false
-            new_info = info = nothing
+            new_info = info = false
         end
         arg_start = 3
         atypes = sig.atypes
@@ -1209,17 +1209,19 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         stmt = ir.stmts[idx][:inst]
         calltype = ir.stmts[idx][:type]
         info = ir.stmts[idx][:info]
-        # Inference determined this couldn't be analyzed. Don't question it.
-        if info === false
-            continue
-        end
 
         # Check whether this call was @pure and evaluates to a constant
-        if calltype isa Const && info isa MethodResultPure
-            if is_inlineable_constant(calltype.val)
+        if info isa MethodResultPure
+            if calltype isa Const && is_inlineable_constant(calltype.val)
                 ir.stmts[idx][:inst] = quoted(calltype.val)
                 continue
             end
+            info = info.info
+        end
+
+        # Inference determined this couldn't be analyzed. Don't question it.
+        if info === false
+            continue
         end
 
         # If inference arrived at this result by using constant propagation,
