@@ -1218,6 +1218,8 @@
                           (loop (list* 'typed_vcat ex (cdr al))))
                          ((comprehension)
                           (loop (list* 'typed_comprehension ex (cdr al))))
+                         ((ncat)
+                          (loop (list* 'typed_ncat ex (cdr al))))
                          (else (error "unknown parse-cat result (internal error)")))))))
             ((|.|)
              (disallow-space s ex t)
@@ -1850,59 +1852,120 @@
      `(comprehension ,gen))))
 
 (define (parse-matrix s first closer gotnewline last-end-symbol)
-  (define (fix head v) (cons head (reverse v)))
-  (define (update-outer v outer)
-    (cond ((null? v)       outer)
-          ((null? (cdr v)) (cons (car v) outer))
-          (else            (cons (fix 'row v) outer))))
-  (define semicolon (eqv? (peek-token s) #\;))
-  ;; if a [ ] expression is a cat expression, `end` is not special
-  (with-bindings ((end-symbol last-end-symbol))
-  (let loop ((vec   (list first))
-             (outer '()))
-    (let ((t  (if (or (eqv? (peek-token s) #\newline) gotnewline)
-                  #\newline
-                  (require-token s))))
+  (define (fix head v)
+    (cons head (reverse v)))
+  (define (fixrow l)
+    (let ((lfix (fix 'row (car l))))
+      (cons lfix (cdr l))))
+  (define (unfix l)
+    (cons (reverse (cdr (cadr l))) (cddr l) ))
+  (define (fixcat head is-row-first dims v)
+    (cons head (cons is-row-first (cons (cons 'tuple dims) (reverse v)))))
+  (define (head1+ l)
+    (cons (1+ (car l)) (cdr l)))
+  (define (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer gotnewline gotlinesep)
+    (let ((t (if (or gotnewline (eqv? (peek-token s) #\newline))
+                 #\newline
+                 (require-token s))))
       (if (eqv? t closer)
-          (begin (take-token s)
-                 (if (pair? outer)
-                     (fix 'vcat (update-outer vec outer))
-                     (if (or (null? vec) (null? (cdr vec)))
-                         (fix 'vect vec)     ; [x]   => (vect x)
-                         (fix 'hcat vec))))  ; [x y] => (hcat x y)
-          (case t
-            ((#\;)
-             (take-token s)
-             (if (eqv? (peek-token s) #\;)
-               (parser-depwarn s (string "Multiple semicolons in an array concatenation expression currently have no effect, "
-                                  "but may have a new meaning in a future version of Julia.")
-                                 "Please remove extra semicolons to preserve forward compatibility e.g. [1;;3] => [1;3]."))
-             (set! gotnewline #f)
-             (loop '() (update-outer vec outer)))
-            ((#\newline)
-             (or gotnewline (take-token s))
-             (set! gotnewline #f)
-             (loop '() (update-outer vec outer)))
-            ((#\,)
-             (error "unexpected comma in matrix expression"))
-            ((#\] #\})
-             (error (string "unexpected \"" t "\"")))
-            ((for)
-             (if (and (not semicolon)
-                      (length= outer 1)
-                      (null? vec))
-                 (begin ;; if we get here, there must have been some kind of space or separator
-                        ;;(expect-space-before s 'for)
-                        (take-token s)
-                        (parse-comprehension s (car outer) closer))
-                 (error "invalid comprehension syntax")))
-            (else
-             (if (and (pair? vec) (not (ts:space? s)))
-                 (error (string "expected \"" closer "\" or separator in arguments to \""
-                                (if (eqv? closer #\]) #\[ #\{) " " closer
-                                "\"; got \""
-                                (deparse (car vec)) t "\"")))
-             (loop (cons (parse-eq* s) vec) outer))))))))
+        (begin
+          (take-token s)
+          (set! is-row-first (if (or (null? is-row-first) is-row-first) ; convert #t/#f
+                                 '(true)
+                                 '(false)))
+          (set! dims (reverse (if (< semicolon-count max-level)
+                                  (head1+ dims) ; if hadn't reached a final semicolon, increment needed
+                                  dims)))
+          (set! a (if (= semicolon-count 0)
+                      (if (> (length (car a)) 1)
+                          (fixrow a)               ; hcat present, fix accumulated values into row
+                          (cons (caar a) (cdr a))) ; move remaining value in head accumulator into tail
+                      (cdr a)))                    ; remove null added in anticipation of next set
+          (cond ((= max-level 0)
+                 (if (= rown 1)  (fix 'vect a)
+                                 (fix 'hcat (reverse (cdar a))))) ; strip row symbol
+                ((= max-level 1) (fix 'vcat a))
+                (else            (fixcat 'ncat is-row-first dims a))))
+        (case t
+          ((#\; #\newline)
+           (or gotnewline (take-token s))
+           (if (and (eqv? t #\newline)
+                    (or (memv (peek-token s) (list #\newline #\; 'for closer))
+                        (> semicolon-count 0)))
+             ; treat line breaks not prior to a comprehension as a semicolon if semicolons absent
+             (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer #f gotlinesep)
+             (begin
+               (set! semicolon-count (1+ semicolon-count))
+                 (let ((is-line-sep
+                        (if (and (not (null? is-row-first))
+                                 is-row-first
+                                 (= semicolon-count 2))
+                            (let ((next (peek-token s)))
+                                 (cond ((eqv? next #\newline) #t)                     ; [a b ;;<newline>...
+                                       ((not (or (eof-object? next) (eqv? next #\;))) ; [a b ;;...
+                                        (error "cannot mix space and ;; separators in an array expression, except to wrap a line"))
+                                       (else #f)))                                    ; [a b ;;<eof> for REPL, [a ;;...
+                            #f)))                                                     ; [a ; b ;; c ; d...
+                   (if is-line-sep
+                       (begin
+                         (set! a (unfix a))
+                         (set! max-level (if (null? (cdr a)) 0 ; no prior single semicolon
+                                                             max-level)))
+                       (begin
+                         (set! dims (cond ((= max-level 0)
+                                           (list 1))         ; first semicolon encountered
+                                          ((and is-row-first (= max-level 1) (= semicolon-count 2))
+                                           (cons rown dims)) ; first second semicolon encountered in row-first order
+                                          ((> semicolon-count max-level)
+                                           (cons 1 dims))    ; new dimension, extend dims
+                                          ((= semicolon-count max-level)
+                                           (head1+ dims))    ; new member of max dimension, increment
+                                          (else
+                                           dims)))           ; no change
+                         (set! max-level (max max-level semicolon-count))
+                         ; finding ;; that isn't a row-separator makes it column-first
+                         (if (and (null? is-row-first)
+                                  (= semicolon-count 2)
+                                  (not (eqv? (peek-token s) #\;)))
+                             (set! is-row-first #f))
+                         ; collect the new values into a row on first new semicolon, if more than item in this row
+                         (set! a (if (= semicolon-count 1)
+                                     (if (> (length (car a)) 1) (cons '() (fixrow a))
+                                                                (cons '() (cons (caar a) (cdr a))))
+                                     a))))
+                   (parse-matrix-inner s a dims rown is-row-first semicolon-count max-level closer #f is-line-sep)))))
+          ((#\,)
+           (error "unexpected comma in matrix expression"))
+          ((#\] #\})
+           (error (string "unexpected \"" t "\"")))
+          ((for)
+           (if (and (length= (car a) 1)
+                    (null? (cdr a)))
+               (begin ;; if we get here, there must have been some kind of space or separator
+                 ;;(expect-space-before s 'for)
+                 (take-token s)
+                 (parse-comprehension s (caar a) closer))
+               (error "invalid comprehension syntax")))
+          (else
+           (if (and (not gotlinesep) (pair? (car a)) (not (ts:space? s)))
+               (error (string "expected \"" closer "\" or separator in arguments to \""
+                              (if (eqv? closer #\]) #\[ #\{) " " closer
+                              "\"; got \""
+                              (deparse (caar a)) t "\"")))
+           (let ((u (parse-eq* s)))
+             (set! a (cons (cons u (car a)) (cdr a)))
+             ; increment count of row elements only before first semicolon reached
+             (set! rown (if (= max-level 0) (1+ rown)
+                                            rown))
+             (if (= (length (car a)) 2)
+                 ; at least 2 elements separated by space found [a b...], [a; b c...]
+                 (if (null? is-row-first)
+                     (set! is-row-first #t)
+                     (if (not is-row-first)
+                         (error "cannot mix space and ;; separators in an array expression, except to wrap a line"))))
+             (parse-matrix-inner s a dims rown is-row-first 0 max-level closer #f #f)))))))
+  (with-bindings ((end-symbol last-end-symbol))
+    (parse-matrix-inner s (cons (list first) '()) (list 1) 1 '() 0 0 closer gotnewline #f)))
 
 (define (expect-space-before s t)
   (if (not (ts:space? s))

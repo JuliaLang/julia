@@ -2699,6 +2699,17 @@ end
     @test Meta.isexpr(Meta.@lower(f((; a, b::Int)) = a + b), :error)
 end
 
+# #33697 n-dimensional concatenation and vectors
+@test string(:([1 2 5; 3 4 6;;; 0 9 3; 4 5 4])) ==
+    "\$(Expr(:ncat, true, :((2, 3, 2)), :(1 2 5), :(3 4 6), :(0 9 3), :(4 5 4)))" # can't express the "row" arguments directly
+@test :([1 ; 2 ;; 3 ; 4]) == Expr(:ncat, false, :((2, 2)), 1, 2, 3, 4)
+
+@test_throws ParseError Meta.parse("[1 2 ;; 3 4]") # cannot mix spaces and ;; except as line break
+@test :([1 2 ;;
+         3 4]) == :([1 2 3 4])
+@test :([1 2 ;;
+         3 4 ; 2 3 4 5]) == :([1 2 3 4 ; 2 3 4 5])
+
 # issue #25652
 x25652 = 1
 x25652_2 = let (x25652, _) = (x25652, nothing)

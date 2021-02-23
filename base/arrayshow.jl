@@ -271,17 +271,20 @@ end
 
 # typeinfo agnostic
 # n-dimensional arrays
-show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices::Bool) =
-    _show_nd(io, inferencebarrier(a), print_matrix, label_slices, map(unitrange, axes(a)))
+show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bool) =
+    _show_nd(io, inferencebarrier(a), print_matrix, show_full, map(unitrange, axes(a)))
 
-function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Function, label_slices::Bool, axs::Tuple{Vararg{AbstractUnitRange}})
+function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Function, show_full::Bool, axs::Tuple{Vararg{AbstractUnitRange}})
     limit::Bool = get(io, :limit, false)
     if isempty(a)
         return
     end
     tailinds = tail(tail(axs))
     nd = ndims(a)-2
-    for I in CartesianIndices(tailinds)
+    show_full || print(io, "[")
+    Is = CartesianIndices(tailinds)
+    lastidxs = first(Is).I
+    for I in Is
         idxs = I.I
         if limit
             for i = 1:nd
@@ -296,7 +299,9 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                                 @goto skip
                             end
                         end
-                        print(io, "...\n\n")
+                        show_full || [print(io, ";") for i ∈ 1:i+2]
+                        print(io, " \u2026 ")
+                        show_full && print(io, "\n\n")
                         @goto skip
                     end
                     if ind[firstindex(ind)+2] < ii <= ind[end-3]
@@ -305,14 +310,17 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                 end
             end
         end
-        if label_slices
+        if show_full
             _show_nd_label(io, a, idxs)
         end
-        slice = view(a, axs[1], axs[2], idxs...)
+        slice = view(a, axes(a,1), axes(a,2), idxs...)
         print_matrix(io, slice)
         print(io, idxs == map(last,tailinds) ? "" : "\n\n")
         @label skip
+        lastidxs = idxs
     end
+    show_full || print(io, "]")
+    return nothing
 end
 
 function _show_nd_label(io::IO, a::AbstractArray, idxs)
@@ -385,10 +393,7 @@ end
 `_show_nonempty(io, X::AbstractMatrix, prefix)` prints matrix X with opening and closing square brackets,
 preceded by `prefix`, supposed to encode the type of the elements.
 """
-_show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
-    _show_nonempty(io, inferencebarrier(X), prefix, axes(X))
-
-function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
+function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
     indr, indc = axs
@@ -407,7 +412,7 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
             cdots = true
         end
     end
-    print(io, prefix, "[")
+    drop_brackets || print(io, prefix, "[")
     for rr in (rr1, rr2)
         for i in rr
             for cr in (cr1, cr2)
@@ -429,12 +434,13 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
         end
         last(rr) != last(indr) && rdots && print(io, "\u2026 ; ")
     end
-    print(io, "]")
+    drop_brackets || print(io, "]")
+    return nothing
 end
 
 
 _show_nonempty(io::IO, X::AbstractArray, prefix::String) =
-    show_nd(io, X, (io, slice) -> _show_nonempty(io, slice, prefix), false)
+    show_nd(io, X, (io, slice) -> _show_nonempty(io, slice, prefix, true), false)
 
 # a specific call path is used to show vectors (show_vector)
 _show_nonempty(::IO, ::AbstractVector, ::String) =
