@@ -1074,6 +1074,26 @@ function abstract_call_unionall(argtypes::Vector{Any})
     return Any
 end
 
+function abstract_invoke(interp::AbstractInterpreter, @nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
+    nargtype = typeintersect(types, argtype)
+    nargtype === Bottom && return CallMeta(Bottom, false)
+    nargtype isa DataType || return CallMeta(Any, false) # other cases are not implemented below
+    isdispatchelem(ft) || return CallMeta(Any, false) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
+    types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)
+    nargtype = Tuple{ft, nargtype.parameters...}
+    argtype = Tuple{ft, argtype.parameters...}
+    result = findsup(types, method_table(interp))
+    if result === nothing
+        return CallMeta(Any, false)
+    end
+    method, valid_worlds = result
+    update_valid_age!(sv, valid_worlds)
+    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    rt, edge = typeinf_edge(interp, method, ti, env, sv)
+    edge !== nothing && add_backedge!(edge::MethodInstance, sv)
+    return CallMeta(rt, InvokeCallInfo(MethodMatch(ti, env, method, argtype <: method.sig)))
+end
+
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any},
@@ -1088,6 +1108,14 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             ft = argtype_by_index(argtypes, 3)
             (itft === Bottom || ft === Bottom) && return CallMeta(Bottom, false)
             return abstract_apply(interp, itft, ft, argtype_tail(argtypes, 4), sv, max_methods)
+        elseif f === invoke
+            ft = widenconst(argtype_by_index(argtypes, 2))
+            (sigty, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
+            (ft === Bottom || sigty === Bottom) && return CallMeta(Bottom, false)
+            if isexact
+                return abstract_invoke(interp, ft, sigty, argtypes_to_type(argtype_tail(argtypes, 4)), sv)
+            end
+            return CallMeta(Any, false)
         end
         return CallMeta(abstract_call_builtin(interp, f, fargs, argtypes, sv, max_methods), nothing)
     elseif f === Core.kwfunc

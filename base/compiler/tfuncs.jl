@@ -1285,25 +1285,6 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
-function invoke_tfunc(interp::AbstractInterpreter, @nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
-    argtype = typeintersect(types, argtype)
-    argtype === Bottom && return Bottom
-    argtype isa DataType || return Any # other cases are not implemented below
-    isdispatchelem(ft) || return Any # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
-    types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)
-    argtype = Tuple{ft, argtype.parameters...}
-    result = findsup(types, method_table(interp))
-    if result === nothing
-        return Any
-    end
-    method, valid_worlds = result
-    update_valid_age!(sv, valid_worlds)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argtype, method.sig)::SimpleVector
-    rt, edge = typeinf_edge(interp, method, ti, env, sv)
-    edge !== nothing && add_backedge!(edge::MethodInstance, sv)
-    return rt
-end
-
 function has_struct_const_info(x)
     isa(x, PartialTypeVar) && return true
     isa(x, Conditional) && return true
@@ -1489,26 +1470,6 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                            sv::Union{InferenceState,Nothing})
     if f === tuple
         return tuple_tfunc(argtypes)
-    elseif f === invoke
-        if length(argtypes) > 1 && sv !== nothing && (isa(argtypes[1], Const) || isa(argtypes[1], Type))
-            if isa(argtypes[1], Const)
-                ft = Core.Typeof(argtypes[1].val)
-            else
-                ft = argtypes[1]
-            end
-            sig = argtypes[2]
-            if isa(sig, Const)
-                sigty = sig.val
-            elseif isType(sig)
-                sigty = sig.parameters[1]
-            else
-                sigty = nothing
-            end
-            if isa(sigty, Type) && !has_free_typevars(sigty) && sigty <: Tuple
-                return invoke_tfunc(interp, ft, sigty, argtypes_to_type(argtypes[3:end]), sv)
-            end
-        end
-        return Any
     end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
