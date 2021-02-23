@@ -1386,6 +1386,11 @@ function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::E
         subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])
         ir[SSAValue(idx)] = subtype_call
         return true
+    elseif params.inlining && f === TypeVar && 2 <= length(atypes) <= 4 && (atypes[2] ⊑ Symbol)
+        ir[SSAValue(idx)] = Expr(:call, GlobalRef(Core, :_typevar), stmt.args[2],
+            length(stmt.args) < 4 ? Bottom : stmt.args[3],
+            length(stmt.args) == 2 ? Any : stmt.args[end])
+        return true
     elseif is_return_type(f)
         if isconstType(typ)
             ir[SSAValue(idx)] = quoted(typ.parameters[1])
