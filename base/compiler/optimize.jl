@@ -26,11 +26,10 @@ struct InferenceCaches{T, S}
     mi_cache::S
 end
 
-struct InliningState{S <: Union{EdgeTracker, Nothing}, T <: Union{InferenceCaches, Nothing}, V <: Union{Nothing, MethodTableView}}
+struct InliningState{S <: Union{EdgeTracker, Nothing}, T <: Union{InferenceCaches, Nothing}}
     params::OptimizationParams
     et::S
     caches::T
-    method_table::V
 end
 
 mutable struct OptimizationState
@@ -49,8 +48,7 @@ mutable struct OptimizationState
             EdgeTracker(s_edges, frame.valid_worlds),
             InferenceCaches(
                 get_inference_cache(interp),
-                WorldView(code_cache(interp), frame.world)),
-            method_table(interp))
+                WorldView(code_cache(interp), frame.world)))
         return new(frame.linfo,
                    frame.src, frame.stmt_info, frame.mod, frame.nargs,
                    frame.sptypes, frame.slottypes, false,
@@ -85,8 +83,7 @@ mutable struct OptimizationState
             nothing,
             InferenceCaches(
                 get_inference_cache(interp),
-                WorldView(code_cache(interp), get_world_counter())),
-            method_table(interp))
+                WorldView(code_cache(interp), get_world_counter())))
         return new(linfo,
                    src, stmt_info, inmodule, nargs,
                    sptypes_from_meth_instance(linfo), slottypes, false,

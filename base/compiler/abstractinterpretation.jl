@@ -875,8 +875,10 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
         push!(retinfos, ApplyCallInfo(call.info, arginfo))
         res = tmerge(res, call.rt)
         if bail_out_apply(interp, res, sv)
-            # No point carrying forward the info, we're not gonna inline it anyway
-            retinfo = false
+            if i != length(ctypes)
+                # No point carrying forward the info, we're not gonna inline it anyway
+                retinfo = false
+            end
             break
         end
     end

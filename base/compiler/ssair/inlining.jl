@@ -1078,21 +1078,6 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
     return sig
 end
 
-# This is not currently called in the regular course, but may be needed
-# if we ever want to re-run inlining again later in the pass pipeline after
-# additional type information was discovered.
-function recompute_method_matches(@nospecialize(atype), params::OptimizationParams, et::EdgeTracker, method_table::MethodTableView)
-    # Regular case: Retrieve matching methods from cache (or compute them)
-    # World age does not need to be taken into account in the cache
-    # because it is forwarded from type inference through `sv.params`
-    # in the case that the cache is nonempty, so it should be unchanged
-    # The max number of methods should be the same as in inference most
-    # of the time, and should not affect correctness otherwise.
-    results = findall(atype, method_table; limit=params.MAX_METHODS)
-    results !== missing && intersect!(et, results.valid_worlds)
-    MethodMatchInfo(results)
-end
-
 function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, @nospecialize(stmt),
         sig::Signature, @nospecialize(calltype), infos::Vector{MethodMatchInfo},
         et, caches, params)
@@ -1201,7 +1186,6 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Pair{Int, Any}[]
     et = state.et
-    method_table = state.method_table
     for idx in 1:length(ir.stmts)
         sig = process_simple!(ir, todo, idx, state)
         sig === nothing && continue
@@ -1244,23 +1228,11 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # Ok, now figure out what method to call
         nu = unionsplitcost(sig.atypes)
         if nu == 1 || nu > state.params.MAX_UNION_SPLITTING
-            if !isa(info, MethodMatchInfo)
-                method_table === nothing && continue
-                et === nothing && continue
-                info = recompute_method_matches(sig.atype, state.params, et, method_table)
-            end
+            isa(info, MethodMatchInfo) || continue
             infos = MethodMatchInfo[info]
         else
-            if !isa(info, UnionSplitInfo)
-                method_table === nothing && continue
-                et === nothing && continue
-                infos = MethodMatchInfo[]
-                for union_sig in UnionSplitSignature(sig.atypes)
-                    push!(infos, recompute_method_matches(argtypes_to_type(union_sig), state.params, et, method_table))
-                end
-            else
-                infos = info.matches
-            end
+            isa(info, UnionSplitInfo) || continue
+            infos = info.matches
         end
 
         analyze_single_call!(ir, todo, idx, stmt, sig, calltype, infos, state.et, state.caches, state.params)
