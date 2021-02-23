@@ -1111,7 +1111,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif la == 3
             ub_var = argtypes[3]
         end
-        return CallMeta(typevar_tfunc(n, lb_var, ub_var), nothing)
+        return CallMeta(typevar_tfunc(n, lb_var, ub_var), false)
     elseif f === UnionAll
         return CallMeta(abstract_call_unionall(argtypes), false)
     elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
