@@ -1214,6 +1214,27 @@ end
         """)
 end
 
+@testset "issue #25992: status quo of parsing of interpolated Julia expressions" begin
+    str_ex = raw" $(1 + 1)$(1 + 1)"
+    @test Markdown.parse(str_ex).content[1].content[1].formula == Markdown.LaTeX("(1 + 1)").formula
+    @test Markdown.parse(str_ex).content[1].content[2] == "(1 + 1)"
+
+
+    str_ex = raw" $(1 + 1) $(1 + 1)"
+    @test Markdown.parse(str_ex).content[1].content[1] == :(1 + 1)
+    @test Markdown.parse(str_ex).content[1].content[2] == " "
+    @test Markdown.parse(str_ex).content[1].content[3] == :(1 + 1)
+
+    str_ex = raw"$(1 + 1) $(1 + 1)"
+    @test Markdown.parse(str_ex).content[1] == :(1 + 1)
+    @test Markdown.parse(str_ex).content[2].content[1] == :(1 + 1)
+
+    str_ex = raw"$(1 + 1)$(1 + 1)"
+    @test Markdown.parse(str_ex).content[1].formula == Markdown.LaTeX("(1 + 1)").formula
+    @test Markdown.parse(str_ex).content[2].content[1] == "(1 + 1)"
+
+end
+
 # Document how combining interpolation and Latex leads to puzzling results
 # (especially relevant in context of Pluto.jl)
 @testset "Latex + Interpolation Intrigues" begin
@@ -1221,11 +1242,11 @@ end
         Markdown.parse(txt).content[1]
     end
 
-    @test parse_md_test(" \$(a) \$ \\epsilon \$").content == Markdown.Paragraph(Any[:a, " \$ \\epsilon \$"]).content
-    @test parse_md_test("\$(a) \$\\epsilon\$").formula == "(a) \$\\epsilon"
+    @test parse_md_test(raw" $(a) $ \epsilon $").content == Markdown.Paragraph(Any[:a, raw" $ \epsilon $"]).content
+    @test parse_md_test(raw"$(a) $\epsilon$").formula == raw"(a) $\epsilon"
 
-    test_string = " \$(a) \$\\epsilon\$ \$(a)"
-    @test parse_md_test(test_string).content[1].formula == Markdown.LaTeX("(a) \$\\epsilon").formula
+    test_string = raw" $(a) $\epsilon$ $(a)"
+    @test parse_md_test(test_string).content[1].formula == Markdown.LaTeX(raw"(a) $\epsilon").formula
     @test parse_md_test(test_string).content[2] == " "
     @test parse_md_test(test_string).content[3] == Symbol("a")
 
