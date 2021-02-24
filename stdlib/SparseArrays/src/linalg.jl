@@ -1415,6 +1415,11 @@ kron(A::Union{SparseVector{T}, AbstractSparseMatrixCSC{T}}, B::Diagonal{S}) wher
 kron!(C::SparseMatrixCSC, A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = broadcast!(*, C, A, B)
 kron(A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = A .* B
 
+# sparse lq decomposition
+function LinearAlgebra.lq(A::SparseMatrixCSC)
+    return LinearAlgebra.qr(SparseMatrixCSC(A'))
+end
+
 ## det, inv, cond
 
 inv(A::AbstractSparseMatrixCSC) = error("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix, e.g. by calling `Matrix`.")
