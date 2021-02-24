@@ -198,7 +198,7 @@ end
     @test collect(takewhile(<(4),1:10)) == [1,2,3]
     @test collect(takewhile(<(4),Iterators.countfrom(1))) == [1,2,3]
     @test collect(takewhile(<(4),5:10)) == []
-    @test collect(takewhile(_->true,5:10)) == 5:10
+    @test collect(takewhile(Always(true),5:10)) == 5:10
     @test collect(takewhile(isodd,[1,1,2,3])) == [1,1]
     @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
 end
@@ -209,8 +209,8 @@ end
     @test collect(dropwhile(<(4), 1:10)) == 4:10
     @test collect(dropwhile(<(4), 1:10)) isa Vector{Int}
     @test isempty(dropwhile(<(4), []))
-    @test collect(dropwhile(_->false,1:3)) == 1:3
-    @test isempty(dropwhile(_->true, 1:3))
+    @test collect(dropwhile(Always(false),1:3)) == 1:3
+    @test isempty(dropwhile(Always(true), 1:3))
     @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
     @test collect(dropwhile(iseven,dropwhile(isodd,[1,1,2,3]))) == [3]
 end

@@ -1810,7 +1810,7 @@ function hvcat(nbc::Integer, as...)
     mod(n,nbc) != 0 &&
         throw(ArgumentError("number of arrays $n is not a multiple of the requested number of block columns $nbc"))
     nbr = div(n,nbc)
-    hvcat(ntuple(i->nbc, nbr), as...)
+    hvcat(ntuple(Always(nbc), nbr), as...)
 end
 
 """
@@ -2112,7 +2112,7 @@ _sub2ind_vec(i) = ()
 
 function _ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
     M = length(ind)
-    t = ntuple(n->similar(ind),Val(N))
+    t = ntuple(Always(similar(ind)),Val(N))
     for (i,idx) in pairs(IndexLinear(), ind)
         sub = _ind2sub(inds, idx)
         for j = 1:N
