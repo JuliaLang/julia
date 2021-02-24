@@ -94,7 +94,7 @@ Standard library changes
 
 #### Mmap
 
-* `mmap` is now exported ([#TODO]).
+* `mmap` is now exported ([#39816]).
 
 
 Deprecated or removed
