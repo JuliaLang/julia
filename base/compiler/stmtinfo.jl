@@ -82,6 +82,18 @@ struct UnionSplitApplyCallInfo
     infos::Vector{ApplyCallInfo}
 end
 
+"""
+    struct ConstCallInfo
+
+Precision for this call was improved using constant information. This info
+keeps a reference to the result that was used (or created for these)
+constant information.
+"""
+struct ConstCallInfo
+    call::Any
+    result::InferenceResult
+end
+
 # Stmt infos that are used by external consumers, but not by optimization.
 # These are not produced by default and must be explicitly opted into by
 # the AbstractInterpreter.
