@@ -71,7 +71,7 @@
             @test q === range(; start, stop             )
             @test q ==  range(; start, stop, step       )
             @test q ==  range(; start, stop,      length)
-            @test q ≈   range(;        stop,      length)
+            @test q ==  range(;        stop,      length)
         end
     end
     @testset "range(start, stop, length)" begin
