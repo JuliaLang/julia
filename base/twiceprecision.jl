@@ -673,7 +673,7 @@ end
 
 # range for rational numbers, start = start_n/den, stop = stop_n/den
 # Note this returns a StepRangeLen
-_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEEFloat} = _linspace(T, start, stop, len, 1)
+_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEEFloat} = _linspace(T, start, stop, len, oneunit(start))
 function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T<:IEEEFloat
     len < 2 && return _linspace1(T, start_n/den, stop_n/den, len)
     start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len, 1)
