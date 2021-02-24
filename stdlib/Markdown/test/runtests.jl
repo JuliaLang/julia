@@ -1213,3 +1213,20 @@ end
         |  $x  |
         """)
 end
+
+# Document how combining interpolation and Latex leads to puzzling results
+# (especially relevant in context of Pluto.jl)
+@testset "Latex + Interpolation Intrigues" begin
+    function parse_md_test(txt)
+        Markdown.parse(txt).content[1]
+    end
+
+    @test parse_md_test(" \$(a) \$ \\epsilon \$").content == Markdown.Paragraph(Any[:a, " \$ \\epsilon \$"]).content
+    @test parse_md_test("\$(a) \$\\epsilon\$").formula == "(a) \$\\epsilon"
+
+    test_string = " \$(a) \$\\epsilon\$ \$(a)"
+    @test parse_md_test(test_string).content[1].formula == Markdown.LaTeX("(a) \$\\epsilon").formula
+    @test parse_md_test(test_string).content[2] == " "
+    @test parse_md_test(test_string).content[3] == Symbol("a")
+
+end
