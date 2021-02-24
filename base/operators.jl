@@ -559,7 +559,7 @@ extrema(f, x::Real) = (y = f(x); (y, y))
 """
     identity(x)
 
-The identity function. Returns its argument.
+The identity function. Returns its argument.  Any keyword arguments are ignored.
 
 # Examples
 ```jldoctest
@@ -567,7 +567,7 @@ julia> identity("Well, what did you expect?")
 "Well, what did you expect?"
 ```
 """
-identity(x) = x
+identity(x; kws...) = x
 
 +(x::Number) = x
 *(x::Number) = x
@@ -951,7 +951,7 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 ```
-See also [`ComposedFunction`](@ref).
+See also [`ComposedFunction`](@ref) and [`IteratedFunction`](@ref).
 """
 function ∘ end
 
@@ -960,9 +960,9 @@ function ∘ end
 
 Represents the composition of two callable objects `outer::Outer` and `inner::Inner`. That is
 ```julia
-ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...))
+ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...); kw...)
 ```
-The preferred way to construct instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
+The preferred way to construct an instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
 ```jldoctest
 julia> sin ∘ cos === ComposedFunction(sin, cos)
 true
@@ -982,7 +982,7 @@ julia> composition.inner === cos
 true
 ```
 !!! compat "Julia 1.6"
-    ComposedFunction requires at least Julia 1.6. In earlier versions `∘` returns an anonymous function instead.
+    `ComposedFunction` requires at least Julia 1.6. In earlier versions `∘` returns an anonymous function instead.
 
 See also [`∘`](@ref).
 """
@@ -993,7 +993,7 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...) = c.outer(c.inner(x...))
+(c::ComposedFunction)(x...; kws...) = c.outer(c.inner(x...; kws...); kws...)
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
@@ -1003,6 +1003,54 @@ function show(io::IO, c::ComposedFunction)
     show(io, c.outer)
     print(io, " ∘ ")
     show(io, c.inner)
+end
+
+"""
+    IteratedFunction{F} <: Function
+
+`IteratedFunction(f,n)` represents the function `f` iterated `n ≥ 0` times on
+its input, which must be a single argument.
+
+That is, for functions `f(x)`, it represents the function
+`x -> f(f(f(f(...(f(x))))))` iterated `n` times`.  Any keyword arguments
+are passed through to all calls.
+
+If `f isa Function`, you should normally use the construction `f^n`
+to form an `IteratedFunction`.  If `n` is a literal integer, `f^n`
+may construct a more specialized object, e.g. `f^1 == f`, `f^0 == identity`,
+and `f^2 == f ∘ f`.
+
+!!! compat "Julia 1.7"
+    `IteratedFunction` and `f^n` require at least Julia 1.7.
+
+See also [`∘`](@ref) and [`ComposedFunction`](@ref).
+"""
+struct IteratedFunction{F} <: Function
+    f::F
+    n::Int
+    IteratedFunction{F}(f, n::Integer) where {F} = new{F}(f, _check_nonnegative(n))
+    IteratedFunction(f, n::Integer) = new{Core.Typeof(f)}(f, _check_nonnegative(n))
+end
+_check_nonnegative(n::Integer) = n ≥ 0 ? n : throw(ArgumentError("$n is not ≥ 0"))
+^(f::Function, n::Integer) = IteratedFunction(f, n)
+^(fn::IteratedFunction, n::Integer) = IteratedFunction(fn.f, fn.n * n)
+literal_pow(::typeof(^), f::Function, ::Val{0}) = identity
+literal_pow(::typeof(^), f::Function, ::Val{1}) = f
+literal_pow(::typeof(^), f::Function, ::Val{2}) = f ∘ f
+literal_pow(::typeof(^), f::Function, ::Val{3}) = f ∘ f ∘ f
+literal_pow(::typeof(^), f::Function, ::Val{4}) = f ∘ f ∘ f ∘ f
+literal_pow(::typeof(^), fn::IteratedFunction, ::Val{2}) = IteratedFunction(fn.f, fn.n * 2)
+literal_pow(::typeof(^), fn::IteratedFunction, ::Val{3}) = IteratedFunction(fn.f, fn.n * 3)
+literal_pow(::typeof(^), fn::IteratedFunction, ::Val{4}) = IteratedFunction(fn.f, fn.n * 4)
+function (fn::IteratedFunction)(x; kws...)
+    for i in Base.OneTo(fn.n)
+        x = fn.f(x; kws...)
+    end
+    return x
+end
+function show(io::IO, fn::IteratedFunction)
+    show(io, fn.f)
+    print(io, "^", fn.n)
 end
 
 """

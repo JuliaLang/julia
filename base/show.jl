@@ -45,6 +45,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
 end
 
 show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
+show(io::IO, ::MIME"text/plain", c::IteratedFunction) = show(io, c)
 
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     isempty(iter) && get(io, :compact, false) && return show(io, iter)
