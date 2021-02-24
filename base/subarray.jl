@@ -69,7 +69,10 @@ sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
 
 function Base.copy(V::SubArray)
     v = V.parent[V.indices...]
-    return ndims(V) == 0 ? fill(v) : v
+    ndims(V) == 0 || return v
+    x = similar(V) # ensure proper type of x
+    x[] = v
+    return x
 end
 
 parent(V::SubArray) = V.parent
