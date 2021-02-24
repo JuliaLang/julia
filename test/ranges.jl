@@ -1,26 +1,109 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "range construction" begin
-    @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
-    @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
+    @testset "range(; kw...)" begin
+        @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
+        @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
+        r = 3.0:2:11
+        let start=first(r), stop=last(r), step=step(r), length=length(r)
+            @test r === range(; start, stop, step        )
+            @test r === range(; start, stop,       length)
+            @test r ==  range(;        stop, step, length)
+            @test r === range(; start,       step, length)
+        end
 
-    r = 3.0:2:11
-    @test r == range(start=first(r), step=step(r), stop=last(r)                  )
-    @test r == range(start=first(r), step=step(r),               length=length(r))
-    @test r == range(start=first(r),               stop=last(r), length=length(r))
-    @test r == range(                step=step(r), stop=last(r), length=length(r))
+        r = 4:9
+        let start=first(r), stop=last(r), step=step(r), length=length(r)
+            @test r === range(; start, stop              )
+            @test r === range(;              stop, length)
+            @test r === range(; start,             length)
+            # the next ones use ==, because it changes the eltype
+            @test r ==  range(; start, stop,       length)
+            @test r ==  range(; start,       step, length)
+        end
 
-    r = 4:9
-    @test r === range(start=first(r), stop=last(r)                  )
-    @test r === range(start=first(r),               length=length(r))
-    @test r === range(                stop=last(r), length=length(r))
-    @test r === range(first(r),       last(r)                       )
-    # the next ones use ==, because it changes the eltype
-    @test r ==  range(first(r),       last(r),      length(r)       )
-    @test r ==  range(start=first(r), stop=last(r), length=length(r))
+        r = 1:5
+        let start=first(r), step=step(r), stop=last(r), length=length(r)
+            @test r === range(; start, stop              )
+            @test r === range(;        stop,       length)
+            # the next three lines uses ==, because it changes the eltype
+            @test r ==  range(; start, stop,       length)
+            @test r ==  range(; start,       step, length)
+        end
+        for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
+            @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
+        end
+    end
+    @testset "range(start, stop)" begin
+        r = 2:11
+        let start=first(r), stop=last(r), step=step(r), length=length(r)
+            q = range(start, stop)
+            @test q === r
+            @test eltype( range( UInt8(start),  UInt8(stop) ) ) == UInt8
+            @test eltype( range( UInt8(start), BigInt(stop) ) ) == BigInt
+            @test eltype( range( UInt8(start),    Int(stop) ) ) == Int
+            # One positional argument
+            @test q === range(  start; stop             )
+            @test q === range(  start;            length)
+            # Two positional arguments
+            @test q === range(  start, stop             )
+            @test q ==  range(  start, stop; step       )
+            @test q ==  range(  start, stop;      length)
+            # All keyword arguments
+            @test q === range(; start, stop             )
+            @test q ==  range(; start, stop, step       )
+            @test q ==  range(; start, stop,      length)
+            @test q ==  range(;        stop,      length)
+        end
 
-    for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
-        @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
+        r = 2.8:20.0
+        let start=first(r), stop=last(r), step=step(r), length=length(r)
+            q = range(start, stop)
+            @test q === r
+            # One positional argument
+            @test q === range(  start; stop             )
+            @test q === range(  start;            length)
+            # Two positional arguments
+            @test q === range(  start, stop             )
+            @test q ==  range(  start, stop; step       )
+            @test q ==  range(  start, stop;      length)
+            # All keyword arguments
+            @test q === range(; start, stop             )
+            @test q ==  range(; start, stop, step       )
+            @test q ==  range(; start, stop,      length)
+            @test q ≈   range(;        stop,      length)
+        end
+    end
+    @testset "range(start, stop, length)" begin
+        r = 3:12
+        let start=first(r), stop=last(r), step=step(r), length=length(r)
+            q = range(start, stop, length)
+            @test q == r
+            # One positional argument
+            @test q ==  range(  start; stop             )
+            @test q ==  range(  start;            length)
+            # Two positional arguments
+            @test q ==  range(  start, stop             )
+            @test q ==  range(  start, stop; step       )
+            @test q ==  range(  start, stop;      length)
+            # All keyword arguments
+            @test q ==  range(; start, stop             )
+            @test q ==  range(; start, stop, step       )
+            @test q ==  range(; start, stop,      length)
+            @test q ==  range(;        stop,      length)
+        end
+
+        r = 3.5:0.5:12.5
+        let start=first(r), stop=last(r), step=step(r), length=length(r)
+            q = range(start, stop, length)
+            @test q == r
+            # Two positional arguments
+            @test q ==  range(  start, stop; step       )
+            @test q ==  range(  start, stop;      length)
+            # All keyword arguments
+            @test q ==  range(; start, stop, step       )
+            @test q ==  range(; start, stop,      length)
+        end
     end
 end
 
@@ -1448,10 +1531,18 @@ end
 
 @testset "Bad range calls" begin
     @test_throws ArgumentError range(1)
+    @test_throws ArgumentError range(1.1)
     @test_throws ArgumentError range(nothing)
     @test_throws ArgumentError range(1, step=4)
     @test_throws ArgumentError range(nothing, length=2)
+    @test_throws ArgumentError range(; step=1, length=6)
+    @test_throws ArgumentError range(; step=2, stop=7.5)
     @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
+    @test_throws ArgumentError range(; stop=5.5)
+    @test_throws ArgumentError range(; stop=nothing)
+    @test_throws ArgumentError range(; length=7)
+    @test_throws ArgumentError range(; length=nothing)
+    @test_throws TypeError range(; length=5.5)
 end
 
 @testset "issue #23300#issuecomment-371575548" begin
