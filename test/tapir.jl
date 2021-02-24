@@ -82,6 +82,10 @@ end
     @test @inferred(tmap(x -> x + 0.5, 1:10)) == 1.5:1:10.5
 end
 
+@testset "SROA" begin
+    @test SROA.demo_sroa() == sum(1:10)
+end
+
 @testset "ad-hoc loop" begin
     @test AdHocLoop.f() == 1:10
 end

@@ -222,6 +222,29 @@ end
 
 end # module TaskOutputs
 
+module SROA
+using Base.Experimental: Tapir
+
+mutable struct AB
+    a::Int
+    b::Int
+end
+
+@inline function sumto!(r, p, xs)
+    for x in xs
+        setproperty!(r, p, getproperty(r, p) + x)
+    end
+end
+
+function demo_sroa()
+    ab = AB(0, 0)
+    Tapir.@sync begin
+        Tapir.@spawn sumto!(ab, :a, 1:2:10)
+        sumto!(ab, :b, 2:2:10)
+    end
+    return ab.a + ab.b
+end
+end
 
 module AdHocLoop
 using Base.Experimental: Tapir
