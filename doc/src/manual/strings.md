@@ -1138,7 +1138,7 @@ order to also allow for unstable (i.e. pre-release) `0.2` versions, the lower bo
 be modified like this: `v"0.2-" <= VERSION`.
 
 Another non-standard version specification extension allows one to use a trailing `+` to express
-an upper limit on build versions, e.g.  `VERSION > v"0.2-rc1+"` can be used to mean any version
+a lower limit on build versions, e.g.  `VERSION > v"0.2-rc1+"` can be used to mean any version
 above `0.2-rc1` and any of its builds: it will return `false` for version `v"0.2-rc1+win64"` and
 `true` for `v"0.2-rc2"`.
 
