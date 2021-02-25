@@ -442,20 +442,14 @@ function find_blas_library(name)
     # On windows, we look in `bin` and never in `lib`
     @static if Sys.iswindows()
         path = joinpath(Sys.BINDIR, name_ext)
-        if isfile(path)
-            return path
-        end
+        isfile(path) && return path
     else
         # On other platforms, we check `lib/julia` first, and if that doesn't exist, `lib`.
         path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", name_ext)
-        if isfile(path)
-            return path
-        end
+        isfile(path) && return path
 
         path = joinpath(Sys.BINDIR, Base.LIBDIR, name_ext)
-        if isfile(path)
-            return path
-        end
+        isfile(path) && return path
     end
 
     # If we can't find it by absolute path, we'll try just passing this straight through to `dlopen()`
@@ -483,11 +477,11 @@ function __init__()
         Threads.resize_nthreads!(Abuf)
         Threads.resize_nthreads!(Bbuf)
         Threads.resize_nthreads!(Cbuf)
-     catch ex
+    catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
-     end
-     # register a hook to disable BLAS threading
-     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
+    end
+    # register a hook to disable BLAS threading
+    Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
 end
 
 end # module LinearAlgebra

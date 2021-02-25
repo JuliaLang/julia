@@ -18,12 +18,12 @@ artifact_dir = ""
 libblastrampoline_handle = C_NULL
 libblastrampoline_path = ""
 
-if Sys.iswindows()
-    const libblastrampoline = "libblastrampoline.dll"
+const libblastrampoline = if Sys.iswindows()
+    "libblastrampoline.dll"
 elseif Sys.isapple()
-    const libblastrampoline = "@rpath/libblastrampoline.dylib"
+    "@rpath/libblastrampoline.dylib"
 else
-    const libblastrampoline = "libblastrampoline.so"
+    "libblastrampoline.so"
 end
 
 function __init__()
