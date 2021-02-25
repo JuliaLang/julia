@@ -359,7 +359,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             st->layout = &opaque_byte_layout;
             return;
         }
-        else if (st == jl_simplevector_type || st->name == jl_array_typename) {
+        else if (st == jl_simplevector_type || st == jl_module_type || st->name == jl_array_typename) {
             static const jl_datatype_layout_t opaque_ptr_layout = {0, 1, -1, sizeof(void*), 0, 0};
             st->layout = &opaque_ptr_layout;
             return;
@@ -439,11 +439,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     zeroinit = 1;
                 }
                 else {
+                    uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->haspadding)
                         haspadding = 1;
+                    if (i >= st->ninitialized && fld_npointers &&
+                        fld_npointers * sizeof(void*) != fsz) {
+                        // field may be undef (may be uninitialized and contains pointer),
+                        // and contains non-pointer fields of non-zero sizes.
+                        haspadding = 1;
+                    }
                     if (!zeroinit)
                         zeroinit = ((jl_datatype_t*)fld)->zeroinit;
-                    npointers += ((jl_datatype_t*)fld)->layout->npointers;
+                    npointers += fld_npointers;
                 }
             }
             else {

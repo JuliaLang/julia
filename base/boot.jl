@@ -8,7 +8,7 @@
 #abstract type Vararg{T} end
 
 #mutable struct Symbol
-#    #opaque
+## opaque
 #end
 
 #mutable struct TypeName
@@ -53,28 +53,43 @@
 #abstract type DenseArray{T,N} <: AbstractArray{T,N} end
 
 #mutable struct Array{T,N} <: DenseArray{T,N}
+## opaque
 #end
 
 #mutable struct Module
-#    name::Symbol
+## opaque
+#end
+
+#mutable struct SimpleVector
+## opaque
+#end
+
+#mutable struct String
+## opaque
 #end
 
 #mutable struct Method
+#...
 #end
 
 #mutable struct MethodInstance
+#...
 #end
 
 #mutable struct CodeInstance
+#...
 #end
 
 #mutable struct CodeInfo
+#...
 #end
 
 #mutable struct TypeMapLevel
+#...
 #end
 
 #mutable struct TypeMapEntry
+#...
 #end
 
 #abstract type Ref{T} end
@@ -93,7 +108,8 @@
 #end
 
 #struct LineInfoNode
-#    method::Any
+#    module::Module
+#    method::Symbol
 #    file::Symbol
 #    line::Int
 #    inlined_at::Int
@@ -379,8 +395,8 @@ eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
 eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
-eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
-             $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
+eval(Core, :(LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
+             $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 

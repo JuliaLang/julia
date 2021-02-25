@@ -2015,8 +2015,9 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_module_type =
         jl_new_datatype(jl_symbol("Module"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(2, "name", "parent"),
-                        jl_svec(2, jl_symbol_type, jl_any_type), 0, 1, 2);
+                        jl_emptysvec, jl_emptysvec, 0, 1, 0);
+    jl_module_type->instance = NULL;
+    jl_compute_field_offsets(jl_module_type);
 
     jl_value_t *symornothing[2] = { (jl_value_t*)jl_symbol_type, (jl_value_t*)jl_void_type };
     jl_linenumbernode_type =
@@ -2026,8 +2027,9 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_lineinfonode_type =
         jl_new_datatype(jl_symbol("LineInfoNode"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(4, "method", "file", "line", "inlined_at"),
-                        jl_svec(4, jl_any_type, jl_symbol_type, jl_long_type, jl_long_type), 0, 0, 4);
+                        jl_perm_symsvec(5, "module", "method", "file", "line", "inlined_at"),
+                        jl_svec(5, jl_module_type, jl_any_type, jl_symbol_type, jl_long_type, jl_long_type),
+                        0, 0, 5);
 
     jl_gotonode_type =
         jl_new_datatype(jl_symbol("GotoNode"), core, jl_any_type, jl_emptysvec,

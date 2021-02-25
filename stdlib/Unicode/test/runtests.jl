@@ -260,6 +260,9 @@ end
             end
         end
     end
+
+    @test Base.Unicode.isgraphemebreak('α', 'β')
+    @test !Base.Unicode.isgraphemebreak('α', '\u0302')
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
@@ -328,6 +331,12 @@ end
     g = graphemes(SubString("123α56789", 1, 6))
     @test eltype(g) == SubString{String}
     @test collect(g) == ["1","2","3","α","5"]
+end
+
+@testset "#37680: initial graphemes" begin
+    @test collect(graphemes("🤦🏼‍♂️")) == ["🤦🏼‍♂️"]
+    @test collect(graphemes("👨🏻‍🤝‍👨🏽")) == ["👨🏻‍🤝‍👨🏽"]
+    @test collect(graphemes("🇸🇪🇸🇪")) == ["🇸🇪","🇸🇪"]
 end
 
 @testset "uppercasefirst/lowercasefirst" begin

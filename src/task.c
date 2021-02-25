@@ -462,6 +462,11 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
 
 JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
 {
+    // NULL exception objects are used when rethrowing. we don't have a handler to process
+    // the exception stack, so at least report the exception at the top of the stack.
+    if (!e)
+        e = jl_current_exception();
+
     jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
     jl_static_show(JL_STDERR, e);
     jl_printf(JL_STDERR, "\n");

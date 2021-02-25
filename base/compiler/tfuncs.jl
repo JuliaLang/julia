@@ -925,11 +925,11 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         return Type
     end
-    # fieldtype only accepts Types, errors on `Module`
-    if isa(s0, Const) && (!(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union)) || s0.val === Module)
+    # fieldtype only accepts Types
+    if isa(s0, Const) && !(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union))
         return Bottom
     end
-    if s0 == Type{Module} || s0 == Type{Union{}} || isa(s0, Conditional)
+    if (s0 isa Type && s0 == Type{Union{}}) || isa(s0, Conditional)
         return Bottom
     end
 

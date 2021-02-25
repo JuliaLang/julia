@@ -1186,25 +1186,45 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case or_int:  return ctx.builder.CreateOr(x, y);
     case xor_int: return ctx.builder.CreateXor(x, y);
 
-    case shl_int:
-        return ctx.builder.CreateSelect(
-                ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
-                                                          t->getPrimitiveSizeInBits())),
-                ConstantInt::get(t, 0),
-                ctx.builder.CreateShl(x, uint_cnvt(ctx, t, y)));
-    case lshr_int:
-        return ctx.builder.CreateSelect(
-                ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
-                                                          t->getPrimitiveSizeInBits())),
-                ConstantInt::get(t, 0),
-                ctx.builder.CreateLShr(x, uint_cnvt(ctx, t, y)));
-    case ashr_int:
-        return ctx.builder.CreateSelect(
-                ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
-                                                          t->getPrimitiveSizeInBits())),
-                ctx.builder.CreateAShr(x, ConstantInt::get(t, t->getPrimitiveSizeInBits() - 1)),
-                ctx.builder.CreateAShr(x, uint_cnvt(ctx, t, y)));
-
+    case shl_int: {
+        Value *the_shl = ctx.builder.CreateShl(x, uint_cnvt(ctx, t, y));
+        if (ConstantInt::isValueValidForType(y->getType(), (uint64_t)t->getPrimitiveSizeInBits())) {
+            return ctx.builder.CreateSelect(
+                    ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
+                                                                  t->getPrimitiveSizeInBits())),
+                    ConstantInt::get(t, 0),
+                    the_shl);
+        }
+        else {
+            return the_shl;
+        }
+    }
+    case lshr_int: {
+        Value *the_shr = ctx.builder.CreateLShr(x, uint_cnvt(ctx, t, y));
+        if (ConstantInt::isValueValidForType(y->getType(), (uint64_t)t->getPrimitiveSizeInBits())) {
+            return ctx.builder.CreateSelect(
+                    ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
+                                                                  t->getPrimitiveSizeInBits())),
+                    ConstantInt::get(t, 0),
+                    the_shr);
+        }
+        else {
+            return the_shr;
+        }
+    }
+    case ashr_int: {
+        Value *the_shr = ctx.builder.CreateAShr(x, uint_cnvt(ctx, t, y));
+        if (ConstantInt::isValueValidForType(y->getType(), (uint64_t)t->getPrimitiveSizeInBits())) {
+            return ctx.builder.CreateSelect(
+                    ctx.builder.CreateICmpUGE(y, ConstantInt::get(y->getType(),
+                                                                  t->getPrimitiveSizeInBits())),
+                    ctx.builder.CreateAShr(x, ConstantInt::get(t, t->getPrimitiveSizeInBits() - 1)),
+                    the_shr);
+        }
+        else {
+            return the_shr;
+        }
+    }
     case bswap_int: {
         FunctionCallee bswapintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, makeArrayRef(t));
         return ctx.builder.CreateCall(bswapintr, x);
