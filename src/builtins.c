@@ -1395,7 +1395,7 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     while (jl_is_unionall(a)) {
         jl_unionall_t *ua = (jl_unionall_t*)a;
         jl_unionall_t *ub = (jl_unionall_t*)b;
-        if (!jl_egal(ua->var->lb, ub->var->lb) || !jl_egal(ua->var->ub, ub->var->ub) ||
+        if (!jl_types_egal(ua->var->lb, ub->var->lb) || !jl_types_egal(ua->var->ub, ub->var->ub) ||
             ua->var->name != ub->var->name)
             goto no;
         a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
