@@ -160,6 +160,11 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
+
+    # test keyword ags in composition
+    function kwf(a;b,c); a + b + c; end
+    @test (abs2 ∘ kwf)(1,b=2,c=3) == 36
+
 end
 
 @testset "function negation" begin
