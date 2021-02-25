@@ -29,6 +29,17 @@ struct InternalMethodTable <: MethodTableView
 end
 
 """
+    struct OverlayMethodTable <: MethodTableView
+
+Overlays the internal method table such that specific queries can be redirected to an
+external table, e.g., to modify specific functions.
+"""
+struct OverlayMethodTable <: MethodTableView
+    world::UInt
+    mt::Core.MethodTable
+end
+
+"""
     struct CachedMethodTable <: MethodTableView
 
 Overlays another method table view with an additional local fast path cache that
@@ -55,6 +66,25 @@ function findall(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable; 
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
     ms = _methods_by_ftype(sig, nothing, limit, table.world, false, _min_val, _max_val, _ambig)
+    if ms === false
+        return missing
+    end
+    return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
+end
+
+function findall(@nospecialize(sig::Type{<:Tuple}), table::OverlayMethodTable; limit::Int=typemax(Int))
+    _min_val = RefValue{UInt}(typemin(UInt))
+    _max_val = RefValue{UInt}(typemax(UInt))
+    _ambig = RefValue{Int32}(0)
+    ms = _methods_by_ftype(sig, table.mt, limit, table.world, false, _min_val, _max_val, _ambig)
+    if ms === false
+        return missing
+    elseif isempty(ms)
+        # fall back to the internal method table
+        _min_val[] = typemin(UInt)
+        _max_val[] = typemax(UInt)
+        ms = _methods_by_ftype(sig, nothing, limit, table.world, false, _min_val, _max_val, _ambig)
+    end
     if ms === false
         return missing
     end
