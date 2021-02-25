@@ -85,27 +85,27 @@ end
     with_artifacts_directory(artifacts_dir) do
         exeext = Sys.iswindows() ? ".exe" : ""
 
-        # simple lookup, gives us the directory for `c_simple` for the current architecture
-        c_simple_dir = artifact"c_simple"
-        @test isdir(c_simple_dir)
-        c_simple_exe_path = joinpath(c_simple_dir, "bin", "c_simple$(exeext)")
-        @test isfile(c_simple_exe_path)
+        # simple lookup, gives us the directory for `HelloWorldC` for the current architecture
+        HelloWorldC_dir = artifact"HelloWorldC"
+        @test isdir(HelloWorldC_dir)
+        HelloWorldC_exe_path = joinpath(HelloWorldC_dir, "bin", "hello_world$(exeext)")
+        @test isfile(HelloWorldC_exe_path)
 
         # Simple slash-indexed lookup
-        c_simple_bin_path = artifact"c_simple/bin"
-        @test isdir(c_simple_bin_path)
+        HelloWorldC_bin_path = artifact"HelloWorldC/bin"
+        @test isdir(HelloWorldC_bin_path)
         # Test that forward and backward slash are equivalent
-        @test artifact"c_simple\\bin" == artifact"c_simple/bin"
+        @test artifact"HelloWorldC\\bin" == artifact"HelloWorldC/bin"
 
         # Dynamically-computed lookup; not done at compile-time
-        generate_artifact_name() = "c_simple"
-        c_simple_dir = @artifact_str(generate_artifact_name())
-        @test isdir(c_simple_dir)
-        c_simple_exe_path = joinpath(c_simple_dir, "bin", "c_simple$(exeext)")
-        @test isfile(c_simple_exe_path)
+        generate_artifact_name() = "HelloWorldC"
+        HelloWorldC_dir = @artifact_str(generate_artifact_name())
+        @test isdir(HelloWorldC_dir)
+        HelloWorldC_exe_path = joinpath(HelloWorldC_dir, "bin", "hello_world$(exeext)")
+        @test isfile(HelloWorldC_exe_path)
 
         # Dynamically-computed slash-indexing:
-        generate_bin_path(pathsep) = "c_simple$(pathsep)bin$(pathsep)c_simple$(exeext)"
+        generate_bin_path(pathsep) = "HelloWorldC$(pathsep)bin$(pathsep)hello_world$(exeext)"
         @test isfile(@artifact_str(generate_bin_path("/")))
         @test isfile(@artifact_str(generate_bin_path("\\")))
     end
@@ -115,20 +115,20 @@ end
     with_artifacts_directory(artifacts_dir) do
         win64 = Platform("x86_64", "windows")
         mac64 = Platform("x86_64", "macos")
-        @test basename(@artifact_str("c_simple", win64)) == "444cecb70ff39e8961dd33e230e151775d959f37"
-        @test basename(@artifact_str("c_simple", mac64)) == "7ba74e239348ea6c060f994c083260be3abe3095"
+        @test basename(@artifact_str("HelloWorldC", win64)) == "2f1a6d4f82cd1eea785a5141b992423c09491f1b"
+        @test basename(@artifact_str("HelloWorldC", mac64)) == "f8ab5a03697f9afc82210d8a2be1d94509aea8bc"
     end
 end
 
 @testset "select_downloadable_artifacts()" begin
-    arm_linux = Platform("armv7l", "linux")
-    artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=arm_linux)
+    armv7l_linux = Platform("armv7l", "linux")
+    artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux)
     @test length(keys(artifacts)) == 1
-    @test artifacts["c_simple"]["git-tree-sha1"] == "0c509b3302db90a9393d6036c3ffcd14d190523d"
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "5a8288c8a30578c0d0f24a9cded29579517ce7a8"
 
-    artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=arm_linux, include_lazy=true)
+    artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux, include_lazy=true)
     @test length(keys(artifacts)) == 2
-    @test artifacts["c_simple"]["git-tree-sha1"] == "0c509b3302db90a9393d6036c3ffcd14d190523d"
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "5a8288c8a30578c0d0f24a9cded29579517ce7a8"
     @test artifacts["socrates"]["git-tree-sha1"] == "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
 end
 
@@ -136,8 +136,8 @@ end
     for imports in ("Artifacts, Pkg", "Pkg, Pkg.Artifacts", "Pkg.Artifacts")
         mktempdir() do tempdir
             with_artifacts_directory(tempdir) do
-                ex = @test_throws ErrorException artifact"c_simple"
-                @test startswith(ex.value.msg, "Artifact \"c_simple\" was not installed correctly. ")
+                ex = @test_throws ErrorException artifact"HelloWorldC"
+                @test startswith(ex.value.msg, "Artifact \"HelloWorldC\" was not installed correctly. ")
                 ex = @test_throws ErrorException artifact"socrates"
                 @test startswith(ex.value.msg, "Artifact \"socrates\" is a lazy artifact; ")
 
