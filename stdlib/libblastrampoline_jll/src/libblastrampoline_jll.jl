@@ -1,41 +1,36 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## dummy stub for https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl
-baremodule OpenBLAS_jll
-using Base, Libdl, CompilerSupportLibraries_jll, Base.BinaryPlatforms
+## dummy stub for https://github.com/JuliaBinaryWrappers/libblastrampoline_jll.jl
+
+baremodule libblastrampoline_jll
+using Base, Libdl
 Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
 
-export libopenblas
+export libblastrampoline
 
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
 artifact_dir = ""
-libopenblas_handle = C_NULL
-libopenblas_path = ""
+libblastrampoline_handle = C_NULL
+libblastrampoline_path = ""
 
-if Base.USE_BLAS64
-    const libsuffix = "64_"
-else
-    const libsuffix = ""
-end
-
-if Sys.iswindows()
-    const libopenblas = "libopenblas$(libsuffix).dll"
+const libblastrampoline = if Sys.iswindows()
+    "libblastrampoline.dll"
 elseif Sys.isapple()
-    const libopenblas = "@rpath/libopenblas$(libsuffix).dylib"
+    "@rpath/libblastrampoline.dylib"
 else
-    const libopenblas = "libopenblas$(libsuffix).so"
+    "libblastrampoline.so"
 end
 
 function __init__()
-    global libopenblas_handle = dlopen(libopenblas)
-    global libopenblas_path = dlpath(libopenblas_handle)
+    global libblastrampoline_handle = dlopen(libblastrampoline)
+    global libblastrampoline_path = dlpath(libblastrampoline_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    LIBPATH[] = dirname(libopenblas_path)
+    LIBPATH[] = dirname(libblastrampoline_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 
@@ -46,6 +41,6 @@ is_available() = true
 find_artifact_dir() = artifact_dir
 dev_jll() = error("stdlib JLLs cannot be dev'ed")
 best_wrapper = nothing
-get_libopenblas_path() = libopenblas_path
+get_libblastrampoline_path() = libblastrampoline_path
 
-end  # module OpenBLAS_jll
+end  # module libblastrampoline_jll

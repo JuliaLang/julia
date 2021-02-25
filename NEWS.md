@@ -60,6 +60,10 @@ Standard library changes
 
 #### LinearAlgebra
 
+* Use [Libblastrampoline](https://github.com/staticfloat/libblastrampoline/) to pick a BLAS and LAPACK at runtime. By default it forwards to OpenBLAS in the Julia distribution. The forwarding mechanism can be used by packages to replace the BLAS and LAPACK with user preferences. ([#39455])
+* On aarch64, OpenBLAS now uses an ILP64 BLAS like all other 64-bit platforms. ([#39436])
+* OpenBLAS is updated to 0.3.13. ([#39216])
+* SuiteSparse is updated to 5.8.1. ([#39455])
 
 #### Markdown
 
