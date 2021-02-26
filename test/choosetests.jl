@@ -55,7 +55,7 @@ function choosetests(choices = [])
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
-        "smallarrayshrink", "opaque_closure"
+        "smallarrayshrink", "opaque_closure", "filesystem", "download"
     ]
 
     tests = []
@@ -112,7 +112,8 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    net_required_for = ["Sockets", "LibGit2", "LibCURL", "Downloads", "Artifacts", "LazyArtifacts"]
+    net_required_for = ["download", "Sockets", "LibGit2", "LibCURL", "Downloads",
+                        "Artifacts", "LazyArtifacts"]
     net_on = true
     try
         ipa = getipaddr()
