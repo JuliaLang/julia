@@ -33,11 +33,8 @@ macro var(x)
 end
 
 function Base.show(io::IO, b::Binding)
-    if b.mod === Main
-        print(io, b.var)
-    else
-        print(io, b.mod, '.', Base.isoperator(b.var) ? ":" : "", b.var)
-    end
+    from = Base.moduleroot(b.mod) === Main ? Main : nothing
+    Base.print_qualified_name(io, b.mod, b.var, from, allow_macroname=true)
 end
 
 aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b

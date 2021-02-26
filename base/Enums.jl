@@ -28,16 +28,7 @@ Base.Symbol(x::Enum) = namemap(typeof(x))[Integer(x)]::Symbol
 Base.print(io::IO, x::Enum) = print(io, Symbol(x))
 
 function Base.show(io::IO, x::Enum)
-    sym = Symbol(x)
-    if !(get(io, :compact, false)::Bool)
-        from = get(io, :module, Main)
-        def = typeof(x).name.module
-        if from === nothing || !Base.isvisible(sym, def, from)
-            show(io, def)
-            print(io, ".")
-        end
-    end
-    print(io, sym)
+    Base.print_qualified_name(io, parentmodule(typeof(x)), Symbol(x))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", x::Enum)

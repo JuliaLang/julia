@@ -132,8 +132,13 @@ end
 # and names
 @test_throws ArgumentError("name \"_zero_Test15\" in Enum Test15 is not unique") @macrocall(@enum(Test15, _zero_Test15, _one_Test15, _zero_Test15))
 
-@test repr(apple) == "$(@__MODULE__).apple"
 @test string(apple) == "apple"
+
+module ModuleWithEnum
+@enum Fruit apple orange kiwi
+end
+
+@test repr(ModuleWithEnum.apple) == "$(repr(ModuleWithEnum)).apple"
 
 @test repr("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
 @test repr("text/plain", orange) == "orange::Fruit = 1"
@@ -207,6 +212,5 @@ let b = IOBuffer()
     b = IOBuffer()
     show(b, MIME"text/plain"(), Union{Alphabet, BritishFood})
     str = String(take!(b))
-    p = string(@__MODULE__)
-    @test str == "Union{$p.Alphabet, $p.BritishFood}" || str == "Union{$p.BritishFood, $p.Alphabet}"
+    @test str == "Union{$(repr(Alphabet)), $(repr(BritishFood))}" || str == "Union{$(repr(BritishFood)), $(repr(Alphabet))}"
 end

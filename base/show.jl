@@ -429,20 +429,6 @@ function _show_default(io::IO, @nospecialize(x))
     print(io,')')
 end
 
-# Check if a particular symbol is exported from a standard library module
-function is_exported_from_stdlib(name::Symbol, mod::Module)
-    !isdefined(mod, name) && return false
-    orig = getfield(mod, name)
-    while !(mod === Base || mod === Core)
-        parent = parentmodule(mod)
-        if mod === Main || mod === parent || parent === Main
-            return false
-        end
-        mod = parent
-    end
-    return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
-end
-
 function show_function(io::IO, f::Function, compact::Bool)
     ft = typeof(f)
     mt = ft.name.mt
@@ -453,12 +439,7 @@ function show_function(io::IO, f::Function, compact::Bool)
         print(io, mt.name)
     elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
-        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
-            show_sym(io, mt.name)
-        else
-            print(io, mt.module, ".")
-            show_sym(io, mt.name)
-        end
+        print_qualified_name(io, mt.module, mt.name)
     else
         show_default(io, f)
     end
@@ -584,17 +565,8 @@ function make_typealias(@nospecialize(x::Type))
 end
 
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
-    if !(get(io, :compact, false)::Bool)
-        # Print module prefix unless alias is visible from module passed to
-        # IOContext. If :module is not set, default to Main. nothing can be used
-        # to force printing prefix.
-        from = get(io, :module, Main)
-        if (from === nothing || !isvisible(name.name, name.mod, from))
-            show(io, name.mod)
-            print(io, ".")
-        end
-    end
-    print(io, name.name)
+    print_qualified_name(io, name.mod, name.name)
+
     n = length(env)
     n == 0 && return
 
@@ -866,11 +838,46 @@ end
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
 function isvisible(sym::Symbol, parent::Module, from::Module)
+    if parent === from
+        return true
+    end
     owner = ccall(:jl_binding_owner, Any, (Any, Any), parent, sym)
     from_owner = ccall(:jl_binding_owner, Any, (Any, Any), from, sym)
-    return owner !== nothing && from_owner === owner &&
-        !isdeprecated(parent, sym) &&
-        isdefined(from, sym) # if we're going to return true, force binding resolution
+    return (owner !== nothing && from_owner === owner && !isdeprecated(parent, sym)) ||
+        # name of a module is visible within itself
+        (from_owner isa Module && nameof(from_owner) === sym)
+end
+
+function should_print_qualified(io::IO, m::Module, name::Symbol, from::Union{Module,Nothing} = get(io,:module,Main))
+    return !isvisible(name, m, from)
+end
+
+# Print `name` from module `m` in qualified form based on IO settings and identifier
+# visibility.
+# If :module is not set, default to Main. `nothing` can be used to force printing prefix.
+# The optional `from` argument exists so that the Main default can be set in
+# a central place and possibly phased out eventually.
+function print_qualified_name(io::IO, m::Module, name::Symbol, from::Union{Module,Nothing} = get(io,:module,Main);
+                              allow_macroname = false)
+    quo = false
+    if !(get(io, :compact, false)::Bool)
+        if from === nothing || !isvisible(name, m, from)
+            show(IOContext(io, :module=>from), m)
+            print(io, ".")
+            if is_valid_identifier(name) && !is_id_start_char(first(string(name)))
+                print(io, ':')
+                if name in quoted_syms
+                    print(io, '(')
+                    quo = true
+                end
+            end
+        end
+        show_sym(io, name; allow_macroname)
+        quo && print(io, ')')
+    else
+        print(io, name)
+    end
+    nothing
 end
 
 function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
@@ -895,26 +902,11 @@ function show_type_name(io::IO, tn::Core.TypeName)
     globfunc = is_global_function(tn, globname)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
-    quo = false
-    if !(get(io, :compact, false)::Bool)
-        # Print module prefix unless type is visible from module passed to
-        # IOContext If :module is not set, default to Main. nothing can be used
-        # to force printing prefix
-        from = get(io, :module, Main)
-        if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from))
-            show(io, tn.module)
-            print(io, ".")
-            if globfunc && !is_id_start_char(first(string(sym)))
-                print(io, ':')
-                if sym in quoted_syms
-                    print(io, '(')
-                    quo = true
-                end
-            end
-        end
+    if isdefined(tn, :module)
+        print_qualified_name(io, tn.module, sym)
+    else
+        show_sym(io, sym)
     end
-    show_sym(io, sym)
-    quo      && print(io, ")")
     globfunc && print(io, ")")
     nothing
 end
@@ -1023,9 +1015,11 @@ function show(io::IO, m::Module)
     if is_root_module(m)
         print(io, nameof(m))
     else
-        print(io, join(fullname(m),"."))
+        print_qualified_name(io, parentmodule(m), nameof(m))
     end
 end
+
+print(io::IO, m::Module) = join(io, fullname(m), ".")
 
 function sourceinfo_slotnames(src::CodeInfo)
     slotnames = src.slotnames
@@ -1531,7 +1525,7 @@ show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = show_globalref(io, ex)
 
 function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
-    print(io, ex.mod)
+    show(io, ex.mod)
     print(io, '.')
     quoted = !isidentifier(ex.name) && !startswith(string(ex.name), "@")
     parens = quoted && (!isoperator(ex.name) || (ex.name in quoted_syms))
@@ -2216,8 +2210,8 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
         isdefined(uw.name.module, uw.name.mt.name) &&
         ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        if qualified && !is_exported_from_stdlib(uw.name.mt.name, uw.name.module) && uw.name.module !== Main
-            print_within_stacktrace(io, uw.name.module, '.', bold=true)
+        if qualified && should_print_qualified(io, uw.name.module, uw.name.mt.name)
+            print_within_stacktrace(io, sprint(show, uw.name.module, context=io), '.', bold=true)
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
         print_within_stacktrace(io, s, bold=true)

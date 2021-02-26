@@ -742,7 +742,7 @@ function f13127()
     show(buf, f)
     String(take!(buf))
 end
-@test startswith(f13127(), "$(@__MODULE__).var\"#f")
+@test startswith(f13127(), "$(repr(@__MODULE__)).var\"#f")
 
 @test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "var\"")
 
@@ -1557,7 +1557,7 @@ end
     @test repr(typeof(UnexportedOperators.:+)) == "typeof($(curmod_prefix)UnexportedOperators.:+)"
     @test repr(typeof(UnexportedOperators.:(==))) == "typeof($(curmod_prefix)UnexportedOperators.:(==))"
     anonfn = x->2x
-    modname = string(@__MODULE__)
+    modname = repr(@__MODULE__)
     anonfn_type_repr = "$modname.var\"$(typeof(anonfn).name.name)\""
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
@@ -1624,11 +1624,11 @@ module TestShowType
 end
 
 @testset "module prefix when printing type" begin
-    @test sprint(show, TestShowType.TypeA) == "$(@__MODULE__).TestShowType.TypeA"
+    @test sprint(show, TestShowType.TypeA) == "$(repr(@__MODULE__)).TestShowType.TypeA"
 
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TestShowType.TypeA)
-    @test String(take!(b)) == "$(@__MODULE__).TestShowType.TypeA"
+    @test String(take!(b)) == "TestShowType.TypeA"
 
     b = IOBuffer()
     show(IOContext(b, :module => TestShowType), TestShowType.TypeA)
@@ -1636,7 +1636,7 @@ end
 
     using .TestShowType
 
-    @test sprint(show, TypeA) == "$(@__MODULE__).TestShowType.TypeA"
+    @test sprint(show, TypeA) == "$(repr(@__MODULE__)).TestShowType.TypeA"
 
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
@@ -1647,9 +1647,6 @@ end
     show(IOContext(b, :module => TestShowType), Base.Pair)
     @test !Base.isbindingresolved(TestShowType, :Pair)
     @test String(take!(b)) == "Base.Pair"
-    show(IOContext(b, :module => TestShowType), Base.Complex)
-    @test Base.isbindingresolved(TestShowType, :Complex)
-    @test String(take!(b)) == "Complex"
 end
 
 @testset "typeinfo" begin
@@ -2162,3 +2159,15 @@ end
     s = sprint(show, MIME("text/plain"), Function)
     @test s == "Function"
 end
+
+# issue #39834, minimal qualifying of module paths in printing
+module M39834
+export A39834
+module A39834
+struct Foo end
+end
+struct (+) end
+end
+using .M39834
+@test sprint(show, M39834.A39834.Foo, context = :module => @__MODULE__) == "A39834.Foo"
+@test sprint(show, M39834.:+, context = :module => @__MODULE__) == "M39834.:+"

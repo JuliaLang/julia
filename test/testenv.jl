@@ -42,8 +42,9 @@ if !@isdefined(testenv_defined)
 
     const curmod = @__MODULE__
     const curmod_name = fullname(curmod)
-    const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
-    const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+    const curmod_rel_name = curmod_name[1] === :Main ? curmod_name[2:end] : curmod_name
+    const curmod_str = join(curmod_rel_name, ".")
+    const curmod_prefix = "$(["$m." for m in curmod_rel_name]...)"
 
     # platforms that support cfunction with closures
     # (requires LLVM back-end support for trampoline intrinsics)

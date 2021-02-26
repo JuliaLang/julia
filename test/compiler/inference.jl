@@ -3030,11 +3030,11 @@ end
     ifi = sel[end].second
     @test length(ifi.slottypes) > ifi.nargs
     str = sprint(show, sel)
-    @test occursin("InferenceFrameInfo for $(@__MODULE__).C.loopc(5::$Int)", str)
+    @test occursin("InferenceFrameInfo for $(repr(@__MODULE__)).C.loopc(5::$Int)", str)
     # check that types aren't double-printed as `T::Type{T}`
     sel = filter(ti -> ti.second.mi.def.name === :myfloor, ft)
     str = sprint(show, sel)
-    @test occursin("InferenceFrameInfo for $(@__MODULE__).C.myfloor(::Type{Int16}, ::Float64)", str)
+    @test occursin("InferenceFrameInfo for $(repr(@__MODULE__)).C.myfloor(::Type{Int16}, ::Float64)", str)
 end
 
 # issue #37638
