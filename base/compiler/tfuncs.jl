@@ -30,9 +30,12 @@ const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
 const DATATYPE_MUTABLE_FIELDINDEX = fieldindex(DataType, :mutable)
 const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
+const DATATYPE_ABSTRACT_FIELDINDEX = fieldindex(DataType, :abstract)
+const DATATYPE_NAMES_FIELDINDEX = fieldindex(DataType, :names)
 
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
 const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
+const TYPENAME_NAMES_FIELDINDEX = fieldindex(Core.TypeName, :names)
 const TYPENAME_WRAPPER_FIELDINDEX = fieldindex(Core.TypeName, :wrapper)
 
 ##########
@@ -611,7 +614,9 @@ is_dt_const_field(fld::Int) = (
      fld == DATATYPE_TYPES_FIELDINDEX ||
      fld == DATATYPE_SUPER_FIELDINDEX ||
      fld == DATATYPE_MUTABLE_FIELDINDEX ||
-     fld == DATATYPE_INSTANCE_FIELDINDEX
+     fld == DATATYPE_INSTANCE_FIELDINDEX ||
+     fld == DATATYPE_NAMES_FIELDINDEX ||
+     fld == DATATYPE_ABSTRACT_FIELDINDEX
     )
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
     if fld == DATATYPE_INSTANCE_FIELDINDEX
@@ -770,7 +775,8 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 fld = isa(nv, Symbol) ? fieldindex(Core.TypeName, nv, false) : nv
                 if (fld == TYPENAME_NAME_FIELDINDEX ||
                     fld == TYPENAME_MODULE_FIELDINDEX ||
-                    fld == TYPENAME_WRAPPER_FIELDINDEX)
+                    fld == TYPENAME_WRAPPER_FIELDINDEX ||
+                    (fld == TYPENAME_NAMES_FIELDINDEX && isdefined(sv, fld)))
                     return Const(getfield(sv, fld))
                 end
             end
