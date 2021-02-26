@@ -720,6 +720,16 @@ end
     @test D ≈ C
 end
 
+@testset "size zero types in matrix mult (see issue 39362)" begin
+    A = [missing missing; missing missing]
+    v = [missing, missing]
+    @test (A * v == v) === missing
+    M = fill(1.0, 2, 2)
+    a = fill(missing, 2, 1)
+    @test (a' * M * a == fill(missing,1,1)) === missing
+end
+
+
 @testset "multiplication of empty matrices without calling zero" begin
     r, c = rand(0:9, 2)
     A = collect(Number, rand(r, c))
