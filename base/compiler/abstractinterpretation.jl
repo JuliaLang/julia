@@ -24,12 +24,13 @@ function is_improvable(@nospecialize(rtype))
         # already at Bottom
         return rtype !== Union{}
     end
-    # Could be improved to `Const` or a more precise PartialStruct
-    return isa(rtype, PartialStruct)
+    # Could be improved to `Const` or a more precise wrapper
+    return isa(rtype, PartialStruct) || isa(rtype, InterConditional)
 end
 
-function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(atype), sv::InferenceState,
-                                  max_methods::Int = InferenceParams(interp).MAX_METHODS)
+function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
+                                  fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, @nospecialize(atype),
+                                  sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
     if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
         return CallMeta(Any, false)
     end
@@ -98,8 +99,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     rettype = Bottom
     edgecycle = false
     edges = MethodInstance[]
-    nonbot = 0  # the index of the only non-Bottom inference result if > 0
-    seen = 0    # number of signatures actually inferred
+    conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
+    nonbot = 0             # the index of the only non-Bottom inference result if > 0
+    seen = 0               # number of signatures actually inferred
     multiple_matches = napplicable > 1
 
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
@@ -121,18 +123,18 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             break
         end
         sigtuple = unwrap_unionall(sig)::DataType
-        splitunions = false
         this_rt = Bottom
+        splitunions = false
         # TODO: splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).MAX_UNION_SPLITTING
-        # currently this triggers a bug in inference recursion detection
+        # this used to trigger a bug in inference recursion detection, and is unmaintained now
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
                 rt, edgecycle1, edge = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
+                edgecycle |= edgecycle1::Bool
                 if edge !== nothing
                     push!(edges, edge)
                 end
-                edgecycle |= edgecycle1::Bool
                 this_rt = tmerge(this_rt, rt)
                 if bail_out_call(interp, this_rt, sv)
                     break
@@ -145,6 +147,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 push!(edges, edge)
             end
         end
+        this_conditional = ignorelimited(this_rt)
+        this_rt = widenwrappedconditional(this_rt)
+        @assert !(this_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
         if this_rt !== Bottom
             if nonbot === 0
                 nonbot = i
@@ -157,6 +162,26 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         if bail_out_call(interp, rettype, sv)
             break
         end
+        if this_conditional !== Bottom && is_lattice_bool(rettype) && fargs !== nothing
+            if conditionals === nothing
+                conditionals = Any[Bottom for _ in 1:length(argtypes)],
+                               Any[Bottom for _ in 1:length(argtypes)]
+            end
+            condval = maybe_extract_const_bool(this_conditional)
+            for i = 1:length(argtypes)
+                fargs[i] isa Slot || continue
+                if this_conditional isa InterConditional && this_conditional.slot == i
+                    vtype = this_conditional.vtype
+                    elsetype = this_conditional.elsetype
+                else
+                    elsetype = vtype = tmeet(argtypes[i], fieldtype(sig, i))
+                    condval === true && (elsetype = Union{})
+                    condval === false && (vtype = Union{})
+                end
+                conditionals[1][i] = tmerge(conditionals[1][i], vtype)
+                conditionals[2][i] = tmerge(conditionals[2][i], elsetype)
+            end
+        end
     end
     # try constant propagation if only 1 method is inferred to non-Bottom
     # this is in preparation for inlining, or improving the return result
@@ -165,16 +190,99 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             is_improvable(rettype) && InferenceParams(interp).ipo_constant_propagation
         # if there's a possibility we could constant-propagate a better result
         # (hopefully without doing too much work), try to do that now
-        # TODO: it feels like this could be better integrated into abstract_call_method / typeinf_edge
+        # TODO: refactor this, enable constant propagation for each (union-split) signature
+        match = applicable[nonbot]::MethodMatch
         const_rettype, result = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::MethodMatch, sv, edgecycle)
-        if const_rettype ⊑ rettype
-            # use the better result, if it's a refinement of rettype
+        const_conditional = ignorelimited(const_rettype)
+        @assert !(const_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
+        const_rettype = widenwrappedconditional(const_rettype)
+        if ignorelimited(const_rettype) ⊑ rettype
+            # use the better result, if it is a refinement of rettype
             rettype = const_rettype
+            if const_conditional isa InterConditional && conditionals === nothing && fargs !== nothing
+                arg = fargs[const_conditional.slot]
+                if arg isa Slot
+                    rettype = Conditional(arg, const_conditional.vtype, const_conditional.elsetype)
+                    if const_rettype isa LimitedAccuracy
+                        rettype = LimitedAccuracy(rettype, const_rettype.causes)
+                    end
+                end
+            end
         end
         if result !== nothing
             info = ConstCallInfo(info, result)
         end
+        # and update refinements with the InterConditional info too
+        # (here we ignorelimited, since there isn't much below this in the
+        # lattice, particularly when we're already using tmeet)
+        if const_conditional isa InterConditional && conditionals !== nothing
+            let i = const_conditional.slot,
+                vtype = const_conditional.vtype,
+                elsetype = const_conditional.elsetype
+                if !(vtype ⊑ conditionals[1][i])
+                    vtype = tmeet(conditionals[1][i], widenconst(vtype))
+                end
+                if !(elsetype ⊑ conditionals[2][i])
+                    elsetype = tmeet(conditionals[2][i], widenconst(elsetype))
+                end
+                conditionals[1][i] = vtype
+                conditionals[2][i] = elsetype
+            end
+        end
     end
+    if rettype isa LimitedAccuracy
+        union!(sv.pclimitations, rettype.causes)
+        rettype = rettype.typ
+    end
+    # if we have argument refinement information, apply that now to get the result
+    if is_lattice_bool(rettype) && conditionals !== nothing && fargs !== nothing
+        slot = 0
+        vtype = elsetype = Any
+        condval = maybe_extract_const_bool(rettype)
+        for i in 1:length(fargs)
+            # find the first argument which supports refinment,
+            # and intersect all equvalent arguments with it
+            arg = fargs[i]
+            arg isa Slot || continue # can't refine
+            old = argtypes[i]
+            old isa Type || continue # unlikely to refine
+            id = slot_id(arg)
+            if slot == 0 || id == slot
+                new_vtype = conditionals[1][i]
+                if condval === false
+                    vtype = Union{}
+                elseif new_vtype ⊑ vtype
+                    vtype = new_vtype
+                else
+                    vtype = tmeet(vtype, widenconst(new_vtype))
+                end
+                new_elsetype = conditionals[2][i]
+                if condval === true
+                    elsetype = Union{}
+                elseif new_elsetype ⊑ elsetype
+                    elsetype = new_elsetype
+                else
+                    elsetype = tmeet(elsetype, widenconst(new_elsetype))
+                end
+                if (slot > 0 || condval !== false) && !(old ⊑ vtype) # essentially vtype ⋤ old
+                    slot = id
+                elseif (slot > 0 || condval !== true) && !(old ⊑ elsetype) # essentially elsetype ⋤ old
+                    slot = id
+                else # reset: no new useful information for this slot
+                    vtype = elsetype = Any
+                    if slot > 0
+                        slot = 0
+                    end
+                end
+            end
+        end
+        if vtype === Bottom && elsetype === Bottom
+            rettype = Bottom # accidentally proved this call to be dead / throw !
+        elseif slot > 0
+            rettype = Conditional(SlotNumber(slot), vtype, elsetype) # record a Conditional improvement to this slot
+        end
+    end
+    @assert !(rettype isa InterConditional) "invalid lattice element returned from inter-procedural context"
     if is_unused && !(rettype === Bottom)
         add_remark!(interp, sv, "Call result type was widened because the return value is unused")
         # We're mainly only here because the optimizer might want this code,
@@ -186,19 +294,18 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         rettype = Any
     end
     add_call_backedges!(interp, rettype, edges, fullmatch, mts, atype, sv)
-    #print("=> ", rettype, "\n")
-    if rettype isa LimitedAccuracy
-        union!(sv.pclimitations, rettype.causes)
-        rettype = rettype.typ
-    end
     if !isempty(sv.pclimitations) # remove self, if present
         delete!(sv.pclimitations, sv)
         for caller in sv.callers_in_cycle
             delete!(sv.pclimitations, caller)
         end
     end
+    #print("=> ", rettype, "\n")
     return CallMeta(rettype, info)
 end
+
+widenwrappedconditional(@nospecialize(typ))   = widenconditional(typ)
+widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
 
 function add_call_backedges!(interp::AbstractInterpreter,
                              @nospecialize(rettype),
@@ -1015,7 +1122,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         # handle Conditional propagation through !Bool
         aty = argtypes[2]
         if isa(aty, Conditional)
-            call = abstract_call_gf_by_type(interp, f, Any[Const(f), Bool], Tuple{typeof(f), Bool}, sv) # make sure we've inferred `!(::Bool)`
+            call = abstract_call_gf_by_type(interp, f, fargs, Any[Const(f), Bool], Tuple{typeof(f), Bool}, sv) # make sure we've inferred `!(::Bool)`
             return CallMeta(Conditional(aty.var, aty.elsetype, aty.vtype), call.info)
         end
     elseif la == 3 && istopfunction(f, :!==)
@@ -1059,7 +1166,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(val === false ? Type : val, MethodResultPure())
     end
     atype = argtypes_to_type(argtypes)
-    return abstract_call_gf_by_type(interp, f, argtypes, atype, sv, max_methods)
+    return abstract_call_gf_by_type(interp, f, fargs, argtypes, atype, sv, max_methods)
 end
 
 function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::PartialOpaque, argtypes::Vector{Any}, sv::InferenceState)
@@ -1098,7 +1205,7 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end
-        return abstract_call_gf_by_type(interp, nothing, argtypes, argtypes_to_type(argtypes), sv, max_methods)
+        return abstract_call_gf_by_type(interp, nothing, fargs, argtypes, argtypes_to_type(argtypes), sv, max_methods)
     end
     return abstract_call_known(interp, f, fargs, argtypes, sv, max_methods)
 end
@@ -1375,17 +1482,61 @@ function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     return typ
 end
 
-function widenreturn(@nospecialize rt)
+function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, slottypes::Vector{Any}, changes::VarTable)
+    if !(bestguess ⊑ Bool) || bestguess === Bool
+        # give up inter-procedural constraint back-propagation
+        # when tmerge would widen the result anyways (as an optimization)
+        rt = widenconditional(rt)
+    else
+        if isa(rt, Conditional)
+            id = slot_id(rt.var)
+            if 1 ≤ id ≤ nslots
+                old_id_type = widenconditional(slottypes[id]) # same as `((s[1]::VarTable)[id]::VarState).typ`
+                if (!(rt.vtype ⊑ old_id_type) || old_id_type ⊑ rt.vtype) &&
+                   (!(rt.elsetype ⊑ old_id_type) || old_id_type ⊑ rt.elsetype)
+                   # discard this `Conditional` since it imposes
+                   # no new constraint on the argument type
+                   # (the caller will recreate it if needed)
+                   rt = widenconditional(rt)
+               end
+            else
+                # discard this `Conditional` imposed on non-call arguments,
+                # since it's not interesting in inter-procedural context;
+                # we may give constraints on other call argument
+                rt = widenconditional(rt)
+            end
+        end
+        if isa(rt, Conditional)
+            rt = InterConditional(slot_id(rt.var), rt.vtype, rt.elsetype)
+        elseif is_lattice_bool(rt)
+            if isa(bestguess, InterConditional)
+                # if the bestguess so far is already `Conditional`, try to convert
+                # this `rt` into `Conditional` on the slot to avoid overapproximation
+                # due to conflict of different slots
+                rt = bool_rt_to_conditional(rt, slottypes, changes, bestguess.slot)
+            else
+                # pick up the first "interesting" slot, convert `rt` to its `Conditional`
+                # TODO: ideally we want `Conditional` and `InterConditional` to convey
+                # constraints on multiple slots
+                for slot_id in 1:nslots
+                    rt = bool_rt_to_conditional(rt, slottypes, changes, slot_id)
+                    rt isa InterConditional && break
+                end
+            end
+        end
+    end
+
     # only propagate information we know we can store
     # and is valid and good inter-procedurally
-    rt = widenconditional(rt)
+    isa(rt, Conditional) && return InterConditional(slot_id(rt.var), rt.vtype, rt.elsetype)
+    isa(rt, InterConditional) && return rt
     isa(rt, Const) && return rt
     isa(rt, Type) && return rt
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
         haveconst = false
         for i in 1:length(fields)
-            a = widenreturn(fields[i])
+            a = widenreturn(fields[i], bestguess, nslots, slottypes, changes)
             if !haveconst && has_const_info(a)
                 # TODO: consider adding && const_prop_profitable(a) here?
                 haveconst = true
@@ -1407,6 +1558,11 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     W = frame.ip
     s = frame.stmt_types
     n = frame.nstmts
+    nargs = frame.nargs
+    def = frame.linfo.def
+    isva = isa(def, Method) && def.isva
+    nslots = nargs - isva
+    slottypes = frame.slottypes
     while frame.pc´´ <= n
         # make progress on the active ip set
         local pc::Int = frame.pc´´ # current program-counter
@@ -1461,12 +1617,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     frame.handler_at[l] = frame.cur_hand
                     changes_else = changes
                     if isa(condt, Conditional)
-                        if condt.elsetype !== Any && condt.elsetype !== changes[slot_id(condt.var)]
-                            changes_else = StateUpdate(condt.var, VarState(condt.elsetype, false), changes_else)
-                        end
-                        if condt.vtype !== Any && condt.vtype !== changes[slot_id(condt.var)]
-                            changes = StateUpdate(condt.var, VarState(condt.vtype, false), changes)
-                        end
+                        changes_else = conditional_changes(changes_else, condt.elsetype, condt.var)
+                        changes      = conditional_changes(changes,      condt.vtype,    condt.var)
                     end
                     newstate_else = stupdate!(s[l], changes_else)
                     if newstate_else !== nothing
@@ -1480,7 +1632,20 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
             elseif isa(stmt, ReturnNode)
                 pc´ = n + 1
-                rt = widenreturn(abstract_eval_value(interp, stmt.val, changes, frame))
+                bestguess = frame.bestguess
+                rt = abstract_eval_value(interp, stmt.val, changes, frame)
+                rt = widenreturn(rt, bestguess, nslots, slottypes, changes)
+                # narrow representation of bestguess slightly to prepare for tmerge with rt
+                if rt isa InterConditional && bestguess isa Const
+                    let slot_id = rt.slot
+                        old_id_type = slottypes[slot_id]
+                        if bestguess.val === true && rt.elsetype !== Bottom
+                            bestguess = InterConditional(slot_id, old_id_type, Bottom)
+                        elseif bestguess.val === false && rt.vtype !== Bottom
+                            bestguess = InterConditional(slot_id, Bottom, old_id_type)
+                        end
+                    end
+                end
                 # copy limitations to return value
                 if !isempty(frame.pclimitations)
                     union!(frame.limitations, frame.pclimitations)
@@ -1489,9 +1654,11 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 if !isempty(frame.limitations)
                     rt = LimitedAccuracy(rt, copy(frame.limitations))
                 end
-                if tchanged(rt, frame.bestguess)
+                if tchanged(rt, bestguess)
                     # new (wider) return type for frame
-                    frame.bestguess = tmerge(frame.bestguess, rt)
+                    bestguess = tmerge(bestguess, rt)
+                    # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
+                    frame.bestguess = bestguess
                     for (caller, caller_pc) in frame.cycle_backedges
                         # notify backedges of updated type information
                         typeassert(caller.stmt_types[caller_pc], VarTable) # we must have visited this statement before
@@ -1598,6 +1765,31 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     end
     frame.dont_work_on_me = false
     nothing
+end
+
+function conditional_changes(changes::VarTable, @nospecialize(typ), var::Slot)
+    if typ ⊑ (changes[slot_id(var)]::VarState).typ
+        return StateUpdate(var, VarState(typ, false), changes)
+    end
+    return changes
+end
+
+function bool_rt_to_conditional(@nospecialize(rt), slottypes::Vector{Any}, state::VarTable, slot_id::Int)
+    old = slottypes[slot_id]
+    new = widenconditional((state[slot_id]::VarState).typ) # avoid nested conditional
+    if new ⊑ old && !(old ⊑ new)
+        if isa(rt, Const)
+            val = rt.val
+            if val === true
+                return InterConditional(slot_id, new, Bottom)
+            elseif val === false
+                return InterConditional(slot_id, Bottom, new)
+            end
+        elseif rt === Bool
+            return InterConditional(slot_id, new, new)
+        end
+    end
+    return rt
 end
 
 # make as much progress on `frame` as possible (by handling cycles)
