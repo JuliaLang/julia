@@ -59,9 +59,7 @@ Base.iterate(S::LQ, ::Val{:done}) = nothing
 struct LQPackedQ{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
     factors::S
     τ::Vector{T}
-    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
-LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
 
 """
