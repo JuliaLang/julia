@@ -17,7 +17,7 @@ artifact_dir = ""
 libopenblas_handle = C_NULL
 libopenblas_path = ""
 
-if Base.USE_BLAS64
+if Sys.WORD_SIZE == 64
     const libsuffix = "64_"
 else
     const libsuffix = ""
