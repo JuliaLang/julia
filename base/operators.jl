@@ -938,6 +938,8 @@ julia> f("hello", x=32)
 """
 struct Returns{V} <: Function
     value::V
+    Returns{V}(value) where {V} = new{V}(value)
+    Returns(value) = new{Core.Typeof(value)}(value)
 end
 
 (obj::Returns)(args...; kw...) = obj.value

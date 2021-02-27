@@ -285,6 +285,10 @@ a = rand(3, 3)
     @test @inferred(Returns(1)(23) ) === 1
     @test @inferred(Returns("a")(2,3)) == "a"
     @test @inferred(Returns(1)(x=1, y=2)) === 1
+    @test @inferred(Returns(Int)()) === Int
+    @test @inferred(Returns(Returns(1))()) === Returns(1)
+    f = @inferred Returns(Int)
+    @inferred f(1,2)
     val = [1,2,3]
     @test Returns(val)(1) === val
     @test sprint(show, Returns(1)) == "Returns(1)"
