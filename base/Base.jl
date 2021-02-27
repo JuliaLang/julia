@@ -336,6 +336,9 @@ include("meta.jl")
 include("stacktraces.jl")
 using .StackTraces
 
+# experimental API's
+include("experimental.jl")
+
 # utilities
 include("deepcopy.jl")
 include("download.jl")
@@ -358,9 +361,6 @@ include("timing.jl")
 include("util.jl")
 
 include("asyncmap.jl")
-
-# experimental API's
-include("experimental.jl")
 
 # deprecated functions
 include("deprecated.jl")
