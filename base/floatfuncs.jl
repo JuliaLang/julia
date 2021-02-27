@@ -278,8 +278,13 @@ true
 function isapprox(x::Number, y::Number;
                   atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
-    x == y || (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
+    x == y || (isfinite(x) && isfinite(y) && _isapprox_small(norm(x-y), atol, rtol, x, y, norm)) || (nans && isnan(x) && isnan(y))
 end
+
+# check if d is small compared to atol and rtol, ignoring the units (if any) of atol
+# only if atol is zero.
+_isapprox_small(d::T, atol, rtol, x, y, norm::F) where {T,F<:Function} =
+    iszero(atol) ? d <= rtol*max(norm(x), norm(y)) : d <= max(atol, rtol*max(norm(x), norm(y)))
 
 """
     isapprox(x; kwargs...) / ≈(x; kwargs...)
@@ -301,6 +306,7 @@ This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
 # default tolerance arguments
 rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
 rtoldefault(::Type{<:Real}) = 0
+rtoldefault(::Type{T}) where {T<:Number} = rtoldefault(typeof(real(one(T)))) # strip dimensions if any
 function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where {T<:Number,S<:Number}
     rtol = max(rtoldefault(real(T)),rtoldefault(real(S)))
     return atol > 0 ? zero(rtol) : rtol

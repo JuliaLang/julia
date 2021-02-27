@@ -504,4 +504,13 @@ end
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
 end
 
+@testset "dimensionful arrays" begin
+    for p in (1,2,3,Inf), x in ([0,0,0], [1e300,2e300], [1,2,Inf])
+        @test GenericDimensionful(norm(x, p)) == norm(GenericDimensionful.(x), p)
+    end
+    @test dot(GenericDimensionful.([1,2,3]), [4,5,6]) == GenericDimensionful(32)
+    @test dot(GenericDimensionful.([1,2,3]), GenericDimensionful.([4,5,6])) == GenericDimensionful{2}(32)
+    @test GenericDimensionful.([1,0]) ≈ GenericDimensionful.([1,1e-13])
+end
+
 end # module TestGeneric

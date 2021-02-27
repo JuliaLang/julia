@@ -25,8 +25,6 @@
 end
 
 using Dates, Random
-isdefined(Main, :PhysQuantities) || @eval Main include("testhelpers/PhysQuantities.jl")
-using .Main.PhysQuantities
 
 # Compare precision in a manner sensitive to subnormals, which lose
 # precision compared to widening.
@@ -212,12 +210,12 @@ end
     @test isnan(Float64(x0/0))
     @test isnan(Float64(x0/0.0))
 
-    x = Base.TwicePrecision(PhysQuantity{1}(4.0))
-    @test x.hi*2 === PhysQuantity{1}(8.0)
-    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
-    @test x.hi/2 === PhysQuantity{1}(2.0)
-    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
-    @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
+    x = Base.TwicePrecision(GenericDimensionful(4.0))
+    @test x.hi*2 === GenericDimensionful(8.0)
+    @test_throws ErrorException x*2   # not a MethodError for convert
+    @test x.hi/2 === GenericDimensionful(2.0)
+    @test_throws ErrorException x/2
+    @test zero(typeof(x)) === Base.TwicePrecision(GenericDimensionful(0.0))
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -1394,20 +1392,17 @@ Base.rem(x, y::NotReal) = rem(x, y.val)
 Base.isless(x, y::NotReal) = isless(x, y.val)
 @test (:)(1, NotReal(1), 5) isa StepRange{Int,NotReal}
 
-isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
-using .Main.Furlongs
-
 @testset "dimensional correctness" begin
-    @test length(Vector(Furlong(2):Furlong(10))) == 9
-    @test length(range(Furlong(2), length=9)) == 9
-    @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
-    @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
-          Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
+    @test length(Vector(GenericDimensionful(2):GenericDimensionful(10))) == 9
+    @test length(range(GenericDimensionful(2), length=9)) == 9
+    @test Vector(GenericDimensionful(2):GenericDimensionful(1):GenericDimensionful(10)) == Vector(range(GenericDimensionful(2), step=GenericDimensionful(1), length=9)) == GenericDimensionful.(2:10)
+    @test Vector(GenericDimensionful(1.0):GenericDimensionful(0.5):GenericDimensionful(10.0)) ==
+          Vector(GenericDimensionful(1):GenericDimensionful(0.5):GenericDimensionful(10)) == GenericDimensionful.(1:0.5:10)
 end
 
 @testset "sum arbitrary types" begin
-    @test sum(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong{1,Float64}(104.5)
-    @test sum(StepRangeLen(Furlong(1), Furlong(0.5), 19)) == Furlong{1,Float64}(104.5)
+    @test sum(GenericDimensionful(1):GenericDimensionful(0.5):GenericDimensionful(10)) == GenericDimensionful{1,Float64}(104.5)
+    @test sum(StepRangeLen(GenericDimensionful(1), GenericDimensionful(0.5), 19)) == GenericDimensionful{1,Float64}(104.5)
     @test sum(0f0:0.001f0:1f0) == 500.5
     @test sum(0f0:0.000001f0:1f0) == 500000.5
     @test sum(0f0:0.1f0:10f0) == 505.

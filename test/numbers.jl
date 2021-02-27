@@ -475,9 +475,7 @@ end
     @test sign(one(UInt)) == 1
     @test sign(zero(UInt)) == 0
 
-    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
-    using .Main.Furlongs
-    x = Furlong(3.0)
+    x = GenericDimensionful(3.0)
     @test sign(x) * x == x
     @test sign(-x) * -x == x
 

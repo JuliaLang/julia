@@ -611,13 +611,10 @@ end
 @test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(fill(1., 3), [1,2,3]) == fill(1., 3)
 
 # dimensional correctness:
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
-using .Main.Furlongs
-LinearAlgebra.sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
+LinearAlgebra.sylvester(a::GenericDimensionful,b::GenericDimensionful,c::GenericDimensionful) = -c / (a + b)
 
-let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
-    @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
+let A = UpperTriangular([GenericDimensionful(1) GenericDimensionful(4); GenericDimensionful(0) GenericDimensionful(1)])
+    @test sqrt(A) == GenericDimensionful{1//2}.(UpperTriangular([1 2; 0 1]))
 end
 
 @testset "similar should preserve underlying storage type" begin

@@ -775,6 +775,10 @@ end
   # #13132: Use of `norm` kwarg for scalar arguments
   @test isapprox(1, 1+1.0e-12, norm=abs)
   @test !isapprox(1, 1+1.0e-12, norm=x->1)
+
+  # dimensionful values
+  @test isapprox(GenericDimensionful(1), GenericDimensionful(1+1.0e-12))
+  @test_throws MethodError isapprox(GenericDimensionful(1), GenericDimensionful(1+1.0e-12), atol=3) # dimension mismatch
 end
 
 # test AbstractFloat fallback pr22716
@@ -1165,19 +1169,17 @@ end
     @test hypot(Inf, NaN) == Inf
     @test hypot(Inf, Inf) == Inf
 
-    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
-    using .Main.Furlongs
-    @test (@inferred hypot(Furlong(0), Furlong(0))) == Furlong(0.0)
-    @test (@inferred hypot(Furlong(3), Furlong(4))) == Furlong(5.0)
-    @test (@inferred hypot(Furlong(NaN), Furlong(Inf))) == Furlong(Inf)
-    @test (@inferred hypot(Furlong(Inf), Furlong(NaN))) == Furlong(Inf)
-    @test (@inferred hypot(Furlong(0), Furlong(0), Furlong(0))) == Furlong(0.0)
-    @test (@inferred hypot(Furlong(Inf), Furlong(Inf))) == Furlong(Inf)
-    @test (@inferred hypot(Furlong(1), Furlong(1), Furlong(1))) == Furlong(sqrt(3))
-    @test (@inferred hypot(Furlong(Inf), Furlong(NaN), Furlong(0))) == Furlong(Inf)
-    @test (@inferred hypot(Furlong(Inf), Furlong(Inf), Furlong(Inf))) == Furlong(Inf)
-    @test isnan(hypot(Furlong(NaN), Furlong(0), Furlong(1)))
-    ex = @test_throws ErrorException hypot(Furlong(1), 1)
+    @test (@inferred hypot(GenericDimensionful(0), GenericDimensionful(0))) == GenericDimensionful(0.0)
+    @test (@inferred hypot(GenericDimensionful(3), GenericDimensionful(4))) == GenericDimensionful(5.0)
+    @test (@inferred hypot(GenericDimensionful(NaN), GenericDimensionful(Inf))) == GenericDimensionful(Inf)
+    @test (@inferred hypot(GenericDimensionful(Inf), GenericDimensionful(NaN))) == GenericDimensionful(Inf)
+    @test (@inferred hypot(GenericDimensionful(0), GenericDimensionful(0), GenericDimensionful(0))) == GenericDimensionful(0.0)
+    @test (@inferred hypot(GenericDimensionful(Inf), GenericDimensionful(Inf))) == GenericDimensionful(Inf)
+    @test (@inferred hypot(GenericDimensionful(1), GenericDimensionful(1), GenericDimensionful(1))) == GenericDimensionful(sqrt(3))
+    @test (@inferred hypot(GenericDimensionful(Inf), GenericDimensionful(NaN), GenericDimensionful(0))) == GenericDimensionful(Inf)
+    @test (@inferred hypot(GenericDimensionful(Inf), GenericDimensionful(Inf), GenericDimensionful(Inf))) == GenericDimensionful(Inf)
+    @test isnan(hypot(GenericDimensionful(NaN), GenericDimensionful(0), GenericDimensionful(1)))
+    ex = @test_throws ErrorException hypot(GenericDimensionful(1), 1)
     @test startswith(ex.value.msg, "promotion of types ")
 
     @test_throws MethodError hypot()

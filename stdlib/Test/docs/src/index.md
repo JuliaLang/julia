@@ -291,3 +291,19 @@ end
 ```@meta
 DocTestSetup = nothing
 ```
+
+## Generic Types
+
+It is often useful to test that packages function correctly with string, container, and number types
+that are similar but not identical to Julia `Base` types like `String`, `Array`, and so on.  The
+`Test` module exports a few such types for testing purposes, so that you don't need to have a test
+dependency on a particular choice of external package implementing an alternative type:
+
+```@docs
+Test.GenericDimensionful
+Test.GenericString
+Test.GenericArray
+Test.GenericDict
+Test.GenericSet
+Test.GenericOrder
+```

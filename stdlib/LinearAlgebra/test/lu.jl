@@ -325,19 +325,16 @@ include("trickyarithmetic.jl")
 end
 
 # dimensional correctness:
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
-using .Main.Furlongs
 
 @testset "lu factorization with dimension type" begin
     n = 4
-    A = Matrix(Furlong(1.0) * I, n, n)
+    A = Matrix(GenericDimensionful(1.0) * I, n, n)
     F = lu(A).factors
     @test Diagonal(F) == Diagonal(A)
-    # upper triangular part has a unit Furlong{1}
-    @test all(x -> typeof(x) == Furlong{1, Float64}, F[i,j] for j=1:n for i=1:j)
-    # lower triangular part is unitless Furlong{0}
-    @test all(x -> typeof(x) == Furlong{0, Float64}, F[i,j] for j=1:n for i=j+1:n)
+    # upper triangular part has a unit GenericDimensionful{1}
+    @test all(x -> typeof(x) == GenericDimensionful{1, Float64}, F[i,j] for j=1:n for i=1:j)
+    # lower triangular part is unitless GenericDimensionful{0}
+    @test all(x -> typeof(x) == GenericDimensionful{0, Float64}, F[i,j] for j=1:n for i=j+1:n)
 end
 
 @testset "Issue #30917. Determinant of integer matrix" begin

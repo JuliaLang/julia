@@ -330,9 +330,6 @@ end
 
 
 # for testing types with a dimension
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
-using .Main.Furlongs
 
 @testset "zero and one for structured matrices" begin
     for elty in (Int64, Float64, ComplexF64)
@@ -395,11 +392,12 @@ using .Main.Furlongs
     @test one(S) isa SymTridiagonal
 
     # eltype with dimensions
-    D = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4])
-    Bu = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
-    Bl =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
-    T = Tridiagonal{Furlong{2, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
-    S = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3])
+    GD2 = GenericDimensionful{2}
+    D = Diagonal(GD2.([1, 2, 3, 4]))
+    Bu = Bidiagonal(GD2.([1, 2, 3, 4]), GD2.([1, 2, 3]), 'U')
+    Bl =  Bidiagonal(GD2.([1, 2, 3, 4]), GD2.([1, 2, 3]), 'L')
+    T = Tridiagonal(GD2.([1, 2, 3]), GD2.([1, 2, 3, 4]), GD2.([1, 2, 3]))
+    S = SymTridiagonal(GD2.([1, 2, 3, 4]), GD2.([1, 2, 3]))
     mats = [D, Bu, Bl, T, S]
     for A in mats
         @test iszero(zero(A))

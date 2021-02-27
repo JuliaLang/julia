@@ -20,7 +20,7 @@ export @test, @test_throws, @test_broken, @test_skip,
 export @testset
 export @inferred
 export detect_ambiguities, detect_unbound_args
-export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
+export GenericDimensionful, GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 
 using Random
@@ -1615,6 +1615,9 @@ function has_unbound_vars(@nospecialize sig)
     return false
 end
 
+
+include("GenericDimensionfuls.jl")
+using .GenericDimensionfuls
 
 """
 The `GenericString` can be used to test generic string APIs that program to

@@ -2072,24 +2072,9 @@ end
     @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 end
 
-module RetTypeDecl
-    using Test
-    import Base: +, *, broadcast, convert
-
-    struct MeterUnits{T,P} <: Number
-        val::T
-    end
-    MeterUnits(val::T, pow::Int) where {T} = MeterUnits{T,pow}(val)
-
-    m  = MeterUnits(1.0, 1)   # 1.0 meter, i.e. units of length
-    m2 = MeterUnits(1.0, 2)   # 1.0 meter^2, i.e. units of area
-
-    (+)(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{T,pow}(x.val+y.val)
-    (*)(x::Int, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
-    (*)(x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
-    broadcast(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
-    convert(::Type{MeterUnits{T,pow}}, y::Real) where {T,pow} = MeterUnits{T,pow}(convert(T,y))
-
+@testset "dimensionful broadcasting" begin
+    m = GenericDimensionful(1.0)
+    m2 = m^2
     @test @inferred(m .+ [m,m]) == [m+m,m+m]
     @test @inferred([m,m] .+ m) == [m+m,m+m]
     @test @inferred(broadcast(*,m,[m,m])) == [m2,m2]

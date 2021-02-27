@@ -4,7 +4,7 @@
 
 (:)(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
-(:)(start::T, stop::T) where {T} = (:)(start, oftype(stop-start, 1), stop)
+(:)(start::T, stop::T) where {T} = (:)(start, oneunit(stop-start), stop)
 
 # promote start and stop, leaving step alone
 (:)(start::A, step, stop::C) where {A<:Real,C<:Real} =
@@ -132,14 +132,14 @@ _range(start::Any    , step::Any    , stop::Any    , len::Nothing) = range_start
 _range(start::Any    , step::Any    , stop::Any    , len::Any    ) = range_error(start, step, stop, len)
 
 range_stop_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(oftype(a, a-len+1), a)
-range_stop_length(a::AbstractFloat, len::Integer) = range_step_stop_length(oftype(a, 1), a, len)
-range_stop_length(a,                len::Integer) = range_step_stop_length(oftype(a-a, 1), a, len)
+range_stop_length(a::AbstractFloat, len::Integer) = range_step_stop_length(oneunit(a), a, len)
+range_stop_length(a,                len::Integer) = range_step_stop_length(oneunit(a-a), a, len)
 
 range_step_stop_length(step, stop, length) = reverse(range_start_step_length(stop, -step, length))
 
 range_start_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
-range_start_length(a::AbstractFloat, len::Integer) = range_start_step_length(a, oftype(a, 1), len)
-range_start_length(a,                len::Integer) = range_start_step_length(a, oftype(a-a, 1), len)
+range_start_length(a::AbstractFloat, len::Integer) = range_start_step_length(a, oneunit(a), len)
+range_start_length(a,                len::Integer) = range_start_step_length(a, oneunit(a-a), len)
 
 range_start_stop(start, stop) = start:stop
 

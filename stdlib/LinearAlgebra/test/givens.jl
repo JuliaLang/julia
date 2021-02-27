@@ -72,12 +72,9 @@ end
 
 # 36430
 # dimensional correctness:
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
-using .Main.Furlongs
 
-@testset "testing dimensions with Furlongs" begin
-    @test_throws MethodError givens(Furlong(1.0), Furlong(2.0), 1, 2)
+@testset "testing dimensions with GenericDimensionfuls" begin
+    @test_throws MethodError givens(GenericDimensionful(1.0), GenericDimensionful(2.0), 1, 2)
 end
 
 const TNumber = Union{Float64,ComplexF64}
