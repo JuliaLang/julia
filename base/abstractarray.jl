@@ -1810,7 +1810,7 @@ function hvcat(nbc::Integer, as...)
     mod(n,nbc) != 0 &&
         throw(ArgumentError("number of arrays $n is not a multiple of the requested number of block columns $nbc"))
     nbr = div(n,nbc)
-    hvcat(ntuple(Always(nbc), nbr), as...)
+    hvcat(ntuple(Returns(nbc), nbr), as...)
 end
 
 """

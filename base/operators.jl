@@ -917,14 +917,14 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 
 # always
 """
-    f = Always(value)
+    f = Returns(value)
 
 Create a callable `f` such that `f(args...; kw...) === value` holds.
 
 # Examples
 
 ```jldoctest
-julia> f = Always(42);
+julia> f = Returns(42);
 
 julia> f(1)
 42
@@ -934,15 +934,15 @@ julia> f("hello", x=32)
 ```
 
 !!! compat "Julia 1.7"
-    Always requires at least Julia 1.7.
+    Returns requires at least Julia 1.7.
 """
-struct Always{V} <: Function
+struct Returns{V} <: Function
     value::V
 end
 
-(obj::Always)(args...; kw...) = obj.value
-function show(io::IO, obj::Always)
-    show(io, Always)
+(obj::Returns)(args...; kw...) = obj.value
+function show(io::IO, obj::Returns)
+    show(io, Returns)
     print(io, "(")
     show(io, obj.value)
     print(io, ")")

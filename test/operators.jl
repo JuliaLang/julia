@@ -280,12 +280,12 @@ a = rand(3, 3)
 
 @test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
 
-@testset "Always" begin
-    @test @inferred(Always(1)()   ) === 1
-    @test @inferred(Always(1)(23) ) === 1
-    @test @inferred(Always("a")(2,3)) == "a"
-    @test @inferred(Always(1)(x=1, y=2)) === 1
+@testset "Returns" begin
+    @test @inferred(Returns(1)()   ) === 1
+    @test @inferred(Returns(1)(23) ) === 1
+    @test @inferred(Returns("a")(2,3)) == "a"
+    @test @inferred(Returns(1)(x=1, y=2)) === 1
     val = [1,2,3]
-    @test Always(val)(1) === val
-    @test sprint(show, Always(1)) == "Always(1)"
+    @test Returns(val)(1) === val
+    @test sprint(show, Returns(1)) == "Returns(1)"
 end
