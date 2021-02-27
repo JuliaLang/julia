@@ -1393,8 +1393,13 @@ Base.isless(x, y::NotReal) = isless(x, y.val)
 @test (:)(1, NotReal(1), 5) isa StepRange{Int,NotReal}
 
 @testset "dimensional correctness" begin
-    @test length(Vector(GenericDimensionful(2):GenericDimensionful(10))) == 9
-    @test length(range(GenericDimensionful(2), length=9)) == 9
+    # Note: ranges for physical units should require an explicit step.
+    # See #19896 and https://discourse.julialang.org/t/type-restriction-on-unitrange/6557/12
+    @test_throws ErrorException GenericDimensionful(2):GenericDimensionful(10)
+    @test_throws ErrorException range(GenericDimensionful(2), length=9)
+
+    @test length(Vector(GenericDimensionful(2):GenericDimensionful(1):GenericDimensionful(10))) == 9
+    @test length(range(GenericDimensionful(2), step=GenericDimensionful(7), length=9)) == 9
     @test Vector(GenericDimensionful(2):GenericDimensionful(1):GenericDimensionful(10)) == Vector(range(GenericDimensionful(2), step=GenericDimensionful(1), length=9)) == GenericDimensionful.(2:10)
     @test Vector(GenericDimensionful(1.0):GenericDimensionful(0.5):GenericDimensionful(10.0)) ==
           Vector(GenericDimensionful(1):GenericDimensionful(0.5):GenericDimensionful(10)) == GenericDimensionful.(1:0.5:10)
