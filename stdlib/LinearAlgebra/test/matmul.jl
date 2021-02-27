@@ -205,6 +205,14 @@ end
     @test *(Asub, adjoint(Asub)) == *(Aref, adjoint(Aref))
 end
 
+@testset "matrix x matrix with negative stride" begin
+    M = reshape(map(Float64,1:77),7,11)
+    N = reshape(map(Float64,1:63),9,7)
+    U = view(M,7:-1:1,11:-2:1)
+    V = view(N,7:-1:2,7:-1:1)
+    @test U*V ≈ Matrix(U) * Matrix(V)
+end
+
 @testset "Complex matrix x real MatOrVec etc (issue #29224)" for T1 in (Float32,Float64)
     for T2 in (Float32,Float64)
         for arg1_real in (true,false)
