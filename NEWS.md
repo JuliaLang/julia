@@ -45,7 +45,7 @@ Standard library changes
 
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 * `Test` now exports a `GenericDimensionful` number type that can be used to test whether
-  code works with dimensionful types (like those in the Unitful.jl package) ([#30692]).
+  code works with dimensionful types (like those in the Unitful.jl package) ([#39852]).
 * `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).
 * `range` now supports `start` as an optional keyword argument ([#38041]).
 * `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
