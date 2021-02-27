@@ -283,7 +283,7 @@ end
 
 # check if d is small compared to atol and rtol, ignoring the units (if any) of atol
 # only if atol is zero.
-_isapprox_small(d::T, atol, rtol, x, y, norm::F) where {T,F<:Function} =
+_isapprox_small(d, atol, rtol, x, y, norm::F) where {F<:Function} =
     iszero(atol) ? d <= rtol*max(norm(x), norm(y)) : d <= max(atol, rtol*max(norm(x), norm(y)))
 
 """
