@@ -515,7 +515,12 @@ axistype(a, b) = UnitRange{Int}(a)
 check_broadcast_shape(shp) = nothing
 check_broadcast_shape(shp, ::Tuple{}) = nothing
 check_broadcast_shape(::Tuple{}, ::Tuple{}) = nothing
-check_broadcast_shape(::Tuple{}, Ashp::Tuple) = throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
+function check_broadcast_shape(::Tuple{}, Ashp::Tuple)
+    if any(ax -> length(ax) != 1, Ashp)
+        throw(DimensionMismatch("cannot broadcast array to have fewer non-singleton dimensions"))
+    end
+    nothing
+end
 function check_broadcast_shape(shp, Ashp::Tuple)
     _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
     check_broadcast_shape(tail(shp), tail(Ashp))
@@ -961,6 +966,11 @@ broadcast_unalias(::Nothing, src) = src
 # * "extrudes" the arguments where it is advantageous to pre-compute the broadcasted indices
 @inline preprocess(dest, bc::Broadcasted{Style}) where {Style} = Broadcasted{Style}(bc.f, preprocess_args(dest, bc.args), bc.axes)
 preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
+function preprocess(dest::AbstractArray, x::AbstractArray)
+    keeps, defaults = newindexer(x)
+    keeps, defaults = keeps[1:min(ndims(dest), end)], defaults[1:min(ndims(dest), end)]
+    return Extruded(broadcast_unalias(dest, x), keeps, defaults)
+end
 
 @inline preprocess_args(dest, args::Tuple) = (preprocess(dest, args[1]), preprocess_args(dest, tail(args))...)
 preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)

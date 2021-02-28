@@ -993,3 +993,23 @@ end
 
     @test Cyclotomic() .* [2, 3] == [[1, 2], [1, 2]]
 end
+
+@testset "inplace broadcast with trailing singleton dims" begin
+    a, b, c = [1, 2], reshape([3 4], :, 1), reshape([5, 6], :, 1, 1)
+
+    a_ = copy(a)
+    a_ .= b
+    @test a_ == vec(b)
+
+    a_ = copy(a)
+    a_ .= b
+    @test a_ == vec(b)
+
+    a_ = copy(a)
+    a_ .= b .+ c
+    @test a_ == vec(b .+ c)
+
+    a_ = copy(a)
+    a_ .*= c
+    @test a_ == vec(a .* c)
+end
