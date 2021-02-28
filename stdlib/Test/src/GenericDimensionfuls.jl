@@ -34,10 +34,7 @@ Base.convert(D::Type{GenericDimensionful{p,T}}, x::Number) where {p,T} = error("
 Base.promote_type(::Type{GenericDimensionful{p,T}}, ::Type{GenericDimensionful{p,S}}) where {p,T,S} =
     (Base.@_pure_meta; GenericDimensionful{p,promote_type(T,S)})
 
-Base.one(x::GenericDimensionful{p,T}) where {p,T} = one(T)
 Base.one(::Type{GenericDimensionful{p,T}}) where {p,T} = one(T)
-Base.oneunit(x::GenericDimensionful{p,T}) where {p,T} = GenericDimensionful{p,T}(one(T))
-Base.oneunit(x::Type{GenericDimensionful{p,T}}) where {p,T} = GenericDimensionful{p,T}(one(T))
 Base.zero(x::GenericDimensionful{p,T}) where {p,T} = GenericDimensionful{p,T}(zero(T))
 Base.zero(::Type{GenericDimensionful{p,T}}) where {p,T} = GenericDimensionful{p,T}(zero(T))
 Base.iszero(x::GenericDimensionful) = iszero(x.val)
