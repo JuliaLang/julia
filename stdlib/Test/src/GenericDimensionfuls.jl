@@ -57,7 +57,7 @@ canonical_p(p) = isinteger(p) ? Int(p) : Rational{Int}(p)
 @generated Base.abs2(x::GenericDimensionful{p}) where {p} = :(GenericDimensionful{$(canonical_p(2p))}(abs2(x.val)))
 @generated Base.inv(x::GenericDimensionful{p}) where {p} = :(GenericDimensionful{$(canonical_p(-p))}(inv(x.val)))
 
-for f in (:isfinite, :isnan, :isreal, :isinf)
+for f in (:isfinite, :isnan, :isreal, :isinf, :isunordered)
     @eval Base.$f(x::GenericDimensionful) = $f(x.val)
 end
 for f in (:abs,:conj,:real,:imag,:complex,:+,:-)
