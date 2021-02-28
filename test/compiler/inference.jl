@@ -3106,3 +3106,99 @@ end == [Int]
 let f() = Val(fieldnames(Complex{Int}))
     @test @inferred(f()) === Val((:re,:im))
 end
+
+@testset "switchtupleunion" begin
+    # signature tuple
+    let
+        tunion = Core.Compiler.switchtupleunion(Tuple{Union{Int32,Int64}, Nothing})
+        @test Tuple{Int32, Nothing} in tunion
+        @test Tuple{Int64, Nothing} in tunion
+    end
+    let
+        tunion = Core.Compiler.switchtupleunion(Tuple{Union{Int32,Int64}, Union{Float32,Float64}, Nothing})
+        @test Tuple{Int32, Float32, Nothing} in tunion
+        @test Tuple{Int32, Float64, Nothing} in tunion
+        @test Tuple{Int64, Float32, Nothing} in tunion
+        @test Tuple{Int64, Float64, Nothing} in tunion
+    end
+
+    # argtypes
+    let
+        tunion = Core.Compiler.switchtupleunion(Any[Union{Int32,Int64}, Core.Const(nothing)])
+        @test length(tunion) == 2
+        @test Any[Int32, Core.Const(nothing)] in tunion
+        @test Any[Int64, Core.Const(nothing)] in tunion
+    end
+    let
+        tunion = Core.Compiler.switchtupleunion(Any[Union{Int32,Int64}, Union{Float32,Float64}, Core.Const(nothing)])
+        @test length(tunion) == 4
+        @test Any[Int32, Float32, Core.Const(nothing)] in tunion
+        @test Any[Int32, Float64, Core.Const(nothing)] in tunion
+        @test Any[Int64, Float32, Core.Const(nothing)] in tunion
+        @test Any[Int64, Float64, Core.Const(nothing)] in tunion
+    end
+end
+
+@testset "constant prop' for union split signature" begin
+    anonymous_module() = Core.eval(@__MODULE__, :(module $(gensym()) end))::Module
+
+    # indexing into tuples really relies on constant prop', and we will get looser result
+    # (`Union{Int,String,Char}`) if constant prop' doesn't happen for splitunion signatures
+    tt = (Union{Tuple{Int,String},Tuple{Int,Char}},)
+    @test Base.return_types(tt) do t
+        getindex(t, 1)
+    end == Any[Int]
+    @test Base.return_types(tt) do t
+        getindex(t, 2)
+    end == Any[Union{String,Char}]
+    @test Base.return_types(tt) do t
+        a, b = t
+        a
+    end == Any[Int]
+    @test Base.return_types(tt) do t
+        a, b = t
+        b
+    end == Any[Union{String,Char}]
+
+    @test (@eval anonymous_module() begin
+        struct F32
+            val::Float32
+            _v::Int
+        end
+        struct F64
+            val::Float64
+            _v::Int
+        end
+        Base.return_types((Union{F32,F64},)) do f
+            f.val
+        end
+    end) == Any[Union{Float32,Float64}]
+
+    @test (@eval anonymous_module() begin
+        struct F32
+            val::Float32
+            _v
+        end
+        struct F64
+            val::Float64
+            _v
+        end
+        Base.return_types((Union{F32,F64},)) do f
+            f.val
+        end
+    end) == Any[Union{Float32,Float64}]
+
+    @test Base.return_types((Union{Tuple{Nothing,Any,Any},Tuple{Nothing,Any}},)) do t
+        getindex(t, 1)
+    end == Any[Nothing]
+
+    # issue #37610
+    @test Base.return_types((typeof(("foo" => "bar", "baz" => nothing)), Int)) do a, i
+        y = iterate(a, i)
+        if y !== nothing
+            (k, v), st = y
+            return k, v
+        end
+        return y
+    end == Any[Union{Nothing, Tuple{String, Union{Nothing, String}}}]
+end
