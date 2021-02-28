@@ -27,7 +27,7 @@ GenericDimensionful{p,T}(x::GenericDimensionful{q}) where {T,p,q} = GenericDimen
 Base.convert(::Type{GenericDimensionful{p}}, x::GenericDimensionful{p}) where {p} = x
 Base.convert(::Type{GenericDimensionful{p,T}}, x::GenericDimensionful{p}) where {p,T} = GenericDimensionful{p,T}(x)
 Base.convert(::Type{GenericDimensionful{0}}, x::Union{Real,Complex}) = GenericDimensionful{0}(x)
-Base.convert(::Type{GenericDimensionful{0,T}}, x::Union{Real,Complex}) where {T} = GenericDimensionful(convert(T, x))
+Base.convert(::Type{GenericDimensionful{0,T}}, x::Union{Real,Complex}) where {T} = GenericDimensionful{0}(convert(T, x))
 Base.convert(D::Type{GenericDimensionful{p}}, x::Number) where {p} = error("dimension mismatch between $D and $(typeof(x))")
 Base.convert(D::Type{GenericDimensionful{p,T}}, x::Number) where {p,T} = error("dimension mismatch between $D and $(typeof(x))")
 
