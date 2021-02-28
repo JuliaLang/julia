@@ -225,9 +225,69 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
     // fall-through return to re-execute faulting statement (but without the error handler)
 }
 
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+enum x86_trap_flags {
+    USER_MODE = 0x4,
+    WRITE_FAULT = 0x2,
+    PAGE_PRESENT = 0x1
+};
+
+int exc_reg_is_write_fault(uintptr_t err) {
+    return err & WRITE_FAULT;
+}
+#elif defined(_CPU_AARCH64_)
+enum aarch64_esr_layout {
+    EC_MASK = ((uint32_t)0b111111) << 26,
+    EC_DATA_ABORT = ((uint32_t)0b100100) << 26,
+    ISR_DA_WnR = ((uint32_t)1) << 6
+};
+
+int exc_reg_is_write_fault(uintptr_t esr) {
+    return (esr & EC_MASK) == EC_DATA_ABORT && (esr & ISR_DA_WnR);
+}
+#endif
+
 #if defined(HAVE_MACH)
 #include "signals-mach.c"
 #else
+
+
+#if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
+int is_write_fault(void *context) {
+    ucontext_t *ctx = (ucontext_t*)context;
+    return exc_reg_is_write_fault(ctx->uc_mcontext.gregs[REG_ERR]);
+}
+#elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+struct linux_aarch64_ctx_header {
+	uint32_t magic;
+	uint32_t size;
+};
+const uint32_t linux_esr_magic = 0x45535201;
+
+int is_write_fault(void *context) {
+    ucontext_t *ctx = (ucontext_t*)context;
+    struct linux_aarch64_ctx_header *extra =
+        (struct linux_aarch64_ctx_header *)ctx->uc_mcontext.__reserved;
+    while (extra->magic != 0) {
+        if (extra->magic == linux_esr_magic) {
+            return exc_reg_is_write_fault(*(uint64_t*)&extra[1]);
+        }
+        extra = (struct linux_aarch64_ctx_header *)
+            (((uint8_t*)extra) + extra->size);
+    }
+    return 0;
+}
+#elif defined(_OS_FREEBSD_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
+int is_write_fault(void *context) {
+    ucontext_t *ctx = (ucontext_t*)context;
+    return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
+}
+#else
+#warning Implement this query for consistent PROT_NONE handling
+int is_write_fault(void *context) {
+    return 0;
+}
+#endif
 
 static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
 {
@@ -273,7 +333,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_safe_printf("ERROR: Signal stack overflow, exit\n");
         _exit(sig + 128);
     }
-    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
+    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context)) {  // writing to read-only memory (e.g., mmap)
         jl_throw_in_ctx(ptls, jl_readonlymemory_exception, sig, context);
     }
     else {

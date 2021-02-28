@@ -1762,8 +1762,8 @@ unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilde
     auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
     for (unsigned i = 0; i < Ptrs.size(); ++i) {
         Value *Elem = Ptrs[i];
-        assert(Elem->getType()->isPointerTy());
-        Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(Elem->getType(), Dst, i);
+        Type *ET = Dst->getType()->getPointerElementType(); // Dst has type `[n x {}*]*`
+        Value *Slot = irbuilder.CreateConstInBoundsGEP2_32(ET, Dst, 0, i);
         StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
         shadowStore->setOrdering(AtomicOrdering::NotAtomic);
         // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -1790,7 +1790,7 @@ void LateLowerGCFrame::MaybeTrackDst(State &S, MemTransferInst *MI) {
     //            Src = new BitCastInst(Src, STy->getPointerTo(MI->getSourceAddressSpace()), "", MI);
     //            auto &Shadow = S.ShadowAllocas[AI];
     //            if (!Shadow)
-    //                Shadow = new AllocaInst(T_prjlvalue, 0, ConstantInt::get(T_int32, nroots), "", MI);
+    //                Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, nroots), 0, "", MI);
     //            AI = Shadow;
     //            unsigned count = TrackWithShadow(Src, STy, true, AI, IRBuilder<>(MI));
     //            assert(count == tracked.count); (void)count;
@@ -1826,7 +1826,7 @@ void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
     // track the Store with a Shadow
     //auto &Shadow = S.ShadowAllocas[AI];
     //if (!Shadow)
-    //    Shadow = new AllocaInst(T_prjlvalue, 0, ConstantInt::get(T_int32, tracked.count), "", MI);
+    //    Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, tracked.count), 0, "", MI);
     //AI = Shadow;
     //Value *Src = I->getValueOperand();
     //unsigned count = TrackWithShadow(Src, Src->getType(), false, AI, MI, TODO which slots are we actually clobbering?);

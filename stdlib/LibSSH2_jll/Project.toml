@@ -1,6 +1,6 @@
 name = "LibSSH2_jll"
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.9.1+0"
+version = "1.9.1+2"
 
 [deps]
 MbedTLS_jll = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"

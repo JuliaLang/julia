@@ -33,11 +33,12 @@ New library functions
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
 * `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
-* New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}; kwargs...)` ([#38438])
+* New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
 
 New library features
 --------------------
 
+* The optional keyword argument `context` of `sprint` can now be set to a tuple of `:key => value` pairs to specify multiple attributes. ([#39381])
 
 Standard library changes
 ------------------------
@@ -51,6 +52,7 @@ Standard library changes
   `keep` that are to be kept as they are. ([#38597]).
 * `getindex` can now be used on `NamedTuple`s with multiple values ([#38878])
 * `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
+* `keys(::Generator)` is now defined to return the iterator's keys ([#34678])
 * `RegexMatch` now iterate to give their captures. ([#34355]).
 
 #### Package Manager
@@ -58,6 +60,10 @@ Standard library changes
 
 #### LinearAlgebra
 
+* Use [Libblastrampoline](https://github.com/staticfloat/libblastrampoline/) to pick a BLAS and LAPACK at runtime. By default it forwards to OpenBLAS in the Julia distribution. The forwarding mechanism can be used by packages to replace the BLAS and LAPACK with user preferences. ([#39455])
+* On aarch64, OpenBLAS now uses an ILP64 BLAS like all other 64-bit platforms. ([#39436])
+* OpenBLAS is updated to 0.3.13. ([#39216])
+* SuiteSparse is updated to 5.8.1. ([#39455])
 
 #### Markdown
 

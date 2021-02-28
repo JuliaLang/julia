@@ -522,26 +522,12 @@ function makeproper(io::IO, x::Type)
             end
         end
     end
-    if x isa Union
-        y = []
-        normal = true
-        for typ in uniontypes(x)
-            if isa(typ, TypeVar)
-                normal = false
-            else
-                push!(y, typ)
-            end
-        end
-        if !normal
-            properx = rewrap_unionall(Union{y...}, properx)
-        end
-    end
     has_free_typevars(properx) && return Any
     return properx
 end
 
 function make_typealias(@nospecialize(x::Type))
-    Any <: x && return
+    Any === x && return
     x <: Tuple && return
     mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
@@ -681,7 +667,7 @@ function show_typealias(io::IO, x::Type)
 end
 
 function make_typealiases(@nospecialize(x::Type))
-    Any <: x && return Core.svec(), Union{}
+    Any === x && return Core.svec(), Union{}
     x <: Tuple && return Core.svec(), Union{}
     mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
@@ -701,7 +687,9 @@ function make_typealiases(@nospecialize(x::Type))
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
                     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
                     ti === Union{} && continue
-                    mod in modulesof!(Set{Module}(), alias) || continue # make sure this alias wasn't from an unrelated part of the Union
+                    # make sure this alias wasn't from an unrelated part of the Union
+                    mod2 = modulesof!(Set{Module}(), alias)
+                    mod in mod2 || (mod === Base && Core in mods) || continue
                     env = env::SimpleVector
                     applied = alias
                     if !isempty(env)
@@ -761,16 +749,21 @@ end
 function show_unionaliases(io::IO, x::Union)
     properx = makeproper(io, x)
     aliases, applied = make_typealiases(properx)
+    isempty(aliases) && return false
     first = true
+    tvar = false
     for typ in uniontypes(x)
-        if !isa(typ, TypeVar) && rewrap_unionall(typ, properx) <: applied
+        if isa(typ, TypeVar)
+            tvar = true # sort bare TypeVars to the end
+            continue
+        elseif rewrap_unionall(typ, properx) <: applied
             continue
         end
         print(io, first ? "Union{" : ", ")
         first = false
         show(io, typ)
     end
-    if first && length(aliases) == 1
+    if first && !tvar && length(aliases) == 1
         alias = aliases[1]
         wheres = make_wheres(io, alias[2], x)
         show_typealias(io, alias[1], x, alias[2], wheres)
@@ -784,8 +777,17 @@ function show_unionaliases(io::IO, x::Union)
             show_typealias(io, alias[1], x, alias[2], wheres)
             show_wheres(io, wheres)
         end
+        if tvar
+            for typ in uniontypes(x)
+                if isa(typ, TypeVar)
+                    print(io, ", ")
+                    show(io, typ)
+                end
+            end
+        end
         print(io, "}")
     end
+    return true
 end
 
 function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
@@ -825,12 +827,11 @@ function _show_type(io::IO, @nospecialize(x::Type))
         show_datatype(io, x)
         return
     elseif x isa Union
-        if get(io, :compact, true)
-            show_unionaliases(io, x)
-        else
-            print(io, "Union")
-            show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+        if get(io, :compact, true) && show_unionaliases(io, x)
+            return
         end
+        print(io, "Union")
+        show_delim_array(io, uniontypes(x), '{', ',', '}', false)
         return
     end
 
@@ -1381,7 +1382,7 @@ function operator_associativity(s::Symbol)
 end
 
 is_expr(@nospecialize(ex), head::Symbol)         = isa(ex, Expr) && (ex.head === head)
-is_expr(@nospecialize(ex), head::Symbol, n::Int) = is_expr(ex, head) && length((ex::Expr).args) == n
+is_expr(@nospecialize(ex), head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
 
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
@@ -2769,6 +2770,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     showindices(io, v.indices...)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
+    return nothing
 end
 showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
     (print(io, ", :"); showindices(io, inds...))
@@ -2782,6 +2784,7 @@ function showarg(io::IO, r::ReshapedArray, toplevel)
     print(io, ", ", join(r.dims, ", "))
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(r))
+    return nothing
 end
 
 function showarg(io::IO, r::NonReshapedReinterpretArray{T}, toplevel) where {T}
@@ -2795,6 +2798,7 @@ function showarg(io::IO, r::ReshapedReinterpretArray{T}, toplevel) where {T}
     showarg(io, parent(r), false)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(r))
+    return nothing
 end
 
 # printing iterators from Base.Iterators

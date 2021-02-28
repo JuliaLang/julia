@@ -1578,16 +1578,30 @@ let x = TypeVar(:_), y = TypeVar(:_)
 end
 
 @testset "showarg" begin
+    io = IOBuffer()
+
     A = reshape(Vector(Int16(1):Int16(2*3*5)), 2, 3, 5)
     @test summary(A) == "2×3×5 Array{Int16, 3}"
+
     v = view(A, :, 3, 2:5)
     @test summary(v) == "2×4 view(::Array{Int16, 3}, :, 3, 2:5) with eltype Int16"
+    @test Base.showarg(io, v, false) === nothing
+    @test String(take!(io)) == "view(::Array{Int16, 3}, :, 3, 2:5)"
+
     r = reshape(v, 4, 2)
     @test summary(r) == "4×2 reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2) with eltype Int16"
+    @test Base.showarg(io, r, false) === nothing
+    @test String(take!(io)) == "reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2)"
+
     p = PermutedDimsArray(r, (2, 1))
     @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
+    @test Base.showarg(io, p, false) === nothing
+    @test String(take!(io)) == "PermutedDimsArray(reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2), (2, 1))"
+
     p = reinterpret(reshape, Tuple{Float32,Float32}, [1.0f0 3.0f0; 2.0f0 4.0f0])
     @test summary(p) == "2-element reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32}) with eltype Tuple{Float32, Float32}"
+    @test Base.showarg(io, p, false) === nothing
+    @test String(take!(io)) == "reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32})"
 end
 
 @testset "Methods" begin
@@ -2071,12 +2085,13 @@ end
 end
 
 module M37012
-export AValue, B2
+export AValue, B2, SimpleU
 struct AnInteger{S<:Integer} end
 struct AStruct{N} end
 const AValue{S} = Union{AStruct{S}, AnInteger{S}}
 struct BStruct{T,S} end
 const B2{S,T} = BStruct{T,S}
+const SimpleU = Union{AnInteger, AStruct, BStruct}
 end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
@@ -2086,6 +2101,10 @@ end
 @test string(M37012.BStruct{T, T} where T) == "$(curmod_prefix)M37012.B2{T, T} where T"
 @test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Unsigned, S<:Signed}"
 @test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Signed, S<:T}"
+@test string(Union{M37012.SimpleU, Nothing}) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU}"
+@test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
+@test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
+@test string(Union{AbstractVector, T} where T) == "Union{AbstractVector{T} where T, T} where T"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

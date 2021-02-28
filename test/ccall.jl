@@ -1003,6 +1003,12 @@ unstable26078(x) = x > 0 ? x : "foo"
 handle26078 = @cfunction(unstable26078, Int32, (Int32,))
 @test ccall(handle26078, Int32, (Int32,), 1) == 1
 
+# issue #39804
+let f = @cfunction(Base.last, String, (Tuple{Int,String},))
+    # String inside a struct is a pointer even though String.size == 0
+    @test ccall(f, Ref{String}, (Tuple{Int,String},), (1, "a string?")) === "a string?"
+end
+
 # issue 17219
 function ccall_reassigned_ptr(ptr::Ptr{Cvoid})
     ptr = Libdl.dlsym(Libdl.dlopen(libccalltest), "test_echo_p")
@@ -1577,6 +1583,19 @@ let
     ptr = eval(:(ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt), $(arr), $(a), $(nba))))
     @test isa(ptr, Ptr{Cvoid})
     @test arr[1] == '0'
+end
+
+# issue #38751
+let
+    function f38751!(dest::Vector{UInt8}, src::Vector{UInt8}, n::UInt)
+        d, s = pointer(dest), pointer(src)
+        GC.@preserve dest src ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), d, s, n)
+        return dest
+    end
+    dest = zeros(UInt8, 8)
+    @test f38751!(dest, collect(0x1:0x8), UInt(8)) == 0x1:0x8
+    llvm = sprint(code_llvm, f38751!, (Vector{UInt8}, Vector{UInt8}, UInt))
+    @test !occursin("call void inttoptr", llvm)
 end
 
 # issue #34061
