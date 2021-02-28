@@ -100,9 +100,9 @@ end
 Base.sqrt(x::GenericDimensionful) = _div(sqrt(x.val), x, Val(2))
 
 @generated Base.literal_pow(::typeof(^), x::GenericDimensionful{p}, ::Val{q}) where {p,q} = :(GenericDimensionful{$(canonical_p(p*q))}(x.val^$q))
-^(x::GenericDimensionful{p}, q::Number) where {p} = GenericDimensionful{p*q}(x.val^q)
+^(x::GenericDimensionful{p}, q::Real) where {p} = GenericDimensionful{p*q}(x.val^q)
 ^(x::GenericDimensionful{p}, q::Integer) where {p} = GenericDimensionful{p*q}(x.val^q)
-^(x::GenericDimensionful{p}, q::GenericDimensionful{0}) where {p}  = GenericDimensionful{p*q}(x.val^q)
+^(x::GenericDimensionful{p}, q::GenericDimensionful{0}) where {p}  = GenericDimensionful{p*q.val}(x.val^q.val)
 ^(x::GenericDimensionful{p}, q::GenericDimensionful) where {p} = error("exponent $(typeof(q)) is not dimensionless")
 
 end
