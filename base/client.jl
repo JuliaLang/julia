@@ -478,6 +478,9 @@ it is evaluated: for each parsed expression `expr` in `path`, the `include` func
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 
 Use [`Base.include`](@ref) to evaluate a file into another module.
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
 """
 MainInclude.include
 
