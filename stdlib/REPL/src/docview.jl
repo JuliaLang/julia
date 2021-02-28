@@ -550,8 +550,10 @@ function matchinds(needle, haystack; acronym::Bool = false)
     is = Int[]
     lastc = '\0'
     for (i, char) in enumerate(haystack)
+        while !isempty(chars) && isspace(first(chars))
+            popfirst!(chars) # skip spaces
+        end
         isempty(chars) && break
-        while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if lowercase(char) == lowercase(chars[1]) &&
            (!acronym || !isletter(lastc))
             push!(is, i)
