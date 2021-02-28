@@ -2,5 +2,8 @@
 # it for tests.
 module Furlongs
 import Test
-Base.@deprecate_binding Furlong Test.GenericDimensionful
+export Furlong
+const Furlong = Test.GenericDimensionful
+# change to deprecation once Statistics stdlib is updated:
+# Base.@deprecate_binding Furlong Test.GenericDimensionful
 end
