@@ -1244,14 +1244,14 @@ end
 
     @test Markdown.parse(var_a_epsilon_dollar_1) == MD([Paragraph([:a, raw" $ \epsilon $"])]) # current behavior
     @test Markdown.parse(var_a_epsilon_tick_1) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon")])])  # result using backtick
-    @test_broken Markdown.parse(var_a_epsilon_dollar_1) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon")])]) # consistent with backtick
+    @test_broken Markdown.parse(var_a_epsilon_dollar_1) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon")])]) # if $ syntax were identical to backtick
 
     @test Markdown.parse(var_a_epsilon_dollar_2) == MD([LaTeX(raw"(a) $\epsilon")]) # current behavior
     @test Markdown.parse(var_a_epsilon_tick_2) == MD([:a, Paragraph([LaTeX(raw"\epsilon")])]) # result using backtick
-    @test_broken Markdown.parse(var_a_epsilon_dollar_2) == MD([:a, Paragraph([LaTeX(raw"\epsilon")])]) # consistent with backtick
+    @test_broken Markdown.parse(var_a_epsilon_dollar_2) == MD([:a, Paragraph([LaTeX(raw"\epsilon")])]) # if $ syntax were identical to backtick
 
 
     @test Markdown.parse(var_a_epsilon_dollar_3) == MD(Paragraph([LaTeX(raw"(a) $\epsilon"), " ", :a])) # current behavior
     @test Markdown.parse(var_a_epsilon_tick_3) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon"), " ", :a])]) # result using backtick
-    @test_broken Markdown.parse(var_a_epsilon_dollar_3) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon"), " ", :a])]) # consistent with backtick
+    @test_broken Markdown.parse(var_a_epsilon_dollar_3) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon"), " ", :a])]) # if $ syntax were identical to backtick
 end
