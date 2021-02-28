@@ -37,7 +37,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
                  ft == typeof(getfield(ft.name.module, name))
         n = length(methods(f))
         m = n==1 ? "method" : "methods"
-        sname = string(name)
+        sname = sprint(show, f)
         ns = (isself || '#' in sname) ? sname : string("(::", ft, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, ns, " (", what, " with $n $m)")
@@ -453,19 +453,16 @@ function show_function(io::IO, f::Function, compact::Bool)
         print(io, mt.name)
     elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
-        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
-            show_sym(io, mt.name)
-        else
-            print(io, mt.module, ".")
-            show_sym(io, mt.name)
-        end
+
+        print(io, mt.module, ".")
+        show_sym(io, mt.name)
     else
         show_default(io, f)
     end
 end
 
 show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
-print(io::IO, f::Function) = show_function(io, f, true)
+print(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
 
 function show(io::IO, f::Core.IntrinsicFunction)
     if !(get(io, :compact, false)::Bool)
