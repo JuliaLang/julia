@@ -261,19 +261,25 @@ but an absurdly large tolerance if `x` is the
 
 # Examples
 ```jldoctest
-julia> 0.1 ≈ (0.1 - 1e-10)
+julia> isapprox(0.1, 0.15; atol=0.05)
 true
 
-julia> isapprox(10, 11; atol = 2)
+julia> isapprox(0.1, 0.15; rtol=0.34)
 true
 
-julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])
+julia> isapprox(0.1, 0.15; rtol=0.33)
+false
+
+julia> 0.1 + 1e-10 ≈ 0.1
 true
 
 julia> 1e-10 ≈ 0
 false
 
 julia> isapprox(1e-10, 0, atol=1e-8)
+true
+
+julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0]) # using `norm`
 true
 ```
 """
