@@ -22,6 +22,16 @@ NTuple
 
 Returns the number of elements in the tuple type.
 Returns nothing for anything else.
+
+# Examples
+```jldoctest
+julia> a=(3,4,5)
+(3, 4, 5)
+
+julia> arity(typeof(a))
+3
+
+```
 """
 arity(::Type{<:NTuple{N,Any}}) where {N} = N
 arity(::Type) = nothing
