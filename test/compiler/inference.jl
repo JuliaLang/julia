@@ -3101,3 +3101,8 @@ Base.return_types((Union{Int,Nothing},)) do x
     end
     x
 end == [Int]
+
+# issue #29100
+let f() = Val(fieldnames(Complex{Int}))
+    @test @inferred(f()) === Val((:re,:im))
+end
