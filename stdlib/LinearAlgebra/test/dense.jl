@@ -148,6 +148,12 @@ end
             asym = a + a' # symmetric indefinite
             asymsq = sqrt(asym)
             @test asymsq*asymsq ≈ asym
+            if eltype(a) <: Real  # real square root
+                apos = a * a
+                apos_sqrt = sqrt(apos)
+                @test apos_sqrt*apos_sqrt ≈ apos
+                @test eltype(apos_sqrt) <: Real
+            end
         end
 
         @testset "Powers" begin
