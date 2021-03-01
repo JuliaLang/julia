@@ -1526,6 +1526,34 @@ function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) 
 end
 sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
+Base.@propagate_inbounds function _sylvester_2x1!(A, B, C)
+    b = B[1]
+    a21, a12 = A[2, 1], A[1, 2]
+    m11 = b + A[1, 1]
+    m22 = b + A[2, 2]
+    d = m11 * m22 - a12 * a21
+    c1, c2 = C
+    C[1] = (a12 * c2 - m22 * c1) / d
+    C[2] = (a21 * c1 - m11 * c2) / d
+    return C
+end
+Base.@propagate_inbounds function _sylvester_1x2!(A, B, C)
+    a = A[1]
+    b21, b12 = B[2, 1], B[1, 2]
+    m11 = a + B[1, 1]
+    m22 = a + B[2, 2]
+    d = m11 * m22 - b21 * b12
+    c1, c2 = C
+    C[1] = (b21 * c2 - m22 * c1) / d
+    C[2] = (b12 * c1 - m11 * c2) / d
+    return C
+end
+function _sylvester_2x2!(A, B, C)
+    _, scale = LAPACK.trsyl!('N', 'N', A, B, C)
+    rmul!(C, -inv(scale))
+    return C
+end
+
 sylvester(a::Union{Real,Complex}, b::Union{Real,Complex}, c::Union{Real,Complex}) = -c / (a + b)
 
 # AX + XA' + C = 0
