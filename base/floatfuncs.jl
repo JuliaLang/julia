@@ -223,16 +223,16 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
+    isapprox(x, y; atol::Number=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
 
 Inexact equality comparison: `true` if `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The
 default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
 argument `nans` determines whether or not NaN values are considered equal (defaults to false).
 
-For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to
+For real or complex floating-point values, if an `atol ≠ 0` is not specified, `rtol` defaults to
 the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
-e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
+e.g. for integer arguments or if an `atol ≠ 0` is supplied, `rtol` defaults to zero.
 
 The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for
 arrays (where an alternative `norm` choice is sometimes useful).
@@ -257,6 +257,10 @@ but an absurdly large tolerance if `x` is the
     Passing the `norm` keyword argument when comparing numeric (non-array) arguments
     requires Julia 1.6 or later.
 
+!!! compat "Julia 1.7"
+    Passing a `Number` value for `atol` rather than `Real` (which is useful for
+    dimensionful number types) requires Julia 1.7 or later.
+
 # Examples
 ```jldoctest
 julia> 0.1 ≈ (0.1 - 1e-10)
@@ -276,15 +280,14 @@ true
 ```
 """
 function isapprox(x::Number, y::Number;
-                  atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
+                  atol::Number=0, rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
-    x == y || (isfinite(x) && isfinite(y) && _isapprox_small(norm(x-y), atol, rtol, x, y, norm)) || (nans && isnan(x) && isnan(y))
+    x == y || (isfinite(x) && isfinite(y) && _isapprox_small(norm(x-y), atol, rtol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
 end
 
-# check if d is small compared to atol and rtol, ignoring the units (if any) of atol
-# only if atol is zero.
-_isapprox_small(d, atol, rtol, x, y, norm::F) where {F<:Function} =
-    iszero(atol) ? d <= rtol*max(norm(x), norm(y)) : d <= max(atol, rtol*max(norm(x), norm(y)))
+# check if d is small compared to atol and rtolx (= rtol*scale),
+# ignoring the mismatch in units (if any) between d and atol only when atol is zero.
+_isapprox_small(d, atol, rtolx) = d <= (iszero(atol) ? rtolx : max(atol, rtolx))
 
 """
     isapprox(x; kwargs...) / ≈(x; kwargs...)
@@ -307,9 +310,9 @@ This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
 rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
 rtoldefault(::Type{<:Real}) = 0
 rtoldefault(::Type{T}) where {T<:Number} = rtoldefault(typeof(real(one(T)))) # strip dimensions if any
-function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where {T<:Number,S<:Number}
+function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Number) where {T<:Number,S<:Number}
     rtol = max(rtoldefault(real(T)),rtoldefault(real(S)))
-    return atol > 0 ? zero(rtol) : rtol
+    return iszero(atol) ? rtol : zero(rtol)
 end
 
 # fused multiply-add

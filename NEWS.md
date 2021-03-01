@@ -39,6 +39,9 @@ New library features
 --------------------
 
 * The optional keyword argument `context` of `sprint` can now be set to a tuple of `:key => value` pairs to specify multiple attributes. ([#39381])
+* `atol` argument of `isapprox` now accepts arbitrary `Number` types (rather than `Real`)
+  in order to support dimensionful values (though a nonzero `atol` must still support `max`
+  like a real number) ([#39852]).
 
 Standard library changes
 ------------------------

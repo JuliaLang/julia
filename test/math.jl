@@ -779,6 +779,8 @@ end
   # dimensionful values
   @test isapprox(GenericDimensionful(1), GenericDimensionful(1+1.0e-12))
   @test_throws MethodError isapprox(GenericDimensionful(1), GenericDimensionful(1+1.0e-12), atol=3) # dimension mismatch
+  @test isapprox(GenericDimensionful(1), GenericDimensionful(1+1.0e-4), atol=GenericDimensionful(1e-3))
+  @test_throws MethodError isapprox(1, 1+1.0e-4, atol=1e-3+0im)
 end
 
 # test AbstractFloat fallback pr22716

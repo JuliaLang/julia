@@ -328,18 +328,18 @@ isequal(A::AbstractMatrix, J::UniformScaling) = false
 isequal(J::UniformScaling, A::AbstractMatrix) = false
 
 function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
-            atol::Real=0, rtol::Real=Base.rtoldefault(T,S,atol), nans::Bool=false) where {T<:Number,S<:Number}
+            atol::Number=0, rtol::Real=Base.rtoldefault(T,S,atol), nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
 function isapprox(J::UniformScaling, A::AbstractMatrix;
-                  atol::Real = 0,
+                  atol::Number = 0,
                   rtol::Real = Base.rtoldefault(promote_leaf_eltypes(A), eltype(J), atol),
                   nans::Bool = false, norm::Function = norm)
     n = checksquare(A)
     normJ = norm === opnorm             ? abs(J.λ) :
             norm === LinearAlgebra.norm ? abs(J.λ) * sqrt(n) :
                                           norm(Diagonal(fill(J.λ, n)))
-    return norm(A - J) <= max(atol, rtol * max(norm(A), normJ))
+    return Base._isapprox_small(norm(A - J), atol, rtol * max(norm(A), normJ))
 end
 isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwargs...)
 
