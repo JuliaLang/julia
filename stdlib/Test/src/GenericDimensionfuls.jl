@@ -33,6 +33,8 @@ Base.convert(::Type{GenericDimensionful{0}}, x::Union{Real,Complex}) = GenericDi
 Base.convert(::Type{GenericDimensionful{0,T}}, x::Union{Real,Complex}) where {T} = GenericDimensionful{0}(convert(T, x))
 Base.convert(D::Type{GenericDimensionful{p}}, x::Number) where {p} = throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
 Base.convert(D::Type{GenericDimensionful{p,T}}, x::Number) where {p,T} = throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
+
+# need separate method to handle case where p==q but p!==q, e.g. p=1.0 and q=1
 Base.convert(D::Type{GenericDimensionful{p}}, x::GenericDimensionful{q}) where {p,q} =
     p == q ? GenericDimensionful{p}(x.val) : throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
 Base.convert(D::Type{GenericDimensionful{p,T}}, x::GenericDimensionful{q}) where {p,q,T} =
