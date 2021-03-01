@@ -76,26 +76,13 @@ end
 @testset "testing dimensions with GenericDimensionfuls" begin
     @test givens(GenericDimensionful(1.0), GenericDimensionful(2.0), 1, 2) == (givens(1.0,2.0, 1, 2)[1], GenericDimensionful(hypot(1.0,2.0)))
     @test_throws MethodError givens(GenericDimensionful(1.0), GenericDimensionful{2}(2.0), 1, 2)
-end
 
-const TNumber = Union{Float64,ComplexF64}
-struct MockUnitful{T<:TNumber} <: Number
-    data::T
-    MockUnitful(data::T) where T<:TNumber = new{T}(data)
-end
-import Base: *, /, one, oneunit
-*(a::MockUnitful{T}, b::T) where T<:TNumber = MockUnitful(a.data * b)
-*(a::T, b::MockUnitful{T}) where T<:TNumber = MockUnitful(a * b.data)
-*(a::MockUnitful{T}, b::MockUnitful{T}) where T<:TNumber = MockUnitful(a.data * b.data)
-/(a::MockUnitful{T}, b::MockUnitful{T}) where T<:TNumber = a.data / b.data
-one(::Type{<:MockUnitful{T}}) where T = one(T)
-oneunit(::Type{<:MockUnitful{T}}) where T = MockUnitful(one(T))
-
-@testset "unitful givens rotation unitful $T " for T in (Float64, ComplexF64)
-    g, r = givens(MockUnitful(T(3)), MockUnitful(T(4)), 1, 2)
-    @test g.c ≈ 3/5
-    @test g.s ≈ 4/5
-    @test r.data ≈ 5.0
+    for T in (Float64, ComplexF64)
+        g, r = givens(GenericDimensionful(T(3)), GenericDimensionful(T(4)), 1, 2)
+        @test g.c ≈ 3/5
+        @test g.s ≈ 4/5
+        @test r ≈ GenericDimensionful(5.0)
+    end
 end
 
 end # module TestGivens
