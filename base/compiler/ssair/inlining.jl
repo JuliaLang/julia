@@ -1226,13 +1226,12 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         # Ok, now figure out what method to call
-        nu = unionsplitcost(sig.atypes)
-        if nu == 1 || nu > state.params.MAX_UNION_SPLITTING
-            isa(info, MethodMatchInfo) || continue
+        if isa(info, MethodMatchInfo)
             infos = MethodMatchInfo[info]
-        else
-            isa(info, UnionSplitInfo) || continue
+        elseif isa(info, UnionSplitInfo)
             infos = info.matches
+        else
+            continue
         end
 
         analyze_single_call!(ir, todo, idx, stmt, sig, calltype, infos, state.et, state.caches, state.params)
