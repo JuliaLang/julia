@@ -33,19 +33,18 @@ Base.convert(::Type{GenericDimensionful{0}}, x::Union{Real,Complex}) = GenericDi
 Base.convert(::Type{GenericDimensionful{0,T}}, x::Union{Real,Complex}) where {T} = GenericDimensionful{0}(convert(T, x))
 Base.convert(D::Type{GenericDimensionful{p}}, x::Number) where {p} = throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
 Base.convert(D::Type{GenericDimensionful{p,T}}, x::Number) where {p,T} = throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
+Base.convert(D::Type{GenericDimensionful{p}}, x::GenericDimensionful{q}) where {p,q} =
+    p == q ? GenericDimensionful{p}(x.val) : throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
+Base.convert(D::Type{GenericDimensionful{p,T}}, x::GenericDimensionful{q}) where {p,q,T} =
+    p == q ? GenericDimensionful{p,T}(x.val) : throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
 
 Base.promote_type(::Type{GenericDimensionful{p,T}}, ::Type{GenericDimensionful{p,S}}) where {p,T,S} =
     (Base.@_pure_meta; GenericDimensionful{p,promote_type(T,S)})
-Base.promote_type(::Type{GenericDimensionful{0,T}}, ::Type{S}) where {T,S<:Number} =
-    (Base.@_pure_meta; GenericDimensionful{0,promote_type(T,S)})
-Base.promote_type(::Type{S}, ::Type{GenericDimensionful{0,T}}) where {T,S<:Number} =
-    (Base.@_pure_meta; GenericDimensionful{0,promote_type(T,S)})
-
+Base.promote_type(::Type{GenericDimensionful{p,T}}, ::Type{S}) where {p,T,S<:Number} =
+    (Base.@_pure_meta; GenericDimensionful{p,promote_type(T,S)})
+Base.promote_type(::Type{S}, ::Type{GenericDimensionful{p,T}}) where {p,T,S<:Number} =
+    (Base.@_pure_meta; GenericDimensionful{p,promote_type(T,S)})
 Base.promote_type(A::Type{GenericDimensionful{p,T}}, B::Type{GenericDimensionful{q,S}}) where {p,q,T,S} =
-    throw(DimensionMismatch("dimension mismatch between $A and $B"))
-Base.promote_type(A::Type{GenericDimensionful{p,T}}, B::Type{S}) where {p,T,S<:Number} =
-        throw(DimensionMismatch("dimension mismatch between $A and $B"))
-Base.promote_type(B::Type{S}, A::Type{GenericDimensionful{p,T}}) where {p,T,S<:Number} =
     throw(DimensionMismatch("dimension mismatch between $A and $B"))
 
 Base.one(::Type{GenericDimensionful{p,T}}) where {p,T} = one(T)

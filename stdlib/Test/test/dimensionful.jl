@@ -14,6 +14,7 @@ const GD = GenericDimensionful
     @test convert(GD{1,Float64}, x) === GD(4.0)
     @test convert(GD{0}, 3) === GD{0}(3)
     @test convert(GD{0,Float64}, 3) === GD{0}(3.0)
+    @test convert(GD{1.0}, x) === convert(GD{1.0,Int}, x) === convert(GD{1.0}, GD{1//1}(4)) === GD{1.0}(4)
     @test_throws DimensionMismatch convert(GD{1}, 3)
     @test_throws DimensionMismatch convert(GD{1,Float64}, 3)
     @test_throws DimensionMismatch convert(GD{2}, x)
