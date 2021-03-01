@@ -74,7 +74,8 @@ end
 # dimensional correctness:
 
 @testset "testing dimensions with GenericDimensionfuls" begin
-    @test_throws MethodError givens(GenericDimensionful(1.0), GenericDimensionful(2.0), 1, 2)
+    @test givens(GenericDimensionful(1.0), GenericDimensionful(2.0), 1, 2) == (givens(1.0,2.0, 1, 2)[1], GenericDimensionful(hypot(1.0,2.0)))
+    @test_throws MethodError givens(GenericDimensionful(1.0), GenericDimensionful{2}(2.0), 1, 2)
 end
 
 const TNumber = Union{Float64,ComplexF64}

@@ -15,7 +15,10 @@ are defined so that you can only combine quantities in ways that respect the uni
 """
 struct GenericDimensionful{p,T<:Number} <: Number
     val::T
-    GenericDimensionful{p,T}(v::Number) where {p,T} = new(v)
+    function GenericDimensionful{p,T}(v::Number) where {p,T}
+        p isa Real || throw(DomainError("units must have real powers"))
+        new(v)
+    end
 end
 GenericDimensionful(x::T) where {T<:Number} = GenericDimensionful{1,T}(x)
 GenericDimensionful(x::GenericDimensionful) = x
@@ -28,11 +31,22 @@ Base.convert(::Type{GenericDimensionful{p}}, x::GenericDimensionful{p}) where {p
 Base.convert(::Type{GenericDimensionful{p,T}}, x::GenericDimensionful{p}) where {p,T} = GenericDimensionful{p,T}(x)
 Base.convert(::Type{GenericDimensionful{0}}, x::Union{Real,Complex}) = GenericDimensionful{0}(x)
 Base.convert(::Type{GenericDimensionful{0,T}}, x::Union{Real,Complex}) where {T} = GenericDimensionful{0}(convert(T, x))
-Base.convert(D::Type{GenericDimensionful{p}}, x::Number) where {p} = error("dimension mismatch between $D and $(typeof(x))")
-Base.convert(D::Type{GenericDimensionful{p,T}}, x::Number) where {p,T} = error("dimension mismatch between $D and $(typeof(x))")
+Base.convert(D::Type{GenericDimensionful{p}}, x::Number) where {p} = throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
+Base.convert(D::Type{GenericDimensionful{p,T}}, x::Number) where {p,T} = throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
 
 Base.promote_type(::Type{GenericDimensionful{p,T}}, ::Type{GenericDimensionful{p,S}}) where {p,T,S} =
     (Base.@_pure_meta; GenericDimensionful{p,promote_type(T,S)})
+Base.promote_type(::Type{GenericDimensionful{0,T}}, ::Type{S}) where {T,S<:Number} =
+    (Base.@_pure_meta; GenericDimensionful{0,promote_type(T,S)})
+Base.promote_type(::Type{S}, ::Type{GenericDimensionful{0,T}}) where {T,S<:Number} =
+    (Base.@_pure_meta; GenericDimensionful{0,promote_type(T,S)})
+
+Base.promote_type(A::Type{GenericDimensionful{p,T}}, B::Type{GenericDimensionful{q,S}}) where {p,q,T,S} =
+    throw(DimensionMismatch("dimension mismatch between $A and $B"))
+Base.promote_type(A::Type{GenericDimensionful{p,T}}, B::Type{S}) where {p,T,S<:Number} =
+        throw(DimensionMismatch("dimension mismatch between $A and $B"))
+Base.promote_type(B::Type{S}, A::Type{GenericDimensionful{p,T}}) where {p,T,S<:Number} =
+    throw(DimensionMismatch("dimension mismatch between $A and $B"))
 
 Base.one(::Type{GenericDimensionful{p,T}}) where {p,T} = one(T)
 Base.zero(x::GenericDimensionful{p,T}) where {p,T} = GenericDimensionful{p,T}(zero(T))
@@ -61,12 +75,10 @@ for f in (:abs,:conj,:real,:imag,:complex,:+,:-)
     @eval Base.$f(x::GenericDimensionful{p}) where {p} = GenericDimensionful{p}($f(x.val))
 end
 
-import Base: +, -, ==, !=, <, <=, isless, isequal, *, /, //, div, rem, mod, ^
+import Base: +, -, ==, !=, <, <=, isless, isequal, *, /, //, ^, div, rem, mod
 for op in (:+, :-)
-    @eval function $op(x::GenericDimensionful{p}, y::GenericDimensionful{p}) where {p}
-        v = $op(x.val, y.val)
-        GenericDimensionful{p}(v)
-    end
+    @eval $op(x::GenericDimensionful{p}, y::GenericDimensionful{p}) where {p} =
+        GenericDimensionful{p}($op(x.val, y.val))
 end
 for op in (:(==), :(!=), :<, :<=, :isless, :isequal)
     @eval $op(x::GenericDimensionful{p}, y::GenericDimensionful{p}) where {p} = $op(x.val, y.val)
@@ -78,7 +90,7 @@ for (f,op) in ((:_plus,:+),(:_minus,:-),(:_times,:*),(:_div,://))
         :(GenericDimensionful{$(canonical_p(s)),$T}(v))
     end
 end
-for (op,eop) in ((:*, :_plus), (:/, :_minus), (://, :_minus), (:div, :_minus))
+for (op,eop) in ((:*, :_plus), (:/, :_minus), (://, :_minus))
     @eval begin
         $op(x::GenericDimensionful{p}, y::GenericDimensionful{q}) where {p,q} =
             $eop($op(x.val, y.val),x,y)
@@ -86,21 +98,24 @@ for (op,eop) in ((:*, :_plus), (:/, :_minus), (://, :_minus), (:div, :_minus))
         $op(x::S, y::GenericDimensionful{p}) where {p,S<:Number} = $op(GenericDimensionful{0,S}(x),y)
     end
 end
+for op in (:/, ://, :div)
+    @eval $op(x::GenericDimensionful{p}, y::GenericDimensionful{p}) where {p} = $op(x.val, y.val)
+end
+for op in (:rem, :mod)
+    @eval $op(x::GenericDimensionful{p}, y::GenericDimensionful{p}) where {p} = GenericDimensionful{p}($op(x.val, y.val))
+end
 # to fix an ambiguity
 //(x::GenericDimensionful, y::Complex) = x // GenericDimensionful{0,typeof(y)}(y)
-for op in (:rem, :mod)
-    @eval begin
-        $op(x::GenericDimensionful{p}, y::GenericDimensionful) where {p} = GenericDimensionful{p}($op(x.val, y.val))
-        $op(x::GenericDimensionful{p}, y::Number) where {p} = GenericDimensionful{p}($op(x.val, y))
-    end
-end
 Base.sqrt(x::GenericDimensionful) = _div(sqrt(x.val), x, Val(2))
 
 @generated Base.literal_pow(::typeof(^), x::GenericDimensionful{p}, ::Val{q}) where {p,q} = :(GenericDimensionful{$(canonical_p(p*q))}(x.val^$q))
 ^(x::GenericDimensionful{p}, q::Real) where {p} = GenericDimensionful{p*q}(x.val^q)
 ^(x::GenericDimensionful{p}, q::Integer) where {p} = GenericDimensionful{p*q}(x.val^q)  # fixes ambiguity
 ^(x::GenericDimensionful{p}, q::Rational) where {p} = GenericDimensionful{p*q}(x.val^q) # fixes ambiguity
-^(x::GenericDimensionful{p}, q::GenericDimensionful{0}) where {p}  = GenericDimensionful{p*q.val}(x.val^q.val)
-^(x::GenericDimensionful{p}, q::GenericDimensionful) where {p} = error("exponent $(typeof(q)) is not dimensionless")
+^(x::Number, q::GenericDimensionful{0}) = x ^ q.val
+^(x::GenericDimensionful{p}, q::GenericDimensionful{0}) where {p} = x ^ q.val
+^(x::Number, q::GenericDimensionful{p}) where {p} = throw(DimensionMismatch("dimensionful exponent type $(typeof(q))"))
+^(x::GenericDimensionful{s}, q::GenericDimensionful{p}) where {s,p} = throw(DimensionMismatch("dimensionful exponent type $(typeof(q))"))
 
 end
+

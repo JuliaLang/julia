@@ -1138,3 +1138,5 @@ let errors = @testset NoThrowTestSet begin
         @test occursin("Expression: !(1 < 2 < missing < 4)", str)
     end
 end
+
+include("dimensionful.jl")

@@ -212,9 +212,9 @@ end
 
     x = Base.TwicePrecision(GenericDimensionful(4.0))
     @test x.hi*2 === GenericDimensionful(8.0)
-    @test_throws ErrorException x*2   # not a MethodError for convert
+    @test_throws DimensionMismatch x*2   # not a MethodError for convert
     @test x.hi/2 === GenericDimensionful(2.0)
-    @test_throws ErrorException x/2
+    @test_throws DimensionMismatch x/2
     @test zero(typeof(x)) === Base.TwicePrecision(GenericDimensionful(0.0))
 end
 @testset "ranges" begin
@@ -1395,8 +1395,8 @@ Base.isless(x, y::NotReal) = isless(x, y.val)
 @testset "dimensional correctness" begin
     # Note: ranges for physical units should require an explicit step.
     # See #19896 and https://discourse.julialang.org/t/type-restriction-on-unitrange/6557/12
-    @test_throws ErrorException GenericDimensionful(2):GenericDimensionful(10)
-    @test_throws ErrorException range(GenericDimensionful(2), length=9)
+    @test_throws DimensionMismatch GenericDimensionful(2):GenericDimensionful(10)
+    @test_throws DimensionMismatch range(GenericDimensionful(2), length=9)
 
     @test length(Vector(GenericDimensionful(2):GenericDimensionful(1):GenericDimensionful(10))) == 9
     @test length(range(GenericDimensionful(2), step=GenericDimensionful(7), length=9)) == 9
