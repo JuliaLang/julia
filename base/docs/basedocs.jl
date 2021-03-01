@@ -746,8 +746,9 @@ kw"while"
 `end` marks the conclusion of a block of expressions, for example
 [`module`](@ref), [`struct`](@ref), [`mutable struct`](@ref),
 [`begin`](@ref), [`let`](@ref), [`for`](@ref) etc.
-`end` may also be used when indexing into an array to represent
-the last index of a dimension.
+
+`end` may also be used when indexing to represent the last index of a
+collection or the last index of a dimension of an array.
 
 # Examples
 ```jldoctest
@@ -1017,6 +1018,22 @@ end
 
 Usually `begin` will not be necessary, since keywords such as [`function`](@ref) and [`let`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
+
+`begin` may also be used when indexing to represent the first index of a
+collection or the first index of a dimension of an array.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> A[begin, :]
+2-element Array{Int64,1}:
+ 1
+ 2
+```
 """
 kw"begin"
 
