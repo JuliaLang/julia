@@ -1654,9 +1654,14 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
     if (n) {
         if (jl_is_typevar(n)) {
+            // TODO: this is disabled due to #39698; it is also inconsistent
+            // with other similar checks, where we usually only check substituted
+            // values and not the bounds of variables.
+            /*
             jl_tvar_t *N = (jl_tvar_t*)n;
             if (!(N->lb == jl_bottom_type && N->ub == (jl_value_t*)jl_any_type))
                 jl_error("TypeVar in Vararg length must have bounds Union{} and Any");
+            */
         }
         else if (!jl_is_long(n)) {
             jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, n);
