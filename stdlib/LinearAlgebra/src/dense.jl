@@ -803,6 +803,64 @@ function sqrt(A::StridedMatrix{<:Complex})
     end
 end
 
+function sqrt_real_quasitriu(A)
+    n = size(A, 1)
+    S = eltype(sqrt(zero(eltype(A))))
+    R = zeros(S, n, n)
+    # compute square roots of diagonal block
+    _sqrt_real_quasitriu_diag_block!(R, A)
+    _sqrt_real_quasitriu_offdiag_block!(R, A)
+    return R
+end
+
+function _sqrt_real_quasitriu_diag_block!(R, A)
+    n = size(R, 1)
+    i = 1
+    @inbounds while i < n
+        r11 = A[i, i]
+        if iszero(A[i + 1, i])
+            R[i, i] = sqrt(r11)
+            i += 1
+        else
+            @views _sqrt_real_2x2!(R[i:(i + 1), i:(i + 1)], A[i:(i + 1), i:(i + 1)])
+            i += 2
+        end
+    end
+    if i == n
+        R[n, n] = sqrt(A[n, n])
+    end
+    return R
+end
+
+function _sqrt_real_quasitriu_offdiag_block!(R, A)
+    n = size(R, 1)
+    j = 1
+    @inbounds while j ≤ n
+        jsize_is_2 = j < n && !iszero(A[j + 1, j])
+        i = j - 1
+        while i > 0
+            isize_is_2 = i > 1 && !iszero(A[i, i - 1])
+            if isize_is_2
+                if jsize_is_2
+                    _sqrt_real_quasitriu_offdiag_block_2x2!(R, A, i - 1, j)
+                else
+                    _sqrt_real_quasitriu_offdiag_block_2x1!(R, A, i - 1, j)
+                end
+                i -= 2
+            else
+                if jsize_is_2
+                    _sqrt_real_quasitriu_offdiag_block_1x2!(R, A, i, j)
+                else
+                    _sqrt_real_quasitriu_offdiag_block_1x1!(R, A, i, j)
+                end
+                i -= 1
+            end
+        end
+        j += 2 - !jsize_is_2
+    end
+    return R
+end
+
 Base.@propagate_inbounds function _sqrt_real_2x2!(R, A)
     a11, a21, a12, a22 = A[1, 1], A[2, 1], A[1, 2], A[2, 2]
     θ = (a11 + a22) / 2
@@ -815,6 +873,59 @@ Base.@propagate_inbounds function _sqrt_real_2x2!(R, A)
     R[2, 1] = a21 / c
     R[1, 2] = a12 / c
     R[2, 2] = α + (a22 - θ) / c
+    return R
+end
+
+Base.@propagate_inbounds function _sqrt_real_quasitriu_offdiag_block_1x1!(R, A, i, j)
+    r = -A[i, j]
+    for k in (i + 1):(j - 1)
+        r += R[i, k] * R[k, j]
+    end
+    R[i, j] = sylvester(R[i, i], R[j, j], r)
+    return R
+end
+
+Base.@propagate_inbounds function _sqrt_real_quasitriu_offdiag_block_1x2!(R, A, i, j)
+    r1 = -A[i, j]
+    r2 = -A[i, j + 1]
+    for k in (i + 1):(j - 1)
+        rik = R[i, k]
+        r1 += rik * R[k, j]
+        r2 += rik * R[k, j + 1]
+    end
+    Rij = @view R[i, j:(j + 1)]
+    Rij[1] = r1
+    Rij[2] = r2
+    _sylvester_1x2!(R[i, i], @view(R[j:(j + 1), j:(j + 1)]), Rij)
+    return R
+end
+
+Base.@propagate_inbounds function _sqrt_real_quasitriu_offdiag_block_2x1!(R, A, i, j)
+    r1 = -A[i, j]
+    r2 = -A[i + 1, j]
+    for k in (i + 1):(j - 1)
+        rkj = R[k, j]
+        r1 += R[i, k] * rkj
+        r2 += R[i + 1, k] * rkj
+    end
+    Rij = @view R[i:(i + 1), j]
+    Rij[1] = r1
+    Rij[2] = r2
+    _sylvester_2x1!(@view(R[i:(i + 1), i:(i + 1)]), R[j, j], Rij)
+    return R
+end
+
+Base.@propagate_inbounds function _sqrt_real_quasitriu_offdiag_block_2x2!(R, A, i, j)
+    T = typeof(zero(eltype(R))^2 + zero(eltype(A)))
+    Rij = @view R[i:(i + 1), j:(j + 1)]
+    for i′ in i:(i + 1), j′ in j:(j + 1)
+        Cij = -A[i′, j′]
+        for k in (i + 2):(j - 1)
+            Cij += R[i′, k] * R[k, j′]
+        end
+        Rij[i′ - i + 1, j′ - j + 1] = Cij
+    end
+    @views _sylvester_2x2!(R[i:(i + 1), i:(i + 1)], R[j:(j + 1), j:(j + 1)], Rij)
     return R
 end
 
