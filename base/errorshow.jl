@@ -64,12 +64,16 @@ function showerror(io::IO, ex::TypeError)
     if ex.expected === Bool
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
     else
+        expected = ex.expected
         if isvarargtype(ex.got)
             targs = (ex.got,)
         elseif isa(ex.got, Type)
             targs = ("Type{", ex.got, "}")
         else
             targs = ("a value of type $(typeof(ex.got))",)
+            if ex.func == Symbol("Type") && ex.context == "parameter"
+                expected = "isbits value or Type"
+            end
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
@@ -78,7 +82,7 @@ function showerror(io::IO, ex::TypeError)
         else
             ctx = "in $(ex.func), in $(ex.context)"
         end
-        print(io, ctx, ", expected ", ex.expected, ", got ", targs...)
+        print(io, ctx, ", expected ", expected, ", got ", targs...)
     end
     Experimental.show_error_hints(io, ex)
 end

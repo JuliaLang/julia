@@ -1045,10 +1045,7 @@ JL_CALLABLE(jl_f_apply_type)
         for(i=1; i < nargs; i++) {
             jl_value_t *pi = args[i];
             if (!jl_valid_type_param(pi)) {
-                jl_type_error_rt("Type", "parameter",
-                                 jl_isa(pi, (jl_value_t*)jl_number_type) ?
-                                 (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
-                                 pi);
+                jl_type_error_rt("Type", "parameter", (jl_value_t*)jl_type_type, pi);
             }
         }
         return jl_apply_type(args[0], &args[1], nargs-1);
