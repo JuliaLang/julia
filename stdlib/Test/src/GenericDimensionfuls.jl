@@ -113,10 +113,6 @@ Base.sqrt(x::GenericDimensionful) = _div(sqrt(x.val), x, Val(2))
 ^(x::GenericDimensionful{p}, q::Real) where {p} = GenericDimensionful{p*q}(x.val^q)
 ^(x::GenericDimensionful{p}, q::Integer) where {p} = GenericDimensionful{p*q}(x.val^q)  # fixes ambiguity
 ^(x::GenericDimensionful{p}, q::Rational) where {p} = GenericDimensionful{p*q}(x.val^q) # fixes ambiguity
-^(x::Number, q::GenericDimensionful{0}) = x ^ q.val
-^(x::GenericDimensionful{p}, q::GenericDimensionful{0}) where {p} = x ^ q.val
-^(x::Number, q::GenericDimensionful{p}) where {p} = throw(DimensionMismatch("dimensionful exponent type $(typeof(q))"))
-^(x::GenericDimensionful{s}, q::GenericDimensionful{p}) where {s,p} = throw(DimensionMismatch("dimensionful exponent type $(typeof(q))"))
 
 end
 
