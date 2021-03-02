@@ -350,7 +350,8 @@ void Optimizer::optimizeAll()
             if (field.hasobjref) {
                 has_ref = true;
                 // This can be relaxed a little based on hasload
-                if (field.hasaggr || field.multiloc) {
+                // TODO: add support for hasaggr load/store
+                if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
                     has_refaggr = true;
                     break;
                 }
@@ -361,15 +362,12 @@ void Optimizer::optimizeAll()
             splitOnStack(orig);
             continue;
         }
-        if (has_ref) {
-            if (use_info.memops.size() != 1 || has_refaggr ||
-                use_info.memops.begin()->second.size != sz) {
-                if (use_info.hastypeof)
-                    optimizeTag(orig);
-                continue;
-            }
-            // The object only has a single field that's a reference with only one kind of access.
+        if (has_refaggr) {
+            if (use_info.hastypeof)
+                optimizeTag(orig);
+            continue;
         }
+        // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref);
     }
 }
@@ -444,6 +442,7 @@ Optimizer::AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
         if (it->first + it->second.size >= offset + size) {
             if (it->second.elty != elty)
                 it->second.elty = nullptr;
+            assert(it->second.elty == nullptr || (it->first == offset && it->second.size == size));
             return *it;
         }
         if (it->first + it->second.size > offset) {
@@ -454,7 +453,7 @@ Optimizer::AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
     else {
         it = memops.begin();
     }
-    // Now fine the last slot that overlaps with the current memory location.
+    // Now find the last slot that overlaps with the current memory location.
     // Also set `lb` if we didn't find any above.
     for (; it != end && it->first < offset + size; ++it) {
         if (lb == end)
@@ -493,8 +492,8 @@ bool Optimizer::AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_
     memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
     auto &field = getField(offset, size, elty);
-    if (field.first != offset || field.second.size != size)
-        field.second.multiloc = true;
+    if (field.second.hasobjref != memop.isobjref)
+        field.second.multiloc = true; // can't split this field, since it contains a mix of references and bits
     if (!isstore)
         field.second.hasload = true;
     if (memop.isobjref) {
