@@ -43,9 +43,7 @@ Base.convert(D::Type{GenericDimensionful{p,T}}, x::GenericDimensionful{q}) where
 @generated Base.promote_rule(::Type{GenericDimensionful{p,T}}, ::Type{GenericDimensionful{q,S}}) where {p,q,T,S} =
     p === q ? :(GenericDimensionful{p, promote_type(T,S)}) :
     p == q  ? :(GenericDimensionful{$(canonical_p(p)), promote_type(T,S)}) : :(Union{})
-Base.promote_type(::Type{GenericDimensionful{0,T}}, ::Type{S}) where {T,S<:Number} =
-    (Base.@_pure_meta; GenericDimensionful{0,promote_type(T,S)})
-Base.promote_type(::Type{S}, ::Type{GenericDimensionful{0,T}}) where {T,S<:Number} =
+Base.promote_rule(::Type{GenericDimensionful{0,T}}, ::Type{S}) where {T,S<:Number} =
     (Base.@_pure_meta; GenericDimensionful{0,promote_type(T,S)})
 
 Base.one(::Type{GenericDimensionful{p,T}}) where {p,T} = one(T)
@@ -114,4 +112,3 @@ Base.sqrt(x::GenericDimensionful) = _div(sqrt(x.val), x, Val(2))
 ^(x::GenericDimensionful{p}, q::Rational) where {p} = GenericDimensionful{p*q}(x.val^q) # fixes ambiguity
 
 end
-
