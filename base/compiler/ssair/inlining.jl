@@ -696,13 +696,13 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
     isconst, src = false, nothing
     if isa(spec.match, InferenceResult)
         let inferred_src = spec.match.src
-            if isa(inferred_src, CodeInfo)
-                isconst, src = false, inferred_src
-            elseif isa(inferred_src, Const)
+            if isa(inferred_src, Const)
                 if !is_inlineable_constant(inferred_src.val)
                     return compileable_specialization(state.et, spec.match)
                 end
                 isconst, src = true, quoted(inferred_src.val)
+            else
+                isconst, src = false, inferred_src
             end
         end
     else
@@ -724,17 +724,15 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
         return ConstantCase(src)
     end
 
-    if src !== nothing && !state.policy(src)
-        src = nothing
+    if src !== nothing
+        src = state.policy(src)
     end
 
     if src === nothing
         return compileable_specialization(state.et, spec.match)
     end
 
-    if isa(src, CodeInfo) || isa(src, Vector{UInt8})
-
-    elseif isa(src, IRCode)
+    if isa(src, IRCode)
         src = copy(src)
     end
 
@@ -1028,7 +1026,7 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, info::InvokeCallIn
     calltype = ir.stmts[idx][:type]
 
     if !info.match.fully_covers
-        # XXX: We could union split this
+        # TODO: We could union split out the signature check and continue on
         return nothing
     end
 
