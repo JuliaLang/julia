@@ -78,15 +78,7 @@ function showerror(io::IO, ex::TypeError)
         else
             ctx = "in $(ex.func), in $(ex.context)"
         end
-        if ex.expected == Type{:TypeParameter}
-            if isa(ex.got,Number) && !isbits(ex.got)
-                print(io, ctx, ", expected isbits Number, got ", targs...)
-            else
-                print(io, ctx, ", expected Type, got ", targs...)
-            end
-        else
-            print(io, ctx, ", expected ", ex.expected, ", got ", targs...)
-        end
+        print(io, ctx, ", expected ", ex.expected, ", got ", targs...)
     end
     Experimental.show_error_hints(io, ex)
 end
