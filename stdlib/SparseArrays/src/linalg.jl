@@ -376,8 +376,19 @@ function dot(x::SparseVector, A::AbstractSparseMatrixCSC, y::SparseVector)
     r
 end
 
-function dot(A::Matrix{TA}, B::SparseMatrixCSC{TB}) where {TA, TB}
-    T = promote_type(TA, TB)
+const DenseMatrixBaseTypes = Union{DenseMatrix, BitMatrix}
+const WrapperMatrixTypes{T} = Union{
+    SubArray{T,2,<:DenseMatrixBaseTypes},
+    Adjoint{T,<:DenseMatrixBaseTypes},
+    Transpose{T,<:DenseMatrixBaseTypes},
+    AbstractTriangular{T,<:DenseMatrixBaseTypes},
+    UpperHessenberg{T,<:DenseMatrixBaseTypes},
+    Symmetric{T,<:DenseMatrixBaseTypes},
+    Hermitian{T,<:DenseMatrixBaseTypes},
+}
+
+function dot(A::MA, B::AbstractSparseMatrix{TB}) where {MA<:Union{DenseMatrixBaseTypes,WrapperMatrixTypes},TB}
+    T = promote_type(eltype(A), TB)
     (m, n) = size(A)
     if (m, n) != size(B)
         throw(DimensionMismatch())
@@ -398,8 +409,8 @@ function dot(A::Matrix{TA}, B::SparseMatrixCSC{TB}) where {TA, TB}
     return s
 end
 
-function dot(A::SparseMatrixCSC{TA}, B::Matrix{TB}) where {TA, TB}
-    T = promote_type(TA, TB)
+function dot(A::AbstractSparseMatrix{TA}, B::MB) where {TA,MB<:Union{DenseMatrixBaseTypes,WrapperMatrixTypes}}
+    T = promote_type(TA, eltype(B))
     (m, n) = size(A)
     if (m, n) != size(B)
         throw(DimensionMismatch())
