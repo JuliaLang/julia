@@ -1181,7 +1181,7 @@ end
     @test (@inferred hypot(GenericDimensionful(Inf), GenericDimensionful(NaN), GenericDimensionful(0))) == GenericDimensionful(Inf)
     @test (@inferred hypot(GenericDimensionful(Inf), GenericDimensionful(Inf), GenericDimensionful(Inf))) == GenericDimensionful(Inf)
     @test isnan(hypot(GenericDimensionful(NaN), GenericDimensionful(0), GenericDimensionful(1)))
-    ex = @test_throws DimensionMismatch hypot(GenericDimensionful(1), 1)
+    ex = @test_throws ErrorException hypot(GenericDimensionful(1), 1)
     @test startswith(ex.value.msg, "promotion of types ")
 
     @test_throws MethodError hypot()
