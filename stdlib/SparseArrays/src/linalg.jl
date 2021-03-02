@@ -376,7 +376,7 @@ function dot(x::SparseVector, A::AbstractSparseMatrixCSC, y::SparseVector)
     r
 end
 
-function dot(A::Matrix{TA}, B::SparseArrays.SparseMatrixCSC{TB}) where {TA, TB}
+function dot(A::Matrix{TA}, B::SparseMatrixCSC{TB}) where {TA, TB}
     T = promote_type(TA, TB)
     (m, n) = size(A)
     if (m, n) != size(B)
@@ -386,10 +386,10 @@ function dot(A::Matrix{TA}, B::SparseArrays.SparseMatrixCSC{TB}) where {TA, TB}
     if m * n == 0
         return s
     end
-    rows = SparseArrays.rowvals(B)
-    vals = SparseArrays.nonzeros(B)
+    rows = rowvals(B)
+    vals = nonzeros(B)
     for j in 1:n
-        for ridx in SparseArrays.nzrange(B, j)
+        for ridx in nzrange(B, j)
             i = rows[ridx]
             v = vals[ridx]
             s += dot(A[i,j], v)
@@ -398,7 +398,7 @@ function dot(A::Matrix{TA}, B::SparseArrays.SparseMatrixCSC{TB}) where {TA, TB}
     return s
 end
 
-function dot(A::SparseArrays.SparseMatrixCSC{TA}, B::Matrix{TB}) where {TA, TB}
+function dot(A::SparseMatrixCSC{TA}, B::Matrix{TB}) where {TA, TB}
     T = promote_type(TA, TB)
     (m, n) = size(A)
     if (m, n) != size(B)
@@ -408,10 +408,10 @@ function dot(A::SparseArrays.SparseMatrixCSC{TA}, B::Matrix{TB}) where {TA, TB}
     if m * n == 0
         return s
     end
-    rows = SparseArrays.rowvals(A)
-    vals = SparseArrays.nonzeros(A)
+    rows = rowvals(A)
+    vals = nonzeros(A)
     for j in 1:n
-        for ridx in SparseArrays.nzrange(A, j)
+        for ridx in nzrange(A, j)
             i = rows[ridx]
             v = vals[ridx]
             s += dot(v, B[i,j])
