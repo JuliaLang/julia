@@ -1678,7 +1678,7 @@ end
 function spzeros(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, Ti}
     spzeros(Tv, Ti, sz[1], sz[2])
 end
-spzeros(::Type{Tv}, sz::Tuple{Integer,Integer}) = spzeros(Tv, Int, sz[1], sz[2])
+spzeros(::Type{Tv}, sz::Tuple{Integer,Integer}) where {Tv} = spzeros(Tv, Int, sz[1], sz[2])
 spzeros(sz::Tuple{Integer,Integer}) = spzeros(Float64, Int, sz[1], sz[2])
 
 import Base._one
