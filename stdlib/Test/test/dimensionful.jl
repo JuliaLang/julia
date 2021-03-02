@@ -68,10 +68,9 @@ const GD = GenericDimensionful
     @test sqrt(x) === GD{1//2}(2.0)
 
     let p = 2 # to avoid literal_pow path
-        @test x^GD{0}(p) == x^2 == x^p == GD{2}(4^p)
+        @test x^2 == x^p == GD{2}(4^p)
     end
-    @test x^GD{0}(2.5) == x^2.5 == GD{2.5}(4^2.5)
     @test x^(5//2) == GD{5//2}(4^2.5)
-    @test_throws DimensionMismatch 2^x
-    @test_throws DimensionMismatch x^x
+    @test_throws ErrorException 2^x
+    @test_throws ErrorException x^x
 end
