@@ -358,9 +358,7 @@ function const_prop_heuristic(interp::AbstractInterpreter, method::Method, mi::M
     if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
-            cache_src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), cache_inf)
-            cache_src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), cache_inf)
-            cache_inlineable = cache_src_inferred && cache_src_inlineable
+            cache_inlineable = inlining_policy(interp)(cache_inf)
         end
     end
     if !cache_inlineable
