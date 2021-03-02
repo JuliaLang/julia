@@ -21,15 +21,20 @@ function push!(et::EdgeTracker, ci::CodeInstance)
     push!(et, ci.def)
 end
 
-struct InferenceCaches{T, S}
-    inf_cache::T
-    mi_cache::S
-end
-
-struct InliningState{S <: Union{EdgeTracker, Nothing}, T <: Union{InferenceCaches, Nothing}}
+struct InliningState{S <: Union{EdgeTracker, Nothing}, T, P}
     params::OptimizationParams
     et::S
-    caches::T
+    mi_cache::T
+    policy::P
+end
+
+function default_inlining_policy(@nospecialize(src))
+    if isa(src, CodeInfo) || isa(src, Vector{UInt8})
+        src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+        src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
+        return src_inferred && src_inlineable
+    end
+    return false
 end
 
 mutable struct OptimizationState
@@ -46,9 +51,8 @@ mutable struct OptimizationState
         s_edges = frame.stmt_edges[1]::Vector{Any}
         inlining = InliningState(params,
             EdgeTracker(s_edges, frame.valid_worlds),
-            InferenceCaches(
-                get_inference_cache(interp),
-                WorldView(code_cache(interp), frame.world)))
+            WorldView(code_cache(interp), frame.world),
+            inlining_policy(interp))
         return new(frame.linfo,
                    frame.src, frame.stmt_info, frame.mod, frame.nargs,
                    frame.sptypes, frame.slottypes, false,
@@ -81,9 +85,8 @@ mutable struct OptimizationState
         # This method is mostly used for unit testing the optimizer
         inlining = InliningState(params,
             nothing,
-            InferenceCaches(
-                get_inference_cache(interp),
-                WorldView(code_cache(interp), get_world_counter())))
+            WorldView(code_cache(interp), get_world_counter()),
+            inlining_policy(interp))
         return new(linfo,
                    src, stmt_info, inmodule, nargs,
                    sptypes_from_meth_instance(linfo), slottypes, false,
