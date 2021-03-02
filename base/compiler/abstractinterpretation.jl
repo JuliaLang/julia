@@ -108,7 +108,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         val = pure_eval_call(f, argtypes)
         if val !== false
             # TODO: add some sort of edge(s)
-            return CallMeta(val, MethodResultPure())
+            return CallMeta(val, MethodResultPure(info))
         end
     end
 
@@ -875,8 +875,10 @@ function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospe
         push!(retinfos, ApplyCallInfo(call.info, arginfo))
         res = tmerge(res, call.rt)
         if bail_out_apply(interp, res, sv)
-            # No point carrying forward the info, we're not gonna inline it anyway
-            retinfo = nothing
+            if i != length(ctypes)
+                # No point carrying forward the info, we're not gonna inline it anyway
+                retinfo = false
+            end
             break
         end
     end
@@ -1074,6 +1076,26 @@ function abstract_call_unionall(argtypes::Vector{Any})
     return Any
 end
 
+function abstract_invoke(interp::AbstractInterpreter, @nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
+    nargtype = typeintersect(types, argtype)
+    nargtype === Bottom && return CallMeta(Bottom, false)
+    nargtype isa DataType || return CallMeta(Any, false) # other cases are not implemented below
+    isdispatchelem(ft) || return CallMeta(Any, false) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
+    types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)
+    nargtype = Tuple{ft, nargtype.parameters...}
+    argtype = Tuple{ft, argtype.parameters...}
+    result = findsup(types, method_table(interp))
+    if result === nothing
+        return CallMeta(Any, false)
+    end
+    method, valid_worlds = result
+    update_valid_age!(sv, valid_worlds)
+    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    rt, edge = typeinf_edge(interp, method, ti, env, sv)
+    edge !== nothing && add_backedge!(edge::MethodInstance, sv)
+    return CallMeta(rt, InvokeCallInfo(MethodMatch(ti, env, method, argtype <: method.sig)))
+end
+
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any},
@@ -1088,8 +1110,16 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             ft = argtype_by_index(argtypes, 3)
             (itft === Bottom || ft === Bottom) && return CallMeta(Bottom, false)
             return abstract_apply(interp, itft, ft, argtype_tail(argtypes, 4), sv, max_methods)
+        elseif f === invoke
+            ft = widenconst(argtype_by_index(argtypes, 2))
+            (sigty, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
+            (ft === Bottom || sigty === Bottom) && return CallMeta(Bottom, false)
+            if isexact
+                return abstract_invoke(interp, ft, sigty, argtypes_to_type(argtype_tail(argtypes, 4)), sv)
+            end
+            return CallMeta(Any, false)
         end
-        return CallMeta(abstract_call_builtin(interp, f, fargs, argtypes, sv, max_methods), nothing)
+        return CallMeta(abstract_call_builtin(interp, f, fargs, argtypes, sv, max_methods), false)
     elseif f === Core.kwfunc
         if la == 2
             ft = widenconst(argtypes[2])
@@ -1111,7 +1141,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif la == 3
             ub_var = argtypes[3]
         end
-        return CallMeta(typevar_tfunc(n, lb_var, ub_var), nothing)
+        return CallMeta(typevar_tfunc(n, lb_var, ub_var), false)
     elseif f === UnionAll
         return CallMeta(abstract_call_unionall(argtypes), false)
     elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
@@ -1129,11 +1159,11 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         # mark !== as exactly a negated call to ===
         rty = abstract_call_known(interp, (===), fargs, argtypes, sv).rt
         if isa(rty, Conditional)
-            return CallMeta(Conditional(rty.var, rty.elsetype, rty.vtype), nothing) # swap if-else
+            return CallMeta(Conditional(rty.var, rty.elsetype, rty.vtype), false) # swap if-else
         elseif isa(rty, Const)
-            return CallMeta(Const(rty.val === false), nothing)
+            return CallMeta(Const(rty.val === false), MethodResultPure())
         end
-        return CallMeta(rty, nothing)
+        return CallMeta(rty, false)
     elseif la == 3 && istopfunction(f, :(>:))
         # mark issupertype as a exact alias for issubtype
         # swap T1 and T2 arguments and call <:
