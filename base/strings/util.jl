@@ -595,14 +595,19 @@ replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
 # hex <-> bytes conversion
 
 """
-    hex2bytes(s::Union{AbstractString,AbstractVector{UInt8}})
+    hex2bytes(itr)
 
-Given a string or array `s` of ASCII codes for a sequence of hexadecimal digits, returns a
+Given an iterable `itr` of ASCII codes for a sequence of hexadecimal digits, returns a
 `Vector{UInt8}` of bytes  corresponding to the binary representation: each successive pair
-of hexadecimal digits in `s` gives the value of one byte in the return vector.
+of hexadecimal digits in `itr` gives the value of one byte in the return vector.
 
-The length of `s` must be even, and the returned array has half of the length of `s`.
+The length of `itr` must be even, and the returned array has half of the length of `itr`.
 See also [`hex2bytes!`](@ref) for an in-place version, and [`bytes2hex`](@ref) for the inverse.
+
+!!! compat "Julia 1.7"
+    Calling hex2bytes with iterables producing UInt8 requires
+    version 1.7. In earlier versions, you can collect the iterable
+    before calling instead.
 
 # Examples
 ```jldoctest
@@ -632,13 +637,12 @@ julia> hex2bytes(a)
 """
 function hex2bytes end
 
-hex2bytes(s::String) = hex2bytes(transcode(UInt8, s))
 hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
 
 # special case - valid bytes are checked in the generic implementation
 function hex2bytes!(dest::AbstractArray{UInt8}, s::String)
     sizeof(s) != length(s) && throw(ArgumentError("input string must consist of hexadecimal characters only"))
-    
+
     hex2bytes!(dest, transcode(UInt8, s))
 end
 
@@ -648,6 +652,11 @@ end
 Convert an iterable `itr` of bytes representing a hexadecimal string to its binary
 representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
 to `dest`. The length of `dest` must be half the length of `itr`.
+
+!!! compat "Julia 1.7"
+    Calling hex2bytes! with iterators producing UInt8 requires
+    version 1.7. In earlier versions, you can collect the iterable
+    before calling instead.
 """
 function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     isodd(length(itr)) && throw(ArgumentError("length of iterable must be even"))
@@ -659,14 +668,15 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
         x,state = next
         y,state = iterate(itr, state)
         next = iterate(itr, state)
-        dest[i] = nfh(x) << 4 + nfh(y)
+        dest[i] = number_from_hex(x) << 4 + number_from_hex(y)
     end
 
     return dest
 end
 
-@inline nfh(c::Char) = nfh(UInt8(c))
-@inline function nfh(c::UInt8)
+@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c))
+@inline number_from_hex(c::Char) = number_from_hex(UInt8(c))
+@inline function number_from_hex(c::UInt8)
     UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
     c |= 0b0100000
     UInt8('a') <= c <= UInt8('f') && return c - UInt8('a') + 0x0a
@@ -680,6 +690,11 @@ end
 Convert an iterator `itr` of bytes to its hexadecimal string representation, either
 returning a `String` via `bytes2hex(itr)` or writing the string to an `io` stream
 via `bytes2hex(io, itr)`.  The hexadecimal characters are all lowercase.
+
+!!! compat "Julia 1.7"
+    Calling bytes2hex with iterators producing UInt8 requires
+    version 1.7. In earlier versions, you can collect the iterable
+    before calling instead.
 
 # Examples
 ```jldoctest
