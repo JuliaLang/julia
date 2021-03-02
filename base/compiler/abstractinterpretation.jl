@@ -796,8 +796,12 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
 end
 
 # do apply(af, fargs...), where af is a function value
-function abstract_apply(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(aft), aargtypes::Vector{Any}, sv::InferenceState,
+function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState,
                         max_methods::Int = InferenceParams(interp).MAX_METHODS)
+    itft = argtype_by_index(argtypes, 2)
+    aft = argtype_by_index(argtypes, 3)
+    (itft === Bottom || aft === Bottom) && return CallMeta(Bottom, false)
+    aargtypes = argtype_tail(argtypes, 4)
     aftw = widenconst(aft)
     if !isa(aft, Const) && !isa(aft, PartialOpaque) && (!isType(aftw) || has_free_typevars(aftw))
         if !isconcretetype(aftw) || (aftw <: Builtin)
@@ -1076,7 +1080,13 @@ function abstract_call_unionall(argtypes::Vector{Any})
     return Any
 end
 
-function abstract_invoke(interp::AbstractInterpreter, @nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
+function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    ft = widenconst(argtype_by_index(argtypes, 2))
+    ft === Bottom && return CallMeta(Bottom, false)
+    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
+    types === Bottom && return CallMeta(Bottom, false)
+    isexact || return CallMeta(Any, false)
+    argtype = argtypes_to_type(argtype_tail(argtypes, 4))
     nargtype = typeintersect(types, argtype)
     nargtype === Bottom && return CallMeta(Bottom, false)
     nargtype isa DataType || return CallMeta(Any, false) # other cases are not implemented below
@@ -1106,18 +1116,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
 
     if isa(f, Builtin)
         if f === _apply_iterate
-            itft = argtype_by_index(argtypes, 2)
-            ft = argtype_by_index(argtypes, 3)
-            (itft === Bottom || ft === Bottom) && return CallMeta(Bottom, false)
-            return abstract_apply(interp, itft, ft, argtype_tail(argtypes, 4), sv, max_methods)
+            return abstract_apply(interp, argtypes, sv, max_methods)
         elseif f === invoke
-            ft = widenconst(argtype_by_index(argtypes, 2))
-            (sigty, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
-            (ft === Bottom || sigty === Bottom) && return CallMeta(Bottom, false)
-            if isexact
-                return abstract_invoke(interp, ft, sigty, argtypes_to_type(argtype_tail(argtypes, 4)), sv)
-            end
-            return CallMeta(Any, false)
+            return abstract_invoke(interp, argtypes, sv)
         end
         return CallMeta(abstract_call_builtin(interp, f, fargs, argtypes, sv, max_methods), false)
     elseif f === Core.kwfunc
