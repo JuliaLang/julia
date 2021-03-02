@@ -40,8 +40,9 @@ Base.convert(D::Type{GenericDimensionful{p}}, x::GenericDimensionful{q}) where {
 Base.convert(D::Type{GenericDimensionful{p,T}}, x::GenericDimensionful{q}) where {p,q,T} =
     p == q ? GenericDimensionful{p,T}(x.val) : throw(DimensionMismatch("dimension mismatch between $D and $(typeof(x))"))
 
-Base.promote_type(::Type{GenericDimensionful{p,T}}, ::Type{GenericDimensionful{p,S}}) where {p,T,S} =
-    (Base.@_pure_meta; GenericDimensionful{p,promote_type(T,S)})
+@generated Base.promote_rule(::Type{GenericDimensionful{p,T}}, ::Type{GenericDimensionful{q,S}}) where {p,q,T,S} =
+    p === q ? :(GenericDimensionful{p, promote_type(T,S)}) :
+    p == q  ? :(GenericDimensionful{$(canonical_p(p)), promote_type(T,S)}) : :(Union{})
 Base.promote_type(::Type{GenericDimensionful{0,T}}, ::Type{S}) where {T,S<:Number} =
     (Base.@_pure_meta; GenericDimensionful{0,promote_type(T,S)})
 Base.promote_type(::Type{S}, ::Type{GenericDimensionful{0,T}}) where {T,S<:Number} =
