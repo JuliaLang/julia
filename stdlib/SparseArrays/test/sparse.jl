@@ -472,9 +472,13 @@ end
     for i = 1:5
         A = sprand(ComplexF64,10,15,0.4)
         B = sprand(ComplexF64,10,15,0.5)
-        @test dot(A,B) ≈ dot(Matrix(A),Matrix(B))
+        @test dot(A,B) ≈ dot(Matrix(A), Matrix(B))
+        @test dot(A,B) ≈ dot(A, Matrix(B))
+        @test dot(A,B) ≈ dot(Matrix(A), B)
     end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
+    @test_throws DimensionMismatch dot(rand(5,5),sprand(5,6,0.2))
+    @test_throws DimensionMismatch dot(sprand(5,5,0.2),rand(5,6))
 end
 
 @testset "generalized dot product" begin
