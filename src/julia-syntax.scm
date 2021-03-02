@@ -470,15 +470,16 @@
           (filter (lambda (s)
                     (not (any (lambda (p) (eq? (car p) (car s)))
                               positional-sparams)))
-                  sparams)))
-    (let ((kw      (gensy))
-          (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
-          (mangled (let ((und (and name (undot-name name))))
-                     (symbol (string (if (and name (= (string.char (string name) 0) #\#))
-                                         ""
-                                         "#")
-                                     (or und '_) "#"
-                                     (string (current-julia-module-counter)))))))
+                  sparams))
+         (kw      (gensy))
+         (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
+         (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
+         (mangled (let ((und (and name (undot-name name))))
+                    (symbol (string (if (and name (= (string.char (string name) 0) #\#))
+                                        ""
+                                        "#")
+                                    (or und '_) "#"
+                                    (string (current-julia-module-counter)))))))
       ;; this is a hack: nest these statements inside a call so they get closure
       ;; converted together, allowing all needed types to be defined before any methods.
       `(call (core ifelse) (false) (false) (block
@@ -579,7 +580,7 @@
                                     (list `(... ,(arg-name (car vararg)))))))))))
         ;; return primary function
         ,(if (not (symbol? name))
-             '(null) name))))))
+             '(null) name)))))
 
 ;; prologue includes line number node and eventual meta nodes
 (define (extract-method-prologue body)

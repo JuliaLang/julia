@@ -618,7 +618,7 @@ end
         @test isempty(d) || haskey(d, first(keys(d)))
         @test collect(v for (k, v) in d) == collect(A)
         if A isa NamedTuple
-            K = isempty(d) ? Union{} : Symbol
+            K = Symbol
             V = isempty(d) ? Union{} : Float64
             @test isempty(d) || haskey(d, :a)
             @test !haskey(d, :abc)
