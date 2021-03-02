@@ -944,7 +944,7 @@ end
 
 (obj::Returns)(args...; kw...) = obj.value
 function show(io::IO, obj::Returns)
-    show(io, Returns)
+    show(io, typeof(obj))
     print(io, "(")
     show(io, obj.value)
     print(io, ")")
