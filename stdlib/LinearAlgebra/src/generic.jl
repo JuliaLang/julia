@@ -527,10 +527,11 @@ function generic_normp(x, p)
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
         (iszero(maxabs) || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
+        maxabsd = maxabs*1.0 # promotes to at least Float64 with * 1.0
     else
         T = typeof(float(norm(v)))
+        maxabsd = oneunit(T)*1.0 # promotes to at least Float64 with * 1.0
     end
-    maxabsd = maxabs*1.0 # promotes to at least Float64 with * 1.0
     pinv = p isa Integer ? 1//p : 1.0*inv(p)
     if -1 <= p <= 1 || (isfinite(length(x)*maxabsd^p) && !iszero(maxabsd^p)) # scaling not necessary
         sum = (norm(v) * 1.0)^p # promotes to at least Float64 with * 1.0
@@ -547,9 +548,9 @@ function generic_normp(x, p)
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
-            sum += (norm(v)/maxabs)^p
+            sum += (norm(v)/maxabsd)^p
         end
-        return convert(T, maxabs*sum^pinv)
+        return convert(T, maxabsd*sum^pinv)
     end
 end
 

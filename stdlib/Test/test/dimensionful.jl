@@ -44,8 +44,8 @@ const GD = GenericDimensionful
     for op in (+, -)
         @test op(x, GD(1.5)) === GD(op(4,1.5))
         @test_throws DimensionMismatch op(x, GD{2}(1.5))
-        @test_throws DimensionMismatch op(x, 1.5)
-        @test_throws DimensionMismatch op(1.5, x)
+        @test_throws ErrorException op(x, 1.5)
+        @test_throws ErrorException op(1.5, x)
         @test op(GD{0}(5), 1.5) === op(5, GD{0}(1.5)) === GD{0}(op(5, 1.5))
     end
 
@@ -53,7 +53,7 @@ const GD = GenericDimensionful
         @test op(x, y) === op(x.val, y.val)
     end
     @test_throws DimensionMismatch x == GD{2}(4)
-    @test_throws DimensionMismatch x == 3
+    @test_throws ErrorException x == 3
 
     @test x*x*x === x * GD{2}(4^2) === GD{3}(4^3)
     for op in (/, //)
