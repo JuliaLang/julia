@@ -1799,7 +1799,7 @@ end
         A = reshape(a, tuple(shp...))
         @test mdsum(A) == 55
         @test mdsum2(A) == 55
-        B = view(A, ntuple(i->Colon(), i)...)
+        B = view(A, ntuple(Returns(:), i)...)
         @test mdsum(B) == 55
         @test mdsum2(B) == 55
         insert!(shp, 2, 1)
