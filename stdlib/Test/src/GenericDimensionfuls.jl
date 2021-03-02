@@ -42,8 +42,6 @@ Base.convert(D::Type{GenericDimensionful{p,T}}, x::GenericDimensionful{q}) where
 
 Base.promote_type(::Type{GenericDimensionful{p,T}}, ::Type{GenericDimensionful{p,S}}) where {p,T,S} =
     (Base.@_pure_meta; GenericDimensionful{p,promote_type(T,S)})
-Base.promote_type(A::Type{GenericDimensionful{p,T}}, B::Type{GenericDimensionful{q,S}}) where {p,q,T,S} =
-    (Base.@_pure_meta; p == q ? GenericDimensionful{p,promote_type(T,S)} : throw(DimensionMismatch("dimension mismatch between $A and $B")))
 Base.promote_type(::Type{GenericDimensionful{0,T}}, ::Type{S}) where {T,S<:Number} =
     (Base.@_pure_meta; GenericDimensionful{0,promote_type(T,S)})
 Base.promote_type(::Type{S}, ::Type{GenericDimensionful{0,T}}) where {T,S<:Number} =
