@@ -915,7 +915,6 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 """
 |>(x, f) = f(x)
 
-# always
 """
     f = Returns(value)
 
@@ -930,6 +929,9 @@ julia> f(1)
 42
 
 julia> f("hello", x=32)
+42
+
+julia> f.value
 42
 ```
 
