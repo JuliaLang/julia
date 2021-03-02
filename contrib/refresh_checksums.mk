@@ -39,7 +39,7 @@ endef
 # If $(2) == `src`, this will generate a `USE_BINARYBUILDER_FOO=0` make flag
 # It will also generate a `FOO_BB_TRIPLET=$(2)` make flag.
 define make_flags
-USE_BINARYBUILDER=$(if $(filter src,$(2)),0,1) $(call makevar,$(1))_BB_TRIPLET=$(if $(filter src,$(2)),,$(2)) LLVM_ASSERTIONS=$(if $(filter assert,$(3)),1,0) DEPS_GIT=0
+USE_BINARYBUILDER=$(if $(filter src,$(2)),0,1) $(if $(filter src,$(2)),FC_VERSION=7.0.0,) $(call makevar,$(1))_BB_TRIPLET=$(if $(filter src,$(2)),,$(2)) LLVM_ASSERTIONS=$(if $(filter assert,$(3)),1,0) DEPS_GIT=0
 endef
 
 # checksum_bb_dep takes in (name, triplet), and generates a `checksum-$(1)-$(2)` target.
