@@ -227,7 +227,7 @@ LinearAlgebra.qr(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
     "sparse floating point QR using SPQR or qr(Array(A)) for generic ",
     "dense QR.")))
 LinearAlgebra.qr(A::SparseMatrixCSC; tol=_default_tol(A)) = qr(float(A); tol=tol)
-LinearAlgebra.qr(A::Adjoint{T,<:SparseMatrixCSC} tol =_default_tol(A)) where T =  qr(SparseMatrixCSC(A); tol=tol)
+LinearAlgebra.qr(A::Adjoint{T,<:SparseMatrixCSC}; tol =_default_tol(A)) where T =  qr(SparseMatrixCSC(A); tol=tol)
 LinearAlgebra.qr(A::Transpose{T,<:SparseMatrixCSC}; tol =_default_tol(A)) where T = qr(SparseMatrixCSC(A); tol=tol)
 
 function LinearAlgebra.lmul!(Q::QRSparseQ, A::StridedVecOrMat)
