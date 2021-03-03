@@ -326,7 +326,7 @@ eltype(::Type{Zip{Is}}) where {Is<:Tuple} = Tuple{ntuple(n -> eltype(fieldtype(I
 #eltype(::Type{Zip{Tuple{}}}) = Tuple{}
 #eltype(::Type{Zip{Tuple{A}}}) where {A} = Tuple{eltype(A)}
 #eltype(::Type{Zip{Tuple{A, B}}}) where {A, B} = Tuple{eltype(A), eltype(B)}
-@inline isdone(z::Zip) = _zip_any_isdone(z.is, Base.map(Returns(()), z.is))
+@inline isdone(z::Zip) = _zip_any_isdone(z.is, Base.map(_ -> (), z.is))
 @inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, Base.map(tuple, ss))
 @inline function _zip_any_isdone(is, ss)
     d1 = isdone(is[1], ss[1]...)
@@ -335,7 +335,7 @@ eltype(::Type{Zip{Is}}) where {Is<:Tuple} = Tuple{ntuple(n -> eltype(fieldtype(I
 end
 @inline _zip_any_isdone(::Tuple{}, ::Tuple{}) = false
 
-@propagate_inbounds iterate(z::Zip) = _zip_iterate_all(z.is, Base.map(Returns(()), z.is))
+@propagate_inbounds iterate(z::Zip) = _zip_iterate_all(z.is, Base.map(_ -> (), z.is))
 @propagate_inbounds iterate(z::Zip, ss) = _zip_iterate_all(z.is, Base.map(tuple, ss))
 
 # This first queries isdone from every iterator. If any gives true, it immediately returns
