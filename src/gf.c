@@ -518,6 +518,13 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
     }
 }
 
+jl_function_t *jl_lower_tapir_func = NULL;
+
+JL_DLLEXPORT void jl_set_lower_tapir_func(jl_value_t *f)
+{
+    jl_lower_tapir_func = (jl_function_t*)f;
+}
+
 static int very_general_type(jl_value_t *t)
 {
     return (t == (jl_value_t*)jl_any_type || jl_types_equal(t, (jl_value_t*)jl_type_type));

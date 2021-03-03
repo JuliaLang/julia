@@ -28,7 +28,12 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 end
             end
         else
-            if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
+            # TODO: hoist out is_sequential(ir)
+            if (
+                is_sequential(ir) && # ignore this check before Tapir lowering
+                !dominates(domtree, def_bb, use_bb) &&
+                !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
+            )
                 # At the moment, we allow GC preserve tokens outside the standard domination notion
                 #@Base.show ir
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"

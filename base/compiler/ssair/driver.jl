@@ -140,7 +140,6 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
     #@Base.show ir
-    @timeit "tapir" ir = lower_tapir!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end

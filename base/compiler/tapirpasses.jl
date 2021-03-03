@@ -977,6 +977,35 @@ function opaque_closure_method_from_ssair(ir::IRCode)
     )
 end
 
+is_sequential(src::CodeInfo) = all(x -> !(x isa DetachNode), src.code)
+
+function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
+    ccall(:jl_breakpoint, Cvoid, (Any,), ci)
+    is_sequential(ci) && return remove_tapir(ci)
+
+    # Ref: _typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    params = OptimizationParams(interp)
+    opt = OptimizationState(linfo, copy(ci), params, interp)
+    nargs = Int(opt.nargs) - 1 # Ref: optimize(interp, opt, params)
+
+    # Ref: run_passes
+    preserve_coverage = coverage_enabled(opt.mod)
+    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, opt)
+    ir = slot2reg(ir, ci, nargs, opt)
+    @timeit "tapir" ir = lower_tapir!(ir)
+    if JLOptions().debug_level == 2
+        @timeit "verify tapir" (verify_ir(ir); verify_linetable(ir.linetable))
+    end
+
+    finish(opt, params, ir, Any) # Ref: optimize(interp, opt, params)
+    finish(opt.src, interp) # Ref: _typeinf(interp, frame)
+
+    return remove_tapir!(opt.src)
+end
+
+lower_tapir(linfo::MethodInstance, ci::CodeInfo) =
+    lower_tapir(NativeInterpreter(), linfo, ci)
+
 """
     remove_tapir!(src::CodeInfo)
     remove_tapir!(_::Any)
@@ -992,6 +1021,13 @@ function remove_tapir!(src::CodeInfo)
             src.code[i] = nothing
         end
     end
-    return
+    return src
 end
 remove_tapir!(::Any) = nothing
+
+function remove_tapir(src::CodeInfo)
+    any(src.code) do x
+        (x isa Union{DetachNode,ReattachNode,SyncNode}) || isexpr(x, :syncregion)
+    end && return remove_tapir!(copy(src))  # warn?
+    return src
+end

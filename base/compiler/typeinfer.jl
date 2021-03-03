@@ -258,7 +258,6 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
                     caller.src = nothing
                 end
                 caller.valid_worlds = opt.inlining.et.valid_worlds[]
-                remove_tapir!(opt.src)
             end
         end
     end

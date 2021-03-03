@@ -557,6 +557,7 @@
     XX(jl_set_errno) \
     XX(jl_set_global) \
     XX(jl_set_istopmod) \
+    XX(jl_set_lower_tapir_func) \
     XX(jl_set_module_compile) \
     XX(jl_set_module_infer) \
     XX(jl_set_module_nospecialize) \

@@ -141,6 +141,7 @@ include("compiler/tapirpasses.jl")
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+ccall(:jl_set_lower_tapir_func, Cvoid, (Any,), lower_tapir)
 
 include("compiler/parsing.jl")
 Core.eval(Core, :(_parse = Compiler.fl_parse))
