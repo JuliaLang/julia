@@ -146,7 +146,7 @@ end
 # product of trailing dims into the last element
 rdims_trailing(l, inds...) = length(l) * rdims_trailing(inds...)
 rdims_trailing(l) = length(l)
-rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val(N)), inds)
+rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(Returns(OneTo(1)), Val(N)), inds)
 rdims(out::Tuple{}, inds::Tuple{}) = () # N == 0, M == 0
 rdims(out::Tuple{}, inds::Tuple{Any}) = ()
 rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = ()

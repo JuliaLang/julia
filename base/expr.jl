@@ -360,7 +360,7 @@ end
 
 findmeta(ex::Array{Any,1}) = findmeta_block(ex)
 
-function findmeta_block(exargs, argsmatch=args->true)
+function findmeta_block(exargs, argsmatch=Returns(true))
     for i = 1:length(exargs)
         a = exargs[i]
         if isa(a, Expr)
