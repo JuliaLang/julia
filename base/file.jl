@@ -278,8 +278,14 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         end
     else
         if recursive
-            for p in readdir(path)
-                rm(joinpath(path, p), force=force, recursive=true)
+            try
+                for p in readdir(path)
+                    rm(joinpath(path, p), force=force, recursive=true)
+                end
+            catch err
+                if !(force && isa(err, IOError) && err.code==Base.UV_EACCES)
+                    rethrow(err)
+                end
             end
         end
         req = Libc.malloc(_sizeof_uv_fs)
@@ -484,7 +490,7 @@ function prepare_for_deletion(path::AbstractString)
 
     try chmod(path, filemode(path) | 0o333)
     catch; end
-    for (root, dirs, files) in walkdir(path)
+    for (root, dirs, files) in walkdir(path; onerror=x->())
         for dir in dirs
             dpath = joinpath(root, dir)
             try chmod(dpath, filemode(dpath) | 0o333)
