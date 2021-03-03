@@ -803,7 +803,7 @@ function getindex end
 @eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for UnitRange and Colon
-function getindex(A::Array, I::UnitRange{Int})
+function getindex(A::Array, I::AbstractUnitRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
