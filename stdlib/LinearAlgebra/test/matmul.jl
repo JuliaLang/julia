@@ -205,6 +205,27 @@ end
     @test *(Asub, adjoint(Asub)) == *(Aref, adjoint(Aref))
 end
 
+@testset "matrix x matrix with negative stride" begin
+    M = reshape(map(Float64,1:77),7,11)
+    N = reshape(map(Float64,1:63),9,7)
+    U = view(M,7:-1:1,11:-2:1)
+    V = view(N,7:-1:2,7:-1:1)
+    @test U*V ≈ Matrix(U) * Matrix(V)
+end
+
+@testset "dot product of subarrays of vectors (floats, negative stride, issue #37767)" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = Vector{T}(3:2:7)
+        b = Vector{T}(1:10)
+        v = view(b,7:-2:3)
+        @test dot(a,Vector(v)) ≈ 67.0
+        @test dot(a,v) ≈ 67.0
+        @test dot(v,a) ≈ 67.0
+        @test dot(Vector(v),Vector(v)) ≈ 83.0
+        @test dot(v,v) ≈ 83.0
+    end
+end
+
 @testset "Complex matrix x real MatOrVec etc (issue #29224)" for T1 in (Float32,Float64)
     for T2 in (Float32,Float64)
         for arg1_real in (true,false)
@@ -719,6 +740,16 @@ end
     LinearAlgebra._generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(-1, 0))
     @test D ≈ C
 end
+
+@testset "size zero types in matrix mult (see issue 39362)" begin
+    A = [missing missing; missing missing]
+    v = [missing, missing]
+    @test (A * v == v) === missing
+    M = fill(1.0, 2, 2)
+    a = fill(missing, 2, 1)
+    @test (a' * M * a == fill(missing,1,1)) === missing
+end
+
 
 @testset "multiplication of empty matrices without calling zero" begin
     r, c = rand(0:9, 2)

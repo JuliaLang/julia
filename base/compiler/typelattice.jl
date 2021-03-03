@@ -4,7 +4,7 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct are defined in Core, to allow them to be used
+# N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
 # inside the global code cache.
 #
 # # The type of a value might be constant
@@ -17,7 +17,6 @@
 #     fields::Vector{Any} # elements are other type lattice members
 # end
 import Core: Const, PartialStruct
-
 
 # The type of this value might be Bool.
 # However, to enable a limited amount of back-propagagation,
@@ -44,6 +43,18 @@ struct Conditional
         return new(var, vtype, nottype)
     end
 end
+
+# # Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
+# # This is separate from `Conditional` to catch logic errors: the lattice element name is InterConditional
+# # while processing a call, then Conditional everywhere else. Thus InterConditional does not appear in
+# # CompilerTypes—these type's usages are disjoint—though we define the lattice for InterConditional.
+# struct InterConditional
+#     slot::Int
+#     vtype
+#     elsetype
+# end
+import Core: InterConditional
+const AnyConditional = Union{Conditional,InterConditional}
 
 struct PartialTypeVar
     tv::TypeVar
@@ -101,11 +112,10 @@ const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStr
 # lattice logic #
 #################
 
-function issubconditional(a::Conditional, b::Conditional)
-    avar = a.var
-    bvar = b.var
-    if (isa(avar, Slot) && isa(bvar, Slot) && slot_id(avar) === slot_id(bvar)) ||
-       (isa(avar, SSAValue) && isa(bvar, SSAValue) && avar === bvar)
+# `Conditional` and `InterConditional` are valid in opposite contexts
+# (i.e. local inference and inter-procedural call), as such they will never be compared
+function issubconditional(a::C, b::C) where {C<:AnyConditional}
+    if is_same_conditionals(a, b)
         if a.vtype ⊑ b.vtype
             if a.elsetype ⊑ b.elsetype
                 return true
@@ -115,8 +125,13 @@ function issubconditional(a::Conditional, b::Conditional)
     return false
 end
 
-maybe_extract_const_bool(c::Const) = isa(c.val, Bool) ? c.val : nothing
-function maybe_extract_const_bool(c::Conditional)
+is_same_conditionals(a::Conditional,      b::Conditional)      = slot_id(a.var) === slot_id(b.var)
+is_same_conditionals(a::InterConditional, b::InterConditional) = a.slot === b.slot
+
+is_lattice_bool(@nospecialize(typ)) = typ !== Bottom && typ ⊑ Bool
+
+maybe_extract_const_bool(c::Const) = (val = c.val; isa(val, Bool)) ? val : nothing
+function maybe_extract_const_bool(c::AnyConditional)
     (c.vtype === Bottom && !(c.elsetype === Bottom)) && return false
     (c.elsetype === Bottom && !(c.vtype === Bottom)) && return true
     nothing
@@ -145,14 +160,14 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     b === Union{} && return false
     @assert !isa(a, TypeVar) "invalid lattice item"
     @assert !isa(b, TypeVar) "invalid lattice item"
-    if isa(a, Conditional)
-        if isa(b, Conditional)
+    if isa(a, AnyConditional)
+        if isa(b, AnyConditional)
             return issubconditional(a, b)
         elseif isa(b, Const) && isa(b.val, Bool)
             return maybe_extract_const_bool(a) === b.val
         end
         a = Bool
-    elseif isa(b, Conditional)
+    elseif isa(b, AnyConditional)
         return false
     end
     if isa(a, PartialStruct)
@@ -251,7 +266,7 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     return a ⊑ b && b ⊑ a
 end
 
-widenconst(c::Conditional) = Bool
+widenconst(c::AnyConditional) = Bool
 function widenconst(c::Const)
     if isa(c.val, Type)
         if isvarargtype(c.val)
@@ -286,7 +301,7 @@ end
 @inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n, o)))
 
 widenconditional(@nospecialize typ) = typ
-function widenconditional(typ::Conditional)
+function widenconditional(typ::AnyConditional)
     if typ.vtype === Union{}
         return Const(false)
     elseif typ.elsetype === Union{}

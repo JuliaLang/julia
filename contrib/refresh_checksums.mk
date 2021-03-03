@@ -19,7 +19,7 @@ CLANG_TRIPLETS=$(filter %-darwin %-freebsd,$(TRIPLETS))
 NON_CLANG_TRIPLETS=$(filter-out %-darwin %-freebsd,$(TRIPLETS))
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
-BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib suitesparse openlibm
+BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib suitesparse openlibm blastrampoline
 BB_GCC_EXPANDED_PROJECTS=openblas csl
 BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools
 # These are non-BB source-only deps
@@ -39,7 +39,7 @@ endef
 # If $(2) == `src`, this will generate a `USE_BINARYBUILDER_FOO=0` make flag
 # It will also generate a `FOO_BB_TRIPLET=$(2)` make flag.
 define make_flags
-USE_BINARYBUILDER=$(if $(filter src,$(2)),0,1) $(call makevar,$(1))_BB_TRIPLET=$(if $(filter src,$(2)),,$(2)) LLVM_ASSERTIONS=$(if $(filter assert,$(3)),1,0) DEPS_GIT=0
+USE_BINARYBUILDER=$(if $(filter src,$(2)),0,1) $(if $(filter src,$(2)),FC_VERSION=7.0.0,) $(call makevar,$(1))_BB_TRIPLET=$(if $(filter src,$(2)),,$(2)) LLVM_ASSERTIONS=$(if $(filter assert,$(3)),1,0) DEPS_GIT=0
 endef
 
 # checksum_bb_dep takes in (name, triplet), and generates a `checksum-$(1)-$(2)` target.

@@ -30,9 +30,12 @@ const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
 const DATATYPE_MUTABLE_FIELDINDEX = fieldindex(DataType, :mutable)
 const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
+const DATATYPE_ABSTRACT_FIELDINDEX = fieldindex(DataType, :abstract)
+const DATATYPE_NAMES_FIELDINDEX = fieldindex(DataType, :names)
 
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
 const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
+const TYPENAME_NAMES_FIELDINDEX = fieldindex(Core.TypeName, :names)
 const TYPENAME_WRAPPER_FIELDINDEX = fieldindex(Core.TypeName, :wrapper)
 
 ##########
@@ -611,7 +614,9 @@ is_dt_const_field(fld::Int) = (
      fld == DATATYPE_TYPES_FIELDINDEX ||
      fld == DATATYPE_SUPER_FIELDINDEX ||
      fld == DATATYPE_MUTABLE_FIELDINDEX ||
-     fld == DATATYPE_INSTANCE_FIELDINDEX
+     fld == DATATYPE_INSTANCE_FIELDINDEX ||
+     fld == DATATYPE_NAMES_FIELDINDEX ||
+     fld == DATATYPE_ABSTRACT_FIELDINDEX
     )
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
     if fld == DATATYPE_INSTANCE_FIELDINDEX
@@ -770,7 +775,8 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 fld = isa(nv, Symbol) ? fieldindex(Core.TypeName, nv, false) : nv
                 if (fld == TYPENAME_NAME_FIELDINDEX ||
                     fld == TYPENAME_MODULE_FIELDINDEX ||
-                    fld == TYPENAME_WRAPPER_FIELDINDEX)
+                    fld == TYPENAME_WRAPPER_FIELDINDEX ||
+                    (fld == TYPENAME_NAMES_FIELDINDEX && isdefined(sv, fld)))
                     return Const(getfield(sv, fld))
                 end
             end
@@ -1279,25 +1285,6 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
-function invoke_tfunc(interp::AbstractInterpreter, @nospecialize(ft), @nospecialize(types), @nospecialize(argtype), sv::InferenceState)
-    argtype = typeintersect(types, argtype)
-    argtype === Bottom && return Bottom
-    argtype isa DataType || return Any # other cases are not implemented below
-    isdispatchelem(ft) || return Any # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
-    types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)
-    argtype = Tuple{ft, argtype.parameters...}
-    result = findsup(types, method_table(interp))
-    if result === nothing
-        return Any
-    end
-    method, valid_worlds = result
-    update_valid_age!(sv, valid_worlds)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argtype, method.sig)::SimpleVector
-    rt, edge = typeinf_edge(interp, method, ti, env, sv)
-    edge !== nothing && add_backedge!(edge::MethodInstance, sv)
-    return rt
-end
-
 function has_struct_const_info(x)
     isa(x, PartialTypeVar) && return true
     isa(x, Conditional) && return true
@@ -1483,26 +1470,6 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                            sv::Union{InferenceState,Nothing})
     if f === tuple
         return tuple_tfunc(argtypes)
-    elseif f === invoke
-        if length(argtypes) > 1 && sv !== nothing && (isa(argtypes[1], Const) || isa(argtypes[1], Type))
-            if isa(argtypes[1], Const)
-                ft = Core.Typeof(argtypes[1].val)
-            else
-                ft = argtypes[1]
-            end
-            sig = argtypes[2]
-            if isa(sig, Const)
-                sigty = sig.val
-            elseif isType(sig)
-                sigty = sig.parameters[1]
-            else
-                sigty = nothing
-            end
-            if isa(sigty, Type) && !has_free_typevars(sigty) && sigty <: Tuple
-                return invoke_tfunc(interp, ft, sigty, argtypes_to_type(argtypes[3:end]), sv)
-            end
-        end
-        return Any
     end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
@@ -1642,10 +1609,10 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), nothing)
+                        return CallMeta(Const(Union{}), false)
                     end
                     call = abstract_call(interp, nothing, argtypes_vec, sv, -1)
-                    info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : nothing
+                    info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
                         # output was computed to be constant
@@ -1674,7 +1641,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             end
         end
     end
-    return CallMeta(Type, nothing)
+    return CallMeta(Type, false)
 end
 
 # N.B.: typename maps type equivalence classes to a single value
