@@ -484,19 +484,6 @@ sizeof(x) = Core.sizeof(x)
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
-    precompile(f, args::Tuple{Vararg{Any}})
-
-Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
-"""
-function precompile(@nospecialize(f), args::Tuple)
-    ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
-end
-
-function precompile(argt::Type)
-    ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
-end
-
-"""
     esc(e)
 
 Only valid in the context of an [`Expr`](@ref) returned from a macro. Prevents the macro hygiene

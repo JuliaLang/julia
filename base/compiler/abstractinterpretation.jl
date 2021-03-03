@@ -939,6 +939,7 @@ end
 
 function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::Union{Nothing,Vector{Any}},
         argtypes::Vector{Any}, sv::InferenceState, max_methods::Int)
+    @nospecialize f
     la = length(argtypes)
     if f === ifelse && fargs isa Vector{Any} && la == 4
         cnd = argtypes[2]
