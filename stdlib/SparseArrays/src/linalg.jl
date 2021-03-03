@@ -1416,9 +1416,7 @@ kron!(C::SparseMatrixCSC, A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) 
 kron(A::SparseVectorUnion, B::AdjOrTransSparseVectorUnion) = A .* B
 
 # sparse lq decomposition
-function LinearAlgebra.lq(A::SparseMatrixCSC)
-    return LinearAlgebra.qr(SparseMatrixCSC(A'))
-end
+LinearAlgebra.lq(A::SparseMatrixCSC) = throw(ArgumentError("LQ factorization for Sparse Matrices not yet implemented. Call qr(A') to get the equivalent LQ decomposition."))
 
 ## det, inv, cond
 
