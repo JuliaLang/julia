@@ -896,6 +896,7 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x1!(R, A, i, j)
 end
 
 Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x2!(R, A, i, j)
+    jrange = j:(j + 1)
     r1 = -A[i, j]
     r2 = -A[i, j + 1]
     for k in (i + 1):(j - 1)
@@ -903,14 +904,16 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x2!(R, A, i, j)
         r1 += rik * R[k, j]
         r2 += rik * R[k, j + 1]
     end
-    Rij = @view R[i, j:(j + 1)]
+    Rjj = @view R[jrange, jrange]
+    Rij = @view R[i, jrange]
     Rij[1] = r1
     Rij[2] = r2
-    _sylvester_1x2!(R[i, i], @view(R[j:(j + 1), j:(j + 1)]), Rij)
+    _sylvester_1x2!(R[i, i], Rjj, Rij)
     return R
 end
 
 Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x1!(R, A, i, j)
+    irange = i:(i + 1)
     r1 = -A[i, j]
     r2 = -A[i + 1, j]
     for k in (i + 1):(j - 1)
@@ -918,24 +921,28 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x1!(R, A, i, j)
         r1 += R[i, k] * rkj
         r2 += R[i + 1, k] * rkj
     end
-    Rij = @view R[i:(i + 1), j]
+    Rii = @view R[irange, irange]
+    Rij = @view R[irange, j]
     Rij[1] = r1
     Rij[2] = r2
-    _sylvester_2x1!(@view(R[i:(i + 1), i:(i + 1)]), R[j, j], Rij)
+    @views _sylvester_2x1!(Rii, R[j, j], Rij)
     return R
 end
 
-    T = typeof(zero(eltype(R))^2 + zero(eltype(A)))
-    Rij = @view R[i:(i + 1), j:(j + 1)]
-    for i′ in i:(i + 1), j′ in j:(j + 1)
 Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x2!(R, A, i, j)
+    irange = i:(i + 1)
+    jrange = j:(j + 1)
+    for i′ in irange, j′ in jrange
         Cij = -A[i′, j′]
         for k in (i + 2):(j - 1)
             Cij += R[i′, k] * R[k, j′]
         end
-        Rij[i′ - i + 1, j′ - j + 1] = Cij
+        R[i′, j′] = Cij
     end
-    @views _sylvester_2x2!(R[i:(i + 1), i:(i + 1)], R[j:(j + 1), j:(j + 1)], Rij)
+    Rii = @view R[irange, irange]
+    Rjj = @view R[jrange, jrange]
+    Rij = @view R[irange, jrange]
+    _sylvester_2x2!(Rii, Rjj, Rij)
     return R
 end
 
