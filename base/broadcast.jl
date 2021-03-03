@@ -558,11 +558,13 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = CartesianIndex(_newindex(I.I, keep, Idefault))
-@inline newindex(i::Integer, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
+@inline newindex(i::Integer, keep::Tuple, idefault) = ifelse(keep[1], i, idefault[1])
 @inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
 @inline _newindex(I, keep, Idefault) =
     (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
 @inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I
+@inline _newindex(I::Tuple{}, keep, Idefault) = ()  # or I is shorter
+@inline _newindex(I::Tuple{}, keep::Tuple{}, Idefault) = () # or both
 
 # newindexer(A) generates `keep` and `Idefault` (for use by `newindex` above)
 # for a particular array `A`; `shapeindexer` does so for its axes.
@@ -966,11 +968,6 @@ broadcast_unalias(::Nothing, src) = src
 # * "extrudes" the arguments where it is advantageous to pre-compute the broadcasted indices
 @inline preprocess(dest, bc::Broadcasted{Style}) where {Style} = Broadcasted{Style}(bc.f, preprocess_args(dest, bc.args), bc.axes)
 preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
-function preprocess(dest::AbstractArray, x::AbstractArray)
-    keeps, defaults = newindexer(x)
-    keeps, defaults = keeps[1:min(ndims(dest), end)], defaults[1:min(ndims(dest), end)]
-    return Extruded(broadcast_unalias(dest, x), keeps, defaults)
-end
 
 @inline preprocess_args(dest, args::Tuple) = (preprocess(dest, args[1]), preprocess_args(dest, tail(args))...)
 preprocess_args(dest, args::Tuple{Any}) = (preprocess(dest, args[1]),)
