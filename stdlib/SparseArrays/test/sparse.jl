@@ -64,6 +64,9 @@ end
 
 @testset "spzeros de-splatting" begin
     @test spzeros(Float64, Int64, (2, 2)) == spzeros(Float64, Int64, 2, 2)
+    @test spzeros(Float64, Int32, (2, 2)) == spzeros(Float64, Int32, 2, 2)
+    @test spzeros(Float32, (3, 2)) == spzeros(Float32, Int, 3, 2)
+    @test spzeros((3, 2)) == spzeros((3, 2)...)
 end
 
 @testset "conversion to AbstractMatrix/SparseMatrix of same eltype" begin
