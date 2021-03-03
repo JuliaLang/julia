@@ -32,5 +32,3 @@
 .DS_Store
 .idea/*
 .vscode/*
-
-stdlib/*/Manifest.toml
