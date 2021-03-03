@@ -278,7 +278,7 @@ end
 @testset "filter" begin
     @test filter(isodd, (1,2,3)) == (1, 3)
     @test filter(isequal(2), (true, 2.0, 3)) === (2.0,)
-    @test filter(i -> true, ()) == ()
+    @test filter(Returns(true), ()) == ()
     @test filter(identity, (true,)) === (true,)
     longtuple = ntuple(identity, 20)
     @test filter(iseven, longtuple) == ntuple(i->2i, 10)

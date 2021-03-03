@@ -1659,7 +1659,7 @@ end
 Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
     #indexing with (UnitRange, UnitRange, UnitRange)
-    args = ntuple(d->UnitRange{Int}, N)
+    args = ntuple(Returns(UnitRange{Int}), N)
     @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N}]
     @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == Any[BitArray{N}]
     @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
@@ -1786,7 +1786,7 @@ end
         @test mdsum(A) == 15
         @test mdsum2(A) == 15
         AA = reshape(aa, tuple(2, shp...))
-        B = view(AA, 1:1, ntuple(i->Colon(), i)...)
+        B = view(AA, 1:1, ntuple(Returns(:), i)...)
         @test isa(Base.IndexStyle(B), Base.IteratorsMD.IndexCartesian)
         @test mdsum(B) == 15
         @test mdsum2(B) == 15

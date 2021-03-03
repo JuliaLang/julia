@@ -134,8 +134,8 @@ end
 function test_bounds(@nospecialize(A))
     @test_throws BoundsError A[0]
     @test_throws BoundsError A[end+1]
-    trailing2 = ntuple(x->1, max(ndims(A)-2, 0))
-    trailing3 = ntuple(x->1, max(ndims(A)-3, 0))
+    trailing2 = ntuple(Returns(1), max(ndims(A)-2, 0))
+    trailing3 = ntuple(Returns(1), max(ndims(A)-3, 0))
     @test_throws BoundsError A[1, 0, trailing2...]
     @test_throws BoundsError A[1, end+1, trailing2...]
     @test_throws BoundsError A[1, 1, 0, trailing3...]
@@ -214,10 +214,10 @@ end
 function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
     @assert ndims(SB) > 2
     for i3 in indexN, i2 in indexN, i1 in indexN
-        runsubarraytests(SB, i1, i2, i3, ntuple(x->1, max(ndims(SB)-3, 0))...)
+        runsubarraytests(SB, i1, i2, i3, ntuple(Returns(1), max(ndims(SB)-3, 0))...)
     end
     for i2 in indexN, i1 in indexN
-        runsubarraytests(SB, i1, i2, ntuple(x->1, max(ndims(SB)-2, 0))...)
+        runsubarraytests(SB, i1, i2, ntuple(Returns(1), max(ndims(SB)-2, 0))...)
     end
     for i1 in indexNNN
         runsubarraytests(SB, i1)
