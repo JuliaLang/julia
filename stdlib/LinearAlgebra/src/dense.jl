@@ -885,7 +885,13 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x1!(R, A, i, j)
     for k in (i + 1):(j - 1)
         r += R[i, k] * R[k, j]
     end
-    R[i, j] = sylvester(R[i, i], R[j, j], r)
+    Rii = R[i, i]
+    Rjj = R[j, j]
+    if Rii == Rjj == r == 0
+        R[i, j] = 0
+    else
+        R[i, j] = sylvester(Rii, Rjj, r)
+    end
     return R
 end
 
