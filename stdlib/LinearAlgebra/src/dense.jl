@@ -803,6 +803,10 @@ function sqrt(A::StridedMatrix{<:Complex})
     end
 end
 
+# auxiliary functions for matrix square root
+
+# square root of complex upper triangular or real upper quasitriangular matrix produced by
+# a real or complex Schur decomposition
 function sqrt_quasitriu(A)
     n = size(A, 1)
     S = eltype(sqrt(zero(eltype(A))))
@@ -822,6 +826,7 @@ function _sqrt_quasitriu_diag_block!(R, A)
             R[i, i] = sqrt(r11)
             i += 1
         else
+            # this branch is never reached when A is complex triangular
             @views _sqrt_real_2x2!(R[i:(i + 1), i:(i + 1)], A[i:(i + 1), i:(i + 1)])
             i += 2
         end
