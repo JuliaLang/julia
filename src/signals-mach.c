@@ -171,6 +171,7 @@ static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
 #else
     state->__sp = rsp;
     state->__pc = (uint64_t)fptr;
+    state->__lr = 0;
 #endif
 }
 

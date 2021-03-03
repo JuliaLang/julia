@@ -163,14 +163,15 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     // `catch_exception_raise`. It works fine when a signal is received
     // due to `kill`/`raise` though.
     ucontext64_t *ctx = (ucontext64_t*)_ctx;
+#if defined(_CPU_X86_64_)
     rsp -= sizeof(void*);
     *(void**)rsp = NULL;
-#if defined(_CPU_X86_64_)
     ctx->uc_mcontext64->__ss.__rsp = rsp;
     ctx->uc_mcontext64->__ss.__rip = (uintptr_t)fptr;
 #else
     ctx->uc_mcontext64->__ss.__sp = rsp;
     ctx->uc_mcontext64->__ss.__pc = (uintptr_t)fptr;
+    ctx->uc_mcontext64->__ss.__lr = 0;
 #endif
 #else
 #warning "julia: throw-in-context not supported on this platform"
