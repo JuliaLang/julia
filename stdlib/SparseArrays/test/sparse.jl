@@ -479,13 +479,17 @@ end
         @test dot(A,B) ≈ dot(Matrix(A), B)
         @test dot(A,C) ≈ dot(Matrix(A), C)
         @test dot(C,A) ≈ dot(C, Matrix(A))
+        # square matrices required by most linear algebra wrappers
+        SA = A * A'
+        SB = B * B'
+        SC = C * C'
         for W in (full_view, LowerTriangular, UpperTriangular, UpperHessenberg, Symmetric, Hermitian)
-            WA = W(Matrix(A))
-            WB = W(Matrix(B))
-            WC = W(Matrix(C))
-            @test dot(WA,B) ≈ dot(WA, Matrix(B))
-            @test dot(A,WB) ≈ dot(Matrix(A), WB)
-            @test dot(A,WC) ≈ dot(Matrix(A), WC)
+            WA = W(Matrix(SA))
+            WB = W(Matrix(SB))
+            WC = W(Matrix(SC))
+            @test dot(WA,SB) ≈ dot(WA, Matrix(SB))
+            @test dot(SA,WB) ≈ dot(Matrix(SA), WB)
+            @test dot(SA,WC) ≈ dot(Matrix(SA), WC)
         end
         for W in (transpose, adjoint)
             WA = W(Matrix(A))
