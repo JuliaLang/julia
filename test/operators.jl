@@ -296,5 +296,5 @@ a = rand(3, 3)
     @inferred f(1,2)
     val = [1,2,3]
     @test Returns(val)(1) === val
-    @test sprint(show, Returns(1)) == "Returns(1)"
+    @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
 end
