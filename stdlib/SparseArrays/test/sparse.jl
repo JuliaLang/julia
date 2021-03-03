@@ -469,12 +469,24 @@ end
 end
 
 @testset "sparse Frobenius dot/inner product" begin
+    full_view = M -> view(M, :, :)
     for i = 1:5
         A = sprand(ComplexF64,10,15,0.4)
         B = sprand(ComplexF64,10,15,0.5)
+        C = rand(10,15) .> 0.3
         @test dot(A,B) ≈ dot(Matrix(A), Matrix(B))
         @test dot(A,B) ≈ dot(A, Matrix(B))
         @test dot(A,B) ≈ dot(Matrix(A), B)
+        @test dot(A,C) ≈ dot(Matrix(A), C)
+        @test dot(C,A) ≈ dot(C, Matrix(A))
+        for W in (full_view, transpose, adjoint, LowerTriangular, UpperTriangular, UpperHessenberg, Symmetric, Hermitian)
+            WA = W(Matrix(A))
+            WB = W(Matrix(B))
+            WC = W(Matrix(C))
+            @test dot(WA,B) ≈ dot(WA, Matrix(B))
+            @test dot(A,WB) ≈ dot(Matrix(A), WB)
+            @test dot(A, WC) ≈ dot(Matrix(A), WC)
+        end
     end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
     @test_throws DimensionMismatch dot(rand(5,5),sprand(5,6,0.2))
