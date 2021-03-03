@@ -12,16 +12,17 @@ compared to dense arrays.
 ## [Compressed Sparse Column (CSC) Sparse Matrix Storage](@id man-csc)
 
 In Julia, sparse matrices are stored in the [Compressed Sparse Column (CSC) format](https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29).
-Julia sparse matrices have the type [`SparseMatrixCSC{Tv,Ti}`](@ref), where `Tv` is the
-type of the stored values, and `Ti` is the integer type for storing column pointers and
-row indices. The internal representation of `SparseMatrixCSC` is as follows:
+Julia sparse matrices have the type [`SparseMatrixCSC{Tv,Ti,Tr}`](@ref), where `Tv` is the
+type of the stored values, `Ti` is the integer type for storing column pointers and `Tr`
+is the integer type for storing row indices. The internal representation of `SparseMatrixCSC`
+is as follows:
 
 ```julia
-struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrixCSC{Tv,Ti}
+struct SparseMatrixCSC{Tv,Ti<:Integer,Tr<:Integer} <: AbstractSparseMatrixCSC{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column j is in colptr[j]:(colptr[j+1]-1)
-    rowval::Vector{Ti}      # Row indices of stored values
+    rowval::Vector{Tr}      # Row indices of stored values
     nzval::Vector{Tv}       # Stored values, typically nonzeros
 end
 ```
@@ -51,13 +52,13 @@ remove stored zeros from the sparse matrix.
 
 ```jldoctest
 julia> A = sparse([1, 1, 2, 3], [1, 3, 2, 3], [0, 1, 2, 0])
-3×3 SparseMatrixCSC{Int64, Int64} with 4 stored entries:
+3×3 SparseMatrixCSC{Int64, Int64, Int64} with 4 stored entries:
  0  ⋅  1
  ⋅  2  ⋅
  ⋅  ⋅  0
 
 julia> dropzeros(A)
-3×3 SparseMatrixCSC{Int64, Int64} with 2 stored entries:
+3×3 SparseMatrixCSC{Int64, Int64, Int64} with 2 stored entries:
  ⋅  ⋅  1
  ⋅  2  ⋅
  ⋅  ⋅  ⋅
@@ -105,7 +106,7 @@ such that `R[I[k]] = V[k]`.
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
-5×18 SparseMatrixCSC{Int64, Int64} with 4 stored entries:
+5×18 SparseMatrixCSC{Int64, Int64, Int64} with 4 stored entries:
 ⠀⠈⠀⡀⠀⠀⠀⠀⠠
 ⠀⠀⠀⠀⠁⠀⠀⠀⠀
 
@@ -149,7 +150,7 @@ the [`sparse`](@ref) function:
 
 ```jldoctest
 julia> sparse(Matrix(1.0I, 5, 5))
-5×5 SparseMatrixCSC{Float64, Int64} with 5 stored entries:
+5×5 SparseMatrixCSC{Float64, Int64, Int64} with 5 stored entries:
  1.0   ⋅    ⋅    ⋅    ⋅
   ⋅   1.0   ⋅    ⋅    ⋅
   ⋅    ⋅   1.0   ⋅    ⋅

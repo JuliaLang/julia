@@ -22,6 +22,7 @@ for wr in (Symmetric, Hermitian, Transpose, Adjoint,
     @eval SparseMatrixCSC{Tv}(A::$wr{Tv}) where Tv = _sparsem(A)
     @eval SparseMatrixCSC{Tv}(A::$wr) where Tv = SparseMatrixCSC{Tv}(_sparsem(A))
     @eval SparseMatrixCSC{Tv,Ti}(A::$wr) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(_sparsem(A))
+    @eval SparseMatrixCSC{Tv,Ti,Tr}(A::$wr) where {Tv,Ti,Tr} = SparseMatrixCSC{Tv,Ti,Tr}(_sparsem(A))
 end
 
 """
@@ -89,7 +90,7 @@ function _sparsem(@nospecialize A::AbstractArray{Tv}) where Tv
         end
     else
         # explicitly call abstract matrix fallback using getindex(A,...)
-        invoke(SparseMatrixCSC{Tv,Int}, Tuple{AbstractMatrix}, A)
+        invoke(SparseMatrixCSC{Tv,Int,Int}, Tuple{AbstractMatrix}, A)
     end
 end
 

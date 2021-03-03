@@ -164,7 +164,7 @@ solve least squares or underdetermined problems with [`\\`](@ref). The function 
 # Examples
 ```jldoctest
 julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
-4×2 SparseMatrixCSC{Float64, Int64} with 4 stored entries:
+4×2 SparseMatrixCSC{Float64, Int64, Int64} with 4 stored entries:
  1.0   ⋅
  1.0   ⋅
   ⋅   1.0
@@ -179,7 +179,7 @@ Q factor:
   0.0       -0.707107   0.707107   0.0
  -0.707107   0.0        0.0        0.707107
 R factor:
-2×2 SparseMatrixCSC{Float64, Int64} with 2 stored entries:
+2×2 SparseMatrixCSC{Float64, Int64, Int64} with 2 stored entries:
  -1.41421    ⋅
    ⋅       -1.41421
 Row permutation:
@@ -309,7 +309,7 @@ julia> F.Q
  0.0  0.0  0.0  1.0
 
 julia> F.R
-4×4 SparseMatrixCSC{Float64, Int64} with 5 stored entries:
+4×4 SparseMatrixCSC{Float64, Int64, Int64} with 5 stored entries:
  3.0   ⋅    ⋅    ⋅
   ⋅   4.0   ⋅   2.0
   ⋅    ⋅   5.0   ⋅
@@ -441,7 +441,7 @@ when the problem is underdetermined.
 # Examples
 ```jldoctest
 julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
-4×2 SparseMatrixCSC{Float64, Int64} with 3 stored entries:
+4×2 SparseMatrixCSC{Float64, Int64, Int64} with 3 stored entries:
  1.0   ⋅
  1.0   ⋅
   ⋅    ⋅

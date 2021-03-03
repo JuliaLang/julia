@@ -111,7 +111,7 @@ Return a tuple `(I, J, V)` where `I` and `J` are the row and column indices of t
 # Examples
 ```jldoctest
 julia> A = sparse([1 2 0; 0 0 3; 0 4 0])
-3×3 SparseMatrixCSC{Int64, Int64} with 4 stored entries:
+3×3 SparseMatrixCSC{Int64, Int64, Int64} with 4 stored entries:
  1  2  ⋅
  ⋅  ⋅  3
  ⋅  4  ⋅

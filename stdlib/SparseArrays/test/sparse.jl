@@ -1944,16 +1944,16 @@ end
     B12118 = sparse([1,2,4,5],   [1,2,3,5],   [2,1,-1,-2])
 
     @test A12118 + B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [3,3,3,-1,4,3])
-    @test typeof(A12118 + B12118) == SparseMatrixCSC{Int,Int}
+    @test typeof(A12118 + B12118) == SparseMatrixCSC{Int,Int,Int}
 
     @test A12118 - B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [-1,1,3,1,4,7])
-    @test typeof(A12118 - B12118) == SparseMatrixCSC{Int,Int}
+    @test typeof(A12118 - B12118) == SparseMatrixCSC{Int,Int,Int}
 
     @test max.(A12118, B12118) == sparse([1,2,3,4,5], [1,2,3,4,5], [2,2,3,4,5])
-    @test typeof(max.(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+    @test typeof(max.(A12118, B12118)) == SparseMatrixCSC{Int,Int,Int}
 
     @test min.(A12118, B12118) == sparse([1,2,4,5], [1,2,3,5], [1,1,-1,-2])
-    @test typeof(min.(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+    @test typeof(min.(A12118, B12118)) == SparseMatrixCSC{Int,Int,Int}
 end
 
 @testset "unary minus for SparseMatrixCSC{Bool}" begin
@@ -2053,19 +2053,19 @@ end
     B13024 = sparse([1,2,4,5],   [1,2,3,5],   fill(true,4))
 
     @test broadcast(&, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
-    @test typeof(broadcast(&, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test typeof(broadcast(&, A13024, B13024)) == SparseMatrixCSC{Bool,Int,Int}
 
     @test broadcast(|, A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-    @test typeof(broadcast(|, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test typeof(broadcast(|, A13024, B13024)) == SparseMatrixCSC{Bool,Int,Int}
 
     @test broadcast(⊻, A13024, B13024) == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
-    @test typeof(broadcast(⊻, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test typeof(broadcast(⊻, A13024, B13024)) == SparseMatrixCSC{Bool,Int,Int}
 
     @test broadcast(max, A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-    @test typeof(broadcast(max, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test typeof(broadcast(max, A13024, B13024)) == SparseMatrixCSC{Bool,Int,Int}
 
     @test broadcast(min, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
-    @test typeof(broadcast(min, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test typeof(broadcast(min, A13024, B13024)) == SparseMatrixCSC{Bool,Int,Int}
 
     for op in (+, -)
         @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
@@ -2095,9 +2095,9 @@ end
     A = A*transpose(A)
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
     @test factorize(triu(A)) == triu(A)
-    @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+    @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64,Int,Int}})
     @test factorize(tril(A)) == tril(A)
-    @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+    @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64,Int,Int}})
     C, b = A[:, 1:4], fill(1., size(A, 1))
     @test !Base.USE_GPL_LIBS || factorize(C)\b ≈ Array(C)\b
     @test_throws ErrorException eigen(A)
@@ -2317,15 +2317,15 @@ end
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), spzeros(Float64, Int64, 0, 0))
-    @test String(take!(io)) == "0×0 SparseArrays.SparseMatrixCSC{Float64, Int64} with 0 stored entries"
+    @test String(take!(io)) == "0×0 SparseArrays.SparseMatrixCSC{Float64, Int64, Int64} with 0 stored entries"
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
-    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64, Int64} with 1 stored entry:\n 1.0"
+    @test String(take!(io)) == "1×1 SparseArrays.SparseMatrixCSC{Float64, Int64, Int64} with 1 stored entry:\n 1.0"
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
-    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32, Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ "
+    @test String(take!(io)) == "2×2 SparseArrays.SparseMatrixCSC{Float32, Int64, Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ "
 
     A = sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0])
     show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:\n 1.0  2.0"
+    @test String(take!(io)) == "1×2 SparseArrays.SparseMatrixCSC{Float64, Int64, Int64} with 2 stored entries:\n 1.0  2.0"
     _show_with_braille_patterns(convert(IOContext, io), A)
     @test String(take!(io)) == "⠉"
 
@@ -2344,13 +2344,13 @@ end
 
     A = sparse(Int64[1, 2, 4, 2, 3], Int64[1, 1, 1, 2, 2], Int64[1, 1, 1, 1, 1], 4, 2)
     show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64, Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅"
+    @test String(take!(io)) == "4×2 SparseArrays.SparseMatrixCSC{Int64, Int64, Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅"
     _show_with_braille_patterns(convert(IOContext, io), A)
     @test String(take!(io)) == "⡳"
 
     A = sparse(Int64[1, 3, 2, 4], Int64[1, 1, 2, 2], Int64[1, 1, 1, 1], 7, 3)
     show(io, MIME"text/plain"(), A)
-    @test String(take!(io)) == "7×3 SparseArrays.SparseMatrixCSC{Int64, Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅"
+    @test String(take!(io)) == "7×3 SparseArrays.SparseMatrixCSC{Int64, Int64, Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅"
     _show_with_braille_patterns(convert(IOContext, io), A)
     @test String(take!(io)) == "⢕" * Char(10240) * "\n" * Char(10240)^2
 
@@ -2360,7 +2360,7 @@ end
     @test String(take!(io)) == brailleString
 
     # Issue #30589
-    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool, $Int} with 2 stored entries:\n 1  1"
+    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool, $Int, $Int} with 2 stored entries:\n 1  1"
 
     function _filled_sparse(m::Integer, n::Integer)
         C = CartesianIndices((m, n))[:]
@@ -2422,9 +2422,9 @@ end
 @testset "similar with type conversion" begin
     local A = sparse(1.0I, 5, 5)
     @test size(similar(A, ComplexF64, Int)) == (5, 5)
-    @test typeof(similar(A, ComplexF64, Int)) == SparseMatrixCSC{ComplexF64, Int}
+    @test typeof(similar(A, ComplexF64, Int)) == SparseMatrixCSC{ComplexF64,Int,Int}
     @test size(similar(A, ComplexF64, Int8)) == (5, 5)
-    @test typeof(similar(A, ComplexF64, Int8)) == SparseMatrixCSC{ComplexF64, Int8}
+    @test typeof(similar(A, ComplexF64, Int8)) == SparseMatrixCSC{ComplexF64,Int8,Int8}
     @test similar(A, ComplexF64,(6, 6)) == spzeros(ComplexF64, 6, 6)
     @test convert(Matrix, A) == Array(A) # lolwut, are you lost, test?
 end
@@ -2440,14 +2440,14 @@ end
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type specification (preserves stored-entry structure)
     simA = similar(A, Float32)
-    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(getcolptr(A))}
+    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(getcolptr(A)),eltype(rowvals(A))}
     @test size(simA) == size(A)
     @test getcolptr(simA) == getcolptr(A)
     @test rowvals(simA) == rowvals(A)
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry and index type specification (preserves stored-entry structure)
     simA = similar(A, Float32, Int8)
-    @test typeof(simA) == SparseMatrixCSC{Float32,Int8}
+    @test typeof(simA) == SparseMatrixCSC{Float32,Int8,Int8}
     @test size(simA) == size(A)
     @test getcolptr(simA) == getcolptr(A)
     @test rowvals(simA) == rowvals(A)
@@ -2461,14 +2461,14 @@ end
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, (6,6))
-    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(getcolptr(A))}
+    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(getcolptr(A)),eltype(rowvals(A))}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == length(rowvals(A))
     @test length(nonzeros(simA)) == length(nonzeros(A))
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
-    @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
+    @test typeof(simA) == SparseMatrixCSC{Float32, Int8, Int8}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == length(rowvals(A))

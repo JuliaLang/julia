@@ -944,9 +944,9 @@ function Sparse(A::SparseMatrixCSC)
     o
 end
 
-Sparse(A::Symmetric{Tv, SparseMatrixCSC{Tv,Ti}}) where {Tv<:Real, Ti} =
+Sparse(A::Symmetric{Tv,<:SparseMatrixCSC{Tv,Ti}}) where {Tv<:Real, Ti} =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
-Sparse(A::Hermitian{Tv,SparseMatrixCSC{Tv,Ti}}) where {Tv, Ti} =
+Sparse(A::Hermitian{Tv,<:SparseMatrixCSC{Tv,Ti}}) where {Tv, Ti} =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 
 Sparse(A::Dense) = dense_to_sparse(A, SuiteSparse_long)
@@ -1327,9 +1327,9 @@ See also [`cholesky`](@ref).
 """
 cholesky!(F::Factor, A::Union{SparseMatrixCSC{T},
           SparseMatrixCSC{Complex{T}},
-          Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-          Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-          Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+          Symmetric{T,<:SparseMatrixCSC{T,SuiteSparse_long}},
+          Hermitian{Complex{T},<:SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+          Hermitian{T,<:SparseMatrixCSC{T,SuiteSparse_long}}};
           shift = 0.0, check::Bool = true) where {T<:Real} =
     cholesky!(F, Sparse(A); shift = shift, check = check)
 
@@ -1414,7 +1414,7 @@ julia> L * L' ≈ A[C.p, C.p]
 true
 
 julia> P = sparse(1:3, C.p, ones(3))
-3×3 SparseMatrixCSC{Float64, Int64} with 3 stored entries:
+3×3 SparseMatrixCSC{Float64, Int64, Int64} with 3 stored entries:
   ⋅    ⋅   1.0
   ⋅   1.0   ⋅
  1.0   ⋅    ⋅
@@ -1452,9 +1452,9 @@ true
     `Base.SparseArrays.CHOLMOD` module.
 """
 cholesky(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
-    Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-    Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+    Symmetric{T,<:SparseMatrixCSC{T,SuiteSparse_long}},
+    Hermitian{Complex{T},<:SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+    Hermitian{T,<:SparseMatrixCSC{T,SuiteSparse_long}}};
     kws...) where {T<:Real} = cholesky(Sparse(A); kws...)
 
 
@@ -1491,9 +1491,9 @@ See also [`ldlt`](@ref).
 """
 ldlt!(F::Factor, A::Union{SparseMatrixCSC{T},
     SparseMatrixCSC{Complex{T}},
-    Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-    Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+    Symmetric{T,<:SparseMatrixCSC{T,SuiteSparse_long}},
+    Hermitian{Complex{T},<:SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+    Hermitian{T,<:SparseMatrixCSC{T,SuiteSparse_long}}};
     shift = 0.0, check::Bool = true) where {T<:Real} =
     ldlt!(F, Sparse(A), shift = shift, check = check)
 
@@ -1556,9 +1556,9 @@ it should be a permutation of `1:size(A,1)` giving the ordering to use
     `Base.SparseArrays.CHOLMOD` module.
 """
 ldlt(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
-    Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
-    Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
+    Symmetric{T,<:SparseMatrixCSC{T,SuiteSparse_long}},
+    Hermitian{Complex{T},<:SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+    Hermitian{T,<:SparseMatrixCSC{T,SuiteSparse_long}}};
     kws...) where {T<:Real} = ldlt(Sparse(A); kws...)
 
 ## Rank updates
@@ -1734,9 +1734,9 @@ function \(adjL::Adjoint{<:Any,<:Factor}, B::StridedMatrix)
 end
 
 const RealHermSymComplexHermF64SSL = Union{
-    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-    Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-    Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long}}}
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long,SuiteSparse_long}},
+    Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long,SuiteSparse_long}},
+    Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long,SuiteSparse_long}}}
 const StridedVecOrMatInclAdjAndTrans = Union{StridedVecOrMat, Adjoint{<:Any, <:StridedVecOrMat}, Transpose{<:Any, <:StridedVecOrMat}}
 function \(A::RealHermSymComplexHermF64SSL, B::StridedVecOrMatInclAdjAndTrans)
     F = cholesky(A; check = false)
@@ -1858,18 +1858,18 @@ function ishermitian(A::Sparse{ComplexF64})
     end
 end
 
-(*)(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}},
+(*)(A::Symmetric{Float64,<:SparseMatrixCSC{Float64,Ti}},
     B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,Ti}},
+(*)(A::Hermitian{ComplexF64,<:SparseMatrixCSC{ComplexF64,Ti}},
     B::SparseVecOrMat{ComplexF64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
-(*)(A::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}},
+(*)(A::Hermitian{Float64,<:SparseMatrixCSC{Float64,Ti}},
     B::SparseVecOrMat{Float64,Ti}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 
 (*)(A::SparseVecOrMat{Float64,Ti},
-    B::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+    B::Symmetric{Float64,<:SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{ComplexF64,Ti},
-    B::Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+    B::Hermitian{ComplexF64,<:SparseMatrixCSC{ComplexF64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{Float64,Ti},
-    B::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+    B::Hermitian{Float64,<:SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 
 end #module
