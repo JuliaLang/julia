@@ -775,27 +775,29 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
-function sqrt(A::StridedMatrix{<:Real})
-    if issymmetric(A)
-        return copytri!(parent(sqrt(Symmetric(A))), 'U')
-    end
-    n = checksquare(A)
-    if istriu(A)
-        return triu!(parent(sqrt(UpperTriangular(A))))
-    else
-        SchurF = schur(complex(A))
-        R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
-        return SchurF.vectors * R * SchurF.vectors'
-    end
-end
-function sqrt(A::StridedMatrix{<:Complex})
+function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     if ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
-        return isa(sqrtHermA, Hermitian) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
-    end
-    n = checksquare(A)
-    if istriu(A)
+        return ishermitian(sqrtHermA) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
+    elseif istriu(A)
         return triu!(parent(sqrt(UpperTriangular(A))))
+    elseif isreal(A)
+        SchurF = schur(real(A))
+        if istriu(SchurF.T)
+            R = sqrt(UpperTriangular(SchurF.T))
+            return SchurF.Z * sqrt(UpperTriangular(SchurF.T)) * SchurF.Z'
+        else
+            # real sqrt exists whenever no eigenvalues are negative
+            is_sqrt_real = !any(x -> isreal(x) && real(x) < 0, SchurF.values)
+            # sqrt_quasitriu uses LAPACK functions
+            if typeof(sqrt(zero(T))) <: BlasFloat && is_sqrt_real
+                return SchurF.Z * sqrt_quasitriu(SchurF.T) * SchurF.Z'
+            else
+                SchurS = schur(complex(SchurF.T))
+                sqrtT = SchurS.Z * sqrt(UpperTriangular(SchurS.T)) * SchurS.Z'
+                return SchurF.Z * sqrtT * SchurF.Z'
+            end
+        end
     else
         SchurF = schur(A)
         R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
