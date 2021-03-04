@@ -993,3 +993,25 @@ end
 
     @test Cyclotomic() .* [2, 3] == [[1, 2], [1, 2]]
 end
+
+@testset "inplace broadcast with trailing singleton dims" begin
+    for (a, b, c) in (([1, 2], reshape([3 4], :, 1), reshape([5, 6], :, 1, 1)),
+            ([1 2; 3 4], reshape([5 6; 7 8], 2, 2, 1), reshape([9 10; 11 12], 2, 2, 1, 1)))
+
+        a_ = copy(a)
+        a_ .= b
+        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
+
+        a_ = copy(a)
+        a_ .= b
+        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
+
+        a_ = copy(a)
+        a_ .= b .+ c
+        @test a_ == dropdims(b .+ c, dims=(findall(==(1), size(c))...,))
+
+        a_ = copy(a)
+        a_ .*= c
+        @test a_ == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
+    end
+end
