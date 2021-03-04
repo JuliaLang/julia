@@ -407,5 +407,5 @@ end
 end
 
 # issue #39705
-f39705() = Base.Cartesian.@nany 0 Returns(true)
+f39705() = Base.Cartesian.@nany 0 _ -> true
 @test f39705() === false
