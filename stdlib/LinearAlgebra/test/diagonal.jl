@@ -740,6 +740,7 @@ end
     B = Diagonal(rand(10) .+ im)
     @test dot(A, B) ≈ dot(Matrix(A), B)
     @test dot(A, B) ≈ dot(A, Matrix(B))
+    @test dot(A, B) ≈ dot(Matrix(A), Matrix(B))
     @test dot(A, B) ≈ conj(dot(B, A))
 end
 
