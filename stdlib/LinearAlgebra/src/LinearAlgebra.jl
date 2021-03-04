@@ -433,7 +433,7 @@ function versioninfo(io::IO=stdout)
     return nothing
 end
 
-function find_library(name)
+function find_library_path(name)
     shlib_ext = string(".", Libdl.dlext)
     if !endswith(name, shlib_ext)
         name_ext = string(name, shlib_ext)
@@ -457,12 +457,9 @@ function find_library(name)
 end
 
 function __init__()
-    # Eventually, this will be provided via libblastrampoline_jll
-    libblastrampoline_handle = Libdl.dlopen(BLAS.libblastrampoline)
-
     try
-        libblas_path = find_library(Base.libblas_name)
-        liblapack_path = find_library(Base.liblapack_name)
+        libblas_path = find_library_path(Base.libblas_name)
+        liblapack_path = find_library_path(Base.liblapack_name)
         BLAS.lbt_forward(libblas_path; clear=true)
         if liblapack_path != libblas_path
             BLAS.lbt_forward(liblapack_path)
