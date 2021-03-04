@@ -697,6 +697,8 @@ end
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 
+dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
+
 function _mapreduce_prod(f, x, D::Diagonal, y)
     if isempty(x) && isempty(D) && isempty(y)
         return zero(Base.promote_op(f, eltype(x), eltype(D), eltype(y)))
