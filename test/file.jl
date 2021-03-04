@@ -1451,6 +1451,31 @@ let n = tempname()
     rm(n)
 end
 
+# PR #39906
+if !Sys.iswindows()
+    @testset "rm empty directories without read permissions" begin
+        mktempdir() do d
+            mkdir(joinpath(d, "nonempty"))
+            touch(joinpath(d, "nonempty", "a"))
+            mkdir(joinpath(d, "empty_outer"))
+            mkdir(joinpath(d, "empty_outer", "empty_inner"))
+
+            chmod(joinpath(d, "nonempty"), 0o333)
+            chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
+
+            # Test that an empty directory, even when we can't read its contents, is deletable
+            rm(joinpath(d, "empty_outer"); recursive=true, force=true)
+            @test !isdir(joinpath(d, "empty_outer"))
+
+            # But a non-empty directory is not
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            chmod(joinpath(d, "nonempty"), 0o777)
+            rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test !isdir(joinpath(d, "nonempty"))
+        end
+    end
+end
+
 @test_throws ArgumentError mkpath("fakepath", mode = -1)
 
 @testset "mktempdir 'prefix' argument" begin
