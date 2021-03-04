@@ -792,7 +792,6 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     elseif isreal(A)
         SchurF = schur(real(A))
         if istriu(SchurF.T)
-            R = sqrt(UpperTriangular(SchurF.T))
             return SchurF.Z * sqrt(UpperTriangular(SchurF.T)) * SchurF.Z'
         else
             # real sqrt exists whenever no eigenvalues are negative
