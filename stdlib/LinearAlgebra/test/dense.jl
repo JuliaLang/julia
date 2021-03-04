@@ -767,6 +767,10 @@ end
     @test diag(zeros(0,1),2) == []
 end
 
+@testset "issue #39857" begin
+    @test lyap(1.0+2.0im, 3.0+4.0im) == -1.5 - 2.0im
+end
+
 @testset "Matrix to real power" for elty in (Float64, ComplexF64)
 # Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
     #Aa : only positive real eigenvalues
