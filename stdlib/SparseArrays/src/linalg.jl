@@ -376,18 +376,17 @@ function dot(x::SparseVector, A::AbstractSparseMatrixCSC, y::SparseVector)
     r
 end
 
-const DenseSparseBaseTypes = Union{DenseMatrixUnion, AbstractSparseMatrix}
-const WrapperMatrixTypes{T} = Union{
-    SubArray{T,2,<:DenseSparseBaseTypes},
-    Adjoint{T,<:DenseSparseBaseTypes},
-    Transpose{T,<:DenseSparseBaseTypes},
-    AbstractTriangular{T,<:DenseSparseBaseTypes},
-    UpperHessenberg{T,<:DenseSparseBaseTypes},
-    Symmetric{T,<:DenseSparseBaseTypes},
-    Hermitian{T,<:DenseSparseBaseTypes},
+const WrapperMatrixTypes{T,MT} = Union{
+    SubArray{T,2,MT},
+    Adjoint{T,MT},
+    Transpose{T,MT},
+    AbstractTriangular{T,MT},
+    UpperHessenberg{T,MT},
+    Symmetric{T,MT},
+    Hermitian{T,MT},
 }
 
-function dot(A::MA, B::AbstractSparseMatrixCSC{TB}) where {MA<:Union{DenseSparseBaseTypes,WrapperMatrixTypes},TB}
+function dot(A::MA, B::AbstractSparseMatrixCSC{TB}) where {MA<:Union{DenseMatrixUnion,WrapperMatrixTypes{<:Any,Union{DenseMatrixUnion,AbstractSparseMatrix}}},TB}
     T = promote_type(eltype(A), TB)
     (m, n) = size(A)
     if (m, n) != size(B)
@@ -409,7 +408,7 @@ function dot(A::MA, B::AbstractSparseMatrixCSC{TB}) where {MA<:Union{DenseSparse
     return s
 end
 
-function dot(A::AbstractSparseMatrixCSC{TA}, B::MB) where {TA,MB<:Union{DenseSparseBaseTypes,WrapperMatrixTypes}}
+function dot(A::AbstractSparseMatrixCSC{TA}, B::MB) where {TA,MB<:Union{DenseMatrixUnion,WrapperMatrixTypes{<:Any,Union{DenseMatrixUnion,AbstractSparseMatrix}}}}
     return conj(dot(B, A))
 end
 
