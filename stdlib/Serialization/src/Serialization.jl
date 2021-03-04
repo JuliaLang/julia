@@ -1289,6 +1289,8 @@ function deserialize_typename(s::AbstractSerializer, number)
                 tn.mt.kwsorter = kws
             end
         end
+    elseif makenew
+        tn.mt = Symbol.name.mt
     end
     return tn::Core.TypeName
 end
