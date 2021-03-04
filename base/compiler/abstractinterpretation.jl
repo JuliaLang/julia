@@ -1451,8 +1451,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 if isa(t, PartialOpaque)
                     # Infer this now so that the specialization is available to
                     # optimization.
-                    abstract_call_opaque_closure(interp, t,
+                    callinfo = abstract_call_opaque_closure(interp, t,
                         most_general_argtypes(t), sv)
+                    sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
                 end
             end
         end
