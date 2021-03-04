@@ -2191,11 +2191,11 @@ end
 
 function _sqrt_quasitriu_diag_block!(R, A)
     n = size(R, 1)
+    t = eltype(R)
     i = 1
     @inbounds while i < n
-        r11 = A[i, i]
         if iszero(A[i + 1, i])
-            R[i, i] = sqrt(r11)
+            R[i, i] = sqrt(t(A[i, i]))
             i += 1
         else
             # this branch is never reached when A is complex triangular
@@ -2204,7 +2204,7 @@ function _sqrt_quasitriu_diag_block!(R, A)
         end
     end
     if i == n
-        R[n, n] = sqrt(A[n, n])
+        R[n, n] = sqrt(t(A[n, n]))
     end
     return R
 end
@@ -2258,25 +2258,27 @@ Base.@propagate_inbounds function _sqrt_real_2x2!(R, A)
 end
 
 Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x1!(R, A, i, j)
-    r = -A[i, j]
-    for k in (i + 1):(j - 1)
-        r += R[i, k] * R[k, j]
-    end
     Rii = R[i, i]
     Rjj = R[j, j]
-    if Rii == Rjj == r == 0
-        R[i, j] = 0
-    else
-        R[i, j] = sylvester(Rii, Rjj, r)
+    iszero(Rii) && iszero(Rjj) && return R
+    t = eltype(R)
+    tt = typeof(zero(t)*zero(t))
+    r = tt(-A[i, j])
+    @simd for k in (i + 1):(j - 1)
+        r += R[i, k] * R[k, j]
     end
+    iszero(r) && return R
+    R[i, j] = sylvester(Rii, Rjj, r)
     return R
 end
 
 Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x2!(R, A, i, j)
     jrange = j:(j + 1)
-    r1 = -A[i, j]
-    r2 = -A[i, j + 1]
-    for k in (i + 1):(j - 1)
+    t = eltype(R)
+    tt = typeof(zero(t)*zero(t))
+    r1 = tt(-A[i, j])
+    r2 = tt(-A[i, j + 1])
+    @simd for k in (i + 1):(j - 1)
         rik = R[i, k]
         r1 += rik * R[k, j]
         r2 += rik * R[k, j + 1]
@@ -2291,9 +2293,11 @@ end
 
 Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x1!(R, A, i, j)
     irange = i:(i + 1)
-    r1 = -A[i, j]
-    r2 = -A[i + 1, j]
-    for k in (i + 1):(j - 1)
+    t = eltype(R)
+    tt = typeof(zero(t)*zero(t))
+    r1 = tt(-A[i, j])
+    r2 = tt(-A[i + 1, j])
+    @simd for k in (i + 1):(j - 1)
         rkj = R[k, j]
         r1 += R[i, k] * rkj
         r2 += R[i + 1, k] * rkj
@@ -2309,8 +2313,10 @@ end
 Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x2!(R, A, i, j)
     irange = i:(i + 1)
     jrange = j:(j + 1)
+    t = eltype(R)
+    tt = typeof(zero(t)*zero(t))
     for i′ in irange, j′ in jrange
-        Cij = -A[i′, j′]
+        Cij = tt(-A[i′, j′])
         for k in (i + 2):(j - 1)
             Cij += R[i′, k] * R[k, j′]
         end
