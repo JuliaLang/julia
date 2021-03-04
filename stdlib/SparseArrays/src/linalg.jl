@@ -410,25 +410,7 @@ function dot(A::MA, B::AbstractSparseMatrixCSC{TB}) where {MA<:Union{DenseMatrix
 end
 
 function dot(A::AbstractSparseMatrixCSC{TA}, B::MB) where {TA,MB<:Union{DenseMatrixBaseTypes,WrapperMatrixTypes}}
-    T = promote_type(TA, eltype(B))
-    (m, n) = size(A)
-    if (m, n) != size(B)
-        throw(DimensionMismatch())
-    end
-    s = zero(T)
-    if m * n == 0
-        return s
-    end
-    rows = rowvals(A)
-    vals = nonzeros(A)
-    for j in 1:n
-        for ridx in nzrange(A, j)
-            i = rows[ridx]
-            v = vals[ridx]
-            s += dot(v, B[i,j])
-        end
-    end
-    return s
+    return conj(dot(B, A))
 end
 
 ## triangular sparse handling
