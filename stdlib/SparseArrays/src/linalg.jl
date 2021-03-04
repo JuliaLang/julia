@@ -376,18 +376,18 @@ function dot(x::SparseVector, A::AbstractSparseMatrixCSC, y::SparseVector)
     r
 end
 
-const DenseMatrixBaseTypes = Union{DenseMatrix, BitMatrix}
+const DenseSparseBaseTypes = Union{DenseMatrix, BitMatrix, SparseMatrix}
 const WrapperMatrixTypes{T} = Union{
-    SubArray{T,2,<:DenseMatrixBaseTypes},
-    Adjoint{T,<:DenseMatrixBaseTypes},
-    Transpose{T,<:DenseMatrixBaseTypes},
-    AbstractTriangular{T,<:DenseMatrixBaseTypes},
-    UpperHessenberg{T,<:DenseMatrixBaseTypes},
-    Symmetric{T,<:DenseMatrixBaseTypes},
-    Hermitian{T,<:DenseMatrixBaseTypes},
+    SubArray{T,2,<:DenseSparseBaseTypes},
+    Adjoint{T,<:DenseSparseBaseTypes},
+    Transpose{T,<:DenseSparseBaseTypes},
+    AbstractTriangular{T,<:DenseSparseBaseTypes},
+    UpperHessenberg{T,<:DenseSparseBaseTypes},
+    Symmetric{T,<:DenseSparseBaseTypes},
+    Hermitian{T,<:DenseSparseBaseTypes},
 }
 
-function dot(A::MA, B::AbstractSparseMatrixCSC{TB}) where {MA<:Union{DenseMatrixBaseTypes,WrapperMatrixTypes},TB}
+function dot(A::MA, B::AbstractSparseMatrixCSC{TB}) where {MA<:Union{DenseSparseBaseTypes,WrapperMatrixTypes},TB}
     T = promote_type(eltype(A), TB)
     (m, n) = size(A)
     if (m, n) != size(B)
@@ -399,7 +399,7 @@ function dot(A::MA, B::AbstractSparseMatrixCSC{TB}) where {MA<:Union{DenseMatrix
     end
     rows = rowvals(B)
     vals = nonzeros(B)
-    for j in 1:n
+    @inbounds for j in 1:n
         for ridx in nzrange(B, j)
             i = rows[ridx]
             v = vals[ridx]
@@ -409,7 +409,7 @@ function dot(A::MA, B::AbstractSparseMatrixCSC{TB}) where {MA<:Union{DenseMatrix
     return s
 end
 
-function dot(A::AbstractSparseMatrixCSC{TA}, B::MB) where {TA,MB<:Union{DenseMatrixBaseTypes,WrapperMatrixTypes}}
+function dot(A::AbstractSparseMatrixCSC{TA}, B::MB) where {TA,MB<:Union{DenseSparseBaseTypes,WrapperMatrixTypes}}
     return conj(dot(B, A))
 end
 
