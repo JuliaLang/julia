@@ -376,7 +376,7 @@ function dot(x::SparseVector, A::AbstractSparseMatrixCSC, y::SparseVector)
     r
 end
 
-const DenseSparseBaseTypes = Union{DenseMatrix, BitMatrix, SparseMatrix}
+const DenseSparseBaseTypes = Union{DenseMatrixUnion, AbstractSparseMatrix}
 const WrapperMatrixTypes{T} = Union{
     SubArray{T,2,<:DenseSparseBaseTypes},
     Adjoint{T,<:DenseSparseBaseTypes},
