@@ -306,7 +306,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     meaning within `[ ]`, something to watch out for. `;` can be used to separate expressions on a
     single line, but are not strictly necessary in many cases, and are more an aid to readability.
   * In Julia, the operator [`⊻`](@ref xor) ([`xor`](@ref)) performs the bitwise XOR operation, i.e.
-    [`^`](@ref) in C/C++.  Also, the bitwise operators do not have the same precedence as C/++, so
+    [`^`](@ref) in C/C++.  Also, the bitwise operators do not have the same precedence as C/C++, so
     parenthesis may be required.
   * Julia's [`^`](@ref) is exponentiation (pow), not bitwise XOR as in C/C++ (use [`⊻`](@ref xor), or
     [`xor`](@ref), in Julia)
