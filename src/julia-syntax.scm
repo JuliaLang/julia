@@ -1985,7 +1985,7 @@
   (define (get-dims a d)
     (let ((n (length a))
           (b (car a)))
-      (if (pair? b)
+      (if (and (pair? b) (memv (car b) (list 'row 'nrow))) ; pass through other symbols
           (if (eq? (car b) 'row)
               (if (= d 1)
                   (list (car (get-dims (cdr b) 0)) n)
